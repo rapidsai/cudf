@@ -26,10 +26,7 @@ class IntervalColumn(StructColumn):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: IntervalDtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if plc_column.num_children() != 2:
@@ -38,10 +35,7 @@ class IntervalColumn(StructColumn):
             )
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
 

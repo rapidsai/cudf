@@ -24,7 +24,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .column cimport Column
 from .expressions cimport Expression
 from .gpumemoryview cimport gpumemoryview
-from .types cimport DataType, null_aware
+from .types cimport DataType, null_aware, output_nullability
 from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = [
@@ -231,6 +231,7 @@ cpdef Column transform(
     DataType output_type,
     bool is_ptx,
     null_aware is_null_aware,
+    output_nullability null_policy,
     Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
@@ -251,6 +252,10 @@ cpdef Column transform(
     is_null_aware: NullAware
         If `NO`, the UDF gets non-nullable parameters
         If `YES`, the UDF gets nullable parameters
+    null_policy: OutputNullability
+        If `PRESERVE`, null-masks are produced if necessary.
+        If `ALL_VALID`, null-masks are not produced.
+        `ALL_VALID` has undefined behavior if the UDF can produce nulls.
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
@@ -266,6 +271,7 @@ cpdef Column transform(
     cdef string c_transform_udf = transform_udf.encode()
     cdef bool c_is_ptx = is_ptx
     cdef null_aware c_is_null_aware = is_null_aware
+    cdef output_nullability c_null_policy = null_policy
     cdef optional[void *] user_data
 
     stream = _get_stream(stream)
@@ -282,6 +288,7 @@ cpdef Column transform(
             c_is_ptx,
             user_data,
             c_is_null_aware,
+            c_null_policy,
             stream.view(),
             mr.get_mr()
         )
