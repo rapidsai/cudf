@@ -47,6 +47,7 @@ files:
       - test_python_pylibcudf
       - test_python_cudf_pandas
       - test_python_cudf_polars
+      - test_python_s3
   test_static_build:
     output: none
     includes:
@@ -75,6 +76,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - test_python_s3
       - numpy_run
       - test_python_pylibcudf
       - depends_on_cudf
@@ -102,6 +104,7 @@ files:
       - test_python_cudf_common
       - test_python_pylibcudf
       - test_python_cudf_polars
+      - test_python_s3
       - depends_on_cudf
       - depends_on_dask_cuda
       - depends_on_pylibcudf
@@ -202,6 +205,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - test_python_s3
   py_build_libcudf:
     output: pyproject
     pyproject_dir: python/libcudf
@@ -385,6 +389,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_dask_cudf
+      - test_python_s3
   py_build_cudf_kafka:
     output: pyproject
     pyproject_dir: python/cudf_kafka
@@ -817,7 +822,7 @@ dependencies:
             packages:
               - numba==0.60.0
               - pandas==2.0.*
-              - numba-cuda==0.19.1
+              - numba-cuda==0.22.1
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==2.3.3
@@ -873,25 +878,33 @@ dependencies:
       - output_types: [pyproject, requirements]
         packages:
           - xxhash
+  test_python_s3:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          # Upper bound on aiobotocore to avoid build issues in CI
+          # https://github.com/rapidsai/cudf/issues/20843
+          - aiobotocore>=2.2.0,<3
+          - boto3>=1.21.21
+          - botocore>=1.24.21
+          - s3fs>=2022.3.0
+      - output_types: conda
+        packages:
+          - moto>=4.0.8
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - aiobotocore>=2.2.0
-          - boto3>=1.21.21
-          - botocore>=1.24.21
           - cramjam
           - *fastavro
           - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
-          - s3fs>=2022.3.0
           - scipy
           - zstandard
       - output_types: conda
         packages:
           - msgpack-python
-          - moto>=4.0.8
       - output_types: [pyproject, requirements]
         packages:
           - msgpack
@@ -960,18 +973,18 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - numba-cuda>=0.19.1,<0.20.0
+        - numba-cuda>=0.22.1,<0.23.0
     specific:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - numba-cuda[cu12]>=0.19.1,<0.20.0
+              - numba-cuda[cu12]>=0.22.1,<0.23.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - numba-cuda[cu13]>=0.19.1,<0.20.0
+              - numba-cuda[cu13]>=0.22.1,<0.23.0
   depends_on_pylibcudf:
     common:
       - output_types: conda
