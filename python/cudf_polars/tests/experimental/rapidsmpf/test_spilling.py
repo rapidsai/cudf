@@ -148,13 +148,19 @@ def test_opaque_reservation() -> None:
 
     # Allocate 80MB of spillable data (8 x 10MB chunks)
     chunk_size = 10 * 1024 * 1024
-    message_ids = []
-    for i in range(8):
-        table = create_test_table(chunk_size, stream)
-        chunk = TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True)
-        msg = Message(i, chunk)
-        mid = spillable.insert(msg)
-        message_ids.append(mid)
+    message_ids = [
+        spillable.insert(
+            Message(
+                i,
+                TableChunk.from_pylibcudf_table(
+                    create_test_table(chunk_size, stream),
+                    stream,
+                    exclusive_view=True,
+                ),
+            )
+        )
+        for i in range(8)
+    ]
 
     # Register spill function so rapidsmpf can spill our data
     spill_func = make_spill_function([spillable], context)
@@ -170,28 +176,8 @@ def test_opaque_reservation() -> None:
         # Now request a 50MB reservation - this should trigger spilling
         # since we only have ~20MB available (100MB limit - 80MB used)
         reserve_size = 50 * 1024 * 1024
-
-        available_before = br.memory_available(MemoryType.DEVICE)
-        reserved_before = br.memory_reserved(MemoryType.DEVICE)
-        print("\nBefore reservation:")
-        print(f"  memory_available: {available_before / (1024 * 1024):.2f}MB")
-        print(f"  memory_reserved: {reserved_before / (1024 * 1024):.2f}MB")
-        print(
-            f"  current_allocated (computed): {(limit - available_before) / (1024 * 1024):.2f}MB"
-        )
-
         with opaque_reservation(context, reserve_size) as reservation:
             assert reservation.size == reserve_size
-
-            available_after = br.memory_available(MemoryType.DEVICE)
-            reserved_after = br.memory_reserved(MemoryType.DEVICE)
-            print("\nAfter reservation (inside context):")
-            print(f"  reservation.size: {reservation.size / (1024 * 1024):.2f}MB")
-            print(f"  memory_available: {available_after / (1024 * 1024):.2f}MB")
-            print(f"  memory_reserved: {reserved_after / (1024 * 1024):.2f}MB")
-            print(
-                f"  current_allocated (computed): {(limit - available_after) / (1024 * 1024):.2f}MB"
-            )
 
             # Check that some data was spilled to host
             descs_after = spillable.get_content_descriptions()
@@ -200,21 +186,11 @@ def test_opaque_reservation() -> None:
                 for mid in message_ids
                 if descs_after[mid].content_sizes[MemoryType.HOST] > 0
             )
-            spilled_bytes = sum(
-                descs_after[mid].content_sizes[MemoryType.HOST] for mid in message_ids
-            )
-            device_bytes = sum(
-                descs_after[mid].content_sizes[MemoryType.DEVICE] for mid in message_ids
-            )
-            print("\nSpilling results:")
-            print(f"  Chunks spilled: {spilled_count} of {len(message_ids)}")
-            print(f"  Bytes on HOST: {spilled_bytes / (1024 * 1024):.2f}MB")
-            print(f"  Bytes on DEVICE: {device_bytes / (1024 * 1024):.2f}MB")
 
             # We need to spill at least 30MB (50MB - 20MB available)
             # That's at least 3 chunks of 10MB each
             assert spilled_count >= 3
-            assert available_after >= reserve_size
+            assert br.memory_available(MemoryType.DEVICE) >= reserve_size
 
     finally:
         br.spill_manager.remove_spill_function(func_id)
