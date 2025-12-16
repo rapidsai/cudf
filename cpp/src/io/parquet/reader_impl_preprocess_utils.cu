@@ -281,7 +281,6 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
 {
   auto const num_pages = pages.size();
   auto page_indexes    = cudf::detail::make_pinned_vector_async<page_index_info>(num_pages, stream);
-  auto page_indexes    = cudf::detail::make_pinned_vector_async<page_index_info>(num_pages, stream);
 
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
