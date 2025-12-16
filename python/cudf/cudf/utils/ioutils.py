@@ -1195,8 +1195,6 @@ doublequote : bool, default True
 comment : char, default None
     Character used as a comments indicator. If found at the beginning of a
     line, the line will be ignored altogether.
-delim_whitespace : bool, default False
-    Determines whether to use whitespace as delimiter.
 byte_range : list or tuple, default None
     Byte range within the input file to be read. The first number is the
     offset in bytes, the second number is the range size in bytes. Set the

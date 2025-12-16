@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import itertools
-import warnings
 from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, cast
@@ -76,19 +75,11 @@ def read_csv(
     quoting: int = 0,
     doublequote: bool = True,
     comment: str | None = None,
-    delim_whitespace: bool = False,
     byte_range: list[int] | tuple[int, int] | None = None,
     storage_options=None,
     bytes_per_thread: int | None = None,
 ) -> DataFrame:
     """{docstring}"""
-
-    if delim_whitespace is not False:
-        warnings.warn(
-            "The 'delim_whitespace' keyword in pd.read_csv is deprecated and "
-            "will be removed in a future version. Use ``sep='\\s+'`` instead",
-            FutureWarning,
-        )
 
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
@@ -109,7 +100,6 @@ def read_csv(
     _validate_args(
         delimiter,
         sep,
-        delim_whitespace,
         decimal,
         thousands,
         nrows,
@@ -229,7 +219,6 @@ def read_csv(
         .lineterminator(str(lineterminator))
         .quotechar(quotechar)
         .decimal(decimal)
-        .delim_whitespace(delim_whitespace)
         .skipinitialspace(skipinitialspace)
         .skip_blank_lines(skip_blank_lines)
         .doublequote(doublequote)
@@ -517,7 +506,6 @@ def _plc_write_csv(
 def _validate_args(
     delimiter: str | None,
     sep: str,
-    delim_whitespace: bool,
     decimal: str,
     thousands: str | None,
     nrows: int | None,
@@ -525,12 +513,6 @@ def _validate_args(
     byte_range: list[int] | tuple[int, int] | None,
     skiprows: int,
 ) -> None:
-    if delim_whitespace:
-        if delimiter is not None:
-            raise ValueError("cannot set both delimiter and delim_whitespace")
-        if sep != ",":
-            raise ValueError("cannot set both sep and delim_whitespace")
-
     # Alias sep -> delimiter.
     actual_delimiter = delimiter if delimiter else sep
 
