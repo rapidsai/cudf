@@ -26,6 +26,7 @@
 #include <nvtext/wordpiece_tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/scan.h>
