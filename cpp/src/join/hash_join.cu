@@ -73,9 +73,6 @@ bool is_trivial_join(table_view const& left, table_view const& right, join_kind 
   return false;
 }
 
-// Multimap type used for mixed joins. TODO: This is a temporary alias used
-// TODO: `pair_equal` to be moved to common utils during mixed-join migration
-
 template <typename Equal>
 class pair_equal {
  public:

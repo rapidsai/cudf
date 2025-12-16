@@ -27,15 +27,9 @@
 namespace cudf {
 namespace detail {
 
-// Convenient alias for a pair of unique pointers to device uvectors.
-using VectorPair = std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                             std::unique_ptr<rmm::device_uvector<size_type>>>;
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-get_trivial_left_join_indices(table_view const& left,
-                              rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+VectorPair get_trivial_left_join_indices(table_view const& left,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr)
 {
   auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
   thrust::sequence(rmm::exec_policy(stream), left_indices->begin(), left_indices->end(), 0);
@@ -69,13 +63,12 @@ VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stre
   return std::move(a);
 }
 
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
-                                 size_type left_table_row_count,
-                                 size_type right_table_row_count,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+VectorPair get_left_join_indices_complement(
+  std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
+  size_type left_table_row_count,
+  size_type right_table_row_count,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   // Get array of indices that do not appear in right_indices
 

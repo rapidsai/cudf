@@ -19,6 +19,10 @@ namespace cudf::detail {
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 
+// Convenient alias for a pair of unique pointers to device uvectors.
+using VectorPair = std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                             std::unique_ptr<rmm::device_uvector<size_type>>>;
+
 /**
  * @brief Computes the trivial left join operation for the case when the
  * right table is empty.
@@ -33,11 +37,9 @@ constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
  *
  * @return Join output indices vector pair
  */
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-get_trivial_left_join_indices(table_view const& left,
-                              rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr);
+VectorPair get_trivial_left_join_indices(table_view const& left,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr);
 
 /**
  * @brief Takes two pairs of vectors and returns a single pair where the first
@@ -61,13 +63,7 @@ get_trivial_left_join_indices(table_view const& left,
  *
  * @return A pair of vectors containing the concatenated output.
  */
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-concatenate_vector_pairs(std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                                   std::unique_ptr<rmm::device_uvector<size_type>>>& a,
-                         std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                                   std::unique_ptr<rmm::device_uvector<size_type>>>& b,
-                         rmm::cuda_stream_view stream);
+VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stream_view stream);
 
 /**
  * @brief  Creates a table containing the complement of left join indices.
@@ -84,12 +80,11 @@ concatenate_vector_pairs(std::pair<std::unique_ptr<rmm::device_uvector<size_type
  *
  * @return Pair of vectors containing the left join indices complement
  */
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
-                                 size_type left_table_row_count,
-                                 size_type right_table_row_count,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+VectorPair get_left_join_indices_complement(
+  std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
+  size_type left_table_row_count,
+  size_type right_table_row_count,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 }  // namespace cudf::detail
