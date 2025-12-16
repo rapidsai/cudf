@@ -121,6 +121,18 @@ class CategoricalColumn(column.ColumnBase):
         """
         return None
 
+    def set_base_data(self, value: None | Buffer) -> None:
+        """
+        Categorical columns don't have their own data buffer, so this is a no-op.
+        The data is stored in the codes child column, which is managed separately.
+        """
+        if value is not None:
+            raise ValueError(
+                "Categorical columns don't have a data buffer. "
+                "Data is stored in the codes child column."
+            )
+        # No-op: categorical plc_column uses the codes child's data
+
     def _get_children_from_pylibcudf_column(
         self, plc_column: plc.Column, dtype: DtypeObj, exposed: bool
     ) -> tuple[ColumnBase]:
@@ -165,9 +177,12 @@ class CategoricalColumn(column.ColumnBase):
         if self._children is None:
             # Pass along size, offset, null_count from __init__
             # which doesn't necessarily match the attributes of plc_column
+            # Use base_children[0]'s plc_column as it has the actual codes data
             child = cudf.core.column.numerical.NumericalColumn(
-                plc_column=self.plc_column,
-                dtype=dtype_from_pylibcudf_column(self.plc_column),
+                plc_column=self.base_children[0].plc_column,
+                dtype=dtype_from_pylibcudf_column(
+                    self.base_children[0].plc_column
+                ),
                 exposed=False,
             )
             self._children = (child,)
