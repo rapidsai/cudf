@@ -38,7 +38,6 @@ class fixed_pinned_pool_memory_resource : public rmm::mr::device_memory_resource
   host_pooled_mr* pool_{nullptr};
   void* pool_begin_{nullptr};
   void* pool_end_{nullptr};
-  cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream().value()};
 
  public:
   fixed_pinned_pool_memory_resource(size_t size)
@@ -49,9 +48,11 @@ class fixed_pinned_pool_memory_resource : public rmm::mr::device_memory_resource
     CUDF_LOG_INFO("Pinned pool size = %zu", pool_size_);
 
     // Allocate full size from the pinned pool to figure out the beginning and end address
-    pool_begin_ = pool_->allocate(stream_, pool_size_);
+    auto stream{cudf::detail::global_cuda_stream_pool().get_stream()};
+    pool_begin_ = pool_->allocate(stream, pool_size_);
     pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
-    pool_->deallocate(stream_, pool_begin_, pool_size_);
+    pool_->deallocate(stream, pool_begin_, pool_size_);
+    stream.synchronize();
   }
 
   // clang-tidy will complain about this function because it is completely
@@ -97,7 +98,7 @@ class fixed_pinned_pool_memory_resource : public rmm::mr::device_memory_resource
   [[nodiscard]] bool do_is_equal(device_memory_resource const& other) const noexcept override
   {
     auto const* other_ptr = dynamic_cast<fixed_pinned_pool_memory_resource const*>(&other);
-    return other_ptr != nullptr && pool_ == other_ptr->pool_ && stream_ == other_ptr->stream_;
+    return other_ptr != nullptr && pool_ == other_ptr->pool_;
   }
 };
 
