@@ -938,12 +938,13 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
                                         get_reduction_key{subpass.pages.size()});
 
       // Find the size of each column
-      thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
-                            reduction_keys,
-                            reduction_keys + num_keys_this_iter,
-                            size_input.cbegin(),
-                            thrust::make_discard_iterator(),
-                            sizes.d_begin() + (key_start / subpass.pages.size()));
+      cudf::detail::reduce_by_key(reduction_keys,
+                                  reduction_keys + num_keys_this_iter,
+                                  size_input.cbegin(),
+                                  thrust::make_discard_iterator(),
+                                  sizes.d_begin() + (key_start / subpass.pages.size()),
+                                  cuda::std::plus<>{},
+                                  _stream);
 
       // For nested hierarchies, compute per-page start offset
       thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
@@ -1022,12 +1023,13 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
 
   // now sum up page sizes
   rmm::device_uvector<int> reduce_keys(d_col_sizes.size(), _stream);
-  thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
-                        page_keys,
-                        page_keys + subpass.pages.size(),
-                        val_iter,
-                        reduce_keys.begin(),
-                        d_col_sizes.begin());
+  cudf::detail::reduce_by_key(page_keys,
+                              page_keys + subpass.pages.size(),
+                              val_iter,
+                              reduce_keys.begin(),
+                              d_col_sizes.begin(),
+                              cuda::std::plus<>{},
+                              _stream);
 
   auto host_col_sizes = cudf::detail::make_pinned_vector_async<size_t>(d_col_sizes.size(), _stream);
   cudf::detail::cuda_memcpy(cudf::host_span<size_t>{host_col_sizes.data(), d_col_sizes.size()},
