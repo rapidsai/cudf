@@ -9,13 +9,13 @@
 #include "page_string_utils.cuh"
 #include "rle_stream.cuh"
 
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/strings/detail/gather.cuh>
 
 #include <cuda/functional>
 #include <cuda/std/utility>
-#include <thrust/logical.h>
 #include <thrust/transform_scan.h>
 
 #include <bitset>
@@ -288,7 +288,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
       pp->num_nulls  = null_count;
       pp->num_valids = pp->num_input_values - null_count;
     }
-    end_value -= pp->num_nulls;
+    end_value -= null_count;
   }
 
   return {start_value, end_value};
@@ -1061,22 +1061,22 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
 {
   // check for needed temp space for DELTA_BYTE_ARRAY
   auto const need_sizes =
-    thrust::any_of(rmm::exec_policy(stream),
-                   pages.device_begin(),
-                   pages.device_end(),
-                   cuda::proclaim_return_type<bool>(
-                     [] __device__(auto& page) { return page.temp_string_size != 0; }));
+    cudf::detail::any_of(pages.device_begin(),
+                         pages.device_end(),
+                         cuda::proclaim_return_type<bool>(
+                           [] __device__(auto const& page) { return page.temp_string_size != 0; }),
+                         stream);
 
   if (need_sizes) {
     // sum up all of the temp_string_sizes
     auto const page_sizes = cuda::proclaim_return_type<int64_t>(
       [] __device__(PageInfo const& page) { return page.temp_string_size; });
-    auto const total_size = thrust::transform_reduce(rmm::exec_policy(stream),
-                                                     pages.device_begin(),
-                                                     pages.device_end(),
-                                                     page_sizes,
-                                                     0L,
-                                                     cuda::std::plus<int64_t>{});
+    auto const total_size = cudf::detail::transform_reduce(pages.device_begin(),
+                                                           pages.device_end(),
+                                                           page_sizes,
+                                                           int64_t{0},
+                                                           cuda::std::plus<int64_t>{},
+                                                           stream);
 
     // now do an exclusive scan over the temp_string_sizes to get offsets for each
     // page's chunk of the temp buffer
