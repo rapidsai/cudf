@@ -12,6 +12,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -34,7 +35,6 @@
 #include <cuda/functional>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/logical.h>
 
 #include <algorithm>
 #include <limits>
@@ -201,11 +201,8 @@ struct page_stats_caster : public stats_caster_base {
                    row_str_sizes.begin());
 
     // Total bytes in the output chars buffer
-    auto const total_bytes = thrust::reduce(rmm::exec_policy(stream),
-                                            row_str_sizes.begin(),
-                                            row_str_sizes.end(),
-                                            size_t{0},
-                                            cuda::std::plus<size_t>());
+    auto const total_bytes = cudf::detail::reduce(
+      row_str_sizes.begin(), row_str_sizes.end(), size_t{0}, cuda::std::plus<size_t>{}, stream);
 
     CUDF_EXPECTS(
       total_bytes <= cuda::std::numeric_limits<cudf::size_type>::max(),
@@ -981,10 +978,10 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
 
   // Return an empty vector if all rows are invalid or all rows are required
   if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
-      thrust::all_of(rmm::exec_policy(stream),
-                     row_mask.template begin<bool>() + row_mask_offset,
-                     row_mask.template begin<bool>() + row_mask_offset + total_rows,
-                     cuda::std::identity{})) {
+      cudf::detail::all_of(row_mask.template begin<bool>() + row_mask_offset,
+                           row_mask.template begin<bool>() + row_mask_offset + total_rows,
+                           cuda::std::identity{},
+                           stream)) {
     return thrust::host_vector<bool>(0, stream);
   }
 
@@ -1035,7 +1032,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     using task_page_row_offsets_type = std::vector<std::pair<std::vector<size_type>, size_type>>;
     std::vector<std::future<task_page_row_offsets_type>> page_row_offset_tasks{};
     page_row_offset_tasks.reserve(max_tasks);
-    auto const cols_per_thread = cudf::util::div_rounding_up_unsafe(num_columns, max_tasks);
+    auto const cols_per_thread = cudf::util::div_rounding_up_safe<size_t>(num_columns, max_tasks);
 
     // Submit page row offset compute tasks
     std::transform(thrust::counting_iterator(0),
@@ -1113,7 +1110,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     thrust::counting_iterator(0),
     thrust::counting_iterator(num_levels - 1),
     [&](auto const prev_level) {
-      auto const current_level_size = cudf::util::div_rounding_up_unsafe(prev_level_size, 2);
+      auto const current_level_size = cudf::util::div_rounding_up_safe(prev_level_size, 2);
       thrust::for_each(
         rmm::exec_policy_nosync(stream),
         thrust::counting_iterator(0),

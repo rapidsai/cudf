@@ -51,6 +51,7 @@ __all__ = [
     "Runtime",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
+    "ShufflerInsertionMethod",
     "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
@@ -208,6 +209,20 @@ class ShuffleMethod(str, enum.Enum):
     _RAPIDSMPF_SINGLE = "rapidsmpf-single"
 
 
+class ShufflerInsertionMethod(str, enum.Enum):
+    """
+    The method to use for inserting chunks into the rapidsmpf shuffler.
+
+    * ``ShufflerInsertionMethod.INSERT_CHUNKS`` : Use insert_chunks for inserting data.
+    * ``ShufflerInsertionMethod.CONCAT_INSERT`` : Use concat_insert for inserting data.
+
+    Only applicable with the "rapidsmpf" shuffle method and the "tasks" runtime.
+    """
+
+    INSERT_CHUNKS = "insert_chunks"
+    CONCAT_INSERT = "concat_insert"
+
+
 T = TypeVar("T")
 
 
@@ -267,6 +282,10 @@ class ParquetOptions:
 
         Set to 0 to avoid row-group sampling. Note that row-group sampling
         will also be skipped if ``max_footer_samples`` is 0.
+    use_rapidsmpf_native
+        Whether to use the native rapidsmpf node for parquet reading.
+        This option is only used when the rapidsmpf runtime is enabled.
+        Default is True.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -301,6 +320,13 @@ class ParquetOptions:
             f"{_env_prefix}__MAX_ROW_GROUP_SAMPLES", int, default=1
         )
     )
+    use_rapidsmpf_native: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_RAPIDSMPF_NATIVE",
+            _bool_converter,
+            default=True,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -315,6 +341,8 @@ class ParquetOptions:
             raise TypeError("max_footer_samples must be an int")
         if not isinstance(self.max_row_group_samples, int):
             raise TypeError("max_row_group_samples must be an int")
+        if not isinstance(self.use_rapidsmpf_native, bool):
+            raise TypeError("use_rapidsmpf_native must be a bool")
 
 
 def default_blocksize(cluster: str) -> int:
@@ -598,6 +626,11 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
         and 'tasks' for single-GPU cluster.
+    shuffler_insertion_method
+        The method to use for inserting chunks with the rapidsmpf shuffler.
+        Can be 'insert_chunks' (default) or 'concat_insert'.
+
+        Only applicable with ``shuffle_method="rapidsmpf"`` and ``runtime="tasks"``.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
@@ -686,6 +719,13 @@ class StreamingExecutor:
             f"{_env_prefix}__SHUFFLE_METHOD",
             ShuffleMethod.__call__,
             default=ShuffleMethod.TASKS,
+        )
+    )
+    shuffler_insertion_method: ShufflerInsertionMethod = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SHUFFLER_INSERTION_METHOD",
+            ShufflerInsertionMethod.__call__,
+            default=ShufflerInsertionMethod.INSERT_CHUNKS,
         )
     )
     rapidsmpf_spill: bool = dataclasses.field(
@@ -805,6 +845,11 @@ class StreamingExecutor:
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
+        object.__setattr__(
+            self,
+            "shuffler_insertion_method",
+            ShufflerInsertionMethod(self.shuffler_insertion_method),
+        )
 
         # Make sure stats_planning is a dataclass
         if isinstance(self.stats_planning, dict):

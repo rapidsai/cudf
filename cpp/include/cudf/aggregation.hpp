@@ -121,7 +121,8 @@ class aggregation {
     MERGE_TDIGEST,      ///< create a tdigest by merging multiple tdigests together
     HISTOGRAM,          ///< compute frequency of each element
     MERGE_HISTOGRAM,    ///< merge partial values of HISTOGRAM aggregation
-    BITWISE_AGG         ///< bitwise aggregation on numeric columns
+    BITWISE_AGG,        ///< bitwise aggregation on numeric columns
+    TOP_K               ///< top k elements in a group
   };
 
   aggregation() = delete;
@@ -796,6 +797,19 @@ std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);
  */
 template <typename Base>
 std::unique_ptr<Base> make_bitwise_aggregation(bitwise_op op);
+
+/**
+ * @brief Factory to create a TOP_K aggregation
+ *
+ * The `topk_order` identifies if the values are selected descending (default)
+ * or ascending. The returned values may not be sorted.
+ *
+ * @param k Number of top values for each group
+ * @param topk_order How the top k values are selected
+ * @return A TOP_K aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_top_k_aggregation(size_type k, order topk_order = order::DESCENDING);
 
 /**
  * @brief Indicate if an aggregation is supported for a source datatype.
