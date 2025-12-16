@@ -316,10 +316,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @property
     def base_data(self) -> None | Buffer:
         """Get data buffer from pylibcudf column."""
-        data_view = self.plc_column.data()
-        if data_view is None:
-            return None
-        return as_buffer(data_view, exposed=False)
+        data = self.plc_column.data()
+        # Unwrap ROCAIWrapper if present (can occur after to_pylibcudf operations)
+        if isinstance(data, ROCAIWrapper):
+            return data._buffer
+        # _ensure_buffers_in_plc_column guarantees data is Buffer or None
+        return data  # type: ignore[return-value]
 
     @property
     def data(self) -> None | Buffer:
@@ -364,10 +366,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @property
     def base_mask(self) -> None | Buffer:
         """Get mask buffer from pylibcudf column."""
-        mask_view = self.plc_column.null_mask()
-        if mask_view is None:
-            return None
-        return as_buffer(mask_view, exposed=False)
+        mask = self.plc_column.null_mask()
+        # Unwrap ROCAIWrapper if present (can occur after to_pylibcudf operations)
+        if isinstance(mask, ROCAIWrapper):
+            return mask._buffer
+        # _ensure_buffers_in_plc_column guarantees mask is Buffer or None
+        return mask  # type: ignore[return-value]
 
     @property
     def mask(self) -> None | Buffer:
