@@ -677,11 +677,17 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   auto const compacted_row_counts_end   = cudf::detail::copy_if(
     row_counts_begin, row_counts_end, compacted_row_counts_begin, row_counts_nonzero{}, stream);
   if (compacted_row_counts_end != compacted_row_counts_begin) {
-    auto const found_row_count = static_cast<size_t>(compacted_row_counts.element(0, stream));
+    auto const found_row_count = [&]() {
+      auto found_row_count = cudf::detail::make_pinned_vector_async<size_type>(1, stream);
+      cudf::detail::cuda_memcpy(cudf::host_span<size_type>{found_row_count.data(), 1},
+                                cudf::device_span<size_type const>{compacted_row_counts.data(), 1},
+                                stream);
+      return found_row_count.front();
+    }();
 
     // if we somehow don't match the expected row count from the row groups themselves
     if (expected_row_count.has_value()) {
-      CUDF_EXPECTS(expected_row_count.value() == found_row_count,
+      CUDF_EXPECTS(std::cmp_equal(expected_row_count.value(), found_row_count),
                    "Encountered malformed parquet page data (unexpected row count in page data)");
     }
 
