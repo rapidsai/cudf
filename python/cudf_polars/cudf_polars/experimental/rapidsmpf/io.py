@@ -338,7 +338,7 @@ async def read_chunk(
         Estimated size of the chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    with opaque_reservation(context, 2 * estimated_chunk_bytes):
+    with opaque_reservation(context, estimated_chunk_bytes):
         df = scan.do_evaluate(
             *scan._non_child_args,
             context=ir_context,

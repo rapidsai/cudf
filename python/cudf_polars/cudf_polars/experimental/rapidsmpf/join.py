@@ -212,7 +212,7 @@ async def broadcast_join_node(
 
             large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
             input_bytes = large_chunk_size + small_size
-            with opaque_reservation(context, 2 * input_bytes):
+            with opaque_reservation(context, input_bytes):
                 df = _concat(
                     *[
                         ir.do_evaluate(

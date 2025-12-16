@@ -147,7 +147,7 @@ async def concatenate_node(
                     input_bytes = sum(
                         chunk.data_alloc_size(MemoryType.DEVICE) for chunk in chunks
                     )
-                    with opaque_reservation(context, 2 * input_bytes):
+                    with opaque_reservation(context, input_bytes):
                         df = _concat(
                             *(
                                 DataFrame.from_table(

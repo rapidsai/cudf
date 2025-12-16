@@ -104,7 +104,7 @@ async def default_node_single(
             del msg
 
             input_bytes = chunk.data_alloc_size(MemoryType.DEVICE)
-            with opaque_reservation(context, 2 * input_bytes):
+            with opaque_reservation(context, input_bytes):
                 df = ir.do_evaluate(
                     *ir._non_child_args,
                     DataFrame.from_table(
@@ -231,7 +231,7 @@ async def default_node_multi(
                 chunk.data_alloc_size(MemoryType.DEVICE)
                 for chunk in cast(list[TableChunk], ready_chunks)
             )
-            with opaque_reservation(context, 2 * input_bytes):
+            with opaque_reservation(context, input_bytes):
                 df = ir.do_evaluate(
                     *ir._non_child_args,
                     *dfs,
