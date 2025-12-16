@@ -27,7 +27,6 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting, stream_compaction
 from cudf.core.accessors import StringMethods
 from cudf.core.buffer import acquire_spill_lock
@@ -1526,38 +1525,12 @@ class Index(SingleColumnFrame):
     @classmethod
     @_performance_tracking
     def _concat(cls, objs):
-        non_empties = [index for index in objs if len(index)]
-        if len(objs) != len(non_empties):
-            # Do not remove until pandas-3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warning_msg = (
-                "The behavior of array concatenation with empty entries is "
-                "deprecated. In a future version, this will no longer exclude "
-                "empty items when determining the result dtype. "
-                "To retain the old behavior, exclude the empty entries before "
-                "the concat operation."
-            )
-            # Warn only if the type might _actually_ change
-            if len(non_empties) == 0:
-                if not all(objs[0].dtype == index.dtype for index in objs[1:]):
-                    warnings.warn(warning_msg, FutureWarning)
-            else:
-                common_all_type = find_common_type(
-                    [index.dtype for index in objs]
-                )
-                common_non_empty_type = find_common_type(
-                    [index.dtype for index in non_empties]
-                )
-                if common_all_type != common_non_empty_type:
-                    warnings.warn(warning_msg, FutureWarning)
-        if all(isinstance(obj, RangeIndex) for obj in non_empties):
-            result = _concat_range_index(non_empties)
+        if all(isinstance(obj, RangeIndex) for obj in objs):
+            result = _concat_range_index(objs)
         else:
-            data = concat_columns([o._column for o in non_empties])
+            data = concat_columns([o._column for o in objs])
             if cls is IntervalIndex:
-                data = data._with_type_metadata(non_empties[0]._column.dtype)
+                data = data._with_type_metadata(objs[0]._column.dtype)
             result = Index._from_column(data)
 
         names = {obj.name for obj in objs}

@@ -8,15 +8,10 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.core.index import Index
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
-    expect_warning_if,
 )
 
 
@@ -54,10 +49,6 @@ from cudf.testing._utils import (
         ["abcd", "defgh", "werty", "poiu"],
     ],
 )
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Does not warn on older versions of pandas",
-)
 def test_index_append(data, other):
     pd_data = pd.Index(data)
     pd_other = pd.Index(other)
@@ -69,14 +60,8 @@ def test_index_append(data, other):
         gd_data = gd_data.astype("str")
         gd_other = gd_other.astype("str")
 
-    with expect_warning_if(
-        (len(data) == 0 or len(other) == 0) and pd_data.dtype != pd_other.dtype
-    ):
-        expected = pd_data.append(pd_other)
-    with expect_warning_if(
-        (len(data) == 0 or len(other) == 0) and gd_data.dtype != gd_other.dtype
-    ):
-        actual = gd_data.append(gd_other)
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
     if len(data) == 0 and len(other) == 0:
         # Pandas default dtype to "object" for empty list
         # cudf default dtype to "float" for empty list
@@ -92,12 +77,10 @@ def test_index_empty_append_name_conflict():
     non_empty = cudf.Index([1], name="bar")
     expected = cudf.Index([1])
 
-    with pytest.warns(FutureWarning):
-        result = non_empty.append(empty)
+    result = non_empty.append(empty)
     assert_eq(result, expected)
 
-    with pytest.warns(FutureWarning):
-        result = empty.append(non_empty)
+    result = empty.append(non_empty)
     assert_eq(result, expected)
 
 
@@ -261,10 +244,6 @@ def test_index_append_error(data, other):
         ),
     ],
 )
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Does not warn on older versions of pandas",
-)
 def test_index_append_list(data, other):
     pd_data = data
     pd_other = other
@@ -272,16 +251,8 @@ def test_index_append_list(data, other):
     gd_data = cudf.from_pandas(data)
     gd_other = [cudf.from_pandas(i) for i in other]
 
-    with expect_warning_if(
-        (len(data) == 0 or any(len(d) == 0 for d in other))
-        and (any(d.dtype != data.dtype for d in other))
-    ):
-        expected = pd_data.append(pd_other)
-    with expect_warning_if(
-        (len(data) == 0 or any(len(d) == 0 for d in other))
-        and (any(d.dtype != data.dtype for d in other))
-    ):
-        actual = gd_data.append(gd_other)
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
 
     assert_eq(expected, actual)
 
