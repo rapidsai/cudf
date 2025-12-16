@@ -31,6 +31,7 @@
 #include <thrust/transform.h>
 
 namespace cudf {
+namespace detail {
 namespace {
 // Launch configuration for optimized hash partition
 constexpr size_type OPTIMIZED_BLOCK_SIZE                     = 512;
@@ -456,40 +457,56 @@ struct copy_block_partitions_dispatcher {
   }
 };
 
-// NOTE hash_has_nulls must be true if table_to_hash has nulls
+/**
+ * @brief Holds intermediate data structures computed during hash partitioning.
+ *
+ * This struct captures the partition assignment for each row and related metadata,
+ * allowing code reuse between hash_partition and hash_partition_indices.
+ */
+struct partition_data {
+  rmm::device_uvector<size_type> row_partition_numbers;
+  rmm::device_uvector<size_type> row_partition_offset;
+  rmm::device_uvector<size_type> block_partition_sizes;
+  rmm::device_uvector<size_type> global_partition_sizes;
+  size_type grid_size;
+  size_type block_size;
+};
+
+/**
+ * @brief Computes which partition each row belongs to based on hash values.
+ *
+ * This is a shared helper used by both hash_partition_table and hash_partition_indices_impl.
+ *
+ * @tparam hash_function The hash function template to use
+ * @tparam hash_has_nulls Whether the table may contain nulls
+ * @param table_to_hash The table whose rows will be hashed
+ * @param num_partitions Number of partitions to create
+ * @param seed Hash seed value
+ * @param use_optimized_block_size Whether to use optimized block size for small partition counts
+ * @param stream CUDA stream
+ * @return partition_data struct containing partition assignments and metadata
+ */
 template <template <typename> class hash_function, bool hash_has_nulls>
-std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
-  table_view const& input,
-  table_view const& table_to_hash,
-  size_type num_partitions,
-  uint32_t seed,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+partition_data compute_partition_data(table_view const& table_to_hash,
+                                      size_type num_partitions,
+                                      uint32_t seed,
+                                      bool use_optimized_block_size,
+                                      rmm::cuda_stream_view stream)
 {
   auto const num_rows = table_to_hash.num_rows();
 
-  bool const use_optimization{num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
-  auto const block_size = use_optimization ? OPTIMIZED_BLOCK_SIZE : FALLBACK_BLOCK_SIZE;
+  auto const block_size = use_optimized_block_size ? OPTIMIZED_BLOCK_SIZE : FALLBACK_BLOCK_SIZE;
   auto const rows_per_thread =
-    use_optimization ? OPTIMIZED_ROWS_PER_THREAD : FALLBACK_ROWS_PER_THREAD;
+    use_optimized_block_size ? OPTIMIZED_ROWS_PER_THREAD : FALLBACK_ROWS_PER_THREAD;
   auto const rows_per_block = block_size * rows_per_thread;
 
-  // NOTE grid_size is non-const to workaround lambda capture bug in gcc 5.4
   auto grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
 
   // Allocate array to hold which partition each row belongs to
   auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
 
   // Array to hold the size of each partition computed by each block
-  //  i.e., { {block0 partition0 size, block1 partition0 size, ...},
-  //          {block0 partition1 size, block1 partition1 size, ...},
-  //          ...
-  //          {block0 partition(num_partitions-1) size, block1
-  //          partition(num_partitions -1) size, ...} }
   auto block_partition_sizes = rmm::device_uvector<size_type>(grid_size * num_partitions, stream);
-
-  auto scanned_block_partition_sizes =
-    rmm::device_uvector<size_type>(grid_size * num_partitions, stream);
 
   // Holds the total number of rows in each partition
   auto global_partition_sizes = cudf::detail::make_zeroed_device_uvector_async<size_type>(
@@ -505,14 +522,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
   if (is_power_two(num_partitions)) {
-    // Determines how the mapping between hash value and partition number is
-    // computed
     using partitioner_type = bitwise_partitioner<hash_value_type>;
-
-    // Computes which partition each row belongs to by hashing the row and
-    // performing a partitioning operator on the hash value. Also computes the
-    // number of rows in each partition both for each thread block as well as
-    // across all blocks
     compute_row_partition_numbers<<<grid_size,
                                     block_size,
                                     num_partitions * sizeof(size_type),
@@ -525,14 +535,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                                       block_partition_sizes.data(),
                                                       global_partition_sizes.data());
   } else {
-    // Determines how the mapping between hash value and partition number is
-    // computed
     using partitioner_type = modulo_partitioner<hash_value_type>;
-
-    // Computes which partition each row belongs to by hashing the row and
-    // performing a partitioning operator on the hash value. Also computes the
-    // number of rows in each partition both for each thread block as well as
-    // across all blocks
     compute_row_partition_numbers<<<grid_size,
                                     block_size,
                                     num_partitions * sizeof(size_type),
@@ -546,25 +549,55 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                                       global_partition_sizes.data());
   }
 
+  return partition_data{std::move(row_partition_numbers),
+                        std::move(row_partition_offset),
+                        std::move(block_partition_sizes),
+                        std::move(global_partition_sizes),
+                        grid_size,
+                        block_size};
+}
+
+// NOTE hash_has_nulls must be true if table_to_hash has nulls
+template <template <typename> class hash_function, bool hash_has_nulls>
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
+  table_view const& input,
+  table_view const& table_to_hash,
+  size_type num_partitions,
+  uint32_t seed,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const num_rows = table_to_hash.num_rows();
+
+  bool const use_optimization{num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
+
+  // Compute partition assignments using shared helper
+  auto pdata = compute_partition_data<hash_function, hash_has_nulls>(
+    table_to_hash, num_partitions, seed, use_optimization, stream);
+
+  // Allocate scanned block partition sizes for the copy/scatter step
+  auto scanned_block_partition_sizes =
+    rmm::device_uvector<size_type>(pdata.grid_size * num_partitions, stream);
+
   // Compute exclusive scan of all blocks' partition sizes in-place to determine
   // the starting point for each blocks portion of each partition in the output
   thrust::exclusive_scan(rmm::exec_policy(stream),
-                         block_partition_sizes.begin(),
-                         block_partition_sizes.end(),
+                         pdata.block_partition_sizes.begin(),
+                         pdata.block_partition_sizes.end(),
                          scanned_block_partition_sizes.data());
 
   // Compute exclusive scan of size of each partition to determine offset
   // location of each partition in final output.
   // TODO This can be done independently on a separate stream
   thrust::exclusive_scan(rmm::exec_policy(stream),
-                         global_partition_sizes.begin(),
-                         global_partition_sizes.end(),
-                         global_partition_sizes.begin());
+                         pdata.global_partition_sizes.begin(),
+                         pdata.global_partition_sizes.end(),
+                         pdata.global_partition_sizes.begin());
 
   // Copy the result of the exclusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
   auto const partition_offsets =
-    cudf::detail::make_std_vector_async(global_partition_sizes, stream);
+    cudf::detail::make_std_vector_async(pdata.global_partition_sizes, stream);
 
   // When the number of partitions is less than a threshold, we can apply an
   // optimization using shared memory to copy values to the output buffer.
@@ -578,11 +611,11 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                                           copy_block_partitions_dispatcher{},
                                                           col,
                                                           num_partitions,
-                                                          row_partition_numbers.data(),
-                                                          row_partition_offset.data(),
-                                                          block_partition_sizes.data(),
+                                                          pdata.row_partition_numbers.data(),
+                                                          pdata.row_partition_offset.data(),
+                                                          pdata.block_partition_sizes.data(),
                                                           scanned_block_partition_sizes.data(),
-                                                          grid_size,
+                                                          pdata.grid_size,
                                                           stream,
                                                           mr);
     });
@@ -591,11 +624,11 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
       // Use copy_block_partitions to compute a gather map
       auto gather_map = compute_gather_map(num_rows,
                                            num_partitions,
-                                           row_partition_numbers.data(),
-                                           row_partition_offset.data(),
-                                           block_partition_sizes.data(),
+                                           pdata.row_partition_numbers.data(),
+                                           pdata.row_partition_offset.data(),
+                                           pdata.block_partition_sizes.data(),
                                            scanned_block_partition_sizes.data(),
-                                           grid_size,
+                                           pdata.grid_size,
                                            stream);
 
       // Handle bitmask using gather to take advantage of ballot_sync
@@ -608,16 +641,16 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   } else {
     // Compute a scatter map from input to output such that the output rows are
     // sorted by partition number
-    auto row_output_locations{row_partition_numbers.data()};
+    auto row_output_locations{pdata.row_partition_numbers.data()};
     auto scanned_block_partition_sizes_ptr{scanned_block_partition_sizes.data()};
-    compute_row_output_locations<<<grid_size,
-                                   block_size,
+    compute_row_output_locations<<<pdata.grid_size,
+                                   pdata.block_size,
                                    num_partitions * sizeof(size_type),
                                    stream.value()>>>(
       row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
     // Use the resulting scatter map to materialize the output
-    auto output = detail::scatter(input, row_partition_numbers, input, stream, mr);
+    auto output = detail::scatter(input, pdata.row_partition_numbers, input, stream, mr);
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
     return std::pair(std::move(output), std::move(partition_offsets));
@@ -716,72 +749,25 @@ struct dispatch_map_type {
     CUDF_FAIL("Unexpected, non-integral partition map.");
   }
 };
-}  // namespace
 
-// NOTE hash_has_nulls must be true if table_to_hash has nulls
-template <template <typename> class hash_function, bool hash_has_nulls>
-std::vector<std::unique_ptr<column>> hash_partition_indices_impl(table_view const& table_to_hash,
-                                                                 size_type num_partitions,
-                                                                 uint32_t seed,
-                                                                 rmm::cuda_stream_view stream,
-                                                                 rmm::device_async_resource_ref mr)
+/**
+ * @brief Creates partition index columns from partition data.
+ *
+ * @param pdata The partition data computed by compute_partition_data
+ * @param num_rows Total number of rows
+ * @param num_partitions Number of partitions
+ * @param stream CUDA stream
+ * @param mr Memory resource for output allocations
+ * @return Vector of columns, each containing row indices for one partition
+ */
+std::vector<std::unique_ptr<column>> create_partition_indices(partition_data& pdata,
+                                                              size_type num_rows,
+                                                              size_type num_partitions,
+                                                              rmm::cuda_stream_view stream,
+                                                              rmm::device_async_resource_ref mr)
 {
-  auto const num_rows = table_to_hash.num_rows();
-
-  auto const block_size      = FALLBACK_BLOCK_SIZE;
-  auto const rows_per_thread = FALLBACK_ROWS_PER_THREAD;
-  auto const rows_per_block  = block_size * rows_per_thread;
-
-  auto grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
-
-  // Allocate array to hold which partition each row belongs to
-  auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
-
-  // Array to hold the size of each partition computed by each block
-  auto block_partition_sizes = rmm::device_uvector<size_type>(grid_size * num_partitions, stream);
-
-  // Holds the total number of rows in each partition
-  auto global_partition_sizes = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_partitions, stream, cudf::get_current_device_resource_ref());
-
-  auto row_partition_offset = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_rows, stream, cudf::get_current_device_resource_ref());
-
-  auto const row_hasher = detail::row::hash::row_hasher(table_to_hash, stream);
-  auto const hasher =
-    row_hasher.device_hasher<hash_function>(nullate::DYNAMIC{hash_has_nulls}, seed);
-
-  // Compute partition numbers
-  if (is_power_two(num_partitions)) {
-    using partitioner_type = bitwise_partitioner<hash_value_type>;
-    compute_row_partition_numbers<<<grid_size,
-                                    block_size,
-                                    num_partitions * sizeof(size_type),
-                                    stream.value()>>>(hasher,
-                                                      num_rows,
-                                                      num_partitions,
-                                                      partitioner_type(num_partitions),
-                                                      row_partition_numbers.data(),
-                                                      row_partition_offset.data(),
-                                                      block_partition_sizes.data(),
-                                                      global_partition_sizes.data());
-  } else {
-    using partitioner_type = modulo_partitioner<hash_value_type>;
-    compute_row_partition_numbers<<<grid_size,
-                                    block_size,
-                                    num_partitions * sizeof(size_type),
-                                    stream.value()>>>(hasher,
-                                                      num_rows,
-                                                      num_partitions,
-                                                      partitioner_type(num_partitions),
-                                                      row_partition_numbers.data(),
-                                                      row_partition_offset.data(),
-                                                      block_partition_sizes.data(),
-                                                      global_partition_sizes.data());
-  }
-
   // Copy partition sizes to host (synchronous)
-  auto const partition_sizes = cudf::detail::make_std_vector(global_partition_sizes, stream);
+  auto const partition_sizes = cudf::detail::make_std_vector(pdata.global_partition_sizes, stream);
 
   // Compute exclusive scan of partition sizes to get offsets
   std::vector<size_type> partition_offsets(num_partitions + 1);
@@ -799,7 +785,7 @@ std::vector<std::unique_ptr<column>> hash_partition_indices_impl(table_view cons
   thrust::for_each(rmm::exec_policy(stream),
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(num_rows),
-                   [row_partition_numbers = row_partition_numbers.data(),
+                   [row_partition_numbers = pdata.row_partition_numbers.data(),
                     partition_offsets     = d_partition_offsets.data(),
                     output                = all_indices.data()] __device__(size_type row_idx) {
                      size_type const partition = row_partition_numbers[row_idx];
@@ -818,10 +804,8 @@ std::vector<std::unique_ptr<column>> hash_partition_indices_impl(table_view cons
   for (size_type p = 0; p < num_partitions; ++p) {
     auto const partition_size = partition_sizes[p];
     if (partition_size == 0) {
-      // Create empty column
-      result.push_back(make_empty_column(data_type{type_id::INT32}));
+      result.push_back(make_empty_column(data_type{type_to_id<size_type>()}));
     } else {
-      // Create column from the appropriate slice of all_indices
       auto const offset = partition_offsets[p];
       rmm::device_buffer buffer(partition_size * sizeof(size_type), stream, mr);
       CUDF_CUDA_TRY(cudaMemcpyAsync(buffer.data(),
@@ -829,16 +813,32 @@ std::vector<std::unique_ptr<column>> hash_partition_indices_impl(table_view cons
                                     partition_size * sizeof(size_type),
                                     cudaMemcpyDefault,
                                     stream.value()));
-      result.push_back(std::make_unique<column>(
-        data_type{type_id::INT32}, partition_size, std::move(buffer), rmm::device_buffer{}, 0));
+      result.push_back(std::make_unique<column>(data_type{type_to_id<size_type>()},
+                                                partition_size,
+                                                std::move(buffer),
+                                                rmm::device_buffer{},
+                                                0));
     }
   }
 
   return result;
 }
 
-namespace detail {
-namespace {
+// NOTE hash_has_nulls must be true if table_to_hash has nulls
+template <template <typename> class hash_function, bool hash_has_nulls>
+std::vector<std::unique_ptr<column>> hash_partition_indices_impl(table_view const& table_to_hash,
+                                                                 size_type num_partitions,
+                                                                 uint32_t seed,
+                                                                 rmm::cuda_stream_view stream,
+                                                                 rmm::device_async_resource_ref mr)
+{
+  auto pdata = compute_partition_data<hash_function, hash_has_nulls>(
+    table_to_hash, num_partitions, seed, false, stream);
+
+  return create_partition_indices(pdata, table_to_hash.num_rows(), num_partitions, stream, mr);
+}
+
+}  // namespace
 
 /**
  * @brief This hash function simply returns the input value cast to the
@@ -889,7 +889,36 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
       input, table_to_hash, num_partitions, seed, stream, mr);
   }
 }
-}  // namespace
+
+template <template <typename> class hash_function>
+std::vector<std::unique_ptr<column>> hash_partition_indices(
+  table_view const& input,
+  std::vector<size_type> const& columns_to_hash,
+  int num_partitions,
+  uint32_t seed,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto table_to_hash = input.select(columns_to_hash);
+
+  // Return empty columns if there are no partitions or nothing to hash
+  if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
+    std::vector<std::unique_ptr<column>> result;
+    result.reserve(num_partitions);
+    for (int i = 0; i < num_partitions; ++i) {
+      result.push_back(make_empty_column(data_type{type_to_id<size_type>()}));
+    }
+    return result;
+  }
+
+  if (has_nested_nulls(table_to_hash)) {
+    return hash_partition_indices_impl<hash_function, true>(
+      table_to_hash, num_partitions, seed, stream, mr);
+  } else {
+    return hash_partition_indices_impl<hash_function, false>(
+      table_to_hash, num_partitions, seed, stream, mr);
+  }
+}
 
 std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
@@ -963,39 +992,17 @@ std::vector<std::unique_ptr<column>> hash_partition_indices(
 {
   CUDF_FUNC_RANGE();
 
-  auto table_to_hash = input.select(columns_to_hash);
-
-  // Return empty columns if there are no partitions or nothing to hash
-  if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    std::vector<std::unique_ptr<column>> result;
-    result.reserve(num_partitions);
-    for (int i = 0; i < num_partitions; ++i) {
-      result.push_back(make_empty_column(data_type{type_id::INT32}));
-    }
-    return result;
-  }
-
   switch (hash_function) {
     case (hash_id::HASH_IDENTITY):
       for (size_type const& column_id : columns_to_hash) {
         if (!is_numeric(input.column(column_id).type()))
           CUDF_FAIL("IdentityHash does not support this data type");
       }
-      if (has_nested_nulls(table_to_hash)) {
-        return hash_partition_indices_impl<detail::IdentityHash, true>(
-          table_to_hash, num_partitions, seed, stream, mr);
-      } else {
-        return hash_partition_indices_impl<detail::IdentityHash, false>(
-          table_to_hash, num_partitions, seed, stream, mr);
-      }
+      return detail::hash_partition_indices<detail::IdentityHash>(
+        input, columns_to_hash, num_partitions, seed, stream, mr);
     case (hash_id::HASH_MURMUR3):
-      if (has_nested_nulls(table_to_hash)) {
-        return hash_partition_indices_impl<cudf::hashing::detail::MurmurHash3_x86_32, true>(
-          table_to_hash, num_partitions, seed, stream, mr);
-      } else {
-        return hash_partition_indices_impl<cudf::hashing::detail::MurmurHash3_x86_32, false>(
-          table_to_hash, num_partitions, seed, stream, mr);
-      }
+      return detail::hash_partition_indices<cudf::hashing::detail::MurmurHash3_x86_32>(
+        input, columns_to_hash, num_partitions, seed, stream, mr);
     default: CUDF_FAIL("Unsupported hash function in hash_partition_indices");
   }
 }
