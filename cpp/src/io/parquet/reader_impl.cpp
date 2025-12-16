@@ -183,7 +183,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   if (has_strings) {
     // Host vector to initialize the initial string offsets
     auto host_offsets_vector =
-      cudf::detail::make_pinned_vector<size_t>(_input_columns.size(), _stream);
+      cudf::detail::make_pinned_vector_async<size_t>(_input_columns.size(), _stream);
     std::fill(
       host_offsets_vector.begin(), host_offsets_vector.end(), std::numeric_limits<size_t>::max());
     // Initialize the initial string offsets vector from the host vector
