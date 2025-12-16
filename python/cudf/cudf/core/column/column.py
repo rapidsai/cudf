@@ -52,7 +52,6 @@ from cudf.core.buffer import (
     acquire_spill_lock,
     as_buffer,
 )
-from cudf.core.buffer.spillable_buffer import SpillableBuffer
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -146,6 +145,18 @@ class MaskCAIWrapper:
         )
         return cai
 
+    @property
+    def ptr(self) -> int:
+        """Device pointer (Span protocol)."""
+        return self._mask.__cuda_array_interface__["data"][0]
+
+    @property
+    def size(self) -> int:
+        """Size in bytes (Span protocol)."""
+        return plc.null_mask.bitmask_allocation_size_bytes(
+            self._mask.__cuda_array_interface__["shape"][0]
+        )
+
 
 class ROCAIWrapper:
     # A wrapper that exposes the __cuda_array_interface__ of a buffer as read-only to
@@ -167,43 +178,18 @@ class ROCAIWrapper:
             "shape": (self._buffer.size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }
 
-
-class spillable_gpumemoryview(plc.gpumemoryview):
-    """
-    HACK: Prevent automatic unspilling of `SpillableBuffer` objects
-    when constructing `plc.Column`.
-
-    The `plc.Column()` constructor expects a `gpumemoryview` object,
-    but wrapping a `SpillableBuffer` directly in a `gpumemoryview`
-    forces the buffer to unspill (materialize) its device data prematurely.
-
-    To avoid this, we wrap spillable buffers in this subclass that implements
-    only the `.obj` attribute; the only attribute actually accessed by
-    `.from_pylibcudf()`. All other attributes intentionally raise errors to
-    prevent accidental usage paths that would cause unspilling.
-    """
-
-    def __init__(self, buf: SpillableBuffer) -> None:
-        self._buf = buf
+    @property
+    def ptr(self) -> int:
+        """Device pointer (Span protocol)."""
+        return self._buffer.get_ptr(mode=self._mode)
 
     @property
-    def obj(self) -> SpillableBuffer:
-        return self._buf
-
-    @property
-    def cai(self) -> None:  # type: ignore[override]
-        assert False
-
-    @property
-    def ptr(self) -> None:  # type: ignore[override]
-        assert False
-
-    @property
-    def nbytes(self) -> None:  # type: ignore[override]
-        assert False
+    def size(self) -> int:
+        """Size in bytes (Span protocol)."""
+        return self._buffer.size
 
 
 class ColumnBase(Serializable, BinaryOperand, Reducible):
@@ -230,10 +216,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: DtypeObj,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not (
@@ -244,15 +227,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 f"plc_column must be a pylibcudf.Column with a TypeId in {self._VALID_PLC_TYPES}"
             )
         self.plc_column = plc_column
-        if size < 0:
-            raise ValueError("size must be >=0")
-        self._size = size
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        self._offset = offset
-        if null_count < 0:
-            raise ValueError("null_count must be >=0")
-        self._null_count = null_count
         self._mask = None
         self._base_mask = None
         self._data = None
@@ -263,7 +239,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         mask_view = plc_column.null_mask()
         mask = (
-            as_buffer(mask_view.obj, exposed=exposed)
+            as_buffer(mask_view, exposed=exposed)
             if mask_view is not None
             else None
         )
@@ -305,7 +281,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         data_view = plc_column.data()
         return (
-            as_buffer(data_view.obj, exposed=exposed)
+            as_buffer(data_view, exposed=exposed)
             if data_view is not None
             else None
         )
@@ -368,7 +344,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def size(self) -> int:
-        return self._size
+        return self.plc_column.size()
 
     @property
     def base_data(self) -> None | Buffer:
@@ -452,6 +428,25 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._mask = None
         self._children = None
         self._base_mask = value  # type: ignore[assignment]
+
+        # Update plc_column with the new mask and compute null_count eagerly
+        if value is not None:
+            new_null_count = plc.null_mask.null_count(
+                value,
+                self.offset,
+                self.offset + self.size,
+            )
+            new_mask = value
+        else:
+            new_mask = None
+            new_null_count = 0
+
+        self.plc_column = self.plc_column.with_mask(
+            new_mask,
+            new_null_count,
+            validate=False,
+        )
+
         self._clear_cache()
 
     def _clear_cache(self) -> None:
@@ -467,7 +462,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             except AttributeError:
                 # attr was not called yet, so ignore.
                 pass
-        self._null_count = None  # type: ignore[assignment]
 
     def set_mask(self, mask: Buffer | None) -> Self:
         """
@@ -475,12 +469,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         The input mask is assumed to be of appropriate size for self.
         """
         if isinstance(mask, Buffer):
-            new_mask = plc.gpumemoryview(mask)
             new_null_count = plc.null_mask.null_count(
-                new_mask,
+                mask,
                 0,
                 self.size,
             )
+            new_mask = mask
         elif mask is None:
             new_mask = None
             new_null_count = 0
@@ -501,21 +495,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def null_count(self) -> int:
-        if self._null_count is None:
-            if not self.nullable or self.size == 0:
-                self._null_count = 0
-            else:
-                with acquire_spill_lock():
-                    self._null_count = plc.null_mask.null_count(
-                        plc.gpumemoryview(self.base_mask),
-                        self.offset,
-                        self.offset + self.size,
-                    )
-        return self._null_count
+        return self.plc_column.null_count()
 
     @property
     def offset(self) -> int:
-        return self._offset
+        return self.plc_column.offset()
 
     @property
     def base_children(self) -> tuple[ColumnBase, ...]:
@@ -563,10 +547,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         object with the Buffers and attributes from the other column.
         """
         if inplace:
-            self._offset = other_col.offset
-            self._size = other_col.size
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
+            # Note: size and offset are now read from plc_column via properties
             self.set_base_data(other_col.base_data)
             self.set_base_children(other_col.base_children)
             self.set_base_mask(other_col.base_mask)
@@ -623,7 +606,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if not use_base:
                 assert col.data is not None
                 data_buff = col.data
-            data = plc.gpumemoryview(ROCAIWrapper(data_buff, mode))
+            data = ROCAIWrapper(data_buff, mode)
 
         mask = None
         if self.nullable:
@@ -634,7 +617,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if not use_base:
                 assert self.mask is not None
                 mask_buff = self.mask
-            mask = plc.gpumemoryview(ROCAIWrapper(mask_buff, mode))
+            mask = ROCAIWrapper(mask_buff, mode)
 
         children = []
         if col.base_children:
@@ -727,10 +710,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         return column_cls(  # type: ignore[return-value]
             plc_column=col,
-            size=col.size(),
             dtype=dtype,
-            offset=col.offset(),
-            null_count=col.null_count(),
             exposed=data_ptr_exposed,
         )
 
@@ -1177,10 +1157,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             col = type(self)(
                 plc_column=self.plc_column,
-                size=self.size,
                 dtype=self.dtype,
-                offset=self.offset,
-                null_count=self.null_count,
                 exposed=False,
             )
             # copy-on-write and spilling logic tracked on the Buffers
@@ -2012,8 +1989,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if cudf.get_option("copy_on_write") and (data_ptr != original_ptr):
                 # The offset must be reset to 0 because we have migrated to a new copied
                 # buffer starting at the old offset.
-                self._offset = 0
-                # Update base_data to match the new data buffer
+                self.plc_column = plc.Column(
+                    data_type=self.plc_column.type(),
+                    size=self.plc_column.size(),
+                    data=self.plc_column.data(),
+                    mask=self.plc_column.null_mask(),
+                    null_count=self.plc_column.null_count(),
+                    offset=0,
+                    children=self.plc_column.children(),
+                )
                 self.set_base_data(self.data)
 
         output = {
@@ -2021,7 +2005,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
             "data": (data_ptr, False),
-            "version": 1,
+            "version": 3,
         }
         data_buf = self._data if self._data is not None else self._base_data
         if data_buf is not None:
@@ -2185,9 +2169,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask is None:
             null_count = 0
         else:
-            null_count = plc.null_mask.null_count(
-                plc.gpumemoryview(mask), 0, header["size"]
-            )
+            null_count = plc.null_mask.null_count(mask, 0, header["size"])
         if isinstance(dtype, IntervalDtype):
             # TODO: Handle in dtype_to_pylibcudf_type?
             plc_type = plc.DataType(plc.TypeId.STRUCT)
@@ -2198,15 +2180,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if isinstance(dtype, CategoricalDtype):
             data = children.pop(0)
 
-        if isinstance(data, SpillableBuffer):
-            data = spillable_gpumemoryview(data)
-        elif data is not None:
-            data = plc.gpumemoryview(data)
-        if isinstance(mask, SpillableBuffer):
-            mask = spillable_gpumemoryview(mask)
-        elif mask is not None:
-            mask = plc.gpumemoryview(mask)
-
         plc_column = plc.Column(
             plc_type,
             header["size"],
@@ -2215,6 +2188,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             null_count,
             0,
             [child.to_pylibcudf(mode="read") for child in children],
+            validate=False,  # Skip validation to avoid triggering SpillableBuffer.ptr
         )
         return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
 
@@ -2678,10 +2652,8 @@ def column_empty(
         mask = (
             None
             if row_count == 0
-            else plc.gpumemoryview(
-                plc.null_mask.create_null_mask(
-                    row_count, plc.types.MaskState.ALL_NULL
-                )
+            else plc.null_mask.create_null_mask(
+                row_count, plc.types.MaskState.ALL_NULL
             )
         )
         return ColumnBase.from_pylibcudf(
@@ -3220,7 +3192,13 @@ def as_column(
                 # pd.Series(arbitrary) might be already inferred as IntervalDtype
                 ser = pd.Series(arbitrary).astype(dtype)
             else:
-                ser = pd.Series(arbitrary, dtype=dtype)
+                ser = pd.Series(
+                    arbitrary, dtype=pd.CategoricalDtype(ordered=dtype.ordered)
+                )
+                if dtype.categories is not None:
+                    ser = ser.cat.set_categories(
+                        dtype.categories, ordered=dtype.ordered
+                    )
         elif dtype == object and not cudf.get_option("mode.pandas_compatible"):
             # Unlike pandas, interpret object as "str" instead of "python object"
             ser = pd.Series(arbitrary, dtype="str")
