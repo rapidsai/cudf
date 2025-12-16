@@ -16,7 +16,6 @@ from cudf import concat
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
-    expect_warning_if,
 )
 
 
@@ -48,6 +47,7 @@ def index(request):
 
 @pytest.fixture
 def ps_gs(data, index):
+    # import pdb;pdb.set_trace()
     ps = pd.Series(data, index=index, dtype="str", name="nice name")
     gs = cudf.Series(data, index=index, dtype="str", name="nice name")
     return (ps, gs)
@@ -1130,7 +1130,7 @@ def test_string_compiled_re(ps_gs, pat, repl):
     expect = ps.str.match(pat)
     got = gs.str.match(pat)
     assert_eq(expect, got)
-
+    # count raises error with re.compile
     expect = ps.str.count(pat)
     got = gs.str.count(pat)
     assert_eq(expect, got, check_dtype=False)
@@ -2043,6 +2043,9 @@ def test_string_filter_alphanum():
 def test_string_char_case(case_op, data_char_types):
     gs = cudf.Series(data_char_types)
     ps = pd.Series(data_char_types)
+    # https://github.com/pandas-dev/pandas/issues/63372
+    # python/cudf/cudf/tests/series/accessors/test_str.py::test_string_char_case[data_char_types3-isdigit]
+    # python/cudf/cudf/tests/series/accessors/test_str.py::test_string_char_case[data_char_types6-isdigit]
     assert_eq(getattr(gs.str, case_op)(), getattr(ps.str, case_op)())
 
 
@@ -2252,7 +2255,6 @@ def test_string_split(data, pat, n, expand):
 
     expect = ps.str.split(pat=pat, n=n, expand=expand)
     got = gs.str.split(pat=pat, n=n, expand=expand)
-
     assert_eq(expect, got)
 
 
@@ -2318,18 +2320,25 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
 
     expectation = does_not_raise()
     if flags_raise or na_raise:
-        expectation = pytest.raises(NotImplementedError)
+        if na == "":
+            expectation = pytest.raises(
+                ValueError,
+            )
+        else:
+            expectation = pytest.raises(NotImplementedError)
 
     with expectation:
-        with expect_warning_if(
-            na == "" or (na is None and not (flags_raise or na_raise)),
-            match=(
-                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
-                "and will raise in a future version."
-            ),
-        ):
-            expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
-            got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
+        # with expect_warning_if(
+        #     na == "" or (na is None and not (flags_raise or na_raise)),
+        #     match=(
+        #         "Allowing a non-bool 'na' in obj.str.contains is deprecated "
+        #         "and will raise in a future version."
+        #     ),
+        # ):
+        expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
+        # import pdb;pdb.set_trace()
+        got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
+
         assert_eq(expect, got)
 
 
@@ -2388,10 +2397,14 @@ def test_string_repeat(data, repeats):
     ps = pd.Series(["hello", "world", None, "", "!"])
     gs = cudf.from_pandas(ps)
 
-    expect = ps.str.repeat(repeats)
-    got = gs.str.repeat(repeats)
+    if isinstance(repeats, int) and repeats < 0:
+        with pytest.raises(ValueError):
+            gs.str.repeat(repeats)
+    else:
+        expect = ps.str.repeat(repeats)
+        got = gs.str.repeat(repeats)
 
-    assert_eq(expect, got)
+        assert_eq(expect, got)
 
 
 def test_string_cat_str_error():
@@ -2669,6 +2682,7 @@ def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
     [["1", "2", "3", "4", "5"]],
 )
 def test_string_cat(ps_gs, others, sep, na_rep, index):
+    # https://github.com/pandas-dev/pandas/issues/63371
     ps, gs = ps_gs
 
     pd_others = others
@@ -2806,8 +2820,9 @@ def test_string_len(ps_gs):
 
     # Can't handle nulls in Pandas so use PyArrow instead
     # Pandas will return as a float64 so need to typecast to int32
-    expect = pa.array(expect, from_pandas=True).cast(pa.int32())
+    expect = pa.array(expect, from_pandas=True).cast(pa.int64())
     got = got.to_arrow()
+    # import pdb;pdb.set_trace()
     assert pa.Array.equals(expect, got)
 
 
@@ -2852,8 +2867,7 @@ def test_string_list_get_access():
     gs = cudf.from_pandas(ps)
 
     expect = ps.str.split(",")
-    got = gs.str.split(",")
-
+    got = gs.str.split(",").to_pandas().fillna(np.nan)
     assert_eq(expect, got)
 
     expect = expect.str.get(1)

@@ -337,9 +337,15 @@ class StringColumn(ColumnBase, Scannable):
         Returns the result with appropriate boolean type metadata based on
         the source column's dtype and pandas compatibility mode.
         """
+        if (
+            isinstance(self.dtype, pd.StringDtype)
+            and self.dtype.na_value is np.nan
+        ):
+            result = result.fillna(False)
         if cudf.get_option("mode.pandas_compatible"):
             new_type = self._get_pandas_compatible_dtype(np.dtype("bool"))
             return result._with_type_metadata(new_type)
+
         return result
 
     def _apply_pandas_int_metadata(self, result: ColumnBase) -> ColumnBase:

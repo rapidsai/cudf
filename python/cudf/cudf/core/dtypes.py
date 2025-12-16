@@ -72,6 +72,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
         if np_dtype.kind == "O":
             return CUDF_STRING_DTYPE
         elif np_dtype.kind == "U":
+            return pd.StringDtype(na_value=np.nan)
             if cudf.get_option("mode.pandas_compatible"):
                 return np_dtype
             return CUDF_STRING_DTYPE

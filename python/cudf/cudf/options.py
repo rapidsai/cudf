@@ -297,7 +297,7 @@ _register_option(
 
 _register_option(
     "mode.pandas_compatible",
-    False,
+    True,
     textwrap.dedent(
         """
         If set to `False`, retains `cudf` specific behavior.
