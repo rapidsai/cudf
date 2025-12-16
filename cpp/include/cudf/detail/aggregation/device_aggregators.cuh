@@ -223,6 +223,96 @@ struct update_target_element<dictionary32, k> {
   }
 };
 
+template <aggregation::Kind k>
+  requires(k == aggregation::ARGMIN)
+struct update_target_element<dictionary32, k> {
+  struct target_from_dictionary {
+    template <typename KeysType>
+    __device__ void operator()(mutable_column_device_view target,
+                               size_type target_index,
+                               column_device_view source,
+                               size_type source_index) const noexcept
+      requires(!is_dictionary<KeysType>() && cudf::is_relationally_comparable<KeysType, KeysType>())
+    {
+      using Target = target_type_t<KeysType, aggregation::ARGMIN>;
+      auto old     = cudf::detail::atomic_cas(
+        &target.element<Target>(target_index), ARGMIN_SENTINEL, source_index);
+      if (old != ARGMIN_SENTINEL) {
+        auto const keys       = source.child(cudf::dictionary_column_view::keys_column_index);
+        auto source_key_index = source.element<dictionary32>(source_index).value();
+        auto old_key_index    = source.element<dictionary32>(old).value();
+        while (keys.element<KeysType>(source_key_index) < keys.element<KeysType>(old_key_index)) {
+          old = cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_index);
+          old_key_index = source.element<dictionary32>(old).value();
+        }
+      }
+    }
+    template <typename KeysType>
+    __device__ void operator()(mutable_column_device_view,
+                               size_type,
+                               column_device_view,
+                               size_type) const noexcept
+      requires(is_dictionary<KeysType>() or
+               not cudf::is_relationally_comparable<KeysType, KeysType>())
+    {
+    }
+  };
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+    auto const keys = source.child(cudf::dictionary_column_view::keys_column_index);
+    type_dispatcher<dispatch_storage_type>(
+      keys.type(), target_from_dictionary{}, target, target_index, source, source_index);
+  }
+};
+
+template <aggregation::Kind k>
+  requires(k == aggregation::ARGMAX)
+struct update_target_element<dictionary32, k> {
+  struct target_from_dictionary {
+    template <typename KeysType>
+    __device__ void operator()(mutable_column_device_view target,
+                               size_type target_index,
+                               column_device_view source,
+                               size_type source_index) const noexcept
+      requires(!is_dictionary<KeysType>() && cudf::is_relationally_comparable<KeysType, KeysType>())
+    {
+      using Target = target_type_t<KeysType, aggregation::ARGMAX>;
+      auto old     = cudf::detail::atomic_cas(
+        &target.element<Target>(target_index), ARGMAX_SENTINEL, source_index);
+      if (old != ARGMAX_SENTINEL) {
+        auto const keys       = source.child(cudf::dictionary_column_view::keys_column_index);
+        auto source_key_index = source.element<dictionary32>(source_index).value();
+        auto old_key_index    = source.element<dictionary32>(old).value();
+        while (keys.element<KeysType>(source_key_index) > keys.element<KeysType>(old_key_index)) {
+          old = cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_index);
+          old_key_index = source.element<dictionary32>(old).value();
+        }
+      }
+    }
+    template <typename KeysType>
+    __device__ void operator()(mutable_column_device_view,
+                               size_type,
+                               column_device_view,
+                               size_type) const noexcept
+      requires(is_dictionary<KeysType>() or
+               not cudf::is_relationally_comparable<KeysType, KeysType>())
+    {
+    }
+  };
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+    auto const keys = source.child(cudf::dictionary_column_view::keys_column_index);
+    type_dispatcher<dispatch_storage_type>(
+      keys.type(), target_from_dictionary{}, target, target_index, source, source_index);
+  }
+};
+
 template <typename Source>
   requires(is_product_supported<Source>())
 struct update_target_element<Source, aggregation::SUM_OF_SQUARES> {
@@ -278,8 +368,7 @@ struct update_target_element<Source, aggregation::COUNT_ALL> {
 };
 
 template <typename Source>
-  requires(is_valid_aggregation<Source, aggregation::ARGMAX>() &&
-           cudf::is_relationally_comparable<Source, Source>())
+  requires(!cudf::is_dictionary<Source>() && cudf::is_relationally_comparable<Source, Source>())
 struct update_target_element<Source, aggregation::ARGMAX> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
@@ -298,8 +387,7 @@ struct update_target_element<Source, aggregation::ARGMAX> {
 };
 
 template <typename Source>
-  requires(is_valid_aggregation<Source, aggregation::ARGMIN>() &&
-           cudf::is_relationally_comparable<Source, Source>())
+  requires(!cudf::is_dictionary<Source>() && cudf::is_relationally_comparable<Source, Source>())
 struct update_target_element<Source, aggregation::ARGMIN> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
