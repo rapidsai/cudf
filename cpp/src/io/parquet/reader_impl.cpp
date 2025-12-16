@@ -417,10 +417,10 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   // that it is difficult/impossible for a given page to know that it is writing the very
   // last value that should then be followed by a terminator (because rows can span
   // page boundaries).
-  std::vector<size_type*> out_buffers;
-  std::vector<size_type> final_offsets;
-  out_buffers.reserve(_input_columns.size());
-  final_offsets.reserve(_input_columns.size());
+  auto out_buffers =
+    cudf::detail::make_empty_host_vector<size_type*>(_input_columns.size(), _stream);
+  auto final_offsets =
+    cudf::detail::make_empty_host_vector<size_type>(_input_columns.size(), _stream);
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     input_column_info const& input_col = _input_columns[idx];
 
@@ -436,14 +436,14 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
         // the final offset for a list at level N is the size of it's child
         size_type const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-        out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1));
-        final_offsets.emplace_back(offset);
+        out_buffers.push_back(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1));
+        final_offsets.push_back(offset);
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // only if it is not a large strings column
         if (std::cmp_less_equal(col_string_sizes[idx], strings::detail::get_offset64_threshold())) {
-          out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
-          final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
+          out_buffers.push_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
+          final_offsets.push_back(static_cast<size_type>(col_string_sizes[idx]));
         }
         // Nested large strings column
         else if (input_col.nesting_depth() > 0) {
@@ -1000,33 +1000,20 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   // Min number of nullmasks to use bulk update optimally
   constexpr auto min_nullmasks_for_bulk_update = 32;
 
+  // Use a bounce buffer to avoid pageable copies
   auto null_masks =
     cudf::detail::make_pinned_vector_async<bitmask_type*>(host_null_masks.size(), _stream);
   auto begin_bits =
     cudf::detail::make_pinned_vector_async<cudf::size_type>(host_begin_bits.size(), _stream);
   auto end_bits =
     cudf::detail::make_pinned_vector_async<cudf::size_type>(host_end_bits.size(), _stream);
-
-  cudf::detail::cuda_memcpy_async(
-    cudf::host_span<bitmask_type*>{null_masks.data(), host_null_masks.size()},
-    cudf::device_span<bitmask_type* const>{host_null_masks.data(), host_null_masks.size()},
-    _stream);
-
-  cudf::detail::cuda_memcpy_async(
-    cudf::host_span<cudf::size_type>{begin_bits.data(), host_begin_bits.size()},
-    cudf::device_span<cudf::size_type const>{host_begin_bits.data(), host_begin_bits.size()},
-    _stream);
-
-  cudf::detail::cuda_memcpy_async(
-    cudf::host_span<cudf::size_type>{end_bits.data(), host_end_bits.size()},
-    cudf::device_span<cudf::size_type const>{host_end_bits.data(), host_end_bits.size()},
-    _stream);
-
-  _stream.synchronize();
+  std::move(host_null_masks.begin(), host_null_masks.end(), null_masks.begin());
+  std::move(host_begin_bits.begin(), host_begin_bits.end(), begin_bits.begin());
+  std::move(host_end_bits.begin(), host_end_bits.end(), end_bits.begin());
 
   // Bulk update the nullmasks if the number of pages is above the threshold
   if (null_masks.size() >= min_nullmasks_for_bulk_update) {
-    auto valids = cudf::detail::make_pinned_vector_async<bool>(host_null_masks.size(), _stream);
+    auto valids = cudf::detail::make_pinned_vector_async<bool>(null_masks.size(), _stream);
     std::fill(valids.begin(), valids.end(), false);
     cudf::set_null_masks_safe(null_masks, begin_bits, end_bits, valids, _stream);
   }

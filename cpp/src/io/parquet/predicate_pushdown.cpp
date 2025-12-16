@@ -445,14 +445,13 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
                "Filter expression must return a boolean column");
 
-  auto const host_bitmask = [&] {
-    auto const num_bitmasks = num_bitmask_words(predicate.size());
+  auto host_bitmask = [&] {
+    std::size_t const num_bitmasks = num_bitmask_words(predicate.size());
     if (predicate.nullable()) {
       auto bitmask = cudf::detail::make_pinned_vector_async<bitmask_type>(num_bitmasks, stream);
       cudf::detail::cuda_memcpy(
-        cudf::host_span<bitmask_type>{bitmask.data(), static_cast<size_t>(num_bitmasks)},
-        cudf::device_span<bitmask_type const>{predicate.null_mask(),
-                                              static_cast<size_t>(num_bitmasks)},
+        cudf::host_span<bitmask_type>{bitmask.data(), num_bitmasks},
+        cudf::device_span<bitmask_type const>{predicate.null_mask(), num_bitmasks},
         stream);
       return bitmask;
     } else {
@@ -469,9 +468,8 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   auto is_row_group_required =
     cudf::detail::make_pinned_vector_async<uint8_t>(predicate.size(), stream);
   cudf::detail::cuda_memcpy(
-    cudf::host_span<uint8_t>{is_row_group_required.data(), static_cast<size_t>(predicate.size())},
-    cudf::device_span<uint8_t const>{predicate.data<uint8_t>(),
-                                     static_cast<size_t>(predicate.size())},
+    cudf::host_span<uint8_t>(is_row_group_required.data(), predicate.size()),
+    cudf::device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()),
     stream);
 
   // Return if all are required, or all are nulls.

@@ -281,6 +281,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
 {
   auto const num_pages = pages.size();
   auto page_indexes    = cudf::detail::make_pinned_vector_async<page_index_info>(num_pages, stream);
+  auto page_indexes    = cudf::detail::make_pinned_vector_async<page_index_info>(num_pages, stream);
 
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
@@ -447,7 +448,7 @@ void decode_page_headers(pass_intermediate_data& pass,
   if (has_page_index) {
     auto host_page_locations =
       cudf::detail::make_pinned_vector_async<uint8_t*>(unsorted_pages.size(), stream);
-    auto current_page_idx = cudf::size_type{0};
+    auto curr_page_idx = 0;
 
     std::for_each(pass.chunks.begin(), pass.chunks.end(), [&](auto const& chunk) {
       // Column chunk buffer's data pointer
@@ -464,8 +465,8 @@ void decode_page_headers(pass_intermediate_data& pass,
         CUDF_EXPECTS(std::cmp_less(chunk.h_chunk_info->dictionary_offset.value(),
                                    chunk.h_chunk_info->pages.front().location.offset),
                      "Encountered dictionary page located beyond the first data page");
-        host_page_locations[current_page_idx] = data_ptr;
-        current_page_idx++;
+        host_page_locations[curr_page_idx] = data_ptr;
+        ++curr_page_idx;
         data_ptr += chunk.h_chunk_info->dictionary_size.value();
       }
 
@@ -477,8 +478,8 @@ void decode_page_headers(pass_intermediate_data& pass,
       std::for_each(thrust::counting_iterator(0),
                     thrust::counting_iterator(num_data_pages),
                     [&](auto const page_idx) {
-                      host_page_locations[current_page_idx] = data_ptr;
-                      current_page_idx++;
+                      host_page_locations[curr_page_idx] = data_ptr;
+                      ++curr_page_idx;
                       if (page_idx < num_data_pages - 1) {
                         data_ptr += chunk.h_chunk_info->pages[page_idx + 1].location.offset -
                                     chunk.h_chunk_info->pages[page_idx].location.offset;
@@ -487,7 +488,7 @@ void decode_page_headers(pass_intermediate_data& pass,
     });
 
     // Check if we have data ptrs for all input pages
-    CUDF_EXPECTS(std::cmp_equal(current_page_idx, unsorted_pages.size()),
+    CUDF_EXPECTS(std::cmp_equal(curr_page_idx, unsorted_pages.size()),
                  "Expected page offsets to match total pages");
 
     // Copy page data ptrs to device

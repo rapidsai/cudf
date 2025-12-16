@@ -1124,12 +1124,10 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   //  Search the Fenwick tree to see if there's a surviving row in each page's row range
   auto const num_ranges = static_cast<cudf::size_type>(page_row_offsets.size() - 1);
   rmm::device_uvector<bool> device_data_page_mask(num_ranges, stream, mr);
+  // Use a pinned bounce buffer to avoid pageable h2d copy
   auto host_page_offsets =
-    cudf::detail::make_pinned_vector_async<size_type>(page_row_offsets.size(), stream);
-  cudf::detail::cuda_memcpy(
-    cudf::host_span<size_type>{host_page_offsets.data(), page_row_offsets.size()},
-    cudf::device_span<size_type const>{page_row_offsets.data(), page_row_offsets.size()},
-    stream);
+    cudf::detail::make_pinned_vector_async<cudf::size_type>(page_row_offsets.size(), stream);
+  std::move(page_row_offsets.begin(), page_row_offsets.end(), host_page_offsets.begin());
   auto page_offsets = cudf::detail::make_device_uvector_async(host_page_offsets, stream, mr);
   thrust::transform(
     rmm::exec_policy_nosync(stream),
@@ -1141,9 +1139,9 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   //  Copy over search results to host
   auto host_results =
     cudf::detail::make_pinned_vector_async<bool>(device_data_page_mask.size(), stream);
-  cudf::detail::cuda_memcpy(
-    cudf::host_span<bool>{host_results.data(), device_data_page_mask.size()},
-    cudf::device_span<bool const>{device_data_page_mask.data(), device_data_page_mask.size()},
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<bool>(host_results.data(), host_results.size()),
+    cudf::device_span<bool const>(device_data_page_mask.data(), device_data_page_mask.size()),
     stream);
   auto const total_pages = page_row_offsets.size() - num_columns;
   auto data_page_mask    = thrust::host_vector<bool>(total_pages, stream);
