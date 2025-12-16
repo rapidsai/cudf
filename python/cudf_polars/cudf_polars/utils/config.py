@@ -282,6 +282,10 @@ class ParquetOptions:
 
         Set to 0 to avoid row-group sampling. Note that row-group sampling
         will also be skipped if ``max_footer_samples`` is 0.
+    use_rapidsmpf_native
+        Whether to use the native rapidsmpf node for parquet reading.
+        This option is only used when the rapidsmpf runtime is enabled.
+        Default is True.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -316,6 +320,13 @@ class ParquetOptions:
             f"{_env_prefix}__MAX_ROW_GROUP_SAMPLES", int, default=1
         )
     )
+    use_rapidsmpf_native: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_RAPIDSMPF_NATIVE",
+            _bool_converter,
+            default=True,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -330,6 +341,8 @@ class ParquetOptions:
             raise TypeError("max_footer_samples must be an int")
         if not isinstance(self.max_row_group_samples, int):
             raise TypeError("max_row_group_samples must be an int")
+        if not isinstance(self.use_rapidsmpf_native, bool):
+            raise TypeError("use_rapidsmpf_native must be a bool")
 
 
 def default_blocksize(cluster: str) -> int:

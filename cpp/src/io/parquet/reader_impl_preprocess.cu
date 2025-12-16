@@ -8,9 +8,9 @@
 #include "reader_impl.hpp"
 #include "reader_impl_preprocess_utils.cuh"
 
-#include <cudf/detail/algorithm/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -814,9 +814,13 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   max_row             = std::min<size_t>(max_row, pass_end);
   CUDF_EXPECTS(max_row > subpass.skip_rows, "Unexpected short subpass", std::underflow_error);
   // Limit the number of rows to read in this subpass to the cudf's column size limit - 1 (for
-  // lists)
-  subpass.num_rows =
-    std::min<size_t>(std::numeric_limits<size_type>::max() - 1, max_row - subpass.skip_rows);
+  // lists). Only apply this limit when chunking is enabled.
+  auto const max_num_rows = max_row - subpass.skip_rows;
+  if (_output_chunk_read_limit > 0) {
+    subpass.num_rows = std::min<size_t>(std::numeric_limits<size_type>::max() - 1, max_num_rows);
+  } else {
+    subpass.num_rows = max_num_rows;
+  }
 
   // now split up the output into chunks as necessary
   compute_output_chunks_for_subpass();
@@ -938,7 +942,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
                                   size_input.cbegin(),
                                   thrust::make_discard_iterator(),
                                   sizes.d_begin() + (key_start / subpass.pages.size()),
-
                                   cuda::std::plus<>{},
                                   _stream);
 
