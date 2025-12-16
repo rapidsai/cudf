@@ -23,6 +23,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     Metadata,
     empty_table_chunk,
     make_spill_function,
+    opaque_reservation,
     process_children,
     shutdown_on_error,
 )
@@ -101,17 +102,18 @@ async def default_node_single(
                 )
                 seq_num = msg.sequence_number
 
-            df = await asyncio.to_thread(
-                ir.do_evaluate,
-                *ir._non_child_args,
-                DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.children[0].schema.keys()),
-                    list(ir.children[0].schema.values()),
-                    chunk.stream,
-                ),
-                context=ir_context,
-            )
+            input_bytes = chunk.data_alloc_size(MemoryType.DEVICE)
+            with opaque_reservation(context, 2 * input_bytes):
+                df = ir.do_evaluate(
+                    *ir._non_child_args,
+                    DataFrame.from_table(
+                        chunk.table_view(),
+                        list(ir.children[0].schema.keys()),
+                        list(ir.children[0].schema.values()),
+                        chunk.stream,
+                    ),
+                    context=ir_context,
+                )
             chunk = TableChunk.from_pylibcudf_table(
                 df.table, chunk.stream, exclusive_view=True
             )
@@ -217,13 +219,16 @@ async def default_node_multi(
                 for chunk, child in zip(ready_chunks, ir.children, strict=True)
             ]
 
-            # Evaluate the IR node with current chunks
-            df = await asyncio.to_thread(
-                ir.do_evaluate,
-                *ir._non_child_args,
-                *dfs,
-                context=ir_context,
+            input_bytes = sum(
+                chunk.data_alloc_size(MemoryType.DEVICE)
+                for chunk in cast(list[TableChunk], ready_chunks)
             )
+            with opaque_reservation(context, 2 * input_bytes):
+                df = ir.do_evaluate(
+                    *ir._non_child_args,
+                    *dfs,
+                    context=ir_context,
+                )
             await ch_out.data.send(
                 context,
                 Message(

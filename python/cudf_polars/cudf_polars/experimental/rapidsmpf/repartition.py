@@ -7,6 +7,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -19,6 +20,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     Metadata,
     empty_table_chunk,
+    opaque_reservation,
 )
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
@@ -138,20 +140,23 @@ async def concatenate_node(
                         )
                     )
 
-                # Process collected chunks
                 if chunks:
-                    df = _concat(
-                        *(
-                            DataFrame.from_table(
-                                chunk.table_view(),
-                                list(ir.schema.keys()),
-                                list(ir.schema.values()),
-                                chunk.stream,
-                            )
-                            for chunk in chunks
-                        ),
-                        context=ir_context,
+                    input_bytes = sum(
+                        chunk.data_alloc_size(MemoryType.DEVICE) for chunk in chunks
                     )
+                    with opaque_reservation(context, 2 * input_bytes):
+                        df = _concat(
+                            *(
+                                DataFrame.from_table(
+                                    chunk.table_view(),
+                                    list(ir.schema.keys()),
+                                    list(ir.schema.values()),
+                                    chunk.stream,
+                                )
+                                for chunk in chunks
+                            ),
+                            context=ir_context,
+                        )
                     await ch_out.data.send(
                         context,
                         Message(

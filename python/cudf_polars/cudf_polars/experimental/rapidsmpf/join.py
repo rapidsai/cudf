@@ -27,6 +27,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     Metadata,
     chunk_to_frame,
     empty_table_chunk,
+    opaque_reservation,
     process_children,
 )
 from cudf_polars.experimental.utils import _concat
@@ -207,12 +208,12 @@ async def broadcast_join_node(
                 empty_small_chunk = empty_table_chunk(small_child, context, stream)
                 small_dfs = [chunk_to_frame(empty_small_chunk, small_child)]
 
-            # Perform the join
-            df = _concat(
-                *[
-                    (
-                        await asyncio.to_thread(
-                            ir.do_evaluate,
+            large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
+            input_bytes = large_chunk_size + small_size
+            with opaque_reservation(context, 2 * input_bytes):
+                df = _concat(
+                    *[
+                        ir.do_evaluate(
                             *ir._non_child_args,
                             *(
                                 [large_df, small_df]
@@ -221,11 +222,10 @@ async def broadcast_join_node(
                             ),
                             context=ir_context,
                         )
-                    )
-                    for small_df in small_dfs
-                ],
-                context=ir_context,
-            )
+                        for small_df in small_dfs
+                    ],
+                    context=ir_context,
+                )
 
             # Send output chunk
             await ch_out.data.send(
