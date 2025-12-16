@@ -205,7 +205,8 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
 
   size_t average_nullmask_words     = 0;
   size_t cumulative_null_mask_words = 0;
-  auto h_number_of_mask_words = cudf::detail::make_pinned_vector<size_type>(num_bitmasks, stream);
+  auto h_number_of_mask_words =
+    cudf::detail::make_pinned_vector_async<size_type>(num_bitmasks, stream);
   thrust::tabulate(
     thrust::host, h_number_of_mask_words.begin(), h_number_of_mask_words.end(), [&](auto i) {
       CUDF_EXPECTS(begin_bits[i] >= 0, "Invalid range.");

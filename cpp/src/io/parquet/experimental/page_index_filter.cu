@@ -1094,7 +1094,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   auto tree_levels_data = rmm::device_uvector<bool>(tree_level_offsets.back(), stream, mr);
 
   // Pointers to each Fenwick tree level data
-  auto host_tree_level_ptrs = cudf::detail::make_pinned_vector<bool*>(num_levels, stream);
+  auto host_tree_level_ptrs = cudf::detail::make_pinned_vector_async<bool*>(num_levels, stream);
   // Zeroth level is just the row mask itself
   host_tree_level_ptrs[0] = const_cast<bool*>(row_mask.template begin<bool>()) + row_mask_offset;
   std::for_each(
@@ -1126,7 +1126,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   rmm::device_uvector<bool> device_data_page_mask(num_ranges, stream, mr);
   // Use a pinned bounce buffer to avoid pageable h2d copy
   auto host_page_offsets =
-    cudf::detail::make_pinned_vector<cudf::size_type>(page_row_offsets.size(), stream);
+    cudf::detail::make_pinned_vector_async<cudf::size_type>(page_row_offsets.size(), stream);
   std::move(page_row_offsets.begin(), page_row_offsets.end(), host_page_offsets.begin());
   auto page_offsets = cudf::detail::make_device_uvector_async(host_page_offsets, stream, mr);
   thrust::transform(

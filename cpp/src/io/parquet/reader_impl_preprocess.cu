@@ -873,7 +873,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   // compute output column sizes by examining the pages of the -input- columns
   if (has_lists) {
     auto h_cols_info =
-      cudf::detail::make_pinned_vector<input_col_info>(_input_columns.size(), _stream);
+      cudf::detail::make_pinned_vector_async<input_col_info>(_input_columns.size(), _stream);
     std::transform(_input_columns.cbegin(),
                    _input_columns.cend(),
                    h_cols_info.begin(),

@@ -279,7 +279,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
                        rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
-  auto page_indexes    = cudf::detail::make_pinned_vector<page_index_info>(num_pages, stream);
+  auto page_indexes    = cudf::detail::make_pinned_vector_async<page_index_info>(num_pages, stream);
 
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
@@ -445,7 +445,7 @@ void decode_page_headers(pass_intermediate_data& pass,
   // page headers kernel
   if (has_page_index) {
     auto host_page_locations =
-      cudf::detail::make_pinned_vector<uint8_t*>(unsorted_pages.size(), stream);
+      cudf::detail::make_pinned_vector_async<uint8_t*>(unsorted_pages.size(), stream);
     auto curr_page_idx = 0;
 
     std::for_each(pass.chunks.begin(), pass.chunks.end(), [&](auto const& chunk) {

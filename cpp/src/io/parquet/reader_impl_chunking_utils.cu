@@ -531,7 +531,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto copy_out =
     cudf::detail::make_pinned_vector_async<device_span<uint8_t>>(num_comp_pages, stream);
   auto curr_copy_page = 0;
-  stream.synchronize();
 
   auto set_parameters = [&](codec_stats& codec,
                             host_span<PageInfo> pages,
@@ -718,11 +717,11 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   // retrieve to host so we can get compression scratch sizes
   auto h_decomp_info =
     cudf::detail::make_pinned_vector_async<decompression_info>(decomp_info.size(), stream);
-  auto temp_cost = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
   cudf::detail::cuda_memcpy(
     cudf::host_span<decompression_info>(h_decomp_info.data(), decomp_info.size()),
     cudf::device_span<decompression_info const>(decomp_info.data(), decomp_info.size()),
     stream);
+  auto temp_cost = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
   std::transform(h_decomp_info.begin(), h_decomp_info.end(), temp_cost.begin(), [](auto const& d) {
     return cudf::io::detail::get_decompression_scratch_size(d);
   });

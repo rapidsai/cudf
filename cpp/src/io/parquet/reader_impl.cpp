@@ -1006,14 +1006,13 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
     cudf::detail::make_pinned_vector_async<cudf::size_type>(host_begin_bits.size(), _stream);
   auto end_bits =
     cudf::detail::make_pinned_vector_async<cudf::size_type>(host_end_bits.size(), _stream);
-  _stream.synchronize();
   std::move(host_null_masks.begin(), host_null_masks.end(), null_masks.begin());
   std::move(host_begin_bits.begin(), host_begin_bits.end(), begin_bits.begin());
   std::move(host_end_bits.begin(), host_end_bits.end(), end_bits.begin());
 
   // Bulk update the nullmasks if the number of pages is above the threshold
   if (null_masks.size() >= min_nullmasks_for_bulk_update) {
-    auto valids = cudf::detail::make_pinned_vector<bool>(null_masks.size(), _stream);
+    auto valids = cudf::detail::make_pinned_vector_async<bool>(null_masks.size(), _stream);
     std::fill(valids.begin(), valids.end(), false);
     cudf::set_null_masks_safe(null_masks, begin_bits, end_bits, valids, _stream);
   }
