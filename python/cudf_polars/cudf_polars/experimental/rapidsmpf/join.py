@@ -129,6 +129,7 @@ async def broadcast_join_node(
                     context.br(), allow_overbooking=True
                 )
             )
+            del msg
             small_size += small_chunks[-1].data_alloc_size(MemoryType.DEVICE)
 
         # Allgather is a collective - all ranks must participate even with no local data
@@ -194,6 +195,7 @@ async def broadcast_join_node(
                     context.br(), allow_overbooking=True
                 )
                 seq_num = msg.sequence_number
+                del msg
 
             large_df = DataFrame.from_table(
                 large_chunk.table_view(),
@@ -227,17 +229,19 @@ async def broadcast_join_node(
                     context=ir_context,
                 )
 
-            # Send output chunk
-            await ch_out.data.send(
-                context,
-                Message(
-                    seq_num,
-                    TableChunk.from_pylibcudf_table(
-                        df.table, df.stream, exclusive_view=True
+                # Send output chunk
+                await ch_out.data.send(
+                    context,
+                    Message(
+                        seq_num,
+                        TableChunk.from_pylibcudf_table(
+                            df.table, df.stream, exclusive_view=True
+                        ),
                     ),
-                ),
-            )
+                )
+                del df, large_df, large_chunk
 
+        del small_dfs, small_chunks
         await ch_out.data.drain(context)
 
 

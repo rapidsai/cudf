@@ -103,6 +103,7 @@ async def concatenate_node(
             while (msg := await ch_in.data.recv(context)) is not None:
                 allgather.insert(seq_num, TableChunk.from_message(msg))
                 seq_num += 1
+                del msg
             allgather.insert_finished()
 
             # Extract concatenated result
@@ -127,18 +128,20 @@ async def concatenate_node(
             seq_num = 0
             while True:
                 chunks = []
-                msg = None
+                done_receiving = False
 
                 # Collect chunks up to max_chunks or until end of stream
                 while len(chunks) < (max_chunks or float("inf")):
                     msg = await ch_in.data.recv(context)
                     if msg is None:
+                        done_receiving = True
                         break
                     chunks.append(
                         TableChunk.from_message(msg).make_available_and_spill(
                             context.br(), allow_overbooking=True
                         )
                     )
+                    del msg
 
                 if chunks:
                     input_bytes = sum(
@@ -157,19 +160,20 @@ async def concatenate_node(
                             ),
                             context=ir_context,
                         )
-                    await ch_out.data.send(
-                        context,
-                        Message(
-                            seq_num,
-                            TableChunk.from_pylibcudf_table(
-                                df.table, df.stream, exclusive_view=True
+                        await ch_out.data.send(
+                            context,
+                            Message(
+                                seq_num,
+                                TableChunk.from_pylibcudf_table(
+                                    df.table, df.stream, exclusive_view=True
+                                ),
                             ),
-                        ),
-                    )
-                    seq_num += 1
+                        )
+                        seq_num += 1
+                        del df, chunks
 
                 # Break if we reached end of stream
-                if msg is None:
+                if done_receiving:
                     break
 
         await ch_out.data.drain(context)

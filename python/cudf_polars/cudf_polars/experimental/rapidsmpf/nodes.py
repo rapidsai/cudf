@@ -101,6 +101,7 @@ async def default_node_single(
                     context.br(), allow_overbooking=True
                 )
                 seq_num = msg.sequence_number
+            del msg
 
             input_bytes = chunk.data_alloc_size(MemoryType.DEVICE)
             with opaque_reservation(context, 2 * input_bytes):
@@ -114,10 +115,16 @@ async def default_node_single(
                     ),
                     context=ir_context,
                 )
-            chunk = TableChunk.from_pylibcudf_table(
-                df.table, chunk.stream, exclusive_view=True
-            )
-            await ch_out.data.send(context, Message(seq_num, chunk))
+                await ch_out.data.send(
+                    context,
+                    Message(
+                        seq_num,
+                        TableChunk.from_pylibcudf_table(
+                            df.table, chunk.stream, exclusive_view=True
+                        ),
+                    ),
+                )
+                del df, chunk
 
         await ch_out.data.drain(context)
 
@@ -191,6 +198,7 @@ async def default_node_multi(
                     # Store the new chunk (replacing previous if any)
                     ready_chunks[ch_idx] = TableChunk.from_message(msg)
                     chunk_count[ch_idx] += 1
+                del msg
 
             # If all channels finished, we're done
             if len(finished_channels) == n_children:
@@ -229,20 +237,22 @@ async def default_node_multi(
                     *dfs,
                     context=ir_context,
                 )
-            await ch_out.data.send(
-                context,
-                Message(
-                    seq_num,
-                    TableChunk.from_pylibcudf_table(
-                        df.table,
-                        df.stream,
-                        exclusive_view=True,
+                await ch_out.data.send(
+                    context,
+                    Message(
+                        seq_num,
+                        TableChunk.from_pylibcudf_table(
+                            df.table,
+                            df.stream,
+                            exclusive_view=True,
+                        ),
                     ),
-                ),
-            )
-            seq_num += 1
+                )
+                seq_num += 1
+                del df, dfs
 
         # Drain the output channel
+        del ready_chunks
         await ch_out.data.drain(context)
 
 
@@ -285,6 +295,7 @@ async def fanout_node_bounded(
                 context.br(), allow_overbooking=True
             )
             seq_num = msg.sequence_number
+            del msg
             for ch_out in chs_out:
                 await ch_out.data.send(
                     context,
@@ -297,6 +308,7 @@ async def fanout_node_bounded(
                         ),
                     ),
                 )
+            del table_chunk
 
         await asyncio.gather(*(ch.data.drain(context) for ch in chs_out))
 

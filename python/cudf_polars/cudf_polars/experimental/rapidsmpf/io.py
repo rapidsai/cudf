@@ -108,7 +108,7 @@ class Lineariser:
 
         # Forward any remaining buffered messages
         for seq in sorted(buffer.keys()):
-            await self.ch_out.send(self.context, buffer[seq])
+            await self.ch_out.send(self.context, buffer.pop(seq))
 
         await self.ch_out.drain(self.context)
 
