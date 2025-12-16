@@ -16,7 +16,6 @@ from cudf import concat
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
-    expect_warning_if,
 )
 
 
@@ -2312,25 +2311,23 @@ def test_string_replace_n(n):
     "flags,flags_raise",
     [(0, 0), (re.MULTILINE | re.DOTALL, 0), (re.I, 1), (re.I | re.DOTALL, 1)],
 )
-@pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
+@pytest.mark.parametrize("na,na_raise", [(np.nan, False), (None, True)])
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ps, gs = ps_gs
 
-    expectation = does_not_raise()
     if flags_raise or na_raise:
-        expectation = pytest.raises(NotImplementedError)
-
-    with expectation:
-        with expect_warning_if(
-            na == "" or (na is None and not (flags_raise or na_raise)),
-            match=(
-                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
-                "and will raise in a future version."
-            ),
-        ):
-            expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
-            got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
+        with pytest.raises(NotImplementedError):
+            gs.str.contains(pat, flags=flags, na=na, regex=regex)
+    else:
+        expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
+        got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
         assert_eq(expect, got)
+
+
+def test_string_contains_na_raises():
+    gs = cudf.Series(["a", "b", "c", "d", None])
+    with pytest.raises(ValueError):
+        gs.str.contains("a", na="")
 
 
 def test_string_contains_case(ps_gs):
