@@ -313,9 +313,7 @@ def test_cudf_json_writer_sinks(sink, tmp_path):
             assert f.read() == '[{"a":1,"b":4},{"a":2,"b":5},{"a":3,"b":6}]'
 
 
-@pytest.fixture(
-    params=["string", "filepath", "pathobj", "bytes_io", "string_io", "url"]
-)
+@pytest.fixture(params=["filepath", "pathobj", "bytes_io", "string_io", "url"])
 def json_input(request, tmp_path):
     input_type = request.param
     buffer = "[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]\n"
@@ -326,8 +324,6 @@ def json_input(request, tmp_path):
         with open(str(fname), "w") as fp:
             fp.write(buffer)
 
-    if input_type == "string":
-        return buffer
     if input_type == "filepath":
         return str(fname)
     if input_type == "pathobj":

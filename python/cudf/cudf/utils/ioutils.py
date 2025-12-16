@@ -8,7 +8,6 @@ import json
 import operator
 import os
 import urllib
-import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 from typing import TYPE_CHECKING, Any
@@ -20,7 +19,6 @@ import pyarrow as pa
 
 import cudf
 from cudf.api.types import is_list_like
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core.dtypes import recursively_update_struct_names
 from cudf.utils.docutils import docfmt_partial
 from cudf.utils.dtypes import cudf_dtype_to_pa_type, np_dtypes_to_pandas_dtypes
@@ -1438,11 +1436,6 @@ mode : str
     Mode in which file is opened
 iotypes : (), default (BytesIO)
     Object type to exclude from file-like check
-allow_raw_text_input : boolean, default False
-    If True, this indicates the input `path_or_data` could be a raw text
-    input and will not check for its existence in the filesystem. If False,
-    the input must be a path and an error will be raised if it does not
-    exist.
 storage_options : dict, optional
     Extra options that make sense for a particular storage connection, e.g.
     host, port, username, password, etc. For HTTP(S) URLs the key-value
@@ -1791,10 +1784,8 @@ def get_reader_filepath_or_buffer(
     mode="rb",
     fs=None,
     iotypes=(BytesIO,),
-    allow_raw_text_input=False,
     storage_options=None,
     bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
-    warn_on_raw_text_input=None,
     warn_meta=None,
     expand_dir_pattern=None,
     prefetch_options=None,
@@ -1814,8 +1805,7 @@ def get_reader_filepath_or_buffer(
     filepaths_or_buffers = []
     string_paths = [isinstance(source, str) for source in input_sources]
     if any(string_paths):
-        # Sources are all strings. The strings are typically
-        # file paths, but they may also be raw text strings.
+        # Sources are all strings and should be file paths.
 
         # Don't allow a mix of source types
         if not all(string_paths):
@@ -1831,37 +1821,9 @@ def get_reader_filepath_or_buffer(
         paths = _maybe_expand_directories(paths, expand_dir_pattern, fs)
 
         if _is_local_filesystem(fs):
-            # Doing this as `read_json` accepts a json string
-            # path_or_data need not be a filepath like string
-
-            # helper for checking if raw text looks like a json filename
-            compression_extensions = [
-                ".tar",
-                ".tar.gz",
-                ".tar.bz2",
-                ".tar.xz",
-                ".gz",
-                ".bz2",
-                ".zip",
-                ".xz",
-                ".zst",
-                "",
-            ]
-
             if len(paths):
                 if fs.exists(paths[0]):
                     filepaths_or_buffers = paths
-
-                # raise FileNotFound if path looks like json
-                # following pandas
-                # see
-                # https://github.com/pandas-dev/pandas/pull/46718/files#diff-472ce5fe087e67387942e1e1c409a5bc58dde9eb8a2db6877f1a45ae4974f694R724-R729
-                elif not allow_raw_text_input or paths[0].lower().endswith(
-                    tuple(f".json{c}" for c in compression_extensions)
-                ):
-                    raise FileNotFoundError(
-                        f"{input_sources} could not be resolved to any files"
-                    )
                 else:
                     raw_text_input = True
             else:
@@ -1887,20 +1849,9 @@ def get_reader_filepath_or_buffer(
             raw_text_input = True
 
         if raw_text_input:
-            filepaths_or_buffers = input_sources
-            if warn_on_raw_text_input:
-                # Do not remove until pandas 3.0 support is added.
-                assert PANDAS_LT_300, (
-                    "Need to drop after pandas-3.0 support is added."
-                )
-                warnings.warn(
-                    f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
-                    "deprecated and will be removed in a future version. "
-                    "To read from a literal string, wrap it in a "
-                    "'StringIO' object.",
-                    FutureWarning,
-                )
-
+            raise FileNotFoundError(
+                f"{input_sources} could not be resolved to any files"
+            )
     else:
         # Sources are already buffers or file-like objects
         for source in input_sources:
