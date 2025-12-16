@@ -94,7 +94,7 @@ def test_random_forest(binary_classification_data):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
-    model = RandomForestClassifier(n_estimators=100)
+    model = RandomForestClassifier(n_estimators=100, n_bins=len(X_train))
     model.fit(X_train, y_train)
     preds = model.predict(X_test)
     return preds.values
@@ -119,6 +119,8 @@ def test_data_scaling():
     return scaled_data
 
 
+# The DeprecationWarning is from numpy, not cuml: https://github.com/rapidsai/cuml/issues/7617
+@pytest.mark.filterwarnings("ignore:Conversion:DeprecationWarning")
 def test_pipeline(binary_classification_data):
     X = binary_classification_data[["feature1", "feature2"]]
     y = binary_classification_data["target"]
