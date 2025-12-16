@@ -124,7 +124,6 @@ class StringColumn(ColumnBase, Scannable):
         self,
         plc_column: plc.Column,
         dtype: np.dtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if (
@@ -146,7 +145,6 @@ class StringColumn(ColumnBase, Scannable):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 

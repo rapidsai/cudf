@@ -78,7 +78,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
         self,
         plc_column: plc.Column,
         dtype: DecimalDtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not isinstance(dtype, DecimalDtype):
@@ -86,7 +85,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -145,9 +143,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 rmm_mask_buffer = rmm.DeviceBuffer.to_device(
                     np.frombuffer(mask_buf).view("uint8")
                 )
-            plc_column = plc_column.with_mask(
-                plc.gpumemoryview(rmm_mask_buffer), data.null_count
-            )
+            plc_column = plc_column.with_mask(rmm_mask_buffer, data.null_count)
         column = cls.from_pylibcudf(plc_column)
         column.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return column
@@ -379,7 +375,6 @@ class Decimal32Column(DecimalBaseColumn):
         self,
         plc_column: plc.Column,
         dtype: Decimal32Dtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not isinstance(dtype, Decimal32Dtype):
@@ -387,7 +382,6 @@ class Decimal32Column(DecimalBaseColumn):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -445,7 +439,6 @@ class Decimal128Column(DecimalBaseColumn):
         self,
         plc_column: plc.Column,
         dtype: Decimal128Dtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if (
@@ -459,7 +452,6 @@ class Decimal128Column(DecimalBaseColumn):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -493,7 +485,6 @@ class Decimal64Column(DecimalBaseColumn):
         self,
         plc_column: plc.Column,
         dtype: Decimal64Dtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not isinstance(dtype, Decimal64Dtype):
@@ -501,7 +492,6 @@ class Decimal64Column(DecimalBaseColumn):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 
