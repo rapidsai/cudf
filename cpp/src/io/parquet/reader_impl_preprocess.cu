@@ -1031,7 +1031,8 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               cuda::std::plus<>{},
                               _stream);
 
-  auto col_string_sizes = cudf::detail::make_pinned_vector_async<size_t>(d_col_sizes.size(), _stream);
+  auto col_string_sizes =
+    cudf::detail::make_pinned_vector_async<size_t>(d_col_sizes.size(), _stream);
   cudf::detail::cuda_memcpy(cudf::host_span<size_t>{col_string_sizes.data(), d_col_sizes.size()},
                             cudf::device_span<size_t const>{d_col_sizes.data(), d_col_sizes.size()},
                             _stream);
