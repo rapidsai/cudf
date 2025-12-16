@@ -46,7 +46,6 @@ class ListColumn(ColumnBase):
         self,
         plc_column: plc.Column,
         dtype: ListDtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if (
@@ -60,7 +59,6 @@ class ListColumn(ColumnBase):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -226,7 +224,6 @@ class ListColumn(ColumnBase):
             return type(self)(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                null_count=self.null_count,
                 exposed=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
@@ -334,11 +331,12 @@ class ListColumn(ColumnBase):
         while leaf_queue:
             col = leaf_queue.pop()
             offsets = col.children[0].plc_column
+            # col.mask is a Buffer which is Span-compliant
             plc_leaf_col = plc.Column(
                 plc.DataType(plc.TypeId.LIST),
                 col.size,
                 None,
-                plc.gpumemoryview(col.mask) if col.mask is not None else None,
+                col.mask,
                 col.null_count,
                 col.offset,
                 [offsets, plc_leaf_col],
