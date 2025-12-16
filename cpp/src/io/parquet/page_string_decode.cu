@@ -288,7 +288,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
       pp->num_nulls  = null_count;
       pp->num_valids = pp->num_input_values - null_count;
     }
-    end_value -= pp->num_nulls;
+    end_value -= null_count;
   }
 
   return {start_value, end_value};
