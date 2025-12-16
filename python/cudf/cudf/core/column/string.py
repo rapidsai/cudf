@@ -210,12 +210,12 @@ class StringColumn(ColumnBase, Scannable):
                 and len(self.base_children) > 0
                 and self.size == self.base_children[0].size - 1
             ):
-                self._data = self.base_data  # type: ignore[assignment]
+                self._data = self.base_data
             else:
-                self._data = self.base_data[  # type: ignore[has-type]
+                self._data = self.base_data[
                     self.start_offset : self.end_offset
                 ]
-        return self._data  # type: ignore[has-type]
+        return self._data
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:

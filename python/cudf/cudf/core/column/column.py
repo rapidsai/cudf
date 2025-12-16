@@ -245,6 +245,24 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers: set[Buffer] = set()
 
+        # Eager computation of _data - compute offset-aware slice immediately
+        # instead of lazily on first access. This simplifies code with negligible overhead.
+        # Skip eager computation if subclass overrides data property (e.g., StringColumn)
+        # since they may use custom slicing logic.
+        if type(self).data is not ColumnBase.data:
+            # Subclass overrides data property, skip eager computation
+            pass
+        elif self.base_data is None:
+            self._data = None
+        elif self.offset == 0 and self.size == self.base_size:
+            # Optimization: for non-sliced columns, data == base_data (just a reference)
+            self._data = self.base_data
+        else:
+            # Compute offset-aware slice (O(1) operation, just pointer arithmetic)
+            start = self.offset * self.dtype.itemsize
+            end = start + self.size * self.dtype.itemsize
+            self._data = self.base_data[start:end]
+
     def _get_children_from_pylibcudf_column(
         self,
         plc_column: plc.Column,
@@ -325,12 +343,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def data(self) -> None | Buffer:
+        # Computed eagerly in __init__ and set_base_data for optimization,
+        # but lazily recomputed here if invalidated by other mutations
         if self.base_data is None:
             return None
         if self._data is None:
-            start = self.offset * self.dtype.itemsize
-            end = start + self.size * self.dtype.itemsize
-            self._data = self.base_data[start:end]  # type: ignore[assignment]
+            if self.offset == 0 and self.size == self.base_size:
+                # Optimization: for non-sliced columns, data == base_data
+                self._data = self.base_data
+            else:
+                start = self.offset * self.dtype.itemsize
+                end = start + self.size * self.dtype.itemsize
+                self._data = self.base_data[start:end]
         return self._data
 
     def set_base_data(self, value: None | Buffer) -> None:
@@ -340,9 +364,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 "Expected a Buffer or None for data, "
                 f"got {type(value).__name__}"
             )
-
-        # Clear offset-aware cache
-        self._data = None
 
         # Create new plc_column with updated data buffer
         # Access mask directly from plc_column to avoid wrapping/unwrapping
@@ -355,6 +376,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             offset=self.plc_column.offset(),
             children=[c.plc_column for c in self.base_children],
         )
+
+        # Eagerly recompute _data (same logic as __init__)
+        # This maintains the eager computation pattern when base_data changes.
+        # Skip if subclass overrides data property (e.g., StringColumn).
+        if type(self).data is not ColumnBase.data:
+            # Subclass overrides data property, invalidate and let property handle it
+            self._data = None
+        elif self.base_data is None:
+            self._data = None
+        elif self.offset == 0 and self.size == self.base_size:
+            self._data = self.base_data
+        else:
+            start = self.offset * self.dtype.itemsize
+            end = start + self.size * self.dtype.itemsize
+            self._data = self.base_data[start:end]
 
     @property
     def nullable(self) -> bool:
