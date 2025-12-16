@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
@@ -83,7 +84,8 @@ class AllGatherManager:
         partition_chunks = await self.allgather.extract_all(
             self.context, ordered=ordered
         )
-        return unpack_and_concat(
+        return await asyncio.to_thread(
+            unpack_and_concat,
             partitions=partition_chunks,
             stream=stream,
             br=self.context.br(),

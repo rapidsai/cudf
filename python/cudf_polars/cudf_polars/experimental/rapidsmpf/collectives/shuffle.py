@@ -10,7 +10,6 @@ from rapidsmpf.integrations.cudf.partition import (
     partition_and_pack as py_partition_and_pack,
     unpack_and_concat as py_unpack_and_concat,
 )
-from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
@@ -24,7 +23,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     Metadata,
-    opaque_reservation,
 )
 from cudf_polars.experimental.shuffle import Shuffle
 
@@ -178,28 +176,33 @@ async def shuffle_node(
 
         # Process input chunks
         while (msg := await ch_in.data.recv(context)) is not None:
+            # Extract TableChunk from message
             chunk = TableChunk.from_message(msg).make_available_and_spill(
                 context.br(), allow_overbooking=True
             )
-            input_bytes = chunk.data_alloc_size(MemoryType.DEVICE)
-            with opaque_reservation(context, 2 * input_bytes):
-                shuffle.insert_chunk(chunk)
 
+            # Get the table view and insert into shuffler
+            shuffle.insert_chunk(chunk)
+
+        # Insert finished
         await shuffle.insert_finished()
 
-        # Extract shuffled partitions
+        # Extract shuffled partitions and send them out
         stream = ir_context.get_cuda_stream()
         for partition_id in range(
-            context.comm().rank, num_partitions, context.comm().nranks
+            # Round-robin partition assignment
+            context.comm().rank,
+            num_partitions,
+            context.comm().nranks,
         ):
-            # TODO: Get actual partition size from shuffler
-            estimated_bytes = context.br().memory_available(MemoryType.DEVICE) // 4
-            with opaque_reservation(context, max(estimated_bytes, 1)):
-                output_chunk = TableChunk.from_pylibcudf_table(
-                    table=await shuffle.extract_chunk(partition_id, stream),
-                    stream=stream,
-                    exclusive_view=True,
-                )
+            # Create a new TableChunk with the result
+            output_chunk = TableChunk.from_pylibcudf_table(
+                table=await shuffle.extract_chunk(partition_id, stream),
+                stream=stream,
+                exclusive_view=True,
+            )
+
+            # Send the output chunk
             await ch_out.data.send(context, Message(partition_id, output_chunk))
 
         await ch_out.data.drain(context)
