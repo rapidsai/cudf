@@ -369,6 +369,13 @@ def opaque_reservation(
     ------
     The memory reservation.
     """
-    yield context.br().reserve_device_memory_and_spill(
+    br = context.br()
+    reservation = br.reserve_device_memory_and_spill(
         estimated_bytes, allow_overbooking=True
     )
+    try:
+        yield reservation
+    finally:
+        # Explicitly release the full reservation
+        if reservation.size > 0:
+            br.release(reservation, reservation.size)

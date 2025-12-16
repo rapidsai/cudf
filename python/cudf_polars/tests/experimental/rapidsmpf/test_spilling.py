@@ -8,18 +8,25 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
+from rapidsmpf.communicator.single import new_communicator as single_process_comm
+from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
+from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
+import rmm.mr
 
-from cudf_polars.experimental.rapidsmpf.utils import make_spill_function
+from cudf_polars.experimental.rapidsmpf.utils import (
+    make_spill_function,
+    opaque_reservation,
+)
 
 if TYPE_CHECKING:
-    from rapidsmpf.streaming.core.context import Context
-
     from rmm.pylibrmm.stream import Stream
 
 
@@ -120,3 +127,95 @@ def test_make_spill_function(local_context: Context) -> None:
 
     finally:
         local_context.br().spill_manager.remove_spill_function(func_id)
+
+
+def test_opaque_reservation() -> None:
+    options = Options(get_environment_variables())
+    comm = single_process_comm(options)
+    _original_mr = rmm.mr.get_current_device_resource()
+    mr = RmmResourceAdaptor(_original_mr)
+    rmm.mr.set_current_device_resource(mr)
+
+    # Set a 100MB limit
+    limit = 100 * 1024 * 1024
+    memory_available = {MemoryType.DEVICE: LimitAvailableMemory(mr, limit=limit)}
+    br = BufferResource(mr, memory_available=memory_available)
+    context = Context(comm, br, options)
+    stream = context.get_stream_from_pool()
+
+    # Create spillable data container
+    spillable = SpillableMessages()
+
+    # Allocate 80MB of spillable data (8 x 10MB chunks)
+    chunk_size = 10 * 1024 * 1024
+    message_ids = []
+    for i in range(8):
+        table = create_test_table(chunk_size, stream)
+        chunk = TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True)
+        msg = Message(i, chunk)
+        mid = spillable.insert(msg)
+        message_ids.append(mid)
+
+    # Register spill function so rapidsmpf can spill our data
+    spill_func = make_spill_function([spillable], context)
+    func_id = br.spill_manager.add_spill_function(spill_func, priority=0)
+
+    try:
+        # Verify all data is on device initially
+        descs_before = spillable.get_content_descriptions()
+        for mid in message_ids:
+            assert descs_before[mid].content_sizes[MemoryType.DEVICE] > 0
+            assert descs_before[mid].content_sizes[MemoryType.HOST] == 0
+
+        # Now request a 50MB reservation - this should trigger spilling
+        # since we only have ~20MB available (100MB limit - 80MB used)
+        reserve_size = 50 * 1024 * 1024
+
+        available_before = br.memory_available(MemoryType.DEVICE)
+        reserved_before = br.memory_reserved(MemoryType.DEVICE)
+        print("\nBefore reservation:")
+        print(f"  memory_available: {available_before / (1024 * 1024):.2f}MB")
+        print(f"  memory_reserved: {reserved_before / (1024 * 1024):.2f}MB")
+        print(
+            f"  current_allocated (computed): {(limit - available_before) / (1024 * 1024):.2f}MB"
+        )
+
+        with opaque_reservation(context, reserve_size) as reservation:
+            assert reservation.size == reserve_size
+
+            available_after = br.memory_available(MemoryType.DEVICE)
+            reserved_after = br.memory_reserved(MemoryType.DEVICE)
+            print("\nAfter reservation (inside context):")
+            print(f"  reservation.size: {reservation.size / (1024 * 1024):.2f}MB")
+            print(f"  memory_available: {available_after / (1024 * 1024):.2f}MB")
+            print(f"  memory_reserved: {reserved_after / (1024 * 1024):.2f}MB")
+            print(
+                f"  current_allocated (computed): {(limit - available_after) / (1024 * 1024):.2f}MB"
+            )
+
+            # Check that some data was spilled to host
+            descs_after = spillable.get_content_descriptions()
+            spilled_count = sum(
+                1
+                for mid in message_ids
+                if descs_after[mid].content_sizes[MemoryType.HOST] > 0
+            )
+            spilled_bytes = sum(
+                descs_after[mid].content_sizes[MemoryType.HOST] for mid in message_ids
+            )
+            device_bytes = sum(
+                descs_after[mid].content_sizes[MemoryType.DEVICE] for mid in message_ids
+            )
+            print("\nSpilling results:")
+            print(f"  Chunks spilled: {spilled_count} of {len(message_ids)}")
+            print(f"  Bytes on HOST: {spilled_bytes / (1024 * 1024):.2f}MB")
+            print(f"  Bytes on DEVICE: {device_bytes / (1024 * 1024):.2f}MB")
+
+            # We need to spill at least 30MB (50MB - 20MB available)
+            # That's at least 3 chunks of 10MB each
+            assert spilled_count >= 3
+            assert available_after >= reserve_size
+
+    finally:
+        br.spill_manager.remove_spill_function(func_id)
+        rmm.mr.set_current_device_resource(_original_mr)
