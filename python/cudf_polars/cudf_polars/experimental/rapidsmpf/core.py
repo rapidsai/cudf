@@ -37,6 +37,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
 )
+from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPoolConfig
@@ -242,16 +243,29 @@ def evaluate_pipeline(
         )
         for msg in messages
     ]
-    dfs = [
-        DataFrame.from_table(
+    dfs: list[DataFrame] = []
+    if chunks:
+        dfs = [
+            DataFrame.from_table(
+                chunk.table_view(),
+                list(ir.schema.keys()),
+                list(ir.schema.values()),
+                chunk.stream,
+            )
+            for chunk in chunks
+        ]
+        df = _concat(*dfs, context=ir_context)
+    else:
+        # No chunks received - create an empty DataFrame with correct schema
+        stream = ir_context.get_cuda_stream()
+        chunk = empty_table_chunk(ir, rmpf_context, stream)
+        df = DataFrame.from_table(
             chunk.table_view(),
             list(ir.schema.keys()),
             list(ir.schema.values()),
-            chunk.stream,
+            stream,
         )
-        for chunk in chunks
-    ]
-    df = _concat(*dfs, context=ir_context)
+
     # We need to materialize the polars dataframe before we drop the rapidsmpf
     # context, which keeps the CUDA streams alive.
     stream = df.stream
