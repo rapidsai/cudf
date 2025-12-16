@@ -196,6 +196,20 @@ async def dataframescan_node(
             await ch_out.data.drain(context)
             return
 
+        # If there is only one ir_slices or one producer, we can
+        # skip the lineariser and read the chunks directly
+        if len(ir_slices) == 1 or num_producers == 1:
+            for seq_num, ir_slice in enumerate(ir_slices):
+                await read_chunk(
+                    context,
+                    ir_slice,
+                    seq_num,
+                    ch_out.data,
+                    ir_context,
+                )
+            await ch_out.data.drain(context)
+            return
+
         # Use Lineariser to ensure ordered delivery
         num_producers = min(num_producers, len(ir_slices))
         lineariser = Lineariser(context, ch_out.data, num_producers)
@@ -436,6 +450,20 @@ async def scan_node(
             await ch_out.data.drain(context)
             return
 
+        # If there is only one scan or one producer, we can
+        # skip the lineariser and read the chunks directly
+        if len(scans) == 1 or num_producers == 1:
+            for seq_num, scan in enumerate(scans):
+                await read_chunk(
+                    context,
+                    scan,
+                    seq_num,
+                    ch_out.data,
+                    ir_context,
+                )
+            await ch_out.data.drain(context)
+            return
+
         # Use Lineariser to ensure ordered delivery
         num_producers = min(num_producers, len(scans))
         lineariser = Lineariser(context, ch_out.data, num_producers)
@@ -596,12 +624,13 @@ def _(
         and rec.state["context"].comm().nranks > 1
     )
 
-    # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
+    # Use rapidsmpf native read_parquet node if possible
     ch_pair = channels[ir].reserve_input_slot()
     nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
     if (
-        partition_info.count > 1
+        parquet_options.use_rapidsmpf_native
+        and partition_info.count > 1
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None
