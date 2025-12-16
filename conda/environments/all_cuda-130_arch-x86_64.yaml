@@ -5,7 +5,7 @@ channels:
 - rapidsai
 - conda-forge
 dependencies:
-- aiobotocore>=2.2.0
+- aiobotocore>=2.2.0,<3
 - boto3>=1.21.21
 - botocore>=1.24.21
 - breathe>=4.35.0
@@ -20,12 +20,12 @@ dependencies:
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
-- cuda-python>=13.0.1,<14.0a0
+- cuda-python>=13.0.1,<14.0
 - cuda-sanitizer-api
 - cuda-version=13.0
 - cupy>=13.6.0
 - cxx-compiler
-- cython>=3.0.3,<3.2.0a0
+- cython>=3.0.3,<3.2.0
 - dask-cuda==26.2.*,>=0.0.0a0
 - dlpack>=0.8,<1.0
 - doxygen=1.9.1
@@ -43,7 +43,7 @@ dependencies:
 - libkvikio==26.2.*,>=0.0.0a0
 - libnvcomp-dev==5.1.0.21
 - libnvjitlink-dev
-- librdkafka>=2.8.0,<2.9.0a0
+- librdkafka>=2.8.0,<2.9.0
 - librmm==26.2.*,>=0.0.0a0
 - make
 - mmh3
@@ -56,16 +56,16 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.19.1,<0.20.0a0
-- numba>=0.60.0,<0.62.0a0
-- numpy>=1.23,<3.0a0
+- numba-cuda>=0.22.1,<0.23.0
+- numba>=0.60.0,<0.62.0
+- numpy>=1.23,<3.0
 - numpydoc
 - nvidia-ml-py>=12
 - nvtx>=0.2.1
 - openpyxl
 - packaging
 - pandas
-- pandas>=2.0,<2.4.0dev0
+- pandas>=2.0,<2.4.0
 - pandoc
 - polars>=1.29,<1.35
 - pre-commit
@@ -78,10 +78,10 @@ dependencies:
 - pytest-httpserver
 - pytest-rerunfailures!=16.0.0
 - pytest-xdist
-- python-confluent-kafka>=2.8.0,<2.9.0a0
+- python-confluent-kafka>=2.8.0,<2.9.0
 - python-xxhash
 - python>=3.10,<3.14
-- rapids-build-backend>=0.4.0,<0.5.0.dev0
+- rapids-build-backend>=0.4.0,<0.5.0
 - rapids-dask-dependency==26.2.*,>=0.0.0a0
 - rapids-logger==0.2.*,>=0.0.0a0
 - rich

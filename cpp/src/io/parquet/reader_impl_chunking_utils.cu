@@ -11,6 +11,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -21,7 +22,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/sequence.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
@@ -396,9 +396,9 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
       page_offsets, chunks, page_row_index, start_row, end_row, is_first_subpass, has_page_index});
 
   // total page count over all columns
-  auto page_count_iter = thrust::make_transform_iterator(page_bounds.begin(), get_span_size{});
-  size_t const total_pages =
-    thrust::reduce(rmm::exec_policy(stream), page_count_iter, page_count_iter + num_columns);
+  auto page_count_iter   = thrust::make_transform_iterator(page_bounds.begin(), get_span_size{});
+  auto const total_pages = cudf::detail::reduce(
+    page_count_iter, page_count_iter + num_columns, size_t{0}, cuda::std::plus<size_t>{}, stream);
 
   return {
     std::move(page_bounds), total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
@@ -622,10 +622,12 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   }
 
   CUDF_EXPECTS(
-    thrust::all_of(rmm::exec_policy(stream),
-                   comp_res.begin(),
-                   comp_res.end(),
-                   [] __device__(auto const& res) { return res.status == codec_status::SUCCESS; }),
+    cudf::detail::all_of(comp_res.begin(),
+                         comp_res.end(),
+                         cuda::proclaim_return_type<bool>([] __device__(auto const& res) {
+                           return res.status == codec_status::SUCCESS;
+                         }),
+                         stream),
     "Error during decompression");
 
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
@@ -716,8 +718,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
                     compression_type::ZSTD};
   for (auto const codec : codecs) {
     if (cudf::io::detail::is_decompression_scratch_size_ex_supported(codec)) {
-      auto const total_decomp_info = thrust::transform_reduce(
-        rmm::exec_policy(stream),
+      auto const total_decomp_info = cudf::detail::transform_reduce(
         decomp_iter,
         decomp_iter + pages.size(),
         cuda::proclaim_return_type<decompression_info>(
@@ -725,7 +726,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
             return d.type == codec ? d : decompression_info{codec, 0, 0, 0};
           }),
         decompression_info{codec, 0, 0, 0},
-        decomp_sum{});
+        decomp_sum{},
+        stream);
 
       // Collect pages with matching codecs
       rmm::device_uvector<device_span<uint8_t const>> temp_spans(pages.size(), stream);
