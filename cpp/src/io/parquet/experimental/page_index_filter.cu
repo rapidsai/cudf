@@ -1032,7 +1032,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     using task_page_row_offsets_type = std::vector<std::pair<std::vector<size_type>, size_type>>;
     std::vector<std::future<task_page_row_offsets_type>> page_row_offset_tasks{};
     page_row_offset_tasks.reserve(max_tasks);
-    auto const cols_per_thread = cudf::util::div_rounding_up_unsafe(num_columns, max_tasks);
+    auto const cols_per_thread = cudf::util::div_rounding_up_safe<size_t>(num_columns, max_tasks);
 
     // Submit page row offset compute tasks
     std::transform(thrust::counting_iterator(0),
@@ -1110,7 +1110,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     thrust::counting_iterator(0),
     thrust::counting_iterator(num_levels - 1),
     [&](auto const prev_level) {
-      auto const current_level_size = cudf::util::div_rounding_up_unsafe(prev_level_size, 2);
+      auto const current_level_size = cudf::util::div_rounding_up_safe(prev_level_size, 2);
       thrust::for_each(
         rmm::exec_policy_nosync(stream),
         thrust::counting_iterator(0),
