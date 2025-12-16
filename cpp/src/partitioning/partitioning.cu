@@ -718,6 +718,125 @@ struct dispatch_map_type {
 };
 }  // namespace
 
+// NOTE hash_has_nulls must be true if table_to_hash has nulls
+template <template <typename> class hash_function, bool hash_has_nulls>
+std::vector<std::unique_ptr<column>> hash_partition_indices_impl(table_view const& table_to_hash,
+                                                                 size_type num_partitions,
+                                                                 uint32_t seed,
+                                                                 rmm::cuda_stream_view stream,
+                                                                 rmm::device_async_resource_ref mr)
+{
+  auto const num_rows = table_to_hash.num_rows();
+
+  auto const block_size      = FALLBACK_BLOCK_SIZE;
+  auto const rows_per_thread = FALLBACK_ROWS_PER_THREAD;
+  auto const rows_per_block  = block_size * rows_per_thread;
+
+  auto grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
+
+  // Allocate array to hold which partition each row belongs to
+  auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
+
+  // Array to hold the size of each partition computed by each block
+  auto block_partition_sizes = rmm::device_uvector<size_type>(grid_size * num_partitions, stream);
+
+  // Holds the total number of rows in each partition
+  auto global_partition_sizes = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+    num_partitions, stream, cudf::get_current_device_resource_ref());
+
+  auto row_partition_offset = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+    num_rows, stream, cudf::get_current_device_resource_ref());
+
+  auto const row_hasher = detail::row::hash::row_hasher(table_to_hash, stream);
+  auto const hasher =
+    row_hasher.device_hasher<hash_function>(nullate::DYNAMIC{hash_has_nulls}, seed);
+
+  // Compute partition numbers
+  if (is_power_two(num_partitions)) {
+    using partitioner_type = bitwise_partitioner<hash_value_type>;
+    compute_row_partition_numbers<<<grid_size,
+                                    block_size,
+                                    num_partitions * sizeof(size_type),
+                                    stream.value()>>>(hasher,
+                                                      num_rows,
+                                                      num_partitions,
+                                                      partitioner_type(num_partitions),
+                                                      row_partition_numbers.data(),
+                                                      row_partition_offset.data(),
+                                                      block_partition_sizes.data(),
+                                                      global_partition_sizes.data());
+  } else {
+    using partitioner_type = modulo_partitioner<hash_value_type>;
+    compute_row_partition_numbers<<<grid_size,
+                                    block_size,
+                                    num_partitions * sizeof(size_type),
+                                    stream.value()>>>(hasher,
+                                                      num_rows,
+                                                      num_partitions,
+                                                      partitioner_type(num_partitions),
+                                                      row_partition_numbers.data(),
+                                                      row_partition_offset.data(),
+                                                      block_partition_sizes.data(),
+                                                      global_partition_sizes.data());
+  }
+
+  // Copy partition sizes to host (synchronous)
+  auto const partition_sizes = cudf::detail::make_std_vector(global_partition_sizes, stream);
+
+  // Compute exclusive scan of partition sizes to get offsets
+  std::vector<size_type> partition_offsets(num_partitions + 1);
+  partition_offsets[0] = 0;
+  std::partial_sum(partition_sizes.begin(), partition_sizes.end(), partition_offsets.begin() + 1);
+
+  // Create a single output buffer for all partition indices
+  auto all_indices = rmm::device_uvector<size_type>(num_rows, stream, mr);
+
+  // Copy partition offsets to device
+  auto d_partition_offsets = cudf::detail::make_device_uvector_async(
+    partition_offsets, stream, cudf::get_current_device_resource_ref());
+
+  // Scatter row indices to their partition positions
+  thrust::for_each(rmm::exec_policy(stream),
+                   thrust::make_counting_iterator<size_type>(0),
+                   thrust::make_counting_iterator<size_type>(num_rows),
+                   [row_partition_numbers = row_partition_numbers.data(),
+                    partition_offsets     = d_partition_offsets.data(),
+                    output                = all_indices.data()] __device__(size_type row_idx) {
+                     size_type const partition = row_partition_numbers[row_idx];
+                     size_type const offset =
+                       atomicAdd(const_cast<size_type*>(&partition_offsets[partition]),
+                                 static_cast<size_type>(1));
+                     output[offset] = row_idx;
+                   });
+
+  stream.synchronize();
+
+  // Create output columns by slicing the all_indices buffer
+  std::vector<std::unique_ptr<column>> result;
+  result.reserve(num_partitions);
+
+  for (size_type p = 0; p < num_partitions; ++p) {
+    auto const partition_size = partition_sizes[p];
+    if (partition_size == 0) {
+      // Create empty column
+      result.push_back(make_empty_column(data_type{type_id::INT32}));
+    } else {
+      // Create column from the appropriate slice of all_indices
+      auto const offset = partition_offsets[p];
+      rmm::device_buffer buffer(partition_size * sizeof(size_type), stream, mr);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(buffer.data(),
+                                    all_indices.data() + offset,
+                                    partition_size * sizeof(size_type),
+                                    cudaMemcpyDefault,
+                                    stream.value()));
+      result.push_back(std::make_unique<column>(
+        data_type{type_id::INT32}, partition_size, std::move(buffer), rmm::device_buffer{}, 0));
+    }
+  }
+
+  return result;
+}
+
 namespace detail {
 namespace {
 
@@ -830,6 +949,55 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
 {
   CUDF_FUNC_RANGE();
   return detail::partition(t, partition_map, num_partitions, stream, mr);
+}
+
+// Compute partition indices based on hash values
+std::vector<std::unique_ptr<column>> hash_partition_indices(
+  table_view const& input,
+  std::vector<size_type> const& columns_to_hash,
+  int num_partitions,
+  hash_id hash_function,
+  uint32_t seed,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  auto table_to_hash = input.select(columns_to_hash);
+
+  // Return empty columns if there are no partitions or nothing to hash
+  if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
+    std::vector<std::unique_ptr<column>> result;
+    result.reserve(num_partitions);
+    for (int i = 0; i < num_partitions; ++i) {
+      result.push_back(make_empty_column(data_type{type_id::INT32}));
+    }
+    return result;
+  }
+
+  switch (hash_function) {
+    case (hash_id::HASH_IDENTITY):
+      for (size_type const& column_id : columns_to_hash) {
+        if (!is_numeric(input.column(column_id).type()))
+          CUDF_FAIL("IdentityHash does not support this data type");
+      }
+      if (has_nested_nulls(table_to_hash)) {
+        return hash_partition_indices_impl<detail::IdentityHash, true>(
+          table_to_hash, num_partitions, seed, stream, mr);
+      } else {
+        return hash_partition_indices_impl<detail::IdentityHash, false>(
+          table_to_hash, num_partitions, seed, stream, mr);
+      }
+    case (hash_id::HASH_MURMUR3):
+      if (has_nested_nulls(table_to_hash)) {
+        return hash_partition_indices_impl<cudf::hashing::detail::MurmurHash3_x86_32, true>(
+          table_to_hash, num_partitions, seed, stream, mr);
+      } else {
+        return hash_partition_indices_impl<cudf::hashing::detail::MurmurHash3_x86_32, false>(
+          table_to_hash, num_partitions, seed, stream, mr);
+      }
+    default: CUDF_FAIL("Unsupported hash function in hash_partition_indices");
+  }
 }
 
 }  // namespace cudf
