@@ -245,24 +245,12 @@ class _SeriesIlocIndexer(_FrameIndexer):
                         to_dtype = find_common_type(
                             (tmp_value.dtype, self._frame.dtype)
                         )
-                    tmp_value = tmp_value.astype(to_dtype)
                     if to_dtype != self._frame.dtype:
-                        # Do not remove until pandas-3.0 support is added.
-                        assert PANDAS_LT_300, (
-                            "Need to drop after pandas-3.0 support is added."
-                        )
-                        warnings.warn(
-                            f"Setting an item of incompatible dtype is deprecated "
-                            "and will raise in a future error of pandas. "
-                            f"Value '{value}' has dtype incompatible with "
-                            f"{self._frame.dtype}, "
-                            "please explicitly cast to a compatible dtype first.",
-                            FutureWarning,
-                        )
-                        self._frame._column._mimic_inplace(
-                            self._frame._column.astype(to_dtype), inplace=True
+                        raise TypeError(
+                            f"Invalid value '{value}' for dtype '{self._frame.dtype}'"
                         )
                     if is_scalar(value):
+                        tmp_value = tmp_value.astype(to_dtype)
                         value = tmp_value.element_indexing(0)
 
         self._frame._column[key] = value

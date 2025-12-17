@@ -102,30 +102,16 @@ def test_series_slice_setitem_struct():
     assert_eq(actual, expected)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning not present in older pandas versions",
-)
-@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
+@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32])
 @pytest.mark.parametrize("indices", [0, [1, 2]])
-def test_series_setitem_upcasting(dtype, indices):
+def test_series_setitem_upcasting_raises(dtype, indices):
     sr = pd.Series([0, 0, 0], dtype=dtype)
     cr = cudf.from_pandas(sr)
-    assert_eq(sr, cr)
-    # Must be a non-integral floating point value that can't be losslessly
-    # converted to float32, otherwise pandas will try and match the source
-    # column dtype.
     new_value = np.float64(np.pi)
-    col_ref = cr._column
-    with expect_warning_if(dtype != np.float64):
+    with pytest.raises(TypeError):
         sr[indices] = new_value
-    with expect_warning_if(dtype != np.float64):
+    with pytest.raises(TypeError):
         cr[indices] = new_value
-    assert_eq(sr, cr)
-
-    if dtype == np.float64:
-        # no-op type cast should not modify backing column
-        assert col_ref == cr._column
 
 
 @pytest.mark.parametrize(
