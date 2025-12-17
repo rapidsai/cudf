@@ -10454,6 +10454,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[nullable_uint-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[object-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[uint64-Series]",
+    "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_setitem_mix_of_nan_and_interval[NaTType-a]",
     "tests/io/excel/test_openpyxl.py::test_engine_kwargs_append_data_only[True-0]",
     "tests/io/excel/test_writers.py::TestExcelWriterEngineTests::test_ExcelWriter_dispatch[OpenpyxlWriter-.xlsx]",
     "tests/io/formats/test_format.py::TestDataFrameFormatting::test_auto_detect",
