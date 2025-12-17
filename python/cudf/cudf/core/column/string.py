@@ -18,7 +18,7 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
@@ -142,14 +142,13 @@ class StringColumn(ColumnBase, Scannable):
         ):
             dtype = CUDF_STRING_DTYPE
 
+        self._start_offset = None
+        self._end_offset = None
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
             exposed=exposed,
         )
-
-        self._start_offset = None
-        self._end_offset = None
 
     @property
     def start_offset(self) -> int:
@@ -201,21 +200,16 @@ class StringColumn(ColumnBase, Scannable):
         else:
             return self.base_children[0].size - 1
 
-    @property
-    def data(self) -> None | Buffer:
-        if self._data is None:  # type: ignore[has-type]
+    def _recompute_data(self) -> None:
+        if (
+            self.offset == 0
+            and len(self.base_children) > 0
+            and self.size == self.base_children[0].size - 1
+        ):
+            self._data = self.base_data
+        else:
             assert self.base_data is not None
-            if (
-                self.offset == 0
-                and len(self.base_children) > 0
-                and self.size == self.base_children[0].size - 1
-            ):
-                self._data = self.base_data
-            else:
-                self._data = self.base_data[
-                    self.start_offset : self.end_offset
-                ]
-        return self._data
+            self._data = self.base_data[self.start_offset : self.end_offset]
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:

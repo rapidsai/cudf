@@ -501,11 +501,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _recompute_data(self) -> None:
         """Recompute the offset-aware data buffer."""
-        if type(self).data is not ColumnBase.data:
-            # Subclass overrides data property, skip computation
-            # TODO: Check this
-            self._data = None
-        elif self.base_data is None:
+        if self.base_data is None:
             self._data = None
         elif self.offset == 0 and self.size == self.base_size:
             # Optimization: for non-sliced columns, data == base_data (just a reference)
