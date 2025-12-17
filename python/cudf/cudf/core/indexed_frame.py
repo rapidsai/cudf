@@ -1352,7 +1352,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def sum(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         min_count: int = 0,
@@ -1404,7 +1404,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def product(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna=True,
         numeric_only=False,
         min_count=0,
@@ -1462,7 +1462,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def mean(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1504,9 +1504,10 @@ class IndexedFrame(Frame):
             **kwargs,
         )
 
+    @_performance_tracking
     def median(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1556,7 +1557,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def std(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         ddof: int = 1,
         numeric_only: bool = False,
@@ -1609,7 +1610,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def var(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         ddof: int = 1,
         numeric_only: bool = False,
@@ -1661,7 +1662,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def kurtosis(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1722,7 +1723,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def skew(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -3370,28 +3371,6 @@ class IndexedFrame(Frame):
             )
 
     @_performance_tracking
-    def backfill(
-        self, value=None, axis=None, inplace: bool = False, limit=None
-    ) -> Self | None:
-        """
-        Synonym for :meth:`Series.fillna` with ``method='bfill'``.
-
-        .. deprecated:: 23.06
-           Use `DataFrame.bfill/Series.bfill` instead.
-
-        Returns
-        -------
-            Object with missing values filled or None if ``inplace=True``.
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            "DataFrame.backfill/Series.backfill is deprecated. Use "
-            "DataFrame.bfill/Series.bfill instead",
-            FutureWarning,
-        )
-        return self.bfill(value=value, axis=axis, inplace=inplace, limit=limit)
-
-    @_performance_tracking
     def ffill(
         self,
         value=None,
@@ -3419,26 +3398,6 @@ class IndexedFrame(Frame):
                 inplace=inplace,
                 limit=limit,
             )
-
-    @_performance_tracking
-    def pad(self, value=None, axis=None, inplace: bool = False, limit=None):
-        """
-        Synonym for :meth:`Series.fillna` with ``method='ffill'``.
-
-        .. deprecated:: 23.06
-           Use `DataFrame.ffill/Series.ffill` instead.
-
-        Returns
-        -------
-            Object with missing values filled or None if ``inplace=True``.
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            "DataFrame.pad/Series.pad is deprecated. Use "
-            "DataFrame.ffill/Series.ffill instead",
-            FutureWarning,
-        )
-        return self.ffill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     def add_prefix(self, prefix, axis=None):
         """
@@ -6629,6 +6588,42 @@ class IndexedFrame(Frame):
             return self._from_data_like_self(
                 self._data._from_columns_like_self(cols, verify=False)
             )
+
+    @_performance_tracking
+    def pct_change(
+        self,
+        periods: int = 1,
+        fill_method: None = None,
+        freq=None,
+        **kwargs,
+    ):
+        """
+        Calculates the percent change between sequential elements.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for forming percent change.
+        fill_method : None
+            Must be None.
+        freq : str, optional
+            Increment to use from time series API.
+            Not yet implemented.
+        **kwargs
+            Additional keyword arguments are passed into shift.
+
+        Returns
+        -------
+        Same type as caller.
+        """
+        if freq is not None:
+            raise NotImplementedError("freq parameter not supported yet.")
+        if fill_method is not None:
+            raise ValueError(f"fill_method must be None; got {fill_method=}.")
+
+        return self.diff(periods=periods) / self.shift(  # type: ignore[attr-defined]
+            periods=periods, freq=freq, **kwargs
+        )
 
     @_performance_tracking
     def serialize(self):

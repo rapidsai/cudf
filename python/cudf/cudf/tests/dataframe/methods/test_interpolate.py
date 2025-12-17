@@ -33,27 +33,13 @@ def test_interpolate_dataframe(data):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "data,kwargs",
-    [
-        (
-            {"A": ["a", "b", "c"], "B": ["d", "e", "f"]},
-            {"axis": 0, "method": "linear"},
-        ),
-        ({"A": [1, 2, 3]}, {"method": "pad", "limit_direction": "forward"}),
-        ({"A": [1, 2, 3]}, {"method": "ffill", "limit_direction": "forward"}),
-        ({"A": [1, 2, 3]}, {"method": "bfill", "limit_direction": "backward"}),
-        (
-            {"A": [1, 2, 3]},
-            {"method": "backfill", "limit_direction": "backward"},
-        ),
-    ],
-)
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="Does not fail on older versions of pandas",
 )
-def test_interpolate_dataframe_error_cases(data, kwargs):
+def test_interpolate_dataframe_error_cases():
+    data = {"A": ["a", "b", "c"], "B": ["d", "e", "f"]}
+    kwargs = {"axis": 0, "method": "linear"}
     gsr = cudf.DataFrame(data)
     psr = gsr.to_pandas()
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import datetime
 import functools
-import warnings
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import cupy as cp
@@ -107,21 +106,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         self, values: Sequence
     ) -> tuple[ColumnBase, ColumnBase]:
         lhs, rhs = super()._process_values_for_isin(values)
-        if len(rhs) and rhs.dtype.kind == "O":
-            try:
-                rhs = rhs.astype(lhs.dtype)
-            except ValueError:
-                pass
-            else:
-                warnings.warn(
-                    f"The behavior of 'isin' with dtype={lhs.dtype} and "
-                    "castable values (e.g. strings) is deprecated. In a "
-                    "future version, these will not be considered matching "
-                    "by isin. Explicitly cast to the appropriate dtype before "
-                    "calling isin instead.",
-                    FutureWarning,
-                )
-        elif isinstance(rhs, type(self)):
+        if isinstance(rhs, type(self)):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 

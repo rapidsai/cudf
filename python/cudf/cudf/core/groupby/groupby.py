@@ -19,9 +19,7 @@ import pyarrow as pa
 
 import pylibcudf as plc
 
-from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_scalar
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
@@ -519,43 +517,6 @@ class GroupBy(Serializable, Reducible, Scannable):
     def ndim(self) -> int:
         return self.obj.ndim
 
-    @property
-    def dtypes(self):
-        """
-        Return the dtypes in this group.
-
-        .. deprecated:: 24.04
-           Use `.dtypes` on base object instead.
-
-        Returns
-        -------
-        pandas.DataFrame
-            The data type of each column of the group.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 3], 'b': ['x', 'y', 'z', 'a'],
-        ...                      'c':[10, 11, 12, 12]})
-        >>> df.groupby("a").dtypes
-               a       b      c
-        a
-        1  int64  object  int64
-        2  int64  object  int64
-        3  int64  object  int64
-        """
-        warnings.warn(
-            f"{type(self).__name__}.dtypes is deprecated and will be "
-            "removed in a future version. Check the dtypes on the "
-            "base object instead",
-            FutureWarning,
-        )
-        index = self.grouping.keys.unique().sort_values().to_pandas()
-        return pd.DataFrame(
-            {name: [dtype] * len(index) for name, dtype in self.obj._dtypes},
-            index=index,
-        )
-
     @cached_property
     def groups(self):
         """
@@ -617,7 +578,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @_performance_tracking
-    def get_group(self, name, obj=None):
+    def get_group(self, name):
         """
         Construct DataFrame from group with provided name.
 
@@ -625,10 +586,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         ----------
         name : object
             The name of the group to get as a DataFrame.
-        obj : DataFrame, default None
-            The DataFrame to take the DataFrame out of.  If
-            it is None, the object groupby was called on will
-            be used.
 
         Returns
         -------
@@ -649,21 +606,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         0  A  1
         2  A  3
         """
-        if obj is None:
-            obj = self.obj
-        else:
-            warnings.warn(
-                "obj is deprecated and will be removed in a future version. "
-                "Use ``df.iloc[gb.indices.get(name)]`` "
-                "instead of ``gb.get_group(name, obj=df)``.",
-                FutureWarning,
-            )
         if is_list_like(self._by) and len(self._by) == 1:
             if isinstance(name, tuple) and len(name) == 1:
                 name = name[0]
             else:
                 raise KeyError(name)
-        return obj.iloc[self.indices[name]]
+        return self.obj.iloc[self.indices[name]]
 
     @_performance_tracking
     def size(self) -> Series:
@@ -2666,72 +2614,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         return self._scan_fill("bfill", limit)
 
     @_performance_tracking
-    def fillna(
-        self,
-        value=None,
-        method=None,
-        axis=0,
-        inplace=False,
-        limit=None,
-        downcast=None,
-    ):
-        """Fill NA values using the specified method.
-
-        Parameters
-        ----------
-        value : scalar, dict
-            Value to use to fill the holes. Cannot be specified with method.
-        method : { 'bfill', 'ffill', None}, default None
-            Method to use for filling holes in reindexed Series
-
-            - ffill: propagate last valid observation forward to next valid
-            - bfill: use next valid observation to fill gap
-        axis : {0 or 'index', 1 or 'columns'}
-            Unsupported
-        inplace : bool, default False
-            If `True`, fill inplace. Note: this will modify other views on this
-            object.
-        limit : int, default None
-            Unsupported
-        downcast : dict, default None
-            Unsupported
-
-        Returns
-        -------
-        DataFrame or Series
-        """
-        warnings.warn(
-            "groupby fillna is deprecated and "
-            "will be removed in a future version. Use groupby ffill "
-            "or groupby bfill for forward or backward filling instead.",
-            FutureWarning,
-        )
-        if inplace:
-            raise NotImplementedError("Does not support inplace yet.")
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-        if downcast is not None:
-            raise NotImplementedError("Does not support downcast yet.")
-        if not axis == 0:
-            raise NotImplementedError("Only support axis == 0.")
-
-        if value is None and method is None:
-            raise ValueError("Must specify a fill 'value' or 'method'.")
-        if value is not None and method is not None:
-            raise ValueError("Cannot specify both 'value' and 'method'.")
-
-        if method is not None:
-            if method not in {"ffill", "bfill"}:
-                raise ValueError("Method can only be of 'ffill', 'bfill'.")
-            return getattr(self, method, limit)()
-
-        values = self.grouping.values
-        values.index = self.obj.index
-        return values.fillna(
-            value=value, inplace=inplace, axis=axis, limit=limit
-        )
-
-    @_performance_tracking
     def shift(
         self,
         periods: int = 1,
@@ -2811,10 +2693,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     @_performance_tracking
     def pct_change(
         self,
-        periods=1,
-        fill_method=no_default,
-        axis=0,
-        limit=no_default,
+        periods: int = 1,
+        fill_method: None = None,
         freq=None,
     ):
         """
@@ -2826,17 +2706,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         periods : int, default 1
             Periods to shift for forming percent change.
         fill_method : str, default 'ffill'
-            How to handle NAs before computing percent changes.
-
-            .. deprecated:: 24.04
-                All options of `fill_method` are deprecated
-                except `fill_method=None`.
-        limit : int, optional
-            The number of consecutive NAs to fill before stopping.
-            Not yet implemented.
-
-            .. deprecated:: 24.04
-                `limit` is deprecated.
+            Must be None.
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
@@ -2846,39 +2716,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Percentage changes within each group
         """
-        if not axis == 0:
-            raise NotImplementedError("Only axis=0 is supported.")
-        if limit is not no_default:
-            raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {no_default, None, "ffill", "bfill"}:
-            raise ValueError("fill_method must be one of 'ffill', or'bfill'.")
+        if fill_method is not None:
+            raise ValueError(f"fill_method must be None; got {fill_method=}.")
 
-        if fill_method not in (no_default, None) or limit is not no_default:
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                "The 'fill_method' keyword being not None and the 'limit' "
-                f"keywords in {type(self).__name__}.pct_change are "
-                "deprecated and will be removed in a future version. "
-                "Either fill in any non-leading NA values prior "
-                "to calling pct_change or specify 'fill_method=None' "
-                "to not fill NA values.",
-                FutureWarning,
-            )
-
-        if fill_method in (no_default, None):
-            fill_method = "ffill"
-        if limit is no_default:
-            limit = None
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            filled = self.fillna(method=fill_method, limit=limit)
-
+        filled = self.ffill()
         fill_grp = filled.groupby(self.grouping)
         shifted = fill_grp.shift(periods=periods, freq=freq)
         return (filled / shifted) - 1

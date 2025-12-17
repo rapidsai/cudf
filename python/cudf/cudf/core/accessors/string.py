@@ -752,10 +752,8 @@ class StringMethods(BaseAccessor):
             and not isinstance(na, bool)
         ):
             # GH#59561
-            warnings.warn(
-                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
-                "and will raise in a future version.",
-                FutureWarning,
+            raise ValueError(
+                f"na must be None, pd.NA, np.nan, True, or False; got {na}"
             )
         if na not in {no_default, np.nan}:
             raise NotImplementedError("`na` parameter is not yet supported")

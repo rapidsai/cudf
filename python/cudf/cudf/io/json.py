@@ -154,9 +154,7 @@ def read_json(
         filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
             path_or_buf,
             iotypes=(BytesIO, StringIO),
-            allow_raw_text_input=True,
             storage_options=storage_options,
-            warn_on_raw_text_input=True,
             warn_meta=("json", "read_json"),
             expand_dir_pattern="*.json",
         )
@@ -254,7 +252,6 @@ def read_json(
         filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
             path_or_data=path_or_buf,
             iotypes=(BytesIO, StringIO),
-            allow_raw_text_input=True,
             storage_options=storage_options,
         )
         filepath_or_buffer = ioutils._select_single_source(

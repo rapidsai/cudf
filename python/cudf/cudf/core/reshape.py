@@ -106,7 +106,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
     else:
         index = indexes[0]
         if sort is None:
-            sort = not index._is_object()
+            sort = index.dtype != CUDF_STRING_DTYPE
         for other in indexes[1:]:
             index = index.union(other, sort=False)
 

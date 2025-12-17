@@ -245,24 +245,12 @@ class _SeriesIlocIndexer(_FrameIndexer):
                         to_dtype = find_common_type(
                             (tmp_value.dtype, self._frame.dtype)
                         )
-                    tmp_value = tmp_value.astype(to_dtype)
                     if to_dtype != self._frame.dtype:
-                        # Do not remove until pandas-3.0 support is added.
-                        assert PANDAS_LT_300, (
-                            "Need to drop after pandas-3.0 support is added."
-                        )
-                        warnings.warn(
-                            f"Setting an item of incompatible dtype is deprecated "
-                            "and will raise in a future error of pandas. "
-                            f"Value '{value}' has dtype incompatible with "
-                            f"{self._frame.dtype}, "
-                            "please explicitly cast to a compatible dtype first.",
-                            FutureWarning,
-                        )
-                        self._frame._column._mimic_inplace(
-                            self._frame._column.astype(to_dtype), inplace=True
+                        raise TypeError(
+                            f"Invalid value '{value}' for dtype '{self._frame.dtype}'"
                         )
                     if is_scalar(value):
+                        tmp_value = tmp_value.astype(to_dtype)
                         value = tmp_value.element_indexing(0)
 
         self._frame._column[key] = value
@@ -1347,18 +1335,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             or self.index.dtype.kind in {"i", "u", "f"}
             or isinstance(self.index.dtype, IntervalDtype)
         ):
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                "Series.__getitem__ treating keys as positions is deprecated "
-                "In a future version, integer keys will always be treated as labels "
-                "(consistent with DataFrame behavior) To access a value by position, "
-                "use `ser.iloc[pos]`",
-                FutureWarning,
-            )
-            return self.iloc[arg]
+            raise KeyError(arg)
         else:
             return self.loc[arg]
 
@@ -1923,7 +1900,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def all(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         bool_only: bool | None = None,
         skipna: bool = True,
         **kwargs,
@@ -3758,88 +3735,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         dtype: int64
         """
         return super()._explode(self.name, ignore_index)
-
-    @_performance_tracking
-    def pct_change(
-        self,
-        periods=1,
-        fill_method=no_default,
-        limit=no_default,
-        freq=None,
-        **kwargs,
-    ):
-        """
-        Calculates the percent change between sequential elements
-        in the Series.
-
-        Parameters
-        ----------
-        periods : int, default 1
-            Periods to shift for forming percent change.
-        fill_method : str, default 'ffill'
-            How to handle NAs before computing percent changes.
-
-            .. deprecated:: 24.04
-                All options of `fill_method` are deprecated
-                except `fill_method=None`.
-        limit : int, optional
-            The number of consecutive NAs to fill before stopping.
-            Not yet implemented.
-
-            .. deprecated:: 24.04
-                `limit` is deprecated.
-        freq : str, optional
-            Increment to use from time series API.
-            Not yet implemented.
-        **kwargs
-            Additional keyword arguments are passed into
-            `Series.shift`.
-
-        Returns
-        -------
-        Series
-        """
-        if limit is not no_default:
-            raise NotImplementedError("limit parameter not supported yet.")
-        if freq is not None:
-            raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {
-            no_default,
-            None,
-            "ffill",
-            "pad",
-            "bfill",
-            "backfill",
-        }:
-            raise ValueError(
-                "fill_method must be one of None, 'ffill', 'pad', "
-                "'bfill', or 'backfill'."
-            )
-        if fill_method not in (no_default, None) or limit is not no_default:
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                "The 'fill_method' and 'limit' keywords in "
-                f"{type(self).__name__}.pct_change are deprecated and will be "
-                "removed in a future version. Either fill in any non-leading "
-                "NA values prior to calling pct_change or specify "
-                "'fill_method=None' to not fill NA values.",
-                FutureWarning,
-            )
-
-        if fill_method is no_default:
-            fill_method = "ffill"
-        if limit is no_default:
-            limit = None
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            data = self.fillna(method=fill_method, limit=limit)
-        diff = data.diff(periods=periods)
-        change = diff / data.shift(periods=periods, freq=freq, **kwargs)
-        return change
 
     @_performance_tracking
     def where(
