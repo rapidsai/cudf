@@ -65,7 +65,7 @@ dependencies:
 - openpyxl
 - packaging
 - pandas
-- pandas>=2.0,<2.4.0
+- pandas==3.0.0rc0
 - pandoc
 - polars>=1.29,<1.35
 - pre-commit
