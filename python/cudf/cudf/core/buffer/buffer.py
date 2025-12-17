@@ -15,6 +15,7 @@ import rmm
 
 from cudf.core.abc import Serializable
 from cudf.core.buffer.string import format_bytes
+from cudf.options import get_option
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -113,7 +114,7 @@ class BufferOwner(Serializable):
             An object implementing the CUDA Array Interface.
         exposed : bool
             Mark the buffer as permanently exposed. This is used by
-            ExposureTrackedBuffer to determine when a deep copy is required
+            copy-on-write to determine when a deep copy is required
             and by SpillableBuffer to mark the buffer unspillable.
 
         Returns
@@ -186,7 +187,7 @@ class BufferOwner(Serializable):
     def exposed(self) -> bool:
         """The current exposure status of the buffer
 
-        This is used by ExposureTrackedBuffer to determine when a deep copy
+        This is used by copy-on-write to determine when a deep copy
         is required and by SpillableBuffer to mark the buffer unspillable.
         """
         return self._exposed
@@ -199,7 +200,7 @@ class BufferOwner(Serializable):
     def mark_exposed(self) -> None:
         """Mark the buffer as "exposed" permanently
 
-        This is used by ExposureTrackedBuffer to determine when a deep copy
+        This is used by copy-on-write to determine when a deep copy
         is required and by SpillableBuffer to mark the buffer unspillable.
 
         Notice, once the exposure status becomes True, it will never change
@@ -228,7 +229,6 @@ class BufferOwner(Serializable):
         See Also
         --------
         SpillableBuffer.get_ptr
-        ExposureTrackedBuffer.get_ptr
         """
         return self._ptr
 
@@ -288,6 +288,9 @@ class Buffer(Serializable):
         self._owner = owner
         self._offset = offset
         self._size = size
+        # Track this slice for copy-on-write
+        if get_option("copy_on_write"):
+            self._owner._slices.add(self)
 
     @property
     def size(self) -> int:
@@ -324,6 +327,8 @@ class Buffer(Serializable):
         )
 
     def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
+        if mode == "write" and get_option("copy_on_write"):
+            self.make_single_owner_inplace()
         return self._owner.get_ptr(mode=mode) + self._offset
 
     def memoryview(self) -> memoryview:
@@ -332,20 +337,33 @@ class Buffer(Serializable):
     def copy(self, deep: bool = True) -> Self:
         """Return a copy of Buffer.
 
+        What actually happens when `deep == False` depends on the
+        "copy_on_write" option. When copy-on-write is enabled, a shallow copy
+        becomes a deep copy if the buffer has been exposed. This is because we
+        have no control over knowing if the data is being modified when the
+        buffer has been exposed to third-party.
+
         Parameters
         ----------
         deep : bool, default True
-            - If deep=True, returns a deep copy of the underlying data.
-            - If deep=False, returns a new `Buffer` instance that refers
-              to the same `BufferOwner` as this one. Thus, no device
-              data are being copied.
+            The semantics when copy-on-write is disabled:
+                - If deep=True, returns a deep copy of the underlying data.
+                - If deep=False, returns a shallow copy of the Buffer pointing
+                  to the same underlying data.
+            The semantics when copy-on-write is enabled:
+                - From the users perspective, always a deep copy of the
+                  underlying data. However, the data isn't actually copied
+                  until someone writes to the returned buffer.
 
         Returns
         -------
         Buffer
             A new buffer that either refers to either a new or an existing
-            `BufferOwner` depending on the `deep` argument (see above).
+            `BufferOwner` depending on the expose status of the owner and the
+            copy-on-write option (see above).
         """
+        if get_option("copy_on_write"):
+            deep = deep or self._owner.exposed
 
         # When doing a shallow copy, we just return a new slice
         if not deep:
@@ -366,6 +384,8 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> Mapping:
         """Implementation of the CUDA Array Interface."""
+        if get_option("copy_on_write"):
+            self.make_single_owner_inplace()
         return {
             "data": (self.get_ptr(mode="write"), False),
             "shape": (self.size,),
@@ -373,6 +393,22 @@ class Buffer(Serializable):
             "typestr": "|u1",
             "version": 3,
         }
+
+    def make_single_owner_inplace(self) -> None:
+        """Make sure this slice is the only one pointing to the owner.
+
+        This is used by copy-on-write to trigger a deep copy when write
+        access is detected.
+        """
+        if len(self._owner._slices) > 1:
+            # If this is not the only slice pointing to `self._owner`, we
+            # point to a new copy of our slice of `self._owner`.
+            self._owner._slices.remove(self)
+            t = self.copy(deep=True)
+            self._owner = t._owner
+            self._offset = t._offset
+            self._size = t._size
+            self._owner._slices.add(self)
 
     def serialize(self) -> tuple[dict, list]:
         """Serialize the buffer into header and frames.

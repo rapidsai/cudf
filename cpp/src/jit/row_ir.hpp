@@ -10,8 +10,18 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <array>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <variant>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
