@@ -226,7 +226,10 @@ class DecimalBaseColumn(NumericalBaseColumn):
             elif not isinstance(self.dtype, other.dtype.__class__):
                 # This branch occurs if we have a DecimalBaseColumn of a
                 # different size (e.g. 64 instead of 32).
-                if _same_precision_and_scale(self.dtype, other.dtype):  # type: ignore[arg-type]
+                if (
+                    self.dtype.precision == other.dtype.precision  # type: ignore[union-attr]
+                    and self.dtype.scale == other.dtype.scale  # type: ignore[union-attr]
+                ):
                     other = other.astype(self.dtype)
             other_cudf_dtype = other.dtype
         elif isinstance(other, (int, Decimal)):
@@ -459,7 +462,3 @@ def _get_decimal_type(
         f"Performing {op} between columns of type {lhs_dtype!r} and "
         f"{rhs_dtype!r} would result in overflow"
     )
-
-
-def _same_precision_and_scale(lhs: DecimalDtype, rhs: DecimalDtype) -> bool:
-    return lhs.precision == rhs.precision and lhs.scale == rhs.scale
