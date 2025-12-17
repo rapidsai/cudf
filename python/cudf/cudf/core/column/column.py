@@ -2106,13 +2106,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 self.plc_column = plc.Column(
                     data_type=self.plc_column.type(),
                     size=self.plc_column.size(),
-                    data=self.plc_column.data(),
+                    data=self.data,  # Use the new buffer directly
                     mask=self.plc_column.null_mask(),
                     null_count=self.plc_column.null_count(),
                     offset=0,
                     children=self.plc_column.children(),
                 )
-                self.set_base_data(self.data)
+                # Recompute _data since we updated plc_column
+                self._recompute_data()
 
         output = {
             "shape": (len(self),),
