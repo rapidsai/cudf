@@ -406,6 +406,19 @@ TYPED_TEST(TransformTest, DeeplyNestedArithmeticLogicalExpression)
 {
   using Executor = TypeParam;
 
+  if constexpr (std::is_same_v<Executor, executor_jit>) {
+    int driverVersion;
+    auto const err = cudaDriverGetVersion(&driverVersion);
+    if (err == cudaSuccess) {
+      auto major = driverVersion / 1000;
+      auto minor = (driverVersion % 1000) / 10;
+      if (major == 12 && minor < 9) {
+        std::cout << "skipping executor_jit test" << std::endl;
+        GTEST_SKIP();
+      }
+    }
+  }
+
   // Test logic for deeply nested arithmetic and logical expressions.
   constexpr int64_t left_depth_level  = 100;
   constexpr int64_t right_depth_level = 75;
