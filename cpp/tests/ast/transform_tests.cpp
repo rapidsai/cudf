@@ -415,8 +415,6 @@ TYPED_TEST(TransformTest, DeeplyNestedArithmeticLogicalExpression)
       if (major == 12 && minor < 9) {
         std::cout << "skipping executor_jit test" << std::endl;
         GTEST_SKIP();
-      } else {
-        std::cout << "AST test print" << std::endl;
       }
     }
   }
