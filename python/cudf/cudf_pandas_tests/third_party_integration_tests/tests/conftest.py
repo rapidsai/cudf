@@ -96,6 +96,24 @@ def read_all_results(pattern):
 
 
 def pytest_configure(config: _pytest.config.Config):
+    # Register custom markers to avoid PytestUnknownMarkWarning
+    config.addinivalue_line(
+        "markers",
+        "assert_eq(fn): custom assertion function for comparing results",
+    )
+    config.addinivalue_line(
+        "markers",
+        "xfail_gold: mark test as expected to fail in gold (pandas) pass",
+    )
+    config.addinivalue_line(
+        "markers",
+        "xfail_cudf_pandas: mark test as expected to fail in cudf.pandas pass",
+    )
+    config.addinivalue_line(
+        "markers",
+        "xfail_compare: mark test as expected to fail in compare pass",
+    )
+
     gold_basename = "results-gold"
     cudf_basename = "results-cudf-pandas"
     test_folder = os.path.join(os.path.dirname(__file__))
