@@ -7,6 +7,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -94,6 +95,90 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
                     fn);
 
   return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
+}
+
+template <typename T, typename OptionalIterator, typename ReplaceIterator>
+struct clamp_dictionary_fn {
+  column_device_view const d_dictionary;
+  OptionalIterator lo_itr;
+  ReplaceIterator lo_replace_itr;
+  OptionalIterator hi_itr;
+  ReplaceIterator hi_replace_itr;
+
+  __device__ size_type operator()(size_type idx) const
+  {
+    if (d_dictionary.is_null(idx)) { return 0; }
+    auto const key_index = d_dictionary.element<dictionary32>(idx).value();
+    auto const element   = d_dictionary.child(1).element<T>(key_index);
+    if (element < (*lo_itr).value_or(element)) { return *lo_replace_itr; }
+    if ((*hi_itr).value_or(element) < element) { return *hi_replace_itr; }
+    return key_index;
+  }
+};
+
+template <typename T>
+std::unique_ptr<cudf::column> clamp_dictionary_column(dictionary_column_view const& input,
+                                                      scalar const& lo,
+                                                      scalar const& lo_replace,
+                                                      scalar const& hi,
+                                                      scalar const& hi_replace,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
+{
+  // add lo_replace and hi_replace to keys
+  auto matched_column = [&] {
+    auto matched_view              = dictionary_column_view(input);
+    std::unique_ptr<column> result = nullptr;
+    auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
+      if (key.is_valid(stream)) {
+        result = dictionary::detail::add_keys(
+          matched_view, make_column_from_scalar(key_replace, 1, stream)->view(), stream, mr);
+        matched_view = dictionary_column_view(result->view());
+      }
+    };
+    add_scalar_key(lo, lo_replace);
+    add_scalar_key(hi, hi_replace);
+    return result;
+  }();
+  auto matched_view = dictionary_column_view(matched_column->view());
+  auto default_mr   = cudf::get_current_device_resource_ref();
+
+  // get the indexes for lo_replace and for hi_replace
+  auto lo_replace_index =
+    dictionary::detail::get_index(matched_view, lo_replace, stream, default_mr);
+  auto hi_replace_index =
+    dictionary::detail::get_index(matched_view, hi_replace, stream, default_mr);
+  auto lo_index_itr = cudf::detail::indexalator_factory::make_input_iterator(*lo_replace_index);
+  auto hi_index_itr = cudf::detail::indexalator_factory::make_input_iterator(*hi_replace_index);
+
+  auto indices_column = cudf::make_numeric_column(
+    matched_view.indices().type(), matched_view.size(), cudf::mask_state::UNALLOCATED, stream, mr);
+  auto indices_itr =
+    cudf::detail::indexalator_factory::make_output_iterator(indices_column->mutable_view());
+
+  auto lo_itr  = make_optional_iterator<T>(lo, nullate::YES{});
+  auto hi_itr  = make_optional_iterator<T>(hi, nullate::YES{});
+  auto d_input = column_device_view::create(input.parent(), stream);
+
+  using OptionalIterator = decltype(lo_itr);
+  using ReplaceIterator  = decltype(lo_index_itr);
+
+  auto fn = clamp_dictionary_fn<T, OptionalIterator, ReplaceIterator>{
+    *d_input, lo_itr, lo_index_itr, hi_itr, hi_index_itr};
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<size_type>(0),
+                    thrust::counting_iterator<size_type>(input.size()),
+                    indices_itr,
+                    fn);
+
+  // take the keys from the matched column allocated using mr
+  std::unique_ptr<column> keys_column(std::move(matched_column->release().children.back()));
+
+  // create column with keys_column and indices_column
+  return make_dictionary_column(std::move(keys_column),
+                                std::move(indices_column),
+                                cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                input.null_count());
 }
 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
@@ -187,6 +272,11 @@ struct dispatch_clamp {
                  "mismatching types of scalar and input",
                  cudf::data_type_error);
 
+    if (input.type().id() == type_id::DICTIONARY32) {
+      return clamp_dictionary_column<T>(
+        dictionary_column_view(input), lo, lo_replace, hi, hi_replace, stream, mr);
+    }
+
     auto lo_itr         = make_optional_iterator<T>(lo, nullate::YES{});
     auto hi_itr         = make_optional_iterator<T>(hi, nullate::YES{});
     auto lo_replace_itr = make_optional_iterator<T>(lo_replace, nullate::NO{});
@@ -222,73 +312,15 @@ std::unique_ptr<column> dispatch_clamp::operator()<struct_view>(column_view cons
 }
 
 template <>
-std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
-  column_view const& input,
-  scalar const& lo,
-  scalar const& lo_replace,
-  scalar const& hi,
-  scalar const& hi_replace,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::unique_ptr<column> dispatch_clamp::operator()<dictionary32>(column_view const&,
+                                                                 scalar const&,
+                                                                 scalar const&,
+                                                                 scalar const&,
+                                                                 scalar const&,
+                                                                 rmm::cuda_stream_view,
+                                                                 rmm::device_async_resource_ref)
 {
-  // add lo_replace and hi_replace to keys
-  auto matched_column = [&] {
-    auto matched_view              = dictionary_column_view(input);
-    std::unique_ptr<column> result = nullptr;
-    auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
-      if (key.is_valid(stream)) {
-        result = dictionary::detail::add_keys(
-          matched_view, make_column_from_scalar(key_replace, 1, stream)->view(), stream, mr);
-        matched_view = dictionary_column_view(result->view());
-      }
-    };
-    add_scalar_key(lo, lo_replace);
-    add_scalar_key(hi, hi_replace);
-    return result;
-  }();
-  auto matched_view = dictionary_column_view(matched_column->view());
-  auto default_mr   = cudf::get_current_device_resource_ref();
-
-  // get the indexes for lo_replace and for hi_replace
-  auto lo_replace_index =
-    dictionary::detail::get_index(matched_view, lo_replace, stream, default_mr);
-  auto hi_replace_index =
-    dictionary::detail::get_index(matched_view, hi_replace, stream, default_mr);
-
-  // get the closest indexes for lo and for hi
-  auto lo_index = dictionary::detail::get_insert_index(matched_view, lo, stream, default_mr);
-  auto hi_index = dictionary::detail::get_insert_index(matched_view, hi, stream, default_mr);
-
-  // call clamp with the scalar indexes and the matched indices
-  auto matched_indices = matched_view.get_indices_annotated();
-  auto new_indices     = cudf::type_dispatcher<dispatch_storage_type>(matched_indices.type(),
-                                                                  dispatch_clamp{},
-                                                                  matched_indices,
-                                                                  *lo_index,
-                                                                  *lo_replace_index,
-                                                                  *hi_index,
-                                                                  *hi_replace_index,
-                                                                  stream,
-                                                                  mr);
-
-  auto const indices_type = new_indices->type();
-  auto const output_size  = new_indices->size();
-  auto const null_count   = new_indices->null_count();
-  auto contents           = new_indices->release();
-  auto indices_column     = std::make_unique<column>(indices_type,
-                                                 static_cast<size_type>(output_size),
-                                                 std::move(*(contents.data.release())),
-                                                 rmm::device_buffer{},
-                                                 0);
-
-  // take the keys from the matched column allocated using mr
-  std::unique_ptr<column> keys_column(std::move(matched_column->release().children.back()));
-
-  // create column with keys_column and indices_column
-  return make_dictionary_column(std::move(keys_column),
-                                std::move(indices_column),
-                                std::move(*(contents.null_mask.release())),
-                                null_count);
+  CUDF_UNREACHABLE("clamp type-dispatch error");
 }
 
 /**
@@ -330,8 +362,10 @@ std::unique_ptr<column> clamp(column_view const& input,
     CUDF_EXPECTS(hi_replace.is_valid(stream), "hi_replace can't be null if hi is not null");
   }
 
+  auto dispatch_type =
+    cudf::is_dictionary(input.type()) ? dictionary_column_view(input).keys().type() : input.type();
   return cudf::type_dispatcher<dispatch_storage_type>(
-    input.type(), dispatch_clamp{}, input, lo, lo_replace, hi, hi_replace, stream, mr);
+    dispatch_type, dispatch_clamp{}, input, lo, lo_replace, hi, hi_replace, stream, mr);
 }
 
 }  // namespace detail
