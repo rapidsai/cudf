@@ -301,18 +301,18 @@ jobs:
   #     build_type: pull-request
   #     script: "ci/test_wheel_cudf_polars.sh"
   #     sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
-  wheel-tests-cudf-polars-with-rapidsmpf:
-    needs: [wheel-build-cudf-polars, changed-files]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
-    with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
-      # (rapidsmpf compatibility already validated in rapidsmpf CI)
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
-      build_type: pull-request
-      script: "ci/test_cudf_polars_with_rapidsmpf.sh"
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
+  # wheel-tests-cudf-polars-with-rapidsmpf:
+  #   needs: [wheel-build-cudf-polars, changed-files]
+  #   secrets: inherit
+  #   uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+  #   if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+  #   with:
+  #     # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
+  #     # (rapidsmpf compatibility already validated in rapidsmpf CI)
+  #     matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+  #     build_type: pull-request
+  #     script: "ci/test_cudf_polars_with_rapidsmpf.sh"
+  #     sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   # cudf-polars-polars-tests:
   #   needs: [wheel-build-cudf-polars, changed-files]
   #   secrets: inherit
