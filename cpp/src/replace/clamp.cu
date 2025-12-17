@@ -109,7 +109,8 @@ struct clamp_dictionary_fn {
   {
     if (d_dictionary.is_null(idx)) { return 0; }
     auto const key_index = d_dictionary.element<dictionary32>(idx).value();
-    auto const element   = d_dictionary.child(1).element<T>(key_index);
+    auto const element =
+      d_dictionary.child(dictionary_column_view::keys_column_index).element<T>(key_index);
     if (element < (*lo_itr).value_or(element)) { return *lo_replace_itr; }
     if ((*hi_itr).value_or(element) < element) { return *hi_replace_itr; }
     return key_index;
