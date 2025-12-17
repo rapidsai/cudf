@@ -22,25 +22,6 @@
 namespace cudf {
 namespace detail {
 
-struct approx_distinct_count::approx_distinct_count_impl {
-  using hll_type = cuco::hyperloglog<uint64_t,
-                                     cuda::thread_scope_device,
-                                     cuda::std::identity,
-                                     rmm::mr::polymorphic_allocator<cuda::std::byte>>;
-
-  hll_type _hll;
-
-  approx_distinct_count_impl(cudf::size_type precision, rmm::cuda_stream_view stream)
-    : _hll{cuco::sketch_size_kb{static_cast<double>(
-             4 * (1ull << std::max(cudf::size_type{4}, std::min(cudf::size_type{18}, precision))) /
-             1024.0)},
-           cuda::std::identity{},
-           rmm::mr::polymorphic_allocator<cuda::std::byte>{},
-           cuda::stream_ref{stream.value()}}
-  {
-  }
-};
-
 approx_distinct_count::~approx_distinct_count() = default;
 
 approx_distinct_count::approx_distinct_count(table_view const& input,
@@ -48,7 +29,9 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
                                              null_policy null_handling,
                                              nan_policy nan_handling,
                                              rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<approx_distinct_count_impl>(precision, stream)}
+  : _impl{cuco::sketch_size_kb{static_cast<double>(
+      4 * (1ull << std::max(cudf::size_type{4}, std::min(cudf::size_type{18}, precision))) /
+      1024.0)}}
 {
   auto const num_rows = input.num_rows();
   if (num_rows == 0) { return; }
@@ -65,7 +48,7 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
   thrust::transform(
     rmm::exec_policy_nosync(stream), iter, iter + num_rows, hash_values.begin(), hash_key);
 
-  _impl->_hll.add(hash_values.begin(), hash_values.end(), cuda::stream_ref{stream.value()});
+  _impl.add(hash_values.begin(), hash_values.end(), cuda::stream_ref{stream.value()});
 }
 
 void approx_distinct_count::add(table_view const& input,
@@ -88,12 +71,12 @@ void approx_distinct_count::add(table_view const& input,
   thrust::transform(
     rmm::exec_policy_nosync(stream), iter, iter + num_rows, hash_values.begin(), hash_key);
 
-  _impl->_hll.add(hash_values.begin(), hash_values.end(), cuda::stream_ref{stream.value()});
+  _impl.add(hash_values.begin(), hash_values.end(), cuda::stream_ref{stream.value()});
 }
 
 cudf::size_type approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
 {
-  return static_cast<cudf::size_type>(_impl->_hll.estimate(cuda::stream_ref{stream.value()}));
+  return static_cast<cudf::size_type>(_impl.estimate(cuda::stream_ref{stream.value()}));
 }
 
 }  // namespace detail
