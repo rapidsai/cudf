@@ -10,6 +10,7 @@
 #include <cudf/detail/row_operator/common_utils.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
@@ -256,8 +257,10 @@ class device_row_comparator {
     {
       auto const lidx = _lhs.element<cudf::dictionary32>(lhs_element_index).value();
       auto const ridx = _rhs.element<cudf::dictionary32>(rhs_element_index).value();
-      auto const lhs  = _lhs.child(1).element<KeyType>(lidx);
-      auto const rhs  = _rhs.child(1).element<KeyType>(ridx);
+      auto const lhs =
+        _lhs.child(cudf::dictionary_column_view::keys_column_index).element<KeyType>(lidx);
+      auto const rhs =
+        _rhs.child(cudf::dictionary_column_view::keys_column_index).element<KeyType>(ridx);
       return cuda::std::pair(_comparator(lhs, rhs), cuda::std::numeric_limits<int>::max());
     }
 
@@ -358,7 +361,7 @@ class device_row_comparator {
         }
       }
 
-      auto keys = _lhs.child(1);
+      auto keys = _lhs.child(cudf::dictionary_column_view::keys_column_index);
       return cudf::type_dispatcher<dispatch_void_if_nested>(
         keys.type(),
         dictionary_comparator{_lhs, _rhs, _comparator},

@@ -11,6 +11,7 @@
 #include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/structs/structs_column_device_view.cuh>
@@ -179,10 +180,12 @@ class device_row_comparator {
                                size_type const rhs_element_index) const noexcept
       requires(cudf::is_equality_comparable<KeyType, KeyType>())
     {
-      auto const lidx    = lhs.element<cudf::dictionary32>(lhs_element_index).value();
-      auto const ridx    = rhs.element<cudf::dictionary32>(rhs_element_index).value();
-      auto const lh_elem = lhs.child(1).element<KeyType>(lidx);
-      auto const rh_elem = rhs.child(1).element<KeyType>(ridx);
+      auto const lidx = lhs.element<cudf::dictionary32>(lhs_element_index).value();
+      auto const ridx = rhs.element<cudf::dictionary32>(rhs_element_index).value();
+      auto const lh_elem =
+        lhs.child(cudf::dictionary_column_view::keys_column_index).element<KeyType>(lidx);
+      auto const rh_elem =
+        rhs.child(cudf::dictionary_column_view::keys_column_index).element<KeyType>(ridx);
       return comparator(lh_elem, rh_elem);
     }
 
@@ -273,7 +276,7 @@ class device_row_comparator {
       }
 
       return cudf::type_dispatcher<dispatch_void_if_nested>(
-        lhs.child(1).type(),
+        lhs.child(cudf::dictionary_column_view::keys_column_index).type(),
         dictionary_comparator{lhs, rhs, comparator},
         lhs_element_index,
         rhs_element_index);
