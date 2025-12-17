@@ -33,7 +33,13 @@ def assert_cugraph_equal(expect, got):
         assert expect == got
 
 
-pytestmark = pytest.mark.assert_eq(fn=assert_cugraph_equal)
+pytestmark = [
+    pytest.mark.assert_eq(fn=assert_cugraph_equal),
+    # We can't pass a valid value here to avoid the warning, so we ignore it.
+    pytest.mark.filterwarnings(
+        "ignore:This parameter is deprecated:PendingDeprecationWarning"
+    ),
+]
 
 
 @pytest.fixture(scope="session")
