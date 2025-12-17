@@ -1955,7 +1955,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 2)
         if (s->is_uncompressed) {
           // Uncompressed block
           uint8_t const* src = s->cur + ((s->bitpos + 7) >> 3);
-          uint8_t* dst       = s->out;
+          __syncthreads();
+          uint8_t* dst = s->out;
           if (!t) {
             if (getbits_bytealign(s) != 0) {
               s->error = -1;

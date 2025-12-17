@@ -97,9 +97,10 @@ struct empty_column_constructor {
     using namespace cudf;
     using namespace cudf::detail;
 
-    if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
+    if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET ||
+                  k == aggregation::Kind::TOP_K) {
       return make_lists_column(
-        0, make_empty_column(type_to_id<size_type>()), empty_like(values), 0, {}, stream, mr);
+        0, make_empty_column(type_id::INT32), empty_like(values), 0, {}, stream, mr);
     }
 
     if constexpr (k == aggregation::Kind::HISTOGRAM) {

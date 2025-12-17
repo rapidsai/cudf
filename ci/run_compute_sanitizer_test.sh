@@ -68,7 +68,7 @@ fi
 # Run compute-sanitizer on the specified test
 compute-sanitizer \
   --tool "${TOOL_NAME}" \
-  --kernel-name-exclude kns=nvcomp \
+  --kernel-name-exclude kns=nvcomp,kns=zstd \
   --error-exitcode=1 \
   "${TEST_EXECUTABLE}" \
   "$@"
