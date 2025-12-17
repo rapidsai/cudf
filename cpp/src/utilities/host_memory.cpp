@@ -21,7 +21,7 @@
 #include <cstdlib>
 #include <mutex>
 #include <optional>
-#include <unordered_map>
+#include <unordered_set>
 
 namespace cudf {
 
@@ -31,8 +31,6 @@ class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_
   using upstream_mr    = rmm::mr::pinned_host_memory_resource;
   using host_pooled_mr = rmm::mr::pool_memory_resource<upstream_mr>;
 
-  enum class allocation_source { POOL, UPSTREAM };
-
  private:
   upstream_mr upstream_mr_{};
   size_t initial_pool_size_{0};
@@ -41,9 +39,9 @@ class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_
   host_pooled_mr* pool_{nullptr};
   cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream().value()};
 
-  // Hash table to track which resource was used for each allocation
-  mutable std::mutex allocation_map_mutex_;
-  std::unordered_map<void*, allocation_source> allocation_map_;
+  // Hash set to track fallback allocations
+  mutable std::mutex fallback_allocations_mutex_;
+  std::unordered_set<void*> fallback_allocations_;
 
  public:
   pinned_pool_with_fallback_memory_resource(size_t initial_size, size_t max_size)
@@ -76,52 +74,42 @@ class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_
  private:
   void* do_allocate(std::size_t bytes, rmm::cuda_stream_view stream) override
   {
-    void* ptr = nullptr;
-    allocation_source source;
-
     try {
-      ptr    = pool_->allocate(stream, bytes);
-      source = allocation_source::POOL;
+      return pool_->allocate(stream, bytes);
     } catch (...) {
       CUDF_LOG_WARN("Pinned pool exhausted, falling back to new pinned allocation for %zu bytes",
                     bytes);
       // fall back to upstream
-      ptr    = upstream_mr_.allocate(stream, bytes);
-      source = allocation_source::UPSTREAM;
-    }
+      auto* ptr = upstream_mr_.allocate(stream, bytes);
 
-    // Track the allocation source in the hash table
-    {
-      std::lock_guard<std::mutex> lock(allocation_map_mutex_);
-      allocation_map_[ptr] = source;
-    }
+      // Only track fallback allocations in the hash set
+      {
+        std::lock_guard<std::mutex> lock(fallback_allocations_mutex_);
+        fallback_allocations_.insert(ptr);
+      }
 
-    return ptr;
+      return ptr;
+    }
   }
 
   void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) noexcept override
   {
-    allocation_source source{};
+    bool is_fallback = false;
 
     {
-      std::lock_guard<std::mutex> lock(allocation_map_mutex_);
-      auto it = allocation_map_.find(ptr);
-      // Look up which resource was used for this allocation
-      if (it != allocation_map_.end()) {
-        source = it->second;
-        allocation_map_.erase(it);
-      } else {
-        CUDF_LOG_ERROR("Deallocating pointer not found in allocation map, using upstream");
-        upstream_mr_.deallocate(stream, ptr, bytes);
-        return;
+      std::lock_guard<std::mutex> lock(fallback_allocations_mutex_);
+      auto it = fallback_allocations_.find(ptr);
+      if (it != fallback_allocations_.end()) {
+        is_fallback = true;
+        fallback_allocations_.erase(it);
       }
     }
 
     // Deallocate using the correct resource
-    if (source == allocation_source::POOL) {
-      pool_->deallocate(stream, ptr, bytes);
-    } else {
+    if (is_fallback) {
       upstream_mr_.deallocate(stream, ptr, bytes);
+    } else {
+      pool_->deallocate(stream, ptr, bytes);
     }
   }
 
