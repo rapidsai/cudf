@@ -407,15 +407,11 @@ TYPED_TEST(TransformTest, DeeplyNestedArithmeticLogicalExpression)
   using Executor = TypeParam;
 
   if constexpr (std::is_same_v<Executor, executor_jit>) {
-    int driverVersion;
-    auto const err = cudaDriverGetVersion(&driverVersion);
-    if (err == cudaSuccess) {
-      auto major = driverVersion / 1000;
-      auto minor = (driverVersion % 1000) / 10;
-      if (major == 12 && minor < 9) {
-        std::cout << "skipping executor_jit test" << std::endl;
-        GTEST_SKIP();
-      }
+    int driver_version{0};
+    auto const err = cudaDriverGetVersion(&driver_version);
+    if (err != cudaSuccess or driver_version < 12090) {
+      std::cout << "Skipping executor_jit test, driver earlier than 12.9" << std::endl;
+      GTEST_SKIP();
     }
   }
 
