@@ -76,9 +76,10 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   columns.emplace_back(
     cudf::test::strings_column_wrapper(string_data.begin(), string_data.end(), validity.begin())
       .release());
-  auto col4 = cudf::test::fixed_width_column_wrapper<int64_t>(
+  auto dict_column = cudf::test::dictionary_column_wrapper<int64_t>(
     int64_data.begin(), int64_data.end(), validity.begin());
-  columns.emplace_back(cudf::dictionary::encode(col4));
+  // make a copy of dict_column since it is used again below
+  columns.emplace_back(std::make_unique<cudf::column>(dict_column));
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
                          bool_data.begin(), bool_data.end(), bool_validity.begin())
                          .release());
@@ -108,19 +109,18 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
     cudf::make_structs_column(length, std::move(cols), null_count, std::move(*null_mask)));
 
   auto int64array = get_arrow_array<int64_t>(int64_data, validity);
+  auto boolarray  = get_arrow_array<bool>(bool_data, bool_validity);
+  auto list_array = get_arrow_list_array<int64_t>(
+    list_int64_data, list_offsets, list_int64_data_validity, list_validity);
 
-  auto string_array = get_arrow_array<cudf::string_view>(string_data, validity);
-  auto dict_col     = cudf::dictionary::encode(col4);
-  cudf::dictionary_column_view view(dict_col->view());
+  cudf::dictionary_column_view view(dict_column);
   auto keys       = cudf::test::to_host<int64_t>(view.keys()).first;
   auto indices    = cudf::test::to_host<int32_t>(view.indices()).first;
   auto dict_array = get_arrow_dict_array(std::vector<int64_t>(keys.begin(), keys.end()),
                                          std::vector<int32_t>(indices.begin(), indices.end()),
                                          validity);
-  auto boolarray  = get_arrow_array<bool>(bool_data, bool_validity);
-  auto list_array = get_arrow_list_array<int64_t>(
-    list_int64_data, list_offsets, list_int64_data_validity, list_validity);
 
+  auto string_array = get_arrow_array<cudf::string_view>(string_data, validity);
   arrow::ArrayVector child_arrays({int64array, string_array});
   std::vector<std::shared_ptr<arrow::Field>> fields = {
     arrow::field("integral", int64array->type(), int64array->null_count() > 0),

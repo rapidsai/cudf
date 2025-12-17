@@ -20,7 +20,6 @@ from cudf.core.buffer.buffer import (
     BufferOwner,
     host_memory_allocation,
 )
-from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
 from cudf.core.buffer.string import format_bytes
 from cudf.utils.performance_tracking import _get_color_for_nvtx
 
@@ -82,7 +81,7 @@ class SpillableBufferCAIWrapper:
             "shape": (size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }
 
 
@@ -360,7 +359,7 @@ class SpillableBufferOwner(BufferOwner):
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }
 
     def memoryview(
@@ -392,7 +391,7 @@ class SpillableBufferOwner(BufferOwner):
         )
 
 
-class SpillableBuffer(ExposureTrackedBuffer):
+class SpillableBuffer(Buffer):
     """A slice of a spillable buffer"""
 
     _owner: SpillableBufferOwner
@@ -476,5 +475,5 @@ class SpillableBuffer(ExposureTrackedBuffer):
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }

@@ -43,6 +43,7 @@ from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
+from .span import is_span as py_is_span
 from .traits cimport (
     is_fixed_width as plc_is_fixed_width,
     is_nested,
@@ -331,16 +332,31 @@ cdef class Column:
         The offset into the data buffer where the column's data begins.
     children : list
         The children of this column if it is a compound column type.
+    validate : bool, default True
+        Whether to validate that data and mask satisfy Span protocol.
     """
     __hash__ = None
 
     def __init__(
-        self, DataType data_type not None, size_type size, gpumemoryview data,
-        gpumemoryview mask, size_type null_count, size_type offset,
-        list children
+        self, DataType data_type not None, size_type size, object data,
+        object mask, size_type null_count, size_type offset,
+        list children, bint validate=True
     ):
         if not all(isinstance(c, Column) for c in children):
             raise ValueError("All children must be pylibcudf Column objects")
+
+        if validate:
+            if data is not None and not py_is_span(data):
+                raise TypeError(
+                    f"data must satisfy Span protocol (have .ptr and .size), "
+                    f"got {type(data).__name__}"
+                )
+            if mask is not None and not py_is_span(mask):
+                raise TypeError(
+                    f"mask must satisfy Span protocol (have .ptr and .size), "
+                    f"got {type(mask).__name__}"
+                )
+
         self._data_type = data_type
         self._size = size
         self._data = data
@@ -523,11 +539,16 @@ cdef class Column:
         """
         cdef const void * data = NULL
         cdef const bitmask_type * null_mask = NULL
+        cdef size_t data_ptr
+        cdef size_t mask_ptr
 
-        if self._data is not None:
-            data = <void*>self._data.ptr
-        if self._mask is not None:
-            null_mask = <bitmask_type*>self._mask.ptr
+        with gil:
+            if self._data is not None:
+                data_ptr = <size_t>self._data.ptr
+                data = <void*>data_ptr
+            if self._mask is not None:
+                mask_ptr = <size_t>self._mask.ptr
+                null_mask = <bitmask_type*>mask_ptr
 
         # TODO: Check if children can ever change. If not, this could be
         # computed once in the constructor and always be reused.
@@ -560,11 +581,16 @@ cdef class Column:
         """
         cdef void * data = NULL
         cdef bitmask_type * null_mask = NULL
+        cdef size_t data_ptr
+        cdef size_t mask_ptr
 
-        if self._data is not None:
-            data = <void*>self._data.ptr
-        if self._mask is not None:
-            null_mask = <bitmask_type*>self._mask.ptr
+        with gil:
+            if self._data is not None:
+                data_ptr = <size_t>self._data.ptr
+                data = <void*>data_ptr
+            if self._mask is not None:
+                mask_ptr = <size_t>self._mask.ptr
+                null_mask = <bitmask_type*>mask_ptr
 
         cdef vector[mutable_column_view] c_children
         with gil:
@@ -676,20 +702,27 @@ cdef class Column:
             children,
         )
 
-    cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
+    cpdef Column with_mask(self, object mask, size_type null_count, bint validate=True):
         """Augment this column with a new null mask.
 
         Parameters
         ----------
-        mask : gpumemoryview
-            New mask (or None to unset the mask)
+        mask : Span-like or None
+            New mask (or None to unset the mask). Must satisfy Span protocol.
         null_count : int
             New null count. If this is incorrect, bad things happen.
+        validate : bool, default True
+            Whether to validate that mask satisfies Span protocol.
 
         Returns
         -------
         New Column object sharing data with self (except for the mask which is new).
         """
+        if validate and mask is not None and not py_is_span(mask):
+            raise TypeError(
+                f"mask must satisfy Span protocol or None, "
+                f"got {type(mask).__name__}"
+            )
         if mask is None and null_count > 0:
             raise ValueError("Empty mask must have null count of zero")
         return Column(
@@ -700,6 +733,7 @@ cdef class Column:
             null_count,
             self._offset,
             self._children,
+            validate=False,  # Already validated above if needed
         )
 
     @staticmethod
@@ -1290,11 +1324,11 @@ cdef class Column:
         """Accessor for methods of a Column that are specific to lists."""
         return ListColumnView(self)
 
-    cpdef gpumemoryview data(self):
+    cpdef object data(self):
         """The data buffer of the column."""
         return self._data
 
-    cpdef gpumemoryview null_mask(self):
+    cpdef object null_mask(self):
         """The null mask of the column."""
         return self._mask
 

@@ -14,7 +14,6 @@
 
 #include <cooperative_groups.h>
 #include <cuda/std/iterator>
-#include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
 
