@@ -1269,26 +1269,40 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
             return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
         else:
-            col = type(self)(
-                plc_column=self.plc_column,
-                dtype=self.dtype,
-                exposed=False,
-            )
-            # copy-on-write and spilling logic tracked on the Buffers
-            # so copy over the Buffers from self
-            col.set_base_children(
-                tuple(child.copy(deep=False) for child in self.base_children)
-            )
-            col.set_base_data(
+            # Shallow copy: create new Column with shallow-copied Buffers
+            # Copy-on-write and spilling logic is tracked on the Buffers themselves
+            data_copy = (
                 self.base_data.copy(deep=False)
                 if self.base_data is not None
                 else None
             )
-            col.set_base_mask(
+            mask_copy = (
                 self.base_mask.copy(deep=False)
                 if self.base_mask is not None
                 else None
             )
+            children_copy = tuple(
+                child.copy(deep=False) for child in self.base_children
+            )
+
+            # Construct plc.Column once with all shallow-copied buffers
+            new_plc_column = plc.Column(
+                data_type=self.plc_column.type(),
+                size=self.plc_column.size(),
+                data=data_copy,
+                mask=mask_copy,
+                null_count=self.plc_column.null_count(),
+                offset=self.plc_column.offset(),
+                children=[c.plc_column for c in children_copy],
+            )
+
+            col = type(self)(
+                plc_column=new_plc_column,
+                dtype=self.dtype,
+                exposed=False,
+            )
+            # Manually set base_children since we already have them
+            col._base_children = children_copy
             return col
 
     def element_indexing(self, index: int) -> ScalarLike:
