@@ -441,7 +441,7 @@ def test_rolling_groupby_multi(supported_rolling_reductions):
         assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("window_size", ["1d", "3d", "6d", "7d"])
+@pytest.mark.parametrize("window_size", ["1D", "3D", "6D", "7D"])
 def test_rolling_groupby_offset(supported_rolling_reductions, window_size):
     pdf = pd.DataFrame(
         {
