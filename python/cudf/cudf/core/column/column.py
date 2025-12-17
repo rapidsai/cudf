@@ -229,9 +229,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.plc_column = plc_column
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        self._mask = None
-        self._data = None
-        self._children = None
+        self._mask: Buffer | None = None
+        self._data: Buffer | None = None
+        self._children: tuple[ColumnBase, ...] | None = None
         children = self._get_children_from_pylibcudf_column(
             self.plc_column,
             dtype,
@@ -247,21 +247,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         # Eager computation of _data - compute offset-aware slice immediately
         # instead of lazily on first access. This simplifies code with negligible overhead.
-        # Skip eager computation if subclass overrides data property (e.g., StringColumn)
-        # since they may use custom slicing logic.
-        if type(self).data is not ColumnBase.data:
-            # Subclass overrides data property, skip eager computation
-            pass
-        elif self.base_data is None:
-            self._data = None
-        elif self.offset == 0 and self.size == self.base_size:
-            # Optimization: for non-sliced columns, data == base_data (just a reference)
-            self._data = self.base_data
-        else:
-            # Compute offset-aware slice (O(1) operation, just pointer arithmetic)
-            start = self.offset * self.dtype.itemsize
-            end = start + self.size * self.dtype.itemsize
-            self._data = self.base_data[start:end]
+        self._recompute_data()
 
     def _get_children_from_pylibcudf_column(
         self,
@@ -343,18 +329,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def data(self) -> None | Buffer:
-        # Computed eagerly in __init__ and set_base_data for optimization,
-        # but lazily recomputed here if invalidated by other mutations
-        if self.base_data is None:
-            return None
-        if self._data is None:
-            if self.offset == 0 and self.size == self.base_size:
-                # Optimization: for non-sliced columns, data == base_data
-                self._data = self.base_data
-            else:
-                start = self.offset * self.dtype.itemsize
-                end = start + self.size * self.dtype.itemsize
-                self._data = self.base_data[start:end]
+        """Return the offset-aware data buffer.
+
+        This property is a trivial passthrough to self._data, which is
+        always kept up-to-date by _recompute_data() whenever the column
+        state changes.
+        """
         return self._data
 
     def set_base_data(self, value: None | Buffer) -> None:
@@ -377,20 +357,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             children=[c.plc_column for c in self.base_children],
         )
 
-        # Eagerly recompute _data (same logic as __init__)
-        # This maintains the eager computation pattern when base_data changes.
-        # Skip if subclass overrides data property (e.g., StringColumn).
-        if type(self).data is not ColumnBase.data:
-            # Subclass overrides data property, invalidate and let property handle it
-            self._data = None
-        elif self.base_data is None:
-            self._data = None
-        elif self.offset == 0 and self.size == self.base_size:
-            self._data = self.base_data
-        else:
-            start = self.offset * self.dtype.itemsize
-            end = start + self.size * self.dtype.itemsize
-            self._data = self.base_data[start:end]
+        # Eagerly recompute _data when base_data changes
+        self._recompute_data()
 
     @property
     def nullable(self) -> bool:
@@ -413,10 +381,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def mask(self) -> None | Buffer:
         if self._mask is None:
             if self.base_mask is None or self.offset == 0:
-                self._mask = self.base_mask  # type: ignore[assignment]
+                self._mask = self.base_mask
             else:
                 with acquire_spill_lock():
-                    self._mask = as_buffer(  # type: ignore[assignment]
+                    self._mask = as_buffer(
                         plc.null_mask.copy_bitmask(
                             self.to_pylibcudf(mode="read")
                         )
@@ -536,10 +504,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @property
     def children(self) -> tuple[ColumnBase, ...]:
         if self.offset == 0 and self.size == self.base_size:
-            self._children = self.base_children  # type: ignore[assignment]
+            self._children = self.base_children
         if self._children is None:
             if not self.base_children:
-                self._children = ()  # type: ignore[assignment]
+                self._children = ()
             else:
                 # Compute children from the column view (children factoring self.size)
                 children = ColumnBase.from_pylibcudf(
@@ -548,11 +516,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 dtypes = (
                     base_child.dtype for base_child in self.base_children
                 )
-                self._children = tuple(  # type: ignore[assignment]
+                self._children = tuple(
                     child._with_type_metadata(dtype)
                     for child, dtype in zip(children, dtypes, strict=True)
                 )
-        return self._children  # type: ignore[return-value]
+        return self._children
 
     def set_base_children(self, value: tuple[ColumnBase, ...]) -> None:
         if not isinstance(value, tuple):
@@ -564,6 +532,30 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         self._children = None
         self._base_children = value
+
+    def _recompute_data(self) -> None:
+        """Recompute the offset-aware data buffer.
+
+        This method eagerly computes self._data based on the current state
+        of base_data, offset, and size. It handles three cases:
+        1. Subclass overrides data property - set to None, let subclass handle it
+        2. No base_data - set to None
+        3. Non-sliced column - _data is just a reference to base_data
+        4. Sliced column - _data is an offset-aware slice of base_data
+        """
+        if type(self).data is not ColumnBase.data:
+            # Subclass overrides data property, skip computation
+            self._data = None
+        elif self.base_data is None:
+            self._data = None
+        elif self.offset == 0 and self.size == self.base_size:
+            # Optimization: for non-sliced columns, data == base_data (just a reference)
+            self._data = self.base_data
+        else:
+            # Compute offset-aware slice (O(1) operation, just pointer arithmetic)
+            start = self.offset * self.dtype.itemsize
+            end = start + self.size * self.dtype.itemsize
+            self._data = self.base_data[start:end]
 
     def _mimic_inplace(
         self, other_col: Self, inplace: bool = False
@@ -579,8 +571,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self.plc_column = other_col.plc_column
             # Update base_children (still a cached attribute)
             self._base_children = other_col._base_children
-            # Clear offset-aware caches
-            self._data = None
+            # Recompute offset-aware data cache
+            self._recompute_data()
+            # Clear other offset-aware caches
             self._mask = None
             self._children = None
             # Clear cached properties (memory_usage, etc.) since column state changed
@@ -1233,8 +1226,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
             # Update self.plc_column with the modified column
             self.plc_column = plc_col
-            # Clear offset-aware caches since the data/mask may have changed
-            self._data = None
+            # Recompute offset-aware data cache since the data may have changed
+            self._recompute_data()
+            # Clear other offset-aware caches since the mask may have changed
             self._mask = None
             # Clear cached properties (memory_usage, etc.) since they may be stale
             self._clear_cache()
