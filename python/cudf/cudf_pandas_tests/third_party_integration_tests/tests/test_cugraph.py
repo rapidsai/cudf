@@ -61,35 +61,26 @@ def adjacency_matrix():
 
 @pytest.mark.parametrize("algo", cugraph_algos)
 def test_cugraph_from_pandas_edgelist(df, algo):
-    if algo == "katz_centrality":
-        G = cugraph.Graph()
-        G.from_pandas_edgelist(df, store_transposed=True)
-    else:
-        G = cugraph.Graph()
-        G.from_pandas_edgelist(df)
+    G = cugraph.Graph()
+    G.from_pandas_edgelist(df)
+    G.store_transposed = True if algo == "katz_centrality" else False
     return getattr(cugraph, algo)(G).to_pandas().values
 
 
 @pytest.mark.parametrize("algo", cugraph_algos)
 def test_cugraph_from_pandas_adjacency(adjacency_matrix, algo):
-    if algo == "katz_centrality":
-        G = cugraph.Graph()
-        G.from_pandas_adjacency(adjacency_matrix, store_transposed=True)
-    else:
-        G = cugraph.Graph()
-        G.from_pandas_adjacency(adjacency_matrix)
+    G = cugraph.Graph()
+    G.from_pandas_adjacency(adjacency_matrix)
+    G.store_transposed = True if algo == "katz_centrality" else False
     res = getattr(cugraph, algo)(G).to_pandas()
     return res.sort_values(list(res.columns)).values
 
 
 @pytest.mark.parametrize("algo", cugraph_algos)
 def test_cugraph_from_numpy_array(df, algo):
-    if algo == "katz_centrality":
-        G = cugraph.Graph()
-        G.from_numpy_array(df.values, store_transposed=True)
-    else:
-        G = cugraph.Graph()
-        G.from_numpy_array(df.values)
+    G = cugraph.Graph()
+    G.from_numpy_array(df.values)
+    G.store_transposed = True if algo == "katz_centrality" else False
     return getattr(cugraph, algo)(G).to_pandas().values
 
 
