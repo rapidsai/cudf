@@ -41,6 +41,7 @@ main() {
     --compare \
     -p cudf.pandas \
     -v \
+    -W error \
     --continue-on-collection-errors \
     --cache-clear \
     --numprocesses="${NUM_PROCESSES}" \

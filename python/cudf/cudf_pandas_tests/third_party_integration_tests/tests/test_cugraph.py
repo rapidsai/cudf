@@ -11,8 +11,8 @@ cugraph_algos = [
     "betweenness_centrality",
     "degree_centrality",
     "katz_centrality",
-    "sorensen_coefficient",
-    "jaccard_coefficient",
+    "sorensen",
+    "jaccard",
 ]
 
 nx_algos = [
@@ -55,23 +55,35 @@ def adjacency_matrix():
 
 @pytest.mark.parametrize("algo", cugraph_algos)
 def test_cugraph_from_pandas_edgelist(df, algo):
-    G = cugraph.Graph()
-    G.from_pandas_edgelist(df)
+    if algo == "katz_centrality":
+        G = cugraph.Graph()
+        G.from_pandas_edgelist(df, store_transposed=True)
+    else:
+        G = cugraph.Graph()
+        G.from_pandas_edgelist(df)
     return getattr(cugraph, algo)(G).to_pandas().values
 
 
 @pytest.mark.parametrize("algo", cugraph_algos)
 def test_cugraph_from_pandas_adjacency(adjacency_matrix, algo):
-    G = cugraph.Graph()
-    G.from_pandas_adjacency(adjacency_matrix)
+    if algo == "katz_centrality":
+        G = cugraph.Graph()
+        G.from_pandas_adjacency(adjacency_matrix, store_transposed=True)
+    else:
+        G = cugraph.Graph()
+        G.from_pandas_adjacency(adjacency_matrix)
     res = getattr(cugraph, algo)(G).to_pandas()
     return res.sort_values(list(res.columns)).values
 
 
 @pytest.mark.parametrize("algo", cugraph_algos)
 def test_cugraph_from_numpy_array(df, algo):
-    G = cugraph.Graph()
-    G.from_numpy_array(df.values)
+    if algo == "katz_centrality":
+        G = cugraph.Graph()
+        G.from_numpy_array(df.values, store_transposed=True)
+    else:
+        G = cugraph.Graph()
+        G.from_numpy_array(df.values)
     return getattr(cugraph, algo)(G).to_pandas().values
 
 
