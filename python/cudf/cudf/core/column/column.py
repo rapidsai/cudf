@@ -500,15 +500,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._base_children = value
 
     def _recompute_data(self) -> None:
-        """Recompute the offset-aware data buffer.
-
-        This method eagerly computes self._data based on the current state
-        of base_data, offset, and size. It handles three cases:
-        1. Subclass overrides data property - set to None, let subclass handle it
-        2. No base_data - set to None
-        3. Non-sliced column - _data is just a reference to base_data
-        4. Sliced column - _data is an offset-aware slice of base_data
-        """
+        """Recompute the offset-aware data buffer."""
         if type(self).data is not ColumnBase.data:
             # Subclass overrides data property, skip computation
             # TODO: Check this
@@ -1163,13 +1155,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     offset=plc_col.offset(),
                     children=plc_col.children(),
                 )
-            # Update self.plc_column with the modified column
             self.plc_column = plc_col
-            # Recompute offset-aware data cache since the data may have changed
             self._recompute_data()
-            # Clear other offset-aware caches since the mask may have changed
             self._mask = None
-            # Clear cached properties (memory_usage, etc.) since they may be stale
             self._clear_cache()
         return self
 
