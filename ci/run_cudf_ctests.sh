@@ -22,3 +22,5 @@ else
 fi
 
 ctest --output-on-failure --no-tests=error "$@"
+
+${installed_test_location}AST_TEST
