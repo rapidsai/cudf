@@ -687,7 +687,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - pandas>=2.0,<2.4.0
+          - pandas==3.0.0rc0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
