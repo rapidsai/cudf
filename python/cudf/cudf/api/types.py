@@ -338,7 +338,7 @@ def is_object_dtype(arr_or_dtype):
     False
     """
     if isinstance(arr_or_dtype, cudf.Index):
-        return arr_or_dtype == CUDF_STRING_DTYPE
+        return arr_or_dtype.dtype == CUDF_STRING_DTYPE
     elif isinstance(arr_or_dtype, cudf.Series):
         return pd_types.is_object_dtype(arr_or_dtype=arr_or_dtype.dtype)
     else:
