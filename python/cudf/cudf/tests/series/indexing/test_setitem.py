@@ -851,10 +851,6 @@ def test_categorical_setitem_with_nan():
     assert_eq(gs, expected_series)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning not present in older pandas versions",
-)
 @pytest.mark.parametrize(
     "key, value",
     [
