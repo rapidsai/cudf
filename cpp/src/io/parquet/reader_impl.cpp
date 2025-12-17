@@ -190,10 +190,6 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     initial_str_offsets =
       cudf::detail::make_device_uvector_async(host_offsets_vector, _stream, _mr);
     chunk_nested_str_data.host_to_device_async(_stream);
-
-    // Allocate string offset buffers and get string offsets for non-dictionary, non-FLBA string
-    // columns
-    compute_page_string_offset_indices(skip_rows, num_rows);
   }
 
   // create this before we fork streams
@@ -214,7 +210,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
                              decoder_mask,
                              _subpass_page_mask,
                              initial_str_offsets,
-                             _page_string_offset_indices,
+                             subpass.page_string_offset_indices,
                              error_code.data(),
                              streams[s_idx++]);
   };
@@ -474,18 +470,12 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     }
   }
 
-  // Clear string offset buffers to free device memory
-  _page_string_offset_indices.resize(0, _stream);
-  _string_offset_buffer.resize(0, _stream);
-
   _stream.synchronize();
 }
 
 reader_impl::reader_impl()
   : _options{},
-    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())},
-    _string_offset_buffer{0, cudf::get_default_stream()},
-    _page_string_offset_indices{0, cudf::get_default_stream()}
+    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())}
 {
 }
 
@@ -519,8 +509,6 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.is_enabled_use_jit_filter()},
     _sources{std::move(sources)},
     _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, _stream)},
-    _string_offset_buffer{0, _stream},
-    _page_string_offset_indices{0, _stream},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
@@ -634,6 +622,7 @@ void reader_impl::preprocess_chunk_strings(read_mode mode, row_range const& read
     compute_page_string_sizes_pass1(subpass.pages,
                                     pass.chunks,
                                     _subpass_page_mask,
+                                    subpass.page_string_offset_indices,
                                     read_info.skip_rows,
                                     read_info.num_rows,
                                     subpass.kernel_mask,

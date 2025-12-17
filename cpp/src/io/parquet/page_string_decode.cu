@@ -424,47 +424,6 @@ __device__ size_t totalDictEntriesSize(uint8_t const* data,
 }
 
 /**
- * @brief Compute string size information for plain encoded strings.
- *
- * @param data Pointer to the start of the page data stream
- * @param data_size Length of data
- * @param start_value Do not count values that occur before this index
- * @param end_value Do not count values that occur after this index
- */
-__device__ size_t totalPlainEntriesSize(uint8_t const* data,
-                                        int data_size,
-                                        int start_value,
-                                        int end_value)
-{
-  int const t      = threadIdx.x;
-  int pos          = 0;
-  size_t total_len = 0;
-
-  // This step is purely serial
-  if (!t) {
-    uint8_t const* cur = data;
-    int k              = 0;
-
-    while (pos < end_value && k < data_size) {
-      int len;
-      if (k + 4 <= data_size) {
-        len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
-        k += 4;
-        if (k + len > data_size) { len = 0; }
-      } else {
-        len = 0;
-      }
-
-      k += len;
-      if (pos >= start_value) { total_len += len; }
-      pos++;
-    }
-  }
-
-  return total_len;
-}
-
-/**
  * @brief Compute string size information for DELTA_BYTE_ARRAY encoded strings.
  *
  * This traverses the packed prefix and suffix lengths, summing them to obtain the total
@@ -883,6 +842,7 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
  * @param page_mask Page mask indicating if this column needs to be decoded
+ * @param page_string_offset_indices Per-page indices into the string offset buffer
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
@@ -890,6 +850,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   compute_page_string_sizes_kernel(PageInfo* pages,
                                    device_span<ColumnChunkDesc const> chunks,
                                    device_span<bool const> page_mask,
+                                   device_span<size_t const> page_string_offset_indices,
                                    size_t min_row,
                                    size_t num_rows)
 {
@@ -968,9 +929,23 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
           data, dict_base, s->dict_bits, dict_size, (end - data), start_value, end_value);
         break;
       case Encoding::PLAIN:
-        dict_size = static_cast<int32_t>(end - data);
-        str_bytes = is_bounds_pg ? totalPlainEntriesSize(data, dict_size, start_value, end_value)
-                                 : dict_size - sizeof(int) * pp->num_valids;
+        // Check if we have precomputed offsets available
+        if (col.column_string_offset_base == nullptr || page_string_offset_indices.empty()) {
+          CUDF_UNREACHABLE("string offsets should have been preprocessed already!");
+        }
+
+        if (start_value >= end_value) {
+          str_bytes = 0;
+        } else {
+          // The span from str_offsets[start] to str_offsets[end] includes the length prefixes
+          // of strings [start+1, end), but we only want the string data bytes.
+          // So we need to subtract 4 bytes per string for those embedded length prefixes.
+          uint32_t const* str_offsets =
+            col.column_string_offset_base + page_string_offset_indices[page_idx];
+          int const num_values = end_value - start_value;
+          size_t const span    = str_offsets[end_value] - str_offsets[start_value];
+          str_bytes            = span - sizeof(int32_t) * num_values;
+        }
         break;
     }
   }
@@ -1005,6 +980,7 @@ struct page_tform_functor {
 void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pages,
                                      cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                      cudf::device_span<bool const> page_mask,
+                                     cudf::device_span<size_t const> page_string_offset_indices,
                                      size_t min_row,
                                      size_t num_rows,
                                      uint32_t kernel_mask,
@@ -1044,7 +1020,7 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
   }
   if (BitAnd(kernel_mask, STRINGS_MASK_NON_DELTA) != 0) {
     compute_page_string_sizes_kernel<<<dim_grid, dim_block, 0, streams[s_idx++].value()>>>(
-      pages.device_ptr(), chunks, page_mask, min_row, num_rows);
+      pages.device_ptr(), chunks, page_mask, page_string_offset_indices, min_row, num_rows);
   }
 
   // synchronize the streams
