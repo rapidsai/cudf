@@ -13,6 +13,9 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
 
+@pytest.mark.filterwarnings(
+    "ignore:obj.round has no effect with datetime:UserWarning"
+)
 @pytest.mark.parametrize("digits", [0, 1, 4])
 def test_dataframe_round_builtin(digits):
     pdf = pd.DataFrame(
@@ -478,7 +481,7 @@ def test_dataframe_shape_empty():
     [
         lambda df: df.empty,
         lambda df: df.x.empty,
-        lambda df: df.x.fillna(123, limit=None, method=None, axis=None),
+        lambda df: df.x.fillna(123, limit=None, axis=None),
         lambda df: df.drop("x", axis=1, errors="raise"),
     ],
 )
