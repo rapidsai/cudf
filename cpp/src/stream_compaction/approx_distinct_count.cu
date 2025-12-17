@@ -30,8 +30,11 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
                                              nan_policy nan_handling,
                                              rmm::cuda_stream_view stream)
   : _impl{cuco::sketch_size_kb{static_cast<double>(
-      4 * (1ull << std::max(cudf::size_type{4}, std::min(cudf::size_type{18}, precision))) /
-      1024.0)}}
+            4 * (1ull << std::max(cudf::size_type{4}, std::min(cudf::size_type{18}, precision))) /
+            1024.0)},
+          cuda::std::identity{},
+          rmm::mr::polymorphic_allocator<cuda::std::byte>{},
+          cuda::stream_ref{stream.value()}}
 {
   auto const num_rows = input.num_rows();
   if (num_rows == 0) { return; }
