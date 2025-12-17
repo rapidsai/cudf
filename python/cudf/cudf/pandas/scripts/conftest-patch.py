@@ -1942,7 +1942,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_arrow.py::test_interpolate_not_numeric[timestamp[ns]]",
     "tests/extension/test_arrow.py::test_interpolate_not_numeric[timestamp[s]]",
     "tests/extension/test_arrow.py::test_interpolate_not_numeric[timestamp[us]]",
-    "tests/extension/test_arrow.py::test_pickle_roundtrip[decimal128(7, 3)]",
     "tests/extension/test_arrow.py::test_pow_missing_operand",
     "tests/extension/test_arrow.py::test_quantile[bool-0.5-higher]",
     "tests/extension/test_arrow.py::test_quantile[bool-0.5-linear]",
