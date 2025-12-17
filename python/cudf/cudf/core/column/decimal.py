@@ -5,14 +5,13 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pyarrow as pa
 from typing_extensions import Self
 
 import pylibcudf as plc
-import rmm
 
 import cudf
 from cudf.api.types import is_scalar
@@ -121,60 +120,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
             result = cls(plc_column, dtype, False)
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
-
-    @classmethod
-    def _from_32_64_arrow(
-        cls,
-        data: pa.Array | pa.ChunkedArray,
-        *,
-        view_type: Literal["int32", "int64"],
-        plc_type: plc.TypeId,
-        step: int,
-    ) -> Self:
-        # Can remove when pyarrow 19 is the minimum version
-        # Handle ChunkedArray by combining chunks first
-        if isinstance(data, pa.ChunkedArray):
-            data = data.combine_chunks()
-        mask_buf, data_buf = data.buffers()
-        if data_buf is None:
-            # If data_buf is None, create an empty column
-            plc_column = plc.Column(
-                data_type=plc.DataType(plc_type, -data.type.scale),
-                size=0,
-                data=None,
-                mask=None,
-                null_count=0,
-                offset=0,
-                children=[],
-            )
-        else:
-            rmm_data_buffer = rmm.DeviceBuffer.to_device(
-                np.frombuffer(data_buf)
-                .view(view_type)[::step]
-                .copy()
-                .view("uint8")
-            )
-            plc_column = plc.Column.from_rmm_buffer(
-                rmm_data_buffer,
-                plc.DataType(plc_type, -data.type.scale),
-                len(data),
-                [],
-            )
-        if mask_buf is not None and data_buf is not None:
-            mask_size = plc.null_mask.bitmask_allocation_size_bytes(len(data))
-            if mask_buf.size < mask_size:
-                rmm_mask_buffer = rmm.DeviceBuffer(size=mask_size)
-                rmm_mask_buffer.copy_from_host(
-                    np.asarray(mask_buf).view("uint8")
-                )
-            else:
-                rmm_mask_buffer = rmm.DeviceBuffer.to_device(
-                    np.frombuffer(mask_buf).view("uint8")
-                )
-            plc_column = plc_column.with_mask(rmm_mask_buffer, data.null_count)
-        column = cls.from_pylibcudf(plc_column)
-        column.dtype.precision = data.type.precision  # type: ignore[union-attr]
-        return column
 
     def element_indexing(self, index: int) -> Decimal | None:
         result = super().element_indexing(index)
