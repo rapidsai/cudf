@@ -337,29 +337,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         return self._data
 
-    def set_base_data(self, value: None | Buffer) -> None:
-        """Set base data buffer by updating plc_column."""
-        if value is not None and not isinstance(value, Buffer):
-            raise TypeError(
-                "Expected a Buffer or None for data, "
-                f"got {type(value).__name__}"
-            )
-
-        # Create new plc_column with updated data buffer
-        # Access mask directly from plc_column to avoid wrapping/unwrapping
-        self.plc_column = plc.Column(
-            data_type=self.plc_column.type(),
-            size=self.plc_column.size(),
-            data=value,  # New data buffer
-            mask=self.plc_column.null_mask(),  # Keep existing mask (raw gpumemoryview)
-            null_count=self.plc_column.null_count(),
-            offset=self.plc_column.offset(),
-            children=[c.plc_column for c in self.base_children],
-        )
-
-        # Eagerly recompute _data when base_data changes
-        self._recompute_data()
-
     @property
     def nullable(self) -> bool:
         return self.base_mask is not None
@@ -1279,11 +1256,26 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             col.set_base_children(
                 tuple(child.copy(deep=False) for child in self.base_children)
             )
-            col.set_base_data(
+
+            value = (
                 self.base_data.copy(deep=False)
                 if self.base_data is not None
                 else None
             )
+            if not isinstance(self.dtype, CategoricalDtype):
+                col.plc_column = plc.Column(
+                    data_type=col.plc_column.type(),
+                    size=col.plc_column.size(),
+                    data=value,
+                    mask=col.plc_column.null_mask(),
+                    null_count=col.plc_column.null_count(),
+                    offset=col.plc_column.offset(),
+                    children=[c.plc_column for c in col.base_children],
+                )
+
+                # Eagerly recompute _data when base_data changes
+                col._recompute_data()
+
             col.set_base_mask(
                 self.base_mask.copy(deep=False)
                 if self.base_mask is not None
