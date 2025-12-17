@@ -24,6 +24,8 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     Decimal128Dtype,
     DecimalDtype,
+    is_decimal32_dtype,
+    is_decimal64_dtype,
     is_decimal128_dtype,
 )
 from cudf.core.mixins import BinaryOperand
@@ -76,13 +78,26 @@ class DecimalBaseColumn(NumericalBaseColumn):
         dtype: DecimalDtype,
         exposed: bool,
     ) -> None:
-        if not isinstance(dtype, DecimalDtype):
-            raise ValueError(f"{dtype=} must be a DecimalDtype instance")
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and not isinstance(dtype, type(self)._decimal_cls)  # type: ignore[attr-defined]
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not type(self)._decimal_check(dtype)  # type: ignore[attr-defined]
+        ):
+            raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
             exposed=exposed,
         )
+
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
+        if isinstance(dtype, type(self)._decimal_cls):  # type: ignore[attr-defined]
+            self.dtype.precision = dtype.precision  # type: ignore[union-attr]
+        if cudf.get_option("mode.pandas_compatible"):
+            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
+        return self
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -343,83 +358,20 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
 class Decimal32Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL32}
-
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: Decimal32Dtype,
-        exposed: bool,
-    ) -> None:
-        if not isinstance(dtype, Decimal32Dtype):
-            raise ValueError(f"{dtype=} must be a Decimal32Dtype instance")
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
-
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        if isinstance(dtype, Decimal32Dtype):
-            self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
-            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
-        return self
-
-
-class Decimal128Column(DecimalBaseColumn):
-    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL128}
-
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: Decimal128Dtype,
-        exposed: bool,
-    ) -> None:
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, Decimal128Dtype)
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_decimal128_dtype(dtype)
-        ):
-            raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
-
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        if isinstance(dtype, Decimal128Dtype):
-            self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
-            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
-        return self
+    _decimal_cls = Decimal32Dtype
+    _decimal_check = is_decimal32_dtype
 
 
 class Decimal64Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL64}
+    _decimal_cls = Decimal64Dtype
+    _decimal_check = is_decimal64_dtype
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: Decimal64Dtype,
-        exposed: bool,
-    ) -> None:
-        if not isinstance(dtype, Decimal64Dtype):
-            raise ValueError(f"{dtype=} must be a Decimal64Dtype instance")
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        if isinstance(dtype, Decimal64Dtype):
-            self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
-            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
-        return self
+class Decimal128Column(DecimalBaseColumn):
+    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL128}
+    _decimal_cls = Decimal128Dtype
+    _decimal_check = is_decimal128_dtype
 
 
 def _get_decimal_type(
