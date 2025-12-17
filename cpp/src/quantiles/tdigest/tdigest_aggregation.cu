@@ -788,6 +788,9 @@ cluster_info generate_group_cluster_info(int delta,
   }();
   cinfo.cluster_wl = rmm::device_uvector<double>(allocated_clusters, stream, temp_mr);
 
+  // sync required after compute_cluster_starts() and before generate_cluster_limits()
+  stream.synchronize();
+
   // fill in the actual cluster weight limits.
   // if we are in the simple case, group_num_clusters will be updated here to reflect the accurate
   // number of clusters per group.
