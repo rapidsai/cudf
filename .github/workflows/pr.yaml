@@ -56,15 +56,17 @@ jobs:
       - name: Telemetry setup
         if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
-  # check-nightly-ci:
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #   steps:
-  #     - name: Check if nightly CI is passing
-  #       uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
-  #       with:
-  #         repo: cudf
+#   check-nightly-ci:
+#     runs-on: ubuntu-latest
+#     env:
+#       RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#     steps:
+#       - name: Check if nightly CI is passing
+#         uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
+#         with:
+#           repo: cudf
+#           # TODO: Fix nightly CI and remove this line
+#           max_days_without_success: 30
   changed-files:
     secrets: inherit
     needs: telemetry-setup
