@@ -77,7 +77,7 @@ class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_
     try {
       return pool_->allocate(stream, bytes);
     } catch (...) {
-      CUDF_LOG_WARN("Pinned pool exhausted, falling back to new pinned allocation for %zu bytes",
+      CUDF_LOG_INFO("Pinned pool exhausted, falling back to new pinned allocation for %zu bytes",
                     bytes);
       // fall back to upstream
       auto* ptr = upstream_mr_.allocate(stream, bytes);
