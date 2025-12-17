@@ -9,7 +9,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
@@ -909,26 +908,18 @@ def test_series_setitem_null():
 @pytest.mark.parametrize(
     "key, value",
     [
-        (0, 0.5),
-        ([0, 1], 0.5),
         ([0, 1], [0.5, 2.5]),
         (slice(0, 2), [0.5, 0.25]),
     ],
 )
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
-def test_series_setitem_dtype(key, value):
+def test_series_setitem_upcasting_list_like_raises(key, value):
     psr = pd.Series([1, 2, 3], dtype="int32")
     gsr = cudf.from_pandas(psr)
 
-    with pytest.warns(FutureWarning):
+    with pytest.raises(TypeError):
         psr[key] = value
-    with pytest.warns(FutureWarning):
+    with pytest.raises(TypeError):
         gsr[key] = value
-
-    assert_eq(psr, gsr)
 
 
 def test_series_setitem_datetime():
