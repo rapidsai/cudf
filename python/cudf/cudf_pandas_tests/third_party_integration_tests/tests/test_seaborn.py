@@ -7,17 +7,12 @@ import pytest
 import seaborn as sns
 
 
-def assert_plots_equal(expect, got):
-    # Both expect and got are now bytes from savefig
+def assert_plots_equal(expect: bytes, got: bytes):
+    # these are the PNGs that we saved in-memory.
     assert expect == got
 
 
-def _save_figure(ax):
-    """Save the figure to an in-memory buffer and return the bytes.
-
-    This avoids pickling issues with matplotlib Axes objects that contain
-    itertools objects (which will lose pickle support in Python 3.14).
-    """
+def _save_figure(ax) -> bytes:
     buf = io.BytesIO()
     ax.get_figure().savefig(buf, format="png")
     buf.seek(0)
