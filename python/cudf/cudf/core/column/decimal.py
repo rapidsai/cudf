@@ -8,8 +8,8 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import pylibcudf as plc
 import rmm
@@ -33,15 +33,12 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
-    pyarrow_dtype_to_cudf_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from typing_extensions import Self
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -93,6 +90,37 @@ class DecimalBaseColumn(NumericalBaseColumn):
         raise NotImplementedError(
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
+
+    @classmethod
+    def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
+        result = cast(Self, super().from_arrow(data))
+        # Support for this conversion can be removed when we drop support for
+        # pyarrow<19, but until then we must support constructing
+        # Decimal32Column and Decimal64Column from Decimal128 pyarrow arrays
+        if cls in (Decimal32Column, Decimal64Column) and isinstance(
+            data.type, pa.Decimal128Type
+        ):
+            dtype_cls = (
+                Decimal32Dtype if cls is Decimal32Column else Decimal64Dtype
+            )
+            type_id = (
+                plc.TypeId.DECIMAL32
+                if cls is Decimal32Column
+                else plc.TypeId.DECIMAL64
+            )
+            dtype = dtype_cls(
+                precision=data.type.precision, scale=data.type.scale
+            )
+            plc_column = plc.unary.cast(
+                result.plc_column,
+                plc.DataType(
+                    type_id,
+                    -data.type.scale,
+                ),
+            )
+            result = cls(plc_column, dtype, False)
+        result.dtype.precision = data.type.precision  # type: ignore[union-attr]
+        return result
 
     @classmethod
     def _from_32_64_arrow(
@@ -385,45 +413,6 @@ class Decimal32Column(DecimalBaseColumn):
             exposed=exposed,
         )
 
-    @classmethod
-    def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
-        return cls._from_32_64_arrow(
-            data, view_type="int32", plc_type=plc.TypeId.DECIMAL32, step=4
-        )
-
-    def to_arrow(self) -> pa.Array:
-        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")  # type: ignore[union-attr]
-        data_buf_128: np.ndarray = np.empty(
-            len(data_buf_32) * 4, dtype="int32"
-        )
-
-        # use striding to set the first 32 bits of each 128-bit chunk:
-        data_buf_128[::4] = data_buf_32
-        # use striding again to set the remaining bits of each 128-bit chunk:
-        # 0 for non-negative values, -1 for negative values:
-        data_buf_128[1::4] = np.piecewise(
-            data_buf_32, [data_buf_32 < 0], [-1, 0]
-        )
-        data_buf_128[2::4] = np.piecewise(
-            data_buf_32, [data_buf_32 < 0], [-1, 0]
-        )
-        data_buf_128[3::4] = np.piecewise(
-            data_buf_32, [data_buf_32 < 0], [-1, 0]
-        )
-        data_buf = pa.py_buffer(data_buf_128)
-        mask_buf = (
-            self.base_mask
-            if self.base_mask is None
-            else pa.py_buffer(self.base_mask.memoryview())
-        )
-        return pa.Array.from_buffers(
-            type=self.dtype.to_arrow(),  # type: ignore[union-attr]
-            offset=self.offset,
-            length=self.size,
-            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
-            buffers=[mask_buf, data_buf],  # type: ignore[list-item]
-        )
-
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, Decimal32Dtype):
             self.dtype.precision = dtype.precision  # type: ignore[union-attr]
@@ -455,21 +444,6 @@ class Decimal128Column(DecimalBaseColumn):
             exposed=exposed,
         )
 
-    @classmethod
-    def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
-        result = cast(Decimal128Dtype, super().from_arrow(data))
-        result.dtype.precision = data.type.precision
-        return result
-
-    def to_arrow(self) -> pa.Array:
-        dtype: Decimal128Dtype
-        if isinstance(self.dtype, pd.ArrowDtype):
-            dtype = pyarrow_dtype_to_cudf_dtype(self.dtype)  # type: ignore[assignment]
-        else:
-            dtype = self.dtype  # type: ignore[assignment]
-
-        return super().to_arrow().cast(dtype.to_arrow())
-
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, Decimal128Dtype):
             self.dtype.precision = dtype.precision  # type: ignore[union-attr]
@@ -493,39 +467,6 @@ class Decimal64Column(DecimalBaseColumn):
             plc_column=plc_column,
             dtype=dtype,
             exposed=exposed,
-        )
-
-    @classmethod
-    def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
-        return cls._from_32_64_arrow(
-            data, view_type="int64", plc_type=plc.TypeId.DECIMAL64, step=2
-        )
-
-    def to_arrow(self) -> pa.Array:
-        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")  # type: ignore[union-attr]
-        data_buf_128: np.ndarray = np.empty(
-            len(data_buf_64) * 2, dtype="int64"
-        )
-
-        # use striding to set the first 64 bits of each 128-bit chunk:
-        data_buf_128[::2] = data_buf_64
-        # use striding again to set the remaining bits of each 128-bit chunk:
-        # 0 for non-negative values, -1 for negative values:
-        data_buf_128[1::2] = np.piecewise(
-            data_buf_64, [data_buf_64 < 0], [-1, 0]
-        )
-        data_buf = pa.py_buffer(data_buf_128)
-        mask_buf = (
-            self.base_mask
-            if self.base_mask is None
-            else pa.py_buffer(self.base_mask.memoryview())
-        )
-        return pa.Array.from_buffers(
-            type=self.dtype.to_arrow(),  # type: ignore[union-attr]
-            offset=self.offset,
-            length=self.size,
-            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
-            buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
