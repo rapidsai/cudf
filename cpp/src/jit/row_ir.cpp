@@ -10,6 +10,7 @@
 #include <cudf/column/column_factories.hpp>
 
 #include <algorithm>
+#include <format>
 #include <iostream>
 #include <numeric>
 
