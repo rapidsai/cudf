@@ -12,7 +12,7 @@ import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.mark.parametrize(
@@ -865,7 +865,6 @@ def test_categorical_setitem_with_nan():
         (slice(0, 2), [4, 5]),
         (slice(1, None), [4, 5, 6, 7]),
         ([], 1),
-        ([], []),
         (slice(None, None), 1),
         (slice(-1, -3), 7),
     ],
@@ -878,15 +877,21 @@ def test_series_setitem_basics(key, value, nulls):
     elif nulls == "all":
         psr[:] = None
     gsr = cudf.from_pandas(psr)
-    with expect_warning_if(
-        isinstance(value, list) and len(value) == 0 and nulls == "none"
-    ):
-        psr[key] = value
-    with expect_warning_if(
-        isinstance(value, list) and len(value) == 0 and not len(key) == 0
-    ):
-        gsr[key] = value
+    psr[key] = value
+    gsr[key] = value
     assert_eq(psr, gsr, check_dtype=False)
+
+
+@pytest.mark.xfail(
+    reason="cuDF doesn't recognize dtype misalignment of empty list"
+)
+def test_series_setitem_empty_list_raises():
+    psr = pd.Series([1, 2, 3, 4, 5])
+    gsr = cudf.Series([1, 2, 3, 4, 5])
+    with pytest.raises(TypeError):
+        psr[[]] = []
+    with pytest.raises(TypeError):
+        gsr[[]] = []
 
 
 def test_series_setitem_null():
