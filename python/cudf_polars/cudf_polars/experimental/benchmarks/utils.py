@@ -937,7 +937,7 @@ def run_polars(
                 "use_rapidsmpf_native": run_config.native_parquet,
             }
         else:
-            parquet_options = None
+            parquet_options = {}
         engine = pl.GPUEngine(
             raise_on_fail=True,
             memory_resource=rmm.mr.CudaAsyncMemoryResource()
