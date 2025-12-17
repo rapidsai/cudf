@@ -129,7 +129,7 @@ def test_series_round_decimal(
         pytest.param(
             pd.Series([34224, 324324, 324342], dtype="datetime64[ns]"),
             marks=pytest.mark.filterwarnings(
-                "ignore:obj.round has no effect:UserWarning:"
+                "ignore:obj.round has no effect:UserWarning"
             ),
         ),
         pd.Series([224.242, None, 2424.234324], dtype="category"),
