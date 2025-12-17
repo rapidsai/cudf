@@ -2381,10 +2381,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         to_replace=None,
         value=no_default,
+        *,
         inplace: bool = False,
-        limit=None,
         regex: bool = False,
-        method=no_default,
     ) -> Self | None:
         if is_dict_like(to_replace) and value not in {None, no_default}:
             raise ValueError(
@@ -2396,9 +2395,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             to_replace,
             value,
             inplace=inplace,
-            limit=limit,
             regex=regex,
-            method=method,
         )
 
     @_performance_tracking
