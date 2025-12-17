@@ -230,7 +230,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
         self._mask: Buffer | None = None
-        self._data: Buffer | None = None
         self._children: tuple[ColumnBase, ...] | None = None
         children = self._get_children_from_pylibcudf_column(
             self.plc_column,
@@ -244,9 +243,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # are destroyed, all references to this column will be removed as well,
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers: set[Buffer] = set()
-
-        # Eager computation of _data - compute offset-aware slice immediately
-        # instead of lazily on first access. This simplifies code with negligible overhead.
         self._recompute_data()
 
     def _get_children_from_pylibcudf_column(
@@ -306,6 +302,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # if this column is a view from offset to the end of the base buffer.
             # Note: Subclasses like CategoricalColumn, ListColumn, StructColumn,
             # and StringColumn override this property with their own logic.
+            # TODO: Check this
             return self.size + self.offset
         return int(self.base_data.size / self.dtype.itemsize)
 
@@ -329,12 +326,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def data(self) -> None | Buffer:
-        """Return the offset-aware data buffer.
-
-        This property is a trivial passthrough to self._data, which is
-        always kept up-to-date by _recompute_data() whenever the column
-        state changes.
-        """
         return self._data
 
     @property
@@ -522,6 +513,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         if type(self).data is not ColumnBase.data:
             # Subclass overrides data property, skip computation
+            # TODO: Check this
             self._data = None
         elif self.base_data is None:
             self._data = None
@@ -546,14 +538,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if inplace:
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
-            # Update base_children (still a cached attribute)
             self._base_children = other_col._base_children
-            # Recompute offset-aware data cache
             self._recompute_data()
-            # Clear other offset-aware caches
             self._mask = None
             self._children = None
-            # Clear cached properties (memory_usage, etc.) since column state changed
             self._clear_cache()
             return None
         else:
@@ -1273,7 +1261,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     children=[c.plc_column for c in col.base_children],
                 )
 
-                # Eagerly recompute _data when base_data changes
                 col._recompute_data()
 
             col.set_base_mask(
