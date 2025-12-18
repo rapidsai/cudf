@@ -147,7 +147,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
             if isinstance(self.dtype, DecimalDtype)
             else cast(pd.ArrowDtype, self.dtype).pyarrow_dtype
         )
-        return arrow_array.cast(arrow_type)
+        # To match existing behavior we must allow unsafe casts here
+        return arrow_array.cast(arrow_type, safe=False)
 
     def element_indexing(self, index: int) -> Decimal | None:
         result = super().element_indexing(index)
