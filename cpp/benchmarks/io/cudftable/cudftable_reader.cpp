@@ -8,17 +8,17 @@
 #include <benchmarks/io/nvbench_helpers.hpp>
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/experimental/cutable.hpp>
+#include <cudf/io/experimental/cudftable.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
 
 constexpr cudf::size_type num_cols = 64;
 
-void cutable_read_common(cudf::size_type num_rows_to_read,
-                         cudf::size_type num_cols_to_read,
-                         cuio_source_sink_pair& source_sink,
-                         nvbench::state& state)
+void cudftable_read_common(cudf::size_type num_rows_to_read,
+                           cudf::size_type num_cols_to_read,
+                           cuio_source_sink_pair& source_sink,
+                           nvbench::state& state)
 {
   auto const data_size = static_cast<size_t>(state.get_int64("data_size"));
   auto source_info     = source_sink.make_source_info();
@@ -29,8 +29,8 @@ void cutable_read_common(cudf::size_type num_rows_to_read,
       try_drop_l3_cache();
 
       timer.start();
-      auto result = cudf::io::experimental::read_cutable(
-        cudf::io::experimental::cutable_reader_options::builder(source_info).build());
+      auto result = cudf::io::experimental::read_cudftable(
+        cudf::io::experimental::cudftable_reader_options::builder(source_info).build());
       timer.stop();
 
       CUDF_EXPECTS(result.table.num_columns() == num_cols_to_read, "Unexpected number of columns");
@@ -42,7 +42,7 @@ void cutable_read_common(cudf::size_type num_rows_to_read,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-void BM_cutable_read_data_sizes(nvbench::state& state)
+void BM_cudftable_read_data_sizes(nvbench::state& state)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(data_type::INTEGRAL));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
@@ -54,19 +54,19 @@ void BM_cutable_read_data_sizes(nvbench::state& state)
       create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size});
     auto const view = tbl->view();
 
-    cudf::io::experimental::write_cutable(
-      cudf::io::experimental::cutable_writer_options::builder(source_sink.make_sink_info(), view)
+    cudf::io::experimental::write_cudftable(
+      cudf::io::experimental::cudftable_writer_options::builder(source_sink.make_sink_info(), view)
         .build());
     return view.num_rows();
   }();
 
-  cutable_read_common(num_rows_written, num_cols, source_sink, state);
+  cudftable_read_common(num_rows_written, num_cols, source_sink, state);
 }
 
 template <data_type DataType>
-void BM_cutable_read_data_common(nvbench::state& state,
-                                 data_profile const& profile,
-                                 nvbench::type_list<nvbench::enum_type<DataType>>)
+void BM_cudftable_read_data_common(nvbench::state& state,
+                                   data_profile const& profile,
+                                   nvbench::type_list<nvbench::enum_type<DataType>>)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
@@ -78,25 +78,25 @@ void BM_cutable_read_data_common(nvbench::state& state,
       create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);
     auto const view = tbl->view();
 
-    cudf::io::experimental::write_cutable(
-      cudf::io::experimental::cutable_writer_options::builder(source_sink.make_sink_info(), view)
+    cudf::io::experimental::write_cudftable(
+      cudf::io::experimental::cudftable_writer_options::builder(source_sink.make_sink_info(), view)
         .build());
     return view.num_rows();
   }();
 
-  cutable_read_common(num_rows_written, num_cols, source_sink, state);
+  cudftable_read_common(num_rows_written, num_cols, source_sink, state);
 }
 
 template <data_type DataType>
-void BM_cutable_read_data_types(nvbench::state& state,
-                                nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+void BM_cudftable_read_data_types(nvbench::state& state,
+                                  nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
-  BM_cutable_read_data_common<DataType>(state, data_profile{}, type_list);
+  BM_cudftable_read_data_common<DataType>(state, data_profile{}, type_list);
 }
 
 template <data_type DataType>
-void BM_cutable_read_num_columns(nvbench::state& state,
-                                 nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+void BM_cudftable_read_num_columns(nvbench::state& state,
+                                   nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
   auto const d_type = get_type_or_group(static_cast<int32_t>(DataType));
 
@@ -110,13 +110,13 @@ void BM_cutable_read_num_columns(nvbench::state& state,
       create_random_table(cycle_dtypes(d_type, n_col), table_size_bytes{data_size_bytes});
     auto const view = tbl->view();
 
-    cudf::io::experimental::write_cutable(
-      cudf::io::experimental::cutable_writer_options::builder(source_sink.make_sink_info(), view)
+    cudf::io::experimental::write_cudftable(
+      cudf::io::experimental::cudftable_writer_options::builder(source_sink.make_sink_info(), view)
         .build());
     return view.num_rows();
   }();
 
-  cutable_read_common(num_rows_written, n_col, source_sink, state);
+  cudftable_read_common(num_rows_written, n_col, source_sink, state);
 }
 
 using d_type_list_reduced = nvbench::enum_type_list<data_type::INTEGRAL,
@@ -128,22 +128,22 @@ using d_type_list_reduced = nvbench::enum_type_list<data_type::INTEGRAL,
                                                     data_type::STRING,
                                                     data_type::LIST,
                                                     data_type::STRUCT>;
-NVBENCH_BENCH_TYPES(BM_cutable_read_data_types, NVBENCH_TYPE_AXES(d_type_list_reduced))
-  .set_name("cutable_read_data_types")
+NVBENCH_BENCH_TYPES(BM_cudftable_read_data_types, NVBENCH_TYPE_AXES(d_type_list_reduced))
+  .set_name("cudftable_read_data_types")
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("data_size", {128 << 20});
 
-NVBENCH_BENCH(BM_cutable_read_data_sizes)
-  .set_name("cutable_read_data_sizes")
+NVBENCH_BENCH(BM_cudftable_read_data_sizes)
+  .set_name("cudftable_read_data_sizes")
   .set_min_samples(4)
   .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
   .add_int64_power_of_two_axis("data_size", nvbench::range(24, 31, 1));  // 16MB to 2GB
 
-NVBENCH_BENCH_TYPES(BM_cutable_read_num_columns,
+NVBENCH_BENCH_TYPES(BM_cudftable_read_num_columns,
                     NVBENCH_TYPE_AXES(nvbench::enum_type_list<data_type::STRING>))
-  .set_name("cutable_read_num_columns")
+  .set_name("cudftable_read_num_columns")
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)

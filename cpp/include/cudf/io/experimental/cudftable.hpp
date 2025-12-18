@@ -22,19 +22,19 @@ namespace io::experimental {
 
 /**
  * @file
- * @brief CUTable binary format APIs for serialization and deserialization
+ * @brief CUDFTable binary format APIs for serialization and deserialization
  */
 
-class cutable_writer_options_builder;
+class cudftable_writer_options_builder;
 
 /**
- * @brief Settings for `write_cutable()`.
+ * @brief Settings for `write_cudftable()`.
  */
-class cutable_writer_options {
+class cudftable_writer_options {
   sink_info _sink;
   table_view _table;
 
-  friend cutable_writer_options_builder;
+  friend cudftable_writer_options_builder;
 
   /**
    * @brief Constructor from sink and table.
@@ -42,21 +42,21 @@ class cutable_writer_options {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit cutable_writer_options(sink_info sink, table_view table)
+  explicit cudftable_writer_options(sink_info sink, table_view table)
     : _sink(std::move(sink)), _table(std::move(table))
   {
   }
 
  public:
   /**
-   * @brief Create builder to create `cutable_writer_options`.
+   * @brief Create builder to create `cudftable_writer_options`.
    *
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    *
-   * @return Builder to build cutable_writer_options
+   * @return Builder to build cudftable_writer_options
    */
-  static cutable_writer_options_builder builder(sink_info const& sink, table_view const& table);
+  static cudftable_writer_options_builder builder(sink_info const& sink, table_view const& table);
 
   /**
    * @brief Returns sink used for writer output.
@@ -81,9 +81,9 @@ class cutable_writer_options {
 };
 
 /**
- * @brief Class to build `cutable_writer_options`.
+ * @brief Class to build `cudftable_writer_options`.
  */
-class cutable_writer_options_builder {
+class cudftable_writer_options_builder {
  public:
   /**
    * @brief Constructor from sink and table.
@@ -91,47 +91,47 @@ class cutable_writer_options_builder {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit cutable_writer_options_builder(sink_info const& sink, table_view const& table)
+  explicit cudftable_writer_options_builder(sink_info const& sink, table_view const& table)
     : _options(sink, table)
   {
   }
 
   /**
-   * @brief Build `cutable_writer_options`.
+   * @brief Build `cudftable_writer_options`.
    *
-   * @return The constructed `cutable_writer_options` object
+   * @return The constructed `cudftable_writer_options` object
    */
-  [[nodiscard]] cutable_writer_options build() const { return _options; }
+  [[nodiscard]] cudftable_writer_options build() const { return _options; }
 
  private:
-  cutable_writer_options _options;
+  cudftable_writer_options _options;
 };
 
-class cutable_reader_options_builder;
+class cudftable_reader_options_builder;
 
 /**
- * @brief Settings for `read_cutable()`.
+ * @brief Settings for `read_cudftable()`.
  */
-class cutable_reader_options {
+class cudftable_reader_options {
   source_info _source;
 
-  friend cutable_reader_options_builder;
+  friend cudftable_reader_options_builder;
 
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read cutable file
+   * @param src source information used to read cudftable file
    */
-  explicit cutable_reader_options(source_info src) : _source{std::move(src)} {}
+  explicit cudftable_reader_options(source_info src) : _source{std::move(src)} {}
 
  public:
   /**
-   * @brief Creates a `cutable_reader_options_builder` to build `cutable_reader_options`.
+   * @brief Creates a `cudftable_reader_options_builder` to build `cudftable_reader_options`.
    *
-   * @param src Source information to read cutable file
+   * @param src Source information to read cudftable file
    * @return Builder to build reader options
    */
-  static cutable_reader_options_builder builder(source_info src = source_info{});
+  static cudftable_reader_options_builder builder(source_info src = source_info{});
 
   /**
    * @brief Returns source info.
@@ -149,26 +149,26 @@ class cutable_reader_options {
 };
 
 /**
- * @brief Class to build `cutable_reader_options`.
+ * @brief Class to build `cudftable_reader_options`.
  */
-class cutable_reader_options_builder {
+class cudftable_reader_options_builder {
  public:
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read cutable file
+   * @param src source information used to read cudftable file
    */
-  explicit cutable_reader_options_builder(source_info src) : _options(std::move(src)) {}
+  explicit cudftable_reader_options_builder(source_info src) : _options(std::move(src)) {}
 
   /**
-   * @brief Build `cutable_reader_options`.
+   * @brief Build `cudftable_reader_options`.
    *
-   * @return The constructed `cutable_reader_options` object
+   * @return The constructed `cudftable_reader_options` object
    */
-  [[nodiscard]] cutable_reader_options build() const { return _options; }
+  [[nodiscard]] cudftable_reader_options build() const { return _options; }
 
  private:
-  cutable_reader_options _options;
+  cudftable_reader_options _options;
 };
 
 /**
@@ -177,7 +177,7 @@ class cutable_reader_options_builder {
  */
 
 /**
- * @brief Write a table using the CUTable binary format.
+ * @brief Write a table using the CUDFTable binary format.
  *
  * This function uses `cudf::pack` to serialize a table into a contiguous format,
  * then writes it to the specified sink with a simple header containing metadata
@@ -187,9 +187,9 @@ class cutable_reader_options_builder {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr An optional memory resource to use for all device allocations
  */
-void write_cutable(cutable_writer_options const& options,
-                   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+void write_cudftable(cudftable_writer_options const& options,
+                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 /**
@@ -198,7 +198,7 @@ void write_cutable(cutable_writer_options const& options,
  */
 
 /**
- * @brief Read a table in CUTable binary format.
+ * @brief Read a table in CUDFTable binary format.
  *
  * This function reads the header from the datasource, validates the format,
  * and uses `cudf::unpack` to deserialize the table.
@@ -216,8 +216,8 @@ void write_cutable(cutable_writer_options const& options,
  * @param mr An optional memory resource to use for all device allocations
  * @return A packed_table containing the deserialized table view and its backing data
  */
-packed_table read_cutable(
-  cutable_reader_options const& options,
+packed_table read_cudftable(
+  cudftable_reader_options const& options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

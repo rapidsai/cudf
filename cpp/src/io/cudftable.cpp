@@ -10,7 +10,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/experimental/cutable.hpp>
+#include <cudf/io/experimental/cudftable.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -26,18 +26,18 @@ namespace detail {
 namespace {
 
 /**
- * @brief Simple binary file format header for CUTable
+ * @brief Simple binary file format header for CUDFTable
  *
- * The CUTable format stores a table in a simple binary layout:
- * - Magic number (4 bytes): "CTBL"
+ * The CUDFTable format stores a table in a simple binary layout:
+ * - Magic number (4 bytes): "CDFT"
  * - Version (4 bytes): uint32_t format version (currently 1)
  * - Metadata length (8 bytes): uint64_t size of the metadata buffer in bytes
  * - Data length (8 bytes): uint64_t size of the data buffer in bytes
  * - Metadata (variable): serialized column metadata from pack()
  * - Data (variable): contiguous device data from pack()
  */
-struct cutable_header {
-  static constexpr uint32_t magic_number = 0x4C425443;  ///< "CTBL" in little-endian
+struct cudftable_header {
+  static constexpr uint32_t magic_number = 0x54464443;  ///< "CDFT" in little-endian
   static constexpr uint32_t version      = 1;           ///< Format version
 
   uint32_t magic;            ///< Magic number for format validation
@@ -48,20 +48,20 @@ struct cutable_header {
 
 }  // anonymous namespace
 
-void write_cutable(data_sink* sink,
-                   table_view const& input,
-                   rmm::cuda_stream_view stream,
-                   rmm::device_async_resource_ref mr)
+void write_cudftable(data_sink* sink,
+                     table_view const& input,
+                     rmm::cuda_stream_view stream,
+                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
   auto const packed = cudf::pack(input, stream, mr);
 
-  auto const header = cutable_header{cutable_header::magic_number,
-                                     cutable_header::version,
-                                     packed.metadata->size(),
-                                     packed.gpu_data->size()};
-  sink->host_write(&header, sizeof(cutable_header));
+  auto const header = cudftable_header{cudftable_header::magic_number,
+                                       cudftable_header::version,
+                                       packed.metadata->size(),
+                                       packed.gpu_data->size()};
+  sink->host_write(&header, sizeof(cudftable_header));
 
   sink->host_write(packed.metadata->data(), header.metadata_length);
 
@@ -78,21 +78,21 @@ void write_cutable(data_sink* sink,
   sink->flush();
 }
 
-packed_table read_cutable(datasource* source,
-                          rmm::cuda_stream_view stream,
-                          rmm::device_async_resource_ref mr)
+packed_table read_cudftable(datasource* source,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
-  auto const header_size = sizeof(cutable_header);
-  CUDF_EXPECTS(source->size() >= header_size, "File too small to contain a valid cutable header");
+  auto const header_size = sizeof(cudftable_header);
+  CUDF_EXPECTS(source->size() >= header_size, "File too small to contain a valid cudftable header");
 
-  auto header = cutable_header{};
+  auto header = cudftable_header{};
   source->host_read(0, header_size, reinterpret_cast<uint8_t*>(&header));
-  CUDF_EXPECTS(header.magic == cutable_header::magic_number,
-               "Invalid magic number in cutable header");
-  CUDF_EXPECTS(header.format_version == cutable_header::version,
-               "Unsupported cutable format version");
+  CUDF_EXPECTS(header.magic == cudftable_header::magic_number,
+               "Invalid magic number in cudftable header");
+  CUDF_EXPECTS(header.format_version == cudftable_header::version,
+               "Unsupported cudftable format version");
 
   auto const metadata_offset = header_size;
   auto const data_offset     = metadata_offset + header.metadata_length;
@@ -124,15 +124,15 @@ packed_table read_cutable(datasource* source,
 
 }  // namespace detail
 
-cutable_writer_options_builder cutable_writer_options::builder(sink_info const& sink,
-                                                               table_view const& table)
+cudftable_writer_options_builder cudftable_writer_options::builder(sink_info const& sink,
+                                                                   table_view const& table)
 {
-  return cutable_writer_options_builder(sink, table);
+  return cudftable_writer_options_builder(sink, table);
 }
 
-cutable_reader_options_builder cutable_reader_options::builder(source_info src)
+cudftable_reader_options_builder cudftable_reader_options::builder(source_info src)
 {
-  return cutable_reader_options_builder(std::move(src));
+  return cudftable_reader_options_builder(std::move(src));
 }
 
 }  // namespace cudf::io::experimental

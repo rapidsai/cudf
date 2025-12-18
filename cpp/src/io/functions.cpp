@@ -20,7 +20,7 @@
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/detail/utils.hpp>
-#include <cudf/io/experimental/cutable.hpp>
+#include <cudf/io/experimental/cudftable.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
@@ -1238,43 +1238,43 @@ namespace experimental {
 
 // Forward declarations for detail functions
 namespace detail {
-void write_cutable(data_sink* sink,
-                   table_view const& input,
-                   rmm::cuda_stream_view stream,
-                   rmm::device_async_resource_ref mr);
-packed_table read_cutable(datasource* source,
-                          rmm::cuda_stream_view stream,
-                          rmm::device_async_resource_ref mr);
+void write_cudftable(data_sink* sink,
+                     table_view const& input,
+                     rmm::cuda_stream_view stream,
+                     rmm::device_async_resource_ref mr);
+packed_table read_cudftable(datasource* source,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr);
 }  // namespace detail
 
 /**
- * @copydoc cudf::io::experimental::write_cutable
+ * @copydoc cudf::io::experimental::write_cudftable
  */
-void write_cutable(cutable_writer_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::device_async_resource_ref mr)
+void write_cudftable(cudftable_writer_options const& options,
+                     rmm::cuda_stream_view stream,
+                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
   auto sinks = make_datasinks(options.get_sink());
-  CUDF_EXPECTS(sinks.size() == 1, "CUTable format only supports single sink");
+  CUDF_EXPECTS(sinks.size() == 1, "CUDFTable format only supports single sink");
 
-  detail::write_cutable(sinks[0].get(), options.get_table(), stream, mr);
+  detail::write_cudftable(sinks[0].get(), options.get_table(), stream, mr);
 }
 
 /**
- * @copydoc cudf::io::experimental::read_cutable
+ * @copydoc cudf::io::experimental::read_cudftable
  */
-packed_table read_cutable(cutable_reader_options const& options,
-                          rmm::cuda_stream_view stream,
-                          rmm::device_async_resource_ref mr)
+packed_table read_cudftable(cudftable_reader_options const& options,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  CUDF_EXPECTS(datasources.size() == 1, "CUTable format only supports single source");
+  CUDF_EXPECTS(datasources.size() == 1, "CUDFTable format only supports single source");
 
-  return detail::read_cutable(datasources[0].get(), stream, mr);
+  return detail::read_cudftable(datasources[0].get(), stream, mr);
 }
 
 }  // namespace experimental
