@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import copy
 import itertools
-import operator
 import textwrap
 import warnings
 from collections import Counter
@@ -38,7 +37,6 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -86,7 +84,6 @@ from cudf.utils.utils import _warn_no_dask_cudf
 
 if TYPE_CHECKING:
     from collections.abc import (
-        Callable,
         Hashable,
         Iterable,
         MutableMapping,
@@ -4493,147 +4490,6 @@ class IndexedFrame(Frame):
                 self._data._level_names,
             ),
             index,
-        )
-
-    def _first_or_last(
-        self, offset, idx: int, op: Callable, side: str, slice_func: Callable
-    ) -> "IndexedFrame":
-        """Shared code path for ``first`` and ``last``."""
-        if not isinstance(self.index, cudf.DatetimeIndex):
-            raise TypeError("'first' only supports a DatetimeIndex index.")
-        if not isinstance(offset, str):
-            raise NotImplementedError(
-                f"Unsupported offset type {type(offset)}."
-            )
-
-        if len(self) == 0:
-            return self.copy()
-
-        pd_offset = pd.tseries.frequencies.to_offset(offset)
-        to_search = op(
-            pd.Timestamp(self.index._column.element_indexing(idx)), pd_offset
-        )
-        if (
-            idx == 0
-            and not isinstance(pd_offset, pd.tseries.offsets.Tick)
-            and pd_offset.is_on_offset(pd.Timestamp(self.index[0]))
-        ):
-            # Special handle is required when the start time of the index
-            # is on the end of the offset. See pandas gh29623 for detail.
-            to_search = to_search - pd_offset.base
-            return self.loc[:to_search]
-        needle = as_column(to_search, dtype=self.index.dtype)
-        end_point = int(
-            self.index._column.searchsorted(
-                needle, side=side
-            ).element_indexing(0)
-        )
-        return slice_func(end_point)
-
-    def first(self, offset):
-        """Select initial periods of time series data based on a date offset.
-
-        When having a DataFrame with **sorted** dates as index, this function
-        can select the first few rows based on a date offset.
-
-        Parameters
-        ----------
-        offset: str
-            The offset length of the data that will be selected. For instance,
-            '1M' will display all rows having their index within the first
-            month.
-
-        Returns
-        -------
-        Series or DataFrame
-            A subset of the caller.
-
-        Raises
-        ------
-        TypeError
-            If the index is not a ``DatetimeIndex``
-
-        Examples
-        --------
-        >>> i = cudf.date_range('2018-04-09', periods=4, freq='2D')
-        >>> ts = cudf.DataFrame({'A': [1, 2, 3, 4]}, index=i)
-        >>> ts
-                    A
-        2018-04-09  1
-        2018-04-11  2
-        2018-04-13  3
-        2018-04-15  4
-        >>> ts.first('3D')
-                    A
-        2018-04-09  1
-        2018-04-11  2
-        """
-        # Do not remove until pandas 3.0 support is added.
-        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
-        warnings.warn(
-            "first is deprecated and will be removed in a future version. "
-            "Please create a mask and filter using `.loc` instead",
-            FutureWarning,
-        )
-        return self._first_or_last(
-            offset,
-            idx=0,
-            op=operator.__add__,
-            side="left",
-            slice_func=lambda i: self.iloc[:i],
-        )
-
-    def last(self, offset):
-        """Select final periods of time series data based on a date offset.
-
-        When having a DataFrame with **sorted** dates as index, this function
-        can select the last few rows based on a date offset.
-
-        Parameters
-        ----------
-        offset: str
-            The offset length of the data that will be selected. For instance,
-            '3D' will display all rows having their index within the last 3
-            days.
-
-        Returns
-        -------
-        Series or DataFrame
-            A subset of the caller.
-
-        Raises
-        ------
-        TypeError
-            If the index is not a ``DatetimeIndex``
-
-        Examples
-        --------
-        >>> i = cudf.date_range('2018-04-09', periods=4, freq='2D')
-        >>> ts = cudf.DataFrame({'A': [1, 2, 3, 4]}, index=i)
-        >>> ts
-                    A
-        2018-04-09  1
-        2018-04-11  2
-        2018-04-13  3
-        2018-04-15  4
-        >>> ts.last('3D')
-                    A
-        2018-04-13  3
-        2018-04-15  4
-        """
-        # Do not remove until pandas 3.0 support is added.
-        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
-        warnings.warn(
-            "last is deprecated and will be removed in a future version. "
-            "Please create a mask and filter using `.loc` instead",
-            FutureWarning,
-        )
-        return self._first_or_last(
-            offset,
-            idx=-1,
-            op=operator.__sub__,
-            side="right",
-            slice_func=lambda i: self.iloc[i:],
         )
 
     @_performance_tracking

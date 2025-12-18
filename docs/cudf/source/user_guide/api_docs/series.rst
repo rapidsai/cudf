@@ -176,10 +176,8 @@ Reindexing / selection / label manipulation
    Series.drop_duplicates
    Series.duplicated
    Series.equals
-   Series.first
    Series.head
    Series.isin
-   Series.last
    Series.reindex
    Series.rename
    Series.reset_index
