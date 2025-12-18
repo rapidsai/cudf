@@ -484,6 +484,44 @@ class approx_distinct_count {
            rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
+   * @brief Merge another sketch into this sketch.
+   *
+   * After merging, this sketch will contain the combined distinct count estimate of both sketches.
+   *
+   * @param other The sketch to merge into this sketch
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  void merge(approx_distinct_count const& other,
+             rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief Merge a sketch from raw bytes into this sketch.
+   *
+   * This allows merging sketches that have been serialized or created elsewhere, enabling
+   * distributed distinct counting scenarios.
+   *
+   * @warning It is the caller's responsibility to ensure that the provided sketch span was created
+   * with the same HyperLogLog configuration (precision, hash function, etc.) as this sketch.
+   * Merging incompatible sketches will produce incorrect results.
+   *
+   * @param sketch_span The sketch bytes to merge into this sketch
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  void merge(cuda::std::span<cuda::std::byte> sketch_span,
+             rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief Get the raw sketch bytes for serialization or external merging.
+   *
+   * The returned span provides access to the internal sketch storage.
+   * This can be used to serialize the sketch, transfer it between processes,
+   * or merge it with other sketches using the span-based merge API.
+   *
+   * @return A span view of the sketch bytes
+   */
+  [[nodiscard]] cuda::std::span<cuda::std::byte> sketch() noexcept;
+
+  /**
    * @brief Estimate the approximate number of distinct rows in the sketch.
    *
    * @param stream CUDA stream used for device memory operations and kernel launches

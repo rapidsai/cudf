@@ -13,6 +13,7 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/hyperloglog.cuh>
+#include <cuco/hyperloglog_ref.cuh>
 #include <cuda/functional>
 
 #include <algorithm>
@@ -74,6 +75,20 @@ void approx_distinct_count::add(table_view const& input,
   _impl.add(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
 }
 
+void approx_distinct_count::merge(approx_distinct_count const& other, rmm::cuda_stream_view stream)
+{
+  _impl.merge(other._impl, cuda::stream_ref{stream.value()});
+}
+
+void approx_distinct_count::merge(cuda::std::span<cuda::std::byte> sketch_span,
+                                  rmm::cuda_stream_view stream)
+{
+  auto other_ref = hll_type::ref_type<>{sketch_span, cuda::std::identity{}};
+  _impl.merge(other_ref, cuda::stream_ref{stream.value()});
+}
+
+cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept { return _impl.sketch(); }
+
 cudf::size_type approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
 {
   return static_cast<cudf::size_type>(_impl.estimate(cuda::stream_ref{stream.value()}));
@@ -99,6 +114,22 @@ void approx_distinct_count::add(table_view const& input,
                                 rmm::cuda_stream_view stream)
 {
   _impl->add(input, null_handling, nan_handling, stream);
+}
+
+void approx_distinct_count::merge(approx_distinct_count const& other, rmm::cuda_stream_view stream)
+{
+  _impl->merge(*other._impl, stream);
+}
+
+void approx_distinct_count::merge(cuda::std::span<cuda::std::byte> sketch_span,
+                                  rmm::cuda_stream_view stream)
+{
+  _impl->merge(sketch_span, stream);
+}
+
+cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept
+{
+  return _impl->sketch();
 }
 
 cudf::size_type approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
