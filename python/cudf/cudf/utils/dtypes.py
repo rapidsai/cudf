@@ -354,12 +354,20 @@ def replace_nested_all_null_arrays_with_null_array(
             )
         return arrow_array
 
-    else:
-        # For primitives and other types, check if all null
+    elif pa.types.is_string(arrow_array.type) or pa.types.is_large_string(
+        arrow_array.type
+    ):
+        # For string arrays, replace all-null arrays with null type
+        # This is needed for nested contexts (e.g., list<: string> with all nulls)
+        # Top-level all-null strings are handled by StringColumn.to_arrow() override
         if arrow_array.null_count == len(arrow_array):
             return pa.NullArray.from_buffers(
                 pa.null(), len(arrow_array), [pa.py_buffer(b"")]
             )
+        return arrow_array
+    else:
+        # For other primitives (int/float/etc), preserve type even if all null
+        # This is important for maintaining dtype when converting to pandas
         return arrow_array
 
 
