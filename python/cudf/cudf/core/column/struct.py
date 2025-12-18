@@ -14,9 +14,7 @@ import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import (
-    dtype_to_metadata,
     is_dtype_obj_struct,
-    replace_nested_all_null_arrays_with_null_array,
 )
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
@@ -114,13 +112,6 @@ class StructColumn(ColumnBase):
             return len(self.base_children[0])
         else:
             return self.size + self.offset
-
-    def to_arrow(self) -> pa.Array:
-        return replace_nested_all_null_arrays_with_null_array(
-            self.to_pylibcudf(mode="read").to_arrow(
-                metadata=dtype_to_metadata(self.dtype)
-            )
-        )
 
     def to_pandas(
         self,

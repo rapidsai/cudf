@@ -20,10 +20,8 @@ from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
-    dtype_to_metadata,
     get_dtype_of_same_kind,
     is_dtype_obj_list,
-    replace_nested_all_null_arrays_with_null_array,
 )
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
@@ -176,13 +174,6 @@ class ListColumn(ColumnBase):
         Integer offsets to elements specifying each row of the ListColumn
         """
         return cast(NumericalColumn, self.children[0])
-
-    def to_arrow(self) -> pa.Array:
-        return replace_nested_all_null_arrays_with_null_array(
-            self.to_pylibcudf(mode="read").to_arrow(
-                metadata=dtype_to_metadata(self.dtype)
-            )
-        )
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:

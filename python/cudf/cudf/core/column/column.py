@@ -70,6 +70,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
+    dtype_to_metadata,
     dtype_to_pylibcudf_type,
     find_common_type,
     get_dtype_of_same_kind,
@@ -83,6 +84,7 @@ from cudf.utils.dtypes import (
     is_pandas_nullable_extension_dtype,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
+    replace_nested_all_null_arrays_with_null_array,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import (
@@ -943,22 +945,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def to_arrow(self) -> pa.Array:
-        """Convert to PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> col = cudf.core.column.as_column([1, 2, 3, 4])
-        >>> col.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7f886547f830>
-        [
-          1,
-          2,
-          3,
-          4
-        ]
-        """
-        return self.to_pylibcudf(mode="read").to_arrow()
+        return replace_nested_all_null_arrays_with_null_array(
+            self.to_pylibcudf(mode="read").to_arrow(
+                metadata=dtype_to_metadata(self.dtype)
+            )
+        )
 
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> ColumnBase:
