@@ -166,9 +166,7 @@ Reindexing / selection / label manipulation
    DataFrame.drop_duplicates
    DataFrame.duplicated
    DataFrame.equals
-   DataFrame.first
    DataFrame.head
-   DataFrame.last
    DataFrame.reindex
    DataFrame.rename
    DataFrame.reset_index
