@@ -215,7 +215,8 @@ async def broadcast_join_node(
             with opaque_reservation(context, input_bytes):
                 df = _concat(
                     *[
-                        ir.do_evaluate(
+                        await asyncio.to_thread(
+                            ir.do_evaluate,
                             *ir._non_child_args,
                             *(
                                 [large_df, small_df]
