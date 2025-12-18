@@ -42,7 +42,7 @@ def leaf_value(request):
     elif request.param == "datetime":
         return pd.to_datetime("1900-01-01")
     elif request.param == "timedelta":
-        return pd.to_timedelta("10d")
+        return pd.to_timedelta("10D")
     else:
         raise ValueError("Unhandled data type")
 
