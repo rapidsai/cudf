@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+import os
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -25,14 +27,23 @@ pytestmark = pytest.mark.assert_eq(fn=stumpy_assert_equal)
 
 # Shared dask client for all tests in this module
 @pytest.fixture(scope="module")
-def dask_client():
-    with LocalCluster(n_workers=4, threads_per_worker=1) as cluster:
+def dask_client(worker_id: str):
+    worker_count = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "0"))
+
+    if worker_count > 0:
+        worker_index = int(worker_id.removeprefix("gw"))
+    else:
+        worker_index = 0
+    scheduler_port = 8123 + worker_index
+
+    with LocalCluster(
+        n_workers=4, threads_per_worker=1, scheduler_port=scheduler_port
+    ) as cluster:
         with Client(cluster) as dask_client:
             yield dask_client
 
 
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
-@pytest.mark.filterwarnings("ignore:Cluster failed to start:RuntimeWarning")
 def test_1d_distributed(dask_client):
     rng = np.random.default_rng(seed=42)
     ts = pd.Series(rng.random(100))
@@ -40,7 +51,6 @@ def test_1d_distributed(dask_client):
     return stumpy.stumped(dask_client, ts, m)
 
 
-@pytest.mark.filterwarnings("ignore:Cluster failed to start:RuntimeWarning")
 def test_multidimensional_distributed_timeseries(dask_client):
     rng = np.random.default_rng(seed=42)
     # Each row represents data from a different dimension while each column represents
