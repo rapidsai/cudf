@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -147,6 +148,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
         elif isinstance(self.dtype, Decimal64Dtype):
             arrow_type = pa.decimal128(self.dtype.precision, self.dtype.scale)
             return arrow_array.cast(arrow_type)
+        elif isinstance(self.dtype, pd.ArrowDtype):
+            return arrow_array.cast(self.dtype.pyarrow_dtype)
         return arrow_array
 
     def element_indexing(self, index: int) -> Decimal | None:
