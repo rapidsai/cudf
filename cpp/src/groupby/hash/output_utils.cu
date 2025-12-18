@@ -48,11 +48,11 @@ struct result_column_creator {
 
   std::unique_ptr<column> operator()(column_view const& col,
                                      aggregation::Kind const& agg,
-                                     bool force_non_nullable) const
+                                     bool is_agg_intermediate) const
   {
     auto const col_type =
       is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
-    auto const nullable = !force_non_nullable && agg != aggregation::COUNT_VALID &&
+    auto const nullable = !is_agg_intermediate && agg != aggregation::COUNT_VALID &&
                           agg != aggregation::COUNT_ALL && col.has_nulls();
     // TODO: Remove adjusted buffer size workaround once https://github.com/NVIDIA/cccl/issues/6430
     // is fixed. Use adjusted buffer size for small data types to ensure atomic operation safety.
@@ -99,21 +99,21 @@ struct result_column_creator {
 std::unique_ptr<table> create_results_table(size_type output_size,
                                             table_view const& values,
                                             host_span<aggregation::Kind const> agg_kinds,
-                                            std::span<int8_t const> force_non_nullable,
+                                            std::span<int8_t const> is_agg_intermediate,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(agg_kinds.size()),
                "The number of values columns and size of agg_kinds vector must be the same.");
   CUDF_EXPECTS(
-    values.num_columns() == static_cast<size_type>(force_non_nullable.size()),
-    "The number of values columns and size of force_non_nullable vector must be the same.");
+    values.num_columns() == static_cast<size_type>(is_agg_intermediate.size()),
+    "The number of values columns and size of is_agg_intermediate vector must be the same.");
 
   auto const column_creator = result_column_creator{output_size, stream, mr};
   std::vector<std::unique_ptr<column>> output_cols;
   for (size_t i = 0; i < agg_kinds.size(); i++) {
     output_cols.emplace_back(
-      column_creator(values.column(i), agg_kinds[i], static_cast<bool>(force_non_nullable[i])));
+      column_creator(values.column(i), agg_kinds[i], static_cast<bool>(is_agg_intermediate[i])));
   }
   auto result_table = std::make_unique<table>(std::move(output_cols));
   cudf::detail::initialize_with_identity(result_table->mutable_view(), agg_kinds, stream);

@@ -72,7 +72,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
-  std::span<int8_t const> force_non_nullable,
+  std::span<int8_t const> is_agg_intermediate,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -92,7 +92,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   auto agg_results    = create_results_table(static_cast<size_type>(unique_keys.size()),
                                           values,
                                           h_agg_kinds,
-                                          force_non_nullable,
+                                          is_agg_intermediate,
                                           stream,
                                           mr);
   auto d_results_ptr  = mutable_table_device_view::create(*agg_results, stream);
@@ -121,14 +121,14 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
-  std::span<int8_t const> force_non_nullable,
+  std::span<int8_t const> is_agg_intermediate,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   auto const num_rows = values.num_rows();
   auto const d_values = table_device_view::create(values, stream);
   auto agg_results =
-    create_results_table(num_rows, values, h_agg_kinds, force_non_nullable, stream, mr);
+    create_results_table(num_rows, values, h_agg_kinds, is_agg_intermediate, stream, mr);
   auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(
@@ -160,7 +160,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
-  std::span<int8_t const> force_non_nullable,
+  std::span<int8_t const> is_agg_intermediate,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -170,7 +170,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global
                                        key_set,
                                        h_agg_kinds,
                                        d_agg_kinds,
-                                       force_non_nullable,
+                                       is_agg_intermediate,
                                        stream,
                                        mr)
            : compute_aggs_sparse_output_gather(row_bitmask,
@@ -178,7 +178,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global
                                                key_set,
                                                h_agg_kinds,
                                                d_agg_kinds,
-                                               force_non_nullable,
+                                               is_agg_intermediate,
                                                stream,
                                                mr);
 }

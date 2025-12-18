@@ -102,10 +102,13 @@ std::tuple<table_view,
 extract_single_pass_aggs(host_span<aggregation_request const> requests,
                          rmm::cuda_stream_view stream)
 {
+  auto agg_kinds = cudf::detail::make_empty_host_vector<aggregation::Kind>(requests.size(), stream);
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<aggregation>> aggs;
-  std::vector<int8_t> force_non_nullable;
-  auto agg_kinds = cudf::detail::make_empty_host_vector<aggregation::Kind>(requests.size(), stream);
+  std::vector<int8_t> is_agg_intermediate;
+  columns.reserve(requests.size());
+  aggs.reserve(requests.size());
+  is_agg_intermediate.reserve(requests.size());
 
   bool has_compound_aggs = false;
   for (auto const& request : requests) {
@@ -130,10 +133,7 @@ extract_single_pass_aggs(host_span<aggregation_request const> requests,
       auto const is_intermediate = it == agg_kinds_map.end();
       agg_kinds_map[agg->kind] =
         is_intermediate ? aggregation_group::INTERMEDIATE : aggregation_group::INPUT_EXTRACTED;
-
-      // If the inserted aggregation is an intermediate aggregation, we can force its output to be
-      // non-nullable (by storing `1` value in the `force_non_nullable` vector).
-      force_non_nullable.push_back(static_cast<int8_t>(is_intermediate));
+      is_agg_intermediate.push_back(static_cast<int8_t>(is_intermediate));
 
       agg_kinds.push_back(agg->kind);
       aggs.push_back(std::move(agg));
@@ -159,7 +159,7 @@ extract_single_pass_aggs(host_span<aggregation_request const> requests,
   return {table_view(columns),
           std::move(agg_kinds),
           std::move(aggs),
-          std::move(force_non_nullable),
+          std::move(is_agg_intermediate),
           has_compound_aggs};
 }
 

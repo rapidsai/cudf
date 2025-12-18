@@ -17,9 +17,9 @@ namespace cudf::groupby::detail::hash {
 /**
  * @brief Extract single pass aggregations from the given aggregation requests.
  *
- * During extraction, compound aggregations will be replaced by their corresponding single pass
- * aggregations dependencies. For example, a MEAN aggregation will be replaced by a SUM and a
- * COUNT_VALID aggregation.
+ * During extraction, compound (i.e., multi-pass) aggregations will be replaced by their
+ * corresponding single pass aggregations dependencies. For example, a MEAN aggregation will be
+ * replaced by a SUM and a COUNT_VALID aggregation.
  *
  * For some single-pass aggregations, we also try to reduce overhead by forcing their results
  * columns to be non-nullable. For example, a SUM aggregation needed only as the intermediate result
@@ -33,9 +33,9 @@ namespace cudf::groupby::detail::hash {
  *         - A table_view containing the input values columns for the single-pass aggregations,
  *         - A vector of aggregation kinds corresponding to each of these values columns,
  *         - A vector of aggregation objects corresponding to each of these values columns,
- *         - A vector of binary values indicating if the corresponding result will be forced to be
- *           non-nullable, and
- *         - A boolean value indicating if there are any multi-pass (compound) aggregations.
+ *         - A vector of binary values indicating if the corresponding result will be used only
+ *           as temporary, intermediate result for computing other compound aggregations, and
+ *         - A boolean value indicating if there are any compound aggregations.
  */
 std::tuple<table_view,
            cudf::detail::host_vector<aggregation::Kind>,
