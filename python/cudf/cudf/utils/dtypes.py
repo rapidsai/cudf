@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any, TypeGuard
+from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 import numpy as np
 import pandas as pd
@@ -136,6 +136,9 @@ def replace_nested_all_null_arrays_with_null_array(
 
     # Post-order traversal: process children first, then parent
     if pa.types.is_struct(arrow_array.type):
+        # Narrow type for mypy
+        arrow_array = cast(pa.StructArray, arrow_array)
+
         # Check if the entire struct should be replaced FIRST
         # This prevents replacing individual struct fields
         if _is_all_null_at_level(arrow_array):
@@ -190,9 +193,9 @@ def replace_nested_all_null_arrays_with_null_array(
                 ]
             )
             # Use from_buffers to properly preserve null mask and metadata
-            buffers = arrow_array.buffers()[
-                :1
-            ]  # Only need validity buffer for structs
+            buffers = cast(
+                list[pa.Buffer], arrow_array.buffers()[:1]
+            )  # Only need validity buffer for structs
             return pa.StructArray.from_buffers(
                 new_struct_type,
                 len(arrow_array),
@@ -205,6 +208,9 @@ def replace_nested_all_null_arrays_with_null_array(
     elif pa.types.is_list(arrow_array.type) or pa.types.is_large_list(
         arrow_array.type
     ):
+        # Narrow type for mypy
+        arrow_array = cast(pa.ListArray | pa.LargeListArray, arrow_array)
+
         # Recursively process the values
         values = arrow_array.values
         new_values = replace_nested_all_null_arrays_with_null_array(values)
@@ -225,7 +231,7 @@ def replace_nested_all_null_arrays_with_null_array(
         if new_values is not values or has_non_nullable_field:
             # Use from_buffers to properly preserve null mask
             # For list arrays, we need validity buffer (0) and offsets buffer (1)
-            buffers = arrow_array.buffers()[:2]
+            buffers = cast(list[pa.Buffer], arrow_array.buffers()[:2])
             value_field = pa.field(
                 arrow_array.type.value_field.name,
                 new_values.type,
@@ -233,9 +239,9 @@ def replace_nested_all_null_arrays_with_null_array(
                 nullable=True,
             )
             if pa.types.is_large_list(arrow_array.type):
-                list_type = pa.large_list(value_field)
+                large_list_type = pa.large_list(value_field)
                 return pa.LargeListArray.from_buffers(
-                    list_type,
+                    large_list_type,
                     len(arrow_array),
                     buffers,
                     children=[new_values],
@@ -253,6 +259,9 @@ def replace_nested_all_null_arrays_with_null_array(
         return arrow_array
 
     elif pa.types.is_fixed_size_list(arrow_array.type):
+        # Narrow type for mypy
+        arrow_array = cast(pa.FixedSizeListArray, arrow_array)
+
         # Recursively process the values
         values = arrow_array.values
         new_values = replace_nested_all_null_arrays_with_null_array(values)
@@ -277,10 +286,14 @@ def replace_nested_all_null_arrays_with_null_array(
                 # Pandas always produces nullable types
                 nullable=True,
             )
-            list_type = pa.list_(value_field, arrow_array.type.list_size)
-            buffers = arrow_array.buffers()[:1]  # validity buffer only
+            fixed_size_list_type = pa.list_(
+                value_field, arrow_array.type.list_size
+            )
+            buffers = cast(
+                list[pa.Buffer], arrow_array.buffers()[:1]
+            )  # validity buffer only
             return pa.FixedSizeListArray.from_buffers(
-                list_type,
+                fixed_size_list_type,
                 len(arrow_array),
                 buffers,
                 children=[new_values],
@@ -289,6 +302,9 @@ def replace_nested_all_null_arrays_with_null_array(
         return arrow_array
 
     elif pa.types.is_map(arrow_array.type):
+        # Narrow type for mypy
+        arrow_array = cast(pa.MapArray, arrow_array)
+
         # Recursively process keys and items
         keys = arrow_array.keys
         items = arrow_array.items
@@ -307,28 +323,33 @@ def replace_nested_all_null_arrays_with_null_array(
 
         # Reconstruct map if keys or items changed (non-nullable checking is implicit through recursion)
         if new_keys is not keys or new_items is not items:
-            map_type = pa.map_(
+            # mypy has trouble with pyarrow's generic map types
+            map_type = pa.map_(  # type: ignore[call-overload]
                 new_keys.type,
                 new_items.type,
-                # Pandas always produces nullable types
                 keys_sorted=arrow_array.type.keys_sorted,
             )
             # Map arrays store a list of struct<key, item> internally
             # We need to reconstruct through the list representation
-            offsets = arrow_array.offsets
+            offsets = cast(pa.Int32Array, arrow_array.offsets)
             struct_array = pa.StructArray.from_arrays(
                 [new_keys, new_items], names=["key", "item"]
             )
             list_array = pa.ListArray.from_arrays(offsets, struct_array)
-            return pa.MapArray.from_arrays(
+            list_values = cast(pa.StructArray, list_array.values)
+            # mypy has trouble with pyarrow's generic map types
+            return pa.MapArray.from_arrays(  # type: ignore[call-overload]
                 list_array.offsets,
-                list_array.values.field("key"),
-                list_array.values.field("item"),
+                list_values.field("key"),
+                list_values.field("item"),
                 type=map_type,
             )
         return arrow_array
 
     elif pa.types.is_dictionary(arrow_array.type):
+        # Narrow type for mypy
+        arrow_array = cast(pa.DictionaryArray, arrow_array)
+
         # Recursively process the dictionary values
         dictionary = arrow_array.dictionary
         new_dictionary = replace_nested_all_null_arrays_with_null_array(
@@ -349,9 +370,10 @@ def replace_nested_all_null_arrays_with_null_array(
                 new_dictionary.type,
                 ordered=arrow_array.type.ordered,
             )
+            # DictionaryArray.from_arrays infers type from indices and dictionary
             return pa.DictionaryArray.from_arrays(
-                arrow_array.indices, new_dictionary, type=dict_type
-            )
+                arrow_array.indices, new_dictionary
+            ).cast(dict_type)
         return arrow_array
 
     elif pa.types.is_string(arrow_array.type) or pa.types.is_large_string(
