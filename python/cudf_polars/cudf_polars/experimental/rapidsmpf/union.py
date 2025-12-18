@@ -60,14 +60,23 @@ async def union_node(
         ch_out.data,
     ):
         # Merge and forward metadata.
-        total_count = 0
+        # Union loses partitioning/ordering info since sources may differ.
+        total_local_count = 0
+        total_global_count: int | None = None
         duplicated = True
         for ch_in in chs_in:
             metadata = await ch_in.recv_metadata(context)
-            total_count += metadata.count
+            total_local_count += metadata.local_count
+            if metadata.global_count is not None:
+                total_global_count = (total_global_count or 0) + metadata.global_count
             duplicated = duplicated and metadata.duplicated
         await ch_out.send_metadata(
-            context, Metadata(total_count, duplicated=duplicated)
+            context,
+            Metadata(
+                local_count=total_local_count,
+                global_count=total_global_count,
+                duplicated=duplicated,
+            ),
         )
 
         seq_num_offset = 0

@@ -91,15 +91,18 @@ async def broadcast_join_node(
             ch_right.recv_metadata(context),
         )
 
-        partitioned_on: tuple[str, ...] = ()
+        local_partitioned_on: tuple[str, ...] = ()
+        global_partitioned_on: tuple[str, ...] = ()
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
             large_ch = ch_left
             small_child = ir.children[1]
             large_child = ir.children[0]
-            chunk_count = left_metadata.count
-            partitioned_on = left_metadata.partitioned_on
+            local_count = left_metadata.local_count
+            global_count = left_metadata.global_count
+            local_partitioned_on = left_metadata.local_partitioned_on
+            global_partitioned_on = left_metadata.global_partitioned_on
             small_duplicated = right_metadata.duplicated
         else:
             # Broadcast left, stream right
@@ -107,15 +110,19 @@ async def broadcast_join_node(
             large_ch = ch_right
             small_child = ir.children[0]
             large_child = ir.children[1]
-            chunk_count = right_metadata.count
+            local_count = right_metadata.local_count
+            global_count = right_metadata.global_count
             small_duplicated = left_metadata.duplicated
             if ir.options[0] == "Right":
-                partitioned_on = right_metadata.partitioned_on
+                local_partitioned_on = right_metadata.local_partitioned_on
+                global_partitioned_on = right_metadata.global_partitioned_on
 
         # Send metadata.
         output_metadata = Metadata(
-            chunk_count,
-            partitioned_on=partitioned_on,
+            local_count=local_count,
+            global_count=global_count,
+            local_partitioned_on=local_partitioned_on,
+            global_partitioned_on=global_partitioned_on,
             duplicated=left_metadata.duplicated and right_metadata.duplicated,
         )
         await ch_out.send_metadata(context, output_metadata)

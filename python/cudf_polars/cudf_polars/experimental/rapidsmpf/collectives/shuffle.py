@@ -162,10 +162,11 @@ async def shuffle_node(
         # Receive and send updated metadata.
         _ = await ch_in.recv_metadata(context)
         column_names = list(ir.schema.keys())
-        partitioned_on = tuple(column_names[i] for i in columns_to_hash)
+        global_partitioned_on = tuple(column_names[i] for i in columns_to_hash)
         output_metadata = Metadata(
-            max(1, num_partitions // context.comm().nranks),
-            partitioned_on=partitioned_on,
+            local_count=max(1, num_partitions // context.comm().nranks),
+            global_count=num_partitions,
+            global_partitioned_on=global_partitioned_on,
         )
         await ch_out.send_metadata(context, output_metadata)
 

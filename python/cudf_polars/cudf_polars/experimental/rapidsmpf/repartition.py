@@ -69,7 +69,7 @@ async def concatenate_node(
     ):
         # Receive metadata.
         input_metadata = await ch_in.recv_metadata(context)
-        metadata = Metadata(output_count)
+        metadata = Metadata(local_count=output_count, global_count=output_count)
 
         # max_chunks corresponds to the number of chunks we can
         # concatenate together. If None, we must concatenate everything.
@@ -78,7 +78,7 @@ async def concatenate_node(
         max_chunks: int | None = None
         if output_count > 1:
             # Make sure max_chunks is at least 2.
-            max_chunks = max(2, math.ceil(input_metadata.count / output_count))
+            max_chunks = max(2, math.ceil(input_metadata.local_count / output_count))
 
         # Check if we need global communication.
         need_global_repartition = (

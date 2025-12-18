@@ -56,25 +56,89 @@ async def shutdown_on_error(
 
 
 class Metadata:
-    """Metadata payload for an individual ChannelPair."""
+    """
+    Metadata payload for an individual ChannelPair.
 
-    __slots__ = ("count", "duplicated", "partitioned_on")
-    count: int
-    """Chunk-count estimate."""
-    partitioned_on: tuple[str, ...]
-    """Partitioned-on columns."""
+    This class tracks both local (per-rank) and global (across all ranks)
+    properties of the data flowing through streaming channels.
+    """
+
+    __slots__ = (
+        "duplicated",
+        "global_count",
+        "global_ordered_on",
+        "global_partitioned_on",
+        "local_count",
+        "local_ordered_on",
+        "local_partitioned_on",
+    )
+
+    # Chunk counts
+    local_count: int
+    """Local chunk-count estimate for the current rank."""
+    global_count: int | None
+    """
+    Global chunk-count estimate across all ranks.
+
+    Known after:
+    - A global shuffle operation (defines output partition count)
+    - An AllReduce collective (not yet available)
+    - Initial data scan (if source provides global metadata)
+
+    None when unknown (e.g., local processing before global communication).
+    """
+
+    # Partitioning (columns data is hash-partitioned on)
+    local_partitioned_on: tuple[str, ...]
+    """
+    Columns the data is partitioned on locally (within this rank).
+
+    When set, chunks on this rank are hash-partitioned by these columns,
+    meaning rows with the same key values are in the same chunk.
+    """
+    global_partitioned_on: tuple[str, ...]
+    """
+    Columns the data is partitioned on globally (across all ranks).
+
+    When set, rows with the same key values are on the same rank.
+    This is typically set after a global shuffle operation.
+    """
+
+    # Ordering (columns data is sorted on) - placeholders for future use
+    local_ordered_on: tuple[str, ...]
+    """
+    Columns the data is sorted on locally (each chunk is sorted).
+
+    Placeholder for sorting-based workflows.
+    """
+    global_ordered_on: tuple[str, ...]
+    """
+    Columns the data is sorted on globally (across all chunks/ranks).
+
+    Placeholder for sorting-based workflows (e.g., merge sort).
+    """
+
+    # Duplication
     duplicated: bool
-    """Whether the data is duplicated on all workers."""
+    """Whether the data is duplicated (identical) on all workers."""
 
     def __init__(
         self,
-        count: int,
+        local_count: int,
         *,
-        partitioned_on: tuple[str, ...] = (),
+        global_count: int | None = None,
+        local_partitioned_on: tuple[str, ...] = (),
+        global_partitioned_on: tuple[str, ...] = (),
+        local_ordered_on: tuple[str, ...] = (),
+        global_ordered_on: tuple[str, ...] = (),
         duplicated: bool = False,
     ):
-        self.count = count
-        self.partitioned_on = partitioned_on
+        self.local_count = local_count
+        self.global_count = global_count
+        self.local_partitioned_on = local_partitioned_on
+        self.global_partitioned_on = global_partitioned_on
+        self.local_ordered_on = local_ordered_on
+        self.global_ordered_on = global_ordered_on
         self.duplicated = duplicated
 
 
