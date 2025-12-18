@@ -627,7 +627,8 @@ def _(
     ir: Scan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
+    executor = rec.state["config_options"].executor
+    assert executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
     )
     parquet_options = config_options.parquet_options
@@ -679,9 +680,6 @@ def _(
     else:
         # Fall back to scan_node (predicate not convertible, or other constraint)
         parquet_options = dataclasses.replace(parquet_options, chunked=False)
-        # Use target_partition_size as the estimated chunk size
-        executor = rec.state["config_options"].executor
-        estimated_chunk_bytes = getattr(executor, "target_partition_size", 1 << 28)
 
         nodes[ir] = [
             scan_node(
@@ -692,7 +690,7 @@ def _(
                 num_producers=num_producers,
                 plan=plan,
                 parquet_options=parquet_options,
-                estimated_chunk_bytes=estimated_chunk_bytes,
+                estimated_chunk_bytes=executor.target_partition_size,
             )
         ]
     return nodes, channels
