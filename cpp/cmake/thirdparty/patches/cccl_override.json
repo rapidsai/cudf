@@ -1,0 +1,16 @@
+{
+  "packages": {
+    "CCCL": {
+      "version": "3.0.2",
+      "git_url": "https://github.com/NVIDIA/cccl.git",
+      "git_tag": "9c40ed11560fa8ffd21abe4cdc8dc3ce875e48e3",
+      "patches": [
+        {
+          "file": "${current_json_dir}/cccl_jitify_compatibility.patch",
+          "issue": "Fix CCCL/Jitify compatibility issues with stdint types and char limits",
+          "fixed_in": ""
+        }
+      ]
+    }
+  }
+}

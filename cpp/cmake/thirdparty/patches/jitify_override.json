@@ -1,0 +1,16 @@
+{
+  "packages": {
+    "jitify": {
+      "version": "2.0.0",
+      "git_url": "https://github.com/NVIDIA/jitify.git",
+      "git_tag": "44e978b21fc8bdb6b2d7d8d179523c8350db72e5",
+      "patches": [
+        {
+          "file": "${current_json_dir}/jitify_char_limits.patch",
+          "issue": "Fix char limits narrowing conversion in numeric_limits template",
+          "fixed_in": ""
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 14 Sep 2025 00:00:00 +0000
+Subject: [PATCH] Fix char limits narrowing conversion in numeric_limits
+
+This patch fixes the narrowing conversion error when instantiating
+numeric_limits<char> by adding explicit casts to CHAR_MIN and CHAR_MAX.
+
+diff --git a/jitify2.hpp b/jitify2.hpp
+index 1234567..2345678 100644
+--- a/jitify2.hpp
++++ b/jitify2.hpp
+@@ -6080,7 +6080,7 @@ struct numeric_limits<bool>
+     : public __jitify_detail::IntegerLimits<bool, false, true, 1> {};
+ template <>
+ struct numeric_limits<char>
+-    : public __jitify_detail::IntegerLimits<char, CHAR_MIN, CHAR_MAX> {};
++    : public __jitify_detail::IntegerLimits<char, (char)CHAR_MIN, (char)CHAR_MAX> {};
+ template <>
+ struct numeric_limits<signed char>
+     : public __jitify_detail::IntegerLimits<signed char, SCHAR_MIN, SCHAR_MAX> {
+--
+2.34.1

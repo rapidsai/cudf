@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 14 Sep 2025 00:00:00 +0000
+Subject: [PATCH] Fix CCCL/Jitify compatibility for NVRTC
+
+This patch fixes type redeclaration conflicts between CCCL and Jitify
+when compiling with NVRTC by:
+1. Adding guards to prevent duplicate type definitions when stdint.h is included
+2. Fixing CHAR_MIN/MAX with explicit casts to avoid narrowing conversions
+
+diff --git a/libcudacxx/include/cuda/std/cstdint b/libcudacxx/include/cuda/std/cstdint
+index ae444b9bd..3ad5e955b 100644
+--- a/libcudacxx/include/cuda/std/cstdint
++++ b/libcudacxx/include/cuda/std/cstdint
+@@ -30,6 +30,9 @@ _CCCL_PUSH_MACROS
+ #else // ^^^ !_CCCL_COMPILER(NVRTC) ^^^ / vvv _CCCL_COMPILER(NVRTC) vvv
+ #  include <cuda/std/climits>
+
++// Only define types if stdint.h hasn't been included
++#ifndef _STDINT_H
++
+ using int8_t   = signed char;
+ using int16_t  = signed short;
+ using int32_t  = signed int;
+@@ -63,6 +66,11 @@ using uintptr_t = uint64_t;
+ using intmax_t  = int64_t;
+ using uintmax_t = uint64_t;
+
++#endif // _STDINT_H
++
++// Only define macros if stdint.h hasn't been included
++#ifndef _STDINT_H
++
+ #  define INT8_MIN   SCHAR_MIN
+ #  define INT16_MIN  SHRT_MIN
+ #  define INT32_MIN  INT_MIN
+@@ -126,6 +134,8 @@ using uintmax_t = uint64_t;
+
+ #  define INTMAX_C(X)  ((::intmax_t)(X))
+ #  define UINTMAX_C(X) ((::uintmax_t)(X))
++
++#endif // _STDINT_H
+ #endif // ^^^ _CCCL_COMPILER(NVRTC)
+
+ _LIBCUDACXX_BEGIN_NAMESPACE_STD
+diff --git a/libcudacxx/include/cuda/std/climits b/libcudacxx/include/cuda/std/climits
+index a605f2dc5..085205322 100644
+--- a/libcudacxx/include/cuda/std/climits
++++ b/libcudacxx/include/cuda/std/climits
+@@ -34,10 +34,10 @@ _CCCL_PUSH_MACROS
+ #  define __CHAR_UNSIGNED__ ('\xff' > 0) // CURSED
+ #  if __CHAR_UNSIGNED__
+ #    define CHAR_MIN 0
+-#    define CHAR_MAX UCHAR_MAX
++#    define CHAR_MAX ((char)UCHAR_MAX)
+ #  else
+-#    define CHAR_MIN SCHAR_MIN
+-#    define CHAR_MAX SCHAR_MAX
++#    define CHAR_MIN ((char)SCHAR_MIN)
++#    define CHAR_MAX ((char)SCHAR_MAX)
+ #  endif
+ #  define SHRT_MIN  (-SHRT_MAX - 1)
+ #  define SHRT_MAX  0x7fff
+--
+2.34.1

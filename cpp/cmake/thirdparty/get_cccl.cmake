@@ -14,6 +14,9 @@
 
 # Use CPM to find or clone CCCL
 function(find_and_configure_cccl)
+  include(${rapids-cmake-dir}/cpm/package_override.cmake)
+  rapids_cpm_package_override("${CMAKE_CURRENT_LIST_DIR}/patches/cccl_override.json")
+
   include(${rapids-cmake-dir}/cpm/cccl.cmake)
   rapids_cpm_cccl(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 endfunction()
