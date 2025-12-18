@@ -56,7 +56,7 @@ def binary_classification_data():
 
 
 def test_linear_regression():
-    lr = LinearRegression(fit_intercept=True, normalize=False, algorithm="eig")
+    lr = LinearRegression(fit_intercept=True, algorithm="eig")
     X = pd.DataFrame()
     X["col1"] = np.array([1, 1, 2, 2], dtype=np.float32)
     X["col2"] = np.array([1, 2, 2, 3], dtype=np.float32)

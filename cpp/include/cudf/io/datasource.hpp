@@ -402,6 +402,21 @@ class datasource {
   };
 };
 
+/**
+ * @brief Constructs datasources from dataset source information
+ *
+ * @ingroup io_datasources
+ *
+ * @param info Dataset source information
+ * @param offset Starting byte offset from which data will be read (default zero)
+ * @param max_size_estimate Upper estimate of the data range that will be read (default zero,
+ * which means the entire file after `offset`)
+ * @return Constructed vector of datasource objects
+ */
+std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info const& info,
+                                                                    size_t offset            = 0,
+                                                                    size_t max_size_estimate = 0);
+
 /** @} */  // end of group
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf
