@@ -5,7 +5,6 @@ from cudf.core.buffer.buffer import (
     Buffer,
     BufferOwner,
 )
-from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
 from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
 from cudf.core.buffer.utils import (
     acquire_spill_lock,
