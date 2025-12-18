@@ -136,6 +136,19 @@ class DecimalBaseColumn(NumericalBaseColumn):
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
 
+    def to_arrow(self) -> pa.Array:
+        arrow_array = super().to_arrow()
+        # Support for this conversion can be removed when we drop support for
+        # pyarrow<19, but until then we must convert Decimal32 and Decimal64
+        # columns to Decimal128
+        if isinstance(self.dtype, Decimal32Dtype):
+            arrow_type = pa.decimal128(self.dtype.precision, self.dtype.scale)
+            return arrow_array.cast(arrow_type)
+        elif isinstance(self.dtype, Decimal64Dtype):
+            arrow_type = pa.decimal128(self.dtype.precision, self.dtype.scale)
+            return arrow_array.cast(arrow_type)
+        return arrow_array
+
     def element_indexing(self, index: int) -> Decimal | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
