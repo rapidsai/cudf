@@ -267,13 +267,21 @@ class StringColumn(ColumnBase, Scannable):
           4
         ]
         """
+        ret = super().to_arrow()
         # Empty pandas arrays convert to null arrays with pa.Array.from_pandas
-        if self.null_count == len(self):
-            return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer(b"")]
-            )
-        else:
-            return super().to_arrow()
+        from cudf.utils.dtypes import (
+            replace_nested_all_null_arrays_with_null_array,
+        )
+
+        # breakpoint()
+        ret = replace_nested_all_null_arrays_with_null_array(ret)
+        return ret
+        # if self.null_count == len(self):
+        #     return pa.NullArray.from_buffers(
+        #         pa.null(), len(self), [pa.py_buffer(b"")]
+        #     )
+        # else:
+        #     return super().to_arrow()
 
     def sum(
         self,

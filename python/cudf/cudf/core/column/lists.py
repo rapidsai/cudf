@@ -180,8 +180,14 @@ class ListColumn(ColumnBase):
         ret = self.to_pylibcudf(mode="read").to_arrow(
             metadata=dtype_to_metadata(self.dtype)
         )
-        if self.leaves().isnull().all():
-            return pa.array(ret.tolist())
+        # if self.leaves().isnull().all():
+        #     return pa.array(ret.tolist())
+        from cudf.utils.dtypes import (
+            replace_nested_all_null_arrays_with_null_array,
+        )
+
+        # breakpoint()
+        ret = replace_nested_all_null_arrays_with_null_array(ret)
         return ret
 
     # def to_arrow(self) -> pa.Array:

@@ -119,9 +119,16 @@ class StructColumn(ColumnBase):
         # have to match the pandas convention of using a null array instead of a string
         # type there.
         # Cast to the correct StructType to preserve field names
-        return self.to_pylibcudf(mode="read").to_arrow(
+        ret = self.to_pylibcudf(mode="read").to_arrow(
             metadata=dtype_to_metadata(self.dtype)
         )
+        from cudf.utils.dtypes import (
+            replace_nested_all_null_arrays_with_null_array,
+        )
+
+        # breakpoint()
+        ret = replace_nested_all_null_arrays_with_null_array(ret)
+        return ret
 
     # def to_arrow(self) -> pa.Array:
     #     children = [child.to_arrow() for child in self.children]

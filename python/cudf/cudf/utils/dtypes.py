@@ -82,6 +82,272 @@ BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
+def replace_nested_all_null_arrays_with_null_array(
+    arrow_array: pa.Array,
+) -> pa.Array:
+    """
+    Recursively replace all-null arrays with null arrays at the highest nesting level.
+
+    This function performs a post-order traversal of a PyArrow array structure,
+    replacing any arrays where all values are null (including nested nulls) with
+    a pa.NullArray of the appropriate length. The replacement happens at the
+    highest level of nesting where all values are null.
+
+    Parameters
+    ----------
+    arrow_array : pa.Array
+        The PyArrow array to process
+
+    Returns
+    -------
+    pa.Array
+        The array with all-null structures replaced by null arrays
+
+    Examples
+    --------
+    >>> import pyarrow as pa
+    >>> # All-null list array gets replaced with null array
+    >>> arr = pa.array([[None, None], [None]], type=pa.list_(pa.int64()))
+    >>> result = replace_nested_all_null_arrays_with_null_array(arr)
+    >>> isinstance(result, pa.NullArray)
+    True
+
+    >>> # Struct with one all-null field gets that field replaced
+    >>> arr = pa.StructArray.from_arrays(
+    ...     [pa.array([None, None], type=pa.int64()), pa.array([1, 2])],
+    ...     names=['a', 'b']
+    ... )
+    >>> result = replace_nested_all_null_arrays_with_null_array(arr)
+    >>> isinstance(result.field('a'), pa.NullArray)
+    True
+    >>> isinstance(result.field('b'), pa.NullArray)
+    False
+    """
+
+    def _is_all_null_at_level(arr: pa.Array) -> bool:
+        """
+        Check if an array is all null at THIS level only.
+
+        Only checks the null count at this level, not nested values.
+        A struct with null field values ({"a": None}) is different from a null struct.
+        A list containing nulls ([None, None]) is different from a null list.
+        """
+        return arr.null_count == len(arr)
+
+    # Post-order traversal: process children first, then parent
+    if pa.types.is_struct(arrow_array.type):
+        # Recursively process each field
+        new_fields = []
+        any_changed = False
+        has_non_nullable_field = False
+        for i in range(arrow_array.type.num_fields):
+            field_array = arrow_array.field(i)
+            new_field_array = replace_nested_all_null_arrays_with_null_array(
+                field_array
+            )
+            new_fields.append(new_field_array)
+            if new_field_array is not field_array:
+                any_changed = True
+            # Check if any field is marked as non-nullable (unless it's null type)
+            if not arrow_array.type[i].nullable and not pa.types.is_null(
+                arrow_array.type[i].type
+            ):
+                has_non_nullable_field = True
+
+        # Check if the entire struct should be replaced
+        if _is_all_null_at_level(arrow_array):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(arrow_array), [pa.py_buffer(b"")]
+            )
+
+        # Reconstruct struct if any field changed or if we have non-nullable fields
+        if any_changed or has_non_nullable_field:
+            # Create a new struct type with updated field types (preserving field names and nullability)
+            new_struct_type = pa.struct(
+                [
+                    pa.field(
+                        arrow_array.type[i].name,
+                        new_fields[i].type,
+                        # Pandas always produces nullable arrays
+                        nullable=True,
+                    )
+                    for i in range(len(new_fields))
+                ]
+            )
+            # Use from_buffers to properly preserve null mask and metadata
+            buffers = arrow_array.buffers()[
+                :1
+            ]  # Only need validity buffer for structs
+            return pa.StructArray.from_buffers(
+                new_struct_type,
+                len(arrow_array),
+                buffers,
+                children=new_fields,
+                null_count=arrow_array.null_count,
+            )
+        return arrow_array
+
+    elif pa.types.is_list(arrow_array.type) or pa.types.is_large_list(
+        arrow_array.type
+    ):
+        # Recursively process the values
+        values = arrow_array.values
+        new_values = replace_nested_all_null_arrays_with_null_array(values)
+
+        # Check if the entire list array should be replaced
+        if _is_all_null_at_level(arrow_array):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(arrow_array), [pa.py_buffer(b"")]
+            )
+
+        # Check if the value field is non-nullable (unless it's null type)
+        has_non_nullable_field = (
+            not arrow_array.type.value_field.nullable
+            and not pa.types.is_null(arrow_array.type.value_field.type)
+        )
+
+        # Reconstruct list if values changed or if value field is non-nullable
+        if new_values is not values or has_non_nullable_field:
+            # Use from_buffers to properly preserve null mask
+            # For list arrays, we need validity buffer (0) and offsets buffer (1)
+            buffers = arrow_array.buffers()[:2]
+            value_field = pa.field(
+                arrow_array.type.value_field.name,
+                new_values.type,
+                # Pandas always produces nullable types
+                nullable=True,
+            )
+            if pa.types.is_large_list(arrow_array.type):
+                list_type = pa.large_list(value_field)
+                return pa.LargeListArray.from_buffers(
+                    list_type,
+                    len(arrow_array),
+                    buffers,
+                    children=[new_values],
+                    null_count=arrow_array.null_count,
+                )
+            else:
+                list_type = pa.list_(value_field)
+                return pa.ListArray.from_buffers(
+                    list_type,
+                    len(arrow_array),
+                    buffers,
+                    children=[new_values],
+                    null_count=arrow_array.null_count,
+                )
+        return arrow_array
+
+    elif pa.types.is_fixed_size_list(arrow_array.type):
+        # Recursively process the values
+        values = arrow_array.values
+        new_values = replace_nested_all_null_arrays_with_null_array(values)
+
+        # Check if the entire array should be replaced
+        if _is_all_null_at_level(arrow_array):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(arrow_array), [pa.py_buffer(b"")]
+            )
+
+        # Check if the value field is non-nullable (unless it's null type)
+        has_non_nullable_field = (
+            not arrow_array.type.value_field.nullable
+            and not pa.types.is_null(arrow_array.type.value_field.type)
+        )
+
+        # Reconstruct fixed size list if values changed or if value field is non-nullable
+        if new_values is not values or has_non_nullable_field:
+            value_field = pa.field(
+                arrow_array.type.value_field.name,
+                new_values.type,
+                # Pandas always produces nullable types
+                nullable=True,
+            )
+            list_type = pa.list_(value_field, arrow_array.type.list_size)
+            buffers = arrow_array.buffers()[:1]  # validity buffer only
+            return pa.FixedSizeListArray.from_buffers(
+                list_type,
+                len(arrow_array),
+                buffers,
+                children=[new_values],
+                null_count=arrow_array.null_count,
+            )
+        return arrow_array
+
+    elif pa.types.is_map(arrow_array.type):
+        # Recursively process keys and items
+        keys = arrow_array.keys
+        items = arrow_array.items
+        new_keys = replace_nested_all_null_arrays_with_null_array(keys)
+        new_items = replace_nested_all_null_arrays_with_null_array(items)
+
+        # Check if the entire array should be replaced
+        if _is_all_null_at_level(arrow_array):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(arrow_array), [pa.py_buffer(b"")]
+            )
+
+        # Map types in PyArrow always have nullable keys and items at the type level,
+        # but we check the underlying struct fields for non-nullable markers
+        # Note: arrow_array.type is the map type, and maps store struct<key, item> internally
+
+        # Reconstruct map if keys or items changed (non-nullable checking is implicit through recursion)
+        if new_keys is not keys or new_items is not items:
+            map_type = pa.map_(
+                new_keys.type,
+                new_items.type,
+                # Pandas always produces nullable types
+                keys_sorted=arrow_array.type.keys_sorted,
+            )
+            # Map arrays store a list of struct<key, item> internally
+            # We need to reconstruct through the list representation
+            offsets = arrow_array.offsets
+            struct_array = pa.StructArray.from_arrays(
+                [new_keys, new_items], names=["key", "item"]
+            )
+            list_array = pa.ListArray.from_arrays(offsets, struct_array)
+            return pa.MapArray.from_arrays(
+                list_array.offsets,
+                list_array.values.field("key"),
+                list_array.values.field("item"),
+                type=map_type,
+            )
+        return arrow_array
+
+    elif pa.types.is_dictionary(arrow_array.type):
+        # Recursively process the dictionary values
+        dictionary = arrow_array.dictionary
+        new_dictionary = replace_nested_all_null_arrays_with_null_array(
+            dictionary
+        )
+
+        # Check if the entire array should be replaced
+        if _is_all_null_at_level(arrow_array):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(arrow_array), [pa.py_buffer(b"")]
+            )
+
+        # Reconstruct dictionary if values changed
+        if new_dictionary is not dictionary:
+            # Note: dictionary values themselves are always nullable in pandas
+            dict_type = pa.dictionary(
+                arrow_array.indices.type,
+                new_dictionary.type,
+                ordered=arrow_array.type.ordered,
+            )
+            return pa.DictionaryArray.from_arrays(
+                arrow_array.indices, new_dictionary, type=dict_type
+            )
+        return arrow_array
+
+    else:
+        # For primitives and other types, check if all null
+        if arrow_array.null_count == len(arrow_array):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(arrow_array), [pa.py_buffer(b"")]
+            )
+        return arrow_array
+
+
 def dtype_to_metadata(dtype):
     cm = plc.interop.ColumnMetadata()
     if isinstance(dtype, cudf.core.dtypes.StructDtype):
