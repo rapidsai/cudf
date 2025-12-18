@@ -20,6 +20,7 @@ from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
+    dtype_to_metadata,
     get_dtype_of_same_kind,
     is_dtype_obj_list,
 )
@@ -176,26 +177,34 @@ class ListColumn(ColumnBase):
         return cast(NumericalColumn, self.children[0])
 
     def to_arrow(self) -> pa.Array:
-        offsets = self.offsets.to_arrow()
-        elements = (
-            pa.nulls(len(self.elements))
-            if len(self.elements) == self.elements.null_count
-            else self.elements.to_arrow()
+        ret = self.to_pylibcudf(mode="read").to_arrow(
+            metadata=dtype_to_metadata(self.dtype)
         )
-        pa_type = pa.list_(elements.type)
+        if self.leaves().isnull().all():
+            return pa.array(ret.tolist())
+        return ret
 
-        if self.nullable:
-            nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
-            buffers = [nbuf, offsets.buffers()[1]]
-        else:
-            buffers = list(offsets.buffers())
-        return pa.ListArray.from_buffers(
-            pa_type,
-            len(self),
-            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
-            buffers,  # type: ignore[arg-type]
-            children=[elements],
-        )
+    # def to_arrow(self) -> pa.Array:
+    #     offsets = self.offsets.to_arrow()
+    #     elements = (
+    #         pa.nulls(len(self.elements))
+    #         if len(self.elements) == self.elements.null_count
+    #         else self.elements.to_arrow()
+    #     )
+    #     pa_type = pa.list_(elements.type)
+    #
+    #     if self.nullable:
+    #         nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
+    #         buffers = [nbuf, offsets.buffers()[1]]
+    #     else:
+    #         buffers = list(offsets.buffers())
+    #     return pa.ListArray.from_buffers(
+    #         pa_type,
+    #         len(self),
+    #         # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
+    #         buffers,  # type: ignore[arg-type]
+    #         children=[elements],
+    #     )
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:

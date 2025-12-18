@@ -82,6 +82,23 @@ BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
+def dtype_to_metadata(dtype):
+    cm = plc.interop.ColumnMetadata()
+    if isinstance(dtype, cudf.core.dtypes.StructDtype):
+        for name, dtype in dtype.fields.items():
+            cm.children_meta.append(dtype_to_metadata(dtype))
+            cm.children_meta[-1].name = name
+    elif isinstance(dtype, cudf.core.dtypes.ListDtype):
+        # Offsets column
+        cm.children_meta.append(plc.interop.ColumnMetadata())
+        # Elements column
+        cm.children_meta.append(dtype_to_metadata(dtype.element_type))
+    elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+        cm.precision = dtype.precision
+    # TODO: Support timezone metadata
+    return cm
+
+
 def _find_common_type_decimal(dtypes: Iterable[DecimalDtype]) -> DecimalDtype:
     # Find the largest scale and the largest difference between
     # precision and scale of the columns to be concatenated
