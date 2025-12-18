@@ -105,7 +105,8 @@ async def default_node_single(
 
             input_bytes = chunk.data_alloc_size(MemoryType.DEVICE)
             with opaque_reservation(context, input_bytes):
-                df = ir.do_evaluate(
+                df = await asyncio.to_thread(
+                    ir.do_evaluate,
                     *ir._non_child_args,
                     DataFrame.from_table(
                         chunk.table_view(),
@@ -232,7 +233,8 @@ async def default_node_multi(
                 for chunk in cast(list[TableChunk], ready_chunks)
             )
             with opaque_reservation(context, input_bytes):
-                df = ir.do_evaluate(
+                df = await asyncio.to_thread(
+                    ir.do_evaluate,
                     *ir._non_child_args,
                     *dfs,
                     context=ir_context,

@@ -339,7 +339,8 @@ async def read_chunk(
         with block spilling to avoid thrashing.
     """
     with opaque_reservation(context, estimated_chunk_bytes):
-        df = scan.do_evaluate(
+        df = await asyncio.to_thread(
+            scan.do_evaluate,
             *scan._non_child_args,
             context=ir_context,
         )
