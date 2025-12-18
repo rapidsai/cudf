@@ -53,10 +53,6 @@ class rmm_host_allocator<void> {
   };
 };
 
-template <class DesiredProperty, class... Properties>
-inline constexpr bool contains_property =
-  (cuda::std::is_same_v<DesiredProperty, Properties> || ... || false);
-
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c `cudf::host_async_resource_ref` for allocation.
  *
@@ -102,11 +98,12 @@ class rmm_host_allocator {
 #ifdef __CUDACC__
 #pragma nv_exec_check_disable
 #endif
-  template <class... Properties>
-  rmm_host_allocator(async_host_resource_ref<Properties...> _mr, rmm::cuda_stream_view _stream)
+  template <typename ResourceType>
+  rmm_host_allocator(ResourceType _mr, rmm::cuda_stream_view _stream)
     : mr(_mr),
       stream(_stream),
-      _is_device_accessible{contains_property<cuda::mr::device_accessible, Properties...>}
+      _is_device_accessible{
+        cuda::mr::synchronous_resource_with<ResourceType, cuda::mr::device_accessible>}
   {
   }
 
