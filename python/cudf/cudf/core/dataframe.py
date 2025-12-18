@@ -6056,36 +6056,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def interpolate(
-        self,
-        method="linear",
-        axis=0,
-        limit=None,
-        inplace: bool = False,
-        limit_direction=None,
-        limit_area=None,
-        downcast=None,
-        **kwargs,
-    ):
-        if all(dt == CUDF_STRING_DTYPE for _, dt in self._dtypes):
-            raise TypeError(
-                "Cannot interpolate with all object-dtype "
-                "columns in the DataFrame. Try setting at "
-                "least one column to a numeric dtype."
-            )
-
-        return super().interpolate(
-            method=method,
-            axis=axis,
-            limit=limit,
-            inplace=inplace,
-            limit_direction=limit_direction,
-            limit_area=limit_area,
-            downcast=downcast,
-            **kwargs,
-        )
-
-    @_performance_tracking
     def quantile(
         self,
         q=0.5,

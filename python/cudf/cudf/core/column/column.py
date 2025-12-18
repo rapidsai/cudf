@@ -1568,12 +1568,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return 0
 
     def interpolate(self, index: Index) -> ColumnBase:
+        if self.dtype == CUDF_STRING_DTYPE:
+            # TODO: Should raise for other types?
+            raise TypeError(
+                f"Cannot interpolate with column of dtype {self.dtype}"
+            )
+        if self.nullable:
+            col = self.astype(np.dtype(np.float64)).fillna(np.nan)
+        else:
+            col = self
+
         # figure out where the nans are
         mask = self.isnull()
 
         # trivial cases, all nan or no nans
         if not mask.any() or mask.all():
-            return self.copy()
+            return col.copy()
 
         from cudf.core.index import RangeIndex
 
@@ -1583,7 +1593,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             known_x = cp.flatnonzero(valid_locs.values)
         else:
             known_x = index._column.apply_boolean_mask(valid_locs).values
-        known_y = self.apply_boolean_mask(valid_locs).values
+        known_y = col.apply_boolean_mask(valid_locs).values
 
         result = cp.interp(index.to_cupy(), known_x, known_y)
 
