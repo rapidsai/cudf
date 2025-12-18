@@ -1964,13 +1964,13 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def interpolate(
         self,
-        method="linear",
-        axis=0,
-        limit=None,
+        *,
+        method: str = "linear",
+        axis: Axis = 0,
+        limit: int | None = None,
         inplace: bool = False,
-        limit_direction=None,
-        limit_area=None,
-        downcast=None,
+        limit_direction: Literal["forward", "backward", "both"] | None = None,
+        limit_area: Literal["inside", "outside"] | None = None,
         **kwargs,
     ):
         """
@@ -1998,23 +1998,7 @@ class IndexedFrame(Frame):
             some or all ``NaN`` values
 
         """
-        if method in {"pad", "ffill"} and limit_direction != "forward":
-            raise ValueError(
-                f"`limit_direction` must be 'forward' for method `{method}`"
-            )
-        if method in {"backfill", "bfill"} and limit_direction != "backward":
-            raise ValueError(
-                f"`limit_direction` must be 'backward' for method `{method}`"
-            )
-
-        if method.lower() in {"ffill", "bfill", "pad", "backfill"}:
-            warnings.warn(
-                f"{type(self).__name__}.interpolate with method={method} is "
-                "deprecated and will raise in a future version. "
-                "Use obj.ffill() or obj.bfill() instead.",
-                FutureWarning,
-            )
-        elif method not in {"linear", "values", "index"}:
+        if method not in {"linear", "values", "index"}:
             raise ValueError(f"Interpolation method `{method}` not found")
 
         if not isinstance(inplace, bool):
@@ -2022,17 +2006,14 @@ class IndexedFrame(Frame):
         elif inplace is True:
             raise NotImplementedError("inplace is not supported")
 
-        data = self
-
         if limit is not None:
             raise NotImplementedError("limit is not supported")
         if limit_direction is not None:
             raise NotImplementedError("limit_direction is not supported")
         if limit_area is not None:
             raise NotImplementedError("limit_area is not supported")
-        if downcast is not None:
-            raise NotImplementedError("downcast is not supported")
 
+        data = self
         if not isinstance(data.index, cudf.RangeIndex):
             perm_sort = data.index.argsort()
             data = data._gather(
@@ -2047,21 +2028,11 @@ class IndexedFrame(Frame):
             interp_index = RangeIndex(self._num_rows)
         else:
             interp_index = data.index
-        columns = []
-        for col in data._columns:
-            if col.dtype == CUDF_STRING_DTYPE:
-                warnings.warn(
-                    f"{type(self).__name__}.interpolate with object dtype is "
-                    "deprecated and will raise in a future version.",
-                    FutureWarning,
-                )
-            if col.nullable:
-                col = col.astype(np.dtype(np.float64)).fillna(np.nan)
-
-            columns.append(col.interpolate(index=interp_index))
 
         result = self._from_data_like_self(
-            self._data._from_columns_like_self(columns)
+            self._data._from_columns_like_self(
+                [col.interpolate(index=interp_index) for col in data._columns]
+            )
         )
         result.index = data.index
 
