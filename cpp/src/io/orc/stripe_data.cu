@@ -1504,6 +1504,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       } else {
         row_plus1 = 0;
       }
+      __syncthreads();
       if (t == nrows - 1) { s->u.rowdec.nz_count = min(nz_count, s->top.data.max_vals); }
       __syncthreads();
 
@@ -1514,7 +1515,6 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       nz_pos   = (valid) ? nz_count : 0;
       if (t == 0) { s->top.data.nrows = last_row; }
       if (valid && nz_pos - 1 < s->u.rowdec.nz_count) { s->u.rowdec.row[nz_pos - 1] = row_plus1; }
-      __syncthreads();
     } else {
       // All values are valid
       nrows = min(nrows, s->top.data.max_vals - s->u.rowdec.nz_count);
@@ -1524,8 +1524,8 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
         s->top.data.nrows += nrows;
         s->u.rowdec.nz_count += nrows;
       }
-      __syncthreads();
     }
+    __syncthreads();
   }
 }
 

@@ -21,7 +21,6 @@
 
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/sequence.h>
 
 #include <numeric>

@@ -123,10 +123,7 @@ class StringColumn(ColumnBase, Scannable):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: np.dtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if (
@@ -147,10 +144,7 @@ class StringColumn(ColumnBase, Scannable):
 
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
 

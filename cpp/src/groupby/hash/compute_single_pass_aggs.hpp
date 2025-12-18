@@ -28,19 +28,6 @@ std::pair<bool, size_type> is_shared_memory_compatible(host_span<aggregation::Ki
                                                        size_type grid_size);
 
 /**
- * @brief Identify thread blocks that cannot be processed using shared memory kernels and need to
- *        fallback to use the global memory aggregation code path.
- *
- * @param grid_size The CUDA grid size to be used for launching the aggregation kernels
- * @param block_cardinality An array containing the cardinality of each thread block
- * @param stream The CUDA stream to use for device memory operations and kernel launches
- * @return A pair consisting of the number of thread blocks that need to fallback to global memory
- *         aggregation code path, and an array containing the indices of these fallback blocks
- */
-std::pair<size_type, rmm::device_uvector<size_type>> find_fallback_blocks(
-  size_type grid_size, size_type const* block_cardinality, rmm::cuda_stream_view stream);
-
-/**
  * @brief Computes all aggregations from `requests` that can run only a single pass over the data
  *        and stores the results in `cache`.
  *
