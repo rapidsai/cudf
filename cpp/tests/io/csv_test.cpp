@@ -2677,14 +2677,13 @@ TEST_F(CsvReaderTest, DoubleQuotesContinuous)
   EXPECT_EQ(result_view.num_rows(), 6);
 
   // Expected: all 6 lines should be read correctly
-  auto const expected = cudf::test::strings_column_wrapper({
-    R"("packageName":"test","type":"test","url_scheme":false,"referer":"",test)",
-    R"(Below line will be empty)",
-    R"(test)",
-    R"(test)",
-    R"(Until this line with another quote, "test=test" "test")",
-    R"(This line will be shown)"
-  });
+  auto const expected = cudf::test::strings_column_wrapper(
+    {R"("packageName":"test","type":"test","url_scheme":false,"referer":"",test)",
+     R"(Below line will be empty)",
+     R"(test)",
+     R"(test)",
+     R"(Until this line with another quote, "test=test" "test")",
+     R"(This line will be shown)"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view.column(0), expected);
 }
 
