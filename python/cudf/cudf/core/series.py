@@ -3201,17 +3201,17 @@ class Series(SingleColumnFrame, IndexedFrame):
         6     3.0
         7    <NA>
         dtype: float64
-        >>> sr.value_counts(dropna=False)
-        3.0     3
-        2.0     2
-        <NA>    2
+        >>> sr.value_counts(dropna=False).sort_index()
         1.0     1
+        2.0     2
+        3.0     3
+        <NA>    2
         Name: count, dtype: int64
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])
-        >>> s.value_counts(bins=3)
-        (2.0, 3.0]      2
+        >>> s.value_counts(bins=3).sort_index()
         (0.996, 2.0]    2
+        (2.0, 3.0]      2
         (3.0, 4.0]      1
         Name: count, dtype: int64
         """
