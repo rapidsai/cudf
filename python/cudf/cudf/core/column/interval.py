@@ -11,8 +11,11 @@ import pyarrow as pa
 import cudf
 from cudf.core.column.column import as_column
 from cudf.core.column.struct import StructColumn
-from cudf.core.dtypes import IntervalDtype
-from cudf.utils.dtypes import is_dtype_obj_interval
+from cudf.core.dtypes import IntervalDtype, StructDtype
+from cudf.utils.dtypes import (
+    is_dtype_obj_interval,
+    pyarrow_dtype_to_cudf_dtype,
+)
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -62,7 +65,29 @@ class IntervalColumn(StructColumn):
 
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()  # type: ignore[union-attr]
-        struct_arrow = super().to_arrow()
+        children = [child.to_arrow() for child in self.children]
+        dtype: StructDtype = (
+            pyarrow_dtype_to_cudf_dtype(self.dtype)  # type: ignore[assignment]
+            if isinstance(self.dtype, pd.ArrowDtype)
+            else self.dtype
+        )
+        pa_type = pa.struct(
+            {
+                field: child.type
+                for field, child in zip(dtype.fields, children, strict=True)
+            }
+        )
+
+        if self.mask is not None:
+            buffers = [pa.py_buffer(self.mask.memoryview())]
+        else:
+            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
+            buffers = [None]  # type: ignore[list-item]
+
+        struct_arrow = pa.StructArray.from_buffers(
+            pa_type, len(self), buffers, children=children
+        )
+
         if len(struct_arrow) == 0:
             # struct arrow is pa.struct array with null children types
             # we need to make sure its children have non-null type
