@@ -107,19 +107,30 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
 {
   if (read_columns_mode == read_columns_mode::ALL_COLUMNS) {
     if (_is_all_columns_selected) { return; }
+
+    // Select only columns required by the options and filter.
+    // Using as is from:
+    // https://github.com/rapidsai/cudf/blob/a8b25cd205dc5d04b9918dcb0b3abd6b8c4e4a74/cpp/src/io/parquet/reader_impl.cpp#L556-L569
+    std::optional<std::vector<std::string>> filter_only_columns_names;
+    if (options.get_filter().has_value() and options.get_columns().has_value()) {
+      filter_only_columns_names = cudf::io::parquet::detail::get_column_names_in_expression(
+        options.get_filter(), *(options.get_columns()));
+      _num_filter_only_columns = filter_only_columns_names->size();
+    }
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
       _metadata->select_columns(options.get_columns(),
-                                {},
-                                _use_pandas_metadata,
+                                filter_only_columns_names,
+                                options.is_enabled_use_pandas_metadata(),
                                 _strings_to_categorical,
                                 options.is_enabled_ignore_missing_columns(),
                                 _options.timestamp_type.id());
+
     _is_all_columns_selected     = true;
     _is_filter_columns_selected  = false;
     _is_payload_columns_selected = false;
-
   } else if (read_columns_mode == read_columns_mode::FILTER_COLUMNS) {
     if (_is_filter_columns_selected) { return; }
+
     // list, struct, dictionary are not supported by AST filter yet.
     _filter_columns_names =
       names_from_expression(
@@ -526,7 +537,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns(
 
   prepare_data(read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), {});
 
-  return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::ALL_COLUMNS, std::nullptr_t{});
+  // Use the main reader's function
+  return reader_impl::read_chunk_internal(read_mode::READ_ALL);
 }
 
 void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
@@ -870,36 +882,14 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));
 
-  if constexpr (std::is_same_v<RowMaskView, cudf::mutable_column_view> or
-                std::is_same_v<RowMaskView, cudf::column_view>) {
-    CUDF_EXPECTS(row_mask.is_empty() or row_mask.type().id() == type_id::BOOL8,
-                 "Input row mask must be empty or a boolean column");
+  CUDF_EXPECTS(row_mask.is_empty() or row_mask.type().id() == type_id::BOOL8,
+               "Input row mask must be empty or a boolean column");
 
-    // If the input row mask is empty, return the table as is.
-    if (row_mask.is_empty()) { return {std::move(read_table), std::move(out_metadata)}; }
-  } else if (std::is_same_v<RowMaskView, std::nullptr_t>) {
-    if (not _expr_conv.get_converted_expr().has_value()) {
-      return {std::move(read_table), std::move(out_metadata)};
-    }
-  }
+  // If the input row mask is empty, return the table as is.
+  if (row_mask.is_empty()) { return {std::move(read_table), std::move(out_metadata)}; }
 
-  // Apply the filter expression on the read table and return the resultant table
-  if constexpr (std::is_same_v<RowMaskView, std::nullptr_t>) {
-    CUDF_EXPECTS(read_columns_mode == read_columns_mode::ALL_COLUMNS, "Invalid read mode");
-
-    auto final_row_mask =
-      cudf::detail::compute_column(*read_table,
-                                   _expr_conv.get_converted_expr().value().get(),
-                                   _stream,
-                                   cudf::get_current_device_resource_ref());
-    CUDF_EXPECTS(final_row_mask->view().type().id() == type_id::BOOL8,
-                 "Predicate filter should return a boolean");
-
-    return {cudf::detail::apply_boolean_mask(read_table->view(), *final_row_mask, _stream, _mr),
-            std::move(out_metadata)};
-  }
   // For filter columns, apply the filter expression and update the input row mask
-  else if constexpr (std::is_same_v<RowMaskView, cudf::mutable_column_view>) {
+  if constexpr (std::is_same_v<RowMaskView, cudf::mutable_column_view>) {
     CUDF_EXPECTS(read_columns_mode == read_columns_mode::FILTER_COLUMNS, "Invalid read mode");
 
     auto final_row_mask =
@@ -914,7 +904,6 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
     auto output_table =
       cudf::detail::apply_boolean_mask(read_table->view(), *final_row_mask, _stream, _mr);
 
-    // Update the input row mask only in case of filter columns
     auto const mask_offset = _rows_processed_so_far;
     _rows_processed_so_far += read_table->num_rows();
 
@@ -924,7 +913,7 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
     // Return the final output table and metadata
     return {std::move(output_table), std::move(out_metadata)};
   }
-  // Otherwise, simply apply the input row mask to the table.
+  // For payload columns, simply apply the input row mask to the table.
   else {
     CUDF_EXPECTS(read_columns_mode == read_columns_mode::PAYLOAD_COLUMNS, "Invalid read mode");
 
