@@ -666,10 +666,9 @@ class IndexedFrame(Frame):
         self,
         to_replace=None,
         value=no_default,
+        *,
         inplace: bool = False,
-        limit=None,
         regex: bool = False,
-        method=no_default,
     ) -> Self | None:
         """Replace values given in ``to_replace`` with ``value``.
 
@@ -861,38 +860,19 @@ class IndexedFrame(Frame):
         .. pandas-compat::
             :meth:`pandas.DataFrame.replace`, :meth:`pandas.Series.replace`
 
-            Parameters that are currently not supported are: `limit`, `regex`,
-            `method`
+            `regex` is not currently supported.
         """
-        if limit is not None:
-            raise NotImplementedError("limit parameter is not implemented yet")
-
         if regex:
             raise NotImplementedError("regex parameter is not implemented yet")
 
-        if method is not no_default:
-            warnings.warn(
-                "The 'method' keyword in "
-                f"{type(self).__name__}.replace is deprecated and "
-                "will be removed in a future version.",
-                FutureWarning,
-            )
-        elif method not in {"pad", None, no_default}:
-            raise NotImplementedError("method parameter is not implemented")
-
-        if (
-            value is no_default
-            and method is no_default
-            and not is_dict_like(to_replace)
-            and regex is False
+        if value is no_default and not (
+            is_dict_like(to_replace) or is_dict_like(regex)
         ):
-            warnings.warn(
-                f"{type(self).__name__}.replace without 'value' and with "
-                "non-dict-like 'to_replace' is deprecated "
-                "and will raise in a future version. "
-                "Explicitly specify the new values instead.",
-                FutureWarning,
+            raise ValueError(
+                f"{type(self).__name__}.replace must specify either 'value', "
+                "a dict-like 'to_replace', or dict-like 'regex'."
             )
+
         if not (to_replace is None and value is no_default):
             (
                 all_na_per_column,

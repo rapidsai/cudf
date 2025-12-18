@@ -10,14 +10,12 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_220,
     PANDAS_GT_214,
     PANDAS_VERSION,
 )
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
-    expect_warning_if,
 )
 
 
@@ -44,7 +42,10 @@ from cudf.testing._utils import (
         (np.inf, 4),
     ],
 )
-def test_series_replace_all(gsr_data, dtype, to_replace, value):
+def test_series_replace_all(request, gsr_data, dtype, to_replace, value):
+    if dtype == "category" and isinstance(value, str) and value == "five":
+        pytest.skip("Tested in test_series_replace_new_string_category_raises")
+
     gsr = cudf.Series(gsr_data, dtype=dtype)
     psr = gsr.to_pandas()
 
@@ -60,25 +61,33 @@ def test_series_replace_all(gsr_data, dtype, to_replace, value):
     else:
         pd_value = value
 
-    expect_warn = (
-        isinstance(gsr.dtype, cudf.CategoricalDtype)
-        and isinstance(gd_to_replace, str)
-        and gd_to_replace == "one"
+    request.applymarker(
+        pytest.mark.xfail(
+            isinstance(gsr.dtype, cudf.CategoricalDtype)
+            and isinstance(value, str)
+            and value == "two",
+            reason="cuDF missing 'one' from the result categories",
+        )
     )
-    with expect_warning_if(expect_warn):
-        actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
-    with expect_warning_if(expect_warn and PANDAS_GE_220):
-        if pd_value is None:
-            # TODO: Remove this workaround once cudf
-            # introduces `no_default` values
-            expected = psr.replace(to_replace=pd_to_replace)
-        else:
-            expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
+    actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
+    if pd_value is None:
+        # TODO: Remove this workaround once cudf
+        # introduces `no_default` values
+        expected = psr.replace(to_replace=pd_to_replace)
+    else:
+        expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
 
-    assert_eq(
-        expected.sort_values().reset_index(drop=True),
-        actual.sort_values().reset_index(drop=True),
-    )
+    assert_eq(expected, actual)
+
+
+@pytest.mark.xfail(reason="cuDF doesn't raise introducing a new category")
+def test_series_replace_new_string_category_raises():
+    psr = pd.Series(["one", "two", "three", None, "one"], dtype="category")
+    gsr = cudf.Series(["one", "two", "three", None, "one"], dtype="category")
+    with pytest.raises(TypeError):
+        psr.replace("one", "five")
+    with pytest.raises(TypeError):
+        gsr.replace("one", "five")
 
 
 def test_series_replace():
@@ -89,24 +98,6 @@ def test_series_replace():
     sr1 = cudf.Series(a1)
     sr2 = sr1.replace(0, 5)
     assert_eq(a2, sr2.to_numpy())
-
-    # Categorical
-    psr3 = pd.Series(["one", "two", "three"], dtype="category")
-    with expect_warning_if(PANDAS_GE_220, FutureWarning):
-        psr4 = psr3.replace("one", "two")
-    sr3 = cudf.from_pandas(psr3)
-    with pytest.warns(FutureWarning):
-        sr4 = sr3.replace("one", "two")
-    assert_eq(
-        psr4.sort_values().reset_index(drop=True),
-        sr4.sort_values().reset_index(drop=True),
-    )
-    with expect_warning_if(PANDAS_GE_220, FutureWarning):
-        psr5 = psr3.replace("one", "five")
-    with pytest.warns(FutureWarning):
-        sr5 = sr3.replace("one", "five")
-
-    assert_eq(psr5, sr5)
 
     # List input
     a6 = np.array([5, 6, 2, 3, 4])
@@ -296,7 +287,6 @@ def test_numeric_series_replace_dtype(
             pd.Series([5, 1, 2, 3, 4]),
             {"to_replace": {5: 0, 3: -5}, "inplace": True},
         ),
-        (pd.Series([5, 1, 2, 3, 4]), {}),
         pytest.param(
             pd.Series(["one", "two", "three"], dtype="category"),
             {"to_replace": "one", "value": "two", "inplace": True},
@@ -344,10 +334,6 @@ def test_numeric_series_replace_dtype(
         ),
     ],
 )
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Warning not given on older versions of pandas",
-)
 def test_replace_inplace(pframe, replace_args):
     gpu_frame = cudf.from_pandas(pframe)
     pandas_frame = pframe.copy()
@@ -357,12 +343,19 @@ def test_replace_inplace(pframe, replace_args):
 
     assert_eq(gpu_frame, pandas_frame)
     assert_eq(gpu_copy, cpu_copy)
-    with expect_warning_if(len(replace_args) == 0):
-        gpu_frame.replace(**replace_args)
-    with expect_warning_if(len(replace_args) == 0):
-        pandas_frame.replace(**replace_args)
+    gpu_frame.replace(**replace_args)
+    pandas_frame.replace(**replace_args)
     assert_eq(gpu_frame, pandas_frame)
     assert_eq(gpu_copy, cpu_copy)
+
+
+def test_series_replace_value_no_args():
+    psr = pd.Series([5, 1, 2, 3, 4])
+    gsr = cudf.Series([5, 1, 2, 3, 4])
+    with pytest.raises(ValueError):
+        psr.replace()
+    with pytest.raises(ValueError):
+        gsr.replace()
 
 
 def test_series_replace_errors():
@@ -486,12 +479,8 @@ def test_series_replace_errors():
 )
 def test_replace_nulls(gsr, old, new, expected):
     gsr = gsr()
-    with expect_warning_if(isinstance(gsr.dtype, cudf.CategoricalDtype)):
-        actual = gsr.replace(old, new)
-    assert_eq(
-        expected().sort_values().reset_index(drop=True),
-        actual.sort_values().reset_index(drop=True),
-    )
+    actual = gsr.replace(old, new)
+    assert_eq(expected(), actual)
 
 
 def test_replace_with_index_objects():
