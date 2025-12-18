@@ -860,7 +860,7 @@ def test_parquet_reader_list_table(tmp_path):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert_arrow_table_equal(pa.Table.from_pandas(expect), got.to_arrow())
+    assert pa.Table.from_pandas(expect).equals(got.to_arrow())
 
 
 def int_gen(first_val, i):
@@ -1018,7 +1018,7 @@ def test_parquet_reader_list_large_mixed(tmp_path):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert_arrow_table_equal(pa.Table.from_pandas(expect), got.to_arrow())
+    assert pa.Table.from_pandas(expect).equals(got.to_arrow())
 
 
 def test_parquet_reader_list_large_multi_rowgroup(tmp_path):
@@ -2450,7 +2450,7 @@ def test_parquet_writer_list_large(tmp_path):
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
-    assert_arrow_table_equal(gdf.to_arrow(), pa.Table.from_pandas(got))
+    assert gdf.to_arrow().equals(pa.Table.from_pandas(got))
 
 
 def test_parquet_writer_list_large_mixed(tmp_path):
@@ -4736,7 +4736,7 @@ def test_parquet_long_list(tmp_path):
     # Make sure that the cudf reader matches the pandas reader for this data
     actual = cudf.read_parquet(file_name)
     expected = pd.read_parquet(file_name)
-    assert_arrow_table_equal(pa.Table.from_pandas(expected), actual.to_arrow())
+    assert actual.to_arrow().equals(pa.Table.from_pandas(expected))
 
 
 @pytest.mark.parametrize(

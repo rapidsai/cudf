@@ -139,35 +139,6 @@ def _check_types(
             )
 
 
-def _make_fields_nullable(typ):
-    new_fields = []
-    for i in range(typ.num_fields):
-        child_field = typ.field(i)
-        if not child_field.nullable:
-            child_type = child_field.type
-            if isinstance(child_type, (pa.StructType, pa.ListType)):
-                child_type = _make_fields_nullable(child_type)
-            new_fields.append(
-                pa.field(child_field.name, child_type, nullable=True)
-            )
-        else:
-            new_fields.append(child_field)
-
-    if isinstance(typ, pa.StructType):
-        return pa.struct(new_fields)
-    elif isinstance(typ, pa.ListType):
-        return pa.list_(new_fields[0])
-    return typ
-
-
-def _make_fields_nullable_schema(schema):
-    for i, name in enumerate(schema.names):
-        field = schema.field(name)
-        field_type = _make_fields_nullable(field.type)
-        schema = schema.set(i, pa.field(name, field_type, nullable=True))
-    return schema
-
-
 def assert_arrow_table_equal(left: pa.Table, right: pa.Table) -> None:
     """
     Check if two pyarrow Tables are equal.
@@ -193,16 +164,8 @@ def assert_arrow_table_equal(left: pa.Table, right: pa.Table) -> None:
     over time, we cast all ``string_view`` types to ``string``
     before comparison.
     """
-    new_left_schema = _make_fields_nullable_schema(left.schema)
-    new_right_schema = _make_fields_nullable_schema(right.schema)
-    left = _string_view_to_string(
-        left if left.schema == new_left_schema else left.cast(new_left_schema)
-    )
-    right = _string_view_to_string(
-        right
-        if right.schema == new_right_schema
-        else right.cast(new_right_schema)
-    )
+    left = _string_view_to_string(left)
+    right = _string_view_to_string(right)
     try:
         assert left.equals(right)
     except AssertionError:
