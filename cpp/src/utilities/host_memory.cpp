@@ -135,7 +135,7 @@ CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
       if (config_size.has_value()) { return *config_size; }
 
       auto const total = rmm::available_device_memory().second;
-      // 0.5% of the total device memory, capped at 100MB
+      // 0.5% of the total device memory, capped at 64MB
       return std::min(total / 200, size_t{64} * 1024 * 1024);
     }();
 
