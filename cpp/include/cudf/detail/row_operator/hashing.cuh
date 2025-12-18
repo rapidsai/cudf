@@ -116,15 +116,20 @@ class device_row_hasher {
    */
   __device__ result_type operator()(size_type row_index) const noexcept
   {
-    auto it =
-      thrust::make_transform_iterator(_table.begin(), [row_index, this](auto const& column) {
-        return cudf::type_dispatcher<dispatch_storage_type>(
-          column.type(), element_hasher_adapter{_check_nulls, _seed}, column, row_index);
-      });
+    auto const hasher = [row_index, this](auto const& column) {
+      return cudf::type_dispatcher<dispatch_storage_type>(
+        column.type(), element_hasher_adapter{_check_nulls, _seed}, column, row_index);
+    };
 
-    return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
-      return cudf::hashing::detail::hash_combine(hash, h);
-    });
+    auto const has_columns = _table.num_columns() > 0;
+    auto const init        = has_columns ? hasher(_table.column(0)) : _seed;
+    auto const start_col   = static_cast<size_type>(has_columns);
+
+    auto it = thrust::make_transform_iterator(_table.begin() + start_col, hasher);
+    return detail::accumulate(
+      it, it + (_table.num_columns() - start_col), init, [](auto hash, auto h) {
+        return cudf::hashing::detail::hash_combine(hash, h);
+      });
   }
 
  private:
