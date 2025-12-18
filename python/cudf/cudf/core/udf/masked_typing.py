@@ -187,47 +187,12 @@ class MaskedType(types.Type):
 
 # For typing a Masked constant value defined outside a kernel (e.g. captured in
 # a closure).
-@typeof_impl.register(api.Masked)
 def typeof_masked(val, c):
     return MaskedType(typeof(val.value))
 
 
-# Implemented typing for Masked(value, valid) - the construction of a Masked
-# type in a kernel.
-@cuda_decl_registry.register
-class MaskedConstructor(ConcreteTemplate):
-    key = api.Masked
-    cases = [
-        nb_signature(MaskedType(t), t, types.boolean)
-        for t in _supported_masked_types
-    ]
-
-
-# Typing for `api.Masked`
-@cuda_decl_registry.register_attr
-class ClassesTemplate(AttributeTemplate):
-    key = types.Module(api)
-
-    def resolve_Masked(self, mod):
-        return types.Function(MaskedConstructor)
-
-
-# Registration of the global is also needed for Numba to type api.Masked
-cuda_decl_registry.register_global(api, types.Module(api))
-# For typing bare Masked (as in `from .api import Masked`
-cuda_decl_registry.register_global(
-    api.Masked, types.Function(MaskedConstructor)
-)
-
-
-# Provide access to `m.value` and `m.valid` in a kernel for a Masked `m`.
-make_attribute_wrapper(MaskedType, "value", "value")
-make_attribute_wrapper(MaskedType, "valid", "valid")
-
-
 # Tell numba how `MaskedType` is constructed on the backend in terms
 # of primitive things that exist at the LLVM level
-@register_model(MaskedType)
 class MaskedModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         # This struct has two members, a value and a validity
@@ -268,7 +233,6 @@ class NAType(types.Type):
 na_type = NAType()
 
 
-@typeof_impl.register(type(NA))
 def typeof_na(val, c):
     """
     Tie instances of _NAType (cudf.NA) to our NAType.
@@ -276,9 +240,6 @@ def typeof_na(val, c):
     instance of this NAType -> handle it accordingly.
     """
     return na_type
-
-
-register_model(NAType)(models.OpaqueModel)
 
 
 # Ultimately, we want numba to produce PTX code that specifies how to implement
@@ -366,7 +327,6 @@ class MaskedScalarScalarOp(AbstractTemplate):
         )
 
 
-@cuda_decl_registry.register_global(operator.is_)
 class MaskedScalarIsNull(AbstractTemplate):
     """
     Typing for `Masked is cudf.NA`
@@ -379,7 +339,6 @@ class MaskedScalarIsNull(AbstractTemplate):
             return nb_signature(types.boolean, na_type, args[1])
 
 
-@cuda_decl_registry.register_global(operator.truth)
 class MaskedScalarTruth(AbstractTemplate):
     """
     Typing for `if Masked`
@@ -393,7 +352,6 @@ class MaskedScalarTruth(AbstractTemplate):
             return nb_signature(types.boolean, MaskedType(types.boolean))
 
 
-@cuda_decl_registry.register_global(float)
 class MaskedScalarFloatCast(AbstractTemplate):
     """
     Typing for float(Masked)
@@ -408,7 +366,6 @@ class MaskedScalarFloatCast(AbstractTemplate):
             return nb_signature(MaskedType(types.float64), args[0])
 
 
-@cuda_decl_registry.register_global(int)
 class MaskedScalarIntCast(AbstractTemplate):
     """
     Typing for int(Masked)
@@ -423,7 +380,6 @@ class MaskedScalarIntCast(AbstractTemplate):
             return nb_signature(MaskedType(types.int64), args[0])
 
 
-@cuda_decl_registry.register_global(abs)
 class MaskedScalarAbsoluteValue(AbstractTemplate):
     """
     Typing for the builtin function abs. Returns the same
@@ -450,7 +406,6 @@ class MaskedScalarAbsoluteValue(AbstractTemplate):
                 return nb_signature(MaskedType(return_type), args[0])
 
 
-@cuda_decl_registry.register_global(api.pack_return)
 class UnpackReturnToMasked(AbstractTemplate):
     """
     Turn a returned MaskedType into its value and validity
@@ -465,16 +420,6 @@ class UnpackReturnToMasked(AbstractTemplate):
             # scalar_type -> MaskedType(scalar_type, True)
             return_type = MaskedType(args[0])
             return nb_signature(return_type, args[0])
-
-
-for binary_op in arith_ops + bitwise_ops + comparison_ops:
-    # Every op shares the same typing class
-    cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
-    cuda_decl_registry.register_global(binary_op)(MaskedScalarNullOp)
-    cuda_decl_registry.register_global(binary_op)(MaskedScalarScalarOp)
-
-for unary_op in unary_ops:
-    cuda_decl_registry.register_global(unary_op)(MaskedScalarUnaryOp)
 
 
 # Strings functions and utilities
@@ -514,7 +459,6 @@ def len_typing(self, args, kws):
         return nb_signature(size_type, args[0])
 
 
-@register_masked_string_function(operator.add)
 def concat_typing(self, args, kws):
     if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
         return nb_signature(
@@ -524,7 +468,6 @@ def concat_typing(self, args, kws):
         )
 
 
-@register_masked_string_function(operator.contains)
 def contains_typing(self, args, kws):
     if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
         return nb_signature(
@@ -548,10 +491,6 @@ class MaskedStringViewCmpOp(AbstractTemplate):
                 MaskedType(string_view),
                 MaskedType(string_view),
             )
-
-
-for op in comparison_ops:
-    cuda_decl_registry.register_global(op)(MaskedStringViewCmpOp)
 
 
 def create_masked_binary_attr(attrname, retty):
@@ -685,5 +624,66 @@ class MaskedManagedUDFStringAttrs(MaskedStringViewAttrs):
         return managed_udf_string
 
 
-cuda_decl_registry.register_attr(MaskedStringViewAttrs)
-cuda_decl_registry.register_attr(MaskedManagedUDFStringAttrs)
+def register_masked_typing():
+    typeof_impl.register(api.Masked)(typeof_masked)
+
+    # Implemented typing for Masked(value, valid) - the construction of a Masked
+    # type in a kernel.
+    class MaskedConstructor(ConcreteTemplate):
+        key = api.Masked
+        cases = [
+            nb_signature(MaskedType(t), t, types.boolean)
+            for t in _supported_masked_types
+        ]
+
+    cuda_decl_registry.register(MaskedConstructor)
+
+    class ClassesTemplate(AttributeTemplate):
+        key = types.Module(api)
+
+        def resolve_Masked(self, mod):
+            return types.Function(MaskedConstructor)
+
+    cuda_decl_registry.register_attr(ClassesTemplate)
+
+    # Registration of the global is also needed for Numba to type api.Masked
+    cuda_decl_registry.register_global(api, types.Module(api))
+    # For typing bare Masked (as in `from .api import Masked`
+    cuda_decl_registry.register_global(
+        api.Masked, types.Function(MaskedConstructor)
+    )
+
+    # Provide access to `m.value` and `m.valid` in a kernel for a Masked `m`.
+    make_attribute_wrapper(MaskedType, "value", "value")
+    make_attribute_wrapper(MaskedType, "valid", "valid")
+
+    register_model(MaskedType)(MaskedModel)
+
+    typeof_impl.register(type(NA))(typeof_na)
+    register_model(NAType)(models.OpaqueModel)
+
+    for binary_op in arith_ops + bitwise_ops + comparison_ops:
+        # Every op shares the same typing class
+        cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
+        cuda_decl_registry.register_global(binary_op)(MaskedScalarNullOp)
+        cuda_decl_registry.register_global(binary_op)(MaskedScalarScalarOp)
+
+    for unary_op in unary_ops:
+        cuda_decl_registry.register_global(unary_op)(MaskedScalarUnaryOp)
+
+    for op in comparison_ops:
+        cuda_decl_registry.register_global(op)(MaskedStringViewCmpOp)
+
+    cuda_decl_registry.register_attr(MaskedStringViewAttrs)
+    cuda_decl_registry.register_attr(MaskedManagedUDFStringAttrs)
+
+    cuda_decl_registry.register_global(operator.is_)(MaskedScalarIsNull)
+    cuda_decl_registry.register_global(operator.truth)(MaskedScalarTruth)
+    cuda_decl_registry.register_global(float)(MaskedScalarFloatCast)
+    cuda_decl_registry.register_global(int)(MaskedScalarIntCast)
+    cuda_decl_registry.register_global(abs)(MaskedScalarAbsoluteValue)
+    cuda_decl_registry.register_global(api.pack_return)(UnpackReturnToMasked)
+
+    register_masked_string_function(len)(len_typing)
+    register_masked_string_function(operator.add)(concat_typing)
+    register_masked_string_function(operator.contains)(contains_typing)

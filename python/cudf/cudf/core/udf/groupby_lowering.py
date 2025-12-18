@@ -91,7 +91,6 @@ def group_corr(context, builder, sig, args):
     return result
 
 
-@lower_builtin(Group, types.Array, group_size_type, types.Array)
 def group_constructor(context, builder, sig, args):
     """
     Instruction boilerplate used for instantiating a Group
@@ -171,20 +170,24 @@ def cuda_Group_size(context, builder, sig, args):
 
 cuda_Group_count = cuda_Group_size
 
+def register_groupby_lowering():
 
-for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
-    cuda_lower("GroupType.max", GroupType(ty))(cuda_Group_max)
-    cuda_lower("GroupType.min", GroupType(ty))(cuda_Group_min)
-    cuda_lower("GroupType.sum", GroupType(ty))(cuda_Group_sum)
-    cuda_lower("GroupType.count", GroupType(ty))(cuda_Group_count)
-    cuda_lower("GroupType.size", GroupType(ty))(cuda_Group_size)
-    cuda_lower("GroupType.mean", GroupType(ty))(cuda_Group_mean)
-    cuda_lower("GroupType.std", GroupType(ty))(cuda_Group_std)
-    cuda_lower("GroupType.var", GroupType(ty))(cuda_Group_var)
-    cuda_lower("GroupType.idxmax", GroupType(ty, types.int64))(
-        cuda_Group_idxmax
-    )
-    cuda_lower("GroupType.idxmin", GroupType(ty, types.int64))(
-        cuda_Group_idxmin
-    )
-    cuda_lower("GroupType.corr", GroupType(ty), GroupType(ty))(group_corr)
+    lower_builtin(Group, types.Array, group_size_type, types.Array)(group_constructor)
+
+    for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
+        cuda_lower("GroupType.max", GroupType(ty))(cuda_Group_max)
+        cuda_lower("GroupType.min", GroupType(ty))(cuda_Group_min)
+        cuda_lower("GroupType.sum", GroupType(ty))(cuda_Group_sum)
+        cuda_lower("GroupType.count", GroupType(ty))(cuda_Group_count)
+        cuda_lower("GroupType.size", GroupType(ty))(cuda_Group_size)
+        cuda_lower("GroupType.mean", GroupType(ty))(cuda_Group_mean)
+        cuda_lower("GroupType.std", GroupType(ty))(cuda_Group_std)
+        cuda_lower("GroupType.var", GroupType(ty))(cuda_Group_var)
+        cuda_lower("GroupType.idxmax", GroupType(ty, types.int64))(
+            cuda_Group_idxmax
+        )
+        cuda_lower("GroupType.idxmin", GroupType(ty, types.int64))(
+            cuda_Group_idxmin
+        )
+        cuda_lower("GroupType.corr", GroupType(ty), GroupType(ty))(group_corr)
+

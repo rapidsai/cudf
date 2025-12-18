@@ -79,10 +79,7 @@ class GroupByJITDataFrame(Row):
     pass
 
 
-register_model(GroupByJITDataFrame)(models.RecordModel)
 
-
-@typeof_impl.register(Group)
 def typeof_group(val, c):
     """
     Tie Group and GroupType together such that when Numba
@@ -97,7 +94,6 @@ def typeof_group(val, c):
 
 # The typing of the python "function" Group.__init__
 # as it appears in python code
-@type_callable(Group)
 def type_group(context):
     def typer(group_data, size, index):
         if (
@@ -110,7 +106,6 @@ def type_group(context):
     return typer
 
 
-@register_model(GroupType)
 class GroupModel(models.StructModel):
     """
     Model backing GroupType instances. See the link below for details.
@@ -315,12 +310,10 @@ class DataFrameAttributeTemplate(AttributeTemplate):
         )
 
 
-@cuda_registry.register_attr
 class DataFrameAttr(DataFrameAttributeTemplate):
     key = GroupByJITDataFrame
 
 
-@cuda_registry.register_attr
 class GroupAttr(AttributeTemplate):
     key = GroupType
 
@@ -355,41 +348,51 @@ class GroupAttr(AttributeTemplate):
         )
 
 
-for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
-    _register_cuda_unary_reduction_caller("Max", ty, ty)
-    _register_cuda_unary_reduction_caller("Min", ty, ty)
-    _register_cuda_idx_reduction_caller("IdxMax", ty)
-    _register_cuda_idx_reduction_caller("IdxMin", ty)
 
-    if ty in types.integer_domain:
-        _register_cuda_binary_reduction_caller("Corr", ty, ty, types.float64)
+def register_groupby_typing():
+    typeof_impl.register(Group)(typeof_group)
+    type_callable(Group)(type_group)
+    register_model(GroupType)(GroupModel)
+    cuda_registry.register_attr(DataFrameAttr)
+    cuda_registry.register_attr(GroupAttr)
 
+    register_model(GroupByJITDataFrame)(models.RecordModel)
 
-_register_cuda_unary_reduction_caller("Sum", types.int32, types.int64)
-_register_cuda_unary_reduction_caller("Sum", types.int64, types.int64)
-_register_cuda_unary_reduction_caller("Sum", types.float32, types.float32)
-_register_cuda_unary_reduction_caller("Sum", types.float64, types.float64)
+    for op in arith_ops + comparison_ops + unary_ops:
+        cuda_registry.register_global(op)(GroupOpBase)
 
-
-_register_cuda_unary_reduction_caller("Mean", types.int32, types.float64)
-_register_cuda_unary_reduction_caller("Mean", types.int64, types.float64)
-_register_cuda_unary_reduction_caller("Mean", types.float32, types.float32)
-_register_cuda_unary_reduction_caller("Mean", types.float64, types.float64)
-
-_register_cuda_unary_reduction_caller("Std", types.int32, types.float64)
-_register_cuda_unary_reduction_caller("Std", types.int64, types.float64)
-_register_cuda_unary_reduction_caller("Std", types.float32, types.float32)
-_register_cuda_unary_reduction_caller("Std", types.float64, types.float64)
-
-_register_cuda_unary_reduction_caller("Var", types.int32, types.float64)
-_register_cuda_unary_reduction_caller("Var", types.int64, types.float64)
-_register_cuda_unary_reduction_caller("Var", types.float32, types.float32)
-_register_cuda_unary_reduction_caller("Var", types.float64, types.float64)
+    for attr in ("group_data", "index", "size"):
+        make_attribute_wrapper(GroupType, attr, attr)
 
 
-for attr in ("group_data", "index", "size"):
-    make_attribute_wrapper(GroupType, attr, attr)
+    _register_cuda_unary_reduction_caller("Sum", types.int32, types.int64)
+    _register_cuda_unary_reduction_caller("Sum", types.int64, types.int64)
+    _register_cuda_unary_reduction_caller("Sum", types.float32, types.float32)
+    _register_cuda_unary_reduction_caller("Sum", types.float64, types.float64)
 
 
-for op in arith_ops + comparison_ops + unary_ops:
-    cuda_registry.register_global(op)(GroupOpBase)
+    _register_cuda_unary_reduction_caller("Mean", types.int32, types.float64)
+    _register_cuda_unary_reduction_caller("Mean", types.int64, types.float64)
+    _register_cuda_unary_reduction_caller("Mean", types.float32, types.float32)
+    _register_cuda_unary_reduction_caller("Mean", types.float64, types.float64)
+
+    _register_cuda_unary_reduction_caller("Std", types.int32, types.float64)
+    _register_cuda_unary_reduction_caller("Std", types.int64, types.float64)
+    _register_cuda_unary_reduction_caller("Std", types.float32, types.float32)
+    _register_cuda_unary_reduction_caller("Std", types.float64, types.float64)
+
+    _register_cuda_unary_reduction_caller("Var", types.int32, types.float64)
+    _register_cuda_unary_reduction_caller("Var", types.int64, types.float64)
+    _register_cuda_unary_reduction_caller("Var", types.float32, types.float32)
+    _register_cuda_unary_reduction_caller("Var", types.float64, types.float64)
+
+    for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
+        _register_cuda_unary_reduction_caller("Max", ty, ty)
+        _register_cuda_unary_reduction_caller("Min", ty, ty)
+        _register_cuda_idx_reduction_caller("IdxMax", ty)
+        _register_cuda_idx_reduction_caller("IdxMin", ty)
+
+        if ty in types.integer_domain:
+            _register_cuda_binary_reduction_caller("Corr", ty, ty, types.float64)
+
+

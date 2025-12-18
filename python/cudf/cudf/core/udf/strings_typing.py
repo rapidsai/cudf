@@ -51,7 +51,6 @@ class StringView(types.Type):
         return ManagedUDFString()
 
 
-@register_model(StringView)
 class stringview_model(models.StructModel):
     # from string_view.hpp:
     _members = (
@@ -70,7 +69,6 @@ class stringview_model(models.StructModel):
         super().__init__(dmm, fe_type, self._members)
 
 
-@register_model(UDFString)
 class udf_string_model(models.StructModel):
     # from udf_string.hpp:
     # private:
@@ -91,7 +89,6 @@ class udf_string_model(models.StructModel):
 udf_string = UDFString()
 
 
-@register_model(ManagedUDFString)
 class managed_udf_string_model(models.StructModel):
     _members = (("meminfo", types.voidptr), ("udf_string", udf_string))
 
@@ -142,7 +139,6 @@ str_view_arg_handler = StrViewArgHandler()
 
 
 # String functions
-@cuda_decl_registry.register_global(len)
 class StringLength(AbstractTemplate):
     """
     provide the length of a cudf::string_view like struct
@@ -161,7 +157,6 @@ def NRT_decref(st):
     pass
 
 
-@cuda_decl_registry.register_global(NRT_decref)
 class NRT_decref_typing(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], ManagedUDFString):
@@ -300,23 +295,33 @@ for func in string_unary_funcs:
     )
 
 
-@cuda_decl_registry.register_attr
 class ManagedUDFStringAttrs(StringViewAttrs):
     key = managed_udf_string
 
 
-cuda_decl_registry.register_attr(StringViewAttrs)
-cuda_decl_registry.register_attr(ManagedUDFStringAttrs)
+def register_strings_typing():
 
-register_stringview_binaryop(operator.eq, types.boolean)
-register_stringview_binaryop(operator.ne, types.boolean)
-register_stringview_binaryop(operator.lt, types.boolean)
-register_stringview_binaryop(operator.gt, types.boolean)
-register_stringview_binaryop(operator.le, types.boolean)
-register_stringview_binaryop(operator.ge, types.boolean)
+    register_model(StringView)(stringview_model)
+    register_model(UDFString)(udf_string_model)
+    register_model(ManagedUDFString)(managed_udf_string_model)
 
-# st in other
-register_stringview_binaryop(operator.contains, types.boolean)
+    cuda_decl_registry.register_global(NRT_decref)(NRT_decref_typing)
 
-# st + other
-register_stringview_binaryop(operator.add, managed_udf_string)
+    cuda_decl_registry.register_global(len)(StringLength)
+
+    cuda_decl_registry.register_attr(StringViewAttrs)
+    cuda_decl_registry.register_attr(ManagedUDFStringAttrs)
+
+    register_stringview_binaryop(operator.eq, types.boolean)
+    register_stringview_binaryop(operator.ne, types.boolean)
+    register_stringview_binaryop(operator.lt, types.boolean)
+    register_stringview_binaryop(operator.gt, types.boolean)
+    register_stringview_binaryop(operator.le, types.boolean)
+    register_stringview_binaryop(operator.ge, types.boolean)
+
+    # st in other
+    register_stringview_binaryop(operator.contains, types.boolean)
+
+    # st + other
+    register_stringview_binaryop(operator.add, managed_udf_string)
+
