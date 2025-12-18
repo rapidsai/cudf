@@ -142,10 +142,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         # Support for this conversion can be removed when we drop support for
         # pyarrow<19, but until then we must convert Decimal32 and Decimal64
         # columns to Decimal128
-        if isinstance(self.dtype, Decimal32Dtype):
-            arrow_type = pa.decimal128(self.dtype.precision, self.dtype.scale)
-            return arrow_array.cast(arrow_type)
-        elif isinstance(self.dtype, Decimal64Dtype):
+        if isinstance(self.dtype, DecimalDtype):
             arrow_type = pa.decimal128(self.dtype.precision, self.dtype.scale)
             return arrow_array.cast(arrow_type)
         elif isinstance(self.dtype, pd.ArrowDtype):
