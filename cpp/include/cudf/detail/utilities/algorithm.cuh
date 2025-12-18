@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cudf/detail/device_scalar.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
