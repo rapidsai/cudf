@@ -53,18 +53,21 @@ def test_dataframe_hash_partition_masked_value():
     assert len(parted) == 3
     assert_eq(
         parted[0],
-        cudf.DataFrame({"key": [0, 8], "val": [100, None]}, index=[0, 8]),
+        cudf.DataFrame({"key": [9], "val": [109]}, index=[9]),
     )
     assert_eq(
         parted[1],
         cudf.DataFrame(
-            {"key": range(2, 8), "val": [102] + [None] * 5},
-            index=list(range(2, 8)),
+            {"key": [0, 8], "val": [100, None]},
+            index=[0, 8],
         ),
     )
     assert_eq(
         parted[2],
-        cudf.DataFrame({"key": [1, 9], "val": [101, 109]}, index=[1, 9]),
+        cudf.DataFrame(
+            {"key": range(1, 8), "val": [101, 102] + [None] * 5},
+            index=list(range(1, 8)),
+        ),
     )
 
 
@@ -81,13 +84,22 @@ def test_dataframe_hash_partition_masked_keys():
     gdf.loc[boolmask, "key"] = None
     parted = gdf.partition_by_hash(["key"], nparts=3, keep_index=False)
     assert len(parted) == 3
-    assert_eq(parted[0], cudf.DataFrame({"key": [0], "val": [100]}, index=[0]))
-    assert_eq(parted[1], cudf.DataFrame({"key": [2], "val": [102]}, index=[0]))
+    assert_eq(
+        parted[0],
+        cudf.DataFrame(
+            {
+                "key": cudf.Series([None, None], dtype="int64"),
+                "val": [103, 104],
+            },
+            index=list(range(2)),
+        ),
+    )
+    assert_eq(parted[1], cudf.DataFrame({"key": [0], "val": [100]}, index=[0]))
     assert_eq(
         parted[2],
         cudf.DataFrame(
-            {"key": [1, None, None], "val": [101, 103, 104]},
-            index=list(range(3)),
+            {"key": [1, 2], "val": [101, 102]},
+            index=list(range(2)),
         ),
     )
 
@@ -99,11 +111,11 @@ def test_dataframe_hash_partition_keep_index(keep_index):
     )
 
     expected_df1 = cudf.DataFrame(
-        {"val": [1, 5], "key": [3, 5]}, index=[5, 1] if keep_index else None
-    )
-    expected_df2 = cudf.DataFrame(
         {"val": [2, 3, 4], "key": [2, 1, 4]},
         index=[4, 3, 2] if keep_index else None,
+    )
+    expected_df2 = cudf.DataFrame(
+        {"val": [1, 5], "key": [3, 5]}, index=[5, 1] if keep_index else None
     )
     expected = [expected_df1, expected_df2]
 
