@@ -27,7 +27,6 @@ class IntervalColumn(StructColumn):
         self,
         plc_column: plc.Column,
         dtype: IntervalDtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if plc_column.num_children() != 2:
@@ -37,7 +36,6 @@ class IntervalColumn(StructColumn):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 

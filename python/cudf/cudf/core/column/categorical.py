@@ -100,7 +100,6 @@ class CategoricalColumn(column.ColumnBase):
         self,
         plc_column: plc.Column,
         dtype: CategoricalDtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not isinstance(dtype, CategoricalDtype):
@@ -110,17 +109,15 @@ class CategoricalColumn(column.ColumnBase):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
         self._codes = self.children[0].set_mask(self.mask)
 
-    @classmethod
-    def _get_data_buffer_from_pylibcudf_column(
-        cls, plc_column: plc.Column, exposed: bool
-    ) -> None:
+    @property
+    def base_data(self) -> None:
         """
-        This column considers the plc_column (i.e. codes) as children
+        Categorical columns don't have a data buffer - data is stored
+        in the codes child column instead.
         """
         return None
 
@@ -168,10 +165,12 @@ class CategoricalColumn(column.ColumnBase):
         if self._children is None:
             # Pass along size, offset, null_count from __init__
             # which doesn't necessarily match the attributes of plc_column
+            # Use base_children[0]'s plc_column as it has the actual codes data
             child = cudf.core.column.numerical.NumericalColumn(
-                plc_column=self.plc_column,
-                dtype=dtype_from_pylibcudf_column(self.plc_column),
-                null_count=self.null_count,
+                plc_column=self.base_children[0].plc_column,
+                dtype=dtype_from_pylibcudf_column(
+                    self.base_children[0].plc_column
+                ),
                 exposed=False,
             )
             self._children = (child,)
@@ -728,7 +727,6 @@ class CategoricalColumn(column.ColumnBase):
             return type(self)(
                 plc_column=self.plc_column,
                 dtype=dtype,
-                null_count=self.null_count,
                 exposed=False,
             )
 
