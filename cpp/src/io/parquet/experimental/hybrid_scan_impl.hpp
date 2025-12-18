@@ -258,6 +258,16 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                           rmm::cuda_stream_view stream);
 
   /**
+   * @brief Convert the input filter expression such that all column name references are replaced
+   * with corresponding column references
+   *
+   * @param filter Input filter expression
+   * @return Converted expression
+   */
+  [[nodiscard]] named_to_reference_converter build_converted_expression(
+    std::optional<std::reference_wrapper<const ast::expression>> filter);
+
+  /**
    * @brief Set the page mask for the pass pages
    *
    * @param data_page_mask Input data page mask from page-pruning step
