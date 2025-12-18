@@ -94,19 +94,21 @@ class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_
 
   void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) noexcept override
   {
+    bool is_fallback{false};
     {
       std::shared_lock lock(fallback_allocations_mutex_);
-      if (fallback_allocations_.find(ptr) == fallback_allocations_.end()) {
-        pool_->deallocate(stream, ptr, bytes);
-        return;
-      }
+      is_fallback = fallback_allocations_.find(ptr) != fallback_allocations_.end();
     }
 
-    {
-      std::unique_lock lock(fallback_allocations_mutex_);
-      fallback_allocations_.erase(ptr);
+    if (is_fallback) {
+      {
+        std::unique_lock lock(fallback_allocations_mutex_);
+        fallback_allocations_.erase(ptr);
+      }
+      upstream_mr_.deallocate(stream, ptr, bytes);
+    } else {
+      pool_->deallocate(stream, ptr, bytes);
     }
-    upstream_mr_.deallocate(stream, ptr, bytes);
   }
 
   [[nodiscard]] bool do_is_equal(device_memory_resource const& other) const noexcept override
