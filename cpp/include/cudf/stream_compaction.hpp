@@ -501,8 +501,8 @@ class approx_distinct_count {
    * distributed distinct counting scenarios.
    *
    * @warning It is the caller's responsibility to ensure that the provided sketch span was created
-   * with the same HyperLogLog configuration (precision, hash function, etc.) as this sketch.
-   * Merging incompatible sketches will produce incorrect results.
+   * with the same approx_distinct_count configuration (precision, null/NaN handling, etc.) as this
+   * sketch. Merging incompatible sketches will produce incorrect results.
    *
    * @param sketch_span The sketch bytes to merge into this sketch
    * @param stream CUDA stream used for device memory operations and kernel launches
