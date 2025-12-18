@@ -2432,7 +2432,7 @@ TEST_F(OrcWriterTest, DISABLED_SizeTypeOverflow)
 {
   constexpr auto num_rows = std::numeric_limits<cudf::size_type>::max();
 
-  auto const val = cudf::numeric_scalar<bool>(true);
+  auto const val = cudf::numeric_scalar<bool>(true, true);
   auto const col = cudf::make_column_from_scalar(val, num_rows);
   ASSERT_EQ(col->size(), num_rows);
 
