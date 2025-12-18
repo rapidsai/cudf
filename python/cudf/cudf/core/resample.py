@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -19,6 +18,8 @@ from cudf.core.groupby.groupby import (
 )
 
 if TYPE_CHECKING:
+    import pylibcudf as plc
+
     from cudf._typing import DataFrameOrSeries
     from cudf.core.index import Index
 
@@ -52,7 +53,9 @@ class _Resampler(GroupBy):
             allow_non_unique=True,
         )
 
-    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+    def _scan_fill(
+        self, method: plc.replace.ReplacePolicy, limit: int | None
+    ) -> DataFrameOrSeries:
         # TODO: can this be more efficient?
 
         # first, compute the outer join between `self.obj` and the `bin_labels`
@@ -64,10 +67,7 @@ class _Resampler(GroupBy):
             allow_non_unique=True,
         )
 
-        # fill the gaps:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            filled = upsampled.fillna(method=method)
+        filled = upsampled._fillna(method=method, limit=limit)
 
         # filter the result to only include the values corresponding
         # to the bin labels:
