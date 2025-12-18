@@ -9,6 +9,8 @@ set -euo pipefail
 rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
 
+source ci/use_conda_packages_from_prs.sh
+
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 
@@ -16,9 +18,15 @@ rapids-logger "Generate Java testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
 
+PREPEND_CHANNEL_ARGS=()
+for _channel in "${RAPIDS_PREPENDED_CONDA_CHANNELS[@]}"; do
+  PREPEND_CHANNEL_ARGS+=("--prepend-channel" "${_channel}")
+done
+
 rapids-dependency-file-generator \
   --output conda \
   --file-key test_java \
+  "${PREPEND_CHANNEL_ARGS[@]}" \
   --prepend-channel "${CPP_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 

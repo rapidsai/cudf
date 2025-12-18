@@ -15,6 +15,8 @@ rapids-logger "Create test conda environment"
 rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
 
+source ci/use_conda_packages_from_prs.sh
+
 ENV_YAML_DIR="$(mktemp -d)"
 
 rapids-logger "Downloading artifacts from previous jobs"
@@ -22,9 +24,15 @@ CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf)")
 PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf --pure --cuda "${RAPIDS_CUDA_VERSION}")")
 
+PREPEND_CHANNEL_ARGS=()
+for _channel in "${RAPIDS_PREPENDED_CONDA_CHANNELS[@]}"; do
+  PREPEND_CHANNEL_ARGS+=("--prepend-channel" "${_channel}")
+done
+
 rapids-dependency-file-generator \
   --output conda \
   --file-key docs \
+  "${PREPEND_CHANNEL_ARGS[@]}" \
   --prepend-channel "${CPP_CHANNEL}" \
   --prepend-channel "${PYTHON_CHANNEL}" \
   --prepend-channel "${PYTHON_NOARCH_CHANNEL}" \

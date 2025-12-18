@@ -6,6 +6,8 @@ set -euo pipefail
 
 source rapids-date-string
 
+source ci/use_conda_packages_from_prs.sh
+
 export CMAKE_GENERATOR=Ninja
 
 rapids-print-env
@@ -27,6 +29,11 @@ source rapids-rattler-channel-string
 rapids-logger "Prepending channels ${CPP_CHANNEL} and ${PYTHON_CHANNEL} to RATTLER_CHANNELS"
 
 RATTLER_CHANNELS=("--channel" "${CPP_CHANNEL}" "--channel" "${PYTHON_CHANNEL}" "${RATTLER_CHANNELS[@]}")
+
+for _channel in "${RAPIDS_PREPENDED_CONDA_CHANNELS[@]}"; do
+    rapids-logger "Prepending PR artifact channel ${_channel} to RATTLER_CHANNELS"
+    RATTLER_CHANNELS=("--channel" "${_channel}" "${RATTLER_CHANNELS[@]}")
+done
 
 rapids-logger "Building dask-cudf"
 
