@@ -3334,6 +3334,7 @@ class IndexedFrame(Frame):
             axis=axis,
             inplace=inplace,
             limit=limit,
+            limit_area=limit_area,
         )
 
     def add_prefix(self, prefix, axis=None):
