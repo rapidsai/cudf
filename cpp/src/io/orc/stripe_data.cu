@@ -1482,7 +1482,6 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
   if (t < s->u.rowdec.nz_count) {
     s->u.rowdec.row[t] = 0;  // Skipped values (below first_row)
   }
-  __syncthreads();
   while (s->u.rowdec.nz_count < s->top.data.max_vals &&
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
     uint32_t const remaining_rows = s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows);
