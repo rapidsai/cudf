@@ -676,11 +676,13 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
           ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE, 1, 0, 1);
         }
       } else if (c == quotechar) {
-        if (c_prev == delimiter || c_prev == quotechar) {
-          // Quoted string after delimiter, quoted string ending in delimiter, or double-quote
-          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
+        // Spark compatibility: only enter quote mode if field starts with quote
+        // (i.e., previous char is delimiter). Ignore quotes in middle of field.
+        if (c_prev == delimiter) {
+          // Quoted string after delimiter - enter quote mode
+          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_QUOTE);
         } else {
-          // Closing or ignored quote
+          // Quote in middle of field (e.g., JSON data) or closing quote - ignore
           ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_NONE);
         }
       } else {
