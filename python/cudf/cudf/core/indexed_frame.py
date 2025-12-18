@@ -3292,7 +3292,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def bfill(
         self,
-        value=None,
+        *,
         axis: Axis | None = None,
         inplace: bool = False,
         limit: None | int = None,
@@ -3306,7 +3306,6 @@ class IndexedFrame(Frame):
             Object with missing values filled or None if ``inplace=True``.
         """
         return self._fillna(
-            value=value,
             method=plc.replace.ReplacePolicy.FOLLOWING,
             axis=axis,
             inplace=inplace,
@@ -3317,12 +3316,12 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def ffill(
         self,
-        value=None,
+        *,
         axis: Axis | None = None,
         inplace: bool = False,
         limit: None | int = None,
         limit_area: Literal["inside", "outside", None] = None,
-    ):
+    ) -> Self | None:
         """
         Fill NA/NaN values by propagating the last valid observation to next valid.
 
@@ -3332,7 +3331,6 @@ class IndexedFrame(Frame):
         """
         return self._fillna(
             method=plc.replace.ReplacePolicy.PRECEDING,
-            value=value,
             axis=axis,
             inplace=inplace,
             limit=limit,
