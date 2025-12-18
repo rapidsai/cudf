@@ -842,10 +842,7 @@ def test_timedelta_reduction_ops(
     gsr = cudf.Series(data_non_overflow, dtype=timedelta_types_as_str)
     psr = gsr.to_pandas()
 
-    if len(psr) > 0 and psr.isnull().all() and reduction_methods == "median":
-        expected = getattr(psr, reduction_methods)()
-    else:
-        expected = getattr(psr, reduction_methods)()
+    expected = getattr(psr, reduction_methods)()
     actual = getattr(gsr, reduction_methods)()
     if pd.isna(expected) and pd.isna(actual):
         pass
