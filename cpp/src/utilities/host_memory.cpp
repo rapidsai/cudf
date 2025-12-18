@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <unordered_set>
 
 namespace cudf {
@@ -40,7 +41,7 @@ class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_
   cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream().value()};
 
   // Hash set to track fallback allocations
-  mutable std::mutex fallback_allocations_mutex_;
+  mutable std::shared_mutex fallback_allocations_mutex_;
   std::unordered_set<void*> fallback_allocations_;
 
  public:
@@ -82,9 +83,8 @@ class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_
       // fall back to upstream
       auto* ptr = upstream_mr_.allocate(stream, bytes);
 
-      // Only track fallback allocations in the hash set
       {
-        std::lock_guard<std::mutex> lock(fallback_allocations_mutex_);
+        std::unique_lock lock(fallback_allocations_mutex_);
         fallback_allocations_.insert(ptr);
       }
 
@@ -94,23 +94,19 @@ class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_
 
   void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) noexcept override
   {
-    bool is_fallback = false;
-
     {
-      std::lock_guard<std::mutex> lock(fallback_allocations_mutex_);
-      auto it = fallback_allocations_.find(ptr);
-      if (it != fallback_allocations_.end()) {
-        is_fallback = true;
-        fallback_allocations_.erase(it);
+      std::shared_lock lock(fallback_allocations_mutex_);
+      if (fallback_allocations_.find(ptr) == fallback_allocations_.end()) {
+        pool_->deallocate(stream, ptr, bytes);
+        return;
       }
     }
 
-    // Deallocate using the correct resource
-    if (is_fallback) {
-      upstream_mr_.deallocate(stream, ptr, bytes);
-    } else {
-      pool_->deallocate(stream, ptr, bytes);
+    {
+      std::unique_lock lock(fallback_allocations_mutex_);
+      fallback_allocations_.erase(ptr);
     }
+    upstream_mr_.deallocate(stream, ptr, bytes);
   }
 
   [[nodiscard]] bool do_is_equal(device_memory_resource const& other) const noexcept override
