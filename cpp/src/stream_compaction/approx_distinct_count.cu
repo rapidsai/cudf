@@ -16,19 +16,8 @@
 #include <cuco/hyperloglog_ref.cuh>
 #include <cuda/functional>
 
-#include <algorithm>
-
 namespace cudf {
 namespace detail {
-
-namespace {
-constexpr double sketch_size_kb_from_precision(cudf::size_type precision) noexcept
-{
-  auto const clamped_precision =
-    std::max(cudf::size_type{4}, std::min(cudf::size_type{18}, precision));
-  return 4.0 * (1ull << clamped_precision) / 1024.0;
-}
-}  // namespace
 
 approx_distinct_count::~approx_distinct_count() = default;
 
@@ -37,7 +26,7 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
                                              null_policy null_handling,
                                              nan_policy nan_handling,
                                              rmm::cuda_stream_view stream)
-  : _impl{cuco::sketch_size_kb{sketch_size_kb_from_precision(precision)},
+  : _impl{cuco::precision{precision},
           cuda::std::identity{},
           rmm::mr::polymorphic_allocator<cuda::std::byte>{},
           cuda::stream_ref{stream.value()}}
@@ -53,7 +42,7 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
 
   auto const hash_iter = cudf::detail::make_counting_transform_iterator(0, hash_key);
 
-  _impl.add(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
+  _impl.add_async(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
 }
 
 void approx_distinct_count::add(table_view const& input,
@@ -72,19 +61,19 @@ void approx_distinct_count::add(table_view const& input,
 
   auto const hash_iter = cudf::detail::make_counting_transform_iterator(0, hash_key);
 
-  _impl.add(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
+  _impl.add_async(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
 }
 
 void approx_distinct_count::merge(approx_distinct_count const& other, rmm::cuda_stream_view stream)
 {
-  _impl.merge(other._impl, cuda::stream_ref{stream.value()});
+  _impl.merge_async(other._impl, cuda::stream_ref{stream.value()});
 }
 
 void approx_distinct_count::merge(cuda::std::span<cuda::std::byte> sketch_span,
                                   rmm::cuda_stream_view stream)
 {
   auto other_ref = hll_type::ref_type<>{sketch_span, cuda::std::identity{}};
-  _impl.merge(other_ref, cuda::stream_ref{stream.value()});
+  _impl.merge_async(other_ref, cuda::stream_ref{stream.value()});
 }
 
 cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept { return _impl.sketch(); }
