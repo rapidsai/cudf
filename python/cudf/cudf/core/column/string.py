@@ -267,6 +267,7 @@ class StringColumn(ColumnBase, Scannable):
           4
         ]
         """
+        # Empty pandas arrays convert to null arrays with pa.Array.from_pandas
         if self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
