@@ -9,11 +9,11 @@
 function(find_and_configure_nvcomp)
 
   include(${rapids-cmake-dir}/cpm/nvcomp.cmake)
-  set(export_args)
-  if(CUDF_EXPORT_NVCOMP)
-    set(export_args BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
-  endif()
-  rapids_cpm_nvcomp(${export_args} USE_PROPRIETARY_BINARY ON)
+  rapids_cpm_nvcomp(
+    BUILD_EXPORT_SET cudf-exports
+    INSTALL_EXPORT_SET cudf-exports
+    USE_PROPRIETARY_BINARY ON
+  )
 
   # Per-thread default stream
   if(TARGET nvcomp AND CUDF_USE_PER_THREAD_DEFAULT_STREAM)
