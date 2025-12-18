@@ -136,29 +136,44 @@ def replace_nested_all_null_arrays_with_null_array(
 
     # Post-order traversal: process children first, then parent
     if pa.types.is_struct(arrow_array.type):
+        # Check if the entire struct should be replaced FIRST
+        # This prevents replacing individual struct fields
+        if _is_all_null_at_level(arrow_array):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(arrow_array), [pa.py_buffer(b"")]
+            )
+
         # Recursively process each field
+        # For nested types (list/struct/map) and strings, recurse to handle all-null replacement
+        # For other primitives (int/float/etc), preserve types even if all null
         new_fields = []
         any_changed = False
         has_non_nullable_field = False
         for i in range(arrow_array.type.num_fields):
             field_array = arrow_array.field(i)
-            new_field_array = replace_nested_all_null_arrays_with_null_array(
-                field_array
-            )
-            new_fields.append(new_field_array)
-            if new_field_array is not field_array:
-                any_changed = True
+            field_type = field_array.type
+            # Recurse into nested types and strings
+            # Strings need special handling because all-null strings should become null type
+            if (
+                pa.types.is_nested(field_type)
+                or pa.types.is_string(field_type)
+                or pa.types.is_large_string(field_type)
+            ):
+                new_field_array = (
+                    replace_nested_all_null_arrays_with_null_array(field_array)
+                )
+                new_fields.append(new_field_array)
+                if new_field_array is not field_array:
+                    any_changed = True
+            else:
+                # For other primitive fields (int/float/etc), keep as-is
+                # This preserves types like int64 with null values
+                new_fields.append(field_array)
             # Check if any field is marked as non-nullable (unless it's null type)
             if not arrow_array.type[i].nullable and not pa.types.is_null(
                 arrow_array.type[i].type
             ):
                 has_non_nullable_field = True
-
-        # Check if the entire struct should be replaced
-        if _is_all_null_at_level(arrow_array):
-            return pa.NullArray.from_buffers(
-                pa.null(), len(arrow_array), [pa.py_buffer(b"")]
-            )
 
         # Reconstruct struct if any field changed or if we have non-nullable fields
         if any_changed or has_non_nullable_field:
@@ -354,11 +369,31 @@ def dtype_to_metadata(dtype):
         for name, dtype in dtype.fields.items():
             cm.children_meta.append(dtype_to_metadata(dtype))
             cm.children_meta[-1].name = name
+    elif isinstance(dtype, pd.ArrowDtype) and pa.types.is_struct(
+        dtype.pyarrow_dtype
+    ):
+        # Handle pandas ArrowDtype for structs
+        for field in dtype.pyarrow_dtype:
+            cm.children_meta.append(
+                dtype_to_metadata(pd.ArrowDtype(field.type))
+            )
+            cm.children_meta[-1].name = field.name
     elif isinstance(dtype, cudf.core.dtypes.ListDtype):
         # Offsets column
         cm.children_meta.append(plc.interop.ColumnMetadata())
         # Elements column
         cm.children_meta.append(dtype_to_metadata(dtype.element_type))
+    elif isinstance(dtype, pd.ArrowDtype) and (
+        pa.types.is_list(dtype.pyarrow_dtype)
+        or pa.types.is_large_list(dtype.pyarrow_dtype)
+    ):
+        # Handle pandas ArrowDtype for lists
+        # Offsets column
+        cm.children_meta.append(plc.interop.ColumnMetadata())
+        # Elements column
+        cm.children_meta.append(
+            dtype_to_metadata(pd.ArrowDtype(dtype.pyarrow_dtype.value_type))
+        )
     elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
         cm.precision = dtype.precision
     # TODO: Support timezone metadata
