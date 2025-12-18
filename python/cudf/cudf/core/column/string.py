@@ -29,6 +29,7 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
+    replace_nested_all_null_arrays_with_null_array,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format
@@ -274,14 +275,9 @@ class StringColumn(ColumnBase, Scannable):
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )
 
-        ret = super().to_arrow()
-        # Empty pandas arrays convert to null arrays with pa.Array.from_pandas
-        from cudf.utils.dtypes import (
-            replace_nested_all_null_arrays_with_null_array,
+        return replace_nested_all_null_arrays_with_null_array(
+            super().to_arrow()
         )
-
-        ret = replace_nested_all_null_arrays_with_null_array(ret)
-        return ret
 
     def sum(
         self,

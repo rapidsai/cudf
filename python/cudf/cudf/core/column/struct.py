@@ -16,6 +16,7 @@ from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import (
     dtype_to_metadata,
     is_dtype_obj_struct,
+    replace_nested_all_null_arrays_with_null_array,
 )
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
@@ -115,44 +116,11 @@ class StructColumn(ColumnBase):
             return self.size + self.offset
 
     def to_arrow(self) -> pa.Array:
-        # TODO: If there are nested string types anywhere and everything is null, we
-        # have to match the pandas convention of using a null array instead of a string
-        # type there.
-        # Cast to the correct StructType to preserve field names
-        ret = self.to_pylibcudf(mode="read").to_arrow(
-            metadata=dtype_to_metadata(self.dtype)
+        return replace_nested_all_null_arrays_with_null_array(
+            self.to_pylibcudf(mode="read").to_arrow(
+                metadata=dtype_to_metadata(self.dtype)
+            )
         )
-        from cudf.utils.dtypes import (
-            replace_nested_all_null_arrays_with_null_array,
-        )
-
-        # breakpoint()
-        ret = replace_nested_all_null_arrays_with_null_array(ret)
-        return ret
-
-    # def to_arrow(self) -> pa.Array:
-    #     children = [child.to_arrow() for child in self.children]
-    #     dtype: StructDtype = (
-    #         pyarrow_dtype_to_cudf_dtype(self.dtype)  # type: ignore[assignment]
-    #         if isinstance(self.dtype, pd.ArrowDtype)
-    #         else self.dtype
-    #     )
-    #     pa_type = pa.struct(
-    #         {
-    #             field: child.type
-    #             for field, child in zip(dtype.fields, children, strict=True)
-    #         }
-    #     )
-    #
-    #     if self.mask is not None:
-    #         buffers = [pa.py_buffer(self.mask.memoryview())]
-    #     else:
-    #         # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
-    #         buffers = [None]  # type: ignore[list-item]
-    #
-    #     return pa.StructArray.from_buffers(
-    #         pa_type, len(self), buffers, children=children
-    #     )
 
     def to_pandas(
         self,
