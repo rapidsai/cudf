@@ -25,7 +25,7 @@ namespace {
  * @brief Simple binary file format header for CUDFTable
  *
  * The CUDFTable format stores a table in a simple binary layout:
- * - Magic number (4 bytes): "CDFT"
+ * - Magic number (4 bytes): "CTBL"
  * - Version (4 bytes): uint32_t format version (currently 1)
  * - Metadata length (8 bytes): uint64_t size of the metadata buffer in bytes
  * - Data length (8 bytes): uint64_t size of the data buffer in bytes
@@ -33,7 +33,7 @@ namespace {
  * - Data (variable): contiguous device data from pack()
  */
 struct cudftable_header {
-  static constexpr uint32_t magic_number = 0x54464443;  ///< "CDFT" in little-endian
+  static constexpr uint32_t magic_number = 0x4C425443;  ///< "CTBL" in little-endian
   static constexpr uint32_t version      = 1;           ///< Format version
 
   uint32_t magic;            ///< Magic number for format validation
