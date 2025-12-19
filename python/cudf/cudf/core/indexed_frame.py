@@ -3997,11 +3997,9 @@ class IndexedFrame(Frame):
     def resample(
         self,
         rule,
-        axis=0,
         closed: Literal["right", "left"] | None = None,
         label: Literal["right", "left"] | None = None,
         convention: Literal["start", "end", "s", "e"] = "start",
-        kind=None,
         on=None,
         level=None,
         origin="start_day",
@@ -4138,26 +4136,7 @@ class IndexedFrame(Frame):
         """
         from cudf.core.resample import DataFrameResampler, SeriesResampler
 
-        if kind is not None:
-            warnings.warn(
-                "The 'kind' keyword in is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("kind is currently not supported.")
-        if axis != 0:
-            warnings.warn(
-                "The 'axis' keyword in is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("axis is currently not supported.")
         if convention != "start":
-            warnings.warn(
-                "The 'convention' keyword in is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
             raise NotImplementedError("convention is currently not supported.")
         if origin != "start_day":
             raise NotImplementedError("origin is currently not supported.")
