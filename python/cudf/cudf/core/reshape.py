@@ -389,7 +389,7 @@ def concat(
 
         # Inner joins involving empty data frames always return empty dfs, but
         # We must delay returning until we have set the column names.
-        empty_inner = any(obj.empty for obj in objs) and join == "inner"
+        empty_inner = join == "inner" and any(obj.empty for obj in objs)
 
         if len(objs) == 0:
             # TODO: https://github.com/rapidsai/cudf/issues/16550
