@@ -267,8 +267,8 @@ class StringColumn(ColumnBase, Scannable):
           4
         ]
         """
-        # Special case: string columns with no children can't be converted by C++
-        # This happens with all-null string columns
+        # All null string columns fail to convert in libcudf, so we must short-circuit
+        # the call to super().to_arrow().
         if len(self.base_children) == 0 or self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
