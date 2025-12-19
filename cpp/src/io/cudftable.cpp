@@ -89,7 +89,7 @@ packed_table read_cudftable(datasource* source,
 
   auto const metadata_offset = header_size;
   auto const data_offset     = metadata_offset + header.metadata_length;
-  CUDF_EXPECTS(source->size() >= data_offset + header.data_length,
+  CUDF_EXPECTS(source->size() == data_offset + header.data_length,
                "File too small for the specified metadata and data sizes");
 
   auto packed = packed_columns{};
