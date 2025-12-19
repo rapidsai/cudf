@@ -222,6 +222,7 @@ files:
     includes:
       - build_base
       - build_cpp
+      - cuda
       - depends_on_libkvikio
       - depends_on_libnvcomp
       - depends_on_librmm
@@ -592,18 +593,20 @@ dependencies:
           - cuda-cudart-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
+          - libcufile-dev
           - libcurand-dev
           - libnvjitlink-dev
     specific:
-      - output_types: conda
+      - output_types: [requirements, pyproject]
         matrices:
           - matrix:
-              arch: aarch64
+              cuda: "12.*"
             packages:
+              - nvidia-nvjitlink-cu12>=12.9
+          # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
-              arch: x86_64
             packages:
-              - libcufile-dev
+              - nvidia-nvjitlink>=13.0
   develop:
     common:
       - output_types: [conda, requirements]

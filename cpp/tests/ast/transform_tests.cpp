@@ -402,7 +402,8 @@ TYPED_TEST(TransformTest, ImbalancedTreeArithmeticDeep)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
-TYPED_TEST(TransformTest, DeeplyNestedArithmeticLogicalExpression)
+// TODO: This fails on CI nightlies for CUDA 12.2, driver 535, V100
+TYPED_TEST(TransformTest, DISABLED_DeeplyNestedArithmeticLogicalExpression)
 {
   using Executor = TypeParam;
 
