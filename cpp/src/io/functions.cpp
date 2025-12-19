@@ -1238,10 +1238,7 @@ namespace experimental {
 
 // Forward declarations for detail functions
 namespace detail {
-void write_cudftable(data_sink* sink,
-                     table_view const& input,
-                     rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref mr);
+void write_cudftable(data_sink* sink, table_view const& input, rmm::cuda_stream_view stream);
 packed_table read_cudftable(datasource* source,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr);
