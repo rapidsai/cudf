@@ -4245,13 +4245,9 @@ class TimedeltaIndex(Index):
     ----------
     data : array-like (1-dimensional), optional
         Optional datetime-like data to construct index with.
-    unit : str, optional
-        This is not yet supported
     copy : bool
         Make a copy of input.
     freq : str, optional
-        This is not yet supported
-    closed : str, optional
         This is not yet supported
     dtype : str or :class:`numpy.dtype`, optional
         Data type for the output Index. If not specified, the
@@ -4295,9 +4291,7 @@ class TimedeltaIndex(Index):
     def __init__(
         self,
         data=None,
-        unit=None,
         freq=None,
-        closed=None,
         dtype=None,
         copy: bool = False,
         name=None,
@@ -4305,25 +4299,6 @@ class TimedeltaIndex(Index):
     ):
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
-
-        if closed is not None:
-            warnings.warn(
-                "The 'closed' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("closed is not yet supported")
-
-        if unit is not None:
-            warnings.warn(
-                "The 'unit' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError(
-                "unit is not yet supported, alternatively "
-                "dtype parameter is supported"
-            )
 
         name = _getdefault_name(data, name=name)
         col = as_column(data)
