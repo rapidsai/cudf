@@ -1296,10 +1296,7 @@ def _parquet_to_frame(
     if len(dfs) > 1:
         # Concatenate dfs and return.
         # Assume we can ignore the index if it has no name.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            res = concat(dfs, ignore_index=dfs[-1].index.name is None)
-        return res
+        return concat(dfs, ignore_index=dfs[-1].index.name is None)
     else:
         return dfs[0]
 
