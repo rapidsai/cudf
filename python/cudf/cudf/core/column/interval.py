@@ -11,11 +11,8 @@ import pyarrow as pa
 import cudf
 from cudf.core.column.column import as_column
 from cudf.core.column.struct import StructColumn
-from cudf.core.dtypes import IntervalDtype, StructDtype
-from cudf.utils.dtypes import (
-    is_dtype_obj_interval,
-    pyarrow_dtype_to_cudf_dtype,
-)
+from cudf.core.dtypes import IntervalDtype
+from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
     from typing_extensions import Self
