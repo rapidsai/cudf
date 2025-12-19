@@ -50,9 +50,9 @@ class element_hasher {
    */
   __device__ element_hasher(
     Nullate nulls,
-    result_type seed      = DEFAULT_HASH_SEED,
-    result_type null_hash = cuda::std::numeric_limits<result_type>::max()) noexcept
-    : _check_nulls(nulls), _seed(seed), _null_hash(null_hash)
+    result_type seed       = DEFAULT_HASH_SEED,
+    result_type null_hash_ = cuda::std::numeric_limits<result_type>::max()) noexcept
+    : _check_nulls(nulls), _seed(seed), _null_hash(null_hash_)
   {
   }
 
