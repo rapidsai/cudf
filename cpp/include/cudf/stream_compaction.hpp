@@ -429,6 +429,19 @@ struct approx_distinct_count;
  * The implementation uses XXHash64 to hash table rows into 64-bit values, which are
  * then added to the HyperLogLog sketch without additional hashing (identity function).
  *
+ * @par HyperLogLog Precision Parameter
+ * The precision parameter (p) determines the number of registers (m = 2^p) in the HLL sketch:
+ * - Memory usage: 2^p bytes (m registers of 1 byte each)
+ * - Standard error: 1.04 / sqrt(m) = 1.04 / sqrt(2^p)
+ *
+ * Common precision values:
+ * - p=10: m=1,024 registers, ~3.2% standard error, 1KB memory
+ * - p=12 (default): m=4,096 registers, ~1.6% standard error, 4KB memory
+ * - p=14: m=16,384 registers, ~0.8% standard error, 16KB memory
+ * - p=16: m=65,536 registers, ~0.4% standard error, 64KB memory
+ *
+ * Valid range: p ∈ [4, 18]. Higher precision provides better accuracy but uses more memory.
+ *
  * Example usage:
  * @code{.cpp}
  *   auto adc = cudf::approx_distinct_count(table1);
