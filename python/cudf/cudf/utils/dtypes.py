@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any, TypeGuard, cast
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 import numpy as np
 import pandas as pd
@@ -80,126 +80,6 @@ OTHER_TYPES = {"bool", "category", "str"}
 STRING_TYPES = {"object"}
 BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
-
-
-def replace_nested_all_null_arrays_with_null_array(
-    arrow_array: pa.Array,
-) -> pa.Array:
-    # Recursively replace all-null nested arrays with arrow NullArrays and make all
-    # types nullable in the schema even if the columns contain no nulls
-    array_type = arrow_array.type
-
-    # Empty nested or string types should become pyarrow null arrays instead of the
-    # normal array classes to match how pyarrow ingests such pandas objects.
-    if (
-        pa.types.is_nested(array_type)
-        or pa.types.is_string(array_type)
-        or pa.types.is_large_string(array_type)
-    ) and (arrow_array.null_count == len(arrow_array)):
-        return pa.NullArray.from_buffers(
-            pa.null(), len(arrow_array), [pa.py_buffer(b"")]
-        )
-
-    if pa.types.is_struct(array_type):
-        arrow_array = cast(pa.StructArray, arrow_array)
-
-        new_fields = []
-        requires_reconstruction = False
-        for i, subfield in enumerate(array_type):
-            new_field_array = field_array = arrow_array.field(i)
-            field_type = subfield.type
-            if (
-                pa.types.is_nested(field_type)
-                or pa.types.is_string(field_type)
-                or pa.types.is_large_string(field_type)
-            ):
-                new_field_array = (
-                    replace_nested_all_null_arrays_with_null_array(field_array)
-                )
-            new_fields.append(new_field_array)
-            # Reconstruct if we replaced nulls in children or need nullability change
-            requires_reconstruction = (
-                requires_reconstruction
-                or (new_field_array is not field_array)
-                or not subfield.nullable
-                and not pa.types.is_null(field_type)
-            )
-
-        if requires_reconstruction:
-            new_struct_type = pa.struct(
-                [
-                    pa.field(at.name, nf.type, nullable=True)
-                    for at, nf in zip(array_type, new_fields, strict=True)
-                ]
-            )
-            # Only need validity buffer for structs
-            buffers = cast(list[pa.Buffer], arrow_array.buffers()[:1])
-            return pa.StructArray.from_buffers(
-                new_struct_type,
-                len(arrow_array),
-                buffers,
-                children=new_fields,
-                null_count=arrow_array.null_count,
-            )
-    elif pa.types.is_list(array_type):
-        arrow_array = cast(pa.ListArray, arrow_array)
-
-        values = arrow_array.values
-        new_values = replace_nested_all_null_arrays_with_null_array(values)
-
-        value_field = array_type.value_field
-        has_non_nullable_field = (
-            not value_field.nullable and not pa.types.is_null(value_field.type)
-        )
-
-        if new_values is not values or has_non_nullable_field:
-            buffers = cast(list[pa.Buffer], arrow_array.buffers()[:2])
-            list_type = pa.list_(
-                pa.field(value_field.name, new_values.type, nullable=True)
-            )
-            return pa.ListArray.from_buffers(
-                list_type,
-                len(arrow_array),
-                buffers,
-                children=[new_values],
-                null_count=arrow_array.null_count,
-            )
-    # For other primitives (int/float/etc), preserve type even if all null
-    return arrow_array
-
-
-def dtype_to_metadata(dtype):
-    # Convert a cudf or pandas dtype to pylibcudf ColumnMetadata for arrow conversion
-    cm = plc.interop.ColumnMetadata()
-    if isinstance(dtype, cudf.core.dtypes.StructDtype):
-        for name, dtype in dtype.fields.items():
-            cm.children_meta.append(dtype_to_metadata(dtype))
-            cm.children_meta[-1].name = name
-    elif isinstance(dtype, cudf.core.dtypes.ListDtype):
-        # Offsets column must be added manually
-        cm.children_meta.append(plc.interop.ColumnMetadata())
-        cm.children_meta.append(dtype_to_metadata(dtype.element_type))
-    elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-        cm.precision = dtype.precision
-    elif isinstance(dtype, pd.ArrowDtype):
-        if pa.types.is_struct(dtype.pyarrow_dtype):
-            for field in dtype.pyarrow_dtype:
-                cm.children_meta.append(
-                    dtype_to_metadata(pd.ArrowDtype(field.type))
-                )
-                cm.children_meta[-1].name = field.name
-        elif pa.types.is_list(dtype.pyarrow_dtype) or pa.types.is_large_list(
-            dtype.pyarrow_dtype
-        ):
-            # Offsets column must be added manually
-            cm.children_meta.append(plc.interop.ColumnMetadata())
-            cm.children_meta.append(
-                dtype_to_metadata(
-                    pd.ArrowDtype(dtype.pyarrow_dtype.value_type)
-                )
-            )
-    # TODO: Support timezone metadata
-    return cm
 
 
 def _find_common_type_decimal(dtypes: Iterable[DecimalDtype]) -> DecimalDtype:
