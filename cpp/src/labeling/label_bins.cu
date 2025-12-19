@@ -37,6 +37,82 @@ namespace cudf {
 namespace detail {
 namespace {
 
+template <typename Func>
+auto dispatch_bool(bool value, Func&& func)
+{
+  if (value) {
+    return func(std::bool_constant<true>{});
+  } else {
+    return func(std::bool_constant<false>{});
+  }
+}
+
+template <typename, inclusive>
+struct InclusiveToComparator;
+
+template <typename T>
+struct InclusiveToComparator<T, inclusive::YES> {
+  using type = cuda::std::less_equal<T>;
+};
+
+template <typename T>
+struct InclusiveToComparator<T, inclusive::NO> {
+  using type = cuda::std::less<T>;
+};
+
+template <typename T, inclusive i>
+using InclusiveToComparator_t = typename InclusiveToComparator<T, i>::type;
+
+template <auto Value, typename Func>
+bool try_dispatch_enum(auto runtime_value, Func&& func, auto& result)
+{
+  if (runtime_value == Value) {
+    result = func(std::integral_constant<decltype(runtime_value), Value>{});
+    return true;
+  }
+  return false;
+}
+
+// Helper to extract first value from parameter pack
+template <auto First, auto...>
+inline constexpr auto first_value = First;
+
+// Generic dispatcher that takes all possible enum values as template parameters
+template <auto... Values, typename Func>
+auto dispatch_enum(auto runtime_value, Func&& func)
+{
+  using EnumType = decltype(runtime_value);
+  using RetType  = decltype(func(std::integral_constant<EnumType, first_value<Values...>>{}));
+
+  if constexpr (std::is_void_v<RetType>) {
+    // Handle void return type
+    bool found = false;
+    ((!found && runtime_value == Values
+        ? (func(std::integral_constant<EnumType, Values>{}), found = true)
+        : false),
+     ...);
+
+    // One of the enum values must have matched. Alternatively we could
+    // throw an exception here indicating that the developer failed to
+    // enumerate all possible values.
+    if (!found) { __builtin_unreachable(); }
+  } else {
+    // Handle non-void return type
+    RetType result{};
+    bool found = (try_dispatch_enum<Values>(runtime_value, func, result) || ...);
+
+    if (!found) { __builtin_unreachable(); }
+    return result;
+  }
+}
+
+// Helper to have single point of dispatch for inclusive enum
+template <typename Func>
+auto dispatch_inclusive(inclusive i, Func&& func)
+{
+  return dispatch_enum<inclusive::YES, inclusive::NO>(i, std::forward<Func>(func));
+}
+
 // Sentinel used to indicate that an input value should be placed in the null
 // bin.
 // NOTE: In theory if a user decided to specify 2^31 bins this would fail. We
@@ -123,21 +199,14 @@ std::unique_ptr<column> label_bins(column_view const& input,
 
   using RandomAccessIterator = decltype(left_edges_device_view->begin<T>());
 
-  if (input.has_nulls()) {
+  dispatch_bool(input.has_nulls(), [&](auto has_nulls) {
     thrust::transform(rmm::exec_policy(stream),
-                      input_device_view->pair_begin<T, true>(),
-                      input_device_view->pair_end<T, true>(),
+                      input_device_view->pair_begin<T, has_nulls>(),
+                      input_device_view->pair_end<T, has_nulls>(),
                       output_begin,
                       bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
                         left_begin, left_end, right_begin));
-  } else {
-    thrust::transform(rmm::exec_policy(stream),
-                      input_device_view->pair_begin<T, false>(),
-                      input_device_view->pair_end<T, false>(),
-                      output_begin,
-                      bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
-                        left_begin, left_end, right_begin));
-  }
+  });
 
   auto mask_and_count = valid_if(output_begin, output_end, filter_null_sentinel(), stream, mr);
 
@@ -169,20 +238,12 @@ struct bin_type_dispatcher {
                                      rmm::device_async_resource_ref mr)
     requires(detail::is_supported_bin_type<T>())
   {
-    if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-      return label_bins<T, cuda::std::less_equal<T>, cuda::std::less_equal<T>>(
-        input, left_edges, right_edges, stream, mr);
-    if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-      return label_bins<T, cuda::std::less_equal<T>, cuda::std::less<T>>(
-        input, left_edges, right_edges, stream, mr);
-    if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-      return label_bins<T, cuda::std::less<T>, cuda::std::less_equal<T>>(
-        input, left_edges, right_edges, stream, mr);
-    if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-      return label_bins<T, cuda::std::less<T>, cuda::std::less<T>>(
-        input, left_edges, right_edges, stream, mr);
-
-    CUDF_FAIL("Undefined inclusive setting.");
+    return dispatch_inclusive(left_inclusive, [&](auto li) {
+      return dispatch_inclusive(right_inclusive, [&](auto ri) {
+        return label_bins<T, InclusiveToComparator_t<T, li>, InclusiveToComparator_t<T, ri>>(
+          input, left_edges, right_edges, stream, mr);
+      });
+    });
   }
 };
 
