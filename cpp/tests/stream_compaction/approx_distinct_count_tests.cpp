@@ -253,18 +253,14 @@ TEST_F(ApproxDistinctCount, TableNullHandling)
 
 TEST_F(ApproxDistinctCount, CombinedNullNaNHandling)
 {
-  // Create float column with both nulls and NaNs
-  std::vector<float> values{1.0f,
-                            std::numeric_limits<float>::quiet_NaN(),
-                            0.0f,
-                            3.0f,
-                            std::numeric_limits<float>::quiet_NaN()};
-  std::vector<bool> validity{true, true, false, true, true};
-  cudf::test::fixed_width_column_wrapper<float> input_col(
-    values.begin(), values.end(), validity.begin());
+  cudf::test::fixed_width_column_wrapper<float> input_col{{1.0f,
+                                                           std::numeric_limits<float>::quiet_NaN(),
+                                                           0.0f,
+                                                           3.0f,
+                                                           std::numeric_limits<float>::quiet_NaN()},
+                                                          {1, 1, 0, 1, 1}};
   cudf::table_view input_table({input_col});
 
-  // Test combination of null and NaN handling
   auto adc =
     cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_NULL);
   auto approx_count = adc.estimate();
@@ -295,4 +291,143 @@ TEST_F(ApproxDistinctCount, AddToExistingSketch)
 
   EXPECT_TRUE(is_reasonable_approximation(approx_count, exact_count))
     << "Exact: " << exact_count << ", Approx: " << approx_count;
+}
+
+TEST_F(ApproxDistinctCount, NullInclude_NaNValid)
+{
+  cudf::test::fixed_width_column_wrapper<float> input_col{
+    {1.0f, std::numeric_limits<float>::quiet_NaN(), 3.0f, 0.0f, 1.0f}, {1, 1, 0, 1, 1}};
+  cudf::table_view input_table({input_col});
+
+  auto adc =
+    cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
+  auto approx_count = adc.estimate();
+  auto const exact_count =
+    cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
+
+  EXPECT_TRUE(is_reasonable_approximation(approx_count, exact_count))
+    << "Exact: " << exact_count << ", Approx: " << approx_count;
+}
+
+TEST_F(ApproxDistinctCount, NullInclude_NaNNull)
+{
+  cudf::test::fixed_width_column_wrapper<float> input_col{{1.0f,
+                                                           std::numeric_limits<float>::quiet_NaN(),
+                                                           3.0f,
+                                                           0.0f,
+                                                           std::numeric_limits<float>::quiet_NaN()},
+                                                          {1, 1, 0, 1, 1}};
+  cudf::table_view input_table({input_col});
+
+  auto adc =
+    cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_NULL);
+  auto approx_count = adc.estimate();
+  auto const exact_count =
+    cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL);
+
+  EXPECT_TRUE(is_reasonable_approximation(approx_count, exact_count))
+    << "Exact: " << exact_count << ", Approx: " << approx_count;
+}
+
+TEST_F(ApproxDistinctCount, NullExclude_NaNValid)
+{
+  cudf::test::fixed_width_column_wrapper<float> input_col{{1.0f,
+                                                           std::numeric_limits<float>::quiet_NaN(),
+                                                           3.0f,
+                                                           0.0f,
+                                                           std::numeric_limits<float>::quiet_NaN()},
+                                                          {1, 1, 0, 1, 1}};
+  cudf::table_view input_table({input_col});
+
+  auto adc =
+    cudf::approx_distinct_count(input_table, 12, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID);
+  auto approx_count = adc.estimate();
+  auto const exact_count =
+    cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID);
+
+  EXPECT_TRUE(is_reasonable_approximation(approx_count, exact_count))
+    << "Exact: " << exact_count << ", Approx: " << approx_count;
+}
+
+TEST_F(ApproxDistinctCount, NullExclude_NaNNull)
+{
+  cudf::test::fixed_width_column_wrapper<float> input_col{{1.0f,
+                                                           std::numeric_limits<float>::quiet_NaN(),
+                                                           3.0f,
+                                                           0.0f,
+                                                           std::numeric_limits<float>::quiet_NaN()},
+                                                          {1, 1, 0, 1, 1}};
+  cudf::table_view input_table({input_col});
+
+  auto adc =
+    cudf::approx_distinct_count(input_table, 12, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL);
+  auto approx_count = adc.estimate();
+  auto const exact_count =
+    cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL);
+
+  EXPECT_TRUE(is_reasonable_approximation(approx_count, exact_count))
+    << "Exact: " << exact_count << ", Approx: " << approx_count;
+}
+
+TEST_F(ApproxDistinctCount, TableWithNoNulls_ExcludePolicy)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col1{1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{1, 2, 2, 4};
+  cudf::table_view input_table({col1, col2});
+
+  auto adc =
+    cudf::approx_distinct_count(input_table, 12, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID);
+  auto approx_count      = adc.estimate();
+  auto const exact_count = cudf::distinct_count(input_table, cudf::null_equality::EQUAL);
+
+  EXPECT_TRUE(is_reasonable_approximation(approx_count, exact_count))
+    << "Exact: " << exact_count << ", Approx: " << approx_count;
+}
+
+TEST_F(ApproxDistinctCount, FloatColumnWithNoNaNs_NaNNullPolicy)
+{
+  cudf::test::fixed_width_column_wrapper<float> input_col{1.0f, 2.0f, 3.0f, 1.0f, 2.0f};
+  cudf::table_view input_table({input_col});
+
+  auto adc =
+    cudf::approx_distinct_count(input_table, 12, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL);
+  auto approx_count = adc.estimate();
+  auto const exact_count =
+    cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL);
+
+  EXPECT_TRUE(is_reasonable_approximation(approx_count, exact_count))
+    << "Exact: " << exact_count << ", Approx: " << approx_count;
+}
+
+TEST_F(ApproxDistinctCount, MixedTypes_NullAndNaNHandling)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4}, {1, 1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<float> float_col{
+    {1.0f, std::numeric_limits<float>::quiet_NaN(), 3.0f, 4.0f}, {1, 1, 1, 0}};
+
+  cudf::table_view input_table({int_col, float_col});
+
+  auto adc_in_v =
+    cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
+  auto adc_in_n =
+    cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_NULL);
+  auto adc_ex_v =
+    cudf::approx_distinct_count(input_table, 12, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID);
+  auto adc_ex_n =
+    cudf::approx_distinct_count(input_table, 12, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL);
+
+  auto count_in_v = adc_in_v.estimate();
+  auto count_in_n = adc_in_n.estimate();
+  auto count_ex_v = adc_ex_v.estimate();
+  auto count_ex_n = adc_ex_n.estimate();
+
+  EXPECT_LE(count_ex_v, count_in_v);
+  EXPECT_LE(count_ex_n, count_in_n);
+  EXPECT_LE(count_ex_n, count_ex_v);
+  EXPECT_LE(count_in_n, count_in_v);
+
+  EXPECT_GT(count_in_v, 0);
+  EXPECT_GT(count_in_n, 0);
+  EXPECT_GT(count_ex_v, 0);
+  EXPECT_GT(count_ex_n, 0);
 }
