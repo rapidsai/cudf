@@ -252,23 +252,9 @@ class StringColumn(ColumnBase, Scannable):
         return result
 
     def to_arrow(self) -> pa.Array:
-        """Convert to PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> col = cudf.core.as_column([1, 2, 3, 4])
-        >>> col.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7f886547f830>
-        [
-          1,
-          2,
-          3,
-          4
-        ]
-        """
         # All null string columns fail to convert in libcudf, so we must short-circuit
         # the call to super().to_arrow().
+        # TODO: Investigate if the above is a bug in libcudf and fix it there.
         if len(self.base_children) == 0 or self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
