@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "cudf/detail/nvtx/ranges.hpp"
-
 #include <cudf/contiguous_split.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
@@ -49,8 +47,6 @@ void write_cudftable(data_sink* sink,
                      rmm::cuda_stream_view stream,
                      rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
-
   auto const packed = cudf::pack(input, stream, mr);
 
   auto const header = cudftable_header{cudftable_header::magic_number,
@@ -78,8 +74,6 @@ packed_table read_cudftable(datasource* source,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
-
   auto const header_size = sizeof(cudftable_header);
   CUDF_EXPECTS(source->size() >= header_size, "File too small to contain a valid cudftable header");
 
