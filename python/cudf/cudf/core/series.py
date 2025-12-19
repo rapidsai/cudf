@@ -1360,9 +1360,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if max_rows not in (0, None) and len(self) > max_rows:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                preprocess = cudf.concat([top, bottom])
+            preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
         if isinstance(preprocess.dtype, CategoricalDtype):
@@ -1511,9 +1509,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             if isinstance(objs[0].index, cudf.MultiIndex):
                 result_index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    result_index = Index._concat([o.index for o in objs])
+                result_index = Index._concat([o.index for o in objs])
         elif index is False:
             result_index = None
         else:

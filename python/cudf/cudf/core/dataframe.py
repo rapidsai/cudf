@@ -52,7 +52,6 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core import indexing_utils, reshape
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
@@ -635,13 +634,7 @@ def _listlike_to_column_accessor(
             )
             transpose = temp_frame.T
         else:
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore",
-                    message="The behavior of array concatenation",
-                    category=FutureWarning,
-                )
-                transpose = cudf.concat(data, axis=1).T
+            transpose = cudf.concat(data, axis=1).T
 
         if columns is None:
             columns = pd.RangeIndex(transpose._num_columns)
@@ -2207,11 +2200,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             lower_left = self.tail(lower_rows).iloc[:, :left_cols]
             lower_right = self.tail(lower_rows).iloc[:, right_cols:]
 
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                upper = cudf.concat([upper_left, upper_right], axis=1)
-                lower = cudf.concat([lower_left, lower_right], axis=1)
-                output = cudf.concat([upper, lower])
+            upper = cudf.concat([upper_left, upper_right], axis=1)
+            lower = cudf.concat([lower_left, lower_right], axis=1)
+            output = cudf.concat([upper, lower])
 
         return output._pandas_repr_compatible()
 
@@ -5471,17 +5462,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 None,
             )
 
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                res = cudf.concat(
-                    [
-                        series.reindex(names, copy=False)
-                        for series in describe_series_list
-                    ],
-                    axis=1,
-                    sort=False,
-                )
-            return res
+            return cudf.concat(
+                [
+                    series.reindex(names, copy=False)
+                    for series in describe_series_list
+                ],
+                axis=1,
+                sort=False,
+            )
 
     @_performance_tracking
     def to_pandas(
@@ -6747,12 +6735,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if len(mode_results) == 0:
             return DataFrame()
 
-        with warnings.catch_warnings():
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.simplefilter("ignore", FutureWarning)
-            df = cudf.concat(mode_results, axis=1)
+        df = cudf.concat(mode_results, axis=1)
 
         if isinstance(df, Series):
             df = df.to_frame()

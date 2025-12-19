@@ -1777,10 +1777,7 @@ class Index(SingleColumnFrame):
         if len(self) > mr and mr != 0:
             top = self[0:mr]
             bottom = self[-1 * mr :]
-
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                preprocess = cudf.concat([top, bottom])
+            preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
 
