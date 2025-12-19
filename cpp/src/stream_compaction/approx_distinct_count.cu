@@ -49,17 +49,13 @@ struct nan_to_null_hasher {
 
   __device__ hash_value_type operator()(cudf::size_type row_idx) const noexcept
   {
-    // Check if row contains any null or NaN values - return the same null hash value
-    // that cudf's row hasher uses (maximum value of the hash type)
     constexpr auto null_hash = cuda::std::numeric_limits<hash_value_type>::max();
 
     for (cudf::size_type col_idx = 0; col_idx < d_table.num_columns(); ++col_idx) {
       auto const& col = d_table.column(col_idx);
 
-      // Check for null
       if (col.nullable() && col.is_null_nocheck(row_idx)) { return null_hash; }
 
-      // Check for NaN in floating point columns
       auto const type = col.type();
       if (type.id() == type_id::FLOAT32) {
         if (cuda::std::isnan(col.element<float>(row_idx))) { return null_hash; }
@@ -68,7 +64,6 @@ struct nan_to_null_hasher {
       }
     }
 
-    // No null or NaN found, return the normal hash
     return base_hasher(row_idx);
   }
 };
@@ -82,10 +77,8 @@ struct check_nans_predicate {
 
   __device__ bool operator()(cudf::size_type row_idx) const noexcept
   {
-    // Check if row is valid using bitmask (excludes nulls) if bitmask is provided
     if (row_bitmask != nullptr && !cudf::bit_is_set(row_bitmask, row_idx)) { return false; }
 
-    // Row is non-null (or no nulls exist), now check for NaN in floating point columns
     for (cudf::size_type col_idx = 0; col_idx < d_table.num_columns(); ++col_idx) {
       auto const& col = d_table.column(col_idx);
       auto const type = col.type();
@@ -133,7 +126,6 @@ void approx_distinct_count::add(table_view const& input,
   auto const row_hasher = cudf::detail::row::hash::row_hasher(preprocessed_input);
   auto const hash_key   = row_hasher.device_hasher<cudf::hashing::detail::XXHash_64>(has_nulls);
 
-  // Use the appropriate hash iterator based on null/NaN handling policies
   if (null_handling == null_policy::INCLUDE) {
     if (nan_handling == nan_policy::NAN_IS_NULL) {
       // Include nulls and treat NaN as null - use custom hasher that maps NaN to NULL_HASH
@@ -142,7 +134,6 @@ void approx_distinct_count::add(table_view const& input,
       auto const hash_iter  = cudf::detail::make_counting_transform_iterator(0, nan_hasher);
       _impl.add_async(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
     } else {
-      // Include nulls and NaNs as distinct values - use regular hasher
       auto const hash_iter = cudf::detail::make_counting_transform_iterator(0, hash_key);
       _impl.add_async(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
     }
@@ -152,9 +143,7 @@ void approx_distinct_count::add(table_view const& input,
     auto const stencil   = thrust::counting_iterator{0};
 
     if (nan_handling == nan_policy::NAN_IS_VALID) {
-      // Only check for nulls using bitmask_and
       if (!has_nulls) {
-        // No nulls, so all rows are valid - use add_async directly
         _impl.add_async(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
       } else {
         auto const row_bitmask =
@@ -164,10 +153,8 @@ void approx_distinct_count::add(table_view const& input,
           hash_iter, hash_iter + num_rows, stencil, pred, cuda::stream_ref{stream.value()});
       }
     } else {
-      // Exclude both nulls (using bitmask) and NaNs
       auto const d_table = table_device_view::create(input, stream);
       if (!has_nulls) {
-        // No nulls, only check for NaNs
         auto const pred = check_nans_predicate{*d_table, nullptr};
         _impl.add_if_async(
           hash_iter, hash_iter + num_rows, stencil, pred, cuda::stream_ref{stream.value()});
@@ -204,7 +191,6 @@ cudf::size_type approx_distinct_count::estimate(rmm::cuda_stream_view stream) co
 
 }  // namespace detail
 
-// Public API implementations
 approx_distinct_count::~approx_distinct_count() = default;
 
 approx_distinct_count::approx_distinct_count(table_view const& input,

@@ -430,7 +430,8 @@ struct approx_distinct_count;
  * then added to the HyperLogLog sketch without additional hashing (identity function).
  *
  * @par HyperLogLog Precision Parameter
- * The precision parameter (p) determines the number of registers (m = 2^p) in the HLL sketch:
+ * The precision parameter (p) is the number of bits used to index into the register array.
+ * It determines the number of registers (m = 2^p) in the HLL sketch:
  * - Memory usage: 2^p bytes (m registers of 1 byte each)
  * - Standard error: 1.04 / sqrt(m) = 1.04 / sqrt(2^p)
  *

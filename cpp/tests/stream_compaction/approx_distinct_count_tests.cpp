@@ -204,15 +204,11 @@ TEST_F(ApproxDistinctCount, DifferentPrecisions)
   EXPECT_TRUE(is_reasonable_approximation(result_high, exact_count, 14));
 }
 
-// ===== COMPREHENSIVE NULL/NaN PARAMETER TESTING =====
-
 TEST_F(ApproxDistinctCount, NullEqualityUnequal)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> input_col{{1, XXX, 3, XXX, 1}, {1, 0, 1, 0, 1}};
   cudf::table_view input_table({input_col});
 
-  // For approximate distinct count, we simplify null handling
-  // Just test that it gives a reasonable approximation
   auto adc =
     cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
   auto approx_count = adc.estimate();
@@ -228,7 +224,6 @@ TEST_F(ApproxDistinctCount, NullEqualityEqual)
   cudf::test::fixed_width_column_wrapper<int32_t> input_col{{1, XXX, 3, XXX, 1}, {1, 0, 1, 0, 1}};
   cudf::table_view input_table({input_col});
 
-  // With simplified API, all nulls are treated as equal
   auto adc =
     cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
   auto approx_count = adc.estimate();
@@ -248,7 +243,6 @@ TEST_F(ApproxDistinctCount, NaNHandling)
                                                           1.0f};
   cudf::table_view input_table({input_col});
 
-  // Test NaN as null with EXCLUDE policy
   auto adc_exclude =
     cudf::approx_distinct_count(input_table, 12, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL);
   auto approx_exclude = adc_exclude.estimate();
@@ -258,7 +252,6 @@ TEST_F(ApproxDistinctCount, NaNHandling)
   EXPECT_TRUE(is_reasonable_approximation(approx_exclude, exact_exclude))
     << "Exclude - Exact: " << exact_exclude << ", Approx: " << approx_exclude;
 
-  // Test NaN as null with INCLUDE policy
   auto adc_include =
     cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_NULL);
   auto approx_include = adc_include.estimate();
@@ -278,7 +271,6 @@ TEST_F(ApproxDistinctCount, NaNEqualityUnequal)
                                                           1.0f};
   cudf::table_view input_table({input_col});
 
-  // For approximate distinct count, simplified NaN handling
   auto adc =
     cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
   auto approx_count = adc.estimate();
@@ -295,7 +287,6 @@ TEST_F(ApproxDistinctCount, TableNullHandling)
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{1, 2, XXX, 1}, {1, 1, 0, 1}};
   cudf::table_view input_table({col1, col2});
 
-  // Test table with simplified null handling
   auto adc =
     cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
   auto approx_count      = adc.estimate();
@@ -327,19 +318,16 @@ TEST_F(ApproxDistinctCount, CombinedNullNaNHandling)
 
 TEST_F(ApproxDistinctCount, AddToExistingSketch)
 {
-  // Create initial sketch
   cudf::test::fixed_width_column_wrapper<int32_t> col1{1, 2, 3};
   cudf::table_view table1({col1});
   auto adc = cudf::approx_distinct_count(table1);
 
-  // Add more data
   cudf::test::fixed_width_column_wrapper<int32_t> col2{3, 4, 5};
   cudf::table_view table2({col2});
   adc.add(table2);
 
   auto approx_count = adc.estimate();
 
-  // Create combined table for exact count
   cudf::test::fixed_width_column_wrapper<int32_t> combined{1, 2, 3, 3, 4, 5};
   auto exact_count = cudf::distinct_count(combined, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID);
 
