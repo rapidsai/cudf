@@ -20,9 +20,9 @@ namespace detail {
 namespace {
 
 /**
- * @brief Simple binary file format header for Cudftable
+ * @brief Simple binary file format header for CudfTable
  *
- * The Cudftable format stores a table in a simple binary layout:
+ * The CudfTable format stores a table in a simple binary layout:
  * - Magic number (4 bytes): "CTBL"
  * - Version (4 bytes): uint32_t format version (currently 1)
  * - Metadata length (8 bytes): uint64_t size of the metadata buffer in bytes
