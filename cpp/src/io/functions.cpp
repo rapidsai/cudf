@@ -1250,16 +1250,14 @@ packed_table read_cudftable(datasource* source,
 /**
  * @copydoc cudf::io::experimental::write_cudftable
  */
-void write_cudftable(cudftable_writer_options const& options,
-                     rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref mr)
+void write_cudftable(cudftable_writer_options const& options, rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Cudftable format only supports single sink");
 
-  detail::write_cudftable(sinks[0].get(), options.get_table(), stream, mr);
+  detail::write_cudftable(sinks[0].get(), options.get_table(), stream);
 }
 
 /**

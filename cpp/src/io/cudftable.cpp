@@ -42,12 +42,9 @@ struct cudftable_header {
 
 }  // anonymous namespace
 
-void write_cudftable(data_sink* sink,
-                     table_view const& input,
-                     rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref mr)
+void write_cudftable(data_sink* sink, table_view const& input, rmm::cuda_stream_view stream)
 {
-  auto const packed = cudf::pack(input, stream, mr);
+  auto const packed = cudf::pack(input, stream, cudf::get_current_device_resource_ref());
 
   auto const header = cudftable_header{cudftable_header::magic_number,
                                        cudftable_header::version,
