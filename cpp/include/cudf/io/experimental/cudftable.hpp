@@ -21,7 +21,7 @@ namespace io::experimental {
 
 /**
  * @file
- * @brief CUDFTable binary format APIs for serialization and deserialization
+ * @brief Cudftable binary format APIs for serialization and deserialization
  */
 
 class cudftable_writer_options_builder;
@@ -176,7 +176,7 @@ class cudftable_reader_options_builder {
  */
 
 /**
- * @brief Write a table using the CUDFTable binary format.
+ * @brief Write a table using the Cudftable binary format.
  *
  * This function uses `cudf::pack` to serialize a table into a contiguous format,
  * then writes it to the specified sink with a simple header containing metadata
@@ -197,7 +197,7 @@ void write_cudftable(cudftable_writer_options const& options,
  */
 
 /**
- * @brief Read a table in CUDFTable binary format.
+ * @brief Read a table in Cudftable binary format.
  *
  * This function reads the header from the datasource, validates the format,
  * and uses `cudf::unpack` to deserialize the table.

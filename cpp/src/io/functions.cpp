@@ -1257,7 +1257,7 @@ void write_cudftable(cudftable_writer_options const& options,
   CUDF_FUNC_RANGE();
 
   auto sinks = make_datasinks(options.get_sink());
-  CUDF_EXPECTS(sinks.size() == 1, "CUDFTable format only supports single sink");
+  CUDF_EXPECTS(sinks.size() == 1, "Cudftable format only supports single sink");
 
   detail::write_cudftable(sinks[0].get(), options.get_table(), stream, mr);
 }
@@ -1272,7 +1272,7 @@ packed_table read_cudftable(cudftable_reader_options const& options,
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  CUDF_EXPECTS(datasources.size() == 1, "CUDFTable format only supports single source");
+  CUDF_EXPECTS(datasources.size() == 1, "Cudftable format only supports single source");
 
   return detail::read_cudftable(datasources[0].get(), stream, mr);
 }
