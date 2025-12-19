@@ -3169,8 +3169,6 @@ class DatetimeIndex(Index):
         data=None,
         freq=None,
         tz=None,
-        normalize: bool = False,
-        closed=None,
         ambiguous: Literal["raise"] = "raise",
         dayfirst: bool = False,
         yearfirst: bool = False,
@@ -3189,20 +3187,6 @@ class DatetimeIndex(Index):
 
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
-        if normalize is not False:
-            warnings.warn(
-                "The 'normalize' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("normalize == True is not yet supported")
-        if closed is not None:
-            warnings.warn(
-                "The 'closed' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("closed is not yet supported")
         if ambiguous != "raise":
             raise NotImplementedError("ambiguous is not yet supported")
         if dayfirst is not False:
