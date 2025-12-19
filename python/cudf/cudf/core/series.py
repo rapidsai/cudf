@@ -29,7 +29,6 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core import indexing_utils
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core.accessors import (
     CategoricalAccessor,
     ListMethods,
@@ -332,26 +331,6 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise NotImplementedError(
                     "Interval indexing is not supported."
                 )
-            if not is_dtype_obj_numeric(
-                index_dtype, include_decimal=False
-            ) and not (
-                isinstance(index_dtype, CategoricalDtype)
-                and index_dtype.categories.dtype.kind in "iu"
-            ):
-                # TODO: switch to cudf.utils.dtypes.is_integer(arg)
-                if is_integer(arg):
-                    # Do not remove until pandas 3.0 support is added.
-                    assert PANDAS_LT_300, (
-                        "Need to drop after pandas-3.0 support is added."
-                    )
-                    warn_msg = (
-                        "Series.__getitem__ treating keys as positions is deprecated. "
-                        "In a future version, integer keys will always be treated "
-                        "as labels (consistent with DataFrame behavior). To access "
-                        "a value by position, use `ser.iloc[pos]`"
-                    )
-                    warnings.warn(warn_msg, FutureWarning)
-                    return arg
             try:
                 if isinstance(self._frame.index, RangeIndex):
                     indices = self._frame.index._indices_of(arg)
