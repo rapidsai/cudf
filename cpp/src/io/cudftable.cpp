@@ -38,6 +38,15 @@ struct cudftable_header {
   uint32_t format_version;   ///< Format version number
   uint64_t metadata_length;  ///< Length of metadata buffer in bytes
   uint64_t data_length;      ///< Length of data buffer in bytes
+
+  cudftable_header() = default;
+  cudftable_header(uint64_t metadata_size, uint64_t data_size)
+    : magic{magic_number},
+      format_version{version},
+      metadata_length{metadata_size},
+      data_length{data_size}
+  {
+  }
 };
 
 }  // anonymous namespace
@@ -46,10 +55,7 @@ void write_cudftable(data_sink* sink, table_view const& input, rmm::cuda_stream_
 {
   auto const packed = cudf::pack(input, stream, cudf::get_current_device_resource_ref());
 
-  auto const header = cudftable_header{cudftable_header::magic_number,
-                                       cudftable_header::version,
-                                       packed.metadata->size(),
-                                       packed.gpu_data->size()};
+  auto const header = cudftable_header{packed.metadata->size(), packed.gpu_data->size()};
   sink->host_write(&header, sizeof(cudftable_header));
 
   sink->host_write(packed.metadata->data(), header.metadata_length);
