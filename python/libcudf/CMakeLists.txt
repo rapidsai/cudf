@@ -35,7 +35,6 @@ set(BUILD_TESTS OFF)
 set(BUILD_BENCHMARKS OFF)
 set(CUDF_BUILD_TESTUTIL OFF)
 set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
-set(CUDF_EXPORT_NVCOMP OFF)
 
 include(../../cpp/cmake/thirdparty/get_nvcomp.cmake)
 
