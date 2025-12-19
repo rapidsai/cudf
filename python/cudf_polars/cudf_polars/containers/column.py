@@ -366,7 +366,8 @@ class Column:
         elif plc.traits.is_integral_not_bool(dtype):
             # is_integer has a second optional int_type: plc.DataType | None = None argument
             # we do not use
-            type_checker = is_integer  # type: ignore[assignment]
+            # unused-ignore for if RMM is missing
+            type_checker = is_integer  # type: ignore[assignment,unused-ignore]
             type_caster = to_integers
         else:
             raise InvalidOperationError(
