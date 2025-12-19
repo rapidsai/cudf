@@ -169,6 +169,7 @@ def replace_nested_all_null_arrays_with_null_array(
 
 
 def dtype_to_metadata(dtype):
+    # Convert a cudf or pandas dtype to pylibcudf ColumnMetadata for arrow conversion
     cm = plc.interop.ColumnMetadata()
     if isinstance(dtype, cudf.core.dtypes.StructDtype):
         for name, dtype in dtype.fields.items():
