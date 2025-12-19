@@ -34,10 +34,10 @@ struct cudftable_header {
   static constexpr uint32_t magic_number = 0x4C425443;  ///< "CTBL" in little-endian
   static constexpr uint32_t version      = 1;           ///< Format version
 
-  uint32_t magic;            ///< Magic number for format validation
-  uint32_t format_version;   ///< Format version number
-  uint64_t metadata_length;  ///< Length of metadata buffer in bytes
-  uint64_t data_length;      ///< Length of data buffer in bytes
+  uint32_t magic{};            ///< Magic number for format validation
+  uint32_t format_version{};   ///< Format version number
+  uint64_t metadata_length{};  ///< Length of metadata buffer in bytes
+  uint64_t data_length{};      ///< Length of data buffer in bytes
 
   cudftable_header() = default;
   cudftable_header(uint64_t metadata_size, uint64_t data_size)
