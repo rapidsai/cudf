@@ -174,33 +174,29 @@ def dtype_to_metadata(dtype):
         for name, dtype in dtype.fields.items():
             cm.children_meta.append(dtype_to_metadata(dtype))
             cm.children_meta[-1].name = name
-    elif isinstance(dtype, pd.ArrowDtype) and pa.types.is_struct(
-        dtype.pyarrow_dtype
-    ):
-        # Handle pandas ArrowDtype for structs
-        for field in dtype.pyarrow_dtype:
-            cm.children_meta.append(
-                dtype_to_metadata(pd.ArrowDtype(field.type))
-            )
-            cm.children_meta[-1].name = field.name
     elif isinstance(dtype, cudf.core.dtypes.ListDtype):
-        # Offsets column
+        # Offsets column must be added manually
         cm.children_meta.append(plc.interop.ColumnMetadata())
-        # Elements column
         cm.children_meta.append(dtype_to_metadata(dtype.element_type))
-    elif isinstance(dtype, pd.ArrowDtype) and (
-        pa.types.is_list(dtype.pyarrow_dtype)
-        or pa.types.is_large_list(dtype.pyarrow_dtype)
-    ):
-        # Handle pandas ArrowDtype for lists
-        # Offsets column
-        cm.children_meta.append(plc.interop.ColumnMetadata())
-        # Elements column
-        cm.children_meta.append(
-            dtype_to_metadata(pd.ArrowDtype(dtype.pyarrow_dtype.value_type))
-        )
     elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
         cm.precision = dtype.precision
+    elif isinstance(dtype, pd.ArrowDtype):
+        if pa.types.is_struct(dtype.pyarrow_dtype):
+            for field in dtype.pyarrow_dtype:
+                cm.children_meta.append(
+                    dtype_to_metadata(pd.ArrowDtype(field.type))
+                )
+                cm.children_meta[-1].name = field.name
+        elif pa.types.is_list(dtype.pyarrow_dtype) or pa.types.is_large_list(
+            dtype.pyarrow_dtype
+        ):
+            # Offsets column must be added manually
+            cm.children_meta.append(plc.interop.ColumnMetadata())
+            cm.children_meta.append(
+                dtype_to_metadata(
+                    pd.ArrowDtype(dtype.pyarrow_dtype.value_type)
+                )
+            )
     # TODO: Support timezone metadata
     return cm
 
