@@ -9,15 +9,10 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/dictionary/encode.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/experimental/cudftable.hpp>
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>

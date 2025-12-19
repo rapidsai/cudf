@@ -6,7 +6,6 @@
 #include "cudf/detail/nvtx/ranges.hpp"
 
 #include <cudf/contiguous_split.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
@@ -16,9 +15,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-
-#include <cstring>
-#include <vector>
 
 namespace cudf::io::experimental {
 namespace detail {
