@@ -133,7 +133,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     -data.type.scale,
                 ),
             )
-            result = cls(plc_column, dtype, False)
+            result = cls.from_pylibcudf(plc_column, False)
+            result._dtype = dtype
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
 
