@@ -62,14 +62,14 @@ class cudftable_writer_options {
    *
    * @return sink used for writer output
    */
-  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
+  [[nodiscard]] sink_info const& get_sink() const noexcept { return _sink; }
 
   /**
    * @brief Returns table that would be written to output.
    *
    * @return Table that would be written to output
    */
-  [[nodiscard]] table_view const& get_table() const { return _table; }
+  [[nodiscard]] table_view const& get_table() const noexcept { return _table; }
 
   /**
    * @brief Sets sink info.
@@ -137,7 +137,7 @@ class cudftable_reader_options {
    *
    * @return Source info
    */
-  [[nodiscard]] source_info const& get_source() const { return _source; }
+  [[nodiscard]] source_info const& get_source() const noexcept { return _source; }
 
   /**
    * @brief Sets source info.
