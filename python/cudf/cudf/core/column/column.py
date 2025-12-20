@@ -660,11 +660,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.nullable:
             # TODO: Are we intentionally use self's mask instead of col's?
             # Where is the mask stored for categoricals?
-            assert self.base_mask is not None
-            mask_buff = self.base_mask
+            assert col.base_mask is not None
+            mask_buff = col.base_mask
             if not use_base:
-                assert self.mask is not None
-                mask_buff = self.mask
+                assert col.mask is not None
+                mask_buff = col.mask
             mask = ROCAIWrapper(mask_buff, mode)
 
         children = []
@@ -678,11 +678,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         return plc.Column(
             dtype,
-            self.size,
+            col.size,
             data,
             mask,
-            self.null_count,
-            self.offset if use_base else 0,
+            col.null_count,
+            col.offset if use_base else 0,
             children,
         )
 
