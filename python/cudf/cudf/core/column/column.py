@@ -38,7 +38,6 @@ from cudf.api.types import (
     is_dtype_equal,
     is_scalar,
 )
-from cudf.core._compat import PANDAS_GE_210
 from cudf.core._internals import (
     aggregation,
     copying,
@@ -104,11 +103,6 @@ if TYPE_CHECKING:
     from cudf.core.column.strings import StringColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.index import Index
-
-if PANDAS_GE_210:
-    NumpyExtensionArray = pd.arrays.NumpyExtensionArray
-else:
-    NumpyExtensionArray = pd.arrays.PandasArray
 
 
 def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
@@ -2936,13 +2930,13 @@ def as_column(
             return result
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype
-        ) and not isinstance(arbitrary, NumpyExtensionArray):
+        ) and not isinstance(arbitrary, pd.arrays.NumpyExtensionArray):
             raise NotImplementedError(
                 "Custom pandas ExtensionDtypes are not supported"
             )
         elif arbitrary.dtype.kind in "fiubmM":
             # numpy dtype like
-            if isinstance(arbitrary, NumpyExtensionArray):
+            if isinstance(arbitrary, pd.arrays.NumpyExtensionArray):
                 arbitrary = np.array(arbitrary)
             arb_dtype = np.dtype(arbitrary.dtype)
             if arb_dtype.kind == "f" and arb_dtype.itemsize == 2:
@@ -2967,7 +2961,7 @@ def as_column(
             )
         elif arbitrary.dtype.kind == "O":
             pyarrow_array = None
-            if isinstance(arbitrary, NumpyExtensionArray):
+            if isinstance(arbitrary, pd.arrays.NumpyExtensionArray):
                 # infer_dtype does not handle NumpyExtensionArray
                 arbitrary = np.array(arbitrary, dtype=object)
             inferred_dtype = infer_dtype(

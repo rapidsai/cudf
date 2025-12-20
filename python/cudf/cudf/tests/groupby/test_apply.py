@@ -12,7 +12,6 @@ import cudf
 from cudf import DataFrame
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_220,
     PANDAS_VERSION,
 )
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
@@ -695,12 +694,12 @@ def test_groupby_apply_return_reindexed_series(as_index):
     )
     pdf = df.to_pandas()
 
-    kwargs = {}
-    if PANDAS_GE_220:
-        kwargs["include_groups"] = False
-
-    expect = pdf.groupby("key", as_index=as_index).apply(pdf_func, **kwargs)
-    got = df.groupby("key", as_index=as_index).apply(gdf_func, **kwargs)
+    expect = pdf.groupby("key", as_index=as_index).apply(
+        pdf_func, include_groups=False
+    )
+    got = df.groupby("key", as_index=as_index).apply(
+        gdf_func, include_groups=False
+    )
     assert_groupby_results_equal(expect, got)
 
 

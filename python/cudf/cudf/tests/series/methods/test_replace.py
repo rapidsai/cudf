@@ -10,7 +10,6 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GT_214,
     PANDAS_VERSION,
 )
 from cudf.testing import assert_eq
@@ -232,8 +231,7 @@ def test_numeric_series_replace_dtype(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            condition=PANDAS_GT_214
-            and (
+            condition=(
                 (
                     numeric_types_as_str == "int8"
                     and replacement in {128, 128.0, 32769, 32769.0}
@@ -241,7 +239,7 @@ def test_numeric_series_replace_dtype(
                 or (
                     numeric_types_as_str == "int16"
                     and replacement in {32769, 32769.0}
-                )
+                ),
             ),
             reason="Pandas throws an AssertionError for these "
             "cases and asks us to log a bug, they are trying to "

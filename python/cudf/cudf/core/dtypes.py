@@ -17,7 +17,7 @@ from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
 from cudf.utils.dtypes import (
@@ -27,11 +27,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     is_pandas_nullable_extension_dtype,
 )
-
-if PANDAS_GE_210:
-    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
-else:
-    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -104,7 +99,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
             return CUDF_STRING_DTYPE
         else:
             return dtype(pd_dtype.numpy_dtype)
-    elif isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
+    elif isinstance(pd_dtype, pd.core.dtypes.dtypes.NumpyEADtype):
         return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.CategoricalDtype):
         return CategoricalDtype(pd_dtype.categories, pd_dtype.ordered)
