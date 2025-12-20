@@ -2111,7 +2111,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "data": (data_ptr, False),
             "version": 3,
         }
-        data_buf = self._data if self._data is not None else self.base_data
+        data_buf = self.data
         if data_buf is not None:
             self._exposed_buffers.add(data_buf)
         if self.nullable and self.has_nulls():
