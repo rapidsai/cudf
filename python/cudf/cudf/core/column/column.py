@@ -636,53 +636,41 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        # TODO: Categoricals will need to be treated differently eventually.
-        # There is no 1-1 correspondence between cudf and libcudf for
-        # categoricals because cudf supports ordered and unordered categoricals
-        # while libcudf supports only unordered categoricals (see
-        # https://github.com/rapidsai/cudf/pull/8567).
-        if isinstance(self.dtype, cudf.CategoricalDtype):
-            col = self.base_children[0]
-        else:
-            col = self
-
-        dtype = dtype_to_pylibcudf_type(col.dtype)
+        dtype = dtype_to_pylibcudf_type(self.dtype)
 
         data = None
-        if col.base_data is not None:
-            data_buff = col.base_data
+        if self.base_data is not None:
+            data_buff = self.base_data
             if not use_base:
-                assert col.data is not None
-                data_buff = col.data
+                assert self.data is not None
+                data_buff = self.data
             data = ROCAIWrapper(data_buff, mode)
 
         mask = None
         if self.nullable:
-            # TODO: Are we intentionally use self's mask instead of col's?
-            # Where is the mask stored for categoricals?
-            assert col.base_mask is not None
-            mask_buff = col.base_mask
+            assert self.base_mask is not None
+            mask_buff = self.base_mask
             if not use_base:
-                assert col.mask is not None
-                mask_buff = col.mask
+                assert self.mask is not None
+                mask_buff = self.mask
             mask = ROCAIWrapper(mask_buff, mode)
 
         children = []
-        if col.base_children:
+        if self.base_children:
             children = [
                 child_column.to_pylibcudf(mode=mode, use_base=use_base)
                 for child_column in (
-                    col.base_children if use_base else col.children
+                    self.base_children if use_base else self.children
                 )
             ]
 
         return plc.Column(
             dtype,
-            col.size,
+            self.size,
             data,
             mask,
-            col.null_count,
-            col.offset if use_base else 0,
+            self.null_count,
+            self.offset if use_base else 0,
             children,
         )
 

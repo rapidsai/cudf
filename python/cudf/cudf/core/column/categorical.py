@@ -188,6 +188,11 @@ class CategoricalColumn(column.ColumnBase):
     def ordered(self) -> bool | None:
         return self.dtype.ordered
 
+    def to_pylibcudf(
+        self, mode: Literal["read", "write"], *, use_base: bool = True
+    ) -> plc.Column:
+        return self.base_children[0].to_pylibcudf(mode, use_base=use_base)
+
     def __setitem__(self, key: Any, value: Any) -> None:
         if is_scalar(value) and _is_null_host_scalar(value):
             to_add_categories = 0
