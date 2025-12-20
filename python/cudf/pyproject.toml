@@ -113,8 +113,6 @@ filterwarnings = [
     "ignore:FNV hashing is not implemented in Numba.*:UserWarning",
     # Allow running UDF tests on older architectures
     "ignore:.*NVRTC log messages whilst compiling.*:UserWarning",
-    # Temporarily in place until a numba-cuda version is released that avoids the cuda.core.experimental usage
-    "ignore:The cuda.core.experimental namespace is deprecated:DeprecationWarning",
 ]
 markers = [
     "spilling: mark benchmark a good candidate to run with `CUDF_SPILL=ON`",
