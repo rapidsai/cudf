@@ -121,10 +121,10 @@ class CategoricalColumn(column.ColumnBase):
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            self._encode(item)
+            encoded = self._encode(item)
         except ValueError:
             return False
-        return self._encode(item) in self.codes
+        return encoded in self.codes
 
     def _process_values_for_isin(
         self, values: Sequence
