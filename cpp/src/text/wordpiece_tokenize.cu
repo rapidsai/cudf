@@ -510,7 +510,7 @@ rmm::device_uvector<cudf::size_type> compute_all_tokens(
   // find beginnings of words
   auto d_edges = rmm::device_uvector<int64_t>(chars_size / 2L, stream);
   // beginning of a word is a non-space preceded by a space
-  auto edges_end = cudf::detail::copy_if_safe(
+  auto edges_end = cudf::detail::copy_if(
     thrust::counting_iterator<int64_t>(0),
     thrust::counting_iterator<int64_t>(chars_size),
     d_edges.begin(),
