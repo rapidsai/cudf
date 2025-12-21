@@ -39,7 +39,6 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
-    from cudf.core.buffer import Buffer
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -96,23 +95,6 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: CategoricalDtype,
-        exposed: bool,
-    ) -> None:
-        if not isinstance(dtype, CategoricalDtype):
-            raise ValueError(
-                f"{dtype=} must be cudf.CategoricalDtype instance."
-            )
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
-        self._codes = self.children[0].set_mask(self.mask)
-
     @property
     def base_data(self) -> None:
         """
@@ -150,14 +132,6 @@ class CategoricalColumn(column.ColumnBase):
         # Convert values to categorical dtype like self
         return self, column.as_column(values, dtype=self.dtype)
 
-    def set_base_mask(self, value: Buffer | None) -> None:
-        super().set_base_mask(value)
-        self._codes = self.children[0].set_mask(self.mask)
-
-    def set_base_children(self, value: tuple[NumericalColumn]) -> None:  # type: ignore[override]
-        super().set_base_children(value)
-        self._codes = value[0].set_mask(self.mask)
-
     @property
     def children(self) -> tuple[NumericalColumn]:
         if self.offset == 0 and self.size == self.base_size:
@@ -182,7 +156,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self) -> NumericalColumn:
-        return self._codes
+        return self.children[0]
 
     @property
     def ordered(self) -> bool | None:
@@ -221,7 +195,7 @@ class CategoricalColumn(column.ColumnBase):
         codes = self.codes
         codes[key] = value
         out = codes._with_type_metadata(self.dtype)
-        self._mimic_inplace(out, inplace=True)
+        self._mimic_inplace(out, inplace=True)  # type: ignore[arg-type]
 
     def _fill(
         self,
@@ -687,14 +661,6 @@ class CategoricalColumn(column.ColumnBase):
     @cached_property
     def memory_usage(self) -> int:
         return self.categories.memory_usage + self.codes.memory_usage
-
-    def _mimic_inplace(
-        self, other_col: ColumnBase, inplace: bool = False
-    ) -> Self | None:
-        out = super()._mimic_inplace(other_col, inplace=inplace)  # type: ignore[arg-type]
-        if inplace and isinstance(other_col, CategoricalColumn):
-            self._codes = other_col.codes
-        return out
 
     @staticmethod
     def _concat(
