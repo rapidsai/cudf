@@ -24,6 +24,11 @@ namespace io::experimental {
  * @brief CudfTable binary format APIs for serialization and deserialization
  */
 
+/**
+ * @addtogroup io_writers
+ * @{
+ */
+
 class cudftable_writer_options_builder;
 
 /**
@@ -106,6 +111,13 @@ class cudftable_writer_options_builder {
   cudftable_writer_options _options;
 };
 
+/** @} */  // end of io_writers group
+
+/**
+ * @addtogroup io_readers
+ * @{
+ */
+
 class cudftable_reader_options_builder;
 
 /**
@@ -169,6 +181,8 @@ class cudftable_reader_options_builder {
  private:
   cudftable_reader_options _options;
 };
+
+/** @} */  // end of io_readers group
 
 /**
  * @addtogroup io_writers
