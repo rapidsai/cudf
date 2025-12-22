@@ -563,8 +563,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
   // Copy the result of the exclusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
-  auto const partition_offsets =
-    cudf::detail::make_std_vector_async(global_partition_sizes, stream);
+  auto partition_offsets = cudf::detail::make_std_vector_async(global_partition_sizes, stream);
+  // Add the total row count as the last offset to make the vector num_partitions + 1 in size
+  partition_offsets.push_back(num_rows);
 
   // When the number of partitions is less than a threshold, we can apply an
   // optimization using shared memory to copy values to the output buffer.
@@ -604,7 +605,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     }
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
-    return std::pair(std::make_unique<table>(std::move(output_cols)), std::move(partition_offsets));
+    return std::pair{std::make_unique<table>(std::move(output_cols)), std::move(partition_offsets)};
   } else {
     // Compute a scatter map from input to output such that the output rows are
     // sorted by partition number
@@ -620,7 +621,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     auto output = detail::scatter(input, row_partition_numbers, input, stream, mr);
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
-    return std::pair(std::move(output), std::move(partition_offsets));
+    return std::pair{std::move(output), std::move(partition_offsets)};
   }
 }
 
@@ -706,7 +707,7 @@ struct dispatch_map_type {
     // Scatter the rows into their partitions
     auto scattered = detail::scatter(t, scatter_map, t, stream, mr);
 
-    return std::pair(std::move(scattered), std::move(partition_offsets));
+    return std::pair{std::move(scattered), std::move(partition_offsets)};
   }
 
   template <typename MapType, typename... Args>
@@ -759,7 +760,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return std::pair(empty_like(input), std::vector<size_type>(num_partitions, 0));
+    return std::pair{empty_like(input), std::vector<size_type>(num_partitions + 1, 0)};
   }
 
   if (has_nested_nulls(table_to_hash)) {
@@ -785,7 +786,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
 
   if (num_partitions == 0 or t.num_rows() == 0) {
     // The output offsets vector must have size `num_partitions + 1` as per documentation.
-    return std::pair(empty_like(t), std::vector<size_type>(num_partitions + 1, 0));
+    return std::pair{empty_like(t), std::vector<size_type>(num_partitions + 1, 0)};
   }
 
   return cudf::type_dispatcher(
