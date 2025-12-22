@@ -1444,9 +1444,7 @@ class StringColumn(ColumnBase, Scannable):
         step: int | None = None,
     ) -> Self:
         if isinstance(start, ColumnBase) and isinstance(stop, ColumnBase):
-            plc_start: plc.Column | plc.Scalar = start.to_pylibcudf(
-                mode="read"
-            )
+            plc_start: plc.Column | plc.Scalar = start.plc_column
             plc_stop: plc.Column | plc.Scalar = stop.plc_column
             plc_step: plc.Scalar | None = None
         elif all(isinstance(x, int) or x is None for x in (start, stop)):

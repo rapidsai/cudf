@@ -913,7 +913,7 @@ class NumericalColumn(NumericalBaseColumn):
             codes_dtype = min_unsigned_type(len(dtype.categories))
             codes = cast(NumericalColumn, self.astype(codes_dtype))
             return CategoricalColumn(
-                plc_column=codes.to_pylibcudf(mode="read"),
+                plc_column=codes.plc_column,
                 dtype=dtype,
                 exposed=False,
             )
