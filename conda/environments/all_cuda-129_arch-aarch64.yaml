@@ -38,6 +38,7 @@ dependencies:
 - include-what-you-use==0.24.0
 - ipython
 - jupyter_client
+- libcufile-dev
 - libcurand-dev
 - libkvikio==26.2.*,>=0.0.0a0
 - libnvcomp-dev==5.1.0.21
