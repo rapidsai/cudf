@@ -14,6 +14,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/operator.hpp>
 #include <cuco/static_set.cuh>
