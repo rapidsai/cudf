@@ -1027,7 +1027,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @acquire_spill_lock()
     def to_arrow(self) -> pa.Array:
         return _handle_nulls(
-            self.to_pylibcudf(mode="read").to_arrow(
+            self.plc_column.to_arrow(
                 metadata=_dtype_to_metadata(self.dtype)  # type: ignore[arg-type]
             )
         )
