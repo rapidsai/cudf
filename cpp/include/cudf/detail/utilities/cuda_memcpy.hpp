@@ -32,7 +32,7 @@ void cuda_memcpy_async_impl(
   void** dsts, void** srcs, std::size_t* sizes, std::size_t count, rmm::cuda_stream_view stream);
 
 /**
- * @brief Wrapper around cudaMemcpyAsync
+ * @brief Wrapper to call `memcpy_batch_async` for a single source to destination buffer.
  *
  * @param dst Destination memory address
  * @param src Source memory address
