@@ -434,6 +434,7 @@ TEST_F(JsonNewlineDelimiterTest, TokenStream)
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
+  stream.synchronize();
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
@@ -568,6 +569,7 @@ TEST_F(JsonNewlineDelimiterTest, TokenStream2)
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
+  stream.synchronize();
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
@@ -849,6 +851,7 @@ TEST_F(JsonTest, PostProcessTokenStream)
 
   auto const filtered_tokens  = cudf::detail::make_std_vector_async(d_filtered_tokens, stream);
   auto const filtered_indices = cudf::detail::make_std_vector_async(d_filtered_indices, stream);
+  stream.synchronize();
 
   // Verify the number of tokens matches
   ASSERT_EQ(filtered_tokens.size(), expected_output.size());

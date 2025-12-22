@@ -35,11 +35,13 @@ struct tree_meta_t2 {
 
 tree_meta_t2 to_cpu_tree(cuio_json::tree_meta_t const& d_value, rmm::cuda_stream_view stream)
 {
-  return {cudf::detail::make_std_vector_async(d_value.node_categories, stream),
-          cudf::detail::make_std_vector_async(d_value.parent_node_ids, stream),
-          cudf::detail::make_std_vector_async(d_value.node_levels, stream),
-          cudf::detail::make_std_vector_async(d_value.node_range_begin, stream),
-          cudf::detail::make_std_vector_async(d_value.node_range_end, stream)};
+  tree_meta_t2 result{cudf::detail::make_std_vector_async(d_value.node_categories, stream),
+                      cudf::detail::make_std_vector_async(d_value.parent_node_ids, stream),
+                      cudf::detail::make_std_vector_async(d_value.node_levels, stream),
+                      cudf::detail::make_std_vector_async(d_value.node_range_begin, stream),
+                      cudf::detail::make_std_vector_async(d_value.node_range_end, stream)};
+  stream.synchronize();
+  return result;
 }
 
 // change this to non-zero and recompile to dump debug info to stdout
@@ -144,7 +146,9 @@ bool compare_vector(std::vector<T> const& cpu_vec,
                     rmm::device_uvector<T> const& d_vec,
                     std::string const& name)
 {
-  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, cudf::get_default_stream());
+  auto stream  = cudf::get_default_stream();
+  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, stream);
+  stream.synchronize();
   return compare_vector(cpu_vec, gpu_vec, name);
 }
 
@@ -882,7 +886,9 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
 #endif
 
   // convert to sequence because gpu col id might be have random id
-  auto gpu_col_id2 = translate_col_id(cudf::detail::make_std_vector_async(gpu_col_id, stream));
+  auto gpu_col_id_vec = cudf::detail::make_std_vector_async(gpu_col_id, stream);
+  stream.synchronize();
+  auto gpu_col_id2 = translate_col_id(gpu_col_id_vec);
   EXPECT_FALSE(compare_vector(cpu_col_id, gpu_col_id2, "col_id"));
   EXPECT_FALSE(compare_vector(cpu_row_offsets, gpu_row_offsets, "row_offsets"));
 }
