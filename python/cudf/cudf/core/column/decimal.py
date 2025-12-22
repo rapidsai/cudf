@@ -138,19 +138,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
 
-    def to_arrow(self) -> pa.Array:
-        arrow_array = super().to_arrow()
-        # Support for this conversion can be removed when we drop support for
-        # pyarrow<19, but until then we must convert Decimal32 and Decimal64
-        # columns to Decimal128
-        arrow_type = (
-            pa.decimal128(self.dtype.precision, self.dtype.scale)
-            if isinstance(self.dtype, DecimalDtype)
-            else cast(pd.ArrowDtype, self.dtype).pyarrow_dtype
-        )
-        # To match existing behavior we must allow unsafe casts here
-        return arrow_array.cast(arrow_type, safe=False)
-
     def element_indexing(self, index: int) -> Decimal | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
@@ -379,17 +366,40 @@ class Decimal32Column(DecimalBaseColumn):
     _decimal_cls = Decimal32Dtype
     _decimal_check = is_decimal32_dtype
 
+    # When we drop support for pyarrow<19 we should match pyarrow decimal types, but
+    # until then we retain the legacy behavior of always returning Decimal128
+    def to_arrow(self) -> pa.Array:
+        return self.astype(
+            cudf.Decimal128Dtype(self.dtype.precision, self.dtype.scale)  # type: ignore[union-attr]
+        ).to_arrow()
+
 
 class Decimal64Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL64}
     _decimal_cls = Decimal64Dtype
     _decimal_check = is_decimal64_dtype
 
+    def to_arrow(self) -> pa.Array:
+        return self.astype(
+            cudf.Decimal128Dtype(self.dtype.precision, self.dtype.scale)  # type: ignore[union-attr]
+        ).to_arrow()
+
 
 class Decimal128Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL128}
     _decimal_cls = Decimal128Dtype
     _decimal_check = is_decimal128_dtype
+
+    def to_arrow(self) -> pa.Array:
+        arrow_array = super().to_arrow()
+        # We have to preserve the precision since pylibcudf does not.
+        arrow_type = (
+            pa.decimal128(self.dtype.precision, self.dtype.scale)
+            if isinstance(self.dtype, DecimalDtype)
+            else cast(pd.ArrowDtype, self.dtype).pyarrow_dtype
+        )
+        # To match existing behavior we must allow unsafe casts here
+        return arrow_array.cast(arrow_type, safe=False)
 
 
 def _get_decimal_type(
