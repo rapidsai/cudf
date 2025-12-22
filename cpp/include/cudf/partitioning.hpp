@@ -78,7 +78,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
  * Partitions rows of `input` into `num_partitions` bins based on the hash
  * value of the columns specified by `columns_to_hash`. Rows partitioned into
  * the same bin are grouped consecutively in the output table. Returns a vector
- * of row offsets to the start of each partition in the output table.
+ * of `num_partitions + 1` offsets, where partition `i` contains rows in the range
+ * `[offsets[i], offsets[i+1])`. The last offset is always equal to the total
+ * number of rows in the output table.
  *
  * @throw std::out_of_range if index is `columns_to_hash` is invalid
  *
@@ -90,7 +92,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
- * @returns An output table and a vector of row offsets to each partition
+ * @returns An output table and a vector of `num_partitions + 1` row offsets to each partition
  */
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
@@ -105,7 +107,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * @brief Round-robin partition.
  *
  * Returns a new table with rows re-arranged into partition groups and
- * a vector of row offsets to the start of each partition in the output table.
+ * a vector of `num_partitions + 1` offsets, where partition `i` contains rows
+ * in the range `[offsets[i], offsets[i+1])`. The last offset is always equal
+ * to the total number of rows in the output table.
  * Rows are assigned partitions based on their row index in the table,
  * in a round robin fashion.
  *
@@ -134,8 +138,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * We start dealing to the first indicated player and continuing
  * around the players until we run out of cards before we run out of players.
  * Players that did not get any cards are represented by
- * `offset[i] == offset[i+1] or
- * offset[i] == table.num_rows() if i == num_partitions-1`
+ * `offset[i] == offset[i+1]`
  * meaning there are no cards (rows) in their deck (partition).
  *
  * ```
@@ -147,7 +150,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  *
  * output: pair<table, partition_offsets>
  * table => col 1 {0,3,6,9,12,1,4,7,10,2,5,8,11}
- * partition_offsets => {0,5,9}
+ * partition_offsets => {0,5,9,13}
  *
  * Example 2:
  * input:
@@ -157,7 +160,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  *
  * output: pair<table, partition_offsets>
  * table => col 1 {2,5,8,11,0,3,6,9,12,1,4,7,10}
- * partition_offsets => {0,4,9}
+ * partition_offsets => {0,4,9,13}
  *
  * Example 3:
  * input:
@@ -167,7 +170,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  *
  * output: pair<table, partition_offsets>
  * table => col 1 {0,3,6,9,1,4,7,10,2,5,8}
- * partition_offsets => {0,4,8}
+ * partition_offsets => {0,4,8,11}
  *
  * Example 4:
  * input:
@@ -177,7 +180,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  *
  * output: pair<table, partition_offsets>
  * table => col 1 {2,5,8,0,3,6,9,1,4,7,10}
- * partition_offsets => {0,3,7}
+ * partition_offsets => {0,3,7,11}
  *
  * Example 5:
  * input:
@@ -187,7 +190,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  *
  * output: pair<table, partition_offsets>
  * table => col 1 {1,4,7,10,2,5,8,0,3,6,9}
- * partition_offsets => {0,4,7}
+ * partition_offsets => {0,4,7,11}
  *
  * Example 6:
  * input:
@@ -197,7 +200,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  *
  * output: pair<table, partition_offsets>
  * table => col 1 {0,1,2,3,4,5,6,7,8,9,10}
- * partition_offsets => {0,0,0,1,2,3,4,5,6,7,8,9,10,11,11}
+ * partition_offsets => {0,0,0,1,2,3,4,5,6,7,8,9,10,11,11,11}
  *
  * Example 7:
  * input:
@@ -207,7 +210,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  *
  * output: pair<table, partition_offsets>
  * table => col 1 {5,6,7,8,9,10,0,1,2,3,4}
- * partition_offsets => {0,1,2,3,4,5,6,6,6,6,6,7,8,9,10}
+ * partition_offsets => {0,1,2,3,4,5,6,6,6,6,6,7,8,9,10,11}
  *
  * Example 8:
  * input:
@@ -217,7 +220,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  *
  * output: pair<table, partition_offsets>
  * table => col 1 {1,2,3,4,5,6,7,8,9,10,0}
- * partition_offsets => {0,1,2,3,4,5,6,7,8,9,10,10,10,10,10}
+ * partition_offsets => {0,1,2,3,4,5,6,7,8,9,10,10,10,10,10,11}
  *
  * Example 9:
  * input:
@@ -227,7 +230,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  *
  * output: pair<table, partition_offsets>
  * table => col 1 {9,10,0,1,2,3,4,5,6,7,8}
- * partition_offsets => {0,1,2,3,4,5,6,7,8,9,10}
+ * partition_offsets => {0,1,2,3,4,5,6,7,8,9,10,11}
  * ```
  *
  * @param[in] input The input table to be round-robin partitioned
@@ -237,7 +240,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
  * @return A std::pair consisting of a unique_ptr to the partitioned table
- * and the partition offsets for each partition within the table.
+ * and a vector of `num_partitions + 1` partition offsets for each partition within the table.
  */
 std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
