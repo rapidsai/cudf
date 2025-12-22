@@ -143,9 +143,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 rmm_mask_buffer = rmm.DeviceBuffer.to_device(
                     np.frombuffer(mask_buf).view("uint8")
                 )
-            plc_column = plc_column.with_mask(
-                plc.gpumemoryview(rmm_mask_buffer), data.null_count
-            )
+            plc_column = plc_column.with_mask(rmm_mask_buffer, data.null_count)
         column = cls.from_pylibcudf(plc_column)
         column.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return column

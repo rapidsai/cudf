@@ -738,8 +738,9 @@ cluster_info generate_group_cluster_info(int delta,
   // CPU.  This specifically addresses customer use cases with large inputs and small numbers of
   // groups, such as just 1. if we're going to be using the CPU, use pinned for a few of the temp
   // buffers
-  auto temp_mr =
-    use_cpu ? cudf::get_pinned_memory_resource() : cudf::get_current_device_resource_ref();
+  rmm::device_async_resource_ref temp_mr =
+    use_cpu ? rmm::device_async_resource_ref{cudf::get_pinned_memory_resource()}
+            : cudf::get_current_device_resource_ref();
 
   // output from the function
   cluster_info cinfo;
@@ -787,6 +788,9 @@ cluster_info generate_group_cluster_info(int delta,
     return simple_cluster_count;
   }();
   cinfo.cluster_wl = rmm::device_uvector<double>(allocated_clusters, stream, temp_mr);
+
+  // sync required after compute_cluster_starts() and before generate_cluster_limits()
+  stream.synchronize();
 
   // fill in the actual cluster weight limits.
   // if we are in the simple case, group_num_clusters will be updated here to reflect the accurate
