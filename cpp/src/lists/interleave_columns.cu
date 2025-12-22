@@ -40,7 +40,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<int8_t>>
 generate_list_offsets_and_validities(table_view const& input,
                                      bool has_null_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   auto const num_cols         = input.num_columns();
   auto const num_rows         = input.num_rows();
@@ -49,15 +49,15 @@ generate_list_offsets_and_validities(table_view const& input,
 
   // The output offsets column.
   auto list_offsets = make_numeric_column(
-    data_type{type_to_id<size_type>()}, num_output_lists + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, num_output_lists + 1, mask_state::UNALLOCATED, stream, resources);
   auto const d_offsets = list_offsets->mutable_view().template begin<size_type>();
 
   // The array of int8_t to store validities for list elements.
-  auto validities = rmm::device_uvector<int8_t>(has_null_mask ? num_output_lists : 0, stream);
+  auto validities = rmm::device_uvector<int8_t>(has_null_mask ? num_output_lists : 0, stream, resources.get_temporary_mr());
 
   // Compute list sizes and validities.
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_output_lists),
     d_offsets,
@@ -77,7 +77,7 @@ generate_list_offsets_and_validities(table_view const& input,
 
   // Compute offsets from sizes.
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + num_output_lists + 1, d_offsets);
+    rmm::exec_policy(stream, resources.get_temporary_mr()), d_offsets, d_offsets + num_output_lists + 1, d_offsets);
 
   return {std::move(list_offsets), std::move(validities)};
 }
@@ -88,11 +88,11 @@ generate_list_offsets_and_validities(table_view const& input,
  */
 std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const> columns_to_concat,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                     cudf::memory_resources resources)
 {
   // Concatenate all columns into a single (temporary) column.
   auto const concatenated_col =
-    cudf::detail::concatenate(columns_to_concat, stream, cudf::get_current_device_resource_ref());
+    cudf::detail::concatenate(columns_to_concat, stream, resources.get_temporary_mr());
 
   // The number of input columns is known to be non-zero thus it's safe to call `front()` here.
   auto const num_cols       = columns_to_concat.size();
@@ -112,7 +112,7 @@ std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const
                                      iter_gather + concatenated_col->size(),
                                      out_of_bounds_policy::DONT_CHECK,
                                      stream,
-                                     mr);
+                                     resources);
   return std::move(result->release()[0]);
 }
 
@@ -186,7 +186,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
                                      size_type num_output_entries,
                                      bool,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const noexcept
+                                     cudf::memory_resources resources) const noexcept
   {
     auto const table_dv_ptr   = table_device_view::create(input, stream);
     auto const d_list_offsets = output_list_offsets.template begin<size_type>();
@@ -195,11 +195,11 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
                                                                           stream);
     auto comp_fn =
       compute_string_sizes_and_interleave_lists_fn{*table_dv_ptr, d_list_offsets, indices.data()};
-    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                        thrust::counting_iterator<size_type>(0),
                        num_output_lists,
                        comp_fn);
-    return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
+    return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, resources);
   }
 };
 
@@ -211,7 +211,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
                                      size_type num_output_entries,
                                      bool data_has_null_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const noexcept
+                                     cudf::memory_resources resources) const noexcept
   {
     auto const num_cols     = input.num_columns();
     auto const table_dv_ptr = table_device_view::create(input, stream);
@@ -221,15 +221,15 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
                                               num_output_entries,
                                               mask_allocation_policy::NEVER,
                                               stream,
-                                              mr);
+                                              resources);
     auto output_dv_ptr = mutable_column_device_view::create(*output, stream);
 
     // The array of int8_t to store entry validities.
     auto validities =
-      rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream);
+      rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream, resources.get_temporary_mr());
 
     thrust::for_each_n(
-      rmm::exec_policy(stream),
+      rmm::exec_policy(stream, resources.get_temporary_mr()),
       thrust::make_counting_iterator<size_type>(0),
       num_output_lists,
       [num_cols,
@@ -270,7 +270,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
 
     if (data_has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
-        validities.begin(), validities.end(), cuda::std::identity{}, stream, mr);
+        validities.begin(), validities.end(), cuda::std::identity{}, stream, resources);
       if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
     }
 
@@ -290,7 +290,7 @@ struct interleave_list_entries_fn {
                                      size_type num_output_entries,
                                      bool data_has_null_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
   {
     return interleave_list_entries_impl<T>{}(input,
                                              output_list_offsets,
@@ -298,7 +298,7 @@ struct interleave_list_entries_fn {
                                              num_output_entries,
                                              data_has_null_mask,
                                              stream,
-                                             mr);
+                                             resources);
   }
 };
 
@@ -311,7 +311,7 @@ struct interleave_list_entries_fn {
 std::unique_ptr<column> interleave_columns(table_view const& input,
                                            bool has_null_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   auto const entry_type = lists_column_view(*input.begin()).child().type();
   for (auto const& col : input) {
@@ -324,19 +324,19 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   }
 
   if (input.num_rows() == 0) { return cudf::empty_like(input.column(0)); }
-  if (input.num_columns() == 1) { return std::make_unique<column>(*(input.begin()), stream, mr); }
+  if (input.num_columns() == 1) { return std::make_unique<column>(*(input.begin()), stream, resources); }
 
   // For nested types, we rely on the `concatenate_and_gather` method, which costs more memory due
   // to concatenation of the input columns into a temporary column. For non-nested types, we can
   // directly interleave the input columns into the output column for better efficiency.
   if (cudf::is_nested(entry_type)) {
     auto const input_columns = std::vector<column_view>(input.begin(), input.end());
-    return concatenate_and_gather_lists(host_span<column_view const>{input_columns}, stream, mr);
+    return concatenate_and_gather_lists(host_span<column_view const>{input_columns}, stream, resources);
   }
 
   // Generate offsets of the output lists column.
   auto [list_offsets, list_validities] =
-    generate_list_offsets_and_validities(input, has_null_mask, stream, mr);
+    generate_list_offsets_and_validities(input, has_null_mask, stream, resources);
   auto const offsets_view = list_offsets->view();
 
   // Copy entries from the input lists columns to the output lists column - this needed to be
@@ -356,7 +356,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                                                              num_output_entries,
                                                              data_has_null_mask,
                                                              stream,
-                                                             mr);
+                                                             resources);
 
   if (not has_null_mask) {
     return make_lists_column(num_output_lists,
@@ -365,18 +365,18 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                              0,
                              rmm::device_buffer{},
                              stream,
-                             mr);
+                             resources);
   }
 
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    list_validities.begin(), list_validities.end(), cuda::std::identity{}, stream, mr);
+    list_validities.begin(), list_validities.end(), cuda::std::identity{}, stream, resources);
   return make_lists_column(num_output_lists,
                            std::move(list_offsets),
                            std::move(list_entries),
                            null_count,
                            null_count ? std::move(null_mask) : rmm::device_buffer{},
                            stream,
-                           mr);
+                           resources);
 }
 
 }  // namespace detail

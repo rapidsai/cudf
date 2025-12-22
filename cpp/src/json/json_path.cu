@@ -683,7 +683,7 @@ std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_co
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
   return is_empty ? std::pair(cuda::std::nullopt, 0)
                   : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector(
-                                h_operators, stream, cudf::get_current_device_resource_ref())),
+                                h_operators, stream, resources.get_temporary_mr())),
                               max_stack_depth);
 }
 
@@ -969,7 +969,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
                                               cudf::string_scalar const& json_path,
                                               get_json_object_options options,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   // preprocess the json_path into a command buffer
   auto preprocess = build_command_buffer(json_path, stream);
@@ -984,13 +984,14 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       data_type{type_id::STRING},
       col.size(),
       rmm::device_buffer{0, stream, mr},  // no data
-      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
+      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream,
+                  resources),
       col.size());  // null count
   }
 
   // compute output sizes
   auto sizes =
-    rmm::device_uvector<size_type>(col.size(), stream, cudf::get_current_device_resource_ref());
+    rmm::device_uvector<size_type>(col.size(), stream, resources.get_temporary_mr());
   auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(col.offsets());
 
   constexpr int block_size = 512;
@@ -1010,16 +1011,16 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // convert sizes to offsets
   auto [offsets, output_size] =
-    cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
+    cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, resources);
   d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // allocate output string column
-  rmm::device_uvector<char> chars(output_size, stream, mr);
+  rmm::device_uvector<char> chars(output_size, stream, resources);
 
   // potential optimization : if we know that all outputs are valid, we could skip creating
   // the validity mask altogether
   rmm::device_buffer validity =
-    cudf::detail::create_null_mask(col.size(), mask_state::UNINITIALIZED, stream, mr);
+    cudf::detail::create_null_mask(col.size(), mask_state::UNINITIALIZED, stream, resources);
 
   // compute results
   cudf::detail::device_scalar<size_type> d_valid_count{0, stream};
@@ -1042,7 +1043,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
                                     std::move(validity));
   // unmatched array query may result in unsanitized '[' value in the result
   if (cudf::detail::has_nonempty_nulls(result->view(), stream)) {
-    result = cudf::detail::purge_nonempty_nulls(result->view(), stream, mr);
+    result = cudf::detail::purge_nonempty_nulls(result->view(), stream, resources);
   }
   return result;
 }
@@ -1054,10 +1055,10 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
                                               cudf::string_scalar const& json_path,
                                               get_json_object_options options,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_json_object(col, json_path, options, stream, mr);
+  return detail::get_json_object(col, json_path, options, stream, resources);
 }
 
 }  // namespace cudf

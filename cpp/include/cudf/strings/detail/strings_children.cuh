@@ -65,7 +65,7 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
                                             IndexPairIterator begin,
                                             size_type strings_count,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   auto chars_data      = rmm::device_uvector<char>(chars_size, stream, mr);
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
@@ -123,7 +123,7 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   InputIterator begin,
   InputIterator end,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto constexpr size_type_max = static_cast<int64_t>(std::numeric_limits<size_type>::max());
   auto const lcount            = static_cast<int64_t>(std::distance(begin, end));
@@ -224,7 +224,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            size_type exec_size,
                            size_type strings_count,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           cudf::memory_resources resources)
 {
   // This is called twice -- once for computing sizes and once for writing chars.
   // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
@@ -304,7 +304,7 @@ template <typename SizeAndExecuteFunction>
 auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            size_type strings_count,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           cudf::memory_resources resources)
 {
   return make_strings_children(size_and_exec_fn, strings_count, strings_count, stream, mr);
 }

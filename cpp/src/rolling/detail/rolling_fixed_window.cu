@@ -23,7 +23,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
@@ -47,7 +47,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                             min_periods,
                                             agg,
                                             stream,
-                                            mr);
+                                            resources);
   } else {
     namespace utils = cudf::detail::rolling;
     auto groups     = utils::ungrouped{input.size()};
@@ -56,7 +56,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
     auto following =
       utils::make_clamped_window_iterator<utils::direction::FOLLOWING>(following_window, groups);
     return cudf::detail::rolling_window(
-      input, default_outputs, preceding, following, min_periods, agg, stream, mr);
+      input, default_outputs, preceding, following, min_periods, agg, stream, resources);
   }
 }
 }  // namespace cudf::detail

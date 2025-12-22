@@ -19,13 +19,13 @@ std::unique_ptr<cudf::column> segmented_min(
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(col.type() == output_dtype,
                "segmented_min() operation requires matching output type");
   using reducer = simple::detail::same_column_type_dispatcher<op::min>;
   return cudf::type_dispatcher(
-    col.type(), reducer{}, col, offsets, null_handling, init, stream, mr);
+    col.type(), reducer{}, col, offsets, null_handling, init, stream, resources);
 }
 }  // namespace detail
 }  // namespace reduction

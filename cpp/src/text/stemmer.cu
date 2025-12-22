@@ -89,7 +89,7 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
                                         letter_type ltype,
                                         PositionIterator position_itr,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::BOOL8});
 
@@ -97,13 +97,14 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
   auto results =
     cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::BOOL8},
                                   strings.size(),
-                                  cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                  cudf::detail::copy_bitmask(strings.parent(), stream,
+                  resources),
                                   strings.null_count(),
                                   stream,
-                                  mr);
+                                  resources);
   // set values into output column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings.size()),
                     results->mutable_view().data<bool>(),
@@ -123,14 +124,14 @@ struct dispatch_is_letter_fn {
                                            letter_type ltype,
                                            cudf::column_view const& indices,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr) const
+                                           cudf::memory_resources resources) const
     requires(cudf::is_index_type<T>())
   {
     CUDF_EXPECTS(strings.size() == indices.size(),
                  "strings column and indices column must be the same size");
     CUDF_EXPECTS(!indices.has_nulls(), "indices column must not contain nulls");
     // resolve and pass an iterator for the indices column to the detail function
-    return is_letter(strings, ltype, indices.begin<T>(), stream, mr);
+    return is_letter(strings, ltype, indices.begin<T>(), stream, resources);
   }
 
   template <typename T, typename... Args>
@@ -203,7 +204,7 @@ struct porter_stemmer_measure_fn {
 
 std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view const& strings,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                     cudf::memory_resources resources)
 {
   if (strings.is_empty()) {
     return cudf::make_empty_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()});
@@ -213,13 +214,14 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
   auto results =
     cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                   strings.size(),
-                                  cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                  cudf::detail::copy_bitmask(strings.parent(), stream,
+                  resources),
                                   strings.null_count(),
                                   stream,
-                                  mr);
+                                  resources);
   // compute measures into output column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings.size()),
                     results->mutable_view().data<cudf::size_type>(),
@@ -232,10 +234,10 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
                                         letter_type ltype,
                                         cudf::column_view const& indices,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   return cudf::type_dispatcher(
-    indices.type(), dispatch_is_letter_fn{}, strings, ltype, indices, stream, mr);
+    indices.type(), dispatch_is_letter_fn{}, strings, ltype, indices, stream, resources);
 }
 
 }  // namespace detail
@@ -246,21 +248,21 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,
                                         letter_type ltype,
                                         cudf::size_type character_index,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::is_letter(
-    input, ltype, thrust::make_constant_iterator<cudf::size_type>(character_index), stream, mr);
+    input, ltype, thrust::make_constant_iterator<cudf::size_type>(character_index), stream, resources);
 }
 
 std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,
                                         letter_type ltype,
                                         cudf::column_view const& indices,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_letter(input, ltype, indices, stream, mr);
+  return detail::is_letter(input, ltype, indices, stream, resources);
 }
 
 /**
@@ -268,10 +270,10 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,
  */
 std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view const& input,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                     cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::porter_stemmer_measure(input, stream, mr);
+  return detail::porter_stemmer_measure(input, stream, resources);
 }
 
 }  // namespace nvtext

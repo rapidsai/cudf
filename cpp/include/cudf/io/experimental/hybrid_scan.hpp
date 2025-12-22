@@ -436,7 +436,7 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const;
+    cudf::memory_resources resources) const;
 
   /**
    * @brief Get byte ranges of column chunks of filter columns

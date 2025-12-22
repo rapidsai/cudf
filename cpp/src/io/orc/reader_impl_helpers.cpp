@@ -100,7 +100,7 @@ column_buffer assemble_buffer(size_type orc_col_id,
                               column_hierarchy const& selected_columns,
                               std::vector<std::vector<column_buffer>>& col_buffers,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   auto const col_id = col_meta.orc_col_map[level][orc_col_id];
   auto& col_buffer  = col_buffers[level][col_id];
@@ -113,7 +113,8 @@ column_buffer assemble_buffer(size_type orc_col_id,
       auto const& children_indices = selected_columns.children.at(orc_col_id);
       for (auto const child_id : children_indices) {
         col_buffer.children.emplace_back(assemble_buffer(
-          child_id, level + 1, col_meta, metadata, selected_columns, col_buffers, stream, mr));
+          child_id, level + 1, col_meta, metadata, selected_columns, col_buffers, stream,
+                  resources));
       }
     } break;
 
@@ -124,13 +125,14 @@ column_buffer assemble_buffer(size_type orc_col_id,
       for (std::size_t idx = 0; idx < children_indices.size(); idx++) {
         auto const col = children_indices[idx];
         child_col_buffers.emplace_back(assemble_buffer(
-          col, level + 1, col_meta, metadata, selected_columns, col_buffers, stream, mr));
+          col, level + 1, col_meta, metadata, selected_columns, col_buffers, stream,
+                  resources));
         child_col_buffers.back().name = get_map_child_col_name(idx);
       }
       // Create a struct buffer
       auto num_rows = child_col_buffers[0].size;
       auto struct_buffer =
-        column_buffer(cudf::data_type(type_id::STRUCT), num_rows, false, stream, mr);
+        column_buffer(cudf::data_type(type_id::STRUCT), num_rows, false, stream, resources);
       struct_buffer.children = std::move(child_col_buffers);
       struct_buffer.name     = "struct";
 

@@ -18,14 +18,14 @@ namespace detail {
 std::unique_ptr<cudf::scalar> mean(column_view const& col,
                                    cudf::data_type const output_dtype,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   auto col_type =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
 
   using reducer = compound::detail::element_type_dispatcher<op::mean>;
   return cudf::type_dispatcher(
-    col_type, reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, stream, mr);
+    col_type, reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, stream, resources);
 }
 
 }  // namespace detail

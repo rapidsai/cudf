@@ -93,7 +93,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                                    string_scalar const& replacement,
                                    std::optional<size_type> max_replace_count,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -108,13 +108,14 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
   auto [offsets_column, chars] = make_strings_children(
-    replace_regex_fn{*d_strings, d_repl, maxrepl}, *d_prog, input.size(), stream, mr);
+    replace_regex_fn{*d_strings, d_repl, maxrepl}, *d_prog, input.size(), stream, resources);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 }  // namespace detail
@@ -126,10 +127,10 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    string_scalar const& replacement,
                                    std::optional<size_type> max_replace_count,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(strings, prog, replacement, max_replace_count, stream, mr);
+  return detail::replace_re(strings, prog, replacement, max_replace_count, stream, resources);
 }
 
 }  // namespace strings

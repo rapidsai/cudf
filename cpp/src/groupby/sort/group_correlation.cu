@@ -110,7 +110,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
                                          size_type min_periods,
                                          size_type ddof,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   using result_type = id_to_type<type_id::FLOAT64>;
   static_assert(
@@ -145,13 +145,13 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
                                                             ddof};
 
   auto result = make_numeric_column(
-    data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, resources);
   auto d_result = result->mutable_view().begin<result_type>();
 
   auto corr_iter =
     thrust::make_transform_iterator(thrust::make_counting_iterator(0), covariance_transform_op);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                         group_labels.begin(),
                         group_labels.end(),
                         corr_iter,
@@ -162,7 +162,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
     return not(group_size == 0 or group_size - ddof <= 0 or group_size < min_periods);
   };
   auto [new_nullmask, null_count] =
-    cudf::detail::valid_if(count.begin<size_type>(), count.end<size_type>(), is_null, stream, mr);
+    cudf::detail::valid_if(count.begin<size_type>(), count.end<size_type>(), is_null, stream, resources);
   if (null_count != 0) { result->set_null_mask(std::move(new_nullmask), null_count); }
   return result;
 }
@@ -171,7 +171,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                           column_view const& stddev_0,
                                           column_view const& stddev_1,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   using result_type = id_to_type<type_id::FLOAT64>;
   CUDF_EXPECTS(covariance.type().id() == type_id::FLOAT64, "Covariance result must be FLOAT64");
@@ -180,12 +180,13 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
   auto stddev_iter = thrust::make_zip_iterator(cuda::std::make_tuple(stddev0_ptr, stddev1_ptr));
   auto result      = make_numeric_column(covariance.type(),
                                     covariance.size(),
-                                    cudf::detail::copy_bitmask(covariance, stream, mr),
+                                    cudf::detail::copy_bitmask(covariance, stream,
+                  resources),
                                     covariance.null_count(),
                                     stream,
-                                    mr);
+                                    resources);
   auto d_result    = result->mutable_view().begin<result_type>();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     covariance.begin<result_type>(),
                     covariance.end<result_type>(),
                     stddev_iter,

@@ -23,7 +23,7 @@ std::unique_ptr<cudf::column> make_structs_column(
   size_type null_count,
   rmm::device_buffer&& null_mask,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(null_count <= 0 || !null_mask.is_empty(),
                "Struct column with nulls must be nullable.");
@@ -40,7 +40,7 @@ std::unique_ptr<cudf::column> make_structs_column(
         null_count,
         std::move(child),
         stream,
-        mr);
+        resources);
     }
   }
 
@@ -59,7 +59,7 @@ std::unique_ptr<cudf::column> create_structs_hierarchy(
   size_type null_count,
   rmm::device_buffer&& null_mask,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(null_count <= 0 || !null_mask.is_empty(),
                "Struct column with nulls must be nullable.");

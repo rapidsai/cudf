@@ -16,7 +16,7 @@ std::unique_ptr<column> scan(column_view const& input,
                              scan_type inclusive,
                              null_policy null_handling,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   if (agg.kind == aggregation::RANK) {
     CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
@@ -24,19 +24,20 @@ std::unique_ptr<column> scan(column_view const& input,
     auto const& rank_agg = static_cast<cudf::detail::rank_aggregation const&>(agg);
     if (rank_agg._method == rank_method::MIN) {
       if (rank_agg._percentage == rank_percentage::NONE) {
-        return inclusive_rank_scan(input, stream, mr);
+        return inclusive_rank_scan(input, stream, resources);
       } else if (rank_agg._percentage == rank_percentage::ONE_NORMALIZED) {
-        return inclusive_one_normalized_percent_rank_scan(input, stream, mr);
+        return inclusive_one_normalized_percent_rank_scan(input, stream, resources);
       }
     } else if (rank_agg._method == rank_method::DENSE) {
-      return inclusive_dense_rank_scan(input, stream, mr);
+      return inclusive_dense_rank_scan(input, stream, resources);
     }
     CUDF_FAIL("Unsupported rank aggregation method for inclusive scan");
   }
 
   return inclusive == scan_type::EXCLUSIVE
-           ? detail::scan_exclusive(input, agg, null_handling, stream, mr)
-           : detail::scan_inclusive(input, agg, null_handling, stream, mr);
+           ? detail::scan_exclusive(input, agg, null_handling, stream,
+                  resources)
+           : detail::scan_inclusive(input, agg, null_handling, stream, resources);
 }
 
 }  // namespace
@@ -47,10 +48,10 @@ std::unique_ptr<column> scan(column_view const& input,
                              scan_type inclusive,
                              null_policy null_handling,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::scan(input, agg, inclusive, null_handling, stream, mr);
+  return detail::scan(input, agg, inclusive, null_handling, stream, resources);
 }
 
 }  // namespace cudf

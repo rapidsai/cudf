@@ -77,7 +77,7 @@ struct extract_fn {
 std::unique_ptr<table> extract(strings_column_view const& input,
                                regex_program const& prog,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
@@ -85,7 +85,7 @@ std::unique_ptr<table> extract(strings_column_view const& input,
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern");
 
-  auto indices   = rmm::device_uvector<string_index_pair>(input.size() * groups, stream);
+  auto indices   = rmm::device_uvector<string_index_pair>(input.size() * groups, stream, resources.get_temporary_mr());
   auto d_indices = cudf::detail::device_2dspan<string_index_pair>(indices, groups);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
@@ -104,7 +104,7 @@ std::unique_ptr<table> extract(strings_column_view const& input,
         0, cuda::proclaim_return_type<size_type>([column_index, groups] __device__(size_type idx) {
           return (idx * groups) + column_index;
         })));
-    return make_strings_column(indices_itr, indices_itr + input.size(), stream, mr);
+    return make_strings_column(indices_itr, indices_itr + input.size(), stream, resources);
   };
 
   std::transform(thrust::make_counting_iterator<size_type>(0),
@@ -147,7 +147,7 @@ std::unique_ptr<column> extract_single(strings_column_view const& input,
                                        regex_program const& prog,
                                        size_type group,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
@@ -160,14 +160,14 @@ std::unique_ptr<column> extract_single(strings_column_view const& input,
                "group parameter outside the range of capture groups found in the regex pattern",
                std::invalid_argument);
 
-  auto indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
+  auto indices = rmm::device_uvector<string_index_pair>(input.size(), stream, resources.get_temporary_mr());
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
   launch_transform_kernel(
     extract_single_fn{*d_strings, group}, *d_prog, indices.data(), input.size(), stream);
 
-  return make_strings_column(indices.begin(), indices.end(), stream, mr);
+  return make_strings_column(indices.begin(), indices.end(), stream, resources);
 }
 
 }  // namespace detail
@@ -177,20 +177,20 @@ std::unique_ptr<column> extract_single(strings_column_view const& input,
 std::unique_ptr<table> extract(strings_column_view const& input,
                                regex_program const& prog,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract(input, prog, stream, mr);
+  return detail::extract(input, prog, stream, resources);
 }
 
 std::unique_ptr<column> extract_single(strings_column_view const& input,
                                        regex_program const& prog,
                                        size_type group,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_single(input, prog, group, stream, mr);
+  return detail::extract_single(input, prog, group, stream, resources);
 }
 }  // namespace strings
 }  // namespace cudf

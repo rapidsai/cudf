@@ -410,7 +410,7 @@ void persisted_statistics::persist(int num_table_rows,
       string_length_functor{num_chunks,
                             intermediate_stats.stripe_stat_chunks.data(),
                             intermediate_stats.stripe_stat_merge.device_ptr()});
-    thrust::exclusive_scan(rmm::exec_policy(stream), iter, iter + offsets.size(), offsets.begin());
+    thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()), iter, iter + offsets.size(), offsets.begin());
 
     // pull size back to host
     auto const total_string_pool_size = offsets.element(num_chunks * 2, stream);
@@ -706,11 +706,11 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
                                 cudaMemcpyDefault,
                                 stream.value()));
   auto const d_stripes = cudf::detail::make_device_uvector_async(
-    segmentation.stripes, stream, cudf::get_current_device_resource_ref());
+    segmentation.stripes, stream, resources.get_temporary_mr());
 
   // One thread per column, per stripe
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator(0),
     orc_table.num_columns() * segmentation.num_stripes(),
     [columns = device_span<orc_column_device_view const>{orc_table.d_columns},
@@ -885,7 +885,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   // TODO (future): pass columns separately from chunks (to skip this step)
   // and remove info from chunks that is common for the entire column
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator(0ul),
     chunks.count(),
     [chunks = chunks.device_view(),
@@ -937,7 +937,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   std::vector<std::vector<rmm::device_uvector<uint8_t>>> encoded_data(segmentation.num_stripes());
   for (auto const& stripe : segmentation.stripes) {
     std::generate_n(std::back_inserter(encoded_data[stripe.id]), streams.size(), [stream]() {
-      return rmm::device_uvector<uint8_t>(0, stream);
+      return rmm::device_uvector<uint8_t>(0, stream, resources.get_temporary_mr());
     });
 
     for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
@@ -992,7 +992,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
             stripe_size += strm.lengths[strm_type] + uncomp_block_align - 1;
           });
 
-          encoded_data[stripe.id][strm_id] = rmm::device_uvector<uint8_t>(stripe_size, stream);
+          encoded_data[stripe.id][strm_id] = rmm::device_uvector<uint8_t>(stripe_size, stream, resources.get_temporary_mr());
         }
 
         // Set offsets
@@ -1077,7 +1077,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   std::vector<std::vector<rmm::device_uvector<uint8_t>>> gathered_stripes(enc_data->data.size());
   for (auto& stripe_data : gathered_stripes) {
     std::generate_n(std::back_inserter(stripe_data), enc_data->data[0].size(), [&]() {
-      return rmm::device_uvector<uint8_t>(0, stream);
+      return rmm::device_uvector<uint8_t>(0, stream, resources.get_temporary_mr());
     });
   }
   std::vector<StripeInformation> stripes(segmentation.num_stripes());
@@ -1103,7 +1103,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
           // copied anyway, to make them contiguous (i.e. gather them).
           if (stripe.size > 1 and allocated_stripe_size > actual_stripe_size) {
             gathered_stripes[stripe.id][stream_id] =
-              rmm::device_uvector<uint8_t>(actual_stripe_size, stream);
+              rmm::device_uvector<uint8_t>(actual_stripe_size, stream, resources.get_temporary_mr());
           }
 
           auto* ss           = &(*strm_desc)[stripe.id][stream_id - num_index_streams];
@@ -1144,7 +1144,7 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                              device_span<stats_column_desc> stat_desc,
                              rmm::cuda_stream_view stream)
 {
-  thrust::for_each(rmm::exec_policy(stream),
+  thrust::for_each(rmm::exec_policy(stream, resources.get_temporary_mr()),
                    thrust::make_counting_iterator(0ul),
                    thrust::make_counting_iterator(stat_desc.size()),
                    [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx]; });
@@ -1364,7 +1364,7 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     }
     //  Copy to device
     auto const d_stat_chunks = cudf::detail::make_device_uvector_async<statistics_chunk>(
-      h_stat_chunks, stream, cudf::get_current_device_resource_ref());
+      h_stat_chunks, stream, resources.get_temporary_mr());
     stats_merge.host_to_device_async(stream);
 
     // Encode and return
@@ -1414,10 +1414,10 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     num_entries_seen += stripes_per_col;
   }
 
-  auto const& mr    = cudf::get_current_device_resource_ref();
-  auto const d_srcs = cudf::detail::make_device_uvector_async(h_srcs, stream, mr);
-  auto const d_dsts = cudf::detail::make_device_uvector_async(h_dsts, stream, mr);
-  auto const d_lens = cudf::detail::make_device_uvector_async(h_lens, stream, mr);
+  auto const& mr    = resources.get_temporary_mr();
+  auto const d_srcs = cudf::detail::make_device_uvector_async(h_srcs, stream, resources);
+  auto const d_dsts = cudf::detail::make_device_uvector_async(h_dsts, stream, resources);
+  auto const d_lens = cudf::detail::make_device_uvector_async(h_lens, stream, resources);
   cudf::detail::batched_memcpy_async(
     d_srcs.begin(), d_dsts.begin(), d_lens.begin(), d_srcs.size(), stream);
 
@@ -1692,7 +1692,7 @@ void pushdown_lists_null_mask(orc_column_view const& col,
 
   // Reset bits where a null list element has rows in the child column
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator(0u),
     col.size(),
     [d_columns, col_idx = col.index(), parent_pd_mask, out_mask] __device__(auto& idx) {
@@ -1753,7 +1753,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
         pd_masks.emplace_back(num_bitmask_words(col.size()), stream);
         mask_ptrs.push_back({pd_masks.back().data()});
 
-        thrust::transform(rmm::exec_policy(stream),
+        thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                           null_mask,
                           null_mask + pd_masks.back().size(),
                           parent_pd_mask,
@@ -1773,9 +1773,9 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
 
   // Attach null masks to device column views (async)
   auto const d_mask_ptrs = cudf::detail::make_device_uvector_async(
-    mask_ptrs, stream, cudf::get_current_device_resource_ref());
+    mask_ptrs, stream, resources.get_temporary_mr());
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator(0ul),
     orc_table.num_columns(),
     [cols = device_span<orc_column_device_view>{orc_table.d_columns},
@@ -1862,7 +1862,7 @@ orc_table_view make_orc_table_view(table_view const& table,
       return orc_column.orc_kind();
     });
   auto const d_type_kinds = cudf::detail::make_device_uvector_async(
-    type_kinds, stream, cudf::get_current_device_resource_ref());
+    type_kinds, stream, resources.get_temporary_mr());
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
   using stack_value_type =
@@ -1911,7 +1911,7 @@ orc_table_view make_orc_table_view(table_view const& table,
           std::move(d_orc_columns),
           str_col_indexes,
           cudf::detail::make_device_uvector(
-            str_col_indexes, stream, cudf::get_current_device_resource_ref())};
+            str_col_indexes, stream, resources.get_temporary_mr())};
 }
 
 hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view const& orc_table,
@@ -1924,7 +1924,7 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
   hostdevice_2dvector<rowgroup_rows> rowgroup_bounds(
     num_rowgroups, orc_table.num_columns(), stream);
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator(0ul),
     num_rowgroups,
     [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
@@ -1975,7 +1975,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
       auto& current_sizes =
         elem_sizes.insert({orc_col.index(), rmm::device_uvector<uint32_t>(orc_col.size(), stream)})
           .first->second;
-      thrust::tabulate(rmm::exec_policy_nosync(stream),
+      thrust::tabulate(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                        current_sizes.begin(),
                        current_sizes.end(),
                        [d_cols  = device_span<orc_column_device_view const>{orc_table.d_columns},
@@ -2010,11 +2010,11 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
   decimal_sizes_to_offsets(segmentation.rowgroups, elem_sizes, stream);
 
   // Gather the row group sizes and copy to host
-  auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(segmentation.num_rowgroups(), stream);
+  auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(segmentation.num_rowgroups(), stream, resources.get_temporary_mr());
   std::map<uint32_t, cudf::detail::host_vector<uint32_t>> rg_sizes;
   for (auto const& [col_idx, esizes] : elem_sizes) {
     // Copy last elem in each row group - equal to row group size
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      d_tmp_rowgroup_sizes.begin(),
                      d_tmp_rowgroup_sizes.end(),
                      [src       = esizes.data(),
@@ -2072,7 +2072,7 @@ auto set_rowgroup_char_counts(orc_table_view& orc_table,
   auto const num_rowgroups = rowgroup_bounds.size().first;
   auto const num_str_cols  = orc_table.num_string_columns();
 
-  auto counts         = rmm::device_uvector<size_type>(num_str_cols * num_rowgroups, stream);
+  auto counts         = rmm::device_uvector<size_type>(num_str_cols * num_rowgroups, stream, resources.get_temporary_mr());
   auto counts_2d_view = device_2dspan<size_type>(counts, num_rowgroups);
   rowgroup_char_counts(counts_2d_view,
                        orc_table.d_columns,
@@ -2274,7 +2274,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
       // Create the inverse permutation - i.e. the mapping from the original order to the sorted
       auto order_copy = cudf::detail::make_device_uvector_async<uint32_t>(
-        sd.data_order, current_stream, cudf::get_current_device_resource_ref());
+        sd.data_order, current_stream, resources.get_temporary_mr());
       thrust::scatter(rmm::exec_policy_nosync(current_stream),
                       thrust::counting_iterator<uint32_t>(0),
                       thrust::counting_iterator<uint32_t>(sd.data_order.size()),
@@ -2297,7 +2297,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
                                                 rmm::cuda_stream_view stream)
 {
   auto const longest_stream = thrust::max_element(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     ss.data(),
     ss.data() + ss.count(),
     cuda::proclaim_return_type<bool>([] __device__(auto const& lhs, auto const& rhs) {
@@ -2429,7 +2429,7 @@ auto convert_table_to_orc_data(table_view const& input,
   rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
   cudf::detail::hostdevice_vector<codec_exec_result> comp_results(num_compressed_blocks, stream);
   std::optional<writer_compression_statistics> compression_stats;
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy(stream, resources.get_temporary_mr()),
                comp_results.d_begin(),
                comp_results.d_end(),
                codec_exec_result{0, codec_status::FAILURE});

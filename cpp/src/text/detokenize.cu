@@ -96,14 +96,14 @@ rmm::device_uvector<cudf::size_type> create_token_row_offsets(
                       sorted_indices.data<cudf::size_type>()};
 
   auto const output_count =
-    thrust::count_if(rmm::exec_policy(stream),
+    thrust::count_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
                      fn);
 
-  auto tokens_offsets = rmm::device_uvector<cudf::size_type>(output_count + 1, stream);
+  auto tokens_offsets = rmm::device_uvector<cudf::size_type>(output_count + 1, stream, resources.get_temporary_mr());
 
-  thrust::copy_if(rmm::exec_policy(stream),
+  thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                   thrust::make_counting_iterator<cudf::size_type>(0),
                   thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
                   tokens_offsets.begin(),
@@ -123,7 +123,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   CUDF_EXPECTS(row_indices.size() == strings.size(),
@@ -137,7 +137,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   // the indices may not be in order so we need to build a sorted map
   auto sorted_rows = cudf::detail::stable_sorted_order(
-    cudf::table_view({row_indices}), {}, {}, stream, cudf::get_current_device_resource_ref());
+    cudf::table_view({row_indices}), {}, {}, stream, resources.get_temporary_mr());
   auto const d_row_map = sorted_rows->view().data<cudf::size_type>();
 
   // create offsets for the tokens for each output string
@@ -151,7 +151,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
     detokenizer_fn{*strings_column, d_row_map, tokens_offsets.data(), d_separator},
     output_count,
     stream,
-    mr);
+    resources);
 
   // make the output strings column from the offsets and chars column
   return cudf::make_strings_column(
@@ -164,10 +164,10 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& input,
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::detokenize(input, row_indices, separator, stream, mr);
+  return detail::detokenize(input, row_indices, separator, stream, resources);
 }
 
 }  // namespace nvtext

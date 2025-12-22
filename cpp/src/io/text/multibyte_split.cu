@@ -298,13 +298,13 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               byte_range_info byte_range,
                                               bool strip_delimiters,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
   if (byte_range.is_empty()) { return make_empty_column(type_id::STRING); }
 
-  auto device_delim = cudf::string_scalar(delimiter, true, stream, mr);
+  auto device_delim = cudf::string_scalar(delimiter, true, stream, resources);
 
   std::string sorted_delim{delimiter};
   std::sort(sorted_delim.begin(), sorted_delim.end());
@@ -337,9 +337,9 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     auto const concurrency = 2;
     auto num_tile_states   = std::max(32, TILES_PER_CHUNK * concurrency + 32);
     auto tile_multistates =
-      scan_tile_state<multistate>(num_tile_states, stream, cudf::get_current_device_resource_ref());
+      scan_tile_state<multistate>(num_tile_states, stream, resources.get_temporary_mr());
     auto tile_offsets = scan_tile_state<output_offset>(
-      num_tile_states, stream, cudf::get_current_device_resource_ref());
+      num_tile_states, stream, resources.get_temporary_mr());
 
     multibyte_split_init_kernel<<<TILES_PER_CHUNK,
                                   THREADS_PER_TILE,
@@ -497,8 +497,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
     cudf::detail::join_streams(streams, stream);
 
-    auto chars          = char_storage.gather(stream, mr);
-    auto global_offsets = row_offset_storage.gather(stream, mr);
+    auto chars          = char_storage.gather(stream, resources);
+    auto global_offsets = row_offset_storage.gather(stream, resources);
     return std::pair{std::move(global_offsets), std::move(chars)};
   }();
 
@@ -517,7 +517,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
         (global_offsets.size() > 0 and global_offsets.back_element(stream) == chunk_offset));
   auto const chars_bytes = chunk_offset - *first_row_offset;
   auto offsets           = cudf::strings::detail::create_offsets_child_column(
-    chars_bytes, global_offsets.size() + insert_begin + insert_end, stream, mr);
+    chars_bytes, global_offsets.size() + insert_begin + insert_end, stream, resources);
   auto offsets_itr =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets->mutable_view());
   auto set_offset_value = [offsets_itr, stream](size_type index, int64_t value) {
@@ -526,7 +526,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   };
   if (insert_begin) { set_offset_value(0, 0); }
   if (insert_end) { set_offset_value(offsets->size() - 1, chars_bytes); }
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     global_offsets.begin(),
                     global_offsets.end(),
                     offsets_itr + insert_begin,
@@ -553,7 +553,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                         cuda::std::max<size_type>(0, len - delim_size));
           };
         }));
-    return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);
+    return cudf::strings::detail::make_strings_column(it, it + string_count, stream, resources);
   } else {
     return cudf::make_strings_column(string_count, std::move(offsets), chars.release(), 0, {});
   }
@@ -565,10 +565,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               std::string_view delimiter,
                                               parse_options options,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   auto result = detail::multibyte_split(
-    source, delimiter, options.byte_range, options.strip_delimiters, stream, mr);
+    source, delimiter, options.byte_range, options.strip_delimiters, stream, resources);
 
   return result;
 }

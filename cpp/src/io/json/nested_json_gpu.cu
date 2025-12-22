@@ -1516,8 +1516,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
     fst::detail::make_translation_functor<symbol_t, 0, 2>(token_filter::TransduceToken{}),
     stream);
 
-  auto const mr = cudf::get_current_device_resource_ref();
-  cudf::detail::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
+  auto const mr = resources.get_temporary_mr();
+  cudf::detail::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, resources);
   rmm::device_uvector<PdaTokenT> filtered_tokens_out{tokens.size(), stream, mr};
   rmm::device_uvector<SymbolOffsetT> filtered_token_indices_out{tokens.size(), stream, mr};
 
@@ -1542,11 +1542,11 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   auto const num_total_tokens = d_num_selected_tokens.value(stream);
   rmm::device_uvector<PdaTokenT> tokens_out{num_total_tokens, stream, mr};
   rmm::device_uvector<SymbolOffsetT> token_indices_out{num_total_tokens, stream, mr};
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy(stream, resources.get_temporary_mr()),
                filtered_tokens_out.end() - num_total_tokens,
                filtered_tokens_out.end(),
                tokens_out.data());
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy(stream, resources.get_temporary_mr()),
                filtered_token_indices_out.end() - num_total_tokens,
                filtered_token_indices_out.end(),
                token_indices_out.data());
@@ -1558,7 +1558,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   check_input_size(json_in.size());
 
@@ -1701,13 +1701,13 @@ void make_json_column(json_column& root_column,
                       cudf::io::json_reader_options const& options,
                       bool include_quote_char,
                       rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr)
+                      cudf::memory_resources resources)
 {
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
 
   // Parse the JSON and get the token stream
-  auto const [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
+  auto const [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, resources);
 
   // Copy the JSON tokens to the host
   auto tokens            = cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
@@ -2103,7 +2103,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   cudf::io::json_reader_options const& options,
   std::optional<schema_element> schema,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();
@@ -2136,10 +2136,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // Move string_offsets and string_lengths to GPU
       rmm::device_uvector<json_column::row_offset_t> d_string_offsets =
         cudf::detail::make_device_uvector_async(
-          json_col.string_offsets, stream, cudf::get_current_device_resource_ref());
+          json_col.string_offsets, stream, resources.get_temporary_mr());
       rmm::device_uvector<json_column::row_offset_t> d_string_lengths =
         cudf::detail::make_device_uvector_async(
-          json_col.string_lengths, stream, cudf::get_current_device_resource_ref());
+          json_col.string_lengths, stream, resources.get_temporary_mr());
 
       // Prepare iterator that returns (string_offset, string_length)-tuples
       auto offset_length_it =
@@ -2176,7 +2176,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                             null_count,
                             parsing_options(options, stream).view(),
                             stream,
-                            mr);
+                            resources);
 
       // Reset nullable if we do not have nulls
       // This is to match the existing JSON reader's behaviour:
@@ -2204,7 +2204,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         column_names.emplace_back(col->first);
         auto const& child_col      = col->second;
         auto [child_column, names] = json_column_to_cudf_column(
-          child_col, d_input, options, get_child_schema(col_name), stream, mr);
+          child_col, d_input, options, get_child_schema(col_name), stream, resources);
         CUDF_EXPECTS(num_rows == child_column->size(),
                      "All children columns must have the same size");
         child_columns.push_back(std::move(child_column));
@@ -2213,7 +2213,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto [result_bitmask, null_count] = make_validity(json_col);
       return {
         make_structs_column(
-          num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream, mr),
+          num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream,
+                  resources),
         column_names};
       break;
     }
@@ -2225,7 +2226,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         json_col.child_columns.empty() ? list_child_name : json_col.child_columns.begin()->first);
 
       rmm::device_uvector<json_column::row_offset_t> d_offsets =
-        cudf::detail::make_device_uvector_async(json_col.child_offsets, stream, mr);
+        cudf::detail::make_device_uvector_async(json_col.child_offsets, stream, resources);
       auto offsets_column = std::make_unique<column>(
         data_type{type_id::INT32}, num_rows, d_offsets.release(), rmm::device_buffer{}, 0);
       // Create children column
@@ -2239,7 +2240,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                        options,
                                        get_child_schema(json_col.child_columns.begin()->first),
                                        stream,
-                                       mr);
+                                       resources);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
       return {make_lists_column(num_rows - 1,

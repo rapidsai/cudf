@@ -41,12 +41,12 @@ namespace {
 std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
                                                       bool build_null_mask,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr)
+                                                      cudf::memory_resources resources)
 {
   auto const num_rows = input.size();
 
   auto out_offsets = make_numeric_column(
-    data_type{type_to_id<size_type>()}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, num_rows + 1, mask_state::UNALLOCATED, stream, resources);
 
   auto const d_out_offsets  = out_offsets->mutable_view().template begin<size_type>();
   auto const d_row_offsets  = lists_column_view(input).offsets_begin();
@@ -56,7 +56,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
   // into row offsets of the root column. Those entry offsets are subtracted by the first entry
   // offset to output zero-based offsets.
   auto const iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     iter,
                     iter + num_rows + 1,
                     d_out_offsets,
@@ -69,11 +69,12 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
   auto out_entries = std::make_unique<column>(
     lists_column_view(lists_column_view(input).get_sliced_child(stream)).get_sliced_child(stream),
     stream,
-    mr);
+    resources);
 
   auto [null_mask, null_count] = [&] {
     if (!build_null_mask)
-      return std::pair(cudf::detail::copy_bitmask(input, stream, mr), input.null_count());
+      return std::pair(cudf::detail::copy_bitmask(input, stream,
+                  resources), input.null_count());
 
     // The output row will be null only if all lists on the input row are null.
     auto const lists_dv_ptr = column_device_view::create(lists_column_view(input).child(), stream);
@@ -88,7 +89,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
           [&] __device__(auto const list_idx) { return lists_dv.is_valid(list_idx); });
       },
       stream,
-      mr);
+      resources);
   }();
 
   return make_lists_column(num_rows,
@@ -97,7 +98,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
                            null_count,
                            null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
                            stream,
-                           mr);
+                           resources);
 }
 
 /**
@@ -108,7 +109,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 std::pair<std::unique_ptr<column>, rmm::device_uvector<int8_t>>
 generate_list_offsets_and_validities(column_view const& input,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   auto const num_rows = input.size();
 
@@ -118,7 +119,7 @@ generate_list_offsets_and_validities(column_view const& input,
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
 
   // The array of int8_t stores validities for the output list elements.
-  auto validities = rmm::device_uvector<int8_t>(num_rows, stream);
+  auto validities = rmm::device_uvector<int8_t>(num_rows, stream, resources.get_temporary_mr());
 
   // Compute output list sizes and validities.
   auto sizes_itr = cudf::detail::make_counting_transform_iterator(
@@ -148,7 +149,8 @@ generate_list_offsets_and_validities(column_view const& input,
     }));
   // Compute offsets from sizes.
   auto out_offsets = std::get<0>(
-    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + num_rows, stream, mr));
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + num_rows, stream,
+                  resources));
 
   return {std::move(out_offsets), std::move(validities)};
 }
@@ -163,17 +165,17 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
                                             size_type num_rows,
                                             size_type num_output_entries,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   auto const child_col      = lists_column_view(input).child();
   auto const entry_col      = lists_column_view(child_col).child();
   auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(child_col).offsets_begin();
-  auto gather_map           = rmm::device_uvector<size_type>(num_output_entries, stream);
+  auto gather_map           = rmm::device_uvector<size_type>(num_output_entries, stream, resources.get_temporary_mr());
 
   // Fill the gather map with indices of the lists from the child column of the input column.
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     num_rows,
     [d_row_offsets,
@@ -196,16 +198,16 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
                                      out_of_bounds_policy::DONT_CHECK,
                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,
-                                     mr);
+                                     resources);
   return std::move(result->release()[0]);
 }
 
 std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& input,
                                                           rmm::cuda_stream_view stream,
-                                                          rmm::device_async_resource_ref mr)
+                                                          cudf::memory_resources resources)
 {
   // Generate offsets and validities of the output lists column.
-  auto [list_offsets, list_validities] = generate_list_offsets_and_validities(input, stream, mr);
+  auto [list_offsets, list_validities] = generate_list_offsets_and_validities(input, stream, resources);
   auto const offsets_view              = list_offsets->view();
 
   auto const num_rows = input.size();
@@ -213,9 +215,9 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
     cudf::detail::get_value<size_type>(offsets_view, num_rows, stream);
 
   auto list_entries =
-    gather_list_entries(input, offsets_view, num_rows, num_output_entries, stream, mr);
+    gather_list_entries(input, offsets_view, num_rows, num_output_entries, stream, resources);
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    list_validities.begin(), list_validities.end(), cuda::std::identity{}, stream, mr);
+    list_validities.begin(), list_validities.end(), cuda::std::identity{}, stream, resources);
 
   return make_lists_column(num_rows,
                            std::move(list_offsets),
@@ -223,7 +225,7 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
                            null_count,
                            null_count ? std::move(null_mask) : rmm::device_buffer{},
                            stream,
-                           mr);
+                           resources);
 }
 
 }  // namespace
@@ -236,7 +238,7 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
 std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   concatenate_null_policy null_policy,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
+                                                  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(input.type().id() == type_id::LIST,
                "Input column must be a lists column.",
@@ -251,8 +253,9 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
 
   bool const has_null_list = child.has_nulls();
   return (null_policy == concatenate_null_policy::IGNORE || !has_null_list)
-           ? concatenate_lists_ignore_null(input, has_null_list, stream, mr)
-           : concatenate_lists_nullifying_rows(input, stream, mr);
+           ? concatenate_lists_ignore_null(input, has_null_list, stream,
+                  resources)
+           : concatenate_lists_nullifying_rows(input, stream, resources);
 }
 
 }  // namespace detail
@@ -263,10 +266,10 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
 std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   concatenate_null_policy null_policy,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
+                                                  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_list_elements(input, null_policy, stream, mr);
+  return detail::concatenate_list_elements(input, null_policy, stream, resources);
 }
 
 }  // namespace lists

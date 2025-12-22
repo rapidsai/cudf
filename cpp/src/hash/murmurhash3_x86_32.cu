@@ -20,13 +20,13 @@ namespace detail {
 std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
                                            uint32_t seed,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   auto output = make_numeric_column(data_type(type_to_id<hash_value_type>()),
                                     input.num_rows(),
                                     mask_state::UNALLOCATED,
                                     stream,
-                                    mr);
+                                    resources);
 
   // Return early if there's nothing to hash
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
@@ -36,7 +36,7 @@ std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
   auto output_view      = output->mutable_view();
 
   // Compute the hash value for each row
-  thrust::tabulate(rmm::exec_policy(stream),
+  thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
                    output_view.begin<hash_value_type>(),
                    output_view.end<hash_value_type>(),
                    row_hasher.device_hasher<MurmurHash3_x86_32>(nullable, seed));
@@ -49,10 +49,10 @@ std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
 std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
                                            uint32_t seed,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::murmurhash3_x86_32(input, seed, stream, mr);
+  return detail::murmurhash3_x86_32(input, seed, stream, resources);
 }
 
 }  // namespace hashing

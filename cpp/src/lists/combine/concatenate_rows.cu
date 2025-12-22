@@ -66,11 +66,11 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                          concatenate_null_policy null_policy,
                                          device_span<size_type const> row_null_counts,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   // outgoing offsets.
   auto offsets = cudf::make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, input.num_rows() + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, input.num_rows() + 1, mask_state::UNALLOCATED, stream, resources);
 
   auto keys = thrust::make_transform_iterator(
     thrust::make_counting_iterator(size_t{0}),
@@ -101,7 +101,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
       return offsets[row_index + 1] - offsets[row_index];
     }));
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                         keys,
                         keys + (input.num_rows() * input.num_columns()),
                         values,
@@ -109,7 +109,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                         offsets->mutable_view().begin<size_type>());
 
   // convert to offsets
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                          offsets->view().begin<size_type>(),
                          offsets->view().begin<size_type>() + input.num_rows() + 1,
                          offsets->mutable_view().begin<size_type>(),
@@ -131,7 +131,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
           return null_count != num_columns;
         },
         stream,
-        mr);
+        resources);
     }
 
     // row is null if -any- input rows are null
@@ -140,7 +140,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
       row_null_counts.begin() + input.num_rows(),
       [] __device__(size_type null_count) { return null_count == 0; },
       stream,
-      mr);
+      resources);
   }();
 
   return {std::move(offsets), std::move(null_mask), null_count};
@@ -165,7 +165,7 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
       return col.null_mask() ? (bit_is_set(col.null_mask(), row_index + col.offset()) ? 0 : 1) : 0;
     }));
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                         keys,
                         keys + (input.num_rows() * input.num_columns()),
                         null_values,
@@ -185,7 +185,7 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
 std::unique_ptr<column> concatenate_rows(table_view const& input,
                                          concatenate_null_policy null_policy,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_EXPECTS(input.num_columns() > 0, "The input table must have at least one column.");
 
@@ -203,12 +203,12 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();
   if (num_rows == 0) { return cudf::empty_like(input.column(0)); }
-  if (num_cols == 1) { return std::make_unique<column>(*(input.begin()), stream, mr); }
+  if (num_cols == 1) { return std::make_unique<column>(*(input.begin()), stream, resources); }
 
   // concatenate the input table into one column.
   std::vector<column_view> cols(input.num_columns());
   std::copy(input.begin(), input.end(), cols.begin());
-  auto concat = cudf::detail::concatenate(cols, stream, cudf::get_current_device_resource_ref());
+  auto concat = cudf::detail::concatenate(cols, stream, resources.get_temporary_mr());
 
   // whether or not we should be generating a null mask at all
   auto const build_null_mask = concat->has_nulls();
@@ -240,7 +240,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
               return row_null_counts[row_index] != num_columns;
             }),
           stream,
-          cudf::get_current_device_resource_ref());
+          resources.get_temporary_mr());
       }
       // NULLIFY_OUTPUT_ROW.  Output row is nullfied if any input row is null
       return cudf::detail::valid_if(
@@ -253,7 +253,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
             return row_null_counts[row_index] == 0;
           }),
         stream,
-        cudf::get_current_device_resource_ref());
+        resources.get_temporary_mr());
     }();
     concat->set_null_mask(std::move(null_mask), null_count);
   }
@@ -277,11 +277,11 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
                                        iter + (input.num_columns() * input.num_rows()),
                                        out_of_bounds_policy::DONT_CHECK,
                                        stream,
-                                       mr);
+                                       resources);
 
   // generate regrouped offsets and null mask
   auto [offsets, null_mask, null_count] = generate_regrouped_offsets_and_null_mask(
-    *input_dv, build_null_mask, null_policy, row_null_counts, stream, mr);
+    *input_dv, build_null_mask, null_policy, row_null_counts, stream, resources);
 
   // reassemble the underlying child data with the regrouped offsets and null mask
   column& col   = gathered->get_column(0);
@@ -293,7 +293,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
     null_count,
     std::move(null_mask),
     stream,
-    mr);
+    resources);
 }
 
 }  // namespace detail
@@ -304,10 +304,10 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
 std::unique_ptr<column> concatenate_rows(table_view const& input,
                                          concatenate_null_policy null_policy,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_rows(input, null_policy, stream, mr);
+  return detail::concatenate_rows(input, null_policy, stream, resources);
 }
 
 }  // namespace lists

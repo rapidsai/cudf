@@ -36,7 +36,7 @@ struct indices_handler_fn {
  */
 std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   if (source.is_empty()) return make_empty_column(type_id::EMPTY);
 
@@ -57,7 +57,8 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
   auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
   // apply any nulls to the output column
-  output_column->set_null_mask(cudf::detail::copy_bitmask(source.parent(), stream, mr),
+  output_column->set_null_mask(cudf::detail::copy_bitmask(source.parent(), stream,
+                  resources),
                                source.null_count());
 
   return output_column;
@@ -67,10 +68,10 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
 
 std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::decode(source, stream, mr);
+  return detail::decode(source, stream, resources);
 }
 
 }  // namespace dictionary

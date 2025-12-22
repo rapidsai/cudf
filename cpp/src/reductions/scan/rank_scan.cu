@@ -57,17 +57,17 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        value_resolver resolver,
                                        scan_operator scan_op,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   auto const order_by_tview = table_view{{order_by}};
   auto comp                 = cudf::detail::row::equality::self_comparator(order_by_tview, stream);
 
   auto ranks = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, resources);
   auto mutable_ranks = ranks->mutable_view();
 
   auto const comparator_helper = [&](auto const device_comparator) {
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      mutable_ranks.begin<size_type>(),
                      mutable_ranks.end<size_type>(),
                      rank_equality_functor<decltype(device_comparator), value_resolver>(
@@ -84,7 +84,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
     comparator_helper(device_comparator);
   }
 
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                          mutable_ranks.begin<size_type>(),
                          mutable_ranks.end<size_type>(),
                          mutable_ranks.begin<size_type>(),
@@ -96,19 +96,19 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
 
 std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
+                                                  cudf::memory_resources resources)
 {
   return rank_generator(
     order_by,
     [] __device__(bool const unequal, size_type const) { return unequal ? 1 : 0; },
     DeviceSum{},
     stream,
-    mr);
+    resources);
 }
 
 std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
                "Unsupported list type in rank scan.");
@@ -117,22 +117,22 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
     [] __device__(bool unequal, auto row_index) { return unequal ? row_index + 1 : 0; },
     DeviceMax{},
     stream,
-    mr);
+    resources);
 }
 
 std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
-  column_view const& order_by, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  column_view const& order_by, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
   auto const rank_column =
-    inclusive_rank_scan(order_by, stream, cudf::get_current_device_resource_ref());
+    inclusive_rank_scan(order_by, stream, resources.get_temporary_mr());
   auto const rank_view = rank_column->view();
 
   // Result type for min 0-index percent rank is independent of input type.
   using result_type        = double;
   auto percent_rank_result = cudf::make_fixed_width_column(
-    data_type{type_to_id<result_type>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<result_type>()}, rank_view.size(), mask_state::UNALLOCATED, stream, resources);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     rank_view.begin<size_type>(),
                     rank_view.end<size_type>(),
                     percent_rank_result->mutable_view().begin<result_type>(),

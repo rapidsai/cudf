@@ -178,7 +178,7 @@ void find_utility(strings_column_view const& input,
         *d_strings, target_itr, start, stop, d_results);
   } else {
     // string-per-thread function
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       d_results,
@@ -192,7 +192,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
                                 size_type start,
                                 size_type stop,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(start >= 0, "Parameter start must be positive integer or zero.");
@@ -201,10 +201,11 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   // create output column
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   // if input is empty or all-null then we are done
   if (input.size() == input.null_count()) { return results; }
 
@@ -214,7 +215,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   if (d_target.empty()) {
     auto d_strings = column_device_view::create(input.parent(), stream);
     auto d_results = results->mutable_view().data<size_type>();
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::counting_iterator<size_type>(0),
                       thrust::counting_iterator<size_type>(input.size()),
                       d_results,
@@ -236,9 +237,9 @@ std::unique_ptr<column> find(strings_column_view const& input,
                              size_type start,
                              size_type stop,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
-  return find_fn<true>(input, target, start, stop, stream, mr);
+  return find_fn<true>(input, target, start, stop, stream, resources);
 }
 
 std::unique_ptr<column> rfind(strings_column_view const& input,
@@ -246,9 +247,9 @@ std::unique_ptr<column> rfind(strings_column_view const& input,
                               size_type start,
                               size_type stop,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
-  return find_fn<false>(input, target, start, stop, stream, mr);
+  return find_fn<false>(input, target, start, stop, stream, resources);
 }
 
 template <bool forward = true>
@@ -256,14 +257,14 @@ std::unique_ptr<column> find(strings_column_view const& input,
                              strings_column_view const& target,
                              size_type start,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_EXPECTS(start >= 0, "Parameter start must be positive integer or zero.");
   CUDF_EXPECTS(input.size() == target.size(), "input and target columns must be the same size");
 
   // create output column
   auto results = make_numeric_column(
-    data_type{type_to_id<size_type>()}, input.size(), rmm::device_buffer{}, 0, stream, mr);
+    data_type{type_to_id<size_type>()}, input.size(), rmm::device_buffer{}, 0, stream, resources);
   // if input is empty or all-null then we are done
   if (input.size() == input.null_count()) { return results; }
 
@@ -275,7 +276,7 @@ std::unique_ptr<column> find(strings_column_view const& input,
 
   // AND the bitmasks from input and target
   auto [null_mask, null_count] =
-    cudf::detail::bitmask_and(table_view({input.parent(), target.parent()}), stream, mr);
+    cudf::detail::bitmask_and(table_view({input.parent(), target.parent()}), stream, resources);
   results->set_null_mask(std::move(null_mask), null_count);
   return results;
 }
@@ -289,10 +290,10 @@ std::unique_ptr<column> find(strings_column_view const& strings,
                              size_type start,
                              size_type stop,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::find(strings, target, start, stop, stream, mr);
+  return detail::find(strings, target, start, stop, stream, resources);
 }
 
 std::unique_ptr<column> rfind(strings_column_view const& strings,
@@ -300,20 +301,20 @@ std::unique_ptr<column> rfind(strings_column_view const& strings,
                               size_type start,
                               size_type stop,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::rfind(strings, target, start, stop, stream, mr);
+  return detail::rfind(strings, target, start, stop, stream, resources);
 }
 
 std::unique_ptr<column> find(strings_column_view const& input,
                              strings_column_view const& target,
                              size_type start,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::find<true>(input, target, start, stream, mr);
+  return detail::find<true>(input, target, start, stream, resources);
 }
 
 namespace detail {
@@ -368,7 +369,7 @@ CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
 std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
                                                string_scalar const& target,
                                                rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
+                                               cudf::memory_resources resources)
 {
   CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   auto d_target = string_view(target.data(), target.size());
@@ -376,16 +377,17 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
   // create output column
   auto results = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
 
   // fill the output with `false` unless the `d_target` is empty
   auto results_view = results->mutable_view();
   if (d_target.empty()) {
     thrust::fill(
-      rmm::exec_policy_nosync(stream), results_view.begin<bool>(), results_view.end<bool>(), true);
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), results_view.begin<bool>(), results_view.end<bool>(), true);
   } else {
     // launch warp per string
     auto const d_strings                   = column_device_view::create(input.parent(), stream);
@@ -419,7 +421,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     string_scalar const& target,
                                     BoolFunction pfn,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::BOOL8);
@@ -428,8 +430,9 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   if (target.size() == 0)  // empty target string returns true
   {
     auto const true_scalar = make_fixed_width_scalar<bool>(true, stream);
-    auto results           = make_column_from_scalar(*true_scalar, strings.size(), stream, mr);
-    results->set_null_mask(cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+    auto results           = make_column_from_scalar(*true_scalar, strings.size(), stream, resources);
+    results->set_null_mask(cudf::detail::copy_bitmask(strings.parent(), stream,
+                  resources),
                            strings.null_count());
     return results;
   }
@@ -440,14 +443,15 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   // create output column
   auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream,
+                  resources),
                                      strings.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -479,7 +483,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     strings_column_view const& targets,
                                     BoolFunction pfn,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   if (strings.is_empty()) return make_empty_column(type_id::BOOL8);
 
@@ -493,15 +497,16 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   // create output column
   auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings.size(),
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream,
+                  resources),
                                      strings.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings.size()),
     d_results,
@@ -523,13 +528,13 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
 std::unique_ptr<column> contains(strings_column_view const& input,
                                  string_scalar const& target,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   // use warp parallel when the average string width is greater than the threshold
   if ((input.null_count() < input.size()) &&
       ((input.chars_size(stream) / (input.size() - input.null_count())) >
        AVG_CHAR_BYTES_THRESHOLD)) {
-    return contains_warp_parallel(input, target, stream, mr);
+    return contains_warp_parallel(input, target, stream, resources);
   }
 
   // benchmark measurements showed this to be faster for smaller strings
@@ -539,13 +544,13 @@ std::unique_ptr<column> contains(strings_column_view const& input,
     }
     return false;
   };
-  return contains_fn(input, target, pfn, stream, mr);
+  return contains_fn(input, target, pfn, stream, resources);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
                                  strings_column_view const& targets,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     for (size_type i = 0; i <= (d_string.size_bytes() - d_target.size_bytes()); ++i) {
@@ -553,37 +558,37 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
     }
     return false;
   };
-  return contains_fn(strings, targets, pfn, stream, mr);
+  return contains_fn(strings, targets, pfn, stream, resources);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     string_scalar const& target,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     return (d_target.size_bytes() <= d_string.size_bytes()) &&
            (d_target.compare(d_string.data(), d_target.size_bytes()) == 0);
   };
-  return contains_fn(strings, target, pfn, stream, mr);
+  return contains_fn(strings, target, pfn, stream, resources);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     strings_column_view const& targets,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     return (d_target.size_bytes() <= d_string.size_bytes()) &&
            (d_target.compare(d_string.data(), d_target.size_bytes()) == 0);
   };
-  return contains_fn(strings, targets, pfn, stream, mr);
+  return contains_fn(strings, targets, pfn, stream, resources);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   string_scalar const& target,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     auto const str_size = d_string.size_bytes();
@@ -592,13 +597,13 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
            (d_target.compare(d_string.data() + str_size - tgt_size, tgt_size) == 0);
   };
 
-  return contains_fn(strings, target, pfn, stream, mr);
+  return contains_fn(strings, target, pfn, stream, resources);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   strings_column_view const& targets,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     auto const str_size = d_string.size_bytes();
@@ -607,7 +612,7 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
            (d_target.compare(d_string.data() + str_size - tgt_size, tgt_size) == 0);
   };
 
-  return contains_fn(strings, targets, pfn, stream, mr);
+  return contains_fn(strings, targets, pfn, stream, resources);
 }
 
 }  // namespace detail
@@ -617,55 +622,55 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
 std::unique_ptr<column> contains(strings_column_view const& strings,
                                  string_scalar const& target,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(strings, target, stream, mr);
+  return detail::contains(strings, target, stream, resources);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
                                  strings_column_view const& targets,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(strings, targets, stream, mr);
+  return detail::contains(strings, targets, stream, resources);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     string_scalar const& target,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::starts_with(strings, target, stream, mr);
+  return detail::starts_with(strings, target, stream, resources);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     strings_column_view const& targets,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::starts_with(strings, targets, stream, mr);
+  return detail::starts_with(strings, targets, stream, resources);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   string_scalar const& target,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::ends_with(strings, target, stream, mr);
+  return detail::ends_with(strings, target, stream, resources);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   strings_column_view const& targets,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::ends_with(strings, targets, stream, mr);
+  return detail::ends_with(strings, targets, stream, resources);
 }
 
 }  // namespace strings

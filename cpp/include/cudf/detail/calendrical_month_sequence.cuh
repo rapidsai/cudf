@@ -27,7 +27,7 @@ struct calendrical_month_sequence_functor {
                                            scalar const& input,
                                            size_type months,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
     requires(cudf::is_timestamp_t<T>::value)
   {
     // Return empty column if n = 0

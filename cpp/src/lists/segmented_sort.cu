@@ -33,11 +33,11 @@ namespace {
  */
 std::unique_ptr<column> build_output_offsets(lists_column_view const& input,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   auto output_offset = make_numeric_column(
-    input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  thrust::transform(rmm::exec_policy(stream),
+    input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, resources);
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     input.offsets_begin(),
                     input.offsets_end(),
                     output_offset->mutable_view().begin<size_type>(),
@@ -53,11 +53,11 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    order column_order,
                                    null_order null_precedence,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   if (input.is_empty()) return empty_like(input.parent());
 
-  auto output_offset = build_output_offsets(input, stream, mr);
+  auto output_offset = build_output_offsets(input, stream, resources);
   auto const child   = input.get_sliced_child(stream);
 
   auto const sorted_child_table = cudf::detail::segmented_sort_by_key(table_view{{child}},
@@ -66,26 +66,27 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                                                       {column_order},
                                                                       {null_precedence},
                                                                       stream,
-                                                                      mr);
+                                                                      resources);
 
   return make_lists_column(input.size(),
                            std::move(output_offset),
                            std::move(sorted_child_table->release().front()),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                           cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                            stream,
-                           mr);
+                           resources);
 }
 
 std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
                                           order column_order,
                                           null_order null_precedence,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   if (input.is_empty()) { return empty_like(input.parent()); }
 
-  auto output_offset = build_output_offsets(input, stream, mr);
+  auto output_offset = build_output_offsets(input, stream, resources);
   auto const child   = input.get_sliced_child(stream);
 
   auto const sorted_child_table = cudf::detail::stable_segmented_sort_by_key(table_view{{child}},
@@ -94,15 +95,16 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
                                                                              {column_order},
                                                                              {null_precedence},
                                                                              stream,
-                                                                             mr);
+                                                                             resources);
 
   return make_lists_column(input.size(),
                            std::move(output_offset),
                            std::move(sorted_child_table->release().front()),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                           cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                            stream,
-                           mr);
+                           resources);
 }
 }  // namespace detail
 
@@ -110,20 +112,20 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    order column_order,
                                    null_order null_precedence,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::sort_lists(input, column_order, null_precedence, stream, mr);
+  return detail::sort_lists(input, column_order, null_precedence, stream, resources);
 }
 
 std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
                                           order column_order,
                                           null_order null_precedence,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_sort_lists(input, column_order, null_precedence, stream, mr);
+  return detail::stable_sort_lists(input, column_order, null_precedence, stream, resources);
 }
 
 }  // namespace lists

@@ -26,7 +26,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          std::string const& ptx,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr);
+                                         cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::binary_operation(scalar const&, column_view const&, binary_operator,
@@ -39,7 +39,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr);
+                                         cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::binary_operation(column_view const&, scalar const&, binary_operator,
@@ -52,7 +52,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr);
+                                         cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::binary_operation(column_view const&, column_view const&,
@@ -65,6 +65,6 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr);
+                                         cudf::memory_resources resources);
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

@@ -812,10 +812,10 @@ void load_nvcomp_library()
 
   std::call_once(nvcomp_initialized_flag, []() {
     auto const stream = cudf::get_default_stream();
-    auto const mr     = cudf::get_current_device_resource_ref();
+    auto const mr     = resources.get_temporary_mr();
 
     // Allocate dummy input buffer and output buffer
-    auto const d_input             = rmm::device_uvector<uint8_t>(1, stream, mr);
+    auto const d_input             = rmm::device_uvector<uint8_t>(1, stream, resources);
     auto const max_compressed_size = compress_max_output_chunk_size(compression_type::SNAPPY, 1);
     rmm::device_uvector<uint8_t> d_compressed(max_compressed_size, stream);
 

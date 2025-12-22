@@ -82,9 +82,9 @@ struct sequences_dispatcher {
                                      std::optional<column_view> const& steps,
                                      size_type const* offsets,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
-    return sequences_functor<T>::invoke(n_lists, n_elements, starts, steps, offsets, stream, mr);
+    return sequences_functor<T>::invoke(n_lists, n_elements, starts, steps, offsets, stream, resources);
   }
 };
 
@@ -102,10 +102,10 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
                                         std::optional<column_view> const& steps,
                                         size_type const* offsets,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
   {
     auto result =
-      make_fixed_width_column(starts.type(), n_elements, mask_state::UNALLOCATED, stream, mr);
+      make_fixed_width_column(starts.type(), n_elements, mask_state::UNALLOCATED, stream, resources);
     if (starts.is_empty()) { return result; }
 
     auto const result_begin = result->mutable_view().template begin<T>();
@@ -116,7 +116,7 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     auto const steps_begin  = steps ? steps.value().template begin<T>() : nullptr;
 
     auto const op = tabulator<T>{n_lists, n_elements, starts_begin, steps_begin, offsets};
-    thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
+    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()), result_begin, result_begin + n_elements, op);
 
     return result;
   }
@@ -126,7 +126,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   std::optional<column_view> const& steps,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(!starts.has_nulls() && !sizes.has_nulls(),
                "starts and sizes input columns must not have nulls.");
@@ -147,12 +147,12 @@ std::unique_ptr<column> sequences(column_view const& starts,
   }
 
   auto const n_lists = starts.size();
-  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type(), stream, mr); }
+  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type(), stream, resources); }
 
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
   // Generate list offsets for the output.
   auto [list_offsets, n_elements] = cudf::detail::make_offsets_child_column(
-    sizes_input_it, sizes_input_it + sizes.size(), stream, mr);
+    sizes_input_it, sizes_input_it + sizes.size(), stream, resources);
   auto const offsets_begin = list_offsets->view().template begin<size_type>();
 
   auto child = type_dispatcher(starts.type(),
@@ -163,15 +163,16 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                steps,
                                offsets_begin,
                                stream,
-                               mr);
+                               resources);
 
   return make_lists_column(n_lists,
                            std::move(list_offsets),
                            std::move(child),
                            0,
-                           rmm::device_buffer(0, stream, mr),
+                           rmm::device_buffer(0, stream,
+                  resources),
                            stream,
-                           mr);
+                           resources);
 }
 
 }  // anonymous namespace
@@ -179,18 +180,18 @@ std::unique_ptr<column> sequences(column_view const& starts,
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
-  return sequences(starts, std::nullopt, sizes, stream, mr);
+  return sequences(starts, std::nullopt, sizes, stream, resources);
 }
 
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& steps,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
-  return sequences(starts, std::optional<column_view>{steps}, sizes, stream, mr);
+  return sequences(starts, std::optional<column_view>{steps}, sizes, stream, resources);
 }
 
 }  // namespace detail
@@ -198,20 +199,20 @@ std::unique_ptr<column> sequences(column_view const& starts,
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, sizes, stream, mr);
+  return detail::sequences(starts, sizes, stream, resources);
 }
 
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& steps,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, steps, sizes, stream, mr);
+  return detail::sequences(starts, steps, sizes, stream, resources);
 }
 
 }  // namespace cudf::lists

@@ -44,7 +44,7 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
                                                 device_span<size_type const> offsets,
                                                 null_policy null_handling,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources resources)
 {
   // only support non-nested types
   CUDF_EXPECTS(!cudf::is_nested(col.type()),
@@ -57,14 +57,14 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
     auto const row_equal =
       comparator.equal_to<false>(cudf::nullate::DYNAMIC{col.has_nulls()}, null_equality::EQUAL);
 
-    auto labels = rmm::device_uvector<size_type>(col.size(), stream);
+    auto labels = rmm::device_uvector<size_type>(col.size(), stream, resources.get_temporary_mr());
     cudf::detail::label_segments(
       offsets.begin(), offsets.end(), labels.begin(), labels.end(), stream);
     auto fn = is_unique_fn<decltype(row_equal)>{
       *d_col, row_equal, null_handling, offsets.data(), labels.data()};
 
-    auto identifiers = rmm::device_uvector<size_type>(col.size(), stream);
-    thrust::transform(rmm::exec_policy(stream),
+    auto identifiers = rmm::device_uvector<size_type>(col.size(), stream, resources.get_temporary_mr());
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(col.size()),
                       identifiers.begin(),
@@ -76,7 +76,7 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
                                           static_cast<size_type>(offsets.size() - 1),
                                           cudf::mask_state::UNALLOCATED,
                                           stream,
-                                          mr);
+                                          resources);
 
   // Sum the unique identifiers within each segment
   auto add_op = op::sum{};
@@ -93,7 +93,7 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
   // - nulls are counted appropriately above per null_handling policy
   auto const bitmask_col = null_handling == null_policy::EXCLUDE ? col : result->view();
   cudf::reduction::detail::segmented_update_validity(
-    *result, bitmask_col, offsets, null_policy::EXCLUDE, std::nullopt, stream, mr);
+    *result, bitmask_col, offsets, null_policy::EXCLUDE, std::nullopt, stream, resources);
 
   return result;
 }

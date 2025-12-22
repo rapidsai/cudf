@@ -27,11 +27,11 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::rolling_window(
-    input, default_outputs, preceding_window, following_window, min_periods, agg, stream, mr);
+    input, default_outputs, preceding_window, following_window, min_periods, agg, stream, resources);
 }
 
 // Applies a fixed-size rolling window function to the values in a column, without default specified
@@ -41,7 +41,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   auto defaults =
@@ -53,7 +53,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                 min_periods,
                                 agg,
                                 stream,
-                                mr);
+                                resources);
 }
 
 // Applies a variable-size rolling window function to the values in a column.
@@ -63,11 +63,11 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::rolling_window(
-    input, preceding_window, following_window, min_periods, agg, stream, mr);
+    input, preceding_window, following_window, min_periods, agg, stream, resources);
 }
 
 bool is_valid_rolling_aggregation(data_type source, aggregation::Kind kind)

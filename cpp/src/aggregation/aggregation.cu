@@ -93,13 +93,13 @@ struct identity_initializer {
       dispatch_type_and_aggregation(
         sum_col.type(), aggregation::SUM, identity_initializer{}, sum_col, stream);
       thrust::uninitialized_fill_n(
-        rmm::exec_policy_nosync(stream), overflow_col.begin<bool>(), col.size(), false);
+        rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), overflow_col.begin<bool>(), col.size(), false);
     } else if constexpr (std::is_same_v<T, cudf::struct_view>) {
       // This should only happen for SUM_WITH_OVERFLOW, but handle it just in case
       CUDF_FAIL("Struct columns are only supported for SUM_WITH_OVERFLOW aggregation");
     } else {
       using DeviceType = device_storage_type_t<T>;
-      thrust::fill(rmm::exec_policy_nosync(stream),
+      thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                    col.begin<DeviceType>(),
                    col.end<DeviceType>(),
                    get_identity<DeviceType, k>());

@@ -24,7 +24,7 @@ namespace cudf {
 namespace detail {
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::device_async_resource_ref mr)
+                                                         cudf::memory_resources resources)
 {
   // If there are no rows in the input, return successfully
   if (input.num_columns() == 0 || input.num_rows() == 0) {
@@ -38,7 +38,7 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
       input.begin(), input.end(), [dtype](auto const& col) { return dtype == col.type(); }),
     "Column type mismatch");
 
-  auto output_column = cudf::detail::interleave_columns(input, stream, mr);
+  auto output_column = cudf::detail::interleave_columns(input, stream, resources);
   auto one_iter      = thrust::make_counting_iterator<size_type>(1);
   auto splits_iter   = thrust::make_transform_iterator(
     one_iter, [width = input.num_columns()](size_type idx) { return idx * width; });
@@ -51,10 +51,10 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
 
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::device_async_resource_ref mr)
+                                                         cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::transpose(input, stream, mr);
+  return detail::transpose(input, stream, resources);
 }
 
 }  // namespace cudf

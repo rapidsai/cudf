@@ -368,10 +368,10 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
                                                       std::string_view timezone_name,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr)
+                                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::make_timezone_transition_table(tzif_dir, timezone_name, stream, mr);
+  return detail::make_timezone_transition_table(tzif_dir, timezone_name, stream, resources);
 }
 
 namespace detail {
@@ -379,7 +379,7 @@ namespace detail {
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
                                                       std::string_view timezone_name,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr)
+                                                      cudf::memory_resources resources)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC
@@ -481,8 +481,8 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
     return duration_s{ts};
   });
 
-  auto d_ttimes  = cudf::detail::make_device_uvector_async(ttimes_typed, stream, mr);
-  auto d_offsets = cudf::detail::make_device_uvector_async(offsets_typed, stream, mr);
+  auto d_ttimes  = cudf::detail::make_device_uvector_async(ttimes_typed, stream, resources);
+  auto d_offsets = cudf::detail::make_device_uvector_async(offsets_typed, stream, resources);
 
   std::vector<std::unique_ptr<column>> tz_table_columns;
   tz_table_columns.emplace_back(

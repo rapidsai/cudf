@@ -59,10 +59,10 @@ void table_to_array_impl(table_view const& input,
     h_dsts[i] = reinterpret_cast<T*>(base_ptr + i * item_size * num_rows);
   }
 
-  auto const mr = cudf::get_current_device_resource_ref();
+  auto const mr = resources.get_temporary_mr();
 
-  auto d_srcs = cudf::detail::make_device_uvector_async(h_srcs, stream, mr);
-  auto d_dsts = cudf::detail::make_device_uvector_async(h_dsts, stream, mr);
+  auto d_srcs = cudf::detail::make_device_uvector_async(h_srcs, stream, resources);
+  auto d_dsts = cudf::detail::make_device_uvector_async(h_dsts, stream, resources);
 
   thrust::constant_iterator<size_t> sizes(static_cast<size_t>(item_size * num_rows));
 

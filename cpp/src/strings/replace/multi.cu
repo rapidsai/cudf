@@ -304,7 +304,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                                                    strings_column_view const& targets,
                                                    strings_column_view const& repls,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+                                                   cudf::memory_resources resources)
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -314,9 +314,9 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     get_offset_value(input.offsets(), input.offset(), stream);
 
   auto d_targets =
-    create_string_vector_from_column(targets, stream, cudf::get_current_device_resource_ref());
+    create_string_vector_from_column(targets, stream, resources.get_temporary_mr());
   auto d_replacements =
-    create_string_vector_from_column(repls, stream, cudf::get_current_device_resource_ref());
+    create_string_vector_from_column(repls, stream, resources.get_temporary_mr());
 
   replace_multi_parallel_fn fn{
     *d_strings,
@@ -334,8 +334,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto target_count = d_count.value(stream);
   // Create a vector of every target position in the chars column.
   // These may also include overlapping targets which will be resolved later.
-  auto targets_positions = rmm::device_uvector<int64_t>(target_count, stream);
-  auto targets_indices   = rmm::device_uvector<size_type>(target_count, stream);
+  auto targets_positions = rmm::device_uvector<int64_t>(target_count, stream, resources.get_temporary_mr());
+  auto targets_indices   = rmm::device_uvector<size_type>(target_count, stream, resources.get_temporary_mr());
 
   // cudf::detail::make_counting_transform_iterator hardcodes size_type
   auto const copy_itr = thrust::make_transform_iterator(thrust::counting_iterator<int64_t>(0),
@@ -354,13 +354,13 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // create a vector of offsets to each string's set of target positions
   auto const targets_offsets = create_offsets_from_positions(
-    input, targets_positions, stream, cudf::get_current_device_resource_ref());
+    input, targets_positions, stream, resources.get_temporary_mr());
   auto const d_targets_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(targets_offsets->view());
 
   // compute the number of string segments produced by replace in each string
-  auto counts = rmm::device_uvector<size_type>(strings_count, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  auto counts = rmm::device_uvector<size_type>(strings_count, stream, resources.get_temporary_mr());
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(strings_count),
                     counts.begin(),
@@ -373,16 +373,16 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // create offsets from the counts
   auto [offsets, total_strings] =
-    cudf::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, mr);
+    cudf::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, resources);
   auto const d_strings_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // build a vector of all the positions for all the strings
-  auto indices   = rmm::device_uvector<string_index_pair>(total_strings, stream);
+  auto indices   = rmm::device_uvector<string_index_pair>(total_strings, stream, resources.get_temporary_mr());
   auto d_indices = indices.data();
   auto d_sizes   = counts.data();  // reusing this vector to hold output sizes now
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [fn,
@@ -397,19 +397,21 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     });
 
   // use this utility to gather the string parts into a contiguous chars column
-  auto chars      = make_strings_column(indices.begin(), indices.end(), stream, mr);
+  auto chars      = make_strings_column(indices.begin(), indices.end(), stream, resources);
   auto chars_data = chars->release().data;
 
   // create offsets from the sizes
   offsets = std::get<0>(
-    cudf::strings::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, mr));
+    cudf::strings::detail::make_offsets_child_column(counts.begin(), counts.end(), stream,
+                  resources));
 
   // build the strings columns from the chars and offsets
   return make_strings_column(strings_count,
                              std::move(offsets),
                              std::move(chars_data.release()[0]),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 /**
@@ -473,20 +475,21 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
                                                 strings_column_view const& targets,
                                                 strings_column_view const& repls,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources resources)
 {
   auto d_strings      = column_device_view::create(input.parent(), stream);
   auto d_targets      = column_device_view::create(targets.parent(), stream);
   auto d_replacements = column_device_view::create(repls.parent(), stream);
 
   auto [offsets_column, chars] = make_strings_children(
-    replace_multi_fn{*d_strings, *d_targets, *d_replacements}, input.size(), stream, mr);
+    replace_multi_fn{*d_strings, *d_targets, *d_replacements}, input.size(), stream, resources);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 }  // namespace
@@ -495,7 +498,7 @@ std::unique_ptr<column> replace_multiple(strings_column_view const& input,
                                          strings_column_view const& targets,
                                          strings_column_view const& repls,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS(((targets.size() > 0) && (targets.null_count() == 0)),
@@ -508,8 +511,9 @@ std::unique_ptr<column> replace_multiple(strings_column_view const& input,
   return (input.size() == input.null_count() ||
           ((input.chars_size(stream) / (input.size() - input.null_count())) <
            AVG_CHAR_BYTES_THRESHOLD))
-           ? replace_string_parallel(input, targets, repls, stream, mr)
-           : replace_character_parallel(input, targets, repls, stream, mr);
+           ? replace_string_parallel(input, targets, repls, stream,
+                  resources)
+           : replace_character_parallel(input, targets, repls, stream, resources);
 }
 
 }  // namespace detail
@@ -520,10 +524,10 @@ std::unique_ptr<column> replace_multiple(strings_column_view const& strings,
                                          strings_column_view const& targets,
                                          strings_column_view const& repls,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_multiple(strings, targets, repls, stream, mr);
+  return detail::replace_multiple(strings, targets, repls, stream, resources);
 }
 
 }  // namespace strings

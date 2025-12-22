@@ -139,7 +139,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       auto span_it =
         thrust::make_zip_iterator(d_compressed_spans.begin(), d_decompressed_spans.begin());
       thrust::transform(
-        rmm::exec_policy_nosync(stream),
+        rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
         offset_it,
         offset_it + num_blocks(),
         span_it,

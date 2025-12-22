@@ -78,7 +78,7 @@ std::unique_ptr<column> cast_to_integer(strings_column_view const& input,
                                         data_type output_type,
                                         endian swap,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   CUDF_EXPECTS(cudf::is_integral_not_bool(output_type),
                "Output type must be an integer type",
@@ -86,15 +86,16 @@ std::unique_ptr<column> cast_to_integer(strings_column_view const& input,
 
   auto results   = make_numeric_column(output_type,
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto d_results = mutable_column_device_view::create(*results, stream);
 
   auto const type_size = static_cast<size_type>(cudf::size_of(output_type));
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      input.size(),
                      cast_to_integer_fn{*d_strings, *d_results, swap, type_size});
@@ -109,10 +110,10 @@ std::unique_ptr<column> cast_to_integer(strings_column_view const& input,
                                         data_type output_type,
                                         endian swap,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::cast_to_integer(input, output_type, swap, stream, mr);
+  return detail::cast_to_integer(input, output_type, swap, stream, resources);
 }
 
 namespace detail {
@@ -172,7 +173,7 @@ struct from_integers_fn {
 std::unique_ptr<column> cast_from_integer(column_view const& integers,
                                           endian swap,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_EXPECTS(cudf::is_integral_not_bool(integers.type()),
                "Input type must be an integer type",
@@ -182,13 +183,14 @@ std::unique_ptr<column> cast_from_integer(column_view const& integers,
   auto d_column = column_device_view::create(integers, stream);
 
   auto [offsets, chars] =
-    make_strings_children(from_integers_fn{*d_column, swap}, integers.size(), stream, mr);
+    make_strings_children(from_integers_fn{*d_column, swap}, integers.size(), stream, resources);
 
   return make_strings_column(integers.size(),
                              std::move(offsets),
                              chars.release(),
                              integers.null_count(),
-                             cudf::detail::copy_bitmask(integers, stream, mr));
+                             cudf::detail::copy_bitmask(integers, stream,
+                  resources));
 }
 
 }  // namespace detail
@@ -198,10 +200,10 @@ std::unique_ptr<column> cast_from_integer(column_view const& integers,
 std::unique_ptr<column> cast_from_integer(column_view const& integers,
                                           endian swap,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::cast_from_integer(integers, swap, stream, mr);
+  return detail::cast_from_integer(integers, swap, stream, resources);
 }
 
 namespace detail {
@@ -213,7 +215,7 @@ std::optional<cudf::data_type> integer_cast_type(strings_column_view const& inpu
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   auto bits_size =
-    thrust::transform_reduce(rmm::exec_policy_nosync(stream),
+    thrust::transform_reduce(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                              thrust::make_counting_iterator<size_type>(0),
                              thrust::make_counting_iterator<size_type>(input.size()),
                              cuda::proclaim_return_type<size_type>(

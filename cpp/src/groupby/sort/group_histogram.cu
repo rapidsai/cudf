@@ -28,7 +28,7 @@ std::unique_ptr<column> build_histogram(column_view const& values,
                                         std::optional<column_view> const& partial_counts,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be the same as that of group labels.",
@@ -44,7 +44,7 @@ std::unique_ptr<column> build_histogram(column_view const& values,
 
   // Build histogram for the labeled values.
   auto [distinct_indices, distinct_counts] =
-    cudf::reduction::detail::compute_row_frequencies(labeled_values, partial_counts, stream, mr);
+    cudf::reduction::detail::compute_row_frequencies(labeled_values, partial_counts, stream, resources);
 
   // Gather the distinct rows for the output histogram.
   auto out_table = cudf::detail::gather(labeled_values,
@@ -52,12 +52,12 @@ std::unique_ptr<column> build_histogram(column_view const& values,
                                         out_of_bounds_policy::DONT_CHECK,
                                         cudf::detail::negative_index_policy::NOT_ALLOWED,
                                         stream,
-                                        mr);
+                                        resources);
 
   // Build offsets for the output lists column containing output histograms.
   // Each list will be a histogram corresponding to one value group.
   auto out_offsets = cudf::lists::detail::reconstruct_offsets(
-    out_table->get_column(0).view(), num_groups, stream, mr);
+    out_table->get_column(0).view(), num_groups, stream, resources);
 
   std::vector<std::unique_ptr<column>> struct_children;
   struct_children.emplace_back(std::move(out_table->release().back()));
@@ -67,10 +67,10 @@ std::unique_ptr<column> build_histogram(column_view const& values,
                                          0,
                                          {},
                                          stream,
-                                         mr);
+                                         resources);
 
   return make_lists_column(
-    num_groups, std::move(out_offsets), std::move(out_structs), 0, {}, stream, mr);
+    num_groups, std::move(out_offsets), std::move(out_structs), 0, {}, stream, resources);
 }
 
 }  // namespace
@@ -79,19 +79,19 @@ std::unique_ptr<column> group_histogram(column_view const& values,
                                         cudf::device_span<size_type const> group_labels,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   // Empty group should be handled before reaching here.
   CUDF_EXPECTS(num_groups > 0, "Group should not be empty.", std::invalid_argument);
 
-  return build_histogram(values, group_labels, std::nullopt, num_groups, stream, mr);
+  return build_histogram(values, group_labels, std::nullopt, num_groups, stream, resources);
 }
 
 std::unique_ptr<column> group_merge_histogram(column_view const& values,
                                               cudf::device_span<size_type const> group_offsets,
                                               size_type num_groups,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   // Empty group should be handled before reaching here.
   CUDF_EXPECTS(num_groups > 0, "Group should not be empty.", std::invalid_argument);
@@ -120,15 +120,15 @@ std::unique_ptr<column> group_merge_histogram(column_view const& values,
   // Concatenate the histograms corresponding to the same key values.
   // That is equivalent to creating a new lists column (view) from the input lists column
   // with new offsets gathered as below.
-  auto new_offsets = rmm::device_uvector<size_type>(num_groups + 1, stream);
-  thrust::gather(rmm::exec_policy(stream),
+  auto new_offsets = rmm::device_uvector<size_type>(num_groups + 1, stream, resources.get_temporary_mr());
+  thrust::gather(rmm::exec_policy(stream, resources.get_temporary_mr()),
                  group_offsets.begin(),
                  group_offsets.end(),
                  lists_cv.offsets_begin(),
                  new_offsets.begin());
 
   // Generate labels for the new lists.
-  auto key_labels = rmm::device_uvector<size_type>(histogram_cv.size(), stream);
+  auto key_labels = rmm::device_uvector<size_type>(histogram_cv.size(), stream, resources.get_temporary_mr());
   cudf::detail::label_segments(
     new_offsets.begin(), new_offsets.end(), key_labels.begin(), key_labels.end(), stream);
 
@@ -136,7 +136,7 @@ std::unique_ptr<column> group_merge_histogram(column_view const& values,
   auto const input_values = structs_cv.get_sliced_child(0, stream);
   auto const input_counts = structs_cv.get_sliced_child(1, stream);
 
-  return build_histogram(input_values, key_labels, input_counts, num_groups, stream, mr);
+  return build_histogram(input_values, key_labels, input_counts, num_groups, stream, resources);
 }
 
 }  // namespace cudf::groupby::detail

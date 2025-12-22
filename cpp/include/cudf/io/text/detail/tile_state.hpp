@@ -74,7 +74,7 @@ struct scan_tile_state {
 
   scan_tile_state(cudf::size_type num_tiles,
                   rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr)
+                  cudf::memory_resources resources)
     : tile_status(rmm::device_uvector<cuda::atomic<scan_tile_status, cuda::thread_scope_device>>(
         num_tiles, stream, mr)),
       tile_state_partial(rmm::device_uvector<T>(num_tiles, stream, mr)),

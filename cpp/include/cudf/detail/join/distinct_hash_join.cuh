@@ -132,7 +132,7 @@ class distinct_hash_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
              rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr) const;
+             cudf::memory_resources resources) const;
 
   /**
    * @copydoc cudf::distinct_hash_join::left_join
@@ -140,7 +140,7 @@ class distinct_hash_join {
   std::unique_ptr<rmm::device_uvector<size_type>> left_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const;
+    cudf::memory_resources resources) const;
 
  private:
   using probing_scheme_type = cuco::linear_probing<1, hasher>;

@@ -31,7 +31,7 @@ std::unique_ptr<table> sample(table_view const& input,
                               sample_with_replacement replacement,
                               int64_t const seed,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_EXPECTS(n >= 0, "expected number of samples should be non-negative");
   auto const num_rows = input.num_rows();
@@ -52,13 +52,13 @@ std::unique_ptr<table> sample(table_view const& input,
 
     auto begin = cudf::detail::make_counting_transform_iterator(0, RandomGen);
 
-    return detail::gather(input, begin, begin + n, out_of_bounds_policy::DONT_CHECK, stream, mr);
+    return detail::gather(input, begin, begin + n, out_of_bounds_policy::DONT_CHECK, stream, resources);
   } else {
     auto gather_map =
       make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream);
     auto gather_map_mutable_view = gather_map->mutable_view();
     // Shuffle all the row indices
-    thrust::shuffle_copy(rmm::exec_policy(stream),
+    thrust::shuffle_copy(rmm::exec_policy(stream, resources.get_temporary_mr()),
                          thrust::counting_iterator<size_type>(0),
                          thrust::counting_iterator<size_type>(num_rows),
                          gather_map_mutable_view.begin<size_type>(),
@@ -72,7 +72,7 @@ std::unique_ptr<table> sample(table_view const& input,
                           gather_map_view.end<size_type>(),
                           out_of_bounds_policy::DONT_CHECK,
                           stream,
-                          mr);
+                          resources);
   }
 }
 
@@ -83,9 +83,9 @@ std::unique_ptr<table> sample(table_view const& input,
                               sample_with_replacement replacement,
                               int64_t const seed,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::sample(input, n, replacement, seed, stream, mr);
+  return detail::sample(input, n, replacement, seed, stream, resources);
 }
 }  // namespace cudf

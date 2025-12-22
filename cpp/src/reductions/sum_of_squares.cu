@@ -18,7 +18,7 @@ namespace detail {
 std::unique_ptr<cudf::scalar> sum_of_squares(column_view const& col,
                                              cudf::data_type const output_dtype,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   return cudf::type_dispatcher(
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type(),
@@ -27,7 +27,7 @@ std::unique_ptr<cudf::scalar> sum_of_squares(column_view const& col,
     output_dtype,
     std::nullopt,
     stream,
-    mr);
+    resources);
 }
 
 }  // namespace detail

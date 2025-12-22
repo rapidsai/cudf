@@ -115,7 +115,7 @@ struct escape_strings_fn {
 struct column_to_strings_fn {
   explicit column_to_strings_fn(csv_writer_options const& options,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
     : options_(options), stream_(stream), mr_(mr)
   {
   }
@@ -262,7 +262,7 @@ void write_chunked_begin(data_sink* out_sink,
                          host_span<std::string const> user_column_names,
                          csv_writer_options const& options,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
+                         cudf::memory_resources resources)
 {
   if (options.is_enabled_include_header()) {
     // need to generate column names if names are not provided
@@ -328,7 +328,7 @@ void write_chunked(data_sink* out_sink,
                    strings_column_view const& str_column_view,
                    csv_writer_options const& options,
                    rmm::cuda_stream_view stream,
-                   rmm::device_async_resource_ref mr)
+                   cudf::memory_resources resources)
 {
   // algorithm outline:
   //
@@ -352,7 +352,8 @@ void write_chunked(data_sink* out_sink,
     auto const empty_str = string_scalar("", true, stream);
     // use join_strings when the output will be less than 2GB
     if (total_size < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
-      return cudf::strings::detail::join_strings(str_column_view, newline, empty_str, stream, mr)
+      return cudf::strings::detail::join_strings(str_column_view, newline, empty_str, stream,
+                  resources)
         ->release();
     }
     auto nl_col = cudf::make_column_from_scalar(newline, str_column_view.size(), stream);
@@ -362,11 +363,13 @@ void write_chunked(data_sink* out_sink,
     cudf::fill_in_place(offsets_view,
                         offsets.size() - 1,  // set the last element with
                         offsets.size(),      // the value from 2nd to last element
-                        *cudf::detail::get_element(offsets.view(), offsets.size() - 2, stream, mr),
+                        *cudf::detail::get_element(offsets.view(), offsets.size() - 2, stream,
+                  resources),
                         stream);
     auto const nl_tbl = cudf::table_view({str_column_view.parent(), nl_col->view()});
     return cudf::strings::detail::concatenate(
-             nl_tbl, empty_str, empty_str, strings::separator_on_nulls::NO, stream, mr)
+             nl_tbl, empty_str, empty_str, strings::separator_on_nulls::NO, stream,
+                  resources)
       ->release();
   }();
   auto const total_num_bytes = contents_w_nl.data->size();
@@ -404,7 +407,7 @@ void write_csv(data_sink* out_sink,
   CUDF_FUNC_RANGE();
 
   write_chunked_begin(
-    out_sink, table, user_column_names, options, stream, cudf::get_current_device_resource_ref());
+    out_sink, table, user_column_names, options, stream, resources.get_temporary_mr());
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
@@ -438,7 +441,7 @@ void write_csv(data_sink* out_sink,
 
     // convert each chunk to CSV:
     //
-    column_to_strings_fn converter{options, stream, cudf::get_current_device_resource_ref()};
+    column_to_strings_fn converter{options, stream, resources.get_temporary_mr()};
     for (auto&& sub_view : vector_views) {
       // Skip if the table has no rows
       if (sub_view.num_rows() == 0) continue;
@@ -473,13 +476,13 @@ void write_csv(data_sink* out_sink,
                                                     options_narep,
                                                     strings::separator_on_nulls::YES,
                                                     stream,
-                                                    cudf::get_current_device_resource_ref());
+                                                    resources.get_temporary_mr());
         return cudf::strings::detail::replace_nulls(
-          str_table_view.column(0), options_narep, stream, cudf::get_current_device_resource_ref());
+          str_table_view.column(0), options_narep, stream, resources.get_temporary_mr());
       }();
 
       write_chunked(
-        out_sink, str_concat_col->view(), options, stream, cudf::get_current_device_resource_ref());
+        out_sink, str_concat_col->view(), options, stream, resources.get_temporary_mr());
     }
   }
 }

@@ -25,13 +25,13 @@ struct dispatch_void_if_non_integral {
 std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
                                           column_view const& col,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   auto const dtype =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
   auto const do_reduction = [&](auto const op) {
     return cudf::type_dispatcher<dispatch_void_if_non_integral>(
-      dtype, op, col, std::nullopt, stream, mr);
+      dtype, op, col, std::nullopt, stream, resources);
   };
 
   switch (bit_op) {

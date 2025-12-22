@@ -13,5 +13,5 @@ compute_single_pass_aggs<nullable_global_set_t>(nullable_global_set_t& global_se
                                                 host_span<aggregation_request const> requests,
                                                 cudf::detail::result_cache* cache,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr);
+                                                cudf::memory_resources resources);
 }  // namespace cudf::groupby::detail::hash

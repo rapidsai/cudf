@@ -25,19 +25,19 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
                                       size_type begin_bit,
                                       size_type end_bit,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   auto const length = end_bit - begin_bit;
   CUDF_EXPECTS(length >= 0, "begin_bit should be less than or equal to end_bit");
   CUDF_EXPECTS((bitmask != nullptr) or (length == 0), "nullmask is null");
 
   auto out_col =
-    make_fixed_width_column(data_type(type_id::BOOL8), length, mask_state::UNALLOCATED, stream, mr);
+    make_fixed_width_column(data_type(type_id::BOOL8), length, mask_state::UNALLOCATED, stream, resources);
 
   if (length > 0) {
     auto mutable_view = out_col->mutable_view();
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<cudf::size_type>(begin_bit),
                       thrust::make_counting_iterator<cudf::size_type>(end_bit),
                       mutable_view.begin<bool>(),
@@ -52,9 +52,9 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
                                       size_type begin_bit,
                                       size_type end_bit,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::mask_to_bools(bitmask, begin_bit, end_bit, stream, mr);
+  return detail::mask_to_bools(bitmask, begin_bit, end_bit, stream, resources);
 }
 }  // namespace cudf

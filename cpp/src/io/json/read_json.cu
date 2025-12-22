@@ -192,7 +192,7 @@ size_type find_first_delimiter(device_span<char const> d_data,
                                rmm::cuda_stream_view stream)
 {
   auto const first_delimiter_position =
-    thrust::find(rmm::exec_policy(stream), d_data.begin(), d_data.end(), delimiter);
+    thrust::find(rmm::exec_policy(stream, resources.get_temporary_mr()), d_data.begin(), d_data.end(), delimiter);
   return first_delimiter_position != d_data.end()
            ? static_cast<size_type>(cuda::std::distance(d_data.begin(), first_delimiter_position))
            : -1;
@@ -273,7 +273,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
   // entire line until the first delimiter is encountered at the end of the line.
   if (first_delim_pos == -1) {
     // return empty owning datasource buffer
-    auto empty_buf = rmm::device_buffer(0, stream);
+    auto empty_buf = rmm::device_buffer(0, stream, resources.get_temporary_mr());
     return std::make_pair(datasource::owning_buffer<rmm::device_buffer>(std::move(empty_buf)),
                           std::nullopt);
   } else if (!should_load_till_last_source) {
@@ -341,7 +341,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     auto rev_it_begin = thrust::make_reverse_iterator(bufsubspan.end());
     auto rev_it_end   = thrust::make_reverse_iterator(bufsubspan.begin());
     auto const second_last_delimiter_it =
-      thrust::find(rmm::exec_policy(stream), rev_it_begin, rev_it_end, delimiter);
+      thrust::find(rmm::exec_policy(stream, resources.get_temporary_mr()), rev_it_begin, rev_it_end, delimiter);
     CUDF_EXPECTS(second_last_delimiter_it != rev_it_end,
                  "A single JSON line cannot be larger than the batch size limit");
     auto const last_line_size =
@@ -396,7 +396,7 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
   host_span<std::unique_ptr<datasource>> sources,
   json_reader_options const& reader_opts,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   // The second owning buffer in the pair returned by get_record_range_raw_input may not be
@@ -410,13 +410,13 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
     normalize_single_quotes(owning_buffers.first,
                             reader_opts.get_delimiter(),
                             stream,
-                            cudf::get_current_device_resource_ref());
+                            resources.get_temporary_mr());
     stream.synchronize();
   }
 
   auto buffer = cudf::device_span<char const>(
     reinterpret_cast<char const*>(owning_buffers.first.data()), owning_buffers.first.size());
-  auto first_partial_table = device_parse_nested_json(buffer, reader_opts, stream, mr);
+  auto first_partial_table = device_parse_nested_json(buffer, reader_opts, stream, resources);
   if (!owning_buffers.second.has_value())
     return std::make_pair(std::move(first_partial_table), std::nullopt);
 
@@ -425,13 +425,13 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
     normalize_single_quotes(owning_buffers.second.value(),
                             reader_opts.get_delimiter(),
                             stream,
-                            cudf::get_current_device_resource_ref());
+                            resources.get_temporary_mr());
     stream.synchronize();
   }
   buffer = cudf::device_span<char const>(
     reinterpret_cast<char const*>(owning_buffers.second.value().data()),
     owning_buffers.second.value().size());
-  auto second_partial_table = device_parse_nested_json(buffer, reader_opts, stream, mr);
+  auto second_partial_table = device_parse_nested_json(buffer, reader_opts, stream, resources);
   return std::make_pair(std::move(first_partial_table), std::move(second_partial_table));
 }
 
@@ -448,7 +448,7 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
 table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> sources,
                                    json_reader_options const& reader_opts,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   std::size_t const total_source_size = sources_size(sources, 0, 0);
 
@@ -577,7 +577,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
   if (batch_offsets.size() <= 2) {
     // single batch
     auto has_inserted = insert_partial_tables(
-      read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+      read_batch(sources, batched_reader_opts, stream, resources.get_temporary_mr()));
     if (!has_inserted) {
       return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{}),
                                  {std::vector<column_name_info>{}}};
@@ -587,7 +587,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     batched_reader_opts.set_byte_range_offset(batch_offsets[0]);
     batched_reader_opts.set_byte_range_size(batch_offsets[1] - batch_offsets[0]);
     insert_partial_tables(
-      read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+      read_batch(sources, batched_reader_opts, stream, resources.get_temporary_mr()));
 
     auto& tbl = partial_tables.back().tbl;
     std::vector<column_view> children;
@@ -607,7 +607,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
       batched_reader_opts.set_byte_range_size(batch_offsets[batch_offset_pos + 1] -
                                               batch_offsets[batch_offset_pos]);
       auto has_inserted = insert_partial_tables(
-        read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+        read_batch(sources, batched_reader_opts, stream, resources.get_temporary_mr()));
 
       if (!has_inserted) {
         CUDF_EXPECTS(batch_offset_pos == batch_offsets.size() - 2,
@@ -633,7 +633,8 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
                  partial_tables.end(),
                  partial_table_views.begin(),
                  [](auto const& table) { return table.tbl->view(); });
-  return table_with_metadata{cudf::concatenate(partial_table_views, stream, mr),
+  return table_with_metadata{cudf::concatenate(partial_table_views, stream,
+                  resources),
                              {partial_tables[0].metadata.schema_info}};
 }
 
@@ -702,8 +703,8 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                   "Currently only single-character delimiters are supported");
     auto const delimiter_source = thrust::make_constant_iterator(delimiter);
     auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
-      delimiter_map, stream, cudf::get_current_device_resource_ref());
-    thrust::scatter(rmm::exec_policy_nosync(stream),
+      delimiter_map, stream, resources.get_temporary_mr());
+    thrust::scatter(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     delimiter_source,
                     delimiter_source + d_delimiter_map.size(),
                     d_delimiter_map.data(),
@@ -726,7 +727,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
@@ -741,7 +742,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   }
 
   if (reader_opts.get_compression() == compression_type::NONE)
-    return read_json_impl(sources, reader_opts, stream, mr);
+    return read_json_impl(sources, reader_opts, stream, resources);
 
   std::vector<std::unique_ptr<datasource>> compressed_sources;
   std::vector<std::future<std::unique_ptr<compressed_host_buffer_source>>> thread_tasks;
@@ -757,7 +758,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  [](auto& task) { return task.get(); });
   // in read_json_impl, we need the compressed source size to actually be the
   // uncompressed source size for correct batching
-  return read_json_impl(compressed_sources, reader_opts, stream, mr);
+  return read_json_impl(compressed_sources, reader_opts, stream, resources);
 }
 
 }  // namespace cudf::io::json::detail

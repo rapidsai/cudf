@@ -44,7 +44,7 @@ std::pair<rmm::device_buffer, size_type> construct_child_nullmask(
   cudf::detail::lists_column_device_view const& target_lists,
   size_type num_child_rows,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto is_valid_predicate = [d_list_vector  = parent_list_vector.begin(),
                              d_offsets      = parent_list_offsets.template data<size_type>(),
@@ -64,7 +64,7 @@ std::pair<rmm::device_buffer, size_type> construct_child_nullmask(
                                 thrust::make_counting_iterator<size_type>(num_child_rows),
                                 is_valid_predicate,
                                 stream,
-                                mr);
+                                resources);
 }
 
 /**
@@ -149,7 +149,7 @@ struct list_child_constructor {
                                      cudf::lists_column_view const& source_lists_column_view,
                                      cudf::lists_column_view const& target_lists_column_view,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(cudf::is_fixed_width<T>())
   {
     auto source_column_device_view =
@@ -165,7 +165,8 @@ struct list_child_constructor {
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
-            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
+            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream,
+                  resources)
         : std::pair(rmm::device_buffer{}, 0);
 
     auto child_column = cudf::make_fixed_width_column(source_lists_column_view.child().type(),
@@ -173,10 +174,10 @@ struct list_child_constructor {
                                                       std::move(child_null_mask.first),
                                                       child_null_mask.second,
                                                       stream,
-                                                      mr);
+                                                      resources);
 
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(child_column->size()),
       child_column->mutable_view().begin<T>(),
@@ -208,7 +209,7 @@ struct list_child_constructor {
                                      cudf::lists_column_view const& source_lists_column_view,
                                      cudf::lists_column_view const& target_lists_column_view,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(std::is_same_v<T, string_view>)
   {
     auto source_column_device_view =
@@ -223,12 +224,12 @@ struct list_child_constructor {
 
     if (num_child_rows == 0) { return make_empty_column(type_id::STRING); }
 
-    auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream);
+    auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream, resources.get_temporary_mr());
 
     auto const null_string_view = string_view{nullptr, 0};  // placeholder for factory function
 
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(string_views.size()),
       string_views.begin(),
@@ -259,7 +260,7 @@ struct list_child_constructor {
 
     // string_views should now have been populated with source and target references.
     auto sv_span = cudf::device_span<string_view const>(string_views);
-    return cudf::make_strings_column(sv_span, null_string_view, stream, mr);
+    return cudf::make_strings_column(sv_span, null_string_view, stream, resources);
   }
 
   /**
@@ -271,7 +272,7 @@ struct list_child_constructor {
                                      cudf::lists_column_view const& source_lists_column_view,
                                      cudf::lists_column_view const& target_lists_column_view,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(std::is_same_v<T, list_view>)
   {
     auto source_column_device_view =
@@ -289,13 +290,13 @@ struct list_child_constructor {
       return empty_like(source_lists_column_view.child());
     }
 
-    auto child_list_views = rmm::device_uvector<unbound_list_view>(num_child_rows, stream, mr);
+    auto child_list_views = rmm::device_uvector<unbound_list_view>(num_child_rows, stream, resources);
 
     // Convert from parent list_device_view instances to child list_device_views.
     // For instance, if a parent list_device_view has 3 elements, it should have 3 corresponding
     // child list_device_view instances.
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(child_list_views.size()),
       child_list_views.begin(),
@@ -331,7 +332,8 @@ struct list_child_constructor {
       cuda::proclaim_return_type<size_type>([] __device__(auto const& row) { return row.size(); }));
 
     auto child_offsets = std::get<0>(
-      cudf::detail::make_offsets_child_column(begin, begin + child_list_views.size(), stream, mr));
+      cudf::detail::make_offsets_child_column(begin, begin + child_list_views.size(), stream,
+                  resources));
 
     auto child_column = cudf::type_dispatcher<dispatch_storage_type>(
       source_lists_column_view.child().child(1).type(),
@@ -341,12 +343,13 @@ struct list_child_constructor {
       cudf::lists_column_view(source_lists_column_view.child()),
       cudf::lists_column_view(target_lists_column_view.child()),
       stream,
-      mr);
+      resources);
 
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
-            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
+            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream,
+                  resources)
         : std::pair(rmm::device_buffer{}, 0);
 
     return cudf::make_lists_column(num_child_rows,
@@ -355,7 +358,7 @@ struct list_child_constructor {
                                    child_null_mask.second,            // Null count
                                    std::move(child_null_mask.first),  // Null mask
                                    stream,
-                                   mr);
+                                   resources);
   }
 
   /**
@@ -367,7 +370,7 @@ struct list_child_constructor {
                                      cudf::lists_column_view const& source_lists_column_view,
                                      cudf::lists_column_view const& target_lists_column_view,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(std::is_same_v<T, struct_view>)
   {
     auto const source_column_device_view =
@@ -433,13 +436,14 @@ struct list_child_constructor {
                        source_struct_member_list_view,
                        target_struct_member_list_view,
                        stream,
-                       mr);
+                       resources);
                    });
 
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
-            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
+            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream,
+                  resources)
         : std::pair(rmm::device_buffer{}, 0);
 
     return cudf::make_structs_column(num_child_rows,
@@ -447,7 +451,7 @@ struct list_child_constructor {
                                      child_null_mask.second,
                                      std::move(child_null_mask.first),
                                      stream,
-                                     mr);
+                                     resources);
   }
 };
 
@@ -458,7 +462,7 @@ std::unique_ptr<column> build_lists_child_column_recursive(
   cudf::lists_column_view const& source_lists_column_view,
   cudf::lists_column_view const& target_lists_column_view,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   return cudf::type_dispatcher<dispatch_storage_type>(child_column_type,
                                                       list_child_constructor{},
@@ -467,7 +471,7 @@ std::unique_ptr<column> build_lists_child_column_recursive(
                                                       source_lists_column_view,
                                                       target_lists_column_view,
                                                       stream,
-                                                      mr);
+                                                      resources);
 }
 
 }  // namespace detail

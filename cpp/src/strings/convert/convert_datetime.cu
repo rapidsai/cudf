@@ -153,7 +153,7 @@ struct format_compiler {
 
     // copy format_items to device memory
     d_items = cudf::detail::make_device_uvector_async(
-      items, stream, cudf::get_current_device_resource_ref());
+      items, stream, resources.get_temporary_mr());
   }
 
   device_span<format_item const> format_items() { return device_span<format_item const>(d_items); }
@@ -407,7 +407,7 @@ struct dispatch_to_timestamps_fn {
   {
     format_compiler compiler(format, stream);
     parse_datetime<T> pfn{d_strings, compiler.format_items(), compiler.subsecond_precision()};
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
                       results_view.data<T>(),
@@ -431,7 +431,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
                                             data_type timestamp_type,
                                             std::string_view format,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   if (input.is_empty()) { return make_empty_column(timestamp_type); }
 
@@ -441,10 +441,11 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
 
   auto results = make_timestamp_column(timestamp_type,
                                        input.size(),
-                                       cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                       cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                        input.null_count(),
                                        stream,
-                                       mr);
+                                       resources);
 
   auto results_view = results->mutable_view();
   cudf::type_dispatcher(
@@ -668,7 +669,7 @@ struct check_datetime_format {
 std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
                                            std::string_view const& format,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   size_type strings_count = input.size();
   if (strings_count == 0) return make_empty_column(type_id::BOOL8);
@@ -679,14 +680,15 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
 
   auto results   = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   auto d_results = results->mutable_view().data<bool>();
 
   format_compiler compiler(format, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -704,19 +706,19 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
                                             data_type timestamp_type,
                                             std::string_view format,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_timestamps(input, timestamp_type, format, stream, mr);
+  return detail::to_timestamps(input, timestamp_type, format, stream, resources);
 }
 
 std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
                                            std::string_view format,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_timestamp(input, format, stream, mr);
+  return detail::is_timestamp(input, format, stream, resources);
 }
 
 namespace detail {
@@ -1100,14 +1102,14 @@ struct dispatch_from_timestamps_fn {
                               column_device_view const& d_format_names,
                               device_span<format_item const> d_format_items,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr) const
+                              cudf::memory_resources resources) const
     requires(cudf::is_timestamp<T>())
   {
     return make_strings_children(
       datetime_formatter_fn<T>{d_timestamps, d_format_names, d_format_items},
       d_timestamps.size(),
       stream,
-      mr);
+      resources);
   }
 
   template <typename T, typename... Args>
@@ -1125,7 +1127,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         std::string_view format,
                                         strings_column_view const& names,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   if (timestamps.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -1151,13 +1153,14 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                                        *d_names,
                                                        d_format_items,
                                                        stream,
-                                                       mr);
+                                                       resources);
 
   return make_strings_column(timestamps.size(),
                              std::move(offsets_column),
                              chars.release(),
                              timestamps.null_count(),
-                             cudf::detail::copy_bitmask(timestamps, stream, mr));
+                             cudf::detail::copy_bitmask(timestamps, stream,
+                  resources));
 }
 
 }  // namespace detail
@@ -1168,10 +1171,10 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         std::string_view format,
                                         strings_column_view const& names,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_timestamps(timestamps, format, names, stream, mr);
+  return detail::from_timestamps(timestamps, format, names, stream, resources);
 }
 
 }  // namespace strings

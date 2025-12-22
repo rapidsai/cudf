@@ -19,7 +19,7 @@ rmm::device_uvector<size_type> segmented_counts(bitmask_type const* null_mask,
                                                 device_span<size_type const> offsets,
                                                 null_policy null_handling,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources resources)
 {
   auto const num_segments = offsets.size() - 1;
 
@@ -30,12 +30,12 @@ rmm::device_uvector<size_type> segmented_counts(bitmask_type const* null_mask,
                                               offsets.begin() + 1,
                                               cudf::detail::count_bits_policy::SET_BITS,
                                               stream,
-                                              mr);
+                                              resources);
   }
 
-  rmm::device_uvector<size_type> valid_counts(num_segments, stream, mr);
+  rmm::device_uvector<size_type> valid_counts(num_segments, stream, resources);
   thrust::adjacent_difference(
-    rmm::exec_policy(stream), offsets.begin() + 1, offsets.end(), valid_counts.begin());
+    rmm::exec_policy(stream, resources.get_temporary_mr()), offsets.begin() + 1, offsets.end(), valid_counts.begin());
   return valid_counts;
 }
 

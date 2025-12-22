@@ -24,14 +24,14 @@ namespace cudf::strings::detail {
 std::unique_ptr<column> create_offsets_from_positions(strings_column_view const& input,
                                                       device_span<int64_t const> const& positions,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr)
+                                                      cudf::memory_resources resources)
 {
   auto const d_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
 
   // first, create a vector of string indices for each position
-  auto indices = rmm::device_uvector<size_type>(positions.size(), stream);
-  thrust::upper_bound(rmm::exec_policy_nosync(stream),
+  auto indices = rmm::device_uvector<size_type>(positions.size(), stream, resources.get_temporary_mr());
+  thrust::upper_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       d_offsets,
                       d_offsets + input.size(),
                       positions.begin(),
@@ -39,15 +39,15 @@ std::unique_ptr<column> create_offsets_from_positions(strings_column_view const&
                       indices.begin());
 
   // compute position offsets per string
-  auto counts = rmm::device_uvector<size_type>(input.size(), stream);
+  auto counts = rmm::device_uvector<size_type>(input.size(), stream, resources.get_temporary_mr());
   // memset to zero-out the counts for any null-entries or strings with no positions
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), counts.begin(), counts.end(), 0);
 
   // next, count the number of positions per string
   auto d_counts  = counts.data();
   auto d_indices = indices.data();
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::counting_iterator<int64_t>(0),
     positions.size(),
     [d_indices, d_counts] __device__(int64_t idx) {
@@ -58,7 +58,8 @@ std::unique_ptr<column> create_offsets_from_positions(strings_column_view const&
 
   // finally, convert the counts into offsets
   return std::get<0>(
-    cudf::strings::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, mr));
+    cudf::strings::detail::make_offsets_child_column(counts.begin(), counts.end(), stream,
+                  resources));
 }
 
 }  // namespace cudf::strings::detail

@@ -39,23 +39,23 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           size_type n,
                                           null_policy null_handling,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 
   if (num_groups == 0) { return empty_like(values); }
 
-  auto nth_index = rmm::device_uvector<size_type>(num_groups, stream);
+  auto nth_index = rmm::device_uvector<size_type>(num_groups, stream, resources.get_temporary_mr());
   // TODO: replace with async version
   thrust::uninitialized_fill_n(
-    rmm::exec_policy(stream), nth_index.begin(), num_groups, values.size());
+    rmm::exec_policy(stream, resources.get_temporary_mr()), nth_index.begin(), num_groups, values.size());
 
   // nulls_policy::INCLUDE (equivalent to pandas nth(dropna=None) but return nulls for n
   if (null_handling == null_policy::INCLUDE || !values.has_nulls()) {
     // Returns index of nth value.
     thrust::transform_if(
-      rmm::exec_policy(stream),
+      rmm::exec_policy(stream, resources.get_temporary_mr()),
       group_sizes.begin<size_type>(),
       group_sizes.end<size_type>(),
       group_offsets.begin(),
@@ -77,7 +77,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                       }));
     rmm::device_uvector<size_type> intra_group_index(values.size(), stream);
     // intra group index for valids only.
-    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                   group_labels.begin(),
                                   group_labels.end(),
                                   bitmask_iterator,
@@ -86,7 +86,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
     rmm::device_uvector<size_type> group_count = [&] {
       if (n < 0) {
         rmm::device_uvector<size_type> group_count(num_groups, stream);
-        thrust::reduce_by_key(rmm::exec_policy(stream),
+        thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                               group_labels.begin(),
                               group_labels.end(),
                               bitmask_iterator,
@@ -94,11 +94,11 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                               group_count.begin());
         return group_count;
       } else {
-        return rmm::device_uvector<size_type>(0, stream);
+        return rmm::device_uvector<size_type>(0, stream, resources.get_temporary_mr());
       }
     }();
     // gather the valid index == n
-    thrust::scatter_if(rmm::exec_policy(stream),
+    thrust::scatter_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                        thrust::make_counting_iterator<size_type>(0),
                        thrust::make_counting_iterator<size_type>(values.size()),
                        group_labels.begin(),                          // map
@@ -119,7 +119,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                            out_of_bounds_policy::NULLIFY,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            stream,
-                                           mr);
+                                           resources);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);
   return std::make_unique<column>(std::move(output_table->get_column(0)));
 }

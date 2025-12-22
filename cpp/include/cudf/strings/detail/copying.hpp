@@ -43,7 +43,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                                          size_type start,
                                          size_type end,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr);
+                                         cudf::memory_resources resources);
 
 /**
  * @brief Returns a new strings column created by shifting the rows by a specified offset.
@@ -70,7 +70,7 @@ std::unique_ptr<column> shift(strings_column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr);
+                              cudf::memory_resources resources);
 
 }  // namespace strings::detail
 }  // namespace CUDF_EXPORT cudf

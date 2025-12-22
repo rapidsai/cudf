@@ -32,7 +32,7 @@ namespace detail {
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(table_view const& input_table,
                                                                   rmm::cuda_stream_view stream,
-                                                                  rmm::device_async_resource_ref mr)
+                                                                  cudf::memory_resources resources)
 {
   auto const num_cols = input_table.num_columns();
 
@@ -45,15 +45,15 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(table_view con
                                               null_equality::EQUAL,
                                               nan_equality::ALL_EQUAL,
                                               stream,
-                                              mr);
+                                              resources);
 
   std::vector<order> column_order(num_cols, order::ASCENDING);
   std::vector<null_order> null_precedence(num_cols, null_order::AFTER);
   auto sorted_unique_keys =
-    cudf::detail::sort(distinct_keys->view(), column_order, null_precedence, stream, mr);
+    cudf::detail::sort(distinct_keys->view(), column_order, null_precedence, stream, resources);
 
   auto indices_column = cudf::detail::lower_bound(
-    sorted_unique_keys->view(), input_table, column_order, null_precedence, stream, mr);
+    sorted_unique_keys->view(), input_table, column_order, null_precedence, stream, resources);
 
   return std::pair(std::move(sorted_unique_keys), std::move(indices_column));
 }
@@ -61,10 +61,10 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(table_view con
 }  // namespace detail
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
-  cudf::table_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  cudf::table_view const& input, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::encode(input, stream, mr);
+  return detail::encode(input, stream, resources);
 }
 
 }  // namespace cudf

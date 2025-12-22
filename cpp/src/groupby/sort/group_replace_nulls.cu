@@ -31,7 +31,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
                                             device_span<size_type const> group_labels,
                                             cudf::replace_policy replace_policy,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   cudf::size_type size = grouped_value.size();
 
@@ -47,7 +47,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   auto func = cudf::detail::replace_policy_functor();
   cuda::std::equal_to<cudf::size_type> eq;
   if (replace_policy == cudf::replace_policy::PRECEDING) {
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+    thrust::inclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                   group_labels.begin(),
                                   group_labels.begin() + size,
                                   in_begin,
@@ -59,7 +59,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
     auto in_rbegin = thrust::make_reverse_iterator(in_begin + size);
     auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + size);
     thrust::inclusive_scan_by_key(
-      rmm::exec_policy(stream), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
+      rmm::exec_policy(stream, resources.get_temporary_mr()), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
   }
 
   auto output = cudf::detail::gather(cudf::table_view({grouped_value}),
@@ -67,7 +67,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
                                      cudf::out_of_bounds_policy::DONT_CHECK,
                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,
-                                     mr);
+                                     resources);
 
   return std::move(output->release()[0]);
 }

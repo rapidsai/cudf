@@ -14,6 +14,6 @@ compute_global_memory_aggs<nullable_global_set_t>(bitmask_type const* row_bitmas
                                                   host_span<aggregation::Kind const> h_agg_kinds,
                                                   device_span<aggregation::Kind const> d_agg_kinds,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr);
+                                                  cudf::memory_resources resources);
 
 }  // namespace cudf::groupby::detail::hash

@@ -19,12 +19,12 @@ std::unique_ptr<cudf::scalar> standard_deviation(column_view const& col,
                                                  cudf::data_type const output_dtype,
                                                  size_type ddof,
                                                  rmm::cuda_stream_view stream,
-                                                 rmm::device_async_resource_ref mr)
+                                                 cudf::memory_resources resources)
 {
   using reducer = compound::detail::element_type_dispatcher<op::standard_deviation>;
   auto col_type =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
-  return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, ddof, stream, mr);
+  return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, ddof, stream, resources);
 }
 
 }  // namespace detail

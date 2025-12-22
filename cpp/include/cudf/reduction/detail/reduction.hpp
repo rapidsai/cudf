@@ -27,7 +27,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                data_type output_dtype,
                                std::optional<std::reference_wrapper<scalar const>> init,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr);
+                               cudf::memory_resources resources);
 
 }  // namespace reduction::detail
 }  // namespace CUDF_EXPORT cudf

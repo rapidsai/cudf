@@ -152,7 +152,7 @@ std::unique_ptr<cudf::column> hybrid_scan_reader::build_row_mask_with_page_index
   cudf::host_span<size_type const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  cudf::memory_resources resources) const
 {
   CUDF_FUNC_RANGE();
 
@@ -160,7 +160,7 @@ std::unique_ptr<cudf::column> hybrid_scan_reader::build_row_mask_with_page_index
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->build_row_mask_with_page_index_stats(input_row_group_indices, options, stream, mr);
+  return _impl->build_row_mask_with_page_index_stats(input_row_group_indices, options, stream, resources);
 }
 
 [[nodiscard]] std::vector<text::byte_range_info>

@@ -47,9 +47,9 @@ struct interleave_columns_functor {
   std::unique_ptr<cudf::column> operator()(table_view const& input,
                                            bool create_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
   {
-    return interleave_columns_impl<T>{}(input, create_mask, stream, mr);
+    return interleave_columns_impl<T>{}(input, create_mask, stream, resources);
   }
 };
 
@@ -58,9 +58,9 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::list_
   std::unique_ptr<column> operator()(table_view const& lists_columns,
                                      bool create_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
-    return lists::detail::interleave_columns(lists_columns, create_mask, stream, mr);
+    return lists::detail::interleave_columns(lists_columns, create_mask, stream, resources);
   }
 };
 
@@ -69,7 +69,7 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
   std::unique_ptr<cudf::column> operator()(table_view const& structs_columns,
                                            bool create_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
   {
     // We can safely call `column(0)` as the number of columns is known to be non zero.
     auto const num_children = structs_columns.column(0).num_children();
@@ -120,14 +120,14 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
                                     thrust::make_counting_iterator<size_type>(output_size),
                                     validity_fn,
                                     stream,
-                                    mr);
+                                    resources);
     };
 
     // Only create null mask if at least one input structs column is nullable.
     auto [null_mask, null_count] =
       create_mask ? create_mask_fn() : std::pair{rmm::device_buffer{0, stream, mr}, size_type{0}};
     return make_structs_column(
-      output_size, std::move(output_struct_members), null_count, std::move(null_mask), stream, mr);
+      output_size, std::move(output_struct_members), null_count, std::move(null_mask), stream, resources);
   }
 };
 
@@ -154,11 +154,11 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
   std::unique_ptr<cudf::column> operator()(table_view const& strings_columns,
                                            bool,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
   {
     auto num_columns = strings_columns.num_columns();
     if (num_columns == 1) {  // Single strings column returns a copy
-      return std::make_unique<column>(*(strings_columns.begin()), stream, mr);
+      return std::make_unique<column>(*(strings_columns.begin()), stream, resources);
     }
 
     auto strings_count = strings_columns.num_rows();
@@ -171,13 +171,13 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
     auto num_strings = num_columns * strings_count;
 
     rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(num_strings, stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(num_strings),
                       indices.begin(),
                       interleave_strings_fn{*d_table});
 
-    return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
+    return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, resources);
   }
 };
 
@@ -186,12 +186,12 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
   std::unique_ptr<cudf::column> operator()(table_view const& input,
                                            bool create_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
   {
     auto arch_column = input.column(0);
     auto output_size = input.num_columns() * input.num_rows();
     auto output =
-      detail::allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, stream, mr);
+      detail::allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, stream, resources);
     auto device_input  = table_device_view::create(input, stream);
     auto device_output = mutable_column_device_view::create(*output, stream);
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);
@@ -204,7 +204,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
 
     if (not create_mask) {
       thrust::transform(
-        rmm::exec_policy(stream), index_begin, index_end, device_output->begin<T>(), func_value);
+        rmm::exec_policy(stream, resources.get_temporary_mr()), index_begin, index_end, device_output->begin<T>(), func_value);
 
       return output;
     }
@@ -214,14 +214,14 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       return input.column(idx % divisor).is_valid(idx / divisor);
     };
 
-    thrust::transform_if(rmm::exec_policy(stream),
+    thrust::transform_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                          index_begin,
                          index_end,
                          device_output->begin<T>(),
                          func_value,
                          func_validity);
 
-    auto [mask, null_count] = valid_if(index_begin, index_end, func_validity, stream, mr);
+    auto [mask, null_count] = valid_if(index_begin, index_end, func_validity, stream, resources);
 
     output->set_null_mask(std::move(mask), null_count);
 
@@ -233,7 +233,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
 
 std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_EXPECTS(input.num_columns() > 0, "input must have at least one column to determine dtype.");
 
@@ -247,17 +247,17 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
     std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
 
   return type_dispatcher<dispatch_storage_type>(
-    dtype, detail::interleave_columns_functor{}, input, output_needs_mask, stream, mr);
+    dtype, detail::interleave_columns_functor{}, input, output_needs_mask, stream, resources);
 }
 
 }  // namespace detail
 
 std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::interleave_columns(input, stream, mr);
+  return detail::interleave_columns(input, stream, resources);
 }
 
 }  // namespace cudf

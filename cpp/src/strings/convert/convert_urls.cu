@@ -120,20 +120,21 @@ struct url_encoder_fn {
 //
 std::unique_ptr<column> url_encode(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
   auto d_column = column_device_view::create(input.parent(), stream);
 
   auto [offsets_column, chars] =
-    make_strings_children(url_encoder_fn{*d_column}, input.size(), stream, mr);
+    make_strings_children(url_encoder_fn{*d_column}, input.size(), stream, resources);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 }  // namespace detail
@@ -141,10 +142,10 @@ std::unique_ptr<column> url_encode(strings_column_view const& input,
 // external API
 std::unique_ptr<column> url_encode(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_encode(input, stream, mr);
+  return detail::url_encode(input, stream, resources);
 }
 
 namespace detail {
@@ -374,7 +375,7 @@ CUDF_KERNEL void url_decode_char_replacer(column_device_view const in_strings,
 //
 std::unique_ptr<column> url_decode(strings_column_view const& strings,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
@@ -388,15 +389,15 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   auto const d_strings = column_device_view::create(strings.parent(), stream);
 
   // build offsets column by computing the output row sizes and scanning the results
-  auto row_sizes = rmm::device_uvector<size_type>(strings_count, stream);
+  auto row_sizes = rmm::device_uvector<size_type>(strings_count, stream, resources.get_temporary_mr());
   url_decode_char_counter<num_warps_per_threadblock, char_block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(*d_strings, row_sizes.data());
   // performs scan on the sizes and builds the appropriate offsets column
   auto [offsets_column, out_chars_bytes] = cudf::strings::detail::make_offsets_child_column(
-    row_sizes.begin(), row_sizes.end(), stream, mr);
+    row_sizes.begin(), row_sizes.end(), stream, resources);
 
   // create the chars column
-  rmm::device_uvector<char> chars(out_chars_bytes, stream, mr);
+  rmm::device_uvector<char> chars(out_chars_bytes, stream, resources);
   auto d_out_chars = chars.data();
   auto const offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
@@ -406,7 +407,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(*d_strings, d_out_chars, offsets);
 
   // copy null mask
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, resources);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
@@ -421,10 +422,10 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
 
 std::unique_ptr<column> url_decode(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_decode(input, stream, mr);
+  return detail::url_decode(input, stream, resources);
 }
 
 }  // namespace strings

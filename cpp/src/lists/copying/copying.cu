@@ -28,7 +28,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                                          size_type start,
                                          size_type end,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   if (lists.is_empty() or start == end) { return cudf::empty_like(lists.parent()); }
   if (end < 0 || end > lists.size()) end = lists.size();
@@ -49,7 +49,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
 
   // Compute the offsets column of the result:
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     offsets_data + start,
     offsets_data + end + 1,  // size of offsets column is 1 greater than slice length
     out_offsets.data(),
@@ -66,14 +66,15 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
   // view into a cudf::column:
   auto child =
     (lists.child().type() == cudf::data_type{type_id::LIST})
-      ? copy_slice(lists_column_view(lists.child()), start_offset, end_offset, stream, mr)
+      ? copy_slice(lists_column_view(lists.child()), start_offset, end_offset, stream,
+                  resources)
       : std::make_unique<cudf::column>(
           cudf::detail::slice(lists.child(), {start_offset, end_offset}, stream).front(),
           stream,
-          mr);
+          resources);
 
   // Compute the null mask of the result:
-  auto null_mask = cudf::detail::copy_bitmask(lists.null_mask(), start, end, stream, mr);
+  auto null_mask = cudf::detail::copy_bitmask(lists.null_mask(), start, end, stream, resources);
 
   auto null_count = cudf::detail::null_count(
     static_cast<bitmask_type const*>(null_mask.data()), 0, end - start, stream);
@@ -84,7 +85,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                            null_count,
                            std::move(null_mask),
                            stream,
-                           mr);
+                           resources);
 }
 
 }  // namespace detail

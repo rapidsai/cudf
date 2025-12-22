@@ -92,20 +92,20 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                        scan_operator scan_op,
                                        bool has_nulls,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   auto const grouped_values_view = table_view{{grouped_values}};
   auto const comparator = cudf::detail::row::equality::self_comparator{grouped_values_view, stream};
 
   auto ranks = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, grouped_values.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, grouped_values.size(), mask_state::UNALLOCATED, stream, resources);
   auto mutable_ranks = ranks->mutable_view();
 
   auto const comparator_helper = [&](auto const d_equal) {
     auto const permuted_equal =
       permuted_row_equality_comparator(d_equal, value_order.begin<size_type>());
 
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      mutable_ranks.begin<size_type>(),
                      mutable_ranks.end<size_type>(),
                      unique_identifier<forward, decltype(permuted_equal), value_resolver>(
@@ -130,7 +130,7 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                              cuda::std::reverse_iterator(mutable_ranks.end<size_type>())};
     }
   }();
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                 group_labels_begin,
                                 group_labels_begin + group_labels.size(),
                                 mutable_rank_begin,
@@ -146,7 +146,7 @@ std::unique_ptr<column> min_rank_scan(column_view const& grouped_values,
                                       device_span<size_type const> group_labels,
                                       device_span<size_type const> group_offsets,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   return rank_generator<true>(
     grouped_values,
@@ -159,7 +159,7 @@ std::unique_ptr<column> min_rank_scan(column_view const& grouped_values,
     DeviceMax{},
     has_nested_nulls(table_view{{grouped_values}}),
     stream,
-    mr);
+    resources);
 }
 
 std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
@@ -167,7 +167,7 @@ std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
                                       device_span<size_type const> group_labels,
                                       device_span<size_type const> group_offsets,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   return rank_generator<false>(
     grouped_values,
@@ -180,7 +180,7 @@ std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
     DeviceMin{},
     has_nested_nulls(table_view{{grouped_values}}),
     stream,
-    mr);
+    resources);
 }
 
 std::unique_ptr<column> first_rank_scan(column_view const& grouped_values,
@@ -188,12 +188,12 @@ std::unique_ptr<column> first_rank_scan(column_view const& grouped_values,
                                         device_span<size_type const> group_labels,
                                         device_span<size_type const> group_offsets,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   auto ranks = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, group_labels.size(), mask_state::UNALLOCATED, stream, resources);
   auto mutable_ranks = ranks->mutable_view();
-  thrust::tabulate(rmm::exec_policy(stream),
+  thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
                    mutable_ranks.begin<size_type>(),
                    mutable_ranks.end<size_type>(),
                    [labels  = group_labels.begin(),
@@ -209,24 +209,24 @@ std::unique_ptr<column> average_rank_scan(column_view const& grouped_values,
                                           device_span<size_type const> group_labels,
                                           device_span<size_type const> group_offsets,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   auto max_rank = max_rank_scan(grouped_values,
                                 value_order,
                                 group_labels,
                                 group_offsets,
                                 stream,
-                                cudf::get_current_device_resource_ref());
+                                resources.get_temporary_mr());
   auto min_rank = min_rank_scan(grouped_values,
                                 value_order,
                                 group_labels,
                                 group_offsets,
                                 stream,
-                                cudf::get_current_device_resource_ref());
+                                resources.get_temporary_mr());
   auto ranks    = make_fixed_width_column(
-    data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, resources);
   auto mutable_ranks = ranks->mutable_view();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     max_rank->view().begin<size_type>(),
                     max_rank->view().end<size_type>(),
                     min_rank->view().begin<size_type>(),
@@ -242,7 +242,7 @@ std::unique_ptr<column> dense_rank_scan(column_view const& grouped_values,
                                         device_span<size_type const> group_labels,
                                         device_span<size_type const> group_offsets,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   return rank_generator<true>(
     grouped_values,
@@ -253,7 +253,7 @@ std::unique_ptr<column> dense_rank_scan(column_view const& grouped_values,
     DeviceSum{},
     has_nested_nulls(table_view{{grouped_values}}),
     stream,
-    mr);
+    resources);
 }
 
 std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
@@ -263,18 +263,18 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
                                                  device_span<size_type const> group_labels,
                                                  device_span<size_type const> group_offsets,
                                                  rmm::cuda_stream_view stream,
-                                                 rmm::device_async_resource_ref mr)
+                                                 cudf::memory_resources resources)
 {
   CUDF_EXPECTS(percentage != rank_percentage::NONE, "Percentage cannot be NONE");
   auto ranks = make_fixed_width_column(
-    data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, resources);
   auto mutable_ranks = ranks->mutable_view();
 
   auto one_normalized = [] __device__(auto const rank, auto const group_size) {
     return group_size == 1 ? 0.0 : ((rank - 1.0) / (group_size - 1));
   };
   if (method == rank_method::DENSE) {
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      mutable_ranks.begin<double>(),
                      mutable_ranks.end<double>(),
                      [percentage,
@@ -294,7 +294,7 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
                                 : one_normalized(r, last_rank);
                      });
   } else {
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      mutable_ranks.begin<double>(),
                      mutable_ranks.end<double>(),
                      [percentage,

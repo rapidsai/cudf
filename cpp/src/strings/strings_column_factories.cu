@@ -36,7 +36,7 @@ template <typename OutputType>
 std::pair<std::vector<std::unique_ptr<column>>, rmm::device_uvector<int64_t>>
 make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& input,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   auto const num_columns = input.size();
   std::vector<std::unique_ptr<column>> offsets_columns(num_columns);
@@ -45,7 +45,7 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
     auto const string_pairs = input[idx];
     auto const string_count = static_cast<size_type>(string_pairs.size());
     auto offsets            = make_numeric_column(
-      data_type{type_to_id<OutputType>()}, string_count + 1, mask_state::UNALLOCATED, stream, mr);
+      data_type{type_to_id<OutputType>()}, string_count + 1, mask_state::UNALLOCATED, stream, resources);
 
     auto const offsets_transformer = cuda::proclaim_return_type<size_type>(
       [string_count, string_pairs = string_pairs.data()] __device__(size_type idx) -> size_type {
@@ -55,7 +55,7 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
     auto const d_offsets = offsets->mutable_view().template data<OutputType>();
     auto const output_it = cudf::detail::make_sizes_to_offsets_iterator(
       d_offsets, d_offsets + string_count + 1, chars_sizes.data() + idx);
-    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                            input_it,
                            input_it + string_count + 1,
                            output_it,
@@ -71,25 +71,26 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
   std::vector<column_string_pairs> const& input,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto const num_columns = input.size();
 
   auto [offsets_cols, d_chars_sizes] =
-    make_offsets_child_column_batch_async<size_type>(input, stream, mr);
+    make_offsets_child_column_batch_async<size_type>(input, stream, resources);
 
   std::vector<rmm::device_buffer> null_masks;
   null_masks.reserve(num_columns);
 
-  rmm::device_uvector<size_type> d_valid_counts(num_columns, stream, mr);
+  rmm::device_uvector<size_type> d_valid_counts(num_columns, stream, resources);
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), d_valid_counts.begin(), d_valid_counts.end(), 0);
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), d_valid_counts.begin(), d_valid_counts.end(), 0);
 
   for (std::size_t idx = 0; idx < num_columns; ++idx) {
     auto const& string_pairs = input[idx];
     auto const string_count  = static_cast<size_type>(string_pairs.size());
     null_masks.emplace_back(
-      cudf::create_null_mask(string_count, mask_state::UNINITIALIZED, stream, mr));
+      cudf::create_null_mask(string_count, mask_state::UNINITIALIZED, stream,
+                  resources));
 
     if (string_count == 0) { continue; }
 
@@ -134,7 +135,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
     }
 
     [[maybe_unused]] auto [new_offsets_cols, d_new_chars_sizes] =
-      make_offsets_child_column_batch_async<int64_t>(long_string_input, stream, mr);
+      make_offsets_child_column_batch_async<int64_t>(long_string_input, stream, resources);
 
     // Update the new offsets columns.
     // The new chars sizes should be the same as before, thus we don't need to update them.
@@ -155,7 +156,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
     auto const valid_count = valid_counts[idx];
 
     auto chars_data = make_chars_buffer(
-      offsets_cols[idx]->view(), chars_size, input[idx].data(), strings_count, stream, mr);
+      offsets_cols[idx]->view(), chars_size, input[idx].data(), strings_count, stream, resources);
 
     auto const null_count = strings_count - valid_count;
     output[idx]           = make_strings_column(
@@ -175,19 +176,19 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 std::unique_ptr<column> make_strings_column(
   device_span<cuda::std::pair<char const*, size_type> const> strings,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
+  return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, resources);
 }
 
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
   std::vector<cudf::device_span<cuda::std::pair<char const*, size_type> const>> const& input,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return cudf::strings::detail::make_strings_column_batch(input, stream, mr);
+  return cudf::strings::detail::make_strings_column_batch(input, stream, resources);
 }
 
 namespace {
@@ -207,14 +208,14 @@ struct string_view_to_pair {
 std::unique_ptr<column> make_strings_column(device_span<string_view const> string_views,
                                             string_view null_placeholder,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
   auto it_pair =
     thrust::make_transform_iterator(string_views.begin(), string_view_to_pair{null_placeholder});
   return cudf::strings::detail::make_strings_column(
-    it_pair, it_pair + string_views.size(), stream, mr);
+    it_pair, it_pair + string_views.size(), stream, resources);
 }
 
 std::unique_ptr<column> make_strings_column(size_type num_strings,

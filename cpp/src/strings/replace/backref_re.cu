@@ -95,7 +95,7 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
                                               regex_program const& prog,
                                               std::string_view replacement,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -109,7 +109,7 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
   auto group_count = std::min(99, d_prog->group_counts());  // group count should NOT exceed 99
   auto const parse_result                    = parse_backrefs(replacement, group_count);
   rmm::device_uvector<backref_type> backrefs = cudf::detail::make_device_uvector_async(
-    parse_result.second, stream, cudf::get_current_device_resource_ref());
+    parse_result.second, stream, resources.get_temporary_mr());
   string_scalar repl_scalar(parse_result.first, true, stream);
   string_view const d_repl_template = repl_scalar.value(stream);
 
@@ -121,13 +121,14 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
     *d_prog,
     input.size(),
     stream,
-    mr);
+    resources);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 }  // namespace detail
@@ -138,10 +139,10 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings
                                               regex_program const& prog,
                                               std::string_view replacement,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_with_backrefs(strings, prog, replacement, stream, mr);
+  return detail::replace_with_backrefs(strings, prog, replacement, stream, resources);
 }
 
 }  // namespace strings

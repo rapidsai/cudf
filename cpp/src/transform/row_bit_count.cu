@@ -477,7 +477,7 @@ CUDF_KERNEL void compute_segment_sizes(device_span<column_device_view const> col
 std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
                                                 size_type segment_length,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources resources)
 {
   // If there is no rows, segment_length will not be checked.
   if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
@@ -496,14 +496,14 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
   // create output buffer and view
   auto const num_segments = cudf::util::div_rounding_up_safe(t.num_rows(), segment_length);
   auto output             = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, num_segments, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_id::INT32}, num_segments, mask_state::UNALLOCATED, stream, resources);
   mutable_column_view mcv = output->mutable_view();
 
   // simple case.  if we have no complex types (lists, strings, etc), the per-row size is already
   // trivially computed
   if (h_info.complex_type_count <= 0) {
     thrust::tabulate(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
       mcv.begin<size_type>(),
       mcv.end<size_type>(),
       cuda::proclaim_return_type<size_type>(
@@ -524,7 +524,7 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
 
   // move stack info to the gpu
   rmm::device_uvector<column_info> d_info =
-    cudf::detail::make_device_uvector_async(info, stream, cudf::get_current_device_resource_ref());
+    cudf::detail::make_device_uvector_async(info, stream, resources.get_temporary_mr());
 
   // each thread needs to maintain a stack of row spans of size max_branch_depth. we will use
   // shared memory to do this rather than allocating a potentially gigantic temporary buffer
@@ -557,9 +557,9 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
 
 std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
-  return detail::segmented_row_bit_count(t, 1, stream, mr);
+  return detail::segmented_row_bit_count(t, 1, stream, resources);
 }
 
 }  // namespace detail
@@ -567,18 +567,18 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
 std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
                                                 size_type segment_length,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_row_bit_count(t, segment_length, stream, mr);
+  return detail::segmented_row_bit_count(t, segment_length, stream, resources);
 }
 
 std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::row_bit_count(t, stream, mr);
+  return detail::row_bit_count(t, stream, resources);
 }
 
 }  // namespace cudf

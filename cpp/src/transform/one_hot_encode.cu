@@ -50,7 +50,7 @@ struct ohe_equality_functor {
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
                                                               column_view const& categories,
                                                               rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr)
+                                                              cudf::memory_resources resources)
 {
   CUDF_EXPECTS(cudf::have_same_types(input, categories),
                "Mismatch type between input and categories.",
@@ -66,14 +66,14 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
 
   auto const total_size = input.size() * categories.size();
   auto all_encodings =
-    make_numeric_column(data_type{type_id::BOOL8}, total_size, mask_state::UNALLOCATED, stream, mr);
+    make_numeric_column(data_type{type_id::BOOL8}, total_size, mask_state::UNALLOCATED, stream, resources);
 
   auto const t_lhs      = table_view{{input}};
   auto const t_rhs      = table_view{{categories}};
   auto const comparator = cudf::detail::row::equality::two_table_comparator{t_lhs, t_rhs, stream};
 
   auto const comparator_helper = [&](auto const d_equal) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(total_size),
                       all_encodings->mutable_view().begin<bool>(),
@@ -104,9 +104,9 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
                                                               column_view const& categories,
                                                               rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr)
+                                                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::one_hot_encode(input, categories, stream, mr);
+  return detail::one_hot_encode(input, categories, stream, resources);
 }
 }  // namespace cudf

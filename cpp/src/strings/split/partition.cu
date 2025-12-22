@@ -174,54 +174,60 @@ struct rpartition_fn : public partition_fn {
 std::unique_ptr<table> partition(strings_column_view const& strings,
                                  string_scalar const& delimiter,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
   if (strings_count == 0) return std::make_unique<table>(std::vector<std::unique_ptr<column>>());
   auto strings_column = column_device_view::create(strings.parent(), stream);
   string_view d_delimiter(delimiter.data(), delimiter.size());
-  auto left_indices  = rmm::device_uvector<string_index_pair>(strings_count, stream);
-  auto delim_indices = rmm::device_uvector<string_index_pair>(strings_count, stream);
-  auto right_indices = rmm::device_uvector<string_index_pair>(strings_count, stream);
+  auto left_indices  = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
+  auto delim_indices = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
+  auto right_indices = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
   partition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
 
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      partitioner);
   std::vector<std::unique_ptr<column>> results;
-  results.emplace_back(make_strings_column(left_indices, stream, mr));
-  results.emplace_back(make_strings_column(delim_indices, stream, mr));
-  results.emplace_back(make_strings_column(right_indices, stream, mr));
+  results.emplace_back(make_strings_column(left_indices, stream,
+                  resources));
+  results.emplace_back(make_strings_column(delim_indices, stream,
+                  resources));
+  results.emplace_back(make_strings_column(right_indices, stream,
+                  resources));
   return std::make_unique<table>(std::move(results));
 }
 
 std::unique_ptr<table> rpartition(strings_column_view const& strings,
                                   string_scalar const& delimiter,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
   if (strings_count == 0) return std::make_unique<table>(std::vector<std::unique_ptr<column>>());
   auto strings_column = column_device_view::create(strings.parent(), stream);
   string_view d_delimiter(delimiter.data(), delimiter.size());
-  auto left_indices  = rmm::device_uvector<string_index_pair>(strings_count, stream);
-  auto delim_indices = rmm::device_uvector<string_index_pair>(strings_count, stream);
-  auto right_indices = rmm::device_uvector<string_index_pair>(strings_count, stream);
+  auto left_indices  = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
+  auto delim_indices = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
+  auto right_indices = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
   rpartition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      partitioner);
 
   std::vector<std::unique_ptr<column>> results;
-  results.emplace_back(make_strings_column(left_indices, stream, mr));
-  results.emplace_back(make_strings_column(delim_indices, stream, mr));
-  results.emplace_back(make_strings_column(right_indices, stream, mr));
+  results.emplace_back(make_strings_column(left_indices, stream,
+                  resources));
+  results.emplace_back(make_strings_column(delim_indices, stream,
+                  resources));
+  results.emplace_back(make_strings_column(right_indices, stream,
+                  resources));
   return std::make_unique<table>(std::move(results));
 }
 
@@ -232,19 +238,19 @@ std::unique_ptr<table> rpartition(strings_column_view const& strings,
 std::unique_ptr<table> partition(strings_column_view const& input,
                                  string_scalar const& delimiter,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(input, delimiter, stream, mr);
+  return detail::partition(input, delimiter, stream, resources);
 }
 
 std::unique_ptr<table> rpartition(strings_column_view const& input,
                                   string_scalar const& delimiter,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::rpartition(input, delimiter, stream, mr);
+  return detail::rpartition(input, delimiter, stream, resources);
 }
 
 }  // namespace strings

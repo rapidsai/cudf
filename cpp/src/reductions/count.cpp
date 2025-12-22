@@ -21,10 +21,10 @@ struct count_scalar_fn {
     requires(cudf::is_numeric_not_bool<T>())
   std::unique_ptr<cudf::scalar> operator()(size_type count,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr) const
+                                           cudf::memory_resources resources) const
   {
     auto const value = static_cast<T>(count);
-    return cudf::make_fixed_width_scalar<T>(value, stream, mr);
+    return cudf::make_fixed_width_scalar<T>(value, stream, resources);
   }
 
   template <typename T>
@@ -42,10 +42,10 @@ std::unique_ptr<cudf::scalar> count(column_view const& col,
                                     cudf::null_policy null_handling,
                                     cudf::data_type const output_dtype,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   auto const count = col.size() - (null_handling == null_policy::EXCLUDE ? col.null_count() : 0);
-  return cudf::type_dispatcher(output_dtype, count_scalar_fn{}, count, stream, mr);
+  return cudf::type_dispatcher(output_dtype, count_scalar_fn{}, count, stream, resources);
 }
 }  // namespace detail
 }  // namespace reduction

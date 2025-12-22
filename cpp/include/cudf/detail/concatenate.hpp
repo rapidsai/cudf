@@ -26,7 +26,7 @@ namespace detail {
  */
 std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_concat,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr);
+                                    cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::concatenate(host_span<table_view const>,rmm::device_async_resource_ref)
@@ -35,7 +35,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_conc
  */
 std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr);
+                                   cudf::memory_resources resources);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

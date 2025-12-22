@@ -266,8 +266,8 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
     rmm::device_uvector<size_t> indices(c_info.size(), stream);
     rmm::device_uvector<size_t> sort_order(c_info.size(), stream);
 
-    thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), 0);
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), indices.begin(), indices.end(), 0);
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       c_info.begin(),
                       c_info.end(),
                       end_row_indices.begin(),
@@ -284,7 +284,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                                     0,
                                     sizeof(size_t) * 8,
                                     stream.value());
-    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, resources.get_temporary_mr());
     cub::DeviceRadixSort::SortPairs(tmp_stg.data(),
                                     tmp_bytes,
                                     end_row_indices.begin(),         // keys in
@@ -296,7 +296,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                                     sizeof(size_t) * 8,
                                     stream.value());
 
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       sort_order.begin(),
                       sort_order.end(),
                       c_info_sorted.begin(),
@@ -305,7 +305,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
 
   // page keys grouped by split.
   rmm::device_uvector<int32_t> page_keys_by_split{c_info.size(), stream};
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     c_info_sorted.begin(),
                     c_info_sorted.end(),
                     page_keys_by_split.begin(),
@@ -327,7 +327,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
 
   size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
   thrust::exclusive_scan(
-    rmm::exec_policy_nosync(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
 
   // adjust the cumulative info such that for each row count, the size includes any pages that span
   // that row count. this is so that if we have this case:
@@ -340,7 +340,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   // page.
   //
   rmm::device_uvector<cumulative_page_info> aggregated_info(c_info.size(), stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     c_info_sorted.begin(),
                     c_info_sorted.end(),
                     aggregated_info.begin(),
@@ -389,7 +389,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto page_row_index =
     cudf::detail::make_counting_transform_iterator(0, get_page_end_row_index{c_info});
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     iter,
     iter + num_columns,
     page_bounds.begin(),
@@ -452,7 +452,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   host_span<PageInfo> subpass_pages,
   host_span<bool const> subpass_page_mask,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
@@ -502,12 +502,12 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   rmm::device_buffer pass_decomp_pages(
     cudf::util::round_up_safe(total_pass_decomp_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE),
     stream,
-    mr);
+    resources);
   auto const total_subpass_decomp_size = total_decomp_size - total_pass_decomp_size;
   rmm::device_buffer subpass_decomp_pages(
     cudf::util::round_up_safe(total_subpass_decomp_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE),
     stream,
-    mr);
+    resources);
 
   auto comp_in =
     cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
@@ -582,11 +582,11 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   }
 
   auto const d_comp_in = cudf::detail::make_device_uvector_async(
-    comp_in, stream, cudf::get_current_device_resource_ref());
+    comp_in, stream, resources.get_temporary_mr());
   auto const d_comp_out = cudf::detail::make_device_uvector_async(
-    comp_out, stream, cudf::get_current_device_resource_ref());
+    comp_out, stream, resources.get_temporary_mr());
   rmm::device_uvector<codec_exec_result> comp_res(num_comp_pages, stream);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                              comp_res.begin(),
                              comp_res.end(),
                              codec_exec_result{0, codec_status::FAILURE});
@@ -615,9 +615,9 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
     auto const d_copy_in = cudf::detail::make_device_uvector_async(
-      copy_in, stream, cudf::get_current_device_resource_ref());
+      copy_in, stream, resources.get_temporary_mr());
     auto const d_copy_out = cudf::detail::make_device_uvector_async(
-      copy_out, stream, cudf::get_current_device_resource_ref());
+      copy_out, stream, resources.get_temporary_mr());
 
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
   }
@@ -692,7 +692,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   // per-codec page counts and decompression sizes
   rmm::device_uvector<decompression_info> decomp_info(pages.size(), stream);
   auto decomp_iter = thrust::make_transform_iterator(pages.begin(), get_decomp_info{chunks});
-  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                 page_keys,
                                 page_keys + pages.size(),
                                 decomp_iter,
@@ -708,7 +708,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   });
 
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
-    temp_cost, stream, cudf::get_current_device_resource_ref());
+    temp_cost, stream, resources.get_temporary_mr());
 
   std::array codecs{compression_type::BROTLI,
                     compression_type::GZIP,
@@ -732,7 +732,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
       rmm::device_uvector<device_span<uint8_t const>> temp_spans(pages.size(), stream);
       auto iter = thrust::make_counting_iterator(size_t{0});
       thrust::for_each(
-        rmm::exec_policy_nosync(stream),
+        rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
         iter,
         iter + pages.size(),
         [pages      = pages.begin(),
@@ -778,7 +778,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
         auto const adjustment_ratio = static_cast<double>(total_temp_size_ex) / total_temp_size;
 
         // Apply the adjustment ratio to each page's temporary cost
-        thrust::for_each(rmm::exec_policy_nosync(stream),
+        thrust::for_each(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          thrust::make_counting_iterator(size_t{0}),
                          thrust::make_counting_iterator(pages.size()),
                          [pages           = pages.begin(),
@@ -808,7 +808,7 @@ void include_scratch_size(device_span<size_t const> temp_cost,
                           rmm::cuda_stream_view stream)
 {
   auto iter = thrust::make_counting_iterator(size_t{0});
-  thrust::for_each(rmm::exec_policy_nosync(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                    iter,
                    iter + c_info.size(),
                    [temp_cost = temp_cost.begin(), c_info = c_info.begin()] __device__(size_t i) {
@@ -869,7 +869,7 @@ rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkD
   rmm::device_uvector<size_t> string_offset_sizes(pages.size(), stream);
 
   auto iter = thrust::make_counting_iterator(size_t{0});
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     iter,
                     iter + pages.size(),
                     string_offset_sizes.begin(),

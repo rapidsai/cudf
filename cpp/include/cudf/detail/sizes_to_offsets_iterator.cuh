@@ -293,7 +293,7 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
   InputIterator begin,
   InputIterator end,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto count          = static_cast<size_type>(std::distance(begin, end));
   auto offsets_column = make_numeric_column(
