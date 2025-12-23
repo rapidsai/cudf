@@ -9,13 +9,9 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_220,
     PANDAS_VERSION,
 )
 from cudf.testing import assert_eq
-from cudf.testing._utils import (
-    expect_warning_if,
-)
 
 
 def test_date_range_freq_default():
@@ -167,25 +163,18 @@ def test_date_range_raise_overflow(kwargs):
         "B",
     ],
 )
-def test_date_range_raise_unsupported(freqstr_unsupported):
-    if not PANDAS_GE_220 and freqstr_unsupported.endswith("E"):
-        pytest.skip(reason="YE, etc. support was added in pandas 2.2")
-
+@pytest.mark.parametrize("case", ["upper", "lower"])
+def test_date_range_raise_unsupported(freqstr_unsupported, case):
+    if case == "lower" and freqstr_unsupported == "3MS":
+        pytest.skip(
+            "3ms parsed as 3 milliseconds, generates too large of range to test"
+        )
+    if case == "lower" and freqstr_unsupported == "B":
+        pytest.skip("b is deprecated in pandas 3.0 - no need to test.")
     s, e = "2001-01-01", "2008-01-31"
-    pd.date_range(start=s, end=e, freq=freqstr_unsupported)
-    with pytest.raises(ValueError, match="does not yet support"):
-        cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
-
-    # We also check that these values are unsupported when using lowercase
-    # characters. We exclude the value 3MS (every 3 month starts) because 3ms
-    # is a valid frequency for every 3 milliseconds.
-    if freqstr_unsupported != "3MS":
-        freqstr_unsupported = freqstr_unsupported.lower()
-        with pytest.raises(ValueError, match="does not yet support"):
-            with expect_warning_if(
-                PANDAS_GE_220 and freqstr_unsupported not in {"b", "bh"}
-            ):
-                cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
+    freq = getattr(freqstr_unsupported, case)()
+    with pytest.raises(ValueError):
+        cudf.date_range(start=s, end=e, freq=freq)
 
 
 @pytest.mark.skipif(
