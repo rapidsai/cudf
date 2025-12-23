@@ -761,10 +761,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         with acquire_spill_lock() as spill_lock:
             plc_groupby = plc.groupby.GroupBy(
                 plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in self.grouping._key_columns
-                    ]
+                    [col.plc_column for col in self.grouping._key_columns]
                 ),
                 plc.types.NullPolicy.EXCLUDE
                 if self._dropna
@@ -778,7 +775,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _groups(
         self, values: Iterable[ColumnBase]
     ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
-        plc_columns = [col.to_pylibcudf(mode="read") for col in values]
+        plc_columns = [col.plc_column for col in values]
         if not plc_columns:
             plc_table = None
         else:
@@ -845,7 +842,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             if col_aggregations:
                 requests.append(
                     plc.groupby.GroupByRequest(
-                        col.to_pylibcudf(mode="read"), col_aggregations
+                        col.plc_column, col_aggregations
                     )
                 )
                 column_included.append(i)
@@ -882,7 +879,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         self, values: tuple[ColumnBase, ...], periods: int, fill_values: list
     ) -> Generator[ColumnBase]:
         _, shifts = self._groupby.plc_groupby.shift(
-            plc.table.Table([col.to_pylibcudf(mode="read") for col in values]),
+            plc.table.Table([col.plc_column for col in values]),
             [periods] * len(values),
             [
                 pa_scalar_to_plc_scalar(
@@ -897,7 +894,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         self, values: tuple[ColumnBase, ...], method: str
     ) -> Generator[ColumnBase]:
         _, replaced = self._groupby.plc_groupby.replace_nulls(
-            plc.Table([col.to_pylibcudf(mode="read") for col in values]),
+            plc.Table([col.plc_column for col in values]),
             [
                 plc.replace.ReplacePolicy.PRECEDING
                 if method == "ffill"
@@ -1110,9 +1107,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # a permutation, so we can use an inner join.
                 with acquire_spill_lock():
                     plc_tables = [
-                        plc.Table(
-                            [col.to_pylibcudf(mode="read") for col in cols]
-                        )
+                        plc.Table([col.plc_column for col in cols])
                         for cols in join_keys
                     ]
                     left_plc, right_plc = plc.join.inner_join(
@@ -1598,11 +1593,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
                 with acquire_spill_lock():
                     plc_table = plc.sorting.stable_segmented_sort_by_key(
-                        plc.Table(
-                            [as_column(indices).to_pylibcudf(mode="read")]
-                        ),
-                        plc.Table([as_column(keys).to_pylibcudf(mode="read")]),
-                        as_column(group_offsets).to_pylibcudf(mode="read"),
+                        plc.Table([as_column(indices).plc_column]),
+                        plc.Table([as_column(keys).plc_column]),
+                        as_column(group_offsets).plc_column,
                         [plc.types.Order.ASCENDING],
                         [plc.types.NullOrder.AFTER],
                     )
@@ -2415,8 +2408,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             struct_column = ColumnBase.from_pylibcudf(
                 plc.Column.struct_from_children(
                     [
-                        self.obj._data[x].to_pylibcudf(mode="read"),
-                        self.obj._data[y].to_pylibcudf(mode="read"),
+                        self.obj._data[x].plc_column,
+                        self.obj._data[y].plc_column,
                     ]
                 )
             ).set_mask(None)
@@ -2455,9 +2448,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         def interleave_columns(source_columns):
             return ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
-                    plc.Table(
-                        [c.to_pylibcudf(mode="read") for c in source_columns]
-                    )
+                    plc.Table([c.plc_column for c in source_columns])
                 )
             )
 
