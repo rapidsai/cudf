@@ -209,7 +209,7 @@ class ListColumn(ColumnBase):
                 dtype.element_type
             )
             new_children = [
-                self.plc_column.children()[0],
+                self.base_children[0].plc_column,
                 elements.plc_column,
             ]
             new_plc_column = plc.Column(
