@@ -58,7 +58,7 @@ std::unique_ptr<cudf::table> join_and_gather(
   auto right_selected     = right_input.select(right_on);
   auto const join_indices = join_impl(left_selected, right_selected, compare_nulls, stream, mr);
 
-  auto left_indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
+  auto left_indices_span = cuda::std::span<cudf::size_type const>{*join_indices};
   auto left_indices_col  = cudf::column_view{left_indices_span};
   return cudf::gather(left_input, left_indices_col);
 }

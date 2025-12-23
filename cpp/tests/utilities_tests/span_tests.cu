@@ -25,7 +25,7 @@
 #include <cstring>
 #include <string>
 
-using cudf::device_span;
+using cuda::std::span;
 using cudf::host_span;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
@@ -216,36 +216,14 @@ TEST(SpanTest, CanConstructFromHostContainers)
   (void)host_span<int const>(h_vector_c);
 }
 
-// This test is the only place in libcudf's test suite where using a
-// thrust::device_vector (and therefore the CUDA default stream) is acceptable
-// since we are explicitly testing conversions from thrust::device_vector.
-TEST(SpanTest, CanConstructFromDeviceContainers)
-{
-  auto d_thrust_vector = thrust::device_vector<int>(1);
-  auto d_vector        = rmm::device_vector<int>(1);
-  auto d_uvector       = rmm::device_uvector<int>(1, cudf::get_default_stream());
-
-  (void)device_span<int>(d_thrust_vector);
-  (void)device_span<int>(d_vector);
-  (void)device_span<int>(d_uvector);
-
-  auto const& d_thrust_vector_c = d_thrust_vector;
-  auto const& d_vector_c        = d_vector;
-  auto const& d_uvector_c       = d_uvector;
-
-  (void)device_span<int const>(d_thrust_vector_c);
-  (void)device_span<int const>(d_vector_c);
-  (void)device_span<int const>(d_uvector_c);
-}
-
-CUDF_KERNEL void simple_device_kernel(device_span<bool> result) { result[0] = true; }
+CUDF_KERNEL void simple_device_kernel(cuda::std::span<bool> result) { result[0] = true; }
 
 TEST(SpanTest, CanUseDeviceSpan)
 {
   auto d_message = cudf::detail::make_zeroed_device_uvector_async<bool>(
     1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
-  auto d_span = device_span<bool>(d_message.data(), d_message.size());
+  auto d_span = cuda::std::span<bool>(d_message.data(), d_message.size());
 
   simple_device_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(d_span);
 
@@ -421,7 +399,7 @@ TEST(HostDeviceSpanTest, CanSendToDevice)
   EXPECT_EQ(got_message, hello_world_message);
 }
 
-CUDF_KERNEL void simple_device_char_kernel(device_span<char> result)
+CUDF_KERNEL void simple_device_char_kernel(cuda::std::span<char> result)
 {
   char const* str = "world hello";
   for (int offset = 0; offset < result.size(); ++offset) {

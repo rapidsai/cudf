@@ -96,14 +96,14 @@ struct host_udf_groupby_test : cudf::groupby_host_udf {
 
     {
       auto const inp_data = get_group_offsets();
-      EXPECT_TRUE((std::is_same_v<cudf::device_span<cudf::size_type const>,
-                                  std::decay_t<decltype(inp_data)>>));
+      EXPECT_TRUE(
+        (std::is_same_v<cuda::std::span<cudf::size_type const>, std::decay_t<decltype(inp_data)>>));
     }
 
     {
       auto const inp_data = get_group_labels();
-      EXPECT_TRUE((std::is_same_v<cudf::device_span<cudf::size_type const>,
-                                  std::decay_t<decltype(inp_data)>>));
+      EXPECT_TRUE(
+        (std::is_same_v<cuda::std::span<cudf::size_type const>, std::decay_t<decltype(inp_data)>>));
     }
 
     // Perform tests on type of the result from computing other aggregations.

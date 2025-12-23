@@ -156,7 +156,10 @@ struct format_compiler {
       items, stream, cudf::get_current_device_resource_ref());
   }
 
-  device_span<format_item const> format_items() { return device_span<format_item const>(d_items); }
+  cuda::std::span<format_item const> format_items()
+  {
+    return cuda::std::span<format_item const>(d_items);
+  }
 
   [[nodiscard]] int8_t subsecond_precision() const { return specifiers.at('f'); }
 };
@@ -188,7 +191,7 @@ __device__ cuda::std::pair<int32_t, size_type> parse_int(char const* str, size_t
 template <typename T>
 struct parse_datetime {
   column_device_view const d_strings;
-  device_span<format_item const> const d_format_items;
+  cuda::std::span<format_item const> const d_format_items;
   int8_t const subsecond_precision;
 
   /**
@@ -461,7 +464,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
  */
 struct check_datetime_format {
   column_device_view const d_strings;
-  device_span<format_item const> const d_format_items;
+  cuda::std::span<format_item const> const d_format_items;
 
   /**
    * @brief Check the specified characters are between ['0','9'].
@@ -747,7 +750,7 @@ template <typename T>
 struct datetime_formatter_fn {
   column_device_view const d_timestamps;
   column_device_view const d_format_names;
-  device_span<format_item const> const d_format_items;
+  cuda::std::span<format_item const> const d_format_items;
   size_type* d_sizes{};
   char* d_chars{};
   cudf::detail::input_offsetalator d_offsets;
@@ -1098,7 +1101,7 @@ struct dispatch_from_timestamps_fn {
   template <typename T>
   strings_children operator()(column_device_view const& d_timestamps,
                               column_device_view const& d_format_names,
-                              device_span<format_item const> d_format_items,
+                              cuda::std::span<format_item const> d_format_items,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr) const
     requires(cudf::is_timestamp<T>())

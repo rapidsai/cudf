@@ -48,8 +48,8 @@ struct DistinctJoinTest : public cudf::test::BaseFixture {
   {
     auto const& [probe_join_indices, build_join_indices] = result;
 
-    auto build_indices_span = cudf::device_span<cudf::size_type const>{*build_join_indices};
-    auto probe_indices_span = cudf::device_span<cudf::size_type const>{*probe_join_indices};
+    auto build_indices_span = cuda::std::span<cudf::size_type const>{*build_join_indices};
+    auto probe_indices_span = cuda::std::span<cudf::size_type const>{*probe_join_indices};
 
     auto build_indices_col = cudf::column_view{build_indices_span};
     auto probe_indices_col = cudf::column_view{probe_indices_span};

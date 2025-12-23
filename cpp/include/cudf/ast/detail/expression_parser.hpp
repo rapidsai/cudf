@@ -70,11 +70,11 @@ using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
  *
  */
 struct expression_device_view {
-  device_span<detail::device_data_reference const> data_references;
-  device_span<generic_scalar_device_view const> literals;
-  device_span<ast_operator const> operators;
-  device_span<cudf::size_type const> operator_arities;
-  device_span<cudf::size_type const> operator_source_indices;
+  cuda::std::span<detail::device_data_reference const> data_references;
+  cuda::std::span<generic_scalar_device_view const> literals;
+  cuda::std::span<ast_operator const> operators;
+  cuda::std::span<cudf::size_type const> operator_arities;
+  cuda::std::span<cudf::size_type const> operator_source_indices;
   cudf::size_type num_intermediates;
 };
 

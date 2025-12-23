@@ -523,7 +523,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
 
   auto [result_bitmask, null_count] =
     profile.get_null_probability().has_value()
-      ? cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), stream)
+      ? cudf::bools_to_mask(cuda::std::span<bool const>(null_mask), stream)
       : std::pair{std::make_unique<rmm::device_buffer>(), 0};
 
   return cudf::make_strings_column(num_rows,
@@ -593,7 +593,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
 
   auto [result_bitmask, null_count] =
     profile.get_null_probability().has_value()
-      ? cudf::bools_to_mask(cudf::device_span<bool const>(null_mask))
+      ? cudf::bools_to_mask(cuda::std::span<bool const>(null_mask))
       : std::pair{std::make_unique<rmm::device_buffer>(), 0};
 
   return std::make_unique<cudf::column>(
@@ -639,7 +639,7 @@ std::unique_ptr<cudf::column> create_random_column<T>(data_profile const& profil
       random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_probability().value()});
     auto null_mask = valid_dist(engine, num_rows);
     auto [result_bitmask, null_count] =
-      cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), cudf::get_default_stream());
+      cudf::bools_to_mask(cuda::std::span<bool const>(null_mask), cudf::get_default_stream());
     col->set_null_mask(std::move(*result_bitmask.release()), null_count);
   }
 
@@ -734,7 +734,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
       auto [null_mask, null_count] = [&]() {
         if (profile.get_null_probability().has_value()) {
           auto valids = valid_dist(engine, num_rows);
-          return cudf::bools_to_mask(cudf::device_span<bool const>(valids),
+          return cudf::bools_to_mask(cuda::std::span<bool const>(valids),
                                      cudf::get_default_stream());
         }
         return std::pair{std::make_unique<rmm::device_buffer>(), 0};
@@ -849,7 +849,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
                                                          0);
 
     auto [null_mask, null_count] = profile.get_null_probability().has_value()
-                                     ? cudf::bools_to_mask(cudf::device_span<bool const>(valids))
+                                     ? cudf::bools_to_mask(cuda::std::span<bool const>(valids))
                                      : std::pair{std::make_unique<rmm::device_buffer>(), 0};
 
     list_column = cudf::make_lists_column(current_num_rows,

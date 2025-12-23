@@ -75,9 +75,9 @@ struct quantiles_functor {
   template <typename T>
   std::unique_ptr<column> operator()(column_view const& values,
                                      column_view const& group_sizes,
-                                     cudf::device_span<size_type const> group_offsets,
+                                     cuda::std::span<size_type const> group_offsets,
                                      size_type const num_groups,
-                                     device_span<double const> quantile,
+                                     cuda::std::span<double const> quantile,
                                      interpolation interpolation,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
@@ -148,7 +148,7 @@ struct quantiles_functor {
 // TODO: add optional check for is_sorted. Use context.flag_sorted
 std::unique_ptr<column> group_quantiles(column_view const& values,
                                         column_view const& group_sizes,
-                                        cudf::device_span<size_type const> group_offsets,
+                                        cuda::std::span<size_type const> group_offsets,
                                         size_type const num_groups,
                                         std::vector<double> const& quantiles,
                                         interpolation interp,

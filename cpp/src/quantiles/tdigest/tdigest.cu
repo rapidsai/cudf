@@ -59,7 +59,7 @@ struct make_centroid {
 
 // kernel for computing percentiles on input tdigest (mean, weight) centroid data.
 template <typename CentroidIter>
-CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest_offsets,
+CUDF_KERNEL void compute_percentiles_kernel(cuda::std::span<size_type const> tdigest_offsets,
                                             column_device_view percentiles,
                                             CentroidIter centroids_,
                                             double const* min_,

@@ -388,13 +388,13 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
       cudf::hash_join hash_joiner(right_equality, compare_nulls);
       auto hash_join_result = hash_joiner.inner_join(left_equality);
 
-      auto hash_filter_result = cudf::filter_join_indices(
-        left_conditional,
-        right_conditional,
-        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
-        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
-        predicate,
-        cudf::join_kind::INNER_JOIN);
+      auto hash_filter_result =
+        cudf::filter_join_indices(left_conditional,
+                                  right_conditional,
+                                  cuda::std::span<cudf::size_type const>(*hash_join_result.first),
+                                  cuda::std::span<cudf::size_type const>(*hash_join_result.second),
+                                  predicate,
+                                  cudf::join_kind::INNER_JOIN);
 
       // Verify both approaches produce the same results
       this->compare_join_results(mixed_result, hash_filter_result);
@@ -650,8 +650,8 @@ TYPED_TEST(MixedInnerJoinTest, SizeBasedInnerJoinRegression)
   auto [output_size, matches_per_row] =
     cudf::mixed_inner_join_size(left_equality, right_equality, left_table, right_table, condition);
 
-  cudf::device_span<cudf::size_type const> matches_span{matches_per_row->data(),
-                                                        matches_per_row->size()};
+  cuda::std::span<cudf::size_type const> matches_span{matches_per_row->data(),
+                                                      matches_per_row->size()};
   auto size_data = std::make_pair(output_size, matches_span);
 
   auto [left_indices, right_indices] = cudf::mixed_inner_join(left_equality,
@@ -739,13 +739,13 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
       cudf::hash_join hash_joiner(right_equality, compare_nulls);
       auto hash_join_result = hash_joiner.left_join(left_equality);
 
-      auto hash_filter_result = cudf::filter_join_indices(
-        left_conditional,
-        right_conditional,
-        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
-        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
-        predicate,
-        cudf::join_kind::LEFT_JOIN);
+      auto hash_filter_result =
+        cudf::filter_join_indices(left_conditional,
+                                  right_conditional,
+                                  cuda::std::span<cudf::size_type const>(*hash_join_result.first),
+                                  cuda::std::span<cudf::size_type const>(*hash_join_result.second),
+                                  predicate,
+                                  cudf::join_kind::LEFT_JOIN);
 
       // Verify both approaches produce the same results
       this->compare_join_results(mixed_result, hash_filter_result);
@@ -831,8 +831,8 @@ TYPED_TEST(MixedLeftJoinTest, SizeBasedLeftJoinRegression)
   auto [output_size, matches_per_row] =
     cudf::mixed_left_join_size(left_equality, right_equality, left_table, right_table, condition);
 
-  cudf::device_span<cudf::size_type const> matches_span{matches_per_row->data(),
-                                                        matches_per_row->size()};
+  cuda::std::span<cudf::size_type const> matches_span{matches_per_row->data(),
+                                                      matches_per_row->size()};
   auto size_data = std::make_pair(output_size, matches_span);
 
   auto [left_indices, right_indices] = cudf::mixed_left_join(left_equality,
@@ -873,13 +873,13 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
       cudf::hash_join hash_joiner(right_equality, compare_nulls);
       auto hash_join_result = hash_joiner.full_join(left_equality);
 
-      auto hash_filter_result = cudf::filter_join_indices(
-        left_conditional,
-        right_conditional,
-        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
-        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
-        predicate,
-        cudf::join_kind::FULL_JOIN);
+      auto hash_filter_result =
+        cudf::filter_join_indices(left_conditional,
+                                  right_conditional,
+                                  cuda::std::span<cudf::size_type const>(*hash_join_result.first),
+                                  cuda::std::span<cudf::size_type const>(*hash_join_result.second),
+                                  predicate,
+                                  cudf::join_kind::FULL_JOIN);
 
       // Verify both approaches produce the same results
       this->compare_join_results(mixed_result, hash_filter_result);
@@ -1187,9 +1187,9 @@ TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMapLarge)
 
     // Copy data back to host for comparisons
     auto expected_indices = cudf::detail::make_std_vector_async<int32_t>(
-      cudf::device_span<int32_t>(*expected_mixed_semi_join), cudf::get_default_stream());
+      cuda::std::span<int32_t>(*expected_mixed_semi_join), cudf::get_default_stream());
     auto result_indices = cudf::detail::make_std_vector<int32_t>(
-      cudf::device_span<int32_t>(*mixed_semi_join), cudf::get_default_stream());
+      cuda::std::span<int32_t>(*mixed_semi_join), cudf::get_default_stream());
 
     // Sort the indices for 1-1 comparison
     std::sort(expected_indices.begin(), expected_indices.end());
@@ -1226,9 +1226,9 @@ TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMapLarge)
 
     // Copy data back to host for comparisons
     auto expected_indices = cudf::detail::make_std_vector_async<int32_t>(
-      cudf::device_span<int32_t>(*expected_mixed_semi_join), cudf::get_default_stream());
+      cuda::std::span<int32_t>(*expected_mixed_semi_join), cudf::get_default_stream());
     auto result_indices = cudf::detail::make_std_vector<int32_t>(
-      cudf::device_span<int32_t>(*mixed_semi_join), cudf::get_default_stream());
+      cuda::std::span<int32_t>(*mixed_semi_join), cudf::get_default_stream());
 
     // Sort the indices for 1-1 comparison
     std::sort(expected_indices.begin(), expected_indices.end());

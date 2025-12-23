@@ -61,7 +61,7 @@ struct var_transform {
 template <typename ResultType, typename Iterator>
 void reduce_by_key_fn(column_device_view const& values,
                       Iterator values_iter,
-                      cudf::device_span<size_type const> group_labels,
+                      cuda::std::span<size_type const> group_labels,
                       ResultType const* d_means,
                       size_type const* d_group_sizes,
                       size_type ddof,
@@ -90,7 +90,7 @@ struct var_functor {
   std::unique_ptr<column> operator()(column_view const& values,
                                      column_view const& group_means,
                                      column_view const& group_sizes,
-                                     cudf::device_span<size_type const> group_labels,
+                                     cuda::std::span<size_type const> group_labels,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
@@ -163,7 +163,7 @@ struct var_functor {
 std::unique_ptr<column> group_var(column_view const& values,
                                   column_view const& group_means,
                                   column_view const& group_sizes,
-                                  cudf::device_span<size_type const> group_labels,
+                                  cuda::std::span<size_type const> group_labels,
                                   size_type ddof,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)

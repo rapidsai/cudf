@@ -154,7 +154,7 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
   // make sure dictionary was used
-  auto const source = cudf::io::datasource::create(buffer_span);
+  auto const source = cudf::io::datasource::create(cudf::host_span<std::byte const>{buffer_span});
   cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);

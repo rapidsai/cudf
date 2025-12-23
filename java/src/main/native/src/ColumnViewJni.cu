@@ -160,7 +160,7 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
   // being called in `create_map` in spark-rapids.
   // Other options comparing nulls and NaNs are set as all-equal.
   auto out_columns = cudf::detail::stable_distinct(
-                       table_view{{column_view{cudf::device_span<cudf::size_type const>{labels}},
+                       table_view{{column_view{cuda::std::span<cudf::size_type const>{labels}},
                                    child.child(0),
                                    child.child(1)}},  // input table
                        std::vector<size_type>{0, 1},  // key columns

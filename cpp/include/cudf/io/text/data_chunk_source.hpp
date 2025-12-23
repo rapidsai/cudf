@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -50,7 +50,7 @@ class device_data_chunk {
    *
    * @return A span over the underlying device data
    */
-  virtual operator device_span<char const>() const = 0;
+  virtual operator cuda::std::span<char const>() const = 0;
 };
 
 /**

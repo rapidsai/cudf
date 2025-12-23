@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -193,7 +193,7 @@ TEST_F(LogicalStackTest, GroundTruth)
   rmm::device_uvector<SymbolT> d_stack_ops{stack_symbols.size(), stream_view};
   rmm::device_uvector<SymbolOffsetT> d_stack_op_indexes{stack_op_indexes.size(), stream_view};
   cudf::detail::hostdevice_vector<SymbolT> top_of_stack_gpu{string_size, stream_view};
-  cudf::device_span<SymbolOffsetT> d_stack_op_idx_span{d_stack_op_indexes};
+  cuda::std::span<SymbolOffsetT> d_stack_op_idx_span{d_stack_op_indexes};
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_stack_ops.data(),
                                 stack_symbols.data(),

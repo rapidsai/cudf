@@ -92,10 +92,10 @@ void print_tree(host_span<SymbolT const> input,
  */
 std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 reduce_to_column_tree(tree_meta_t const& tree,
-                      device_span<NodeIndexT const> original_col_ids,
-                      device_span<NodeIndexT const> sorted_col_ids,
-                      device_span<NodeIndexT const> ordered_node_ids,
-                      device_span<size_type const> row_offsets,
+                      cuda::std::span<NodeIndexT const> original_col_ids,
+                      cuda::std::span<NodeIndexT const> sorted_col_ids,
+                      cuda::std::span<NodeIndexT const> ordered_node_ids,
+                      cuda::std::span<size_type const> row_offsets,
                       bool is_array_of_arrays,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream)
@@ -282,7 +282,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
 
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_column_to_cudf_column(
   device_json_column& json_col,
-  device_span<SymbolT const> d_input,
+  cuda::std::span<SymbolT const> d_input,
   cudf::io::parse_options const& options,
   bool prune_columns,
   std::optional<schema_element> schema,
@@ -504,7 +504,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   }
 }
 
-table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
+table_with_metadata device_parse_nested_json(cuda::std::span<SymbolT const> d_input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
@@ -535,7 +535,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     auto const size_to_copy = std::min(size_t{2}, gpu_tree.node_categories.size());
     if (size_to_copy == 0) return false;
     auto const h_node_categories = cudf::detail::make_host_vector(
-      device_span<NodeT const>{gpu_tree.node_categories.data(), size_to_copy}, stream);
+      cuda::std::span<NodeT const>{gpu_tree.node_categories.data(), size_to_copy}, stream);
 
     if (options.is_enabled_lines()) return h_node_categories[0] == NC_LIST;
     return h_node_categories.size() >= 2 and h_node_categories[0] == NC_LIST and

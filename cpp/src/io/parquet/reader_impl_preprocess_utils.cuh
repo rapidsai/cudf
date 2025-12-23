@@ -93,7 +93,7 @@ void generate_depth_remappings(
  * This replaces some preprocessing steps, such as page string size calculation.
  */
 void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
-                       device_span<PageInfo> pages,
+                       cuda::std::span<PageInfo> pages,
                        rmm::cuda_stream_view stream);
 
 /**
@@ -119,7 +119,7 @@ std::string encoding_to_string(Encoding encoding);
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns Human readable string with unsupported encodings
  */
-[[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
+[[nodiscard]] std::string list_unsupported_encodings(cuda::std::span<PageInfo const> pages,
                                                      rmm::cuda_stream_view stream);
 
 /**
@@ -131,7 +131,7 @@ std::string encoding_to_string(Encoding encoding);
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void decode_page_headers(pass_intermediate_data& pass,
-                         device_span<PageInfo> unsorted_pages,
+                         cuda::std::span<PageInfo> unsorted_pages,
                          bool has_page_index,
                          rmm::cuda_stream_view stream);
 
@@ -162,8 +162,8 @@ struct page_index_info {
  * @brief Functor to copy page_index_info into the PageInfo struct
  */
 struct copy_page_info {
-  device_span<page_index_info const> page_indexes;
-  device_span<PageInfo> pages;
+  cuda::std::span<page_index_info const> page_indexes;
+  cuda::std::span<PageInfo> pages;
 
   __device__ constexpr void operator()(size_type idx)
   {
@@ -185,8 +185,8 @@ struct copy_page_info {
  * @brief Functor to set the string dictionary index counts for a given data page
  */
 struct set_str_dict_index_count {
-  device_span<size_t> str_dict_index_count;
-  device_span<ColumnChunkDesc const> chunks;
+  cuda::std::span<size_t> str_dict_index_count;
+  cuda::std::span<ColumnChunkDesc const> chunks;
 
   __device__ constexpr inline void operator()(PageInfo const& page)
   {
@@ -204,8 +204,8 @@ struct set_str_dict_index_count {
  */
 struct set_str_dict_index_ptr {
   string_index_pair* const base;
-  device_span<size_t const> str_dict_index_offsets;
-  device_span<ColumnChunkDesc> chunks;
+  cuda::std::span<size_t const> str_dict_index_offsets;
+  cuda::std::span<ColumnChunkDesc> chunks;
 
   __device__ constexpr inline void operator()(size_t i)
   {
@@ -220,7 +220,7 @@ struct set_str_dict_index_ptr {
  * @brief Functor to compute an estimated row count for list pages
  */
 struct set_list_row_count_estimate {
-  device_span<ColumnChunkDesc const> chunks;
+  cuda::std::span<ColumnChunkDesc const> chunks;
 
   __device__ constexpr inline void operator()(PageInfo& page)
   {
@@ -247,8 +247,8 @@ struct set_list_row_count_estimate {
  * @brief Functor to set the expected row count on the final page for all columns
  */
 struct set_final_row_count {
-  device_span<PageInfo> pages;
-  device_span<ColumnChunkDesc const> chunks;
+  cuda::std::span<PageInfo> pages;
+  cuda::std::span<ColumnChunkDesc const> chunks;
 
   __device__ inline void operator()(size_t i)
   {
@@ -269,8 +269,8 @@ struct set_final_row_count {
  * @brief Functor to set the page.num_rows for all pages if page index is available
  */
 struct compute_page_num_rows_from_chunk_rows {
-  device_span<PageInfo> pages;
-  device_span<ColumnChunkDesc const> chunks;
+  cuda::std::span<PageInfo> pages;
+  cuda::std::span<ColumnChunkDesc const> chunks;
 
   __device__ constexpr inline void operator()(size_t i)
   {
@@ -482,9 +482,9 @@ struct page_offset_output_iter {
  * @brief Functor to update chunk_row field from pass page to subpass page
  */
 struct update_subpass_chunk_row {
-  device_span<PageInfo> pass_pages;
-  device_span<PageInfo> subpass_pages;
-  device_span<size_t> page_src_index;
+  cuda::std::span<PageInfo> pass_pages;
+  cuda::std::span<PageInfo> subpass_pages;
+  cuda::std::span<size_t> page_src_index;
 
   __device__ constexpr inline void operator()(size_t i)
   {
@@ -496,9 +496,9 @@ struct update_subpass_chunk_row {
  * @brief Functor to update num_rows field from pass page to subpass page
  */
 struct update_pass_num_rows {
-  device_span<PageInfo> pass_pages;
-  device_span<PageInfo> subpass_pages;
-  device_span<size_t> page_src_index;
+  cuda::std::span<PageInfo> pass_pages;
+  cuda::std::span<PageInfo> subpass_pages;
+  cuda::std::span<size_t> page_src_index;
 
   __device__ constexpr inline void operator()(size_t i)
   {

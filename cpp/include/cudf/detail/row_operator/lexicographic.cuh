@@ -112,7 +112,7 @@ using optional_dremel_view = cuda::std::optional<detail::dremel_device_view cons
 // significant performance drop.  As a result, there is some minor tension in
 // the current design between the presence of this parameter and the way that
 // the Dremel data is passed around, first as a
-// std::optional<device_span<dremel_device_view>> in the
+// std::optional<cuda::std::span<dremel_device_view>> in the
 // preprocessed_table/device_row_comparator (which is always valid when
 // has_nested_columns and is otherwise invalid) that is then unpacked to a
 // cuda::std::optional<dremel_device_view> at the element_comparator level (which
@@ -183,12 +183,12 @@ class device_row_comparator {
     Nullate check_nulls,
     table_device_view lhs,
     table_device_view rhs,
-    device_span<detail::dremel_device_view const> l_dremel_device_views,
-    device_span<detail::dremel_device_view const> r_dremel_device_views,
-    cuda::std::optional<device_span<int const>> depth                  = cuda::std::nullopt,
-    cuda::std::optional<device_span<order const>> column_order         = cuda::std::nullopt,
-    cuda::std::optional<device_span<null_order const>> null_precedence = cuda::std::nullopt,
-    PhysicalElementComparator comparator                               = {}) noexcept
+    cuda::std::span<detail::dremel_device_view const> l_dremel_device_views,
+    cuda::std::span<detail::dremel_device_view const> r_dremel_device_views,
+    cuda::std::optional<cuda::std::span<int const>> depth                  = cuda::std::nullopt,
+    cuda::std::optional<cuda::std::span<order const>> column_order         = cuda::std::nullopt,
+    cuda::std::optional<cuda::std::span<null_order const>> null_precedence = cuda::std::nullopt,
+    PhysicalElementComparator comparator                                   = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _l_dremel(l_dremel_device_views),
@@ -224,9 +224,9 @@ class device_row_comparator {
     Nullate check_nulls,
     table_device_view lhs,
     table_device_view rhs,
-    cuda::std::optional<device_span<order const>> column_order         = cuda::std::nullopt,
-    cuda::std::optional<device_span<null_order const>> null_precedence = cuda::std::nullopt,
-    PhysicalElementComparator comparator                               = {}) noexcept
+    cuda::std::optional<cuda::std::span<order const>> column_order         = cuda::std::nullopt,
+    cuda::std::optional<cuda::std::span<null_order const>> null_precedence = cuda::std::nullopt,
+    PhysicalElementComparator comparator                                   = {}) noexcept
     requires(nested_disable)
     : _lhs{lhs},
       _rhs{rhs},
@@ -521,12 +521,12 @@ class device_row_comparator {
  private:
   table_device_view const _lhs;
   table_device_view const _rhs;
-  device_span<detail::dremel_device_view const> const _l_dremel;
-  device_span<detail::dremel_device_view const> const _r_dremel;
+  cuda::std::span<detail::dremel_device_view const> const _l_dremel;
+  cuda::std::span<detail::dremel_device_view const> const _r_dremel;
   Nullate const _check_nulls;
-  cuda::std::optional<device_span<int const>> const _depth;
-  cuda::std::optional<device_span<order const>> const _column_order;
-  cuda::std::optional<device_span<null_order const>> const _null_precedence;
+  cuda::std::optional<cuda::std::span<int const>> const _depth;
+  cuda::std::optional<cuda::std::span<order const>> const _column_order;
+  cuda::std::optional<cuda::std::span<null_order const>> const _null_precedence;
   PhysicalElementComparator const _comparator;
 };
 
@@ -753,9 +753,9 @@ struct preprocessed_table {
    * @return Device array containing respective column orders. If no explicit column orders were
    * specified during the creation of this object then this will be `nullopt`.
    */
-  [[nodiscard]] cuda::std::optional<device_span<order const>> column_order() const
+  [[nodiscard]] cuda::std::optional<cuda::std::span<order const>> column_order() const
   {
-    return _column_order.size() ? cuda::std::optional<device_span<order const>>(_column_order)
+    return _column_order.size() ? cuda::std::optional<cuda::std::span<order const>>(_column_order)
                                 : cuda::std::nullopt;
   }
 
@@ -766,10 +766,10 @@ struct preprocessed_table {
    * @return Device array containing respective column null precedence. If no explicit column null
    * precedences were specified during the creation of this object then this will be `nullopt`.
    */
-  [[nodiscard]] cuda::std::optional<device_span<null_order const>> null_precedence() const
+  [[nodiscard]] cuda::std::optional<cuda::std::span<null_order const>> null_precedence() const
   {
     return _null_precedence.size()
-             ? cuda::std::optional<device_span<null_order const>>(_null_precedence)
+             ? cuda::std::optional<cuda::std::span<null_order const>>(_null_precedence)
              : cuda::std::nullopt;
   }
 
@@ -778,19 +778,19 @@ struct preprocessed_table {
    *
    * @see struct_linearize()
    *
-   * @return std::optional<device_span<int const>> Device array containing respective column depths.
-   * If there are no nested columns in the table then this will be `nullopt`.
+   * @return std::optional<cuda::std::span<int const>> Device array containing respective column
+   * depths. If there are no nested columns in the table then this will be `nullopt`.
    */
-  [[nodiscard]] cuda::std::optional<device_span<int const>> depths() const
+  [[nodiscard]] cuda::std::optional<cuda::std::span<int const>> depths() const
   {
-    return _depths.size() ? cuda::std::optional<device_span<int const>>(_depths)
+    return _depths.size() ? cuda::std::optional<cuda::std::span<int const>>(_depths)
                           : cuda::std::nullopt;
   }
 
-  [[nodiscard]] device_span<detail::dremel_device_view const> dremel_device_views() const
+  [[nodiscard]] cuda::std::span<detail::dremel_device_view const> dremel_device_views() const
   {
     if (_dremel_device_views.has_value()) {
-      return device_span<detail::dremel_device_view const>(*_dremel_device_views);
+      return cuda::std::span<detail::dremel_device_view const>(*_dremel_device_views);
     } else {
       return {};
     }

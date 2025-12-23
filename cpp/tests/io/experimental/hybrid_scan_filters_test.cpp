@@ -436,7 +436,9 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
 
     // Copy the row mask to the host and count the number of surviving rows
     auto const host_row_mask = cudf::detail::make_host_vector<bool>(
-      {row_mask->view().data<bool>(), static_cast<size_t>(row_mask->view().size())}, stream);
+      cuda::std::span<bool const>(row_mask->view().data<bool>(),
+                                  static_cast<size_t>(row_mask->view().size())),
+      stream);
     EXPECT_EQ(std::count(host_row_mask.begin(), host_row_mask.end(), true),
               expected_surviving_rows);
   };

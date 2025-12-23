@@ -115,7 +115,7 @@ struct null_count_back_copier {
  * @brief Test if the given page is in a string column
  */
 __device__ constexpr bool is_string_col(PageInfo const& page,
-                                        device_span<ColumnChunkDesc const> chunks)
+                                        cuda::std::span<ColumnChunkDesc const> chunks)
 {
   if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { return false; }
   auto const& col = chunks[page.chunk_idx];
@@ -1114,7 +1114,7 @@ enum class page_processing_stage {
 template <typename Filter>
 inline __device__ bool setup_local_page_info(page_state_s* const s,
                                              PageInfo const* p,
-                                             device_span<ColumnChunkDesc const> chunks,
+                                             cuda::std::span<ColumnChunkDesc const> chunks,
                                              size_t min_row,
                                              size_t num_rows,
                                              Filter filter,

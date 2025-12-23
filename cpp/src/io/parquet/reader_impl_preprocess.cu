@@ -292,8 +292,8 @@ namespace {
  * on row counts.
  */
 struct compute_page_offset_count {
-  device_span<PageInfo const> pages;
-  device_span<ColumnChunkDesc const> chunks;
+  cuda::std::span<PageInfo const> pages;
+  cuda::std::span<ColumnChunkDesc const> chunks;
   size_t skip_rows;
   size_t num_rows;
 
@@ -853,7 +853,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   // if we have any list columns that need further processing.
   bool has_lists = false;
   // Validity Buffer is a uint32_t pointer
-  std::vector<cudf::device_span<cudf::bitmask_type>> nullmask_bufs;
+  std::vector<cuda::std::span<cudf::bitmask_type>> nullmask_bufs;
 
   for (const auto& input_col : _input_columns) {
     size_t const max_depth = input_col.nesting_depth();

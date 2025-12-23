@@ -806,7 +806,9 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
   std::string const host_chars =
     std::accumulate(host_strings.begin(), host_strings.end(), std::string(""));
   auto d_chars = cudf::detail::make_device_uvector_async(
-    host_chars, stream, cudf::get_current_device_resource_ref());
+    cudf::host_span<char const>(host_chars.data(), host_chars.size()),
+    stream,
+    cudf::get_current_device_resource_ref());
   std::vector<cudf::size_type> offsets(host_strings.size() + 1, 0);
   std::transform_inclusive_scan(host_strings.begin(),
                                 host_strings.end(),
@@ -860,7 +862,7 @@ void write_chunked(data_sink* out_sink,
   } else {
     // copy the bytes to host to write them out
     auto const h_bytes = cudf::detail::make_host_vector(
-      device_span<char const>(ptr_all_bytes, total_num_bytes), stream);
+      cuda::std::span<char const>(ptr_all_bytes, total_num_bytes), stream);
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);
   }

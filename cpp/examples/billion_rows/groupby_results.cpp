@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -72,7 +72,7 @@ std::unique_ptr<cudf::table> compute_final_aggregates(
   auto const start    = cudf::numeric_scalar<cudf::size_type>(0, true, stream);
   auto const step     = cudf::numeric_scalar<cudf::size_type>(agg_data.size(), true, stream);
   auto seg_offsets    = cudf::sequence(size, start, step, stream);
-  auto offsets_span   = cudf::device_span<cudf::size_type const>(seg_offsets->view());
+  auto offsets_span   = cuda::std::span<cudf::size_type const>(seg_offsets->view());
 
   // compute the min/max for each key by using segmented reduce
   auto min_agg = cudf::make_min_aggregation<cudf::segmented_reduce_aggregation>();

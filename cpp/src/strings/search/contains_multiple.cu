@@ -95,7 +95,7 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
                                        size_type const* d_offsets,
                                        size_type unique_count,
                                        bool* working_memory,
-                                       cudf::device_span<bool*> d_results)
+                                       cuda::std::span<bool*> d_results)
 {
   auto const idx     = cudf::detail::grid_1d::global_thread_id();
   auto const str_idx = idx / tile_size;

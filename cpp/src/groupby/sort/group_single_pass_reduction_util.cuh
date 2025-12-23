@@ -105,7 +105,7 @@ struct group_reduction_dispatcher {
   template <typename T>
   std::unique_ptr<column> operator()(column_view const& values,
                                      size_type num_groups,
-                                     cudf::device_span<cudf::size_type const> group_labels,
+                                     cuda::std::span<cudf::size_type const> group_labels,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
@@ -138,7 +138,7 @@ struct group_reduction_functor<
   std::enable_if_t<is_group_reduction_supported<K, T>() && !cudf::is_nested<T>()>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
-                                        cudf::device_span<cudf::size_type const> group_labels,
+                                        cuda::std::span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
   {
@@ -206,7 +206,7 @@ struct group_reduction_functor<
   std::enable_if_t<is_group_reduction_supported<K, T>() && cudf::is_nested<T>()>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
-                                        cudf::device_span<cudf::size_type const> group_labels,
+                                        cuda::std::span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
   {

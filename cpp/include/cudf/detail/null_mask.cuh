@@ -67,9 +67,9 @@ __device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restri
  */
 template <int block_size, typename Binop>
 CUDF_KERNEL void offset_bitmask_binop(Binop op,
-                                      device_span<bitmask_type> destination,
-                                      device_span<bitmask_type const* const> source,
-                                      device_span<size_type const> source_begin_bits,
+                                      cuda::std::span<bitmask_type> destination,
+                                      cuda::std::span<bitmask_type const* const> source,
+                                      cuda::std::span<size_type const> source_begin_bits,
                                       size_type source_size_bits,
                                       size_type* count_ptr)
 {
@@ -240,14 +240,14 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(Binop op,
 {
   auto dest_mask = rmm::device_buffer{bitmask_allocation_size_bytes(mask_size_bits), stream, mr};
   auto null_count =
-    mask_size_bits -
-    inplace_bitmask_binop(op,
-                          device_span<bitmask_type>(static_cast<bitmask_type*>(dest_mask.data()),
-                                                    num_bitmask_words(mask_size_bits)),
-                          masks,
-                          masks_begin_bits,
-                          mask_size_bits,
-                          stream);
+    mask_size_bits - inplace_bitmask_binop(
+                       op,
+                       cuda::std::span<bitmask_type>(static_cast<bitmask_type*>(dest_mask.data()),
+                                                     num_bitmask_words(mask_size_bits)),
+                       masks,
+                       masks_begin_bits,
+                       mask_size_bits,
+                       stream);
 
   return std::pair(std::move(dest_mask), null_count);
 }
@@ -314,7 +314,7 @@ segmented_bitmask_binop(Binop op,
  */
 template <typename Binop>
 size_type inplace_bitmask_binop(Binop op,
-                                device_span<bitmask_type> dest_mask,
+                                cuda::std::span<bitmask_type> dest_mask,
                                 host_span<bitmask_type const* const> masks,
                                 host_span<size_type const> masks_begin_bits,
                                 size_type mask_size_bits,
@@ -364,7 +364,7 @@ size_type inplace_bitmask_binop(Binop op,
 template <typename Binop>
 rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
   Binop op,
-  device_span<bitmask_type*> dest_masks,
+  cuda::std::span<bitmask_type*> dest_masks,
   size_type dest_mask_size,
   host_span<bitmask_type const* const> masks,
   host_span<size_type const> masks_begin_bits,

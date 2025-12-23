@@ -29,7 +29,7 @@ namespace detail {
  */
 template <bool is_outer, bool has_nulls>
 __device__ __forceinline__ void retrieve_matches(
-  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+  cuda::std::span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   pair_expression_equality<has_nulls> const& key_equal,
   cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
   cuda::std::pair<hash_value_type, hash_value_type> const& hash_idx,
@@ -81,7 +81,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
              bool is_outer_join,
              bool swap_tables,
              row_equality equality_probe,
-             cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+             cuda::std::span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
              cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
              cuda::std::pair<hash_value_type, hash_value_type> const* hash_indices,
              cudf::ast::detail::expression_device_view device_expression_data,
@@ -146,7 +146,7 @@ void launch_mixed_join(
   bool is_outer_join,
   bool swap_tables,
   row_equality equality_probe,
-  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+  cuda::std::span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<hash_value_type, hash_value_type> const* hash_indices,
   cudf::ast::detail::expression_device_view device_expression_data,

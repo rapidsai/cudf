@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -52,7 +52,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
 }
 
 std::unique_ptr<table> gather(table_view const& source_table,
-                              device_span<size_type const> const gather_map,
+                              cuda::std::span<size_type const> const gather_map,
                               out_of_bounds_policy bounds_policy,
                               negative_index_policy neg_indices,
                               rmm::cuda_stream_view stream,

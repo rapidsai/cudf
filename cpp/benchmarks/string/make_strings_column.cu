@@ -27,8 +27,7 @@ using string_index_pair = cuda::std::pair<char const*, cudf::size_type>;
 
 template <bool batch_construction>
 std::vector<std::unique_ptr<cudf::column>> make_strings_columns(
-  std::vector<cudf::device_span<string_index_pair const>> const& input,
-  rmm::cuda_stream_view stream)
+  std::vector<cuda::std::span<string_index_pair const>> const& input, rmm::cuda_stream_view stream)
 {
   if constexpr (batch_construction) {
     return cudf::make_strings_column_batch(input, stream);
@@ -59,7 +58,7 @@ static void BM_make_strings_column_batch(nvbench::state& state)
 
   auto const stream = cudf::get_default_stream();
   auto input_data   = std::vector<rmm::device_uvector<string_index_pair>>{};
-  auto input        = std::vector<cudf::device_span<string_index_pair const>>{};
+  auto input        = std::vector<cuda::std::span<string_index_pair const>>{};
   input_data.reserve(batch_size);
   input.reserve(batch_size);
   for (auto const& cv : data_table->view()) {

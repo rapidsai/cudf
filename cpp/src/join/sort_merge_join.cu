@@ -50,7 +50,7 @@ struct mapping_functor {
 struct list_nonnull_filter {
   bitmask_type* const validity_mask;
   bitmask_type const* const reduced_validity_mask;
-  device_span<size_type const> child_positions;
+  cuda::std::span<size_type const> child_positions;
   size_type const subset_offset;
   __device__ void operator()(size_type idx) const noexcept
   {
@@ -314,7 +314,7 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
                             reinterpret_cast<bitmask_type const*>(mask)};
           std::vector<size_type> begin_bits{0, 0};
           cudf::detail::inplace_bitmask_and(
-            device_span<bitmask_type>(mask, num_bitmask_words(num_rows)),
+            cuda::std::span<bitmask_type>(mask, num_bitmask_words(num_rows)),
             masks,
             begin_bits,
             num_rows,
@@ -425,8 +425,8 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
   return table_mapping;
 }
 
-void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices,
-                                          device_span<size_type> larger_indices,
+void sort_merge_join::postprocess_indices(cuda::std::span<size_type> smaller_indices,
+                                          cuda::std::span<size_type> larger_indices,
                                           rmm::cuda_stream_view stream)
 {
   if (compare_nulls == null_equality::UNEQUAL) {
@@ -439,7 +439,7 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
                         larger_indices.begin(),
                         larger_indices.end(),
                         larger_indices.begin(),
-                        mapping_functor<device_span<size_type>>{left_mapping});
+                        mapping_functor<cuda::std::span<size_type>>{left_mapping});
     }
     if (is_right_nullable) {
       auto right_mapping = preprocessed_right.map_table_to_unprocessed(stream);
@@ -447,7 +447,7 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
                         smaller_indices.begin(),
                         smaller_indices.end(),
                         smaller_indices.begin(),
-                        mapping_functor<device_span<size_type>>{right_mapping});
+                        mapping_functor<cuda::std::span<size_type>>{right_mapping});
     }
   }
 }

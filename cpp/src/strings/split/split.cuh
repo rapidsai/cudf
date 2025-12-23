@@ -104,8 +104,8 @@ struct base_split_tokenizer {
 
     auto const d_str_offsets = get_string_offsets(d_strings, idx);
     auto const delimiters =
-      cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
-                                       d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
+      cuda::std::span<int64_t const>(d_positions + d_delimiter_offsets[idx],
+                                     d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
 
     size_type token_count = 1;  // all strings will have at least one token
     auto last_pos         = d_str_offsets.first - delimiter_size;
@@ -145,14 +145,14 @@ struct base_split_tokenizer {
     if (d_strings.is_null(idx)) { return; }
 
     auto const d_tokens =  // this string's tokens output
-      cudf::device_span<string_index_pair>(d_all_tokens + d_tokens_offsets[idx],
-                                           d_tokens_offsets[idx + 1] - d_tokens_offsets[idx]);
+      cuda::std::span<string_index_pair>(d_all_tokens + d_tokens_offsets[idx],
+                                         d_tokens_offsets[idx + 1] - d_tokens_offsets[idx]);
 
     auto const d_str_offsets = get_string_offsets(d_strings, idx);
 
     auto const delimiters =
-      cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
-                                       d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
+      cuda::std::span<int64_t const>(d_positions + d_delimiter_offsets[idx],
+                                     d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
 
     auto& derived = static_cast<Derived const&>(*this);
     derived.process_tokens(d_str_offsets.first, d_str_offsets.second, delimiters, d_tokens);
@@ -187,8 +187,8 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
    */
   __device__ void process_tokens(int64_t pos_begin,
                                  int64_t pos_end,
-                                 device_span<int64_t const> d_delimiters,
-                                 device_span<string_index_pair> d_tokens) const
+                                 cuda::std::span<int64_t const> d_delimiters,
+                                 cuda::std::span<string_index_pair> d_tokens) const
   {
     auto const base_ptr = d_strings.head<char>();  // d_delimiters, pos_begin/end based on this ptr
     auto const token_count = static_cast<size_type>(d_tokens.size());
@@ -245,8 +245,8 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
    */
   __device__ void process_tokens(int64_t pos_begin,
                                  int64_t pos_end,
-                                 device_span<int64_t const> d_delimiters,
-                                 device_span<string_index_pair> d_tokens) const
+                                 cuda::std::span<int64_t const> d_delimiters,
+                                 cuda::std::span<string_index_pair> d_tokens) const
   {
     auto const base_ptr = d_strings.head<char>();  // d_delimiters, pos_begin/end based on this ptr
     auto const token_count = static_cast<size_type>(d_tokens.size());
@@ -301,8 +301,8 @@ struct base_ws_split_tokenizer {
     auto const d_str_offsets = get_string_offsets(d_strings, idx);
 
     auto const delimiters =
-      cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
-                                       d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
+      cuda::std::span<int64_t const>(d_positions + d_delimiter_offsets[idx],
+                                     d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
     if (delimiters.size() == (d_str_offsets.second - d_str_offsets.first)) { return 0; }
     if (delimiters.empty()) { return 1; }
 
@@ -325,15 +325,15 @@ struct base_ws_split_tokenizer {
     if (d_strings.is_null(idx)) { return; }
 
     auto const d_tokens =  // this string's tokens output
-      cudf::device_span<string_index_pair>(d_all_tokens + d_tokens_offsets[idx],
-                                           d_tokens_offsets[idx + 1] - d_tokens_offsets[idx]);
+      cuda::std::span<string_index_pair>(d_all_tokens + d_tokens_offsets[idx],
+                                         d_tokens_offsets[idx + 1] - d_tokens_offsets[idx]);
     if (d_tokens.empty()) { return; }
 
     auto const d_str_offsets = get_string_offsets(d_strings, idx);
 
     auto const delimiters =
-      cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
-                                       d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
+      cuda::std::span<int64_t const>(d_positions + d_delimiter_offsets[idx],
+                                     d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
 
     auto const str_bytes = d_str_offsets.second - d_str_offsets.first;
     if (delimiters.size() == str_bytes) {
@@ -370,8 +370,8 @@ struct base_ws_split_tokenizer {
 struct split_ws_tokenizer_fn : base_ws_split_tokenizer<split_ws_tokenizer_fn> {
   __device__ void process_tokens(int64_t pos_begin,
                                  int64_t pos_end,
-                                 device_span<int64_t const> delimiters,
-                                 device_span<string_index_pair> d_tokens) const
+                                 cuda::std::span<int64_t const> delimiters,
+                                 cuda::std::span<string_index_pair> d_tokens) const
   {
     auto const base_ptr = d_strings.head<char>();  // d_delimiters, pos_begin/end based on this ptr
     auto const token_count = static_cast<size_type>(d_tokens.size());
@@ -412,8 +412,8 @@ struct split_ws_tokenizer_fn : base_ws_split_tokenizer<split_ws_tokenizer_fn> {
 struct rsplit_ws_tokenizer_fn : base_ws_split_tokenizer<rsplit_ws_tokenizer_fn> {
   __device__ void process_tokens(int64_t pos_begin,
                                  int64_t pos_end,
-                                 device_span<int64_t const> delimiters,
-                                 device_span<string_index_pair> d_tokens) const
+                                 cuda::std::span<int64_t const> delimiters,
+                                 cuda::std::span<string_index_pair> d_tokens) const
   {
     auto const base_ptr = d_strings.head<char>();  // d_delimiters, pos_begin/end based on this ptr
     auto const token_count = static_cast<size_type>(d_tokens.size());

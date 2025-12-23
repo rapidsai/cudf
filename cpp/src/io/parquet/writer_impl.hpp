@@ -127,7 +127,7 @@ class writer::impl {
    * @param[out] bounce_buffer Temporary host output buffer
    */
   void write_parquet_data_to_sink(std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
-                                  device_span<EncPage const> pages,
+                                  cuda::std::span<EncPage const> pages,
                                   host_2dspan<EncColumnChunk const> chunks,
                                   host_span<size_t const> global_rowgroup_base,
                                   host_span<int const> first_rg_in_part,

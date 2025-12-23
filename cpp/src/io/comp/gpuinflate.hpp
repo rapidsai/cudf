@@ -33,9 +33,9 @@ enum class gzip_header_included { NO, YES };
  * @param[in] stream CUDA stream to use
  */
 CUDF_EXPORT
-void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
-                device_span<device_span<uint8_t> const> outputs,
-                device_span<codec_exec_result> results,
+void gpuinflate(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                cuda::std::span<codec_exec_result> results,
                 gzip_header_included parse_hdr,
                 rmm::cuda_stream_view stream);
 
@@ -46,8 +46,8 @@ void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
  * @param[out] outputs List of output buffers
  * @param[in] stream CUDA stream to use
  */
-void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> inputs,
-                                  device_span<device_span<uint8_t> const> outputs,
+void gpu_copy_uncompressed_blocks(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                                  cuda::std::span<cuda::std::span<uint8_t> const> outputs,
                                   rmm::cuda_stream_view stream);
 
 /**
@@ -62,9 +62,9 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
  * @param[in] stream CUDA stream to use
  */
 CUDF_EXPORT
-void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
-                device_span<device_span<uint8_t> const> outputs,
-                device_span<codec_exec_result> results,
+void gpu_unsnap(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                cuda::std::span<codec_exec_result> results,
                 rmm::cuda_stream_view stream);
 
 /**
@@ -91,9 +91,9 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
  * @param[in] stream CUDA stream to use
  */
 CUDF_EXPORT
-void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
-                  device_span<device_span<uint8_t> const> outputs,
-                  device_span<codec_exec_result> results,
+void gpu_debrotli(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                  cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                  cuda::std::span<codec_exec_result> results,
                   rmm::cuda_stream_view stream);
 
 /**
@@ -107,9 +107,9 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
  * @param[out] results List of output status structures
  * @param[in] stream CUDA stream to use
  */
-void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
-              device_span<device_span<uint8_t> const> outputs,
-              device_span<codec_exec_result> results,
+void gpu_snap(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+              cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+              cuda::std::span<codec_exec_result> results,
               rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::detail

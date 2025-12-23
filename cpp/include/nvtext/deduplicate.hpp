@@ -64,7 +64,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
  */
 std::unique_ptr<cudf::column> resolve_duplicates(
   cudf::strings_column_view const& input,
-  cudf::device_span<cudf::size_type const> indices,
+  cuda::std::span<cudf::size_type const> indices,
   cudf::size_type min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -93,9 +93,9 @@ std::unique_ptr<cudf::column> resolve_duplicates(
  */
 std::unique_ptr<cudf::column> resolve_duplicates_pair(
   cudf::strings_column_view const& input1,
-  cudf::device_span<cudf::size_type const> indices1,
+  cuda::std::span<cudf::size_type const> indices1,
   cudf::strings_column_view const& input2,
-  cudf::device_span<cudf::size_type const> indices2,
+  cuda::std::span<cudf::size_type const> indices2,
   cudf::size_type min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

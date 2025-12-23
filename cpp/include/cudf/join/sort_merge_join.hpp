@@ -232,8 +232,8 @@ class sort_merge_join {
    * @param larger_indices Indices for the larger processed table used to construct the join result
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  void postprocess_indices(device_span<size_type> smaller_indices,
-                           device_span<size_type> larger_indices,
+  void postprocess_indices(cuda::std::span<size_type> smaller_indices,
+                           cuda::std::span<size_type> larger_indices,
                            rmm::cuda_stream_view stream);
 
   /**

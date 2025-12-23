@@ -152,8 +152,9 @@ inline __device__ void compute_initial_large_strings_offset(page_state_s const* 
  * @param[in] page Page information
  */
 template <int block_size, bool has_lists>
-__device__ void update_string_offsets_for_pruned_pages(
-  page_state_s* state, cudf::device_span<size_t> initial_str_offsets, PageInfo const& page)
+__device__ void update_string_offsets_for_pruned_pages(page_state_s* state,
+                                                       cuda::std::span<size_t> initial_str_offsets,
+                                                       PageInfo const& page)
 {
   namespace cg = cooperative_groups;
 

@@ -32,7 +32,7 @@ struct trie_node {
 };
 
 struct trie_device_view {
-  device_span<trie_node const> _nodes;
+  cuda::std::span<trie_node const> _nodes;
 
   /**
    * @brief create a multistate which contains all partial path matches for the given token.

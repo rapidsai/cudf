@@ -64,7 +64,7 @@ std::unique_ptr<table> copy_if(table_view const& input,
   // everything selected
   if (output_size == input.num_rows()) { return std::make_unique<table>(input, stream, mr); }
 
-  auto const map = device_span<size_type const>(indices.data(), output_size);
+  auto const map = cuda::std::span<size_type const>(indices.data(), output_size);
   return cudf::detail::gather(
     input, map, out_of_bounds_policy::DONT_CHECK, negative_index_policy::NOT_ALLOWED, stream, mr);
 }

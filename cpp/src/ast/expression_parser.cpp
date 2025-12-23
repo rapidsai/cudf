@@ -118,20 +118,20 @@ void expression_parser::move_to_device(rmm::cuda_stream_view stream,
 
   // Create device pointers to components of plan
   auto device_data_buffer_ptr            = static_cast<char const*>(_device_data_buffer.data());
-  device_expression_data.data_references = device_span<detail::device_data_reference const>(
+  device_expression_data.data_references = cuda::std::span<detail::device_data_reference const>(
     reinterpret_cast<detail::device_data_reference const*>(device_data_buffer_ptr +
                                                            buffer_offsets[0]),
     _data_references.size());
-  device_expression_data.literals = device_span<generic_scalar_device_view const>(
+  device_expression_data.literals = cuda::std::span<generic_scalar_device_view const>(
     reinterpret_cast<generic_scalar_device_view const*>(device_data_buffer_ptr + buffer_offsets[1]),
     _literals.size());
-  device_expression_data.operators = device_span<ast_operator const>(
+  device_expression_data.operators = cuda::std::span<ast_operator const>(
     reinterpret_cast<ast_operator const*>(device_data_buffer_ptr + buffer_offsets[2]),
     _operators.size());
-  device_expression_data.operator_arities = device_span<cudf::size_type const>(
+  device_expression_data.operator_arities = cuda::std::span<cudf::size_type const>(
     reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[3]),
     _operators.size());
-  device_expression_data.operator_source_indices = device_span<cudf::size_type const>(
+  device_expression_data.operator_source_indices = cuda::std::span<cudf::size_type const>(
     reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[4]),
     _operator_source_indices.size());
   device_expression_data.num_intermediates = _intermediate_counter.get_max_used();

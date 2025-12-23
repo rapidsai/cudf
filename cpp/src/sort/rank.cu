@@ -115,7 +115,7 @@ template <typename TieType,
           typename TieBreaker,
           typename Transformer,
           typename TieIterator>
-void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sorted,
+void tie_break_ranks_transform(cuda::std::span<size_type const> dense_rank_sorted,
                                TieIterator tie_iter,
                                column_view const& sorted_order_view,
                                outputIterator rank_iter,
@@ -164,7 +164,7 @@ void rank_first(column_view sorted_order_view,
 }
 
 template <typename outputType>
-void rank_dense(cudf::device_span<size_type const> dense_rank_sorted,
+void rank_dense(cuda::std::span<size_type const> dense_rank_sorted,
                 column_view sorted_order_view,
                 mutable_column_view rank_mutable_view,
                 rmm::cuda_stream_view stream)
@@ -178,7 +178,7 @@ void rank_dense(cudf::device_span<size_type const> dense_rank_sorted,
 }
 
 template <typename outputType>
-void rank_min(cudf::device_span<size_type const> group_keys,
+void rank_min(cuda::std::span<size_type const> group_keys,
               column_view sorted_order_view,
               mutable_column_view rank_mutable_view,
               rmm::cuda_stream_view stream)
@@ -196,7 +196,7 @@ void rank_min(cudf::device_span<size_type const> group_keys,
 }
 
 template <typename outputType>
-void rank_max(cudf::device_span<size_type const> group_keys,
+void rank_max(cuda::std::span<size_type const> group_keys,
               column_view sorted_order_view,
               mutable_column_view rank_mutable_view,
               rmm::cuda_stream_view stream)
@@ -219,7 +219,7 @@ struct index_counter {
   __device__ T operator()(size_type i) { return T{i, 1}; }
 };
 
-void rank_average(cudf::device_span<size_type const> group_keys,
+void rank_average(cuda::std::span<size_type const> group_keys,
                   column_view sorted_order_view,
                   mutable_column_view rank_mutable_view,
                   rmm::cuda_stream_view stream)

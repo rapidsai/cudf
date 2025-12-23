@@ -88,8 +88,8 @@ class hostdevice_vector {
     return host_span<T const>{h_data}.subspan(0, size());
   }
 
-  operator cudf::device_span<T>() { return {device_ptr(), size()}; }
-  operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
+  operator cuda::std::span<T>() { return {device_ptr(), size()}; }
+  operator cuda::std::span<T const>() const { return {device_ptr(), size()}; }
 
   void host_to_device_async(rmm::cuda_stream_view stream)
   {
@@ -147,8 +147,11 @@ class hostdevice_2dvector {
   {
   }
 
-  operator device_2dspan<T>() { return {device_span<T>{_data}, _size.second}; }
-  operator device_2dspan<T const>() const { return {device_span<T const>{_data}, _size.second}; }
+  operator device_2dspan<T>() { return {cuda::std::span<T>{_data}, _size.second}; }
+  operator device_2dspan<T const>() const
+  {
+    return {cuda::std::span<T const>{_data}, _size.second};
+  }
 
   device_2dspan<T> device_view() { return static_cast<device_2dspan<T>>(*this); }
   [[nodiscard]] device_2dspan<T const> device_view() const

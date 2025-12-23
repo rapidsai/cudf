@@ -41,9 +41,9 @@ namespace {
  * @param d_indices Mark these indices to be removed
  * @param d_segment_sizes Store actual sizes of each segment
  */
-CUDF_KERNEL void resolve_segment_indices(device_span<size_type const> d_offsets,
+CUDF_KERNEL void resolve_segment_indices(cuda::std::span<size_type const> d_offsets,
                                          size_type k,
-                                         device_span<size_type> d_indices,
+                                         cuda::std::span<size_type> d_indices,
                                          size_type* d_segment_sizes)
 {
   auto const tid = cudf::detail::grid_1d::global_thread_id();
@@ -96,8 +96,9 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
   auto const d_indices = indices->mutable_view().begin<size_type>();
 
   auto segment_sizes = rmm::device_uvector<size_type>(segment_offsets.size() - 1, stream);
-  auto span_indices  = device_span<size_type>{d_indices, static_cast<std::size_t>(indices->size())};
-  auto const grid    = cudf::detail::grid_1d(indices->size(), 256);
+  auto span_indices =
+    cuda::std::span<size_type>{d_indices, static_cast<std::size_t>(indices->size())};
+  auto const grid = cudf::detail::grid_1d(indices->size(), 256);
   resolve_segment_indices<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
     segment_offsets, k, span_indices, segment_sizes.data());
   auto [offsets, total_elements] =

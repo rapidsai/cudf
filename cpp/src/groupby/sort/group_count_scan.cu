@@ -23,7 +23,7 @@ namespace groupby {
 namespace detail {
 std::unique_ptr<column> count_scan(column_view const& values,
                                    null_policy nulls,
-                                   cudf::device_span<size_type const> group_labels,
+                                   cuda::std::span<size_type const> group_labels,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {

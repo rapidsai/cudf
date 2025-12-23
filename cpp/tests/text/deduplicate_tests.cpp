@@ -61,7 +61,7 @@ TEST_F(TextDeduplicateTest, SuffixArray)
 
   auto const results = nvtext::build_suffix_array(sv, 8);
   auto const col_view =
-    cudf::column_view(cudf::device_span<cudf::size_type const>(results->data(), results->size()));
+    cudf::column_view(cuda::std::span<cudf::size_type const>(results->data(), results->size()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, col_view);
 }
 

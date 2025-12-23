@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,7 +17,7 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_merge_lists(column_view const& values,
-                                          cudf::device_span<size_type const> group_offsets,
+                                          cuda::std::span<size_type const> group_offsets,
                                           size_type num_groups,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)

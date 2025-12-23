@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -111,7 +111,7 @@ void BM_Segmented_Reduction(nvbench::state& state,
 
   auto const input_view   = input->view();
   auto const offsets_view = offsets->view();
-  auto const offset_span  = cudf::device_span<cudf::size_type const>{
+  auto const offset_span  = cuda::std::span<cudf::size_type const>{
     offsets_view.template data<cudf::size_type>(), static_cast<std::size_t>(offsets_view.size())};
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));

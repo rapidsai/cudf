@@ -102,7 +102,7 @@ struct covariance_transform {
 
 std::unique_ptr<column> group_covariance(column_view const& values_0,
                                          column_view const& values_1,
-                                         cudf::device_span<size_type const> group_labels,
+                                         cuda::std::span<size_type const> group_labels,
                                          size_type num_groups,
                                          column_view const& count,
                                          column_view const& mean_0,
@@ -141,7 +141,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
                                                             mean0_ptr,
                                                             mean1_ptr,
                                                             count.data<size_type>(),
-                                                            group_labels.begin(),
+                                                            group_labels.data(),
                                                             ddof};
 
   auto result = make_numeric_column(

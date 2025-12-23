@@ -82,8 +82,8 @@ std::unique_ptr<cudf::table> join_and_gather(
   auto const [left_join_indices, right_join_indices] =
     join_impl(left_selected, right_selected, compare_nulls, stream, mr);
 
-  auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
-  auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
+  auto left_indices_span  = cuda::std::span<cudf::size_type const>{*left_join_indices};
+  auto right_indices_span = cuda::std::span<cudf::size_type const>{*right_join_indices};
 
   auto left_indices_col  = cudf::column_view{left_indices_span};
   auto right_indices_col = cudf::column_view{right_indices_span};
@@ -1020,8 +1020,8 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNulls)
     auto const [left_join_indices, right_join_indices] =
       obj.partitioned_inner_join(cxt, stream, cudf::get_current_device_resource_ref());
 
-    auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
-    auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
+    auto left_indices_span  = cuda::std::span<cudf::size_type const>{*left_join_indices};
+    auto right_indices_span = cuda::std::span<cudf::size_type const>{*right_join_indices};
 
     auto left_indices_col  = cudf::column_view{left_indices_span};
     auto right_indices_col = cudf::column_view{right_indices_span};
@@ -2829,7 +2829,7 @@ struct JoinTestLists : public cudf::test::BaseFixture {
 
   auto column_view_from_device_uvector(rmm::device_uvector<cudf::size_type> const& vector)
   {
-    auto const indices_span = cudf::device_span<cudf::size_type const>{vector};
+    auto const indices_span = cuda::std::span<cudf::size_type const>{vector};
     return cudf::column_view{indices_span};
   }
 

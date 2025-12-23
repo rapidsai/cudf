@@ -47,7 +47,7 @@
 using std::string;
 using std::vector;
 
-using cudf::device_span;
+using cuda::std::span;
 using cudf::host_span;
 using cudf::detail::make_device_uvector_async;
 
@@ -68,17 +68,17 @@ namespace {
  */
 class selected_rows_offsets {
   rmm::device_uvector<uint64_t> all;
-  device_span<uint64_t const> selected;
+  cuda::std::span<uint64_t const> selected;
 
  public:
   selected_rows_offsets(rmm::device_uvector<uint64_t>&& data,
-                        device_span<uint64_t const> selected_span)
+                        cuda::std::span<uint64_t const> selected_span)
     : all{std::move(data)}, selected{selected_span}
   {
   }
   explicit selected_rows_offsets(rmm::cuda_stream_view stream) : all{0, stream}, selected{all} {}
 
-  operator device_span<uint64_t const>() const { return selected; }
+  operator cuda::std::span<uint64_t const>() const { return selected; }
   void shrink(size_t size)
   {
     CUDF_EXPECTS(size <= selected.size(), "New size must be smaller");
@@ -186,7 +186,7 @@ template <typename C>
 void erase_except_last(C& container, rmm::cuda_stream_view stream)
 {
   cudf::detail::device_single_thread(
-    [span = device_span<typename C::value_type>{container}] __device__() mutable {
+    [span = cuda::std::span<typename C::value_type>{container}] __device__() mutable {
       span.front() = span.back();
     },
     stream);
@@ -276,7 +276,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
     auto const read_size   = target_pos - input_pos - previous_data_size;
     if (data.has_value()) {
       cudf::detail::cuda_memcpy_async(
-        device_span<char>{d_data.data() + previous_data_size, read_size},
+        cuda::std::span<char>{d_data.data() + previous_data_size, read_size},
         data->subspan(read_offset, read_size),
         stream);
     } else {
@@ -289,7 +289,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
         auto const buffer = source->host_read(read_offset, read_size);
         // Use sync version to prevent buffer going out of scope before we copy the data.
         cudf::detail::cuda_memcpy(
-          device_span<char>{d_data.data() + previous_data_size, read_size},
+          cuda::std::span<char>{d_data.data() + previous_data_size, read_size},
           host_span<char const>{reinterpret_cast<char const*>(buffer->data()), buffer->size()},
           stream);
       }
@@ -299,7 +299,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
     // possible parser state at the beginning of the block.
     auto const num_blocks = cudf::io::csv::gpu::gather_row_offsets(parse_opts.view(),
                                                                    row_ctx.device_ptr(),
-                                                                   device_span<uint64_t>(),
+                                                                   cuda::std::span<uint64_t>(),
                                                                    d_data,
                                                                    chunk_size,
                                                                    pos,
@@ -311,7 +311,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                                                    stream);
 
     cudf::detail::cuda_memcpy(host_span<uint64_t>{row_ctx}.subspan(0, num_blocks),
-                              device_span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
+                              cuda::std::span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
                               stream);
 
     // Sum up the rows in each character block, selecting the row count that
@@ -327,7 +327,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
       // At least one row in range in this batch
       all_row_offsets.resize(total_rows - skip_rows, stream);
 
-      cudf::detail::cuda_memcpy_async(device_span<uint64_t>{row_ctx}.subspan(0, num_blocks),
+      cudf::detail::cuda_memcpy_async(cuda::std::span<uint64_t>{row_ctx}.subspan(0, num_blocks),
                                       host_span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
                                       stream);
 
@@ -347,7 +347,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
       // With byte range, we want to keep only one row out of the specified range
       if (range_end < data_size) {
         cudf::detail::cuda_memcpy(host_span<uint64_t>{row_ctx}.subspan(0, num_blocks),
-                                  device_span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
+                                  cuda::std::span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
                                   stream);
 
         size_t rows_out_of_range = 0;
@@ -392,9 +392,10 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   // Remove header rows and extract header
   auto const header_row_index = std::max<size_t>(header_rows, 1) - 1;
   if (header_row_index + 1 < row_offsets.size()) {
-    cudf::detail::cuda_memcpy(host_span<uint64_t>{row_ctx}.subspan(0, 2),
-                              device_span<uint64_t const>{row_offsets.data() + header_row_index, 2},
-                              stream);
+    cudf::detail::cuda_memcpy(
+      host_span<uint64_t>{row_ctx}.subspan(0, 2),
+      cuda::std::span<uint64_t const>{row_offsets.data() + header_row_index, 2},
+      stream);
 
     auto const header_start = input_pos + row_ctx[0];
     auto const header_end   = input_pos + row_ctx[1];
@@ -555,8 +556,8 @@ void get_data_types_from_column_names(std::map<std::string, data_type> const& us
 
 void infer_column_types(parse_options const& parse_opts,
                         host_span<column_parse::flags const> column_flags,
-                        device_span<char const> data,
-                        device_span<uint64_t const> row_offsets,
+                        cuda::std::span<char const> data,
+                        cuda::std::span<uint64_t const> row_offsets,
                         int32_t num_records,
                         data_type timestamp_type,
                         host_span<data_type> column_types,
@@ -617,8 +618,8 @@ void infer_column_types(parse_options const& parse_opts,
 std::vector<column_buffer> decode_data(parse_options const& parse_opts,
                                        host_span<column_parse::flags const> column_flags,
                                        std::vector<std::string> const& column_names,
-                                       device_span<char const> data,
-                                       device_span<uint64_t const> row_offsets,
+                                       cuda::std::span<char const> data,
+                                       cuda::std::span<uint64_t const> row_offsets,
                                        host_span<data_type const> column_types,
                                        int32_t num_records,
                                        int32_t num_actual_columns,
@@ -674,8 +675,8 @@ cudf::detail::host_vector<data_type> determine_column_types(
   csv_reader_options const& reader_opts,
   parse_options const& parse_opts,
   host_span<std::string const> column_names,
-  device_span<char const> data,
-  device_span<uint64_t const> row_offsets,
+  cuda::std::span<char const> data,
+  cuda::std::span<uint64_t const> row_offsets,
   int32_t num_records,
   host_span<column_parse::flags> column_flags,
   cudf::size_type num_active_columns,

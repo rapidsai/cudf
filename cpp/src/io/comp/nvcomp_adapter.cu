@@ -15,9 +15,10 @@
 
 namespace cudf::io::detail::nvcomp {
 
-batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> const> inputs,
-                                        device_span<device_span<uint8_t> const> outputs,
-                                        rmm::cuda_stream_view stream)
+batched_args create_batched_nvcomp_args(
+  cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+  cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+  rmm::cuda_stream_view stream)
 {
   auto const num_comp_chunks = inputs.size();
   rmm::device_uvector<void const*> input_data_ptrs(num_comp_chunks, stream);
@@ -50,7 +51,7 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
 }
 
 std::pair<rmm::device_uvector<void const*>, rmm::device_uvector<size_t>> create_get_temp_size_args(
-  device_span<device_span<uint8_t const> const> inputs, rmm::cuda_stream_view stream)
+  cuda::std::span<cuda::std::span<uint8_t const> const> inputs, rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<void const*> input_data_ptrs(inputs.size(), stream);
   rmm::device_uvector<size_t> input_data_sizes(inputs.size(), stream);
@@ -66,9 +67,9 @@ std::pair<rmm::device_uvector<void const*>, rmm::device_uvector<size_t>> create_
   return {std::move(input_data_ptrs), std::move(input_data_sizes)};
 }
 
-void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
-                                device_span<size_t const> actual_output_sizes,
-                                device_span<codec_exec_result> results,
+void update_compression_results(cuda::std::span<nvcompStatus_t const> nvcomp_stats,
+                                cuda::std::span<size_t const> actual_output_sizes,
+                                cuda::std::span<codec_exec_result> results,
                                 rmm::cuda_stream_view stream)
 {
   thrust::transform_if(
@@ -87,8 +88,8 @@ void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
     [] __device__(auto const& cudf_status) { return cudf_status.status != codec_status::SKIPPED; });
 }
 
-void update_compression_results(device_span<size_t const> actual_output_sizes,
-                                device_span<codec_exec_result> results,
+void update_compression_results(cuda::std::span<size_t const> actual_output_sizes,
+                                cuda::std::span<codec_exec_result> results,
                                 rmm::cuda_stream_view stream)
 {
   thrust::transform_if(
@@ -101,8 +102,8 @@ void update_compression_results(device_span<size_t const> actual_output_sizes,
     [] __device__(auto const& results) { return results.status != codec_status::SKIPPED; });
 }
 
-void skip_unsupported_inputs(device_span<size_t> input_sizes,
-                             device_span<codec_exec_result> results,
+void skip_unsupported_inputs(cuda::std::span<size_t> input_sizes,
+                             cuda::std::span<codec_exec_result> results,
                              std::optional<size_t> max_valid_input_size,
                              rmm::cuda_stream_view stream)
 {
@@ -122,7 +123,7 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
       });
   }
 }
-std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
+std::pair<size_t, size_t> max_chunk_and_total_input_size(cuda::std::span<size_t const> input_sizes,
                                                          rmm::cuda_stream_view stream)
 {
   auto const max = thrust::reduce(

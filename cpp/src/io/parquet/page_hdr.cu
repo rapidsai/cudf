@@ -532,7 +532,7 @@ void __forceinline__ __device__ zero_out_page_header_info(byte_stream_s* bs)
  */
 CUDF_KERNEL
 void __launch_bounds__(decode_page_headers_block_size)
-  decode_page_headers_kernel(device_span<ColumnChunkDesc const> chunks,
+  decode_page_headers_kernel(cuda::std::span<ColumnChunkDesc const> chunks,
                              chunk_page_info* chunk_pages,
                              kernel_error::pointer error_code)
 {
@@ -654,7 +654,7 @@ void __launch_bounds__(decode_page_headers_block_size)
  * @param[out] error_code Pointer to the error code for kernel failures
  */
 CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
-  count_page_headers_kernel(cudf::device_span<ColumnChunkDesc> chunks,
+  count_page_headers_kernel(cuda::std::span<ColumnChunkDesc> chunks,
                             kernel_error::pointer error_code)
 {
   auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
@@ -738,8 +738,8 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
  * @brief Functor to decode page headers from specified page locations
  */
 struct decode_page_headers_with_pgidx_fn {
-  cudf::device_span<ColumnChunkDesc const> colchunks;
-  cudf::device_span<PageInfo> pages;
+  cuda::std::span<ColumnChunkDesc const> colchunks;
+  cuda::std::span<PageInfo> pages;
   uint8_t** page_locations;
   size_type* chunk_page_offsets;
   kernel_error::pointer error_code;
@@ -901,7 +901,7 @@ void count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
   count_page_headers_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, error_code);
 }
 
-void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
+void decode_page_headers(cuda::std::span<ColumnChunkDesc const> chunks,
                          chunk_page_info* chunk_pages,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream)
@@ -921,8 +921,8 @@ void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
     chunks, chunk_pages, error_code);
 }
 
-void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chunks,
-                                    cudf::device_span<PageInfo> pages,
+void decode_page_headers_with_pgidx(cuda::std::span<ColumnChunkDesc const> chunks,
+                                    cuda::std::span<PageInfo> pages,
                                     uint8_t** page_locations,
                                     size_type* chunk_page_offsets,
                                     kernel_error::pointer error_code,

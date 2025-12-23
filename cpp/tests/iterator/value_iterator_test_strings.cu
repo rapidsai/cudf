@@ -42,8 +42,10 @@ TEST_F(StringIteratorTest, string_view_null_iterator)
   using T = cudf::string_view;
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector(
-    zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto initmsg =
+    cudf::detail::make_device_uvector(cudf::host_span<char const>{zero.data(), zero.size()},
+                                      cudf::get_default_stream(),
+                                      cudf::get_current_device_resource_ref());
   T init = T{initmsg.data(), int(initmsg.size())};
 
   // data and valid arrays
@@ -78,8 +80,10 @@ TEST_F(StringIteratorTest, string_view_no_null_iterator)
   // T init = T{"", 0};
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector(
-    zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto initmsg =
+    cudf::detail::make_device_uvector(cudf::host_span<char const>{zero.data(), zero.size()},
+                                      cudf::get_default_stream(),
+                                      cudf::get_current_device_resource_ref());
   T init = T{initmsg.data(), int(initmsg.size())};
 
   // data array
@@ -103,8 +107,10 @@ TEST_F(StringIteratorTest, string_scalar_iterator)
   // T init = T{"", 0};
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector(
-    zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto initmsg =
+    cudf::detail::make_device_uvector(cudf::host_span<char const>{zero.data(), zero.size()},
+                                      cudf::get_default_stream(),
+                                      cudf::get_current_device_resource_ref());
   T init = T{initmsg.data(), int(initmsg.size())};
 
   // data array

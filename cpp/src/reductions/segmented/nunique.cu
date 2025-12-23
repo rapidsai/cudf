@@ -41,7 +41,7 @@ struct is_unique_fn {
 }  // namespace
 
 std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
-                                                device_span<size_type const> offsets,
+                                                cuda::std::span<size_type const> offsets,
                                                 null_policy null_handling,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::device_async_resource_ref mr)

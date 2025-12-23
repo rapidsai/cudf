@@ -131,13 +131,13 @@ cpdef void table_to_array(
         )
     stream = _get_stream(stream)
 
-    cdef device_span[byte] span = device_span[byte](
+    cdef device_span[byte] d_span = device_span[byte](
         <byte*> ptr, size
     )
 
     with nogil:
         cpp_table_to_array(
             input_table.view(),
-            span,
+            d_span,
             stream.view()
         )

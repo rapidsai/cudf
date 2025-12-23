@@ -12,7 +12,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-using cudf::device_span;
+using cuda::std::span;
 
 namespace cudf {
 namespace io {
@@ -140,8 +140,8 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
  */
 uint32_t gather_row_offsets(cudf::io::parse_options_view const& options,
                             uint64_t* row_ctx,
-                            device_span<uint64_t> offsets_out,
-                            device_span<char const> data,
+                            cuda::std::span<uint64_t> offsets_out,
+                            cuda::std::span<char const> data,
                             size_t chunk_size,
                             size_t parse_pos,
                             size_t start_offset,
@@ -160,8 +160,8 @@ uint32_t gather_row_offsets(cudf::io::parse_options_view const& options,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 size_t count_blank_rows(cudf::io::parse_options_view const& options,
-                        device_span<char const> data,
-                        device_span<uint64_t const> row_offsets,
+                        cuda::std::span<char const> data,
+                        cuda::std::span<uint64_t const> row_offsets,
                         rmm::cuda_stream_view stream);
 
 /**
@@ -172,10 +172,10 @@ size_t count_blank_rows(cudf::io::parse_options_view const& options,
  * @param row_offsets Row offsets in the character data buffer
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-device_span<uint64_t> remove_blank_rows(cudf::io::parse_options_view const& options,
-                                        device_span<char const> data,
-                                        device_span<uint64_t> row_offsets,
-                                        rmm::cuda_stream_view stream);
+cuda::std::span<uint64_t> remove_blank_rows(cudf::io::parse_options_view const& options,
+                                            cuda::std::span<char const> data,
+                                            cuda::std::span<uint64_t> row_offsets,
+                                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for detecting possible dtype of each column of data
@@ -190,9 +190,9 @@ device_span<uint64_t> remove_blank_rows(cudf::io::parse_options_view const& opti
  */
 cudf::detail::host_vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const& options,
-  device_span<char const> data,
-  device_span<column_parse::flags const> column_flags,
-  device_span<uint64_t const> row_offsets,
+  cuda::std::span<char const> data,
+  cuda::std::span<column_parse::flags const> column_flags,
+  cuda::std::span<uint64_t const> row_offsets,
   size_t const num_active_columns,
   rmm::cuda_stream_view stream);
 
@@ -210,13 +210,13 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
  * @param[in] stream CUDA stream to use
  */
 void decode_row_column_data(cudf::io::parse_options_view const& options,
-                            device_span<char const> data,
-                            device_span<column_parse::flags const> column_flags,
-                            device_span<uint64_t const> row_offsets,
-                            device_span<cudf::data_type const> dtypes,
-                            device_span<void* const> columns,
-                            device_span<cudf::bitmask_type* const> valids,
-                            device_span<size_type> valid_counts,
+                            cuda::std::span<char const> data,
+                            cuda::std::span<column_parse::flags const> column_flags,
+                            cuda::std::span<uint64_t const> row_offsets,
+                            cuda::std::span<cudf::data_type const> dtypes,
+                            cuda::std::span<void* const> columns,
+                            cuda::std::span<cudf::bitmask_type* const> valids,
+                            cuda::std::span<size_type> valid_counts,
                             rmm::cuda_stream_view stream);
 
 }  // namespace gpu

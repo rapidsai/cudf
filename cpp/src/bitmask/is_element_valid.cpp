@@ -25,7 +25,7 @@ bool is_element_valid_sync(column_view const& col_view,
 
   auto const word =
     cudf::detail::make_host_vector(
-      device_span<bitmask_type const>{col_view.null_mask() + word_index(index), 1}, stream)
+      cuda::std::span<bitmask_type const>{col_view.null_mask() + word_index(index), 1}, stream)
       .front();
 
   return static_cast<bool>(word & (bitmask_type{1} << intra_word_index(index)));

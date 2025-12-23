@@ -38,9 +38,9 @@ using cudf::io::detail::codec_status;
 using cudf::io::detail::decompression_info;
 
 #if defined(CHUNKING_DEBUG)
-void print_cumulative_page_info(device_span<PageInfo const> d_pages,
-                                device_span<ColumnChunkDesc const> d_chunks,
-                                device_span<cumulative_page_info const> d_c_info,
+void print_cumulative_page_info(cuda::std::span<PageInfo const> d_pages,
+                                cuda::std::span<ColumnChunkDesc const> d_chunks,
+                                cuda::std::span<cumulative_page_info const> d_c_info,
                                 rmm::cuda_stream_view stream)
 {
   auto const pages  = cudf::detail::make_host_vector(d_pages, stream);
@@ -254,8 +254,8 @@ std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg)
 }
 
 std::pair<rmm::device_uvector<cumulative_page_info>, rmm::device_uvector<int32_t>>
-adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
-                        device_span<PageInfo const> pages,
+adjust_cumulative_sizes(cuda::std::span<cumulative_page_info const> c_info,
+                        cuda::std::span<PageInfo const> pages,
                         rmm::cuda_stream_view stream)
 {
   // sort by row count
@@ -349,10 +349,10 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
 }
 
 std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
-  device_span<cumulative_page_info const> c_info,
-  device_span<PageInfo const> pages,
-  device_span<ColumnChunkDesc const> chunks,
-  device_span<size_type const> page_offsets,
+  cuda::std::span<cumulative_page_info const> c_info,
+  cuda::std::span<PageInfo const> pages,
+  cuda::std::span<ColumnChunkDesc const> chunks,
+  cuda::std::span<size_type const> page_offsets,
   size_t start_row,
   size_t size_limit,
   size_t num_columns,
@@ -405,12 +405,13 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
     std::move(page_bounds), total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
 }
 
-std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_info const> c_info,
-                                                  device_span<PageInfo const> pages,
-                                                  size_t skip_rows,
-                                                  size_t num_rows,
-                                                  size_t size_limit,
-                                                  rmm::cuda_stream_view stream)
+std::vector<row_range> compute_page_splits_by_row(
+  cuda::std::span<cumulative_page_info const> c_info,
+  cuda::std::span<PageInfo const> pages,
+  size_t skip_rows,
+  size_t num_rows,
+  size_t size_limit,
+  rmm::cuda_stream_view stream)
 {
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
@@ -510,15 +511,15 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     mr);
 
   auto comp_in =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+    cudf::detail::make_empty_host_vector<cuda::std::span<uint8_t const>>(num_comp_pages, stream);
   auto comp_out =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
+    cudf::detail::make_empty_host_vector<cuda::std::span<uint8_t>>(num_comp_pages, stream);
 
   // vectors to save v2 def and rep level data, if any
   auto copy_in =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+    cudf::detail::make_empty_host_vector<cuda::std::span<uint8_t const>>(num_comp_pages, stream);
   auto copy_out =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
+    cudf::detail::make_empty_host_vector<cuda::std::span<uint8_t>>(num_comp_pages, stream);
 
   auto set_parameters = [&](codec_stats& codec,
                             host_span<PageInfo> pages,
@@ -597,11 +598,12 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     CUDF_EXPECTS(is_supported_read_parquet(from_parquet_compression(codec.compression_type)),
                  "Unsupported compression type for Parquet reading");
 
-    device_span<device_span<uint8_t const> const> d_comp_in_view{d_comp_in.data() + start_pos,
-                                                                 codec.num_pages};
-    device_span<device_span<uint8_t> const> d_comp_out_view(d_comp_out.data() + start_pos,
-                                                            codec.num_pages);
-    device_span<codec_exec_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
+    cuda::std::span<cuda::std::span<uint8_t const> const> d_comp_in_view{
+      d_comp_in.data() + start_pos, codec.num_pages};
+    cuda::std::span<cuda::std::span<uint8_t> const> d_comp_out_view(d_comp_out.data() + start_pos,
+                                                                    codec.num_pages);
+    cuda::std::span<codec_exec_result> d_comp_res_view(comp_res.data() + start_pos,
+                                                       codec.num_pages);
     cudf::io::detail::decompress(from_parquet_compression(codec.compression_type),
                                  d_comp_in_view,
                                  d_comp_out_view,
@@ -634,8 +636,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
 }
 
-void detect_malformed_pages(device_span<PageInfo const> pages,
-                            device_span<ColumnChunkDesc const> chunks,
+void detect_malformed_pages(cuda::std::span<PageInfo const> pages,
+                            cuda::std::span<ColumnChunkDesc const> chunks,
                             std::optional<size_t> expected_row_count,
                             rmm::cuda_stream_view stream)
 {
@@ -683,8 +685,8 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
 }
 
 rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
-  device_span<ColumnChunkDesc const> chunks,
-  device_span<PageInfo const> pages,
+  cuda::std::span<ColumnChunkDesc const> chunks,
+  cuda::std::span<PageInfo const> pages,
   rmm::cuda_stream_view stream)
 {
   auto page_keys = make_page_key_iterator(pages);
@@ -729,7 +731,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
         stream);
 
       // Collect pages with matching codecs
-      rmm::device_uvector<device_span<uint8_t const>> temp_spans(pages.size(), stream);
+      rmm::device_uvector<cuda::std::span<uint8_t const>> temp_spans(pages.size(), stream);
       auto iter = thrust::make_counting_iterator(size_t{0});
       thrust::for_each(
         rmm::exec_policy_nosync(stream),
@@ -741,13 +743,15 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
          codec] __device__(size_t i) {
           auto const& page = pages[i];
           if (parquet_compression_support(chunks[page.chunk_idx].codec).first == codec) {
-            temp_spans[i] = {page.page_data, static_cast<size_t>(page.compressed_page_size)};
+            temp_spans[i] = cuda::std::span<uint8_t const>(
+              page.page_data, static_cast<size_t>(page.compressed_page_size));
           } else {
-            temp_spans[i] = {nullptr, 0};  // Mark pages with other codecs as empty
+            temp_spans[i] =
+              cuda::std::span<uint8_t const>();  // Mark pages with other codecs as empty
           }
         });
       // Copy only non-null spans
-      rmm::device_uvector<device_span<uint8_t const>> page_spans(pages.size(), stream);
+      rmm::device_uvector<cuda::std::span<uint8_t const>> page_spans(pages.size(), stream);
       auto end_iter =
         cudf::detail::copy_if(temp_spans.begin(),
                               temp_spans.end(),
@@ -803,8 +807,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   return d_temp_cost;
 }
 
-void include_scratch_size(device_span<size_t const> temp_cost,
-                          device_span<cumulative_page_info> c_info,
+void include_scratch_size(cuda::std::span<size_t const> temp_cost,
+                          cuda::std::span<cumulative_page_info> c_info,
                           rmm::cuda_stream_view stream)
 {
   auto iter = thrust::make_counting_iterator(size_t{0});
@@ -825,8 +829,8 @@ namespace {
  * for non-dictionary, non-FLBA string pages.
  */
 struct compute_page_string_offset_size {
-  device_span<PageInfo const> pages;
-  device_span<ColumnChunkDesc const> chunks;
+  cuda::std::span<PageInfo const> pages;
+  cuda::std::span<ColumnChunkDesc const> chunks;
 
   __device__ size_t operator()(size_t page_idx) const
   {
@@ -862,9 +866,10 @@ struct compute_page_string_offset_size {
 
 }  // anonymous namespace
 
-rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkDesc const> chunks,
-                                                        device_span<PageInfo const> pages,
-                                                        rmm::cuda_stream_view stream)
+rmm::device_uvector<size_t> compute_string_offset_sizes(
+  cuda::std::span<ColumnChunkDesc const> chunks,
+  cuda::std::span<PageInfo const> pages,
+  rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<size_t> string_offset_sizes(pages.size(), stream);
 

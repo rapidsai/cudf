@@ -58,8 +58,8 @@ CUDF_KERNEL void __launch_bounds__(128, 8)
       uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       auto const is_uncompressed = static_cast<bool>(block_len & 1);
       uint64_t uncompressed_size;
-      device_span<uint8_t const>* init_in_ctl = nullptr;
-      device_span<uint8_t>* init_out_ctl      = nullptr;
+      cuda::std::span<uint8_t const>* init_in_ctl = nullptr;
+      cuda::std::span<uint8_t>* init_out_ctl      = nullptr;
       block_len >>= 1;
       cur += block_header_size;
       if (block_len > compression_block_size || cur + block_len > end) {
@@ -508,7 +508,7 @@ CUDF_KERNEL void __launch_bounds__(128, 8)
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  reduce_pushdown_masks_kernel(device_span<orc_column_device_view const> orc_columns,
+  reduce_pushdown_masks_kernel(cuda::std::span<orc_column_device_view const> orc_columns,
                                device_2dspan<rowgroup_rows const> rowgroup_bounds,
                                device_2dspan<size_type> set_counts)
 {
@@ -583,7 +583,7 @@ void __host__ parse_row_group_index(row_group* row_groups,
     row_groups, strm_info, chunks, num_columns, num_stripes, rowidx_stride, use_base_stride);
 }
 
-void __host__ reduce_pushdown_masks(device_span<orc_column_device_view const> columns,
+void __host__ reduce_pushdown_masks(cuda::std::span<orc_column_device_view const> columns,
                                     device_2dspan<rowgroup_rows const> rowgroups,
                                     device_2dspan<cudf::size_type> valid_counts,
                                     rmm::cuda_stream_view stream)

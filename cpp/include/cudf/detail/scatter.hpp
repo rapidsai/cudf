@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -63,7 +63,7 @@ std::unique_ptr<table> scatter(table_view const& source,
  * @throws cudf::logic_error if `scatter_map` span size is larger than max of `size_type`.
  */
 std::unique_ptr<table> scatter(table_view const& source,
-                               device_span<size_type const> const scatter_map,
+                               cuda::std::span<size_type const> const scatter_map,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr);

@@ -28,9 +28,9 @@ namespace cudf::io::detail::nvcomp {
  * @param[in] stream CUDA stream to use
  */
 void batched_decompress(compression_type compression,
-                        device_span<device_span<uint8_t const> const> inputs,
-                        device_span<device_span<uint8_t> const> outputs,
-                        device_span<codec_exec_result> results,
+                        cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                        cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                        cuda::std::span<codec_exec_result> results,
                         size_t max_uncomp_chunk_size,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream);
@@ -70,7 +70,7 @@ size_t batched_decompress_temp_size(compression_type compression,
  */
 [[nodiscard]] size_t batched_decompress_temp_size_ex(
   compression_type compression,
-  device_span<device_span<uint8_t const> const> inputs,
+  cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
   size_t max_uncomp_chunk_size,
   size_t max_total_uncomp_size,
   rmm::cuda_stream_view stream);
@@ -129,9 +129,9 @@ void load_nvcomp_library();
  * @param[in] stream CUDA stream to use
  */
 void batched_compress(compression_type compression,
-                      device_span<device_span<uint8_t const> const> inputs,
-                      device_span<device_span<uint8_t> const> outputs,
-                      device_span<codec_exec_result> results,
+                      cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                      cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                      cuda::std::span<codec_exec_result> results,
                       rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::detail::nvcomp

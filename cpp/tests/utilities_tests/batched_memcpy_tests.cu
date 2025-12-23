@@ -119,7 +119,7 @@ TEST(BatchedMemcpyTest, BasicTest)
 
   // Copy over the result destination buffer to host and synchronize the stream
   auto result_dst_buffer =
-    cudf::detail::make_std_vector<T1>(cudf::device_span<T1>(d_dst_data), stream);
+    cudf::detail::make_std_vector<T1>(cuda::std::span<T1>(d_dst_data), stream);
 
   // Check if both vectors are equal
   EXPECT_TRUE(

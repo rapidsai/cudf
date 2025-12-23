@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -157,7 +157,7 @@ std::unique_ptr<column> shift(column_view const& input,
  * @note If `offset == 0`, a copy of @p segmented_values is returned.
  */
 std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
-                                        device_span<size_type const> segment_offsets,
+                                        cuda::std::span<size_type const> segment_offsets,
                                         size_type offset,
                                         scalar const& fill_value,
                                         rmm::cuda_stream_view stream,

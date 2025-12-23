@@ -194,16 +194,14 @@ class memory_mapped_source : public kvikio_source<kvikio::MmapHandle> {
  */
 class device_buffer_source final : public datasource {
  public:
-  explicit device_buffer_source(cudf::device_span<std::byte const> d_buffer) : _d_buffer{d_buffer}
-  {
-  }
+  explicit device_buffer_source(cuda::std::span<std::byte const> d_buffer) : _d_buffer{d_buffer} {}
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     auto const count  = std::min(size, this->size() - offset);
     auto const stream = cudf::detail::global_cuda_stream_pool().get_stream();
     cudf::detail::cuda_memcpy(host_span<uint8_t>{dst, count},
-                              device_span<uint8_t const>{
+                              cuda::std::span<uint8_t const>{
                                 reinterpret_cast<uint8_t const*>(_d_buffer.data() + offset), count},
                               stream);
     return count;
@@ -214,7 +212,7 @@ class device_buffer_source final : public datasource {
     auto const count  = std::min(size, this->size() - offset);
     auto const stream = cudf::detail::global_cuda_stream_pool().get_stream();
     auto h_data       = cudf::detail::make_host_vector_async(
-      cudf::device_span<std::byte const>{_d_buffer.data() + offset, count}, stream);
+      cuda::std::span<std::byte const>{_d_buffer.data() + offset, count}, stream);
     stream.synchronize();
     return std::make_unique<owning_buffer<cudf::detail::host_vector<std::byte>>>(std::move(h_data));
   }
@@ -251,7 +249,7 @@ class device_buffer_source final : public datasource {
   [[nodiscard]] size_t size() const override { return _d_buffer.size(); }
 
  private:
-  cudf::device_span<std::byte const> _d_buffer;  ///< A non-owning view of the existing device data
+  cuda::std::span<std::byte const> _d_buffer;  ///< A non-owning view of the existing device data
 };
 
 // zero-copy host buffer source
@@ -465,7 +463,7 @@ std::unique_ptr<datasource> datasource::create(cudf::host_span<std::byte const> 
   return std::make_unique<host_buffer_source>(buffer);
 }
 
-std::unique_ptr<datasource> datasource::create(cudf::device_span<std::byte const> buffer)
+std::unique_ptr<datasource> datasource::create(cuda::std::span<std::byte const> buffer)
 {
   return std::make_unique<device_buffer_source>(buffer);
 }

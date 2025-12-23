@@ -13,7 +13,7 @@ namespace reduction {
 namespace detail {
 std::unique_ptr<cudf::column> segmented_product(
   column_view const& col,
-  device_span<size_type const> offsets,
+  cuda::std::span<size_type const> offsets,
   cudf::data_type const output_dtype,
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,

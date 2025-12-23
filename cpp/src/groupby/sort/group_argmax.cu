@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,7 +18,7 @@ namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_argmax(column_view const& values,
                                      size_type num_groups,
-                                     cudf::device_span<size_type const> group_labels,
+                                     cuda::std::span<size_type const> group_labels,
                                      column_view const& key_sort_order,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)

@@ -147,8 +147,8 @@ CUDF_KERNEL void concatenate_masks_kernel(column_device_view const* views,
 }
 }  // namespace
 
-size_type concatenate_masks(device_span<column_device_view const> d_views,
-                            device_span<size_t const> d_offsets,
+size_type concatenate_masks(cuda::std::span<column_device_view const> d_views,
+                            cuda::std::span<size_t const> d_offsets,
                             bitmask_type* dest_mask,
                             size_type output_size,
                             rmm::cuda_stream_view stream)

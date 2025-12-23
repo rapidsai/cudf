@@ -213,8 +213,8 @@ auto translate_col_id(T const& col_id)
 }
 
 tree_meta_t2 get_tree_representation_cpu(
-  cudf::device_span<cuio_json::PdaTokenT const> tokens_gpu,
-  cudf::device_span<cuio_json::SymbolOffsetT const> token_indices_gpu1,
+  cuda::std::span<cuio_json::PdaTokenT const> tokens_gpu,
+  cuda::std::span<cuio_json::SymbolOffsetT const> token_indices_gpu1,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -568,7 +568,7 @@ TEST_F(JsonTest, TreeRepresentation)
                             R"(}] )";
   // Prepare input & output buffers
   cudf::string_scalar const d_scalar(input, true, stream);
-  auto const d_input = cudf::device_span<cuio_json::SymbolT const>{
+  auto const d_input = cuda::std::span<cuio_json::SymbolT const>{
     d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   cudf::io::json_reader_options const options{};
@@ -656,8 +656,8 @@ TEST_F(JsonTest, TreeRepresentation2)
     "\n}}]";
   // Prepare input & output buffers
   cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
-                                                             static_cast<size_t>(d_scalar.size())};
+  auto d_input = cuda::std::span<cuio_json::SymbolT const>{d_scalar.data(),
+                                                           static_cast<size_t>(d_scalar.size())};
 
   cudf::io::json_reader_options const options{};
 
@@ -730,8 +730,8 @@ TEST_F(JsonTest, TreeRepresentation3)
  { "a": { "y" : 6, "z": [] }}
  { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )";  // Prepare input & output buffers
   cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
-                                                             static_cast<size_t>(d_scalar.size())};
+  auto d_input = cuda::std::span<cuio_json::SymbolT const>{d_scalar.data(),
+                                                           static_cast<size_t>(d_scalar.size())};
 
   cudf::io::json_reader_options options{};
   options.enable_lines(true);
@@ -758,7 +758,7 @@ TEST_F(JsonTest, TreeRepresentationError)
   std::string const input = R"([ {}, }{])";
   // Prepare input & output buffers
   cudf::string_scalar const d_scalar(input, true, stream);
-  auto const d_input = cudf::device_span<cuio_json::SymbolT const>{
+  auto const d_input = cuda::std::span<cuio_json::SymbolT const>{
     d_scalar.data(), static_cast<size_t>(d_scalar.size())};
   cudf::io::json_reader_options const options{};
 
@@ -842,8 +842,8 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
 
   // std::cout << json_lines << input << std::endl;
   cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
-                                                             static_cast<size_t>(d_scalar.size())};
+  auto d_input = cuda::std::span<cuio_json::SymbolT const>{d_scalar.data(),
+                                                           static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
   auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(

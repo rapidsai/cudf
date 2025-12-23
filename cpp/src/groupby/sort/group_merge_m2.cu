@@ -62,7 +62,7 @@ struct merge_fn {
 
 template <typename count_type>
 std::unique_ptr<column> merge_m2(column_view const& values,
-                                 device_span<size_type const> group_offsets,
+                                 cuda::std::span<size_type const> group_offsets,
                                  size_type num_groups,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
@@ -84,7 +84,7 @@ std::unique_ptr<column> merge_m2(column_view const& values,
   auto const M2_values   = values.child(2);
   auto const iter        = thrust::make_counting_iterator<size_type>(0);
 
-  auto const fn = merge_fn<count_type>{group_offsets.begin(),
+  auto const fn = merge_fn<count_type>{group_offsets.data(),
                                        count_valid.template begin<count_type>(),
                                        mean_values.template begin<result_type>(),
                                        M2_values.template begin<result_type>()};
@@ -102,7 +102,7 @@ std::unique_ptr<column> merge_m2(column_view const& values,
 }  // namespace
 
 std::unique_ptr<column> group_merge_m2(column_view const& values,
-                                       device_span<size_type const> group_offsets,
+                                       cuda::std::span<size_type const> group_offsets,
                                        size_type num_groups,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)

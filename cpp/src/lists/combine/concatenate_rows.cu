@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -64,7 +64,7 @@ std::tuple<std::unique_ptr<column>, rmm::device_buffer, size_type>
 generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                          bool build_null_mask,
                                          concatenate_null_policy null_policy,
-                                         device_span<size_type const> row_null_counts,
+                                         cuda::std::span<size_type const> row_null_counts,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
 {

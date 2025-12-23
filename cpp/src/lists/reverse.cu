@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,7 +59,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
 
   auto child_segmented_reversed =
     cudf::detail::gather(table_view{{child}},
-                         device_span<size_type const>{gather_map.data(), gather_map.size()},
+                         cuda::std::span<size_type const>{gather_map.data(), gather_map.size()},
                          out_of_bounds_policy::DONT_CHECK,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
                          stream,

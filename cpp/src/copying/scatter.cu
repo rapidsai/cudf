@@ -321,7 +321,7 @@ std::unique_ptr<table> scatter(table_view const& source,
 }
 
 std::unique_ptr<table> scatter(table_view const& source,
-                               device_span<size_type const> const scatter_map,
+                               cuda::std::span<size_type const> const scatter_map,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)

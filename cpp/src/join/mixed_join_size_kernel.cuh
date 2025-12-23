@@ -27,7 +27,7 @@ namespace cudf::detail {
 template <bool has_nulls>
 __device__ __forceinline__ auto standalone_count(
   pair_expression_equality<has_nulls> const& key_equal,
-  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+  cuda::std::span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
   cuda::std::pair<hash_value_type, hash_value_type> const& hash_idx,
   bool is_outer_join) noexcept
@@ -51,17 +51,17 @@ __device__ __forceinline__ auto standalone_count(
 }
 
 template <bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join_count(
-  table_device_view left_table,
-  table_device_view right_table,
-  bool is_outer_join,
-  bool swap_tables,
-  row_equality equality_probe,
-  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
-  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-  cuda::std::pair<hash_value_type, hash_value_type> const* hash_indices,
-  ast::detail::expression_device_view device_expression_data,
-  cudf::device_span<cudf::size_type> matches_per_row)
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
+  mixed_join_count(table_device_view left_table,
+                   table_device_view right_table,
+                   bool is_outer_join,
+                   bool swap_tables,
+                   row_equality equality_probe,
+                   cuda::std::span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+                   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+                   cuda::std::pair<hash_value_type, hash_value_type> const* hash_indices,
+                   ast::detail::expression_device_view device_expression_data,
+                   cuda::std::span<cudf::size_type> matches_per_row)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -106,11 +106,11 @@ void launch_mixed_join_count(
   bool is_outer_join,
   bool swap_tables,
   row_equality equality_probe,
-  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+  cuda::std::span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<hash_value_type, hash_value_type> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
-  cudf::device_span<cudf::size_type> matches_per_row,
+  cuda::std::span<cudf::size_type> matches_per_row,
   detail::grid_1d config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream)

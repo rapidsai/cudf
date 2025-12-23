@@ -43,7 +43,7 @@ using string_index = cudf::strings::detail::string_index_pair;
  * chars_span.
  */
 struct sort_comparator_fn {
-  cudf::device_span<char const> chars_span;
+  cuda::std::span<char const> chars_span;
   __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const
   {
     auto const chars_size = static_cast<cudf::size_type>(chars_span.size());
@@ -75,7 +75,7 @@ __device__ cudf::size_type common_prefix_length(cudf::string_view lhs, cudf::str
  * bytes between adjacent strings and return the count if greater than width.
  */
 struct find_adjacent_duplicates_fn {
-  cudf::device_span<char const> chars_span;
+  cuda::std::span<char const> chars_span;
   cudf::size_type width;
   cudf::size_type const* d_indices;
   __device__ int16_t operator()(cudf::size_type idx) const
@@ -141,7 +141,7 @@ struct collapse_overlaps_fn {
 };
 
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array_fn(
-  cudf::device_span<char const> chars_span,
+  cuda::std::span<char const> chars_span,
   cudf::size_type min_width,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
@@ -161,12 +161,11 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array_fn(
   return std::make_unique<rmm::device_uvector<cudf::size_type>>(std::move(indices));
 }
 
-std::unique_ptr<cudf::column> resolve_duplicates_fn(
-  cudf::device_span<char const> chars_span,
-  cudf::device_span<cudf::size_type const> indices,
-  cudf::size_type min_width,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::unique_ptr<cudf::column> resolve_duplicates_fn(cuda::std::span<char const> chars_span,
+                                                    cuda::std::span<cudf::size_type const> indices,
+                                                    cudf::size_type min_width,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::device_async_resource_ref mr)
 {
   auto sizes = rmm::device_uvector<int16_t>(indices.size(), stream);
 
@@ -254,12 +253,12 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
                "Input size cannot exceed the maximum integer size limit of 2GB",
                std::invalid_argument);
 
-  auto const chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
+  auto const chars_span = cuda::std::span<char const>(d_input_chars, chars_size);
   return build_suffix_array_fn(chars_span, min_width, stream, mr);
 }
 
 std::unique_ptr<cudf::column> resolve_duplicates(cudf::strings_column_view const& input,
-                                                 cudf::device_span<cudf::size_type const> indices,
+                                                 cuda::std::span<cudf::size_type const> indices,
                                                  cudf::size_type min_width,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
@@ -277,7 +276,7 @@ std::unique_ptr<cudf::column> resolve_duplicates(cudf::strings_column_view const
                "Input size cannot exceed the maximum integer size limit of 2GB",
                std::invalid_argument);
 
-  auto const chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
+  auto const chars_span = cuda::std::span<char const>(d_input_chars, chars_size);
 
   return resolve_duplicates_fn(chars_span, indices, min_width, stream, mr);
 }
@@ -298,13 +297,13 @@ namespace {
  * Returns the size of the common bytes found only if greater than width.
  */
 struct find_duplicates_fn {
-  cudf::device_span<char const> chars_span1;
-  cudf::device_span<char const> chars_span2;
+  cuda::std::span<char const> chars_span1;
+  cuda::std::span<char const> chars_span2;
   cudf::size_type width;
-  cudf::device_span<cudf::size_type const> d_indices1;
-  cudf::device_span<cudf::size_type const> d_indices2;
-  cudf::device_span<cudf::size_type const> lb_indices;
-  cudf::device_span<cudf::size_type const> ub_indices;
+  cuda::std::span<cudf::size_type const> d_indices1;
+  cuda::std::span<cudf::size_type const> d_indices2;
+  cuda::std::span<cudf::size_type const> lb_indices;
+  cuda::std::span<cudf::size_type const> ub_indices;
 
   __device__ int16_t operator()(cudf::size_type idx) const
   {
@@ -349,7 +348,7 @@ struct find_duplicates_fn {
  * @brief Builds a string_view from a chars index
  */
 struct index_to_string_fn {
-  cudf::device_span<char const> chars;
+  cuda::std::span<char const> chars;
   __device__ cudf::string_view operator()(cudf::size_type idx) const
   {
     auto const size = static_cast<cudf::size_type>(chars.size() - idx);
@@ -374,7 +373,7 @@ struct string_to_prefix_fn {
  * @brief Builds a prefix string from a chars index
  */
 struct index_to_prefix_fn {
-  cudf::device_span<char const> chars;
+  cuda::std::span<char const> chars;
   __device__ uint32_t operator()(cudf::size_type idx) const
   {
     auto const size = cuda::std::min((chars.size() - idx), sizeof(uint32_t));
@@ -386,9 +385,9 @@ struct index_to_prefix_fn {
 
 std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
   cudf::strings_column_view const& input1,
-  cudf::device_span<cudf::size_type const> indices1,
+  cuda::std::span<cudf::size_type const> indices1,
   cudf::strings_column_view const& input2,
-  cudf::device_span<cudf::size_type const> indices2,
+  cuda::std::span<cudf::size_type const> indices2,
   cudf::size_type min_width,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
@@ -411,8 +410,8 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
   CUDF_EXPECTS(
     min_width < chars_size2, "min_width value cannot exceed the input size", std::invalid_argument);
 
-  auto const chars_span1 = cudf::device_span<char const>(d_input_chars1, chars_size1);
-  auto const chars_span2 = cudf::device_span<char const>(d_input_chars2, chars_size2);
+  auto const chars_span1 = cuda::std::span<char const>(d_input_chars1, chars_size1);
+  auto const chars_span2 = cuda::std::span<char const>(d_input_chars2, chars_size2);
 
   auto const itr1 =
     thrust::make_transform_iterator(indices1.begin(), index_to_prefix_fn{chars_span1});
@@ -507,9 +506,9 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
 
 std::unique_ptr<cudf::column> resolve_duplicates_pair(
   cudf::strings_column_view const& input1,
-  cudf::device_span<cudf::size_type const> indices1,
+  cuda::std::span<cudf::size_type const> indices1,
   cudf::strings_column_view const& input2,
-  cudf::device_span<cudf::size_type const> indices2,
+  cuda::std::span<cudf::size_type const> indices2,
   cudf::size_type min_width,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
@@ -534,7 +533,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
 }
 
 std::unique_ptr<cudf::column> resolve_duplicates(cudf::strings_column_view const& input,
-                                                 cudf::device_span<cudf::size_type const> indices,
+                                                 cuda::std::span<cudf::size_type const> indices,
                                                  cudf::size_type min_width,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
@@ -545,9 +544,9 @@ std::unique_ptr<cudf::column> resolve_duplicates(cudf::strings_column_view const
 
 std::unique_ptr<cudf::column> resolve_duplicates_pair(
   cudf::strings_column_view const& input1,
-  cudf::device_span<cudf::size_type const> indices1,
+  cuda::std::span<cudf::size_type const> indices1,
   cudf::strings_column_view const& input2,
-  cudf::device_span<cudf::size_type const> indices2,
+  cuda::std::span<cudf::size_type const> indices2,
   cudf::size_type min_width,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
