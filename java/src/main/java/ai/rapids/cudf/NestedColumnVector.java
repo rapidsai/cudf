@@ -39,12 +39,7 @@ public final class NestedColumnVector extends ColumnView {
   public NestedColumnVector(DType type, ColumnVector... children) {
     super(createNestedColumnView(type, children));
     
-    if (!type.equals(DType.STRUCT)) {
-      throw new IllegalArgumentException(
-          "NestedColumnVector currently only supports STRUCT type. " +
-          "For LIST columns, use ColumnVector.makeListFromOffsets() or other existing methods. " +
-          "Got type: " + type);
-    }
+    validateType(type);
     
     // Store children and increment their reference counts
     List<ColumnVector> childList = new ArrayList<>(children.length);
@@ -59,6 +54,21 @@ public final class NestedColumnVector extends ColumnView {
   }
 
   /**
+   * Validates that the type is supported.
+   * 
+   * @param type the data type to validate
+   * @throws IllegalArgumentException if type is not STRUCT
+   */
+  private static void validateType(DType type) {
+    if (!type.equals(DType.STRUCT)) {
+      throw new IllegalArgumentException(
+          "NestedColumnVector currently only supports STRUCT type. " +
+          "For LIST columns, use ColumnVector.makeListFromOffsets() or other existing methods. " +
+          "Got type: " + type);
+    }
+  }
+
+  /**
    * Create a native column_view pointer from the children column vectors.
    * 
    * @param type the nested type (currently only STRUCT is supported)
@@ -66,12 +76,7 @@ public final class NestedColumnVector extends ColumnView {
    * @return a native pointer to the created cudf::column_view
    */
   private static long createNestedColumnView(DType type, ColumnVector... children) {
-    if (!type.equals(DType.STRUCT)) {
-      throw new IllegalArgumentException(
-          "NestedColumnVector currently only supports STRUCT type. " +
-          "For LIST columns, use ColumnVector.makeListFromOffsets() or other existing methods. " +
-          "Got type: " + type);
-    }
+    validateType(type);
     
     if (children == null) {
       children = new ColumnVector[0];
@@ -110,15 +115,38 @@ public final class NestedColumnVector extends ColumnView {
 
   /**
    * Close this nested column view and decrement reference counts of children.
+   * Uses proper exception handling to ensure all children are closed even if
+   * some operations fail.
    */
   @Override
-  public synchronized void close() {
+  public void close() {
     // Close the parent view first
     super.close();
     
     // Decrement the reference counts of children
+    // Collect exceptions to ensure all children are closed
+    Throwable pending = null;
     for (ColumnVector child : children) {
-      child.close();
+      try {
+        child.close();
+      } catch (Throwable t) {
+        if (pending == null) {
+          pending = t;
+        } else {
+          pending.addSuppressed(t);
+        }
+      }
+    }
+    
+    // Throw any collected exceptions after all cleanup is done
+    if (pending != null) {
+      if (pending instanceof RuntimeException) {
+        throw (RuntimeException) pending;
+      } else if (pending instanceof Error) {
+        throw (Error) pending;
+      } else {
+        throw new RuntimeException(pending);
+      }
     }
   }
 
