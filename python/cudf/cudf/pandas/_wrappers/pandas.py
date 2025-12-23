@@ -92,6 +92,7 @@ def _pandas_util_dir():
                 *list(importlib.import_module("pandas.util").__dict__.keys()),
                 "Appender",
                 "Substitution",
+                "capitalize_first_letter",
                 "_exceptions",
                 "_print_versions",
                 "cache_readonly",
@@ -104,8 +105,6 @@ def _pandas_util_dir():
             ]
         )
     )
-    if cudf.core._compat.PANDAS_GE_220:
-        res.append("capitalize_first_letter")
     return res
 
 
@@ -808,28 +807,26 @@ StringArray = make_final_proxy_type(
     },
 )
 
-if cudf.core._compat.PANDAS_GE_210:
-    ArrowStringArrayNumpySemantics = make_final_proxy_type(
-        "ArrowStringArrayNumpySemantics",
-        _Unusable,
-        pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
-        fast_to_slow=_Unusable(),
-        slow_to_fast=_Unusable(),
-        additional_attributes={
-            "_pa_array": _FastSlowAttribute("_pa_array", private=True),
-            "__array__": _FastSlowAttribute("__array__", private=True),
-        },
-    )
+ArrowStringArrayNumpySemantics = make_final_proxy_type(
+    "ArrowStringArrayNumpySemantics",
+    _Unusable,
+    pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "__array__": _FastSlowAttribute("__array__", private=True),
+    },
+)
 
-if cudf.core._compat.PANDAS_GE_230:
-    StringArrayNumpySemantics = make_final_proxy_type(
-        "StringArrayNumpySemantics",
-        _Unusable,
-        pd.core.arrays.string_.StringArrayNumpySemantics,
-        bases=(StringArray,),
-        fast_to_slow=_Unusable(),
-        slow_to_fast=_Unusable(),
-    )
+StringArrayNumpySemantics = make_final_proxy_type(
+    "StringArrayNumpySemantics",
+    _Unusable,
+    pd.core.arrays.string_.StringArrayNumpySemantics,
+    bases=(StringArray,),
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
 
 
 ArrowStringArray = make_final_proxy_type(

@@ -9,7 +9,6 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_220,
     PANDAS_VERSION,
 )
 from cudf.testing import assert_eq
@@ -44,9 +43,6 @@ def test_dataframe_empty_sort_index():
 def test_dataframe_sort_index(
     request, index, axis, ascending, inplace, ignore_index, na_position
 ):
-    if not PANDAS_GE_220 and axis in (1, "columns") and ignore_index:
-        pytest.skip(reason="Bug fixed in pandas-2.2")
-
     pdf = pd.DataFrame(
         {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
         index=index,

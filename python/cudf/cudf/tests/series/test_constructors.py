@@ -15,7 +15,6 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_210,
     PANDAS_VERSION,
 )
 from cudf.core.buffer.spill_manager import get_global_manager
@@ -285,13 +284,7 @@ def test_series_unitness_np_datetimelike_units():
 
 
 def test_from_numpyextensionarray_string_object_pandas_compat_mode():
-    NumpyExtensionArray = (
-        pd.arrays.NumpyExtensionArray
-        if PANDAS_GE_210
-        else pd.arrays.PandasArray
-    )
-
-    data = NumpyExtensionArray(np.array(["a", None], dtype=object))
+    data = pd.arrays.NumpyExtensionArray(np.array(["a", None], dtype=object))
     with cudf.option_context("mode.pandas_compatible", True):
         result = cudf.Series(data)
     expected = pd.Series(data)

@@ -9,7 +9,8 @@ import pytest
 
 import cudf
 from cudf.core._compat import (
-    PANDAS_GE_220,
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION,
 )
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
@@ -273,7 +274,7 @@ def test_fillna_categorical(psr, fill_value, inplace):
             pd.date_range(
                 "2010-01-01",
                 "2020-01-10",
-                freq="1YE" if PANDAS_GE_220 else "1y",
+                freq="1YE",
             )
         ),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
@@ -320,7 +321,7 @@ def test_fillna_categorical(psr, fill_value, inplace):
             pd.date_range(
                 "2010-01-01",
                 "2020-01-10",
-                freq="1YE" if PANDAS_GE_220 else "1y",
+                freq="1YE",
             )
         )
         + pd.Timedelta(days=1),

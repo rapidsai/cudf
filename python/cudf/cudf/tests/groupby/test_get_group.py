@@ -5,9 +5,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_GE_220,
-)
 from cudf.testing import assert_eq, assert_groupby_results_equal
 
 
@@ -57,9 +54,6 @@ def test_groupby_get_group(group, name):
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_220, reason="pandas behavior applicable in >=2.2"
-)
 def test_get_group_list_like():
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     result = df.groupby(["a"]).get_group((1,))
