@@ -20,7 +20,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
-  std::span<int8_t const> force_non_nullable,
+  std::span<int8_t const> is_agg_intermediate,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 }  // namespace cudf::groupby::detail::hash
