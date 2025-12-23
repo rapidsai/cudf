@@ -22,8 +22,8 @@ def gather(
     nullify: bool = False,
 ) -> list[plc.Column]:
     plc_tbl = plc.copying.gather(
-        plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
-        gather_map.to_pylibcudf(mode="read"),
+        plc.Table([col.plc_column for col in columns]),
+        gather_map.plc_column,
         plc.copying.OutOfBoundsPolicy.NULLIFY
         if nullify
         else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
@@ -66,12 +66,12 @@ def scatter(
         if isinstance(sources[0], plc.Scalar)
         else plc.Table(
             [
-                col.to_pylibcudf(mode="read")  # type: ignore[union-attr]
+                col.plc_column  # type: ignore[union-attr]
                 for col in sources
             ]
         ),
-        scatter_map.to_pylibcudf(mode="read"),
-        plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
+        scatter_map.plc_column,
+        plc.Table([col.to_pylibcudf(mode="write") for col in target_columns]),
     )
 
     return plc_tbl.columns()
@@ -84,9 +84,7 @@ def columns_split(
     return [
         plc_tbl.columns()
         for plc_tbl in plc.copying.split(
-            plc.Table(
-                [col.to_pylibcudf(mode="read") for col in input_columns]
-            ),
+            plc.Table([col.plc_column for col in input_columns]),
             splits,
         )
     ]
