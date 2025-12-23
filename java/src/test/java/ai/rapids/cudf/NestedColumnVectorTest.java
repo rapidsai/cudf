@@ -69,34 +69,6 @@ public class NestedColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  public void testMultipleReferencesToNestedColumn() {
-    try (ColumnVector col1 = ColumnVector.fromInts(1, 2, 3);
-         ColumnVector col2 = ColumnVector.fromStrings("a", "b", "c")) {
-      
-      NestedColumnVector struct1 = new NestedColumnVector(DType.STRUCT, col1, col2);
-      assertEquals(2, col1.getRefCount());
-      assertEquals(2, col2.getRefCount());
-      
-      // Increment ref count on the struct itself
-      NestedColumnVector struct2 = (NestedColumnVector) struct1.incRefCount();
-      assertEquals(2, struct1.getRefCount());
-      assertEquals(2, col1.getRefCount()); // Children ref count shouldn't change
-      assertEquals(2, col2.getRefCount());
-      
-      // Close one reference
-      struct1.close();
-      assertEquals(1, struct2.getRefCount());
-      assertEquals(2, col1.getRefCount()); // Children should still be referenced
-      assertEquals(2, col2.getRefCount());
-      
-      // Close final reference
-      struct2.close();
-      assertEquals(1, col1.getRefCount()); // Children ref counts should decrease
-      assertEquals(1, col2.getRefCount());
-    }
-  }
-
-  @Test
   public void testChildrenMustHaveSameRowCount() {
     try (ColumnVector col1 = ColumnVector.fromInts(1, 2, 3);
          ColumnVector col2 = ColumnVector.fromStrings("a", "b")) {
@@ -162,12 +134,19 @@ public class NestedColumnVectorTest extends CudfTestBase {
       assertEquals(4, struct.getRowCount());
       assertEquals(4, struct.getNumChildren());
       
-      try (ColumnView[] children = struct.getChildColumnViews()) {
+      ColumnView[] children = struct.getChildColumnViews();
+      try {
         assertEquals(4, children.length);
         assertEquals(DType.INT32, children[0].getType());
         assertEquals(DType.INT64, children[1].getType());
         assertEquals(DType.FLOAT64, children[2].getType());
         assertEquals(DType.STRING, children[3].getType());
+      } finally {
+        for (ColumnView child : children) {
+          if (child != null) {
+            child.close();
+          }
+        }
       }
     }
   }
@@ -196,12 +175,27 @@ public class NestedColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  public void testUseInTableOperations() {
-    // Test that NestedColumnVector can be used in Table operations
+  public void testConvertToColumnVector() {
+    // Test that NestedColumnVector can be converted to ColumnVector
     try (ColumnVector col1 = ColumnVector.fromInts(1, 2, 3);
          ColumnVector col2 = ColumnVector.fromStrings("a", "b", "c");
          NestedColumnVector struct = new NestedColumnVector(DType.STRUCT, col1, col2);
-         Table t = new Table(struct)) {
+         ColumnVector cv = struct.copyToColumnVector()) {
+      
+      assertEquals(DType.STRUCT, cv.getType());
+      assertEquals(3, cv.getRowCount());
+      assertEquals(2, cv.getNumChildren());
+    }
+  }
+
+  @Test
+  public void testUseInTableOperations() {
+    // Test that NestedColumnVector can be converted and used in Table operations
+    try (ColumnVector col1 = ColumnVector.fromInts(1, 2, 3);
+         ColumnVector col2 = ColumnVector.fromStrings("a", "b", "c");
+         NestedColumnVector struct = new NestedColumnVector(DType.STRUCT, col1, col2);
+         ColumnVector cv = struct.copyToColumnVector();
+         Table t = new Table(cv)) {
       
       assertEquals(1, t.getNumberOfColumns());
       assertEquals(3, t.getRowCount());

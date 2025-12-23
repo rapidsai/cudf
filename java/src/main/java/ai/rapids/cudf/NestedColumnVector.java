@@ -12,7 +12,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * This class represents a nested column vector that holds references to existing ColumnVector
+ * This class represents a nested column view that holds references to existing ColumnVector
  * children without copying data. This enables zero-copy creation of nested columns from existing
  * ColumnVector objects.
  * 
@@ -21,13 +21,16 @@ import java.util.List;
  * 
  * The class increments the reference count of child columns on construction and decrements
  * them on close, ensuring proper memory management.
+ * 
+ * Note: This class extends ColumnView rather than ColumnVector because ColumnVector is final.
+ * However, you can convert this to a ColumnVector using copyToColumnVector() if needed.
  */
-public final class NestedColumnVector extends ColumnVector {
+public final class NestedColumnVector extends ColumnView {
 
   private final List<ColumnVector> children;
 
   /**
-   * Create a nested STRUCT column vector from existing column vectors.
+   * Create a nested STRUCT column view from existing column vectors.
    * 
    * @param type the data type of the nested column, must be STRUCT
    * @param children the child columns for the STRUCT
@@ -106,19 +109,16 @@ public final class NestedColumnVector extends ColumnVector {
   }
 
   /**
-   * Close this nested column vector and decrement reference counts of children.
+   * Close this nested column view and decrement reference counts of children.
    */
   @Override
   public synchronized void close() {
-    // First close the parent to decrement our own reference count
+    // Close the parent view first
     super.close();
     
-    // If this was the last reference to this NestedColumnVector,
-    // decrement the reference counts of children
-    if (getRefCount() == 0) {
-      for (ColumnVector child : children) {
-        child.close();
-      }
+    // Decrement the reference counts of children
+    for (ColumnVector child : children) {
+      child.close();
     }
   }
 
