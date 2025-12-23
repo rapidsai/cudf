@@ -86,7 +86,7 @@ void hash_compound_agg_finalizer::visit(cudf::detail::mean_aggregation const& ag
   auto const count_agg        = make_count_aggregation();
   auto const sum_result       = cache->get_result(col, *sum_agg);
   auto const count_result     = cache->get_result(col, *count_agg);
-  auto const null_removed_sum = [&] {
+  auto const sum_without_nulls = [&] {
     if (sum_result.null_count() == 0) { return sum_result; }
     return column_view{
       sum_result.type(), sum_result.size(), sum_result.head(), nullptr, 0, sum_result.offset()};
@@ -96,7 +96,7 @@ void hash_compound_agg_finalizer::visit(cudf::detail::mean_aggregation const& ag
   // This is because the null mask (if exists) is just needed to be copied from the sum result,
   // and copying is faster than running the `bitmask_and` kernel.
   auto result =
-    cudf::detail::binary_operation(null_removed_sum,
+    cudf::detail::binary_operation(sum_without_nulls,
                                    count_result,
                                    binary_operator::DIV,
                                    cudf::detail::target_type(input_type, aggregation::MEAN),
