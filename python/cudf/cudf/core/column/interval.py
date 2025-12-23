@@ -9,9 +9,9 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column.column import as_column
+from cudf.core.column.column import _handle_nulls, as_column
 from cudf.core.column.struct import StructColumn
-from cudf.core.dtypes import IntervalDtype
+from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
@@ -62,7 +62,17 @@ class IntervalColumn(StructColumn):
 
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()  # type: ignore[union-attr]
-        struct_arrow = super().to_arrow()
+        struct_arrow = self.plc_column.to_arrow(
+            metadata=_dtype_to_metadata(self.dtype)  # type: ignore[arg-type]
+        )
+        possibly_null_struct_arrow = _handle_nulls(struct_arrow)
+
+        # Disable null handling for all null arrays because those cannot be
+        # passed to from_storage below, in that case we leave the struct
+        # structure in place.
+        if not isinstance(possibly_null_struct_arrow, pa.lib.NullArray):
+            struct_arrow = possibly_null_struct_arrow
+
         if len(struct_arrow) == 0:
             # struct arrow is pa.struct array with null children types
             # we need to make sure its children have non-null type

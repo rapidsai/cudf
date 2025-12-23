@@ -59,6 +59,7 @@ from cudf.core.dtypes import (
     IntervalDtype,
     ListDtype,
     StructDtype,
+    _dtype_to_metadata,
 )
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.errors import MixedTypeError
@@ -190,6 +191,88 @@ class ROCAIWrapper:
     def size(self) -> int:
         """Size in bytes (Span protocol)."""
         return self._buffer.size
+
+
+def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
+    # Recursively replace all-null nested arrays with arrow NullArrays and make all
+    # types nullable in the schema even if the columns contain no nulls
+    array_type = arrow_array.type
+
+    # Empty nested or string types should become pyarrow null arrays instead of the
+    # normal array classes to match how pyarrow ingests such pandas objects.
+    if (
+        pa.types.is_nested(array_type)
+        or pa.types.is_string(array_type)
+        or pa.types.is_large_string(array_type)
+    ) and (arrow_array.null_count == len(arrow_array)):
+        return pa.NullArray.from_buffers(
+            pa.null(), len(arrow_array), [pa.py_buffer(b"")]
+        )
+
+    if pa.types.is_struct(array_type):
+        arrow_array = cast(pa.StructArray, arrow_array)
+
+        new_fields = []
+        requires_reconstruction = False
+        for i, subfield in enumerate(array_type):
+            new_field_array = field_array = arrow_array.field(i)
+            field_type = subfield.type
+            if (
+                pa.types.is_nested(field_type)
+                or pa.types.is_string(field_type)
+                or pa.types.is_large_string(field_type)
+            ):
+                new_field_array = _handle_nulls(field_array)
+            new_fields.append(new_field_array)
+            # Reconstruct if we replaced nulls in children or need nullability change
+            requires_reconstruction = (
+                requires_reconstruction
+                or (new_field_array is not field_array)
+                or not subfield.nullable
+                and not pa.types.is_null(field_type)
+            )
+
+        if requires_reconstruction:
+            new_struct_type = pa.struct(
+                [
+                    pa.field(at.name, nf.type, nullable=True)
+                    for at, nf in zip(array_type, new_fields, strict=True)
+                ]
+            )
+            # Only need validity buffer for structs
+            buffers = cast(list[pa.Buffer], arrow_array.buffers()[:1])
+            return pa.StructArray.from_buffers(
+                new_struct_type,
+                len(arrow_array),
+                buffers,
+                children=new_fields,
+                null_count=arrow_array.null_count,
+            )
+    elif pa.types.is_list(array_type):
+        arrow_array = cast(pa.ListArray, arrow_array)
+
+        values = arrow_array.values
+        new_values = _handle_nulls(values)
+
+        value_field = array_type.value_field
+        has_non_nullable_field = (
+            not value_field.nullable and not pa.types.is_null(value_field.type)
+        )
+
+        if new_values is not values or has_non_nullable_field:
+            buffers = cast(list[pa.Buffer], arrow_array.buffers()[:2])
+            list_type = pa.list_(
+                pa.field(value_field.name, new_values.type, nullable=True)
+            )
+            return pa.ListArray.from_buffers(
+                list_type,
+                len(arrow_array),
+                buffers,
+                children=[new_values],
+                null_count=arrow_array.null_count,
+            )
+    # For other primitives (int/float/etc), preserve type even if all null
+    return arrow_array
 
 
 class ColumnBase(Serializable, BinaryOperand, Reducible):
@@ -941,22 +1024,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def to_arrow(self) -> pa.Array:
-        """Convert to PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> col = cudf.core.column.as_column([1, 2, 3, 4])
-        >>> col.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7f886547f830>
-        [
-          1,
-          2,
-          3,
-          4
-        ]
-        """
-        return self.plc_column.to_arrow()
+        return _handle_nulls(
+            self.plc_column.to_arrow(
+                metadata=_dtype_to_metadata(self.dtype)  # type: ignore[arg-type]
+            )
+        )
 
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> ColumnBase:
