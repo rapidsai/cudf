@@ -3,15 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "groupby/sort/group_single_pass_reduction_util.cuh"
+#include "group_single_pass_reduction_util.cuh"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/gather.h>
 
 namespace cudf {
 namespace groupby {
@@ -32,8 +37,8 @@ std::unique_ptr<column> group_max_by(column_view const& values,
                "MAX_BY aggregation expects a struct column with exactly 2 children");
 
   // First child is the ordering column, second child is the value column
-  auto const& ordering_column = struct_view.get_sliced_child(0, stream);
-  auto const& value_column    = struct_view.get_sliced_child(1, stream);
+  auto const ordering_column = struct_view.get_sliced_child(0, stream);
+  auto const value_column    = struct_view.get_sliced_child(1, stream);
 
   // Find argmax of the ordering column
   auto arg_indices = type_dispatcher(ordering_column.type(),
@@ -45,9 +50,8 @@ std::unique_ptr<column> group_max_by(column_view const& values,
                                      mr);
 
   // Map indices from sorted to original order
-  auto indices_view = arg_indices->view();
-  auto mapped_indices =
-    rmm::device_uvector<size_type>(indices_view.size(), stream, mr);
+  auto indices_view   = arg_indices->view();
+  auto mapped_indices = rmm::device_uvector<size_type>(indices_view.size(), stream, mr);
   thrust::gather(rmm::exec_policy_nosync(stream),
                  indices_view.begin<size_type>(),
                  indices_view.end<size_type>(),
@@ -55,8 +59,8 @@ std::unique_ptr<column> group_max_by(column_view const& values,
                  mapped_indices.data());
 
   // Create a column view from the mapped indices
-  auto const indices_column = column_view(
-    data_type{type_id::INT32}, mapped_indices.size(), mapped_indices.data());
+  auto const indices_column =
+    column_view(data_type{type_id::INT32}, mapped_indices.size(), mapped_indices.data());
 
   // Gather the value column using the mapped indices
   auto gathered_table = cudf::detail::gather(table_view{{value_column}},
@@ -69,11 +73,12 @@ std::unique_ptr<column> group_max_by(column_view const& values,
   // Preserve null mask from argmax results
   auto result = std::move(gathered_table->release().front());
   if (arg_indices->nullable()) {
-    result->set_null_mask(rmm::device_buffer{*arg_indices->view().null_mask(),
-                                            cudf::bitmask_allocation_size_bytes(result->size()),
-                                            stream,
-                                            mr},
-                         arg_indices->null_count());
+    result->set_null_mask(
+      rmm::device_buffer{*arg_indices->view().null_mask(),
+                         cudf::bitmask_allocation_size_bytes(result->size()),
+                         stream,
+                         mr},
+      arg_indices->null_count());
   }
 
   return result;

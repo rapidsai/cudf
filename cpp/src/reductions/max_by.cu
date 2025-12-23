@@ -4,10 +4,13 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/reduction.hpp>
+#include <cudf/reduction/detail/reduction_functions.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -46,24 +49,8 @@ std::unique_ptr<scalar> max_by(column_view const& input,
   // Extract the index
   auto const max_index = static_cast<cudf::numeric_scalar<size_type> const&>(*argmax_result).value(stream);
 
-  // Gather the value at that index
-  auto const indices = rmm::device_uvector<size_type>(1, stream, mr);
-  cudaMemcpyAsync(const_cast<size_type*>(indices.data()),
-                  &max_index,
-                  sizeof(size_type),
-                  cudaMemcpyHostToDevice,
-                  stream.value());
-
-  auto const indices_column = column_view(data_type{type_id::INT32}, 1, indices.data());
-  auto gathered_table = cudf::detail::gather(table_view{{value_column}},
-                                             indices_column,
-                                             cudf::out_of_bounds_policy::NULLIFY,
-                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                             stream,
-                                             mr);
-
-  // Extract scalar from the gathered result
-  return cudf::get_element(gathered_table->get_column(0).view(), 0, stream, mr);
+  // Get the element at that index from the value column
+  return get_element(value_column, max_index, stream, mr);
 }
 
 }  // namespace cudf::reduction::detail
