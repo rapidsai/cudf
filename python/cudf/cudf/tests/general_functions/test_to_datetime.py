@@ -11,7 +11,6 @@ import cudf
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
-    expect_warning_if,
 )
 
 
@@ -229,22 +228,15 @@ def test_to_datetime_units(data, unit):
         (pd.Series([2015, 2020.0, 2021.2]), "%Y"),
     ],
 )
-@pytest.mark.parametrize("infer_datetime_format", [True, False])
-def test_to_datetime_format(data, format, infer_datetime_format):
+def test_to_datetime_format(data, format):
     pd_data = data
     if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
         gd_data = cudf.from_pandas(pd_data)
     else:
         gd_data = pd_data
 
-    with expect_warning_if(True, UserWarning):
-        expected = pd.to_datetime(
-            pd_data, format=format, infer_datetime_format=infer_datetime_format
-        )
-    with expect_warning_if(not infer_datetime_format):
-        actual = cudf.to_datetime(
-            gd_data, format=format, infer_datetime_format=infer_datetime_format
-        )
+    expected = pd.to_datetime(pd_data, format=format)
+    actual = cudf.to_datetime(gd_data, format=format)
 
     if isinstance(expected, pd.Series):
         assert_eq(actual, expected, check_dtype=False)

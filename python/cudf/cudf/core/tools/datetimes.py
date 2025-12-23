@@ -74,7 +74,7 @@ def to_datetime(
     utc: bool = False,
     format: str | None = None,
     exact: bool = True,
-    unit: str = "ns",
+    unit: str = None,
     infer_datetime_format: bool = True,
     origin="unix",
     cache: bool = True,
@@ -165,12 +165,16 @@ def to_datetime(
             FutureWarning,
         )
 
-    if infer_datetime_format in {None, False}:
-        warnings.warn(
-            "`infer_datetime_format` is deprecated and will "
-            "be removed in a future version of cudf.",
-            FutureWarning,
-        )
+    # if infer_datetime_format in {None, False}:
+    #     warnings.warn(
+    #         "`infer_datetime_format` is deprecated and will "
+    #         "be removed in a future version of cudf.",
+    #         FutureWarning,
+    #     )
+    # infer_datetime_format = True
+    # import pdb;pdb.set_trace()
+    # if unit is None:
+    #     unit = "us"
 
     if arg is None:
         return None
@@ -396,7 +400,9 @@ def _process_col(
                     dayfirst=dayfirst,
                 )
             col = col.strptime(
-                dtype=np.dtype(_unit_dtype_map[unit]),
+                dtype=np.dtype(
+                    _unit_dtype_map.get(unit, _unit_dtype_map["us"])
+                ),
                 format=format,
             )
     elif col.dtype.kind != "M":
