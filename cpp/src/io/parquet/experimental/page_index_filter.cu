@@ -8,11 +8,11 @@
 #include "page_index_filter_utils.hpp"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/algorithm/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -35,7 +35,6 @@
 #include <cuda/functional>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/logical.h>
 
 #include <algorithm>
 #include <limits>
@@ -977,26 +976,25 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
 
   auto const total_rows = total_rows_in_row_groups(row_group_indices);
 
-  // Return an empty vector if all rows are invalid or all rows are required
-  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
-      thrust::all_of(rmm::exec_policy(stream),
-                     row_mask.template begin<bool>() + row_mask_offset,
-                     row_mask.template begin<bool>() + row_mask_offset + total_rows,
-                     cuda::std::identity{})) {
-    return thrust::host_vector<bool>(0, stream);
-  }
-
   CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
                "Mismatch in total rows in input row mask and row groups",
                std::invalid_argument);
+
+  // Return an empty vector if all rows are invalid or all rows are required
+  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
+      cudf::detail::all_of(row_mask.template begin<bool>() + row_mask_offset,
+                           row_mask.template begin<bool>() + row_mask_offset + total_rows,
+                           cuda::std::identity{},
+                           stream)) {
+    return thrust::host_vector<bool>(0, stream);
+  }
 
   auto const has_page_index = compute_has_page_index(per_file_metadata, row_group_indices);
 
   // Return early if page index is not present
   if (not has_page_index) {
     CUDF_LOG_WARN("Encountered missing Parquet page index for one or more output columns");
-    return thrust::host_vector<bool>(
-      0);  // An empty data page mask indicates all pages are required
+    return thrust::host_vector<bool>{};
   }
 
   // Collect column schema indices from the input columns.
@@ -1033,7 +1031,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     using task_page_row_offsets_type = std::vector<std::pair<std::vector<size_type>, size_type>>;
     std::vector<std::future<task_page_row_offsets_type>> page_row_offset_tasks{};
     page_row_offset_tasks.reserve(max_tasks);
-    auto const cols_per_thread = cudf::util::div_rounding_up_unsafe(num_columns, max_tasks);
+    auto const cols_per_thread = cudf::util::div_rounding_up_safe<size_t>(num_columns, max_tasks);
 
     // Submit page row offset compute tasks
     std::transform(thrust::counting_iterator(0),
@@ -1111,7 +1109,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     thrust::counting_iterator(0),
     thrust::counting_iterator(num_levels - 1),
     [&](auto const prev_level) {
-      auto const current_level_size = cudf::util::div_rounding_up_unsafe(prev_level_size, 2);
+      auto const current_level_size = cudf::util::div_rounding_up_safe(prev_level_size, 2);
       thrust::for_each(
         rmm::exec_policy_nosync(stream),
         thrust::counting_iterator(0),

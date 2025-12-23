@@ -117,7 +117,9 @@ empty_parameter_set_mark = "fail_at_collect"
 filterwarnings = [
   "error",
   "ignore:::.*xdist.*",
-  "ignore:::.*pytest.*"
+  "ignore:::.*pytest.*",
+  # Temporarily in place until a numba-cuda version is released that avoids the cuda.core.experimental usage
+  "ignore:The cuda.core.experimental namespace is deprecated:DeprecationWarning",
 ]
 xfail_strict = true
 
