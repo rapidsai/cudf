@@ -130,6 +130,7 @@ if TYPE_CHECKING:
         Axis,
         ColumnLike,
         Dtype,
+        NoDefault,
         ScalarLike,
     )
 
@@ -7253,7 +7254,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def stack(
-        self, level=-1, dropna=no_default, future_stack=False
+        self,
+        level=-1,
+        dropna: bool | NoDefault = no_default,
+        future_stack: bool = True,
     ) -> DataFrame | Series:
         """Stack the prescribed level(s) from columns to index
 
@@ -7396,14 +7400,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     "version of cudf."
                 )
         else:
-            if dropna is not no_default or self._data.nlevels > 1:
-                warnings.warn(
-                    "The previous implementation of stack is deprecated and "
-                    "will be removed in a future version of cudf. Specify "
-                    "future_stack=True to adopt the new implementation and "
-                    "silence this warning.",
-                    FutureWarning,
-                )
+            warnings.warn(
+                "The previous implementation of stack is deprecated and "
+                "will be removed in a future version of cudf. Do not specify the "
+                "future_stack argument to adopt the new implementation and "
+                "silence this warning.",
+                FutureWarning,
+            )
             if dropna is no_default:
                 dropna = True
 
