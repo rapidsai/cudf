@@ -426,9 +426,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             else:
                 with acquire_spill_lock():
                     self._mask = as_buffer(
-                        plc.null_mask.copy_bitmask(
-                            self.to_pylibcudf(mode="read")
-                        )
+                        plc.null_mask.copy_bitmask(self.plc_column)
                     )
         return self._mask
 
@@ -552,7 +550,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             else:
                 # Compute children from the column view (children factoring self.size)
                 children = ColumnBase.from_pylibcudf(
-                    self.to_pylibcudf(mode="read").copy()
+                    self.plc_column.copy()
                 ).base_children
                 dtypes = (
                     base_child.dtype for base_child in self.base_children
@@ -951,7 +949,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @acquire_spill_lock()
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         plc_column = plc.replace.clamp(
-            self.to_pylibcudf(mode="read"),
+            self.plc_column,
             pa_scalar_to_plc_scalar(
                 pa.scalar(lo, type=cudf_dtype_to_pa_type(self.dtype))
             ),
@@ -1164,7 +1162,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             with acquire_spill_lock():
                 result = type(self).from_pylibcudf(
                     plc.filling.fill(
-                        self.to_pylibcudf(mode="read"),
+                        self.plc_column,
                         begin,
                         end,
                         fill_value,
@@ -1225,7 +1223,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def shift(self, offset: int, fill_value: ScalarLike) -> Self:
         plc_fill_value = self._scalar_to_plc_scalar(fill_value)
         plc_col = plc.copying.shift(
-            self.to_pylibcudf(mode="read"),
+            self.plc_column,
             offset,
             plc_fill_value,
         )
@@ -1251,9 +1249,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         if deep:
             with acquire_spill_lock():
-                result = type(self).from_pylibcudf(
-                    self.to_pylibcudf(mode="read").copy()
-                )
+                result = type(self).from_pylibcudf(self.plc_column.copy())
             return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
         else:
             col = type(self)(
@@ -1310,7 +1306,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise IndexError("single positional indexer is out-of-bounds")
         with acquire_spill_lock():
             plc_scalar = plc.copying.get_element(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 index,
             )
         py_element = plc_scalar.to_arrow()
@@ -1335,7 +1331,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 result = [
                     type(self).from_pylibcudf(col)
                     for col in plc.copying.slice(
-                        self.to_pylibcudf(mode="read"),
+                        self.plc_column,
                         [start, stop],
                     )
                 ]
@@ -1445,8 +1441,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 with acquire_spill_lock():
                     return type(self).from_pylibcudf(
                         plc.copying.copy_range(
-                            value.to_pylibcudf(mode="read"),
-                            self.to_pylibcudf(mode="read"),
+                            value.plc_column,
+                            self.to_pylibcudf(mode="write"),
                             0,
                             num_keys,
                             start,
@@ -1498,11 +1494,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if key.dtype.kind == "b":
             with acquire_spill_lock():
                 plc_table = plc.copying.boolean_mask_scatter(
-                    plc.Table([value.to_pylibcudf(mode="read")])
+                    plc.Table([value.plc_column])
                     if isinstance(value, ColumnBase)
                     else [value],
-                    plc.Table([self.to_pylibcudf(mode="read")]),
-                    key.to_pylibcudf(mode="read"),
+                    plc.Table([self.to_pylibcudf(mode="write")]),
+                    key.plc_column,
                 )
                 return (
                     type(self)  # type: ignore[return-value]
@@ -1556,9 +1552,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> Self:
         return type(self).from_pylibcudf(
             plc.replace.find_and_replace_all(
-                self.to_pylibcudf(mode="read"),
-                values_to_replace.to_pylibcudf(mode="read"),
-                replacement_values.to_pylibcudf(mode="read"),
+                self.plc_column,
+                values_to_replace.plc_column,
+                replacement_values.plc_column,
             )
         )
 
@@ -1566,7 +1562,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def repeat(self, repeats: int) -> Self:
         return type(self).from_pylibcudf(
             plc.filling.repeat(
-                plc.Table([self.to_pylibcudf(mode="read")]), repeats
+                plc.Table([self.plc_column]), repeats
             ).columns()[0]
         )
 
@@ -1606,9 +1602,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             elif isinstance(fill_value, plc.Scalar):
                 plc_replace = fill_value
             else:
-                plc_replace = fill_value.to_pylibcudf(mode="read")
+                plc_replace = fill_value.plc_column
             plc_column = plc.replace.replace_nulls(
-                input_col.to_pylibcudf(mode="read"),
+                input_col.plc_column,
                 plc_replace,
             )
             result = type(self).from_pylibcudf(plc_column)
@@ -1617,18 +1613,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @acquire_spill_lock()
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
-        return type(self).from_pylibcudf(
-            plc.unary.is_valid(self.to_pylibcudf(mode="read"))
-        )
+        return type(self).from_pylibcudf(plc.unary.is_valid(self.plc_column))
 
     def isnan(self) -> ColumnBase:
         """Identify NaN values in a Column."""
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
         with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.unary.is_nan(self.to_pylibcudf(mode="read"))
-            )
+            return type(self).from_pylibcudf(plc.unary.is_nan(self.plc_column))
 
     def notnan(self) -> ColumnBase:
         """Identify non-NaN values in a Column."""
@@ -1636,7 +1628,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return as_column(True, length=len(self))
         with acquire_spill_lock():
             return type(self).from_pylibcudf(
-                plc.unary.is_not_nan(self.to_pylibcudf(mode="read"))
+                plc.unary.is_not_nan(self.plc_column)
             )
 
     def isnull(self) -> ColumnBase:
@@ -1663,7 +1655,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             with acquire_spill_lock():
                 result = type(self).from_pylibcudf(
-                    plc.unary.is_valid(self.to_pylibcudf(mode="read"))
+                    plc.unary.is_valid(self.plc_column)
                 )
 
             if self.dtype.kind == "f":
@@ -1879,9 +1871,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError("Column must have no nulls.")
 
         with acquire_spill_lock():
-            mask, _ = plc.transform.bools_to_mask(
-                self.to_pylibcudf(mode="read")
-            )
+            mask, _ = plc.transform.bools_to_mask(self.plc_column)
             return as_buffer(mask)
 
     @property
@@ -1913,8 +1903,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         return ColumnBase.from_pylibcudf(
             plc.search.contains(
-                self.to_pylibcudf(mode="read"),
-                other.to_pylibcudf(mode="read"),
+                self.plc_column,
+                other.plc_column,
             )
         )
 
@@ -1930,7 +1920,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         order = sorting.ordering([ascending], [na_position])
         with acquire_spill_lock():
             plc_table = plc.sorting.sort(
-                plc.Table([self.to_pylibcudf(mode="read")]),
+                plc.Table([self.plc_column]),
                 order[0],
                 order[1],
             )
@@ -1946,7 +1936,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         except KeyError:
             with acquire_spill_lock():
                 result = plc.stream_compaction.distinct_count(
-                    self.to_pylibcudf(mode="read"),
+                    self.plc_column,
                     plc.types.NullPolicy.EXCLUDE
                     if dropna
                     else plc.types.NullPolicy.INCLUDE,
@@ -1963,9 +1953,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @acquire_spill_lock()
     def cast(self, dtype: DtypeObj) -> ColumnBase:
         result = type(self).from_pylibcudf(
-            plc.unary.cast(
-                self.to_pylibcudf(mode="read"), dtype_to_pylibcudf_type(dtype)
-            )
+            plc.unary.cast(self.plc_column, dtype_to_pylibcudf_type(dtype))
         )
         if isinstance(
             result.dtype,
@@ -2303,7 +2291,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             mask,
             null_count,
             0,
-            [child.to_pylibcudf(mode="read") for child in children],
+            [child.plc_column for child in children],
             validate=False,  # Skip validation to avoid triggering SpillableBuffer.ptr
         )
         return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
@@ -2449,8 +2437,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return _return_sentinel_column()
 
         left_rows, right_rows = plc.join.left_join(
-            plc.Table([self.to_pylibcudf(mode="read")]),
-            plc.Table([cats.to_pylibcudf(mode="read")]),
+            plc.Table([self.plc_column]),
+            plc.Table([cats.plc_column]),
             plc.types.NullEquality.EQUAL,
         )
         left_gather_map = type(self).from_pylibcudf(left_rows)
@@ -2476,11 +2464,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             type(self)
             .from_pylibcudf(  # type: ignore[return-value]
                 plc.copying.copy_if_else(
-                    self.to_pylibcudf(mode="read"),
+                    self.plc_column,
                     other
                     if isinstance(other, plc.Scalar)
-                    else other.to_pylibcudf(mode="read"),
-                    boolean_mask.to_pylibcudf(mode="read"),
+                    else other.plc_column,
+                    boolean_mask.plc_column,
                 )
             )
             ._with_type_metadata(self.dtype)
@@ -2500,8 +2488,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @acquire_spill_lock()
     def one_hot_encode(self, categories: ColumnBase) -> Generator[ColumnBase]:
         plc_table = plc.transform.one_hot_encode(
-            self.to_pylibcudf(mode="read"),
-            categories.to_pylibcudf(mode="read"),
+            self.plc_column,
+            categories.plc_column,
         )
         return (
             type(self).from_pylibcudf(col, data_ptr_exposed=True)
@@ -2512,7 +2500,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def scan(self, scan_op: str, inclusive: bool, **kwargs: Any) -> Self:
         return type(self).from_pylibcudf(
             plc.reduce.scan(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 aggregation.make_aggregation(scan_op, kwargs).plc_obj,
                 plc.reduce.ScanType.INCLUSIVE
                 if inclusive
@@ -2536,7 +2524,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         with acquire_spill_lock():
             plc_scalar = plc.reduce.reduce(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 aggregation.make_aggregation(reduction_op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
@@ -2575,7 +2563,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def minmax(self) -> tuple[ScalarLike, ScalarLike]:
-        min_val, max_val = plc.reduce.minmax(self.to_pylibcudf(mode="read"))
+        min_val, max_val = plc.reduce.minmax(self.plc_column)
         return (
             type(self)
             .from_pylibcudf(plc.Column.from_scalar(min_val, 1))
@@ -2597,7 +2585,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> Self:
         return type(self).from_pylibcudf(
             plc.sorting.rank(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 method,
                 column_order,
                 null_handling,
@@ -2617,12 +2605,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> NumericalColumn:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.labeling.label_bins(
-                self.to_pylibcudf(mode="read"),
-                left_edge.to_pylibcudf(mode="read"),
+                self.plc_column,
+                left_edge.plc_column,
                 plc.labeling.Inclusive.YES
                 if left_inclusive
                 else plc.labeling.Inclusive.NO,
-                right_edge.to_pylibcudf(mode="read"),
+                right_edge.plc_column,
                 plc.labeling.Inclusive.YES
                 if right_inclusive
                 else plc.labeling.Inclusive.NO,
@@ -2780,7 +2768,7 @@ def column_empty(
                 mask,
                 row_count,
                 0,
-                [child.to_pylibcudf(mode="read") for child in children],
+                [child.plc_column for child in children],
             )
         )._with_type_metadata(dtype)
     else:
@@ -3546,6 +3534,6 @@ def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
     with acquire_spill_lock():
         return ColumnBase.from_pylibcudf(
             plc.concatenate.concatenate(
-                [col.to_pylibcudf(mode="read") for col in objs_with_len]
+                [col.plc_column for col in objs_with_len]
             )
         )._with_type_metadata(objs_with_len[0].dtype)

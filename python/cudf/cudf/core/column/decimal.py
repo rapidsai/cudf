@@ -168,7 +168,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             with acquire_spill_lock():
                 plc_column = (
                     plc.strings.convert.convert_fixed_point.from_fixed_point(
-                        self.to_pylibcudf(mode="read"),
+                        self.plc_column,
                     )
                 )
                 return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
@@ -339,7 +339,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             col = ColumnBase.from_pylibcudf(
                 plc.Column.from_scalar(plc_scalar, 1)
             ).astype(self.dtype)
-            return plc.copying.get_element(col.to_pylibcudf(mode="read"), 0)
+            return plc.copying.get_element(col.plc_column, 0)
         return plc_scalar
 
     def _validate_fillna_value(
