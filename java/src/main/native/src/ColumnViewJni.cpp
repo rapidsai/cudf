@@ -3013,4 +3013,41 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringContainsMulti(
   JNI_CATCH(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_NestedColumnVector_makeStructViewNative(
+  JNIEnv* env, jclass, jlongArray child_handles, jlong row_count)
+{
+  JNI_NULL_CHECK(env, child_handles, "native view handles are null", 0)
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    auto children        = cudf::jni::native_jpointerArray<cudf::column_view>{env, child_handles};
+    auto children_vector = children.get_dereferenced();
+    return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT},
+                                              row_count,
+                                              nullptr,
+                                              nullptr,
+                                              0,
+                                              0,
+                                              children_vector));
+  }
+  JNI_CATCH(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_NestedColumnVector_makeListViewNative(
+  JNIEnv* env, jclass, jlongArray child_handles, jlong row_count)
+{
+  // For now, LIST support in NestedColumnVector is not implemented.
+  // Users should use ColumnVector.makeListFromOffsets() for creating LIST columns.
+  JNI_NULL_CHECK(env, child_handles, "native view handles are null", 0)
+  JNI_TRY
+  {
+    JNI_THROW_NEW(env,
+                  cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                  "NestedColumnVector does not currently support LIST type. "
+                  "Use ColumnVector.makeListFromOffsets() instead.",
+                  0);
+  }
+  JNI_CATCH(env, 0);
+}
+
 }  // extern "C"
