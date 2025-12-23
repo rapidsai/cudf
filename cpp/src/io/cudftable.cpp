@@ -64,8 +64,8 @@ void write_cudftable(data_sink* sink, table_view const& input, rmm::cuda_stream_
     sink->device_write(packed.gpu_data->data(), header.data_length, stream);
   } else {
     auto host_buffer = cudf::detail::make_host_vector(
-      cudf::device_span<uint8_t const>{static_cast<uint8_t const*>(packed.gpu_data->data()),
-                                       header.data_length},
+      cuda::std::span<uint8_t const>{static_cast<uint8_t const*>(packed.gpu_data->data()),
+                                     header.data_length},
       stream);
     sink->host_write(host_buffer.data(), header.data_length);
   }
