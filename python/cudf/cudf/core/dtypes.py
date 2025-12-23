@@ -17,7 +17,6 @@ from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
 from cudf.utils.dtypes import (
@@ -1169,8 +1168,6 @@ def is_categorical_dtype(obj):
     bool
         Whether or not the array-like or dtype is of a categorical dtype.
     """
-    # Do not remove until pandas 3.0 support is added.
-    assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
     warnings.warn(
         "is_categorical_dtype is deprecated and will be removed in a future "
         "version. Use isinstance(dtype, cudf.CategoricalDtype) instead",

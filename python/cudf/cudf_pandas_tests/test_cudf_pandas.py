@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
-import contextlib
 import copy
 import cProfile
 import datetime
@@ -27,16 +26,12 @@ import pyarrow as pa
 import pytest
 from nbconvert.preprocessors import ExecutePreprocessor
 from numba import (
-    NumbaDeprecationWarning,
-    __version__ as numba_version,
     vectorize,
 )
-from packaging import version
 from pytz import utc
 
 from rmm import RMMError
 
-from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import (
     AttributeFallbackError,
@@ -573,15 +568,12 @@ def test_array_ufunc(series):
 @pytest.mark.xfail(strict=False, reason="Fails in CI, passes locally.")
 def test_groupby_apply_func_returns_series(dataframe):
     pdf, df = dataframe
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
-
     expect = pdf.groupby("a").apply(
-        lambda group: pd.Series({"x": 1}), **kwargs
+        lambda group: pd.Series({"x": 1}), include_groups=False
     )
-    got = df.groupby("a").apply(lambda group: xpd.Series({"x": 1}), **kwargs)
+    got = df.groupby("a").apply(
+        lambda group: xpd.Series({"x": 1}), include_groups=False
+    )
     tm.assert_equal(expect, got)
 
 
@@ -719,11 +711,6 @@ def test_rolling_win_type():
     tm.assert_equal(result, expected)
 
 
-@pytest.mark.xfail(
-    version.parse(numba_version) >= version.parse("0.59")
-    and PANDAS_VERSION < version.parse("2.1"),
-    reason="numba.generated_jit removed in 0.59, requires pandas >= 2.1",
-)
 def test_rolling_apply_numba_engine():
     def weighted_mean(x):
         arr = np.ones((1, x.shape[1]))
@@ -733,15 +720,9 @@ def test_rolling_apply_numba_engine():
     pdf = pd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
     df = xpd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
 
-    ctx = (
-        contextlib.nullcontext()
-        if PANDAS_GE_210
-        else pytest.warns(NumbaDeprecationWarning)
+    expect = pdf.rolling(2, method="table", min_periods=0).apply(
+        weighted_mean, raw=True, engine="numba"
     )
-    with ctx:
-        expect = pdf.rolling(2, method="table", min_periods=0).apply(
-            weighted_mean, raw=True, engine="numba"
-        )
     got = df.rolling(2, method="table", min_periods=0).apply(
         weighted_mean, raw=True, engine="numba"
     )
@@ -1315,10 +1296,6 @@ def test_super_attribute_lookup():
     assert s.max_times_two() == 6
 
 
-@pytest.mark.xfail(
-    PANDAS_VERSION < version.parse("2.1"),
-    reason="DatetimeArray.__floordiv__ missing in pandas-2.0.0",
-)
 def test_floordiv_array_vs_df():
     xarray = xpd.Series([1, 2, 3], dtype="datetime64[ns]").array
     parray = pd.Series([1, 2, 3], dtype="datetime64[ns]").array
@@ -1595,10 +1572,6 @@ def test_numpy_cupy_flatiter(series):
     assert type(arr.flat._fsproxy_slow) is np.flatiter
 
 
-@pytest.mark.xfail(
-    PANDAS_VERSION < version.parse("2.1"),
-    reason="pyarrow_numpy storage type was not supported in pandas-2.0.0",
-)
 def test_arrow_string_arrays():
     cu_s = xpd.Series(["a", "b", "c"])
     pd_s = pd.Series(["a", "b", "c"])
@@ -1612,17 +1585,10 @@ def test_arrow_string_arrays():
 
     tm.assert_equal(cu_arr, pd_arr)
 
-    xpd_pa_np_storage_type = (
-        xpd.StringDtype("pyarrow_numpy")
-        if PANDAS_VERSION < version.parse("2.3.1")
-        else pd.StringDtype(storage="pyarrow", na_value=np.nan)
-    )
+    # TODO: Should this use xpd.StringDtype?
+    xpd_pa_np_storage_type = pd.StringDtype(storage="pyarrow", na_value=np.nan)
 
-    pd_pa_np_storage_type = (
-        pd.StringDtype("pyarrow_numpy")
-        if PANDAS_VERSION < version.parse("2.3.1")
-        else pd.StringDtype(storage="pyarrow", na_value=np.nan)
-    )
+    pd_pa_np_storage_type = pd.StringDtype(storage="pyarrow", na_value=np.nan)
 
     cu_arr = xpd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
         cu_s, dtype=xpd_pa_np_storage_type
@@ -1859,10 +1825,7 @@ def test_fallback_raises_specific_error(
     ],
 )
 def test_cudf_pandas_util_version(attrs):
-    if not PANDAS_GE_220 and attrs == "capitalize_first_letter":
-        assert not hasattr(pd.util, attrs)
-    else:
-        assert hasattr(pd.util, attrs)
+    assert hasattr(pd.util, attrs)
 
 
 def test_iteration_over_dataframe_dtypes_produces_proxy_objects(dataframe):
