@@ -82,10 +82,10 @@ void hash_compound_agg_finalizer::visit(cudf::detail::mean_aggregation const& ag
 {
   if (cache->has_result(col, agg)) { return; }
 
-  auto const sum_agg          = make_sum_aggregation();
-  auto const count_agg        = make_count_aggregation();
-  auto const sum_result       = cache->get_result(col, *sum_agg);
-  auto const count_result     = cache->get_result(col, *count_agg);
+  auto const sum_agg           = make_sum_aggregation();
+  auto const count_agg         = make_count_aggregation();
+  auto const sum_result        = cache->get_result(col, *sum_agg);
+  auto const count_result      = cache->get_result(col, *count_agg);
   auto const sum_without_nulls = [&] {
     if (sum_result.null_count() == 0) { return sum_result; }
     return column_view{
