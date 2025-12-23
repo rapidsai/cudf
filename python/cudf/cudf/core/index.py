@@ -3166,8 +3166,6 @@ class DatetimeIndex(Index):
         data=None,
         freq=None,
         tz=None,
-        normalize: bool = False,
-        closed=None,
         ambiguous: Literal["raise"] = "raise",
         dayfirst: bool = False,
         yearfirst: bool = False,
@@ -3186,20 +3184,6 @@ class DatetimeIndex(Index):
 
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
-        if normalize is not False:
-            warnings.warn(
-                "The 'normalize' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("normalize == True is not yet supported")
-        if closed is not None:
-            warnings.warn(
-                "The 'closed' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("closed is not yet supported")
         if ambiguous != "raise":
             raise NotImplementedError("ambiguous is not yet supported")
         if dayfirst is not False:
@@ -4242,13 +4226,9 @@ class TimedeltaIndex(Index):
     ----------
     data : array-like (1-dimensional), optional
         Optional datetime-like data to construct index with.
-    unit : str, optional
-        This is not yet supported
     copy : bool
         Make a copy of input.
     freq : str, optional
-        This is not yet supported
-    closed : str, optional
         This is not yet supported
     dtype : str or :class:`numpy.dtype`, optional
         Data type for the output Index. If not specified, the
@@ -4292,9 +4272,7 @@ class TimedeltaIndex(Index):
     def __init__(
         self,
         data=None,
-        unit=None,
         freq=None,
-        closed=None,
         dtype=None,
         copy: bool = False,
         name=None,
@@ -4302,25 +4280,6 @@ class TimedeltaIndex(Index):
     ):
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
-
-        if closed is not None:
-            warnings.warn(
-                "The 'closed' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("closed is not yet supported")
-
-        if unit is not None:
-            warnings.warn(
-                "The 'unit' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError(
-                "unit is not yet supported, alternatively "
-                "dtype parameter is supported"
-            )
 
         name = _getdefault_name(data, name=name)
         col = as_column(data)
