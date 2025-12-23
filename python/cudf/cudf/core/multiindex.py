@@ -780,20 +780,18 @@ class MultiIndex(Index):
                 verify=False,
             )
         )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            data_table = cudf.concat(
-                [
-                    frame,
-                    cudf.DataFrame._from_data(
-                        ColumnAccessor(
-                            {"idx": column.as_column(range(len(frame)))},
-                            verify=False,
-                        )
-                    ),
-                ],
-                axis=1,
-            )
+        data_table = cudf.concat(
+            [
+                frame,
+                cudf.DataFrame._from_data(
+                    ColumnAccessor(
+                        {"idx": column.as_column(range(len(frame)))},
+                        verify=False,
+                    )
+                ),
+            ],
+            axis=1,
+        )
         # Sort indices in pandas compatible mode
         # because we want the indices to be fetched
         # in a deterministic order.

@@ -1810,9 +1810,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # group is a row-like "Series" where the index labels
             # are the same as the original calling DataFrame
             if _is_row_of(chunk_results[0], self.obj):
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    result = concat(chunk_results, axis=1).T
+                result = concat(chunk_results, axis=1).T
                 result.index = group_names
                 result.index.names = self.grouping.names
             # When the UDF is like df.x + df.y, the result for each
@@ -1821,9 +1819,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 len(self.obj),
                 len(group_names),
             }:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    result = concat(chunk_results)
+                result = concat(chunk_results)
                 if total_rows == len(group_names):
                     result.index = group_names
                     # TODO: Is there a better way to determine what
@@ -1847,9 +1843,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     f"type {type(chunk_results[0])}"
                 )
         else:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                result = concat(chunk_results)
+            result = concat(chunk_results)
             if self._group_keys:
                 index_data = group_keys._data.copy(deep=True)
                 index_data[None] = grouped_values.index._column
