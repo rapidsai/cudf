@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
@@ -174,11 +173,9 @@ def _match_categorical_dtypes_both(
         return lcol, rcol._get_decategorized_column().astype(ltype)
     else:
         # merge categories
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            merged_categories = concat(
-                [ltype.categories, rtype.categories]
-            ).unique()
+        merged_categories = concat(
+            [ltype.categories, rtype.categories]
+        ).unique()
         common_type = CategoricalDtype(
             categories=merged_categories, ordered=False
         )

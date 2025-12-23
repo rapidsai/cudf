@@ -52,7 +52,6 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core import indexing_utils, reshape
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
@@ -131,6 +130,7 @@ if TYPE_CHECKING:
         Axis,
         ColumnLike,
         Dtype,
+        NoDefault,
         ScalarLike,
     )
 
@@ -635,13 +635,7 @@ def _listlike_to_column_accessor(
             )
             transpose = temp_frame.T
         else:
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore",
-                    message="The behavior of array concatenation",
-                    category=FutureWarning,
-                )
-                transpose = cudf.concat(data, axis=1).T
+            transpose = cudf.concat(data, axis=1).T
 
         if columns is None:
             columns = pd.RangeIndex(transpose._num_columns)
@@ -2207,11 +2201,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             lower_left = self.tail(lower_rows).iloc[:, :left_cols]
             lower_right = self.tail(lower_rows).iloc[:, right_cols:]
 
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                upper = cudf.concat([upper_left, upper_right], axis=1)
-                lower = cudf.concat([lower_left, lower_right], axis=1)
-                output = cudf.concat([upper, lower])
+            upper = cudf.concat([upper_left, upper_right], axis=1)
+            lower = cudf.concat([lower_left, lower_right], axis=1)
+            output = cudf.concat([upper, lower])
 
         return output._pandas_repr_compatible()
 
@@ -3273,8 +3265,57 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def fillna(
-        self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):
+        self,
+        value,
+        *,
+        axis: Axis | None = None,
+        inplace: bool = False,
+        limit: int | None = None,
+    ) -> Self | None:
+        """Fill null values with ``value``.
+
+        Parameters
+        ----------
+        value : scalar, Series-like or dict
+            Value to use to fill nulls. If Series-like, null values
+            are filled with values in corresponding indices.
+            A dict can be used to provide different values to fill nulls
+            in different columns.
+
+        Returns
+        -------
+        result : DataFrame, Series, or Index
+            Copy with nulls filled.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
+        >>> df
+              a     b
+        0     1     3
+        1     2  <NA>
+        2  <NA>     5
+        >>> df.fillna(4)
+           a  b
+        0  1  3
+        1  2  4
+        2  4  5
+        >>> df.fillna({'a': 3, 'b': 4})
+           a  b
+        0  1  3
+        1  2  4
+        2  3  5
+
+        ``fillna`` can also supports inplace operation:
+
+        >>> df.fillna({'a': 3, 'b': 4}, inplace=True)
+        >>> df
+           a  b
+        0  1  3
+        1  2  4
+        2  3  5
+        """
         if isinstance(value, (pd.Series, pd.DataFrame)):
             value = from_pandas(value)
         if isinstance(value, Series):
@@ -3293,8 +3334,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 else value
                 for key, value in value.items()
             }
-        return super().fillna(
-            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        return super()._fillna(
+            value=value, axis=axis, inplace=inplace, limit=limit
         )
 
     @_performance_tracking
@@ -5471,17 +5512,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 None,
             )
 
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                res = cudf.concat(
-                    [
-                        series.reindex(names, copy=False)
-                        for series in describe_series_list
-                    ],
-                    axis=1,
-                    sort=False,
-                )
-            return res
+            return cudf.concat(
+                [
+                    series.reindex(names, copy=False)
+                    for series in describe_series_list
+                ],
+                axis=1,
+                sort=False,
+            )
 
     @_performance_tracking
     def to_pandas(
@@ -6747,12 +6785,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if len(mode_results) == 0:
             return DataFrame()
 
-        with warnings.catch_warnings():
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.simplefilter("ignore", FutureWarning)
-            df = cudf.concat(mode_results, axis=1)
+        df = cudf.concat(mode_results, axis=1)
 
         if isinstance(df, Series):
             df = df.to_frame()
@@ -7221,7 +7254,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def stack(
-        self, level=-1, dropna=no_default, future_stack=False
+        self,
+        level=-1,
+        dropna: bool | NoDefault = no_default,
+        future_stack: bool = True,
     ) -> DataFrame | Series:
         """Stack the prescribed level(s) from columns to index
 
@@ -7364,14 +7400,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     "version of cudf."
                 )
         else:
-            if dropna is not no_default or self._data.nlevels > 1:
-                warnings.warn(
-                    "The previous implementation of stack is deprecated and "
-                    "will be removed in a future version of cudf. Specify "
-                    "future_stack=True to adopt the new implementation and "
-                    "silence this warning.",
-                    FutureWarning,
-                )
+            warnings.warn(
+                "The previous implementation of stack is deprecated and "
+                "will be removed in a future version of cudf. Do not specify the "
+                "future_stack argument to adopt the new implementation and "
+                "silence this warning.",
+                FutureWarning,
+            )
             if dropna is no_default:
                 dropna = True
 

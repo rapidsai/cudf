@@ -1495,9 +1495,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def fillna(
         self,
         fill_value: ScalarLike | ColumnLike,
-        method: Literal["ffill", "bfill", None] = None,
+        method: plc.replace.ReplacePolicy | None = None,
     ) -> Self:
-        """Fill null values with ``value``.
+        """
+        Fill null values with ``value``. Supports .fillna, .bfill, .ffill.
 
         Returns a copy with null filled.
         """
@@ -1518,17 +1519,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         input_col = self.nans_to_nulls()
 
         with acquire_spill_lock():
-            plc_replace: plc.replace.ReplacePolicy | plc.Scalar
-            if method:
-                plc_replace = (
-                    plc.replace.ReplacePolicy.PRECEDING
-                    if method == "ffill"
-                    else plc.replace.ReplacePolicy.FOLLOWING
-                )
-            elif isinstance(fill_value, plc.Scalar):
-                plc_replace = fill_value
+            plc_replace: plc.replace.ReplacePolicy | plc.Scalar | plc.Column
+            if method is None:
+                if isinstance(fill_value, plc.Scalar):
+                    plc_replace = fill_value
+                else:
+                    plc_replace = fill_value.to_pylibcudf(mode="read")
             else:
-                plc_replace = fill_value.to_pylibcudf(mode="read")
+                plc_replace = method
             plc_column = plc.replace.replace_nulls(
                 input_col.to_pylibcudf(mode="read"),
                 plc_replace,

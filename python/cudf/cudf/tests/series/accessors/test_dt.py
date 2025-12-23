@@ -153,12 +153,12 @@ def test_day_month_name(meth, klass):
         "S",
     ],
 )
-def test_datetime_ceil_raise_warning(freqstr):
+def test_datetime_ceil_invalid_freq_raises(freqstr):
     t = cudf.Series(
         ["2001-01-01 00:04:45", "2001-01-01 00:04:58", "2001-01-01 00:05:04"],
         dtype="datetime64[ns]",
     )
-    with pytest.warns(FutureWarning):
+    with pytest.raises(ValueError):
         t.dt.ceil(freqstr)
 
 

@@ -7,7 +7,6 @@ import calendar
 import functools
 import locale
 import re
-import warnings
 from locale import nl_langinfo
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -392,22 +391,6 @@ class DatetimeColumn(TemporalBaseColumn):
         freq: str,
     ) -> ColumnBase:
         # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
-        old_to_new_freq_map = {
-            "H": "h",
-            "N": "ns",
-            "T": "min",
-            "L": "ms",
-            "U": "us",
-            "S": "s",
-        }
-        if freq in old_to_new_freq_map:
-            warnings.warn(
-                f"{freq} is deprecated and will be "
-                "removed in a future version, please use "
-                f"{old_to_new_freq_map[freq]} instead.",
-                FutureWarning,
-            )
-            freq = old_to_new_freq_map[freq]
         rounding_fequency_map = {
             "D": plc.datetime.RoundingFrequency.DAY,
             "h": plc.datetime.RoundingFrequency.HOUR,

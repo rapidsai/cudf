@@ -247,14 +247,8 @@ def test_groupby_apply_jit_unary_reductions(
             reason=("https://github.com/rapidsai/cudf/issues/14860"),
         )
     )
-    warn_condition = (
-        dataset == "nans"
-        and func in {"idxmax", "idxmin"}
-        and dtype.kind == "f"
-    )
     dataset = groupby_jit_datasets[dataset].copy(deep=True)
-    with expect_warning_if(warn_condition, FutureWarning):
-        groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+    groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 
 
 # test unary reductions for special values

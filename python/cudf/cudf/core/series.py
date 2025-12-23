@@ -29,7 +29,6 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core import indexing_utils
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core.accessors import (
     CategoricalAccessor,
     ListMethods,
@@ -332,26 +331,6 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise NotImplementedError(
                     "Interval indexing is not supported."
                 )
-            if not is_dtype_obj_numeric(
-                index_dtype, include_decimal=False
-            ) and not (
-                isinstance(index_dtype, CategoricalDtype)
-                and index_dtype.categories.dtype.kind in "iu"
-            ):
-                # TODO: switch to cudf.utils.dtypes.is_integer(arg)
-                if is_integer(arg):
-                    # Do not remove until pandas 3.0 support is added.
-                    assert PANDAS_LT_300, (
-                        "Need to drop after pandas-3.0 support is added."
-                    )
-                    warn_msg = (
-                        "Series.__getitem__ treating keys as positions is deprecated. "
-                        "In a future version, integer keys will always be treated "
-                        "as labels (consistent with DataFrame behavior). To access "
-                        "a value by position, use `ser.iloc[pos]`"
-                    )
-                    warnings.warn(warn_msg, FutureWarning)
-                    return arg
             try:
                 if isinstance(self._frame.index, RangeIndex):
                     indices = self._frame.index._indices_of(arg)
@@ -1360,9 +1339,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if max_rows not in (0, None) and len(self) > max_rows:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                preprocess = cudf.concat([top, bottom])
+            preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
         if isinstance(preprocess.dtype, CategoricalDtype):
@@ -1511,9 +1488,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             if isinstance(objs[0].index, cudf.MultiIndex):
                 result_index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    result_index = Index._concat([o.index for o in objs])
+                result_index = Index._concat([o.index for o in objs])
         elif index is False:
             result_index = None
         else:
@@ -1785,20 +1760,62 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def fillna(
         self,
-        value: None | ScalarLike | Series = None,
-        method: Literal["ffill", "bfill", "pad", "backfill"] | None = None,
+        value: None | ScalarLike | Series,
+        *,
         axis: Axis | None = None,
         inplace: bool = False,
         limit: int | None = None,
     ) -> Self | None:
+        """Fill null values with ``value``.
+
+        Parameters
+        ----------
+        value : scalar, Series-like or dict
+            Value to use to fill nulls. If Series-like, null values
+            are filled with values in corresponding indices.
+            A dict can be used to provide different values to fill nulls
+            in different columns.
+
+        Returns
+        -------
+        result : Series
+            Copy with nulls filled.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(['a', 'b', None, 'c'])
+        >>> ser
+        0       a
+        1       b
+        2    <NA>
+        3       c
+        dtype: object
+        >>> ser.fillna('z')
+        0    a
+        1    b
+        2    z
+        3    c
+        dtype: object
+
+        ``fillna`` can also supports inplace operation:
+
+        >>> ser.fillna('z', inplace=True)
+        >>> ser
+        0    a
+        1    b
+        2    z
+        3    c
+        dtype: object
+        """
         if isinstance(value, (pd.Series, Mapping)):
             value = Series(value)
         if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
                 value = value.reindex(self.index)
             value = {self.name: value._column}
-        return super().fillna(
-            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        return super()._fillna(
+            value=value, axis=axis, inplace=inplace, limit=limit
         )
 
     def between(

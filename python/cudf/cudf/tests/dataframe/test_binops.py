@@ -8,7 +8,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.mark.parametrize(
@@ -437,19 +437,7 @@ def test_df_sr_binop_col_order(op):
     gsr = cudf.Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])
     psr = gsr.to_pandas()
 
-    with expect_warning_if(
-        op
-        in {
-            operator.eq,
-            operator.lt,
-            operator.le,
-            operator.gt,
-            operator.ge,
-            operator.ne,
-        },
-        FutureWarning,
-    ):
-        expect = op(pdf, psr).astype("float")
+    expect = op(pdf, psr).astype("float")
     out = op(gdf, gsr).astype("float")
     got = out[expect.columns]
 
