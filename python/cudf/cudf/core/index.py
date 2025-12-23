@@ -2412,7 +2412,7 @@ class RangeIndex(Index):
             return self if not copy else self.copy()
         return self._as_int_index().astype(dtype, copy=copy)
 
-    def fillna(self, value, downcast=None) -> Self:
+    def fillna(self, value) -> Self:
         return self.copy()
 
     @_performance_tracking

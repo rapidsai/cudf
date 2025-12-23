@@ -3273,8 +3273,57 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def fillna(
-        self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):
+        self,
+        value,
+        *,
+        axis: Axis | None = None,
+        inplace: bool = False,
+        limit: int | None = None,
+    ) -> Self | None:
+        """Fill null values with ``value``.
+
+        Parameters
+        ----------
+        value : scalar, Series-like or dict
+            Value to use to fill nulls. If Series-like, null values
+            are filled with values in corresponding indices.
+            A dict can be used to provide different values to fill nulls
+            in different columns.
+
+        Returns
+        -------
+        result : DataFrame, Series, or Index
+            Copy with nulls filled.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
+        >>> df
+              a     b
+        0     1     3
+        1     2  <NA>
+        2  <NA>     5
+        >>> df.fillna(4)
+           a  b
+        0  1  3
+        1  2  4
+        2  4  5
+        >>> df.fillna({'a': 3, 'b': 4})
+           a  b
+        0  1  3
+        1  2  4
+        2  3  5
+
+        ``fillna`` can also supports inplace operation:
+
+        >>> df.fillna({'a': 3, 'b': 4}, inplace=True)
+        >>> df
+           a  b
+        0  1  3
+        1  2  4
+        2  3  5
+        """
         if isinstance(value, (pd.Series, pd.DataFrame)):
             value = from_pandas(value)
         if isinstance(value, Series):
@@ -3293,8 +3342,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 else value
                 for key, value in value.items()
             }
-        return super().fillna(
-            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        return super()._fillna(
+            value=value, axis=axis, inplace=inplace, limit=limit
         )
 
     @_performance_tracking

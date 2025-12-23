@@ -842,16 +842,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         return (ColumnBase.from_pylibcudf(col) for col in shifts.columns())
 
     def _replace_nulls(
-        self, values: tuple[ColumnBase, ...], method: str
+        self, values: tuple[ColumnBase, ...], method: plc.replace.ReplacePolicy
     ) -> Generator[ColumnBase]:
         _, replaced = self._groupby.plc_groupby.replace_nulls(
             plc.Table([col.to_pylibcudf(mode="read") for col in values]),
-            [
-                plc.replace.ReplacePolicy.PRECEDING
-                if method == "ffill"
-                else plc.replace.ReplacePolicy.FOLLOWING
-            ]
-            * len(values),
+            [method] * len(values),
         )
 
         return (ColumnBase.from_pylibcudf(col) for col in replaced.columns())
@@ -2571,7 +2566,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         values.index = self.obj.index
         return values - self.shift(periods=periods)
 
-    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+    def _scan_fill(
+        self, method: plc.replace.ReplacePolicy, limit: int | None
+    ) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
         values = self.grouping.values
         result = self.obj._from_data(
@@ -2586,7 +2583,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
 
-    def ffill(self, limit=None):
+    def ffill(self, limit: int | None = None):
         """Forward fill NA values.
 
         Parameters
@@ -2594,13 +2591,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         limit : int, default None
             Unsupported
         """
+        return self._scan_fill(plc.replace.ReplacePolicy.PRECEDING, limit)
 
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        return self._scan_fill("ffill", limit)
-
-    def bfill(self, limit=None):
+    def bfill(self, limit: int | None = None):
         """Backward fill NA values.
 
         Parameters
@@ -2608,10 +2601,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         limit : int, default None
             Unsupported
         """
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        return self._scan_fill("bfill", limit)
+        return self._scan_fill(plc.replace.ReplacePolicy.FOLLOWING, limit)
 
     @_performance_tracking
     def shift(

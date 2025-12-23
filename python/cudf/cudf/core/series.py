@@ -1785,20 +1785,62 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def fillna(
         self,
-        value: None | ScalarLike | Series = None,
-        method: Literal["ffill", "bfill", "pad", "backfill"] | None = None,
+        value: None | ScalarLike | Series,
+        *,
         axis: Axis | None = None,
         inplace: bool = False,
         limit: int | None = None,
     ) -> Self | None:
+        """Fill null values with ``value``.
+
+        Parameters
+        ----------
+        value : scalar, Series-like or dict
+            Value to use to fill nulls. If Series-like, null values
+            are filled with values in corresponding indices.
+            A dict can be used to provide different values to fill nulls
+            in different columns.
+
+        Returns
+        -------
+        result : Series
+            Copy with nulls filled.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(['a', 'b', None, 'c'])
+        >>> ser
+        0       a
+        1       b
+        2    <NA>
+        3       c
+        dtype: object
+        >>> ser.fillna('z')
+        0    a
+        1    b
+        2    z
+        3    c
+        dtype: object
+
+        ``fillna`` can also supports inplace operation:
+
+        >>> ser.fillna('z', inplace=True)
+        >>> ser
+        0    a
+        1    b
+        2    z
+        3    c
+        dtype: object
+        """
         if isinstance(value, (pd.Series, Mapping)):
             value = Series(value)
         if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
                 value = value.reindex(self.index)
             value = {self.name: value._column}
-        return super().fillna(
-            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        return super()._fillna(
+            value=value, axis=axis, inplace=inplace, limit=limit
         )
 
     def between(

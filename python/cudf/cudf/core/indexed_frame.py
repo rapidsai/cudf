@@ -3292,60 +3292,50 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def bfill(
         self,
-        value=None,
-        axis=None,
+        *,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit=None,
-        limit_area=None,
+        limit: None | int = None,
+        limit_area: Literal["inside", "outside", None] = None,
     ) -> Self | None:
         """
-        Synonym for :meth:`Series.fillna` with ``method='bfill'``.
+        Fill NA/NaN values by using the next valid observation to fill the gap.
 
         Returns
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        if limit_area is not None:
-            raise NotImplementedError("limit_area is currently not supported.")
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            return self.fillna(
-                method="bfill",
-                value=value,
-                axis=axis,
-                inplace=inplace,
-                limit=limit,
-            )
+        return self._fillna(
+            method=plc.replace.ReplacePolicy.FOLLOWING,
+            axis=axis,
+            inplace=inplace,
+            limit=limit,
+            limit_area=limit_area,
+        )
 
     @_performance_tracking
     def ffill(
         self,
-        value=None,
-        axis=None,
+        *,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit=None,
+        limit: None | int = None,
         limit_area: Literal["inside", "outside", None] = None,
-    ):
+    ) -> Self | None:
         """
-        Synonym for :meth:`Series.fillna` with ``method='ffill'``.
+        Fill NA/NaN values by propagating the last valid observation to next valid.
 
         Returns
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        if limit_area is not None:
-            raise NotImplementedError("limit_area is currently not supported.")
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            return self.fillna(
-                method="ffill",
-                value=value,
-                axis=axis,
-                inplace=inplace,
-                limit=limit,
-            )
+        return self._fillna(
+            method=plc.replace.ReplacePolicy.PRECEDING,
+            axis=axis,
+            inplace=inplace,
+            limit=limit,
+            limit_area=limit_area,
+        )
 
     def add_prefix(self, prefix, axis=None):
         """

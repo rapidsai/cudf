@@ -23,7 +23,6 @@ from cudf.api.extensions import no_default
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
 from cudf.api.types import is_dtype_equal, is_scalar, is_string_dtype
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
@@ -924,138 +923,26 @@ class Frame(BinaryOperand, Scannable, Serializable):
         raise NotImplementedError
 
     @_performance_tracking
-    def fillna(
+    def _fillna(
         self,
         value: None | ScalarLike | Series = None,
-        method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
+        *,
+        method: None | plc.replace.ReplacePolicy = None,
         axis: Axis | None = None,
         inplace: bool = False,
         limit: int | None = None,
+        limit_area: Literal["inside", "outside", None] = None,
     ) -> Self | None:
-        """Fill null values with ``value`` or specified ``method``.
-
-        Parameters
-        ----------
-        value : scalar, Series-like or dict
-            Value to use to fill nulls. If Series-like, null values
-            are filled with values in corresponding indices.
-            A dict can be used to provide different values to fill nulls
-            in different columns. Cannot be used with ``method``.
-        method : {'ffill', 'bfill'}, default None
-            Method to use for filling null values in the dataframe or series.
-            `ffill` propagates the last non-null values forward to the next
-            non-null value. `bfill` propagates backward with the next non-null
-            value. Cannot be used with ``value``.
-
-            .. deprecated:: 24.04
-                `method` is deprecated.
-
-        Returns
-        -------
-        result : DataFrame, Series, or Index
-            Copy with nulls filled.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
-        >>> df
-              a     b
-        0     1     3
-        1     2  <NA>
-        2  <NA>     5
-        >>> df.fillna(4)
-           a  b
-        0  1  3
-        1  2  4
-        2  4  5
-        >>> df.fillna({'a': 3, 'b': 4})
-           a  b
-        0  1  3
-        1  2  4
-        2  3  5
-
-        ``fillna`` on a Series object:
-
-        >>> ser = cudf.Series(['a', 'b', None, 'c'])
-        >>> ser
-        0       a
-        1       b
-        2    <NA>
-        3       c
-        dtype: object
-        >>> ser.fillna('z')
-        0    a
-        1    b
-        2    z
-        3    c
-        dtype: object
-
-        ``fillna`` can also supports inplace operation:
-
-        >>> ser.fillna('z', inplace=True)
-        >>> ser
-        0    a
-        1    b
-        2    z
-        3    c
-        dtype: object
-        >>> df.fillna({'a': 3, 'b': 4}, inplace=True)
-        >>> df
-           a  b
-        0  1  3
-        1  2  4
-        2  3  5
-
-        ``fillna`` specified with fill ``method``
-
-        >>> ser = cudf.Series([1, None, None, 2, 3, None, None])
-        >>> ser.fillna(method='ffill')
-        0    1
-        1    1
-        2    1
-        3    2
-        4    3
-        5    3
-        6    3
-        dtype: int64
-        >>> ser.fillna(method='bfill')
-        0       1
-        1       2
-        2       2
-        3       2
-        4       3
-        5    <NA>
-        6    <NA>
-        dtype: int64
-        """
+        """Helper function for .fillna, .bfill, .ffill."""
         if limit is not None:
             raise NotImplementedError("The limit keyword is not supported")
+        if limit_area is not None:
+            raise NotImplementedError("limit_area is currently not supported.")
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
         if value is not None and method is not None:
             raise ValueError("Cannot specify both 'value' and 'method'.")
-
-        if method:
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                f"{type(self).__name__}.fillna with 'method' is "
-                "deprecated and will raise in a future version. "
-                "Use obj.ffill() or obj.bfill() instead.",
-                FutureWarning,
-            )
-            if method not in {"ffill", "bfill", "pad", "backfill"}:
-                raise NotImplementedError(
-                    f"Fill method {method} is not supported"
-                )
-            if method == "pad":
-                method = "ffill"
-            elif method == "backfill":
-                method = "bfill"
 
         if is_scalar(value):
             value = {name: value for name in self._column_names}

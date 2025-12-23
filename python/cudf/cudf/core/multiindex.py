@@ -1825,8 +1825,7 @@ class MultiIndex(Index):
                     ('hello',     '1')],
                    names=['x', 'y'])
         """
-
-        return super().fillna(value=value)
+        return super()._fillna(value=value)
 
     @_performance_tracking
     def unique(self, level: int | None = None) -> Self | Index:
