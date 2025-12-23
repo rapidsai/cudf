@@ -12,9 +12,8 @@ import pytest
 from packaging.version import parse
 
 import cudf
-from cudf.core._compat import PANDAS_GE_230
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.mark.parametrize("data", [[], [1, 2, 3]])
@@ -815,6 +814,7 @@ def test_categorical_reductions(request, reduction_methods):
     )
 
 
+@pytest.mark.filterwarnings("ignore:Mean of empty slice:RuntimeWarning")
 @pytest.mark.parametrize(
     "data_non_overflow",
     [
@@ -843,17 +843,7 @@ def test_timedelta_reduction_ops(
     gsr = cudf.Series(data_non_overflow, dtype=timedelta_types_as_str)
     psr = gsr.to_pandas()
 
-    if len(psr) > 0 and psr.isnull().all() and reduction_methods == "median":
-        with pytest.warns(RuntimeWarning, match="Mean of empty slice"):
-            expected = getattr(psr, reduction_methods)()
-    else:
-        with expect_warning_if(
-            PANDAS_GE_230
-            and reduction_methods == "quantile"
-            and len(data_non_overflow) == 0
-            and timedelta_types_as_str != "timedelta64[ns]"
-        ):
-            expected = getattr(psr, reduction_methods)()
+    expected = getattr(psr, reduction_methods)()
     actual = getattr(gsr, reduction_methods)()
     if pd.isna(expected) and pd.isna(actual):
         pass
@@ -994,13 +984,7 @@ def test_datetime_stats(data, datetime_types_as_str, reduction_methods):
     gsr = cudf.Series(data, dtype=datetime_types_as_str)
     psr = gsr.to_pandas()
 
-    with expect_warning_if(
-        PANDAS_GE_230
-        and reduction_methods == "quantile"
-        and len(data) == 0
-        and datetime_types_as_str != "datetime64[ns]"
-    ):
-        expected = getattr(psr, reduction_methods)()
+    expected = getattr(psr, reduction_methods)()
     actual = getattr(gsr, reduction_methods)()
 
     if len(data) == 0:
@@ -1009,6 +993,7 @@ def test_datetime_stats(data, datetime_types_as_str, reduction_methods):
         assert_eq(expected, actual)
 
 
+@pytest.mark.filterwarnings("ignore:Mean of empty slice:RuntimeWarning")
 @pytest.mark.parametrize(
     "data",
     [
@@ -1026,11 +1011,7 @@ def test_datetime_reductions(data, reduction_methods, datetime_types_as_str):
     psr = sr.to_pandas()
 
     actual = getattr(sr, reduction_methods)()
-    with expect_warning_if(
-        psr.size > 0 and psr.isnull().all() and reduction_methods == "median",
-        RuntimeWarning,
-    ):
-        expected = getattr(psr, reduction_methods)()
+    expected = getattr(psr, reduction_methods)()
 
     if (
         expected is pd.NaT
