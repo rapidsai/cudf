@@ -40,7 +40,7 @@ std::unique_ptr<scalar> max_by(column_view const& input,
 
   // Find argmax of the ordering column
   auto const argmax_result = argmax(ordering_column, stream, mr);
-  
+
   // Check if argmax result is valid
   if (!argmax_result->is_valid(stream)) {
     return make_default_constructed_scalar(value_column.type(), stream, mr);

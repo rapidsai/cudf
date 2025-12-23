@@ -40,7 +40,7 @@ std::unique_ptr<scalar> min_by(column_view const& input,
 
   // Find argmin of the ordering column
   auto const argmin_result = argmin(ordering_column, stream, mr);
-  
+
   // Check if argmin result is valid
   if (!argmin_result->is_valid(stream)) {
     return make_default_constructed_scalar(value_column.type(), stream, mr);
