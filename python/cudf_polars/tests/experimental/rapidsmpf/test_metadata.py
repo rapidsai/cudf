@@ -76,9 +76,9 @@ def test_rapidsmpf_join_metadata(
     assert metadata_collector is not None
     assert len(metadata_collector) == 1
     metadata = metadata_collector[0]
-    assert metadata.count == left_count
+    assert metadata.local_count == left_count
     assert metadata.duplicated is False
     if right_count > broadcast_join_limit:
-        assert metadata.partitioned_on == ("y",)
+        assert metadata.global_partitioned_on == ("y",)
     else:
-        assert metadata.partitioned_on == ()
+        assert metadata.global_partitioned_on == ()

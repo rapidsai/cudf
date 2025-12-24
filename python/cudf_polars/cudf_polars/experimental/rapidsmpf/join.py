@@ -27,6 +27,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     Metadata,
     chunk_to_frame,
     empty_table_chunk,
+    opaque_reservation,
     process_children,
 )
 from cudf_polars.experimental.utils import _concat
@@ -90,15 +91,18 @@ async def broadcast_join_node(
             ch_right.recv_metadata(context),
         )
 
-        partitioned_on: tuple[str, ...] = ()
+        local_partitioned_on: tuple[str, ...] = ()
+        global_partitioned_on: tuple[str, ...] = ()
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
             large_ch = ch_left
             small_child = ir.children[1]
             large_child = ir.children[0]
-            chunk_count = left_metadata.count
-            partitioned_on = left_metadata.partitioned_on
+            local_count = left_metadata.local_count
+            global_count = left_metadata.global_count
+            local_partitioned_on = left_metadata.local_partitioned_on
+            global_partitioned_on = left_metadata.global_partitioned_on
             small_duplicated = right_metadata.duplicated
         else:
             # Broadcast left, stream right
@@ -106,15 +110,19 @@ async def broadcast_join_node(
             large_ch = ch_right
             small_child = ir.children[0]
             large_child = ir.children[1]
-            chunk_count = right_metadata.count
+            local_count = right_metadata.local_count
+            global_count = right_metadata.global_count
             small_duplicated = left_metadata.duplicated
             if ir.options[0] == "Right":
-                partitioned_on = right_metadata.partitioned_on
+                local_partitioned_on = right_metadata.local_partitioned_on
+                global_partitioned_on = right_metadata.global_partitioned_on
 
         # Send metadata.
         output_metadata = Metadata(
-            chunk_count,
-            partitioned_on=partitioned_on,
+            local_count=local_count,
+            global_count=global_count,
+            local_partitioned_on=local_partitioned_on,
+            global_partitioned_on=global_partitioned_on,
             duplicated=left_metadata.duplicated and right_metadata.duplicated,
         )
         await ch_out.send_metadata(context, output_metadata)
@@ -128,6 +136,7 @@ async def broadcast_join_node(
                     context.br(), allow_overbooking=True
                 )
             )
+            del msg
             small_size += small_chunks[-1].data_alloc_size(MemoryType.DEVICE)
 
         # Allgather is a collective - all ranks must participate even with no local data
@@ -193,6 +202,7 @@ async def broadcast_join_node(
                     context.br(), allow_overbooking=True
                 )
                 seq_num = msg.sequence_number
+                del msg
 
             large_df = DataFrame.from_table(
                 large_chunk.table_view(),
@@ -207,10 +217,11 @@ async def broadcast_join_node(
                 empty_small_chunk = empty_table_chunk(small_child, context, stream)
                 small_dfs = [chunk_to_frame(empty_small_chunk, small_child)]
 
-            # Perform the join
-            df = _concat(
-                *[
-                    (
+            large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
+            input_bytes = large_chunk_size + small_size
+            with opaque_reservation(context, input_bytes):
+                df = _concat(
+                    *[
                         await asyncio.to_thread(
                             ir.do_evaluate,
                             *ir._non_child_args,
@@ -221,23 +232,24 @@ async def broadcast_join_node(
                             ),
                             context=ir_context,
                         )
-                    )
-                    for small_df in small_dfs
-                ],
-                context=ir_context,
-            )
+                        for small_df in small_dfs
+                    ],
+                    context=ir_context,
+                )
 
-            # Send output chunk
-            await ch_out.data.send(
-                context,
-                Message(
-                    seq_num,
-                    TableChunk.from_pylibcudf_table(
-                        df.table, df.stream, exclusive_view=True
+                # Send output chunk
+                await ch_out.data.send(
+                    context,
+                    Message(
+                        seq_num,
+                        TableChunk.from_pylibcudf_table(
+                            df.table, df.stream, exclusive_view=True
+                        ),
                     ),
-                ),
-            )
+                )
+                del df, large_df, large_chunk
 
+        del small_dfs, small_chunks
         await ch_out.data.drain(context)
 
 
