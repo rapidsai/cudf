@@ -7,7 +7,7 @@ import collections.abc
 import time
 import weakref
 from threading import RLock
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import numpy
 import nvtx
@@ -294,7 +294,7 @@ class SpillableBufferOwner(BufferOwner):
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
 
-    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
+    def get_ptr(self) -> int:
         """Get a device pointer to the memory of the buffer.
 
         If this is called within an `acquire_spill_lock` context,
