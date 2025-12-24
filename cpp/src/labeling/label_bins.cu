@@ -13,6 +13,7 @@
 #include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/dispatchers.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -37,16 +38,6 @@ namespace cudf {
 namespace detail {
 namespace {
 
-template <typename Func>
-auto dispatch_bool(bool value, Func&& func)
-{
-  if (value) {
-    return func(std::bool_constant<true>{});
-  } else {
-    return func(std::bool_constant<false>{});
-  }
-}
-
 template <typename, inclusive>
 struct InclusiveToComparator;
 
@@ -62,49 +53,6 @@ struct InclusiveToComparator<T, inclusive::NO> {
 
 template <typename T, inclusive i>
 using InclusiveToComparator_t = typename InclusiveToComparator<T, i>::type;
-
-template <auto Value, typename Func>
-bool try_dispatch_enum(auto runtime_value, Func&& func, auto& result)
-{
-  if (runtime_value == Value) {
-    result = func(std::integral_constant<decltype(runtime_value), Value>{});
-    return true;
-  }
-  return false;
-}
-
-// Helper to extract first value from parameter pack
-template <auto First, auto...>
-inline constexpr auto first_value = First;
-
-// Generic dispatcher that takes all possible enum values as template parameters
-template <auto... Values, typename Func>
-auto dispatch_enum(auto runtime_value, Func&& func)
-{
-  using EnumType = decltype(runtime_value);
-  using RetType  = decltype(func(std::integral_constant<EnumType, first_value<Values...>>{}));
-
-  if constexpr (std::is_void_v<RetType>) {
-    // Handle void return type
-    bool found = false;
-    ((!found && runtime_value == Values
-        ? (func(std::integral_constant<EnumType, Values>{}), found = true)
-        : false),
-     ...);
-
-    // One of the enum values must have matched. Alternatively we could
-    // throw an exception here indicating that the developer failed to
-    // enumerate all possible values.
-    if (!found) { __builtin_unreachable(); }
-  } else {
-    // Handle non-void return type
-    RetType result{};
-    bool found = (try_dispatch_enum<Values>(runtime_value, func, result) || ...);
-
-    if (!found) { __builtin_unreachable(); }
-    return result;
-  }
-}
 
 // Helper to have single point of dispatch for inclusive enum
 template <typename Func>
