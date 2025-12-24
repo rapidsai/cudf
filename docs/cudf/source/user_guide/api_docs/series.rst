@@ -22,7 +22,6 @@ Attributes
    Series.iat
    Series.index
    Series.values
-   Series.data
    Series.dtype
    Series.dtypes
    Series.shape
