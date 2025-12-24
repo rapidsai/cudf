@@ -374,6 +374,10 @@ public final class MemoryCleaner {
     all.put(cleaner.id, new CleanerWeakReference(hashJoin, cleaner, collected, true));
   }
 
+  static void register(KeyRemapping keyRemapping, Cleaner cleaner) {
+    all.put(cleaner.id, new CleanerWeakReference(keyRemapping, cleaner, collected, true));
+  }
+
   /**
    * This is not 100% perfect and we can still run into situations where RMM buffers were not
    * collected and this returns false because of thread race conditions. This is just a best effort.
