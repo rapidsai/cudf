@@ -411,4 +411,321 @@ TEST_F(HashPartition, StructofStructWithNulls)
                                  second_result->get_column(0).view());
 }
 
+// Tests for hash_partition_indices
+class HashPartitionIndices : public cudf::test::BaseFixture {};
+
+TEST_F(HashPartitionIndices, ZeroPartitions)
+{
+  fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  fixed_width_column_wrapper<int16_t> integers({1, 2, 3, 4, 5, 6, 7, 8});
+  auto input = cudf::table_view({floats, integers});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 0;
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{0}, result.size());
+}
+
+TEST_F(HashPartitionIndices, ZeroRows)
+{
+  fixed_width_column_wrapper<float> floats({});
+  fixed_width_column_wrapper<int16_t> integers({});
+  auto input = cudf::table_view({floats, integers});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 3;
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{num_partitions}, result.size());
+  for (auto const& col : result) {
+    EXPECT_EQ(0, col->size());
+  }
+}
+
+TEST_F(HashPartitionIndices, ZeroColumns)
+{
+  auto input = cudf::table_view(std::vector<cudf::column_view>{});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({});
+
+  cudf::size_type const num_partitions = 3;
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{num_partitions}, result.size());
+  for (auto const& col : result) {
+    EXPECT_EQ(0, col->size());
+  }
+}
+
+TEST_F(HashPartitionIndices, SinglePartition)
+{
+  fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5, 6, 7, 8});
+  auto input = cudf::table_view({col});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 1;
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{1}, result.size());
+  EXPECT_EQ(8, result[0]->size());
+
+  // All row indices should be present
+  auto gathered      = cudf::gather(input, result[0]->view());
+  auto sorted_input  = cudf::sort(input);
+  auto sorted_output = cudf::sort(gathered->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_input->view(), sorted_output->view());
+}
+
+TEST_F(HashPartitionIndices, PowerOfTwoPartitions)
+{
+  fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+  auto input = cudf::table_view({col});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 4;  // Power of 2
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{num_partitions}, result.size());
+
+  // Total indices should equal total rows
+  cudf::size_type total = 0;
+  for (auto const& col : result) {
+    total += col->size();
+  }
+  EXPECT_EQ(16, total);
+}
+
+TEST_F(HashPartitionIndices, NonPowerOfTwoPartitions)
+{
+  fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
+  auto input = cudf::table_view({col});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 5;  // Non-power of 2
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{num_partitions}, result.size());
+
+  // Total indices should equal total rows
+  cudf::size_type total = 0;
+  for (auto const& col : result) {
+    total += col->size();
+  }
+  EXPECT_EQ(15, total);
+}
+
+TEST_F(HashPartitionIndices, ConsistentWithHashPartition)
+{
+  // Verify that gathering with the indices produces the same result as hash_partition
+  fixed_width_column_wrapper<int32_t> col1({1, 2, 3, 4, 5, 6, 7, 8});
+  fixed_width_column_wrapper<float> col2({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  auto input = cudf::table_view({col1, col2});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 3;
+
+  // Get partition indices
+  auto indices = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  // Get hash_partition result
+  auto [partitioned_table, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
+
+  // For each partition, gather from input and compare with the corresponding slice
+  for (cudf::size_type p = 0; p < num_partitions; ++p) {
+    auto gathered = cudf::gather(input, indices[p]->view());
+
+    // Sort both for comparison (order within partition is undefined)
+    auto sorted_gathered = cudf::sort(gathered->view());
+
+    auto const start = offsets[p];
+    auto const end   = (p + 1 < num_partitions) ? offsets[p + 1] : partitioned_table->num_rows();
+
+    std::vector<cudf::column_view> sliced_cols;
+    for (cudf::size_type c = 0; c < partitioned_table->num_columns(); ++c) {
+      sliced_cols.push_back(cudf::slice(partitioned_table->get_column(c), {start, end})[0]);
+    }
+    auto sliced       = cudf::table_view(sliced_cols);
+    auto sorted_slice = cudf::sort(sliced);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_gathered->view(), sorted_slice->view());
+  }
+}
+
+TEST_F(HashPartitionIndices, StringColumn)
+{
+  strings_column_wrapper strings({"apple", "banana", "cherry", "date", "elderberry", "fig"});
+  auto input = cudf::table_view({strings});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 3;
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{num_partitions}, result.size());
+
+  cudf::size_type total = 0;
+  for (auto const& col : result) {
+    total += col->size();
+  }
+  EXPECT_EQ(6, total);
+}
+
+TEST_F(HashPartitionIndices, WithNulls)
+{
+  fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5, 6}, {1, 0, 1, 1, 0, 1});
+  auto input = cudf::table_view({col});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 3;
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{num_partitions}, result.size());
+
+  cudf::size_type total = 0;
+  for (auto const& col : result) {
+    total += col->size();
+  }
+  EXPECT_EQ(6, total);
+}
+
+TEST_F(HashPartitionIndices, StructColumn)
+{
+  auto const to_hash = [&] {
+    auto a = fixed_width_column_wrapper<int32_t>{1, 1, 1, 2, 2, 2};
+    auto b = fixed_width_column_wrapper<int32_t>{1, 2, 3, 1, 2, 3};
+    return structs_col{{a, b}};
+  }();
+
+  auto input = cudf::table_view({to_hash});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 3;
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{num_partitions}, result.size());
+
+  cudf::size_type total = 0;
+  for (auto const& col : result) {
+    total += col->size();
+  }
+  EXPECT_EQ(6, total);
+}
+
+TEST_F(HashPartitionIndices, ListColumn)
+{
+  using lcw = cudf::test::lists_column_wrapper<int32_t>;
+
+  lcw to_hash{{1}, {2, 2}, {3, 3, 3}, {1}, {2, 2}, {3, 3, 3}};
+  auto input = cudf::table_view({to_hash});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 3;
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{num_partitions}, result.size());
+
+  cudf::size_type total = 0;
+  for (auto const& col : result) {
+    total += col->size();
+  }
+  EXPECT_EQ(6, total);
+}
+
+TEST_F(HashPartitionIndices, MorePartitionsThanRows)
+{
+  fixed_width_column_wrapper<int32_t> col({1, 2, 3});
+  auto input = cudf::table_view({col});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 10;
+  auto result = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(std::size_t{num_partitions}, result.size());
+
+  cudf::size_type total       = 0;
+  cudf::size_type empty_count = 0;
+  for (auto const& col : result) {
+    total += col->size();
+    if (col->size() == 0) { empty_count++; }
+  }
+  EXPECT_EQ(3, total);
+  EXPECT_GE(empty_count, 7);  // At least 7 partitions should be empty
+}
+
+TEST_F(HashPartitionIndices, DeterministicResults)
+{
+  fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+  auto input = cudf::table_view({col});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 4;
+
+  auto result1 = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+  auto result2 = cudf::hash_partition_indices(input, columns_to_hash, num_partitions);
+
+  EXPECT_EQ(result1.size(), result2.size());
+  for (std::size_t i = 0; i < result1.size(); ++i) {
+    // Sort the indices within each partition for comparison
+    // (order within partition is undefined)
+    auto sorted1 = cudf::sort(cudf::table_view({result1[i]->view()}));
+    auto sorted2 = cudf::sort(cudf::table_view({result2[i]->view()}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(sorted1->view(), sorted2->view());
+  }
+}
+
+TEST_F(HashPartitionIndices, CustomSeed)
+{
+  fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5, 6, 7, 8});
+  auto input = cudf::table_view({col});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 3;
+
+  auto result1 = cudf::hash_partition_indices(
+    input, columns_to_hash, num_partitions, cudf::hash_id::HASH_MURMUR3, 12345);
+  auto result2 = cudf::hash_partition_indices(
+    input, columns_to_hash, num_partitions, cudf::hash_id::HASH_MURMUR3, 12345);
+
+  EXPECT_EQ(result1.size(), result2.size());
+  for (std::size_t i = 0; i < result1.size(); ++i) {
+    auto sorted1 = cudf::sort(cudf::table_view({result1[i]->view()}));
+    auto sorted2 = cudf::sort(cudf::table_view({result2[i]->view()}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(sorted1->view(), sorted2->view());
+  }
+}
+
+TEST_F(HashPartitionIndices, IdentityHash)
+{
+  fixed_width_column_wrapper<int32_t> col({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+  auto input = cudf::table_view({col});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 5;
+
+  auto result = cudf::hash_partition_indices(
+    input, columns_to_hash, num_partitions, cudf::hash_id::HASH_IDENTITY);
+
+  EXPECT_EQ(std::size_t{num_partitions}, result.size());
+
+  cudf::size_type total = 0;
+  for (auto const& col : result) {
+    total += col->size();
+  }
+  EXPECT_EQ(10, total);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

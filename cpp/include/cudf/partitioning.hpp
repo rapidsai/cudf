@@ -102,6 +102,45 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Computes partition row indices without materializing the partitioned table.
+ *
+ * Returns a vector of columns where each column contains the row indices belonging
+ * to that partition. This enables downstream operations to gather the partitions in
+ * the most efficient format for their use case, avoiding an intermediate copy.
+ *
+ * @code{.pseudo}
+ * // Example usage:
+ * auto partition_indices = cudf::hash_partition_indices(input, cols_to_hash, num_partitions);
+ *
+ * // Gather each partition separately (potentially on separate streams)
+ * std::vector<std::unique_ptr<table>> partitions;
+ * for (auto& indices : partition_indices) {
+ *   partitions.push_back(cudf::gather(input, indices->view()));
+ * }
+ * @endcode
+ *
+ * @throw std::out_of_range if index in `columns_to_hash` is invalid
+ *
+ * @param input The table to partition
+ * @param columns_to_hash Indices of input columns to hash
+ * @param num_partitions The number of partitions to create
+ * @param hash_function Optional hash id that chooses the hash function to use
+ * @param seed Optional seed value to the hash function
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned columns' device memory
+ *
+ * @return Vector of columns, each containing row indices for one partition
+ */
+std::vector<std::unique_ptr<column>> hash_partition_indices(
+  table_view const& input,
+  std::vector<size_type> const& columns_to_hash,
+  int num_partitions,
+  hash_id hash_function             = hash_id::HASH_MURMUR3,
+  uint32_t seed                     = DEFAULT_HASH_SEED,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Round-robin partition.
  *
  * Returns a new table with rows re-arranged into partition groups and
