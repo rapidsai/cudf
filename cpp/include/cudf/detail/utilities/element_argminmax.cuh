@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,22 +26,30 @@ struct element_argminmax_fn {
   bool const has_nulls;
   bool const arg_min;
 
-  __device__ inline size_type operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
+  __device__ inline bool out_of_bounds_or_null(size_type idx) const
   {
     // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
     // github.com/NVIDIA/thrust/issues/1525
     // where invalid random values may be passed here by thrust::reduce_by_key
-    auto out_of_bound_or_null = [this] __device__(size_type const& idx) {
-      return idx < 0 || idx >= this->d_col.size() ||
-             (this->has_nulls && this->d_col.is_null_nocheck(idx));
-    };
-    if (out_of_bound_or_null(lhs_idx)) { return rhs_idx; }
-    if (out_of_bound_or_null(rhs_idx)) { return lhs_idx; }
+    return idx < 0 || idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(idx));
+  }
+
+  __device__ inline size_type operator()(size_type lhs_idx, size_type rhs_idx) const
+  {
+    if (out_of_bounds_or_null(lhs_idx)) { return rhs_idx; }
+    if (out_of_bounds_or_null(rhs_idx)) { return lhs_idx; }
+
+    auto const lhs = d_col.type().id() == type_id::DICTIONARY32
+                       ? d_col.child(1).element<T>(d_col.element<dictionary32>(lhs_idx).value())
+                       : d_col.element<T>(lhs_idx);
+    auto const rhs = d_col.type().id() == type_id::DICTIONARY32
+                       ? d_col.child(1).element<T>(d_col.element<dictionary32>(rhs_idx).value())
+                       : d_col.element<T>(rhs_idx);
 
     // Return `lhs_idx` iff:
     //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
     //   row(lhs_idx) >= row(rhs_idx) and finding ArgMax.
-    auto const less = d_col.element<T>(lhs_idx) < d_col.element<T>(rhs_idx);
+    auto const less = lhs < rhs;
     return less == arg_min ? lhs_idx : rhs_idx;
   }
 };
