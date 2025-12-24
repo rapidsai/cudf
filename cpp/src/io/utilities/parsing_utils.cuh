@@ -209,13 +209,19 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
   bool quotation   = false;
   auto current     = begin;
   bool escape_next = false;
+
+  // Spark behavior: only enable quote handling if field starts with quote character
+  // Fields like "field value" are quoted, but field" value or field"value are not
+  bool field_starts_with_quote = (begin < end && *begin == opts.quotechar);
+
   while (current < end) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields.
     // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
 
-    if (*current == opts.quotechar and not escape_next) {
+    // Only process quotes if field started with a quote (Spark compatibility)
+    if (field_starts_with_quote && *current == opts.quotechar and not escape_next) {
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {
