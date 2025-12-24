@@ -18,7 +18,7 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
@@ -142,14 +142,13 @@ class StringColumn(ColumnBase, Scannable):
         ):
             dtype = CUDF_STRING_DTYPE
 
+        self._start_offset = None
+        self._end_offset = None
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
             exposed=exposed,
         )
-
-        self._start_offset = None
-        self._end_offset = None
 
     @property
     def start_offset(self) -> int:
@@ -201,21 +200,16 @@ class StringColumn(ColumnBase, Scannable):
         else:
             return self.base_children[0].size - 1
 
-    @property
-    def data(self) -> None | Buffer:
-        if self._data is None:  # type: ignore[has-type]
+    def _recompute_data(self) -> None:
+        if (
+            self.offset == 0
+            and len(self.base_children) > 0
+            and self.size == self.base_children[0].size - 1
+        ):
+            self._data = self.base_data
+        else:
             assert self.base_data is not None
-            if (
-                self.offset == 0
-                and len(self.base_children) > 0
-                and self.size == self.base_children[0].size - 1
-            ):
-                self._data = self.base_data  # type: ignore[assignment]
-            else:
-                self._data = self.base_data[  # type: ignore[has-type]
-                    self.start_offset : self.end_offset
-                ]
-        return self._data  # type: ignore[has-type]
+            self._data = self.base_data[self.start_offset : self.end_offset]
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
@@ -258,27 +252,14 @@ class StringColumn(ColumnBase, Scannable):
         return result
 
     def to_arrow(self) -> pa.Array:
-        """Convert to PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> col = cudf.core.as_column([1, 2, 3, 4])
-        >>> col.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7f886547f830>
-        [
-          1,
-          2,
-          3,
-          4
-        ]
-        """
-        if self.null_count == len(self):
+        # All null string columns fail to convert in libcudf, so we must short-circuit
+        # the call to super().to_arrow().
+        # TODO: Investigate if the above is a bug in libcudf and fix it there.
+        if len(self.base_children) == 0 or self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )
-        else:
-            return super().to_arrow()
+        return super().to_arrow()
 
     def sum(
         self,
@@ -1450,9 +1431,7 @@ class StringColumn(ColumnBase, Scannable):
         step: int | None = None,
     ) -> Self:
         if isinstance(start, ColumnBase) and isinstance(stop, ColumnBase):
-            plc_start: plc.Column | plc.Scalar = start.to_pylibcudf(
-                mode="read"
-            )
+            plc_start: plc.Column | plc.Scalar = start.plc_column
             plc_stop: plc.Column | plc.Scalar = stop.plc_column
             plc_step: plc.Scalar | None = None
         elif all(isinstance(x, int) or x is None for x in (start, stop)):

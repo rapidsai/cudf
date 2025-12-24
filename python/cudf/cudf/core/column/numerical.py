@@ -397,7 +397,20 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
         with acquire_spill_lock():
-            mask, _ = plc.transform.nans_to_nulls(self.plc_column)
+            # When computing a null mask to set back to the column, since the column may
+            # have been sliced and have an offset, we need to compute the mask of the
+            # equivalent unsliced column so that the mask bits will be appropriately
+            # shifted..
+            shifted_column = plc.Column(
+                self.plc_column.type(),
+                self.plc_column.size() + self.plc_column.offset(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                0,
+                self.plc_column.children(),
+            )
+            mask, _ = plc.transform.nans_to_nulls(shifted_column)
             return self.set_mask(as_buffer(mask))
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
@@ -567,6 +580,15 @@ class NumericalColumn(NumericalBaseColumn):
                 res = self.nans_to_nulls().cast(dtype=dtype)
                 res._dtype = dtype
                 return res  # type: ignore[return-value]
+
+            if (
+                self.dtype.kind == "f"
+                and dtype.kind == "b"
+                and not is_pandas_nullable_extension_dtype(dtype)
+                and self.has_nulls()
+            ):
+                return self.fillna(np.nan).cast(dtype=dtype)  # type: ignore[return-value]
+
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
@@ -904,7 +926,7 @@ class NumericalColumn(NumericalBaseColumn):
             codes_dtype = min_unsigned_type(len(dtype.categories))
             codes = cast(NumericalColumn, self.astype(codes_dtype))
             return CategoricalColumn(
-                plc_column=codes.to_pylibcudf(mode="read"),
+                plc_column=codes.plc_column,
                 dtype=dtype,
                 exposed=False,
             )
