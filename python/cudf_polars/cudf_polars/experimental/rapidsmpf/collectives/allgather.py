@@ -59,6 +59,7 @@ class AllGatherManager:
                 self.context.br(),
             ),
         )
+        del chunk
 
     def insert_finished(self) -> None:
         """Insert finished into the AllGatherManager."""
@@ -81,12 +82,9 @@ class AllGatherManager:
         -------
         The concatenated AllGather result.
         """
-        partition_chunks = await self.allgather.extract_all(
-            self.context, ordered=ordered
-        )
         return await asyncio.to_thread(
             unpack_and_concat,
-            partitions=partition_chunks,
+            partitions=await self.allgather.extract_all(self.context, ordered=ordered),
             stream=stream,
             br=self.context.br(),
         )
