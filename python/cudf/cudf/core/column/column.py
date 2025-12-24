@@ -517,9 +517,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 f"Expected a Buffer object or None for mask, got {type(mask).__name__}"
             )
-        new_plc_column = self.to_pylibcudf(mode="read").with_mask(
-            new_mask, new_null_count
-        )
+        new_plc_column = self.plc_column.with_mask(new_mask, new_null_count)
         return (
             type(self)
             .from_pylibcudf(  # type: ignore[return-value]
