@@ -13,6 +13,7 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/join/key_remapping.hpp>
 #include <cudf/table/table_view.hpp>
@@ -26,7 +27,7 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
-#include <thrust/count.h>
+#include <cuda/std/atomic>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -34,6 +35,8 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/replace.h>
+
+#include <cooperative_groups.h>
 
 #include <cstddef>
 #include <limits>
@@ -167,58 +170,71 @@ struct build_comparator {
   RowEqual _d_equal;
 };
 
-/**
- * @brief Functor to check if a count is greater than zero.
- */
-struct is_nonzero_count {
-  __device__ bool operator()(cudf::size_type c) const { return c > 0; }
-};
+/// Block size for key remapping kernel
+CUDF_HOST_DEVICE auto constexpr KEY_REMAP_BLOCK_SIZE = 128;
 
 /**
- * @brief Functor for inserting keys with counting (with null filtering).
- */
-template <typename SetRef, typename KeyIter>
-struct insert_and_count_with_nulls_fn {
-  mutable SetRef set_ref;  // mutable because insert_and_find is non-const
-  KeyIter key_iter;
-  cudf::size_type* counts_ptr;
-  cudf::bitmask_type const* bitmask_ptr;
-
-  __device__ void operator()(cudf::size_type idx) const
-  {
-    // Skip rows with top-level nulls
-    if (!cudf::bit_is_set(bitmask_ptr, idx)) { return; }
-
-    auto const key              = key_iter[idx];
-    auto const [iter, inserted] = set_ref.insert_and_find(key);
-    auto const stored_idx       = static_cast<cudf::size_type>(iter->second);
-
-    // Atomically increment the count for this key's first occurrence
-    // This is a distributed atomic (different keys update different locations)
-    atomicAdd(&counts_ptr[stored_idx], 1);
-  }
-};
-
-/**
- * @brief Functor for inserting keys with counting (no null filtering).
+ * @brief Kernel for inserting keys with counting using block-scoped atomics.
+ *
+ * Uses block-scoped atomics for counting distinct keys (insertions) to avoid
+ * global atomic contention. Each block counts its insertions locally using
+ * cuda::thread_scope_block atomics, then performs a single device-scope atomic
+ * to add the block total to the global count.
+ *
+ * This reduces global atomics from O(num_rows) to O(num_blocks), similar to the
+ * approach used in groupby hash aggregation (see compute_mapping_indices.cuh).
+ *
+ * For duplicate counting, uses distributed device-scoped atomics (one per key)
+ * which is acceptable since different keys update different locations.
  */
 template <typename SetRef, typename KeyIter>
-struct insert_and_count_fn {
-  mutable SetRef set_ref;  // mutable because insert_and_find is non-const
-  KeyIter key_iter;
-  cudf::size_type* counts_ptr;
+CUDF_KERNEL void insert_and_count_kernel(cudf::size_type num_rows,
+                                         SetRef set_ref,
+                                         KeyIter key_iter,
+                                         cudf::size_type* counts_ptr,
+                                         cudf::size_type* global_distinct_count,
+                                         cudf::bitmask_type const* bitmask_ptr)
+{
+  auto const block = cooperative_groups::this_thread_block();
 
-  __device__ void operator()(cudf::size_type idx) const
-  {
-    auto const key              = key_iter[idx];
-    auto const [iter, inserted] = set_ref.insert_and_find(key);
-    auto const stored_idx       = static_cast<cudf::size_type>(iter->second);
+  // Block-local counter for insertions (distinct keys found by this block)
+  __shared__ cudf::size_type block_insert_count;
+  if (block.thread_rank() == 0) { block_insert_count = 0; }
+  block.sync();
 
-    // Atomically increment the count for this key's first occurrence
-    // This is a distributed atomic (different keys update different locations)
-    atomicAdd(&counts_ptr[stored_idx], 1);
+  // Process rows assigned to this block
+  auto const stride = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
+  for (auto idx = static_cast<cudf::size_type>(blockIdx.x * blockDim.x + threadIdx.x);
+       idx < num_rows;
+       idx += stride) {
+    // Skip rows with top-level nulls if bitmask is provided
+    bool const is_valid = (bitmask_ptr == nullptr) || cudf::bit_is_set(bitmask_ptr, idx);
+
+    if (is_valid) {
+      auto const key              = key_iter[idx];
+      auto const [iter, inserted] = set_ref.insert_and_find(key);
+      auto const stored_idx       = static_cast<cudf::size_type>(iter->second);
+
+      // Distributed atomic for per-key count (acceptable - different keys, different locations)
+      atomicAdd(&counts_ptr[stored_idx], 1);
+
+      // Block-scoped atomic for insertion count (avoids global contention)
+      if (inserted) {
+        cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> ref{block_insert_count};
+        ref.fetch_add(1, cuda::std::memory_order_relaxed);
+      }
+    }
   }
-};
+
+  // Synchronize block before adding to global count
+  block.sync();
+
+  // One thread per block adds the block's insertion count to global count
+  // This reduces global atomics from O(num_rows) to O(num_blocks)
+  if (block.thread_rank() == 0 && block_insert_count > 0) {
+    atomicAdd(global_distinct_count, block_insert_count);
+  }
+}
 
 /**
  * @brief Abstract interface for key remap hash table implementations.
@@ -312,6 +328,9 @@ class key_remap_table : public key_remap_table_interface {
     rmm::device_uvector<cudf::size_type> counts(build_num_rows, stream);
     thrust::fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
 
+    // Device scalar for distinct count (accumulated via per-block atomics)
+    rmm::device_scalar<cudf::size_type> d_distinct_count(0, stream);
+
     // Get hash table reference for insert_and_find
     auto set_ref = _hash_table.ref(cuco::op::insert_and_find);
 
@@ -323,33 +342,37 @@ class key_remap_table : public key_remap_table_interface {
     bool const skip_nulls =
       (_compare_nulls == cudf::null_equality::UNEQUAL) && cudf::nullable(build);
 
+    // Compute grid size for kernel launch
+    auto const grid_size = cudf::util::div_rounding_up_safe(
+      build_num_rows, static_cast<cudf::size_type>(KEY_REMAP_BLOCK_SIZE));
+
     if (skip_nulls) {
       // Compute row validity mask
       auto const row_bitmask =
         cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref()).first;
       auto const bitmask_ptr = reinterpret_cast<cudf::bitmask_type const*>(row_bitmask.data());
 
-      // Insert with counting, skipping null rows
-      using functor_type = insert_and_count_with_nulls_fn<decltype(set_ref), decltype(key_iter)>;
-      thrust::for_each_n(
-        rmm::exec_policy_nosync(stream),
-        thrust::make_counting_iterator<cudf::size_type>(0),
+      // Insert with counting using custom kernel with block-scoped atomics
+      insert_and_count_kernel<<<grid_size, KEY_REMAP_BLOCK_SIZE, 0, stream.value()>>>(
         build_num_rows,
-        functor_type{set_ref, key_iter, counts.data(), bitmask_ptr});
+        set_ref,
+        key_iter,
+        counts.data(),
+        d_distinct_count.data(),
+        bitmask_ptr);
     } else {
-      // Insert all rows with counting
-      using functor_type = insert_and_count_fn<decltype(set_ref), decltype(key_iter)>;
-      thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                         thrust::make_counting_iterator<cudf::size_type>(0),
-                         build_num_rows,
-                         functor_type{set_ref, key_iter, counts.data()});
+      // Insert all rows with counting using custom kernel with block-scoped atomics
+      insert_and_count_kernel<<<grid_size, KEY_REMAP_BLOCK_SIZE, 0, stream.value()>>>(
+        build_num_rows,
+        set_ref,
+        key_iter,
+        counts.data(),
+        d_distinct_count.data(),
+        nullptr);  // No bitmask
     }
 
-    // Compute distinct count by counting non-zero entries in counts array
-    _distinct_count = thrust::count_if(rmm::exec_policy_nosync(stream),
-                                       counts.begin(),
-                                       counts.end(),
-                                       is_nonzero_count{});
+    // Copy distinct count from device (accumulated via block-scoped atomics)
+    _distinct_count = d_distinct_count.value(stream);
 
     // Compute max duplicate count
     _max_duplicate_count = thrust::reduce(rmm::exec_policy_nosync(stream),
