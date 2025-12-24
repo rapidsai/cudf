@@ -199,7 +199,7 @@ struct map_find_fn {
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  populate_chunk_hash_maps_kernel(device_span<slot_type> const map_storage,
+  populate_chunk_hash_maps_kernel(cuda::std::span<slot_type> const map_storage,
                                   cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto const col_idx = blockIdx.y;
@@ -228,8 +228,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  collect_map_entries_kernel(device_span<slot_type> const map_storage,
-                             device_span<EncColumnChunk> chunks)
+  collect_map_entries_kernel(cuda::std::span<slot_type> const map_storage,
+                             cuda::std::span<EncColumnChunk> chunks)
 {
   auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
@@ -258,7 +258,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  get_dictionary_indices_kernel(device_span<slot_type> const map_storage,
+  get_dictionary_indices_kernel(cuda::std::span<slot_type> const map_storage,
                                 cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto const col_idx = blockIdx.y;
@@ -288,7 +288,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                   s_ck_start_val_idx);
 }
 
-void populate_chunk_hash_maps(device_span<slot_type> const map_storage,
+void populate_chunk_hash_maps(cuda::std::span<slot_type> const map_storage,
                               cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
@@ -297,8 +297,8 @@ void populate_chunk_hash_maps(device_span<slot_type> const map_storage,
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(map_storage, frags);
 }
 
-void collect_map_entries(device_span<slot_type> const map_storage,
-                         device_span<EncColumnChunk> chunks,
+void collect_map_entries(cuda::std::span<slot_type> const map_storage,
+                         cuda::std::span<EncColumnChunk> chunks,
                          rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
@@ -306,7 +306,7 @@ void collect_map_entries(device_span<slot_type> const map_storage,
     <<<chunks.size(), block_size, 0, stream.value()>>>(map_storage, chunks);
 }
 
-void get_dictionary_indices(device_span<slot_type> const map_storage,
+void get_dictionary_indices(cuda::std::span<slot_type> const map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream)
 {

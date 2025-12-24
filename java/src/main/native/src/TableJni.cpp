@@ -893,13 +893,13 @@ jlongArray mixed_join_size(JNIEnv* env,
   JNI_CATCH(env, NULL);
 }
 
-std::pair<std::size_t, cudf::device_span<cudf::size_type const>> get_mixed_size_info(
+std::pair<std::size_t, cuda::std::span<cudf::size_type const>> get_mixed_size_info(
   JNIEnv* env, jlong j_output_row_count, jlong j_matches_view)
 {
   auto const row_count = static_cast<std::size_t>(j_output_row_count);
   auto const matches   = reinterpret_cast<cudf::column_view const*>(j_matches_view);
   return std::make_pair(row_count,
-                        cudf::device_span<cudf::size_type const>(
+                        cuda::std::span<cudf::size_type const>(
                           matches->template data<cudf::size_type>(), matches->size()));
 }
 

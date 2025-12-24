@@ -258,7 +258,7 @@ struct list_child_constructor {
       }));
 
     // string_views should now have been populated with source and target references.
-    auto sv_span = cudf::device_span<string_view const>(string_views);
+    auto sv_span = cuda::std::span<string_view const>(string_views);
     return cudf::make_strings_column(sv_span, null_string_view, stream, mr);
   }
 

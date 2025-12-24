@@ -21,7 +21,7 @@
 
 #include <vector>
 
-using cudf::device_span;
+using cuda::std::span;
 using cudf::io::detail::codec_exec_result;
 using cudf::io::detail::codec_status;
 namespace nvcomp = cudf::io::detail::nvcomp;
@@ -73,11 +73,11 @@ struct DecompressTest
     rmm::device_buffer src{compressed.data(), compressed.size(), stream};
     rmm::device_uvector<uint8_t> dst{decompressed.size(), stream};
 
-    cudf::detail::hostdevice_vector<device_span<uint8_t const>> inf_in(1, stream);
+    cudf::detail::hostdevice_vector<cuda::std::span<uint8_t const>> inf_in(1, stream);
     inf_in[0] = {static_cast<uint8_t const*>(src.data()), src.size()};
     inf_in.host_to_device_async(stream);
 
-    cudf::detail::hostdevice_vector<device_span<uint8_t>> inf_out(1, stream);
+    cudf::detail::hostdevice_vector<cuda::std::span<uint8_t>> inf_out(1, stream);
     inf_out[0] = dst;
     inf_out.host_to_device_async(stream);
 
@@ -147,9 +147,9 @@ struct HostDecompressTest : public cudf::test::BaseFixture,
  * @brief Derived fixture for GZIP decompression
  */
 struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
-  void device_dispatch(device_span<device_span<uint8_t const>> d_inf_in,
-                       device_span<device_span<uint8_t>> d_inf_out,
-                       device_span<codec_exec_result> d_inf_stat)
+  void device_dispatch(cuda::std::span<cuda::std::span<uint8_t const>> d_inf_in,
+                       cuda::std::span<cuda::std::span<uint8_t>> d_inf_out,
+                       cuda::std::span<codec_exec_result> d_inf_stat)
   {
     cudf::io::detail::gpuinflate(d_inf_in,
                                  d_inf_out,
@@ -194,9 +194,9 @@ struct ZstdDecompressTest : public DecompressTest<ZstdDecompressTest> {
  * @brief Derived fixture for Snappy decompression
  */
 struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
-  void device_dispatch(device_span<device_span<uint8_t const>> d_inf_in,
-                       device_span<device_span<uint8_t>> d_inf_out,
-                       device_span<codec_exec_result> d_inf_stat)
+  void device_dispatch(cuda::std::span<cuda::std::span<uint8_t const>> d_inf_in,
+                       cuda::std::span<cuda::std::span<uint8_t>> d_inf_out,
+                       cuda::std::span<codec_exec_result> d_inf_stat)
   {
     cudf::io::detail::gpu_unsnap(d_inf_in, d_inf_out, d_inf_stat, cudf::get_default_stream());
   }
@@ -219,9 +219,9 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
  * @brief Derived fixture for Brotli decompression
  */
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
-  void device_dispatch(device_span<device_span<uint8_t const>> d_inf_in,
-                       device_span<device_span<uint8_t>> d_inf_out,
-                       device_span<codec_exec_result> d_inf_stat)
+  void device_dispatch(cuda::std::span<cuda::std::span<uint8_t const>> d_inf_in,
+                       cuda::std::span<cuda::std::span<uint8_t>> d_inf_out,
+                       cuda::std::span<codec_exec_result> d_inf_stat)
   {
     rmm::device_buffer d_scratch{cudf::io::detail::get_gpu_debrotli_scratch_size(1),
                                  cudf::get_default_stream()};
@@ -388,11 +388,11 @@ void roundtrip_test(cudf::io::compression_type compression)
       cudf::io::detail::max_compressed_size(compression, expected.size()), stream, mr);
     {
       auto const d_orig = cudf::detail::make_device_uvector_async(expected, stream, mr);
-      auto hd_srcs      = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
-      hd_srcs[0]        = d_orig;
+      auto hd_srcs = cudf::detail::hostdevice_vector<cuda::std::span<uint8_t const>>(1, stream);
+      hd_srcs[0]   = d_orig;
       hd_srcs.host_to_device_async(stream);
 
-      auto hd_dsts = cudf::detail::hostdevice_vector<device_span<uint8_t>>(1, stream);
+      auto hd_dsts = cudf::detail::hostdevice_vector<cuda::std::span<uint8_t>>(1, stream);
       hd_dsts[0]   = d_comp;
       hd_dsts.host_to_device_async(stream);
 
@@ -408,11 +408,11 @@ void roundtrip_test(cudf::io::compression_type compression)
 
     auto d_got = cudf::detail::hostdevice_vector<uint8_t>(expected.size(), stream);
     {
-      auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
+      auto hd_srcs = cudf::detail::hostdevice_vector<cuda::std::span<uint8_t const>>(1, stream);
       hd_srcs[0]   = d_comp;
       hd_srcs.host_to_device_async(stream);
 
-      auto hd_dsts = cudf::detail::hostdevice_vector<device_span<uint8_t>>(1, stream);
+      auto hd_dsts = cudf::detail::hostdevice_vector<cuda::std::span<uint8_t>>(1, stream);
       hd_dsts[0]   = d_got;
       hd_dsts.host_to_device_async(stream);
 

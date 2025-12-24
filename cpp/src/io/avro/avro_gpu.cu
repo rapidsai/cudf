@@ -7,7 +7,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-using cudf::device_span;
+using cuda::std::span;
 
 namespace cudf {
 namespace io {
@@ -69,7 +69,7 @@ avro_decode_row(schemadesc_s const* schema,
                 size_t row_offset,
                 uint8_t const* cur,
                 uint8_t const* end,
-                device_span<string_index_pair const> global_dictionary,
+                cuda::std::span<string_index_pair const> global_dictionary,
                 bool* skipped_row)
 {
   // `dst_row` depicts the offset of the decoded row in the destination
@@ -313,9 +313,9 @@ avro_decode_row(schemadesc_s const* schema,
  */
 // blockDim {32,num_warps,1}
 CUDF_KERNEL void __launch_bounds__(num_warps * 32, 2)
-  gpuDecodeAvroColumnData(device_span<block_desc_s const> blocks,
+  gpuDecodeAvroColumnData(cuda::std::span<block_desc_s const> blocks,
                           schemadesc_s* schema_g,
-                          device_span<string_index_pair const> global_dictionary,
+                          cuda::std::span<string_index_pair const> global_dictionary,
                           uint8_t const* avro_data,
                           uint32_t schema_len,
                           uint32_t min_row_size)
@@ -409,9 +409,9 @@ CUDF_KERNEL void __launch_bounds__(num_warps * 32, 2)
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use
  */
-void DecodeAvroColumnData(device_span<block_desc_s const> blocks,
+void DecodeAvroColumnData(cuda::std::span<block_desc_s const> blocks,
                           schemadesc_s* schema,
-                          device_span<string_index_pair const> global_dictionary,
+                          cuda::std::span<string_index_pair const> global_dictionary,
                           uint8_t const* avro_data,
                           uint32_t schema_len,
                           uint32_t min_row_size,

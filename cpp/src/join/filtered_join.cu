@@ -69,7 +69,7 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
 
 struct gather_mask {
   join_kind kind;
-  device_span<bool const> flagged;
+  cuda::std::span<bool const> flagged;
   __device__ bool operator()(size_type idx) const noexcept
   {
     return flagged[idx] == (kind == join_kind::LEFT_SEMI_JOIN);

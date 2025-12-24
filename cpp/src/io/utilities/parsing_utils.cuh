@@ -29,7 +29,7 @@
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
 
-using cudf::device_span;
+using cuda::std::span;
 
 namespace cudf {
 namespace io {

@@ -55,8 +55,8 @@ template <bool has_nulls>
 struct row_lexicographic_tagged_comparator {
   row_lexicographic_tagged_comparator(table_device_view const lhs,
                                       table_device_view const rhs,
-                                      device_span<order const> const column_order,
-                                      device_span<null_order const> const null_precedence)
+                                      cuda::std::span<order const> const column_order,
+                                      cuda::std::span<null_order const> const null_precedence)
     : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
   {
   }
@@ -85,8 +85,8 @@ struct row_lexicographic_tagged_comparator {
  private:
   table_device_view const _lhs;
   table_device_view const _rhs;
-  device_span<null_order const> const _null_precedence;
-  device_span<order const> const _column_order;
+  cuda::std::span<null_order const> const _null_precedence;
+  cuda::std::span<order const> const _column_order;
 };
 
 using detail::side;

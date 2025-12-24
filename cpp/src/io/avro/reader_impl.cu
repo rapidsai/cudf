@@ -38,7 +38,7 @@
 #include <utility>
 #include <vector>
 
-using cudf::device_span;
+using cuda::std::span;
 
 namespace cudf {
 namespace io {
@@ -184,10 +184,10 @@ rmm::device_buffer decompress_data(datasource& source,
                                    rmm::cuda_stream_view stream)
 {
   if (meta.codec == "deflate") {
-    auto inflate_in =
-      cudf::detail::hostdevice_vector<device_span<uint8_t const>>(meta.block_list.size(), stream);
+    auto inflate_in = cudf::detail::hostdevice_vector<cuda::std::span<uint8_t const>>(
+      meta.block_list.size(), stream);
     auto inflate_out =
-      cudf::detail::hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
+      cudf::detail::hostdevice_vector<cuda::std::span<uint8_t>>(meta.block_list.size(), stream);
     auto inflate_stats =
       cudf::detail::hostdevice_vector<codec_exec_result>(meta.block_list.size(), stream);
     thrust::fill(rmm::exec_policy(stream),
@@ -263,14 +263,14 @@ rmm::device_buffer decompress_data(datasource& source,
     // comp_block_data contains contents of the avro file starting from the first block, excluding
     // file header. meta.block_list[i].offset refers to offset of block i in the file, including
     // file header.
-    cudf::detail::hostdevice_vector<device_span<uint8_t const>> compressed_blocks(num_blocks,
-                                                                                  stream);
+    cudf::detail::hostdevice_vector<cuda::std::span<uint8_t const>> compressed_blocks(num_blocks,
+                                                                                      stream);
     std::transform(meta.block_list.begin(),
                    meta.block_list.end(),
                    compressed_blocks.host_ptr(),
                    [&](auto const& block) {
                      // Find ptrs to each compressed block by removing the header offset
-                     return device_span<uint8_t const>{
+                     return cuda::std::span<uint8_t const>{
                        static_cast<uint8_t const*>(comp_block_data.data()) +
                          (block.offset - meta.block_list[0].offset),
                        block.size - sizeof(uint32_t)};  // exclude the CRC32 checksum
@@ -293,14 +293,14 @@ rmm::device_buffer decompress_data(datasource& source,
       *std::max_element(uncompressed_sizes.begin(), uncompressed_sizes.end());
 
     rmm::device_buffer decompressed_data(uncompressed_data_size, stream);
-    rmm::device_uvector<device_span<uint8_t>> decompressed_blocks(num_blocks, stream);
+    rmm::device_uvector<cuda::std::span<uint8_t>> decompressed_blocks(num_blocks, stream);
     thrust::tabulate(rmm::exec_policy(stream),
                      decompressed_blocks.begin(),
                      decompressed_blocks.end(),
                      [off  = uncompressed_offsets.device_ptr(),
                       size = uncompressed_sizes.device_ptr(),
                       data = static_cast<uint8_t*>(decompressed_data.data())] __device__(int i) {
-                       return device_span<uint8_t>{data + off[i], size[i]};
+                       return cuda::std::span<uint8_t>{data + off[i], size[i]};
                      });
 
     rmm::device_uvector<codec_exec_result> decomp_results(num_blocks, stream);
@@ -341,7 +341,7 @@ rmm::device_buffer decompress_data(datasource& source,
 std::vector<column_buffer> decode_data(metadata& meta,
                                        rmm::device_buffer const& block_data,
                                        std::vector<std::pair<uint32_t, uint32_t>> const& dict,
-                                       device_span<string_index_pair const> global_dictionary,
+                                       cuda::std::span<string_index_pair const> global_dictionary,
                                        size_t num_rows,
                                        std::vector<std::pair<int, std::string>> const& selection,
                                        std::vector<data_type> const& column_types,

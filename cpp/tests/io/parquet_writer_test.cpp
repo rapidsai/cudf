@@ -190,7 +190,7 @@ TEST_F(ParquetWriterTest, BufferSource)
                                      out_buffer.size()},
       cudf::get_default_stream(),
       cudf::get_current_device_resource_ref());
-    auto const d_buffer = cudf::device_span<std::byte const>(
+    auto const d_buffer = cuda::std::span<std::byte const>(
       reinterpret_cast<std::byte const*>(d_input.data()), d_input.size());
     cudf::io::parquet_reader_options in_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info(d_buffer));

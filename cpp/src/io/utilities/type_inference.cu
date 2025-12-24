@@ -102,7 +102,7 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  */
 template <int BlockSize, typename OptionsView, typename ColumnStringIter>
 CUDF_KERNEL void infer_column_type_kernel(OptionsView options,
-                                          device_span<char const> data,
+                                          cuda::std::span<char const> data,
                                           ColumnStringIter offset_length_begin,
                                           std::size_t size,
                                           cudf::io::column_type_histogram* column_info)
@@ -113,7 +113,7 @@ CUDF_KERNEL void infer_column_type_kernel(OptionsView options,
        idx += gridDim.x * blockDim.x) {
     auto const field_offset = cuda::std::get<0>(*(offset_length_begin + idx));
     auto const field_len    = cuda::std::get<1>(*(offset_length_begin + idx));
-    auto const field_begin  = data.begin() + field_offset;
+    auto const field_begin  = data.data() + field_offset;
 
     if (cudf::detail::serialized_trie_contains(
           options.trie_na, {field_begin, static_cast<std::size_t>(field_len)})) {
@@ -223,7 +223,7 @@ CUDF_KERNEL void infer_column_type_kernel(OptionsView options,
  */
 template <typename OptionsView, typename ColumnStringIter>
 cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
-                                                  cudf::device_span<char const> data,
+                                                  cuda::std::span<char const> data,
                                                   ColumnStringIter offset_length_begin,
                                                   std::size_t const size,
                                                   rmm::cuda_stream_view stream)
@@ -243,7 +243,7 @@ cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
 
 cudf::data_type infer_data_type(
   cudf::io::json_inference_options_view const& options,
-  device_span<char const> data,
+  cuda::std::span<char const> data,
   thrust::zip_iterator<cuda::std::tuple<size_type const*, size_type const*>> offset_length_begin,
   std::size_t const size,
   rmm::cuda_stream_view stream)

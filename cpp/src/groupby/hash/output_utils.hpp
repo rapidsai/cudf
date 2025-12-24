@@ -65,7 +65,7 @@ rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
  */
 rmm::device_uvector<size_type> compute_key_transform_map(
   size_type num_total_keys,
-  device_span<size_type const> unique_key_indices,
+  cuda::std::span<size_type const> unique_key_indices,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
@@ -82,10 +82,11 @@ rmm::device_uvector<size_type> compute_key_transform_map(
  * @param mr Device memory resource used to allocate the returned array
  * @return A device vector mapping each input row to its output row index
  */
-rmm::device_uvector<size_type> compute_target_indices(device_span<size_type const> input,
-                                                      device_span<size_type const> transform_map,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr);
+rmm::device_uvector<size_type> compute_target_indices(
+  cuda::std::span<size_type const> input,
+  cuda::std::span<size_type const> transform_map,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Perform some final computation for the aggregation results such as null count and move

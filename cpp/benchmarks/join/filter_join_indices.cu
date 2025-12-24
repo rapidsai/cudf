@@ -27,8 +27,8 @@ void nvbench_filter_join_indices_inner_join(nvbench::state& state,
 
     return cudf::filter_join_indices(left_conditional_input,
                                      right_conditional_input,
-                                     cudf::device_span<cudf::size_type const>(*left_indices),
-                                     cudf::device_span<cudf::size_type const>(*right_indices),
+                                     cuda::std::span<cudf::size_type const>(*left_indices),
+                                     cuda::std::span<cudf::size_type const>(*right_indices),
                                      binary_pred,
                                      cudf::join_kind::INNER_JOIN);
   };
@@ -60,8 +60,8 @@ void nvbench_filter_join_indices_inner_join_complex_ast(
 
     return cudf::filter_join_indices(left_conditional_input,
                                      right_conditional_input,
-                                     cudf::device_span<cudf::size_type const>(*left_indices),
-                                     cudf::device_span<cudf::size_type const>(*right_indices),
+                                     cuda::std::span<cudf::size_type const>(*left_indices),
+                                     cuda::std::span<cudf::size_type const>(*right_indices),
                                      tree.back(),
                                      cudf::join_kind::INNER_JOIN);
   };
@@ -87,8 +87,8 @@ void nvbench_filter_join_indices_left_join(nvbench::state& state,
 
     return cudf::filter_join_indices(left_conditional_input,
                                      right_conditional_input,
-                                     cudf::device_span<cudf::size_type const>(*left_indices),
-                                     cudf::device_span<cudf::size_type const>(*right_indices),
+                                     cuda::std::span<cudf::size_type const>(*left_indices),
+                                     cuda::std::span<cudf::size_type const>(*right_indices),
                                      binary_pred,
                                      cudf::join_kind::LEFT_JOIN);
   };
@@ -114,8 +114,8 @@ void nvbench_filter_join_indices_full_join(nvbench::state& state,
 
     return cudf::filter_join_indices(left_conditional_input,
                                      right_conditional_input,
-                                     cudf::device_span<cudf::size_type const>(*left_indices),
-                                     cudf::device_span<cudf::size_type const>(*right_indices),
+                                     cuda::std::span<cudf::size_type const>(*left_indices),
+                                     cuda::std::span<cudf::size_type const>(*right_indices),
                                      binary_pred,
                                      cudf::join_kind::FULL_JOIN);
   };

@@ -49,7 +49,7 @@ struct m2_transform {
 template <typename ResultType, typename Iterator>
 void compute_m2_fn(column_device_view const& values,
                    Iterator values_iter,
-                   cudf::device_span<size_type const> group_labels,
+                   cuda::std::span<size_type const> group_labels,
                    ResultType const* d_means,
                    ResultType* d_result,
                    rmm::cuda_stream_view stream)
@@ -75,7 +75,7 @@ struct m2_functor {
   template <typename T>
   std::unique_ptr<column> operator()(column_view const& values,
                                      column_view const& group_means,
-                                     cudf::device_span<size_type const> group_labels,
+                                     cuda::std::span<size_type const> group_labels,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
     requires(std::is_arithmetic_v<T>)
@@ -116,7 +116,7 @@ struct m2_functor {
 
 std::unique_ptr<column> group_m2(column_view const& values,
                                  column_view const& group_means,
-                                 cudf::device_span<size_type const> group_labels,
+                                 cuda::std::span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {

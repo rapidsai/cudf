@@ -25,9 +25,10 @@ namespace cudf::strings::detail {
  * @param mr Device memory resource used to allocate the returned objects' device memory
  * @return Offsets of the position values for each string in input
  */
-std::unique_ptr<column> create_offsets_from_positions(strings_column_view const& input,
-                                                      device_span<int64_t const> const& positions,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr);
+std::unique_ptr<column> create_offsets_from_positions(
+  strings_column_view const& input,
+  cuda::std::span<int64_t const> const& positions,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 }  // namespace cudf::strings::detail

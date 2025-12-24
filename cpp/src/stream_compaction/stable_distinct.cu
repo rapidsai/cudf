@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -57,7 +57,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
   }();
 
   return cudf::detail::apply_boolean_mask(
-    input, cudf::device_span<bool const>(output_markers), stream, mr);
+    input, cuda::std::span<bool const>(output_markers), stream, mr);
 }
 
 }  // namespace detail

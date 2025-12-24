@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -41,7 +41,7 @@ namespace reduction::detail {
  * @return Sums of segments as type `output_dtype`
  */
 std::unique_ptr<column> segmented_sum(column_view const& col,
-                                      device_span<size_type const> offsets,
+                                      cuda::std::span<size_type const> offsets,
                                       data_type const output_dtype,
                                       null_policy null_handling,
                                       std::optional<std::reference_wrapper<scalar const>> init,
@@ -71,7 +71,7 @@ std::unique_ptr<column> segmented_sum(column_view const& col,
  * @return Product of segments as type `output_dtype`
  */
 std::unique_ptr<column> segmented_product(column_view const& col,
-                                          device_span<size_type const> offsets,
+                                          cuda::std::span<size_type const> offsets,
                                           data_type const output_dtype,
                                           null_policy null_handling,
                                           std::optional<std::reference_wrapper<scalar const>> init,
@@ -100,7 +100,7 @@ std::unique_ptr<column> segmented_product(column_view const& col,
  * @return Minimums of segments as type `output_dtype`
  */
 std::unique_ptr<column> segmented_min(column_view const& col,
-                                      device_span<size_type const> offsets,
+                                      cuda::std::span<size_type const> offsets,
                                       data_type const output_dtype,
                                       null_policy null_handling,
                                       std::optional<std::reference_wrapper<scalar const>> init,
@@ -129,7 +129,7 @@ std::unique_ptr<column> segmented_min(column_view const& col,
  * @return Maximums of segments as type `output_dtype`
  */
 std::unique_ptr<column> segmented_max(column_view const& col,
-                                      device_span<size_type const> offsets,
+                                      cuda::std::span<size_type const> offsets,
                                       data_type const output_dtype,
                                       null_policy null_handling,
                                       std::optional<std::reference_wrapper<scalar const>> init,
@@ -159,7 +159,7 @@ std::unique_ptr<column> segmented_max(column_view const& col,
  * @return Column of type BOOL8 for the results of the segments
  */
 std::unique_ptr<column> segmented_any(column_view const& col,
-                                      device_span<size_type const> offsets,
+                                      cuda::std::span<size_type const> offsets,
                                       data_type const output_dtype,
                                       null_policy null_handling,
                                       std::optional<std::reference_wrapper<scalar const>> init,
@@ -189,7 +189,7 @@ std::unique_ptr<column> segmented_any(column_view const& col,
  * @return Column of BOOL8 for the results of the segments
  */
 std::unique_ptr<column> segmented_all(column_view const& col,
-                                      device_span<size_type const> offsets,
+                                      cuda::std::span<size_type const> offsets,
                                       data_type const output_dtype,
                                       null_policy null_handling,
                                       std::optional<std::reference_wrapper<scalar const>> init,
@@ -218,7 +218,7 @@ std::unique_ptr<column> segmented_all(column_view const& col,
  * @return Column of `output_dtype` for the reduction results of the segments
  */
 std::unique_ptr<column> segmented_mean(column_view const& col,
-                                       device_span<size_type const> offsets,
+                                       cuda::std::span<size_type const> offsets,
                                        data_type const output_dtype,
                                        null_policy null_handling,
                                        rmm::cuda_stream_view stream,
@@ -246,7 +246,7 @@ std::unique_ptr<column> segmented_mean(column_view const& col,
  * @return Column of `output_dtype` for the reduction results of the segments
  */
 std::unique_ptr<column> segmented_sum_of_squares(column_view const& col,
-                                                 device_span<size_type const> offsets,
+                                                 cuda::std::span<size_type const> offsets,
                                                  data_type const output_dtype,
                                                  null_policy null_handling,
                                                  rmm::cuda_stream_view stream,
@@ -276,7 +276,7 @@ std::unique_ptr<column> segmented_sum_of_squares(column_view const& col,
  * @return Column of `output_dtype` for the reduction results of the segments
  */
 std::unique_ptr<column> segmented_standard_deviation(column_view const& col,
-                                                     device_span<size_type const> offsets,
+                                                     cuda::std::span<size_type const> offsets,
                                                      data_type const output_dtype,
                                                      null_policy null_handling,
                                                      size_type ddof,
@@ -307,7 +307,7 @@ std::unique_ptr<column> segmented_standard_deviation(column_view const& col,
  * @return Column of `output_dtype` for the reduction results of the segments
  */
 std::unique_ptr<column> segmented_variance(column_view const& col,
-                                           device_span<size_type const> offsets,
+                                           cuda::std::span<size_type const> offsets,
                                            data_type const output_dtype,
                                            null_policy null_handling,
                                            size_type ddof,
@@ -337,7 +337,7 @@ std::unique_ptr<column> segmented_variance(column_view const& col,
  * @return Column of unique counts per segment
  */
 std::unique_ptr<column> segmented_nunique(column_view const& col,
-                                          device_span<size_type const> offsets,
+                                          cuda::std::span<size_type const> offsets,
                                           null_policy null_handling,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr);

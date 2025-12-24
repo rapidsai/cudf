@@ -126,7 +126,7 @@ struct mixed_join_setup_data {
   detail::grid_1d config;
   thread_index_type shmem_size_per_block;
   row_equality equality_probe;
-  cudf::device_span<cuco::pair<hash_value_type, size_type>> hash_table_storage;
+  cuda::std::span<cuco::pair<hash_value_type, size_type>> hash_table_storage;
   rmm::device_uvector<cuco::pair<hash_value_type, size_type>> input_pairs;
   rmm::device_uvector<cuda::std::pair<hash_value_type, hash_value_type>> hash_indices;
 };
@@ -211,7 +211,7 @@ mixed_join_setup_data setup_mixed_join_common(table_view const& left_equality,
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   // Precompute hash table storage and input data
-  auto hash_table_storage = cudf::device_span<cuco::pair<hash_value_type, size_type>>{
+  auto hash_table_storage = cuda::std::span<cuco::pair<hash_value_type, size_type>>{
     hash_table.data(), hash_table.capacity()};
   CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(hash_table_storage.data()) %
                    (2 * sizeof(cuco::pair<hash_value_type, size_type>)) ==
@@ -251,7 +251,7 @@ compute_mixed_join_matches_per_row(
   bool is_outer_join,
   bool swap_tables,
   row_equality const& equality_probe,
-  cudf::device_span<cuco::pair<hash_value_type, size_type>> hash_table_storage,
+  cuda::std::span<cuco::pair<hash_value_type, size_type>> hash_table_storage,
   cuco::pair<hash_value_type, size_type> const* input_pairs,
   cuda::std::pair<hash_value_type, hash_value_type> const* hash_indices,
   cudf::ast::detail::expression_device_view device_expression_data,
@@ -263,8 +263,8 @@ compute_mixed_join_matches_per_row(
 {
   auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
     static_cast<std::size_t>(outer_num_rows), stream, mr);
-  auto matches_per_row_span = cudf::device_span<size_type>{
-    matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
+  auto matches_per_row_span =
+    cuda::std::span<size_type>{matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
 
   if (has_nulls) {
     launch_mixed_join_count<true>(left_conditional_view,
@@ -315,7 +315,7 @@ mixed_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   join_kind join_type,
-  std::optional<std::pair<std::size_t, device_span<size_type const>>> const& output_size_data,
+  std::optional<std::pair<std::size_t, cuda::std::span<size_type const>>> const& output_size_data,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -374,7 +374,7 @@ mixed_join(
   // Using an optional because we only need to allocate a new vector if one was
   // not passed as input, and rmm::device_uvector is not default constructible
   std::optional<rmm::device_uvector<size_type>> matches_per_row{};
-  device_span<size_type const> matches_per_row_span{};
+  cuda::std::span<size_type const> matches_per_row_span{};
 
   if (output_size_data.has_value()) {
     join_size            = output_size_data->first;
@@ -397,7 +397,7 @@ mixed_join(
                                                               mr);
     join_size            = size;
     matches_per_row      = std::move(*matches);
-    matches_per_row_span = cudf::device_span<size_type const>{
+    matches_per_row_span = cuda::std::span<size_type const>{
       matches_per_row->begin(), static_cast<std::size_t>(setup.outer_num_rows)};
   }
 
@@ -507,7 +507,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                                                                  : left_num_rows;
     auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
       static_cast<std::size_t>(outer_num_rows), stream, mr);
-    auto matches_per_row_span = cudf::device_span<size_type>{
+    auto matches_per_row_span = cuda::std::span<size_type>{
       matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
 
     if (right_num_rows == 0 && join_type == join_kind::LEFT_JOIN) {
@@ -566,7 +566,7 @@ mixed_inner_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
-  std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
+  std::optional<std::pair<std::size_t, cuda::std::span<size_type const>>> const output_size_data,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {

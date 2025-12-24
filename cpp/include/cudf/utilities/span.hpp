@@ -298,7 +298,8 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   bool _is_device_accessible{false};
 };
 
-// ===== device_span ===============================================================================
+// ===== cuda::std::span
+// ===============================================================================
 
 template <typename T>
 struct is_device_span_supported_container : std::false_type {};
@@ -318,9 +319,15 @@ struct is_device_span_supported_container<  //
 /**
  * @brief Device version of C++20 std::span with reduced feature set.
  *
+ * @deprecated Use cuda::std::span instead. This type will be removed in version 26.02.
  */
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 template <typename T, std::size_t Extent = cudf::dynamic_extent>
-struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Extent>> {
+struct [[deprecated("Use cuda::std::span instead. This type will be removed in version 26.02.")]]
+device_span : public cudf::detail::span_base<T, Extent, device_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, device_span<T, Extent>>;  ///< Base type
   using base::base;
 
@@ -418,6 +425,9 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
     return device_span{this->data() + offset, count};
   }
 };
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 /** @} */  // end of group
 
 namespace detail {
@@ -536,7 +546,7 @@ using host_2dspan = base_2dspan<T, host_span>;
  * Index operator returns rows as `device_span`.
  */
 template <class T>
-using device_2dspan = base_2dspan<T, device_span>;
+using device_2dspan = base_2dspan<T, cuda::std::span>;
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

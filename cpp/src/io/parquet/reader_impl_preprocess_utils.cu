@@ -275,7 +275,7 @@ void generate_depth_remappings(
 }
 
 void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
-                       device_span<PageInfo> pages,
+                       cuda::std::span<PageInfo> pages,
                        rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
@@ -339,7 +339,7 @@ std::string encoding_to_string(Encoding encoding)
   return result;
 }
 
-[[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
+[[nodiscard]] std::string list_unsupported_encodings(cuda::std::span<PageInfo const> pages,
                                                      rmm::cuda_stream_view stream)
 {
   auto const to_mask     = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
@@ -350,8 +350,8 @@ std::string encoding_to_string(Encoding encoding)
   return encoding_bitmask_to_str(unsupported);
 }
 
-cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const> unsorted_pages,
-                                                     device_span<ColumnChunkDesc const> chunks,
+cudf::detail::hostdevice_vector<PageInfo> sort_pages(cuda::std::span<PageInfo const> unsorted_pages,
+                                                     cuda::std::span<ColumnChunkDesc const> chunks,
                                                      rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -409,7 +409,7 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
 }
 
 void decode_page_headers(pass_intermediate_data& pass,
-                         device_span<PageInfo> unsorted_pages,
+                         cuda::std::span<PageInfo> unsorted_pages,
                          bool has_page_index,
                          rmm::cuda_stream_view stream)
 {

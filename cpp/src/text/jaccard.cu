@@ -56,7 +56,7 @@ __device__ auto get_row(uint32_t const* values, int64_t const* offsets, cudf::si
   auto const offset = offsets[row_idx];
   auto const size   = offsets[row_idx + 1] - offset;
   auto const begin  = values + offset;
-  return cudf::device_span<uint32_t const>(begin, size);
+  return cuda::std::span<uint32_t const>(begin, size);
 }
 
 /**

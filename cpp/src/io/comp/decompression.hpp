@@ -49,7 +49,7 @@ struct decompression_info {
  */
 [[nodiscard]] size_t get_decompression_scratch_size_ex(
   compression_type compression,
-  device_span<device_span<uint8_t const> const> inputs,
+  cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
   size_t max_uncomp_chunk_size,
   size_t max_total_uncomp_size,
   rmm::cuda_stream_view stream);
@@ -70,8 +70,8 @@ struct decompression_info {
  * @param uncompressed_sizes Output device memory buffers to store the uncompressed sizes
  * @param stream CUDA stream to be used for device operations and synchronization.
  */
-void get_snappy_uncompressed_size(device_span<device_span<uint8_t const> const> inputs,
-                                  device_span<size_t> uncompressed_sizes,
+void get_snappy_uncompressed_size(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                                  cuda::std::span<size_t> uncompressed_sizes,
                                   rmm::cuda_stream_view stream);
 
 }  // namespace io::detail

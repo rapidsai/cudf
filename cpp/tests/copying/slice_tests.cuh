@@ -221,7 +221,7 @@ inline std::unique_ptr<cudf::column> make_long_offsets_string_column()
   });
   rmm::device_buffer d_chars(num_chars, cudf::get_default_stream());
   cudf::detail::cuda_memcpy(
-    cudf::device_span<int8_t>{static_cast<int8_t*>(d_chars.data()), d_chars.size()},
+    cuda::std::span<int8_t>{static_cast<int8_t*>(d_chars.data()), d_chars.size()},
     cudf::host_span<int8_t const>{chars.data(), chars.size()},
     cudf::get_default_stream());
 

@@ -35,7 +35,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
  * @copydoc cudf::table_to_array
  */
 void table_to_array(table_view const& input,
-                    device_span<cuda::std::byte> output,
+                    cuda::std::span<cuda::std::byte> output,
                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 }  // namespace detail

@@ -131,7 +131,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
 
     rmm::device_uvector<size_type> unique_key_indices(num_keys, stream);
     auto const keys_end       = set.retrieve_all(unique_key_indices.begin(), stream.value());
-    auto const key_gather_map = device_span<size_type const>{
+    auto const key_gather_map = cuda::std::span<size_type const>{
       unique_key_indices.data(),
       static_cast<std::size_t>(cuda::std::distance(unique_key_indices.begin(), keys_end))};
     return gather_keys(key_gather_map);

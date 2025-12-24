@@ -34,8 +34,8 @@ template <cudf::size_type max_block_size, bool has_nulls, bool has_complex_type>
 CUDF_KERNEL __launch_bounds__(max_block_size) void filter_join_indices_kernel(
   cudf::table_device_view left_table,
   cudf::table_device_view right_table,
-  cudf::device_span<cudf::size_type const> left_indices,
-  cudf::device_span<cudf::size_type const> right_indices,
+  cuda::std::span<cudf::size_type const> left_indices,
+  cuda::std::span<cudf::size_type const> right_indices,
   cudf::ast::detail::expression_device_view device_expression_data,
   bool* predicate_results)
 {
@@ -86,8 +86,8 @@ template <bool has_nulls, bool has_complex_type>
 void launch_filter_gather_map_kernel(
   cudf::table_device_view const& left_table,
   cudf::table_device_view const& right_table,
-  cudf::device_span<cudf::size_type const> left_indices,
-  cudf::device_span<cudf::size_type const> right_indices,
+  cuda::std::span<cudf::size_type const> left_indices,
+  cuda::std::span<cudf::size_type const> right_indices,
   cudf::ast::detail::expression_device_view device_expression_data,
   cudf::detail::grid_1d const& config,
   std::size_t shmem_per_block,

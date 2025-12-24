@@ -44,9 +44,9 @@ using found_range = cuda::std::pair<size_type, size_type>;
  */
 struct replace_multi_regex_fn {
   column_device_view const d_strings;
-  device_span<reprog_device const> progs;  // array of regex progs
-  found_range* d_found_ranges;             // working array matched (begin,end) values
-  column_device_view const d_repls;        // replacement strings
+  cuda::std::span<reprog_device const> progs;  // array of regex progs
+  found_range* d_found_ranges;                 // working array matched (begin,end) values
+  column_device_view const d_repls;            // replacement strings
   size_type* d_sizes{};
   char* d_chars{};
   cudf::detail::input_offsetalator d_offsets;

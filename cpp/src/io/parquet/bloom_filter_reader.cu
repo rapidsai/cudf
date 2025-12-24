@@ -39,7 +39,7 @@ namespace {
  *
  */
 struct bloom_filter_caster {
-  cudf::device_span<cudf::device_span<cuda::std::byte> const> bloom_filter_spans;
+  cuda::std::span<cuda::std::span<cuda::std::byte> const> bloom_filter_spans;
   host_span<Type const> parquet_types;
   size_t total_row_groups;
   size_t num_equality_columns;
@@ -73,7 +73,7 @@ struct bloom_filter_caster {
     auto constexpr bytes_per_block = sizeof(word_type) * policy_type::words_per_block;
 
     rmm::device_buffer results{total_row_groups, stream, cudf::get_current_device_resource_ref()};
-    cudf::device_span<bool> results_span{static_cast<bool*>(results.data()), total_row_groups};
+    cuda::std::span<bool> results_span{static_cast<bool*>(results.data()), total_row_groups};
 
     // Query literal in bloom filters from each column chunk (row group).
     thrust::tabulate(rmm::exec_policy_nosync(stream),
@@ -529,13 +529,13 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto const parquet_types = get_parquet_types(input_row_group_indices, bloom_filter_col_schemas);
 
   // Create spans from bloom filter bitset buffers to use in cuco::bloom_filter_ref.
-  std::vector<cudf::device_span<cuda::std::byte>> h_bloom_filter_spans;
+  std::vector<cuda::std::span<cuda::std::byte>> h_bloom_filter_spans;
   h_bloom_filter_spans.reserve(bloom_filter_data.size());
   std::transform(bloom_filter_data.begin(),
                  bloom_filter_data.end(),
                  std::back_inserter(h_bloom_filter_spans),
                  [&](auto& buffer) {
-                   return cudf::device_span<cuda::std::byte>{
+                   return cuda::std::span<cuda::std::byte>{
                      static_cast<cuda::std::byte*>(buffer.data()), buffer.size()};
                  });
 

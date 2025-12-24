@@ -211,7 +211,7 @@ struct character_normalizer::character_normalizer_impl {
   std::unique_ptr<cudf::column> special_tokens;
   rmm::device_uvector<cudf::string_view> special_tokens_view;
 
-  cudf::device_span<cudf::string_view const> get_special_tokens() const
+  cuda::std::span<cudf::string_view const> get_special_tokens() const
   {
     return special_tokens_view;
   }
@@ -286,7 +286,7 @@ namespace {
  */
 CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
                                        int64_t total_count,
-                                       cudf::device_span<cudf::string_view const> special_tokens,
+                                       cuda::std::span<cudf::string_view const> special_tokens,
                                        bool do_lower_case)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
@@ -409,7 +409,7 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
  * @return The sizes of each output row
  */
 template <typename OffsetType>
-rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<uint32_t const> d_normalized,
+rmm::device_uvector<cudf::size_type> compute_sizes(cuda::std::span<uint32_t const> d_normalized,
                                                    OffsetType offsets,
                                                    int64_t offset,
                                                    cudf::size_type size,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -39,13 +39,13 @@ namespace io {
  */
 template <typename ColumnDescriptor>
 rmm::device_uvector<column_device_view> create_leaf_column_device_views(
-  typename cudf::device_span<ColumnDescriptor> col_desc,
+  typename cuda::std::span<ColumnDescriptor> col_desc,
   table_device_view const& parent_table_device_view,
   rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<column_device_view> leaf_column_views(parent_table_device_view.num_columns(),
                                                             stream);
-  auto leaf_columns = cudf::device_span<column_device_view>{leaf_column_views};
+  auto leaf_columns = cuda::std::span<column_device_view>{leaf_column_views};
 
   auto iter = thrust::make_counting_iterator<size_type>(0);
   thrust::for_each(
@@ -69,7 +69,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
         col = child;
       }
       // Store leaf_column to device storage
-      column_device_view* leaf_col_ptr = leaf_columns.begin() + index;
+      column_device_view* leaf_col_ptr = leaf_columns.data() + index;
       *leaf_col_ptr                    = col;
       col_desc[index].leaf_column      = leaf_col_ptr;
     });

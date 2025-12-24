@@ -14,7 +14,7 @@ template void launch_mixed_join<false>(
   bool is_outer_join,
   bool swap_tables,
   row_equality equality_probe,
-  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+  cuda::std::span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<hash_value_type, hash_value_type> const* hash_indices,
   cudf::ast::detail::expression_device_view device_expression_data,
