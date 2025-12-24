@@ -166,11 +166,11 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
  */
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr)
+                    cudf::memory_resources resources)
 {
   // do a contiguous_split with no splits to get the memory for the table
   // arranged as we want it
-  auto contig_split_result = cudf::detail::contiguous_split(input, {}, stream, mr);
+  auto contig_split_result = cudf::detail::contiguous_split(input, {}, stream, resources);
   return contig_split_result.empty() ? packed_columns{} : std::move(contig_split_result[0].data);
 }
 
@@ -253,10 +253,10 @@ void metadata_builder::clear() { return impl->clear(); }
  */
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr)
+                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::pack(input, stream, mr);
+  return detail::pack(input, stream, resources);
 }
 
 /**

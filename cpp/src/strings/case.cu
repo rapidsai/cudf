@@ -385,10 +385,10 @@ CUDF_KERNEL void multibyte_converter_kernel(convert_char_fn converter,
 std::unique_ptr<column> convert_case(strings_column_view const& input,
                                      character_flags_table_type case_flag,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   if (input.size() == input.null_count()) {
-    return std::make_unique<column>(input.parent(), stream, mr);
+    return std::make_unique<column>(input.parent(), stream, resources);
   }
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
@@ -409,12 +409,13 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
 
   // For smaller strings, use the regular string-parallel algorithm
   if ((chars_size / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
-    auto [offsets, chars] = make_strings_children(converter, input.size(), stream, mr);
+    auto [offsets, chars] = make_strings_children(converter, input.size(), stream, resources);
     return make_strings_column(input.size(),
                                std::move(offsets),
                                chars.release(),
                                input.null_count(),
-                               cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                               cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
   }
 
   // Check if the input contains special multi-byte characters where the case equivalent
@@ -432,7 +433,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
     // optimization for the non-special case;
     // copying the input column automatically handles normalizing sliced inputs
     // and nulls properly but also does incur a wasteful chars copy too
-    auto result  = std::make_unique<column>(input.parent(), stream, mr);
+    auto result  = std::make_unique<column>(input.parent(), stream, resources);
     auto d_chars = result->mutable_view().head<char>();
     multibyte_converter_kernel<bytes_per_thread>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
@@ -451,16 +452,16 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         ccfn, *d_strings, sizes.data());
     // convert sizes to offsets
-    return cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
+    return cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, resources);
   }();
 
   // build sub-offsets
   auto const sub_count = chars_size / LS_SUB_BLOCK_SIZE;
-  auto tmp_offsets     = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream);
+  auto tmp_offsets     = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream, resources.get_temporary_mr());
   {
     rmm::device_uvector<int64_t> sub_offsets(sub_count, stream);
     auto const count_itr = thrust::make_counting_iterator<int64_t>(0);
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       count_itr,
                       count_itr + sub_count,
                       sub_offsets.data(),
@@ -469,7 +470,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
     // merge them with input offsets
     auto input_offsets =
       cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
-    thrust::merge(rmm::exec_policy_nosync(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                   input_offsets,
                   input_offsets + input.size() + 1,
                   sub_offsets.begin(),
@@ -481,42 +482,44 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // run case conversion over the new sub-strings
   auto const tmp_size = static_cast<size_type>(tmp_offsets.size()) - 1;
   upper_lower_ls_fn sub_conv{ccfn, input_chars, tmp_offsets.data()};
-  auto chars = std::get<1>(make_strings_children(sub_conv, tmp_size, stream, mr));
+  auto chars = std::get<1>(make_strings_children(sub_conv, tmp_size, stream,
+                  resources));
 
   return make_strings_column(input.size(),
                              std::move(offsets),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 }  // namespace
 
 std::unique_ptr<column> to_lower(strings_column_view const& strings,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   character_flags_table_type case_flag = IS_UPPER(0xFF);  // convert only upper case characters
-  return convert_case(strings, case_flag, stream, mr);
+  return convert_case(strings, case_flag, stream, resources);
 }
 
 //
 std::unique_ptr<column> to_upper(strings_column_view const& strings,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   character_flags_table_type case_flag = IS_LOWER(0xFF);  // convert only lower case characters
-  return convert_case(strings, case_flag, stream, mr);
+  return convert_case(strings, case_flag, stream, resources);
 }
 
 //
 std::unique_ptr<column> swapcase(strings_column_view const& strings,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   // convert only upper or lower case characters
   character_flags_table_type case_flag = IS_LOWER(0xFF) | IS_UPPER(0xFF);
-  return convert_case(strings, case_flag, stream, mr);
+  return convert_case(strings, case_flag, stream, resources);
 }
 
 }  // namespace detail
@@ -525,26 +528,26 @@ std::unique_ptr<column> swapcase(strings_column_view const& strings,
 
 std::unique_ptr<column> to_lower(strings_column_view const& strings,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_lower(strings, stream, mr);
+  return detail::to_lower(strings, stream, resources);
 }
 
 std::unique_ptr<column> to_upper(strings_column_view const& strings,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_upper(strings, stream, mr);
+  return detail::to_upper(strings, stream, resources);
 }
 
 std::unique_ptr<column> swapcase(strings_column_view const& strings,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::swapcase(strings, stream, mr);
+  return detail::swapcase(strings, stream, resources);
 }
 
 }  // namespace strings

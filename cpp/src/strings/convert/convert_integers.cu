@@ -102,26 +102,27 @@ struct dispatch_is_integer_fn {
   template <typename T>
   std::unique_ptr<column> operator()(strings_column_view const& input,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(cudf::is_integral_not_bool<T>())
   {
     auto const d_column = column_device_view::create(input.parent(), stream);
     auto results        = make_numeric_column(data_type{type_id::BOOL8},
                                        input.size(),
-                                       cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                       cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                        input.null_count(),
                                        stream,
-                                       mr);
+                                       resources);
 
     auto d_results = results->mutable_view().data<bool>();
     if (input.has_nulls()) {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                         d_column->pair_begin<string_view, true>(),
                         d_column->pair_end<string_view, true>(),
                         d_results,
                         string_to_integer_check_fn<T>{});
     } else {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                         d_column->pair_begin<string_view, false>(),
                         d_column->pair_end<string_view, false>(),
                         d_results,
@@ -148,26 +149,27 @@ struct dispatch_is_integer_fn {
 
 std::unique_ptr<column> is_integer(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   auto const d_column = column_device_view::create(input.parent(), stream);
   auto results        = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
 
   auto d_results = results->mutable_view().data<bool>();
   if (input.has_nulls()) {
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy(stream, resources.get_temporary_mr()),
       d_column->pair_begin<string_view, true>(),
       d_column->pair_end<string_view, true>(),
       d_results,
       [] __device__(auto const& p) { return p.second ? is_integer(p.first) : false; });
   } else {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       d_column->pair_begin<string_view, false>(),
                       d_column->pair_end<string_view, false>(),
                       d_results,
@@ -183,10 +185,10 @@ std::unique_ptr<column> is_integer(strings_column_view const& input,
 std::unique_ptr<column> is_integer(strings_column_view const& input,
                                    data_type int_type,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   if (input.is_empty()) { return cudf::make_empty_column(type_id::BOOL8); }
-  return type_dispatcher(int_type, dispatch_is_integer_fn{}, input, stream, mr);
+  return type_dispatcher(int_type, dispatch_is_integer_fn{}, input, stream, resources);
 }
 
 }  // namespace detail
@@ -194,19 +196,19 @@ std::unique_ptr<column> is_integer(strings_column_view const& input,
 // external APIs
 std::unique_ptr<column> is_integer(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(input, stream, mr);
+  return detail::is_integer(input, stream, resources);
 }
 
 std::unique_ptr<column> is_integer(strings_column_view const& input,
                                    data_type int_type,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(input, int_type, stream, mr);
+  return detail::is_integer(input, int_type, stream, resources);
 }
 
 namespace detail {
@@ -241,7 +243,7 @@ struct dispatch_to_integers_fn {
                   rmm::cuda_stream_view stream) const
     requires(cudf::is_integral_not_bool<IntegerType>())
   {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_column.size()),
                       output_column.data<IntegerType>(),
@@ -262,7 +264,7 @@ struct dispatch_to_integers_fn {
 std::unique_ptr<column> to_integers(strings_column_view const& input,
                                     data_type output_type,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
@@ -272,10 +274,11 @@ std::unique_ptr<column> to_integers(strings_column_view const& input,
   // Create integer output column copying the strings null-mask
   auto results = make_numeric_column(output_type,
                                      strings_count,
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   // Fill output column with integers
   auto const strings_dev_view = column_device_view::create(input.parent(), stream);
   auto results_view           = results->mutable_view();
@@ -293,10 +296,10 @@ std::unique_ptr<column> to_integers(strings_column_view const& input,
 std::unique_ptr<column> to_integers(strings_column_view const& input,
                                     data_type output_type,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_integers(input, output_type, stream, mr);
+  return detail::to_integers(input, output_type, stream, resources);
 }
 
 namespace detail {
@@ -344,7 +347,7 @@ struct dispatch_from_integers_fn {
   template <typename IntegerType>
   std::unique_ptr<column> operator()(column_view const& integers,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(cudf::is_integral_not_bool<IntegerType>())
   {
     size_type strings_count = integers.size();
@@ -352,10 +355,10 @@ struct dispatch_from_integers_fn {
     auto d_column           = *column;
 
     // copy the null mask
-    rmm::device_buffer null_mask = cudf::detail::copy_bitmask(integers, stream, mr);
+    rmm::device_buffer null_mask = cudf::detail::copy_bitmask(integers, stream, resources);
 
     auto [offsets, chars] =
-      make_strings_children(from_integers_fn<IntegerType>{d_column}, strings_count, stream, mr);
+      make_strings_children(from_integers_fn<IntegerType>{d_column}, strings_count, stream, resources);
 
     return make_strings_column(strings_count,
                                std::move(offsets),
@@ -379,12 +382,12 @@ struct dispatch_from_integers_fn {
 // This will convert all integer column types into a strings column.
 std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   size_type strings_count = integers.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
-  return type_dispatcher(integers.type(), dispatch_from_integers_fn{}, integers, stream, mr);
+  return type_dispatcher(integers.type(), dispatch_from_integers_fn{}, integers, stream, resources);
 }
 
 }  // namespace detail
@@ -392,10 +395,10 @@ std::unique_ptr<column> from_integers(column_view const& integers,
 // external API
 std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_integers(integers, stream, mr);
+  return detail::from_integers(integers, stream, resources);
 }
 
 }  // namespace strings

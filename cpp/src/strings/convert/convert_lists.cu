@@ -184,7 +184,7 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
                                            string_scalar const& na_rep,
                                            strings_column_view const& separators,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
 
@@ -201,7 +201,7 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
   CUDF_EXPECTS(na_rep.is_valid(stream), "Null replacement string must be valid");
 
   // create stack memory for processing nested lists
-  auto stack_buffer = rmm::device_uvector<stack_item>(input.size() * depth, stream);
+  auto stack_buffer = rmm::device_uvector<stack_item>(input.size() * depth, stream, resources.get_temporary_mr());
 
   auto const d_input      = column_device_view::create(input.parent(), stream);
   auto const d_separators = column_device_view::create(separators.parent(), stream);
@@ -211,7 +211,7 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
     format_lists_fn{*d_input, *d_separators, d_na_rep, stack_buffer.data(), depth},
     input.size(),
     stream,
-    mr);
+    resources);
 
   return make_strings_column(
     input.size(), std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
@@ -225,10 +225,10 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
                                            string_scalar const& na_rep,
                                            strings_column_view const& separators,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::format_list_column(input, na_rep, separators, stream, mr);
+  return detail::format_list_column(input, na_rep, separators, stream, resources);
 }
 
 }  // namespace strings

@@ -22,7 +22,7 @@ struct nan_dispatcher {
   std::unique_ptr<column> operator()(cudf::column_view const& input,
                                      Predicate predicate,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(std::is_floating_point_v<T>)
   {
     auto input_device_view = column_device_view::create(input, stream);
@@ -34,7 +34,7 @@ struct nan_dispatcher {
                      input.size(),
                      predicate,
                      stream,
-                     mr);
+                     resources);
     } else {
       auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
       return true_if(input_pair_iterator,
@@ -42,7 +42,7 @@ struct nan_dispatcher {
                      input.size(),
                      predicate,
                      stream,
-                     mr);
+                     resources);
     }
   }
 
@@ -50,7 +50,7 @@ struct nan_dispatcher {
   std::unique_ptr<column> operator()(cudf::column_view const& input,
                                      Predicate predicate,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(!std::is_floating_point_v<T>)
   {
     CUDF_FAIL("NAN is not supported in a Non-floating point type column");
@@ -59,42 +59,42 @@ struct nan_dispatcher {
 
 std::unique_ptr<column> is_nan(cudf::column_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   auto predicate = [] __device__(auto element_validity_pair) {
     return element_validity_pair.second and std::isnan(element_validity_pair.first);
   };
 
-  return cudf::type_dispatcher(input.type(), nan_dispatcher{}, input, predicate, stream, mr);
+  return cudf::type_dispatcher(input.type(), nan_dispatcher{}, input, predicate, stream, resources);
 }
 
 std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   auto predicate = [] __device__(auto element_validity_pair) {
     return !element_validity_pair.second or !std::isnan(element_validity_pair.first);
   };
 
-  return cudf::type_dispatcher(input.type(), nan_dispatcher{}, input, predicate, stream, mr);
+  return cudf::type_dispatcher(input.type(), nan_dispatcher{}, input, predicate, stream, resources);
 }
 
 }  // namespace detail
 
 std::unique_ptr<column> is_nan(cudf::column_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_nan(input, stream, mr);
+  return detail::is_nan(input, stream, resources);
 }
 
 std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_not_nan(input, stream, mr);
+  return detail::is_not_nan(input, stream, resources);
 }
 
 }  // namespace cudf

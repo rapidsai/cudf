@@ -35,7 +35,7 @@ struct segmented_reduce_dispatch_functor {
                                     null_policy null_handling,
                                     std::optional<std::reference_wrapper<scalar const>> init,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
     : col(segmented_values),
       offsets(offsets),
       output_dtype(output_dtype),
@@ -51,9 +51,10 @@ struct segmented_reduce_dispatch_functor {
                                     data_type output_dtype,
                                     null_policy null_handling,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
     : segmented_reduce_dispatch_functor(
-        segmented_values, offsets, output_dtype, null_handling, std::nullopt, stream, mr)
+        segmented_values, offsets, output_dtype, null_handling, std::nullopt, stream,
+                  resources)
   {
   }
 
@@ -62,39 +63,39 @@ struct segmented_reduce_dispatch_functor {
   {
     switch (k) {
       case segmented_reduce_aggregation::SUM:
-        return segmented_sum(col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_sum(col, offsets, output_dtype, null_handling, init, stream, resources);
       case segmented_reduce_aggregation::PRODUCT:
-        return segmented_product(col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_product(col, offsets, output_dtype, null_handling, init, stream, resources);
       case segmented_reduce_aggregation::MIN:
-        return segmented_min(col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_min(col, offsets, output_dtype, null_handling, init, stream, resources);
       case segmented_reduce_aggregation::MAX:
-        return segmented_max(col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_max(col, offsets, output_dtype, null_handling, init, stream, resources);
       case segmented_reduce_aggregation::ANY:
-        return segmented_any(col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_any(col, offsets, output_dtype, null_handling, init, stream, resources);
       case segmented_reduce_aggregation::ALL:
-        return segmented_all(col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_all(col, offsets, output_dtype, null_handling, init, stream, resources);
       case segmented_reduce_aggregation::SUM_OF_SQUARES:
-        return segmented_sum_of_squares(col, offsets, output_dtype, null_handling, stream, mr);
+        return segmented_sum_of_squares(col, offsets, output_dtype, null_handling, stream, resources);
       case segmented_reduce_aggregation::MEAN:
-        return segmented_mean(col, offsets, output_dtype, null_handling, stream, mr);
+        return segmented_mean(col, offsets, output_dtype, null_handling, stream, resources);
       case segmented_reduce_aggregation::VARIANCE: {
         auto var_agg = static_cast<cudf::detail::var_aggregation const&>(agg);
         return segmented_variance(
-          col, offsets, output_dtype, null_handling, var_agg._ddof, stream, mr);
+          col, offsets, output_dtype, null_handling, var_agg._ddof, stream, resources);
       }
       case segmented_reduce_aggregation::STD: {
         auto var_agg = static_cast<cudf::detail::std_aggregation const&>(agg);
         return segmented_standard_deviation(
-          col, offsets, output_dtype, null_handling, var_agg._ddof, stream, mr);
+          col, offsets, output_dtype, null_handling, var_agg._ddof, stream, resources);
       }
       case segmented_reduce_aggregation::NUNIQUE:
-        return segmented_nunique(col, offsets, null_handling, stream, mr);
+        return segmented_nunique(col, offsets, null_handling, stream, resources);
       case aggregation::HOST_UDF: {
         auto const& udf_base_ptr =
           dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
         auto const udf_ptr = dynamic_cast<segmented_reduce_host_udf const*>(udf_base_ptr.get());
         CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for segmented reduction.");
-        return (*udf_ptr)(col, offsets, output_dtype, null_handling, init, stream, mr);
+        return (*udf_ptr)(col, offsets, output_dtype, null_handling, init, stream, resources);
       }  // case aggregation::HOST_UDF
       default: CUDF_FAIL("Unsupported aggregation type.");
     }
@@ -108,7 +109,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          null_policy null_handling,
                                          std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_EXPECTS(!init.has_value() || cudf::have_same_types(segmented_values, init.value().get()),
                "column and initial value must be the same type",
@@ -144,11 +145,11 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          data_type output_dtype,
                                          null_policy null_handling,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return reduction::detail::segmented_reduce(
-    segmented_values, offsets, agg, output_dtype, null_handling, std::nullopt, stream, mr);
+    segmented_values, offsets, agg, output_dtype, null_handling, std::nullopt, stream, resources);
 }
 
 std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
@@ -158,11 +159,11 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          null_policy null_handling,
                                          std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return reduction::detail::segmented_reduce(
-    segmented_values, offsets, agg, output_dtype, null_handling, init, stream, mr);
+    segmented_values, offsets, agg, output_dtype, null_handling, init, stream, resources);
 }
 
 }  // namespace cudf

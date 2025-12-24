@@ -43,7 +43,7 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
   IndexIterator index_begin,
   IndexIterator index_end,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto n_rows = cuda::std::distance(index_begin, index_end);
 
@@ -88,7 +88,7 @@ std::unique_ptr<column> scatter_impl(rmm::device_uvector<unbound_list_view> cons
                                      column_view const& source,
                                      column_view const& target,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_EXPECTS(have_same_types(source, target), "Mismatched column types.");
 
@@ -167,7 +167,7 @@ std::unique_ptr<column> scatter(column_view const& source,
                                 MapIterator scatter_map_end,
                                 column_view const& target,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   auto const num_rows = target.size();
   if (num_rows == 0) { return cudf::empty_like(target); }
@@ -223,7 +223,7 @@ std::unique_ptr<column> scatter(scalar const& slr,
                                 MapIterator scatter_map_end,
                                 column_view const& target,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   auto const num_rows = target.size();
   if (num_rows == 0) { return cudf::empty_like(target); }

@@ -42,7 +42,7 @@ class distinct_filtered_join : public filtered_join {
     cudf::table_view const& probe,
     join_kind kind,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr);
+    cudf::memory_resources resources);
 
   /**
    * @brief Core implementation for querying the hash table
@@ -67,7 +67,7 @@ class distinct_filtered_join : public filtered_join {
     join_kind kind,
     Ref query_ref,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr);
+    cudf::memory_resources resources);
 
  public:
   /**
@@ -96,7 +96,7 @@ class distinct_filtered_join : public filtered_join {
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) override;
+    cudf::memory_resources resources) override;
 
   /**
    * @brief Implementation of anti join for set
@@ -111,7 +111,7 @@ class distinct_filtered_join : public filtered_join {
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) override;
+    cudf::memory_resources resources) override;
 };
 
 }  // namespace detail

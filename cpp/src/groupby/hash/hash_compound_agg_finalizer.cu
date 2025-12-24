@@ -23,7 +23,7 @@ hash_compound_agg_finalizer::hash_compound_agg_finalizer(column_view col,
                                                          cudf::detail::result_cache* cache,
                                                          bitmask_type const* d_row_bitmask,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::device_async_resource_ref mr)
+                                                         cudf::memory_resources resources)
   : col{col},
     input_type{is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type()},
     cache{cache},
@@ -53,7 +53,7 @@ auto hash_compound_agg_finalizer::gather_argminmax(aggregation const& agg)
                                                : cudf::out_of_bounds_policy::DONT_CHECK,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
                          stream,
-                         mr);
+                         resources);
   return std::move(gather_argminmax->release()[0]);
 }
 
@@ -92,7 +92,7 @@ void hash_compound_agg_finalizer::visit(cudf::detail::mean_aggregation const& ag
                                    binary_operator::DIV,
                                    cudf::detail::target_type(input_type, aggregation::MEAN),
                                    stream,
-                                   mr);
+                                   resources);
   cache->add_result(col, agg, std::move(result));
 }
 
@@ -110,7 +110,7 @@ void hash_compound_agg_finalizer::visit(cudf::detail::m2_aggregation const& agg)
   auto const sum_result     = cache->get_result(col, *sum_agg);
   auto const count_result   = cache->get_result(col, *count_agg);
 
-  auto output = compute_m2(input_type, sum_sqr_result, sum_result, count_result, stream, mr);
+  auto output = compute_m2(input_type, sum_sqr_result, sum_result, count_result, stream, resources);
   cache->add_result(col, agg, std::move(output));
 }
 
@@ -125,7 +125,7 @@ void hash_compound_agg_finalizer::visit(cudf::detail::var_aggregation const& agg
   auto const m2_result    = cache->get_result(col, *m2_agg);
   auto const count_result = cache->get_result(col, *count_agg);
 
-  auto output = compute_variance(m2_result, count_result, agg._ddof, stream, mr);
+  auto output = compute_variance(m2_result, count_result, agg._ddof, stream, resources);
   cache->add_result(col, agg, std::move(output));
 }
 
@@ -140,7 +140,7 @@ void hash_compound_agg_finalizer::visit(cudf::detail::std_aggregation const& agg
   auto const m2_result    = cache->get_result(col, *m2_agg);
   auto const count_result = cache->get_result(col, *count_agg);
 
-  auto output = compute_std(m2_result, count_result, agg._ddof, stream, mr);
+  auto output = compute_std(m2_result, count_result, agg._ddof, stream, resources);
   cache->add_result(col, agg, std::move(output));
 }
 

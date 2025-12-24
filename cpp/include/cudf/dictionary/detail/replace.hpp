@@ -31,7 +31,7 @@ namespace dictionary::detail {
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       dictionary_column_view const& replacement,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr);
+                                      cudf::memory_resources resources);
 
 /**
  * @brief Create a new dictionary column by replacing nulls with a
@@ -48,7 +48,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       scalar const& replacement,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr);
+                                      cudf::memory_resources resources);
 
 }  // namespace dictionary::detail
 }  // namespace CUDF_EXPORT cudf

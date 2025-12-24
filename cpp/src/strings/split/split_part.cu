@@ -67,20 +67,20 @@ std::unique_ptr<column> split_part_fn(strings_column_view const& input,
                                       Tokenizer tokenizer,
                                       DelimiterFn delimiter_fn,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   if (input.size() == input.null_count()) {
-    return std::make_unique<column>(input.parent(), stream, mr);
+    return std::make_unique<column>(input.parent(), stream, resources);
   }
 
   // builds the offsets and the vector of all tokens
-  auto [offsets, tokens] = split_helper(input, tokenizer, delimiter_fn, stream, mr);
+  auto [offsets, tokens] = split_helper(input, tokenizer, delimiter_fn, stream, resources);
   auto const d_offsets   = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   auto const d_tokens    = tokens.data();
 
   // get just the indexed value of each element
-  auto d_indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  auto d_indices = rmm::device_uvector<string_index_pair>(input.size(), stream, resources.get_temporary_mr());
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(input.size()),
                     d_indices.begin(),
@@ -91,7 +91,7 @@ std::unique_ptr<column> split_part_fn(strings_column_view const& input,
                                                    : string_index_pair{nullptr, 0};
                     });
 
-  return make_strings_column(d_indices.begin(), d_indices.end(), stream, mr);
+  return make_strings_column(d_indices.begin(), d_indices.end(), stream, resources);
 }
 
 }  // namespace
@@ -100,7 +100,7 @@ std::unique_ptr<column> split_part(strings_column_view const& input,
                                    string_scalar const& delimiter,
                                    size_type index,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_EXPECTS(
     delimiter.is_valid(stream), "Parameter delimiter must be valid", std::invalid_argument);
@@ -111,14 +111,14 @@ std::unique_ptr<column> split_part(strings_column_view const& input,
   if (delimiter.size() == 0) {
     auto tokenizer    = split_part_ws_tokenizer_fn{*d_strings, index};
     auto delimiter_fn = whitespace_delimiter_fn{};
-    return split_part_fn(input, index, tokenizer, delimiter_fn, stream, mr);
+    return split_part_fn(input, index, tokenizer, delimiter_fn, stream, resources);
   }
 
   // Set the max_tokens to stop splitting once index is achieved.
   // The max_tokens is set to index+2 to ensure a complete split occurs at index.
   auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), index + 2};
   auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
-  return split_part_fn(input, index, tokenizer, delimiter_fn, stream, mr);
+  return split_part_fn(input, index, tokenizer, delimiter_fn, stream, resources);
 }
 }  // namespace detail
 
@@ -126,10 +126,10 @@ std::unique_ptr<column> split_part(strings_column_view const& input,
                                    string_scalar const& delimiter,
                                    size_type index,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_part(input, delimiter, index, stream, mr);
+  return detail::split_part(input, delimiter, index, stream, resources);
 }
 
 }  // namespace strings

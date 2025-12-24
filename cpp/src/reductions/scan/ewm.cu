@@ -140,7 +140,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
     cuda::proclaim_return_type<int>([] __device__(int valid) -> int { return 1 - valid; }));
 
   // valid mask {1, 0, 1, 0, 0, 1} leads to output array {0, 0, 1, 0, 1, 2}
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                 invalid_it,
                                 invalid_it + input.size() - 1,
                                 invalid_it,
@@ -152,7 +152,7 @@ template <typename T>
 rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                            T const beta,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   rmm::device_uvector<T> output(input.size(), stream);
   rmm::device_uvector<pair_type<T>> pairs(input.size(), stream);
@@ -164,19 +164,19 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
     auto data =
       thrust::make_zip_iterator(cuda::std::make_tuple(valid_it, nullcnt.begin(), input.begin<T>()));
 
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
                                      ewma_adjust_nulls_functor<T, true>{beta},
                                      recurrence_functor<T>{});
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       pairs.begin(),
                       pairs.end(),
                       output.begin(),
                       [] __device__(pair_type<T> pair) -> T { return pair.second; });
 
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
@@ -184,20 +184,20 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      recurrence_functor<T>{});
 
   } else {
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                      input.begin<T>(),
                                      input.end<T>(),
                                      pairs.begin(),
                                      ewma_adjust_no_nulls_functor<T, true>{beta},
                                      recurrence_functor<T>{});
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       pairs.begin(),
                       pairs.end(),
                       output.begin(),
                       [] __device__(pair_type<T> pair) -> T { return pair.second; });
     auto itr = thrust::make_counting_iterator<size_type>(0);
 
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                      itr,
                                      itr + input.size(),
                                      pairs.begin(),
@@ -206,7 +206,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
   }
 
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     pairs.begin(),
     pairs.end(),
     output.begin(),
@@ -220,7 +220,7 @@ template <typename T>
 rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                                              T const beta,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   rmm::device_uvector<T> output(input.size(), stream);
   rmm::device_uvector<pair_type<T>> pairs(input.size(), stream);
@@ -229,7 +229,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     if (input.has_nulls()) {
       return null_roll_up(input, stream);
     } else {
-      return rmm::device_uvector<cudf::size_type>(input.size(), stream);
+      return rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
     }
   }();
   // denominators are all 1 and do not need to be computed
@@ -238,7 +238,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
   if (!input.has_nulls()) {
     auto data = thrust::make_zip_iterator(
       cuda::std::make_tuple(input.begin<T>(), thrust::make_counting_iterator<size_type>(0)));
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
@@ -252,7 +252,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     auto data = thrust::make_zip_iterator(cuda::std::make_tuple(
       input.begin<T>(), thrust::make_counting_iterator<size_type>(0), valid_it, nullcnt.begin()));
 
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
@@ -261,7 +261,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
   }
 
   // copy the second elements to the output for now
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     pairs.begin(),
                     pairs.end(),
                     output.begin(),
@@ -274,7 +274,7 @@ struct ewma_functor {
   std::unique_ptr<column> operator()(scan_aggregation const& agg,
                                      column_view const& input,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     CUDF_FAIL("Unsupported type for EWMA.");
   }
@@ -283,7 +283,7 @@ struct ewma_functor {
   std::unique_ptr<column> operator()(scan_aggregation const& agg,
                                      column_view const& input,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     auto const ewma_agg       = dynamic_cast<ewma_aggregation const*>(&agg);
     auto const history        = ewma_agg->history;
@@ -295,9 +295,9 @@ struct ewma_functor {
 
     auto result = [&]() {
       if (history == cudf::ewm_history::INFINITE) {
-        return compute_ewma_adjust(input, beta, stream, mr);
+        return compute_ewma_adjust(input, beta, stream, resources);
       } else {
-        return compute_ewma_noadjust(input, beta, stream, mr);
+        return compute_ewma_noadjust(input, beta, stream, resources);
       }
     }();
     return std::make_unique<column>(cudf::data_type(cudf::type_to_id<T>()),
@@ -311,9 +311,9 @@ struct ewma_functor {
 std::unique_ptr<column> exponentially_weighted_moving_average(column_view const& input,
                                                               scan_aggregation const& agg,
                                                               rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr)
+                                                              cudf::memory_resources resources)
 {
-  return type_dispatcher(input.type(), ewma_functor{}, agg, input, stream, mr);
+  return type_dispatcher(input.type(), ewma_functor{}, agg, input, stream, resources);
 }
 
 }  // namespace detail

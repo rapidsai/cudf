@@ -121,7 +121,7 @@ std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr);
+                              cudf::memory_resources resources);
 
 /**
  * @brief Performs segmented shifts for specified values.
@@ -161,7 +161,7 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                         size_type offset,
                                         scalar const& fill_value,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr);
+                                        cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::allocate_like(column_view const&, size_type, mask_allocation_policy,
@@ -173,7 +173,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr);
+                                      cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::copy_if_else( column_view const&, column_view const&,
@@ -185,7 +185,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr);
+                                     cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::copy_if_else( scalar const&, column_view const&,
@@ -197,7 +197,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr);
+                                     cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::copy_if_else( column_view const&, scalar const&,
@@ -209,7 +209,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr);
+                                     cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::copy_if_else( scalar const&, scalar const&,
@@ -221,7 +221,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr);
+                                     cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::sample
@@ -233,7 +233,7 @@ std::unique_ptr<table> sample(table_view const& input,
                               sample_with_replacement replacement,
                               int64_t const seed,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr);
+                              cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::get_element
@@ -243,7 +243,7 @@ std::unique_ptr<table> sample(table_view const& input,
 std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr);
+                                    cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::has_nonempty_nulls
@@ -266,7 +266,7 @@ bool may_have_nonempty_nulls(column_view const& input, rmm::cuda_stream_view str
  */
 std::unique_ptr<column> purge_nonempty_nulls(column_view const& input,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr);
+                                             cudf::memory_resources resources);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

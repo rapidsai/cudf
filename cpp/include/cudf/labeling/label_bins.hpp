@@ -64,7 +64,7 @@ std::unique_ptr<column> label_bins(
   column_view const& right_edges,
   inclusive right_inclusive,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

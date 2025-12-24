@@ -33,7 +33,7 @@ namespace CUDF_EXPORT cudf {
 std::unique_ptr<scalar> make_numeric_scalar(
   data_type type,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Construct scalar with uninitialized storage to hold a value of the
@@ -50,7 +50,7 @@ std::unique_ptr<scalar> make_numeric_scalar(
 std::unique_ptr<scalar> make_timestamp_scalar(
   data_type type,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Construct scalar with uninitialized storage to hold a value of the
@@ -67,7 +67,7 @@ std::unique_ptr<scalar> make_timestamp_scalar(
 std::unique_ptr<scalar> make_duration_scalar(
   data_type type,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Construct scalar with uninitialized storage to hold a value of the
@@ -84,7 +84,7 @@ std::unique_ptr<scalar> make_duration_scalar(
 std::unique_ptr<scalar> make_fixed_width_scalar(
   data_type type,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Construct STRING type scalar given a `std::string`.
@@ -101,7 +101,7 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
 std::unique_ptr<scalar> make_string_scalar(
   std::string const& string,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Constructs default constructed scalar of type `type`
@@ -116,7 +116,7 @@ std::unique_ptr<scalar> make_string_scalar(
 std::unique_ptr<scalar> make_default_constructed_scalar(
   data_type type,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates an empty (invalid) scalar of the same type as the `input` column_view.
@@ -131,7 +131,7 @@ std::unique_ptr<scalar> make_default_constructed_scalar(
 std::unique_ptr<scalar> make_empty_scalar_like(
   column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Construct scalar using the given value of fixed width type
@@ -146,7 +146,7 @@ template <typename T>
 std::unique_ptr<scalar> make_fixed_width_scalar(
   T value,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref())
 {
   return std::make_unique<scalar_type_t<T>>(value, true, stream, mr);
 }
@@ -166,7 +166,7 @@ std::unique_ptr<scalar> make_fixed_point_scalar(
   typename T::rep value,
   numeric::scale_type scale,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref())
 {
   return std::make_unique<scalar_type_t<T>>(value, scale, true, stream, mr);
 }
@@ -182,7 +182,7 @@ std::unique_ptr<scalar> make_fixed_point_scalar(
 std::unique_ptr<scalar> make_list_scalar(
   column_view elements,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Construct a struct scalar using the given table_view.
@@ -197,7 +197,7 @@ std::unique_ptr<scalar> make_list_scalar(
 std::unique_ptr<scalar> make_struct_scalar(
   table_view const& data,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Construct a struct scalar using the given span of column views.
@@ -212,7 +212,7 @@ std::unique_ptr<scalar> make_struct_scalar(
 std::unique_ptr<scalar> make_struct_scalar(
   host_span<column_view const> data,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

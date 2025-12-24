@@ -29,7 +29,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
                                        std::vector<order> const& column_order,
                                        std::vector<null_order> const& null_precedence,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_EXPECTS(
     column_order.empty() or static_cast<std::size_t>(haystack.num_columns()) == column_order.size(),
@@ -40,7 +40,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
 
   // Allocate result column
   auto result = make_numeric_column(
-    data_type{type_to_id<size_type>()}, needles.num_rows(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, needles.num_rows(), mask_state::UNALLOCATED, stream, resources);
   auto const out_it = result->mutable_view().data<size_type>();
 
   // Handle empty inputs
@@ -53,7 +53,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
   auto const matched = dictionary::detail::match_dictionaries(
-    {haystack, needles}, stream, cudf::get_current_device_resource_ref());
+    {haystack, needles}, stream, resources.get_temporary_mr());
   auto const& matched_haystack = matched.second.front();
   auto const& matched_needles  = matched.second.back();
 
@@ -67,7 +67,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   if (cudf::detail::has_nested_columns(haystack) || cudf::detail::has_nested_columns(needles)) {
     auto const d_comparator = comparator.less<true>(nullate::DYNAMIC{has_nulls});
     if (find_first) {
-      thrust::lower_bound(rmm::exec_policy(stream),
+      thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
                           haystack_it,
                           haystack_it + haystack.num_rows(),
                           needles_it,
@@ -75,7 +75,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
                           out_it,
                           d_comparator);
     } else {
-      thrust::upper_bound(rmm::exec_policy(stream),
+      thrust::upper_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
                           haystack_it,
                           haystack_it + haystack.num_rows(),
                           needles_it,
@@ -86,7 +86,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   } else {
     auto const d_comparator = comparator.less<false>(nullate::DYNAMIC{has_nulls});
     if (find_first) {
-      thrust::lower_bound(rmm::exec_policy(stream),
+      thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
                           haystack_it,
                           haystack_it + haystack.num_rows(),
                           needles_it,
@@ -94,7 +94,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
                           out_it,
                           d_comparator);
     } else {
-      thrust::upper_bound(rmm::exec_policy(stream),
+      thrust::upper_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
                           haystack_it,
                           haystack_it + haystack.num_rows(),
                           needles_it,
@@ -112,9 +112,9 @@ std::unique_ptr<column> lower_bound(table_view const& haystack,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
-  return search_ordered(haystack, needles, true, column_order, null_precedence, stream, mr);
+  return search_ordered(haystack, needles, true, column_order, null_precedence, stream, resources);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& haystack,
@@ -122,9 +122,9 @@ std::unique_ptr<column> upper_bound(table_view const& haystack,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
-  return search_ordered(haystack, needles, false, column_order, null_precedence, stream, mr);
+  return search_ordered(haystack, needles, false, column_order, null_precedence, stream, resources);
 }
 
 }  // namespace detail
@@ -136,10 +136,10 @@ std::unique_ptr<column> lower_bound(table_view const& haystack,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::lower_bound(haystack, needles, column_order, null_precedence, stream, mr);
+  return detail::lower_bound(haystack, needles, column_order, null_precedence, stream, resources);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& haystack,
@@ -147,10 +147,10 @@ std::unique_ptr<column> upper_bound(table_view const& haystack,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::upper_bound(haystack, needles, column_order, null_precedence, stream, mr);
+  return detail::upper_bound(haystack, needles, column_order, null_precedence, stream, resources);
 }
 
 }  // namespace cudf

@@ -94,11 +94,12 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
 std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_impl(
   cudf::strings_column_view const& input,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto const space = std::string(" ");  // workaround to ARM issue
   auto pairs =
-    cudf::strings::split_record(input, cudf::string_scalar(space, true, stream, mr), 1, stream, mr);
+    cudf::strings::split_record(input, cudf::string_scalar(space, true, stream,
+                  resources), 1, stream, resources);
   auto content = pairs->release();
   return create_bpe_merge_pairs_impl(std::move(content.children.back()), stream);
 }
@@ -107,21 +108,21 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
 
 std::unique_ptr<bpe_merge_pairs> load_merge_pairs(cudf::strings_column_view const& merge_pairs,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
+                                                  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(!merge_pairs.is_empty(), "Merge pairs must not be empty");
   CUDF_EXPECTS(!merge_pairs.has_nulls(), "Merge pairs may not contain nulls");
-  return std::make_unique<bpe_merge_pairs>(merge_pairs, stream, mr);
+  return std::make_unique<bpe_merge_pairs>(merge_pairs, stream, resources);
 }
 
 }  // namespace detail
 
 std::unique_ptr<bpe_merge_pairs> load_merge_pairs(cudf::strings_column_view const& merge_pairs,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
+                                                  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::load_merge_pairs(merge_pairs, stream, mr);
+  return detail::load_merge_pairs(merge_pairs, stream, resources);
 }
 
 bpe_merge_pairs::bpe_merge_pairs_impl::bpe_merge_pairs_impl(
@@ -146,8 +147,9 @@ bpe_merge_pairs::bpe_merge_pairs(std::unique_ptr<cudf::column>&& input,
 
 bpe_merge_pairs::bpe_merge_pairs(cudf::strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
-  : impl(detail::create_bpe_merge_pairs_impl(input, stream, mr).release())
+                                 cudf::memory_resources resources)
+  : impl(detail::create_bpe_merge_pairs_impl(input, stream,
+                  resources).release())
 {
 }
 

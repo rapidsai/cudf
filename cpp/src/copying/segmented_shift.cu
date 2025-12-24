@@ -63,7 +63,7 @@ struct segmented_shift_functor<T, std::enable_if_t<is_rep_layout_compatible<T>()
                                      size_type offset,
                                      scalar const& fill_value,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     auto values_device_view = column_device_view::create(segmented_values, stream);
     bool nullable           = not fill_value.is_valid(stream) or segmented_values.nullable();
@@ -78,7 +78,7 @@ struct segmented_shift_functor<T, std::enable_if_t<is_rep_layout_compatible<T>()
                         segmented_shift_filter{segment_offsets, offset},
                         segmented_values.type(),
                         stream,
-                        mr);
+                        resources);
   }
 };
 
@@ -92,7 +92,7 @@ struct segmented_shift_functor<string_view> {
                                      size_type offset,
                                      scalar const& fill_value,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     auto values_device_view = column_device_view::create(segmented_values, stream);
     auto input_iterator     = make_optional_iterator<cudf::string_view>(
@@ -104,7 +104,7 @@ struct segmented_shift_functor<string_view> {
                                          fill_iterator,
                                          segmented_shift_filter{segment_offsets, offset},
                                          stream,
-                                         mr);
+                                         resources);
   }
 };
 
@@ -119,10 +119,10 @@ struct segmented_shift_functor_forwarder {
                                      size_type offset,
                                      scalar const& fill_value,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     segmented_shift_functor<T> shifter;
-    return shifter(segmented_values, segment_offsets, offset, fill_value, stream, mr);
+    return shifter(segmented_values, segment_offsets, offset, fill_value, stream, resources);
   }
 };
 
@@ -133,10 +133,10 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                         size_type offset,
                                         scalar const& fill_value,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   if (segmented_values.is_empty()) { return empty_like(segmented_values); }
-  if (offset == 0) { return std::make_unique<column>(segmented_values, stream, mr); };
+  if (offset == 0) { return std::make_unique<column>(segmented_values, stream, resources); };
 
   return type_dispatcher<dispatch_storage_type>(segmented_values.type(),
                                                 segmented_shift_functor_forwarder{},
@@ -145,7 +145,7 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                                 offset,
                                                 fill_value,
                                                 stream,
-                                                mr);
+                                                resources);
 }
 
 }  // namespace detail

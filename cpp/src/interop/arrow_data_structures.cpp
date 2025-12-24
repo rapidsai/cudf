@@ -54,9 +54,9 @@ struct arrow_array_container {
   arrow_array_container(ArrowSchema&& schema_,
                         T input_,
                         rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr)
+                        cudf::memory_resources resources)
   {
-    auto output = cudf::to_arrow_device(std::move(input_), stream, mr);
+    auto output = cudf::to_arrow_device(std::move(input_), stream, resources);
     ArrowSchemaMove(&schema_, &schema);
     ArrowDeviceArrayMove(output.get(), &owner);
   }
@@ -64,7 +64,7 @@ struct arrow_array_container {
   arrow_array_container(ArrowSchema&& schema_,
                         ArrowDeviceArray&& input_,
                         rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr)
+                        cudf::memory_resources resources)
   {
     switch (input_.device_type) {
       case ARROW_DEVICE_CUDA:
@@ -181,7 +181,7 @@ void arrow_obj_to_arrow(T& obj,
                         ArrowDeviceArray* output,
                         ArrowDeviceType device_type,
                         rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr)
+                        cudf::memory_resources resources)
 {
   switch (device_type) {
     case ARROW_DEVICE_CUDA:
@@ -198,7 +198,7 @@ void arrow_obj_to_arrow(T& obj,
       break;
     }
     case ARROW_DEVICE_CPU: {
-      auto out = cudf::to_arrow_host(obj.view(), stream, mr);
+      auto out = cudf::to_arrow_host(obj.view(), stream, resources);
       ArrowArrayMove(&out->array, &output->array);
       output->device_id   = -1;
       output->sync_event  = nullptr;
@@ -214,16 +214,16 @@ void arrow_obj_to_arrow(T& obj,
 arrow_column::arrow_column(cudf::column&& input,
                            column_metadata const& metadata,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           cudf::memory_resources resources)
   : container{[&] {
       auto table_meta = std::vector{metadata};
       auto tv         = cudf::table_view{{input.view()}};
       auto schema     = cudf::to_arrow_schema(tv, table_meta);
       return std::make_shared<arrow_array_container>(
-        std::move(*schema->children[0]), std::move(input), stream, mr);
+        std::move(*schema->children[0]), std::move(input), stream, resources);
     }()}
 {
-  auto tmp     = from_arrow_device_column(&container->schema, &container->owner, stream, mr);
+  auto tmp     = from_arrow_device_column(&container->schema, &container->owner, stream, resources);
   view_columns = std::move(tmp.get_deleter().owned_mem_);
   cached_view  = *tmp;
 }
@@ -231,12 +231,12 @@ arrow_column::arrow_column(cudf::column&& input,
 arrow_column::arrow_column(ArrowSchema&& schema,
                            ArrowDeviceArray&& input,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           cudf::memory_resources resources)
 {
   switch (input.device_type) {
     case ARROW_DEVICE_CPU: {
-      auto col        = from_arrow_host_column(&schema, &input, stream, mr);
-      auto tmp_column = arrow_column(std::move(*col), get_column_metadata(col->view()), stream, mr);
+      auto col        = from_arrow_host_column(&schema, &input, stream, resources);
+      auto tmp_column = arrow_column(std::move(*col), get_column_metadata(col->view()), stream, resources);
       container       = tmp_column.container;
       // Should always be non-null unless we're in some odd multithreaded
       // context but best to be safe.
@@ -245,9 +245,9 @@ arrow_column::arrow_column(ArrowSchema&& schema,
     }
     default:
       container =
-        std::make_shared<arrow_array_container>(std::move(schema), std::move(input), stream, mr);
+        std::make_shared<arrow_array_container>(std::move(schema), std::move(input), stream, resources);
   }
-  auto tmp     = from_arrow_device_column(&container->schema, &container->owner, stream, mr);
+  auto tmp     = from_arrow_device_column(&container->schema, &container->owner, stream, resources);
   view_columns = std::move(tmp.get_deleter().owned_mem_);
   cached_view  = *tmp;
 }
@@ -255,11 +255,11 @@ arrow_column::arrow_column(ArrowSchema&& schema,
 arrow_column::arrow_column(ArrowSchema&& schema,
                            ArrowArray&& input,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           cudf::memory_resources resources)
 {
   ArrowDeviceArray arr{.array = {}, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
   ArrowArrayMove(&input, &arr.array);
-  auto tmp     = arrow_column(std::move(schema), std::move(arr), stream, mr);
+  auto tmp     = arrow_column(std::move(schema), std::move(arr), stream, resources);
   container    = tmp.container;
   view_columns = std::move(tmp.view_columns);
   cached_view  = tmp.cached_view;
@@ -267,10 +267,10 @@ arrow_column::arrow_column(ArrowSchema&& schema,
 
 arrow_column::arrow_column(ArrowArrayStream&& input,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           cudf::memory_resources resources)
 {
-  auto col     = from_arrow_stream_column(&input, stream, mr);
-  auto tmp     = arrow_column(std::move(*col), get_column_metadata(col->view()), stream, mr);
+  auto col     = from_arrow_stream_column(&input, stream, resources);
+  auto tmp     = arrow_column(std::move(*col), get_column_metadata(col->view()), stream, resources);
   container    = tmp.container;
   view_columns = std::move(tmp.view_columns);
   cached_view  = tmp.cached_view;
@@ -278,7 +278,7 @@ arrow_column::arrow_column(ArrowArrayStream&& input,
 
 void arrow_column::to_arrow_schema(ArrowSchema* output,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr) const
+                                   cudf::memory_resources resources) const
 {
   NANOARROW_THROW_NOT_OK(ArrowSchemaDeepCopy(&container->schema, output));
 }
@@ -286,9 +286,9 @@ void arrow_column::to_arrow_schema(ArrowSchema* output,
 void arrow_column::to_arrow(ArrowDeviceArray* output,
                             ArrowDeviceType device_type,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr) const
+                            cudf::memory_resources resources) const
 {
-  arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
+  arrow_obj_to_arrow(*this, container, output, device_type, stream, resources);
 }
 
 column_view arrow_column::view() const { return cached_view; }
@@ -296,14 +296,14 @@ column_view arrow_column::view() const { return cached_view; }
 arrow_table::arrow_table(cudf::table&& input,
                          cudf::host_span<column_metadata const> metadata,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
+                         cudf::memory_resources resources)
   : container{[&]() {
       auto schema = cudf::to_arrow_schema(input.view(), metadata);
       return std::make_shared<arrow_array_container>(
-        std::move(*schema), std::move(input), stream, mr);
+        std::move(*schema), std::move(input), stream, resources);
     }()}
 {
-  auto tmp     = from_arrow_device(&container->schema, &container->owner, stream, mr);
+  auto tmp     = from_arrow_device(&container->schema, &container->owner, stream, resources);
   view_columns = std::move(tmp.get_deleter().owned_mem_);
   cached_view  = *tmp;
 }
@@ -311,7 +311,7 @@ arrow_table::arrow_table(cudf::table&& input,
 arrow_table::arrow_table(ArrowSchema&& schema,
                          ArrowDeviceArray&& input,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
+                         cudf::memory_resources resources)
 {
   switch (input.device_type) {
     case ARROW_DEVICE_CPU: {
@@ -319,17 +319,17 @@ arrow_table::arrow_table(ArrowSchema&& schema,
       // back-and-forth conversion without writing a lot of bespoke logic. I
       // suspect that the overhead of the memory copies will dwarf any extra
       // work here, but it's worth benchmarking to be sure.
-      auto tbl       = from_arrow_host(&schema, &input, stream, mr);
-      auto tmp_table = arrow_table(std::move(*tbl), get_table_metadata(tbl->view()), stream, mr);
+      auto tbl       = from_arrow_host(&schema, &input, stream, resources);
+      auto tmp_table = arrow_table(std::move(*tbl), get_table_metadata(tbl->view()), stream, resources);
       container      = tmp_table.container;
       if (input.array.release != nullptr) { ArrowArrayRelease(&input.array); }
       break;
     }
     default:
       container =
-        std::make_shared<arrow_array_container>(std::move(schema), std::move(input), stream, mr);
+        std::make_shared<arrow_array_container>(std::move(schema), std::move(input), stream, resources);
   }
-  auto tmp     = from_arrow_device(&container->schema, &container->owner, stream, mr);
+  auto tmp     = from_arrow_device(&container->schema, &container->owner, stream, resources);
   view_columns = std::move(tmp.get_deleter().owned_mem_);
   cached_view  = *tmp;
 }
@@ -337,11 +337,11 @@ arrow_table::arrow_table(ArrowSchema&& schema,
 arrow_table::arrow_table(ArrowSchema&& schema,
                          ArrowArray&& input,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
+                         cudf::memory_resources resources)
 {
   ArrowDeviceArray arr{.array = {}, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
   ArrowArrayMove(&input, &arr.array);
-  auto tmp     = arrow_table(std::move(schema), std::move(arr), stream, mr);
+  auto tmp     = arrow_table(std::move(schema), std::move(arr), stream, resources);
   container    = tmp.container;
   view_columns = std::move(tmp.view_columns);
   cached_view  = tmp.cached_view;
@@ -349,10 +349,10 @@ arrow_table::arrow_table(ArrowSchema&& schema,
 
 arrow_table::arrow_table(ArrowArrayStream&& input,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
+                         cudf::memory_resources resources)
 {
-  auto tbl     = from_arrow_stream(&input, stream, mr);
-  auto tmp     = arrow_table(std::move(*tbl), get_table_metadata(tbl->view()), stream, mr);
+  auto tbl     = from_arrow_stream(&input, stream, resources);
+  auto tmp     = arrow_table(std::move(*tbl), get_table_metadata(tbl->view()), stream, resources);
   container    = tmp.container;
   view_columns = std::move(tmp.view_columns);
   cached_view  = tmp.cached_view;
@@ -360,7 +360,7 @@ arrow_table::arrow_table(ArrowArrayStream&& input,
 
 void arrow_table::to_arrow_schema(ArrowSchema* output,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr) const
+                                  cudf::memory_resources resources) const
 {
   NANOARROW_THROW_NOT_OK(ArrowSchemaDeepCopy(&container->schema, output));
 }
@@ -368,9 +368,9 @@ void arrow_table::to_arrow_schema(ArrowSchema* output,
 void arrow_table::to_arrow(ArrowDeviceArray* output,
                            ArrowDeviceType device_type,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr) const
+                           cudf::memory_resources resources) const
 {
-  arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
+  arrow_obj_to_arrow(*this, container, output, device_type, stream, resources);
 }
 
 table_view arrow_table::view() const { return cached_view; }

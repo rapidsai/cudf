@@ -1,0 +1,943 @@
+grep -F "cudf::" -r velox 
+velox/experimental/cudf/expression/CMakeLists.txt:  PUBLIC cudf::cudf
+velox/experimental/cudf/expression/AstUtils.h:cudf::ast::literal makeLiteralFromScalar(
+velox/experimental/cudf/expression/AstUtils.h:    cudf::scalar& scalar,
+velox/experimental/cudf/expression/AstUtils.h:  if constexpr (cudf::is_fixed_width<T>()) {
+velox/experimental/cudf/expression/AstUtils.h:      using CudfDurationType = cudf::duration_ms;
+velox/experimental/cudf/expression/AstUtils.h:        using CudfScalarType = cudf::duration_scalar<CudfDurationType>;
+velox/experimental/cudf/expression/AstUtils.h:        return cudf::ast::literal{*static_cast<CudfScalarType*>(&scalar)};
+velox/experimental/cudf/expression/AstUtils.h:      using CudfDateType = cudf::timestamp_D;
+velox/experimental/cudf/expression/AstUtils.h:        using CudfScalarType = cudf::timestamp_scalar<CudfDateType>;
+velox/experimental/cudf/expression/AstUtils.h:        return cudf::ast::literal{*static_cast<CudfScalarType*>(&scalar)};
+velox/experimental/cudf/expression/AstUtils.h:      using CudfScalarType = cudf::numeric_scalar<T>;
+velox/experimental/cudf/expression/AstUtils.h:      return cudf::ast::literal{*static_cast<CudfScalarType*>(&scalar)};
+velox/experimental/cudf/expression/AstUtils.h:    return cudf::ast::literal{*static_cast<cudf::string_scalar*>(&scalar)};
+velox/experimental/cudf/expression/AstUtils.h:std::unique_ptr<cudf::scalar> makeScalarFromValue(
+velox/experimental/cudf/expression/AstUtils.h:    std::optional<cudf::type_id> toType = std::nullopt) {
+velox/experimental/cudf/expression/AstUtils.h:  auto stream = cudf::get_default_stream();
+velox/experimental/cudf/expression/AstUtils.h:  auto mr = cudf::get_current_device_resource_ref();
+velox/experimental/cudf/expression/AstUtils.h:  if constexpr (cudf::is_fixed_width<T>()) {
+velox/experimental/cudf/expression/AstUtils.h:     using CudfDecimalType = cudf::numeric::decimal64;
+velox/experimental/cudf/expression/AstUtils.h:     using cudfScalarType = cudf::fixed_point_scalar<CudfDecimalType>;
+velox/experimental/cudf/expression/AstUtils.h:      using CudfDurationType = cudf::duration_ms;
+velox/experimental/cudf/expression/AstUtils.h:        return std::make_unique<cudf::duration_scalar<CudfDurationType>>(
+velox/experimental/cudf/expression/AstUtils.h:      using CudfDateType = cudf::timestamp_D;
+velox/experimental/cudf/expression/AstUtils.h:        return std::make_unique<cudf::timestamp_scalar<CudfDateType>>(
+velox/experimental/cudf/expression/AstUtils.h:      if (toType == cudf::type_id::DURATION_DAYS) {
+velox/experimental/cudf/expression/AstUtils.h:        return std::make_unique<cudf::duration_scalar<cudf::duration_D>>(
+velox/experimental/cudf/expression/AstUtils.h:      return std::make_unique<cudf::numeric_scalar<T>>(
+velox/experimental/cudf/expression/AstUtils.h:    return std::make_unique<cudf::string_scalar>(
+velox/experimental/cudf/expression/AstUtils.h:static std::unique_ptr<cudf::scalar> createCudfScalar(
+velox/experimental/cudf/expression/AstUtils.h:    std::optional<cudf::type_id> toType = std::nullopt) {
+velox/experimental/cudf/expression/AstUtils.h:inline std::unique_ptr<cudf::scalar> makeScalarFromConstantExpr(
+velox/experimental/cudf/expression/AstUtils.h:    std::optional<cudf::type_id> toType = std::nullopt) {
+velox/experimental/cudf/expression/AstUtils.h:cudf::ast::literal makeScalarAndLiteral(
+velox/experimental/cudf/expression/AstUtils.h:    std::vector<std::unique_ptr<cudf::scalar>>& scalars) {
+velox/experimental/cudf/expression/AstUtils.h:  if constexpr (cudf::is_fixed_width<T>() || kind == TypeKind::VARCHAR) {
+velox/experimental/cudf/expression/ExpressionEvaluator.h:// Holds either a non-owning cudf::column_view (zero-copy) or an owning
+velox/experimental/cudf/expression/ExpressionEvaluator.h:// cudf::column (materialised result).
+velox/experimental/cudf/expression/ExpressionEvaluator.h:    std::variant<cudf::column_view, std::unique_ptr<cudf::column>>;
+velox/experimental/cudf/expression/ExpressionEvaluator.h:inline cudf::column_view asView(ColumnOrView& holder) {
+velox/experimental/cudf/expression/ExpressionEvaluator.h:      [](auto& h) -> cudf::column_view {
+velox/experimental/cudf/expression/ExpressionEvaluator.h:        if constexpr (std::is_same_v<T, cudf::column_view>) {
+velox/experimental/cudf/expression/ExpressionEvaluator.h:      std::vector<std::unique_ptr<cudf::column>>& inputTableColumns,
+velox/experimental/cudf/expression/ExpressionEvaluator.h:      std::vector<std::unique_ptr<cudf::column>>& inputTableColumns,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.h:cudf::ast::expression const& createAstFromSubfieldFilter(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.h:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.h:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.h:cudf::ast::expression const& createAstFromSubfieldFilters(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.h:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.h:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/AstExpression.cpp:cudf::ast::literal createLiteral(
+velox/experimental/cudf/expression/AstExpression.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/AstExpression.cpp:    std::vector<cudf::ast::literal>& literals,
+velox/experimental/cudf/expression/AstExpression.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/AstExpression.cpp:std::vector<cudf::ast::literal> createLiteralsFromArray(
+velox/experimental/cudf/expression/AstExpression.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars) {
+velox/experimental/cudf/expression/AstExpression.cpp:  std::vector<cudf::ast::literal> literals;
+velox/experimental/cudf/expression/AstExpression.cpp:using Op = cudf::ast::ast_operator;
+velox/experimental/cudf/expression/AstExpression.cpp:  cudf::ast::tree& tree;
+velox/experimental/cudf/expression/AstExpression.cpp:  std::vector<std::unique_ptr<cudf::scalar>>& scalars;
+velox/experimental/cudf/expression/AstExpression.cpp:  cudf::ast::expression const& pushExprToTree(
+velox/experimental/cudf/expression/AstExpression.cpp:  cudf::ast::expression const& addPrecomputeInstructionOnSide(
+velox/experimental/cudf/expression/AstExpression.cpp:  cudf::ast::expression const& addPrecomputeInstruction(
+velox/experimental/cudf/expression/AstExpression.cpp:  cudf::ast::expression const& multipleInputsToPairWise(
+velox/experimental/cudf/expression/AstExpression.cpp:cudf::ast::expression const& AstContext::addPrecomputeInstructionOnSide(
+velox/experimental/cudf/expression/AstExpression.cpp:  auto side = static_cast<cudf::ast::table_reference>(sideIdx);
+velox/experimental/cudf/expression/AstExpression.cpp:  return tree.push(cudf::ast::column_reference(newColumnIndex, side));
+velox/experimental/cudf/expression/AstExpression.cpp:cudf::ast::expression const& AstContext::addPrecomputeInstruction(
+velox/experimental/cudf/expression/AstExpression.cpp:cudf::ast::expression const& AstContext::multipleInputsToPairWise(
+velox/experimental/cudf/expression/AstExpression.cpp:  using Operation = cudf::ast::operation;
+velox/experimental/cudf/expression/AstExpression.cpp:cudf::ast::expression const& AstContext::pushExprToTree(
+velox/experimental/cudf/expression/AstExpression.cpp:  using Op = cudf::ast::ast_operator;
+velox/experimental/cudf/expression/AstExpression.cpp:  using Operation = cudf::ast::operation;
+velox/experimental/cudf/expression/AstExpression.cpp:    // Special case: VARCHAR literals cannot be handled by cudf::compute_column
+velox/experimental/cudf/expression/AstExpression.cpp:    std::vector<const cudf::ast::expression*> exprVec;
+velox/experimental/cudf/expression/AstExpression.cpp:        auto side = static_cast<cudf::ast::table_reference>(sideIdx);
+velox/experimental/cudf/expression/AstExpression.cpp:          return tree.push(cudf::ast::column_reference(columnIndex, side));
+velox/experimental/cudf/expression/AstExpression.cpp:    std::vector<std::unique_ptr<cudf::column>>& inputTableColumns,
+velox/experimental/cudf/expression/AstExpression.cpp:    const std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/AstExpression.cpp:          cudf::get_current_device_resource_ref(),
+velox/experimental/cudf/expression/AstExpression.cpp:      auto newColumn = cudf::make_column_from_scalar(
+velox/experimental/cudf/expression/AstExpression.cpp:          *static_cast<cudf::string_scalar*>(scalars[scalarIndex].get()),
+velox/experimental/cudf/expression/AstExpression.cpp:          cudf::get_current_device_resource_ref());
+velox/experimental/cudf/expression/AstExpression.cpp:cudf::ast::expression const& createAstTree(
+velox/experimental/cudf/expression/AstExpression.cpp:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/AstExpression.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/AstExpression.cpp:cudf::ast::expression const& createAstTree(
+velox/experimental/cudf/expression/AstExpression.cpp:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/AstExpression.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/AstExpression.cpp:    std::vector<std::unique_ptr<cudf::column>>& inputTableColumns,
+velox/experimental/cudf/expression/AstExpression.cpp:  std::vector<cudf::column_view> allColumnViews;
+velox/experimental/cudf/expression/AstExpression.cpp:  cudf::table_view astInputTableView(allColumnViews);
+velox/experimental/cudf/expression/AstExpression.cpp:    if (auto colRefPtr = dynamic_cast<cudf::ast::column_reference const*>(
+velox/experimental/cudf/expression/AstExpression.cpp:      return cudf::compute_column(
+velox/experimental/cudf/expression/AstExpression.cpp:        cudf::data_type(cudf_velox::veloxToCudfTypeId(expr_->type()));
+velox/experimental/cudf/expression/AstExpression.cpp:      result = cudf::cast(resultView, requestedType, stream, mr);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    auto stream = cudf::get_default_stream();
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    auto mr = cudf::get_current_device_resource_ref();
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    delimiterScalar_ = std::make_unique<cudf::string_scalar>(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::strings::split_record(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::string_scalar> delimiterScalar_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  cudf::size_type maxSplitCount_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:        cudf::data_type(cudf_velox::veloxToCudfTypeId(expr->type()));
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    auto sourceType = cudf::data_type(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:        cudf::is_supported_cast(sourceType, targetCudfType_),
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::cast(inputCol, targetCudfType_, stream, mr);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  cudf::data_type targetCudfType_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:        expr->inputs()[1], cudf::type_id::DURATION_DAYS);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::binary_operation(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:        cudf::binary_operator::ADD,
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:        cudf::data_type(cudf::type_id::TIMESTAMP_DAYS),
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::scalar> value_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::lists::count_elements(inputCol, stream, mr);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::round_decimal(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:        cudf::rounding_method::HALF_UP,
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      cudf::binary_operator op)
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:        type_(cudf::data_type(cudf_velox::veloxToCudfTypeId(expr->type()))) {
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      return cudf::binary_operation(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      return cudf::binary_operation(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::binary_operation(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  const cudf::binary_operator op_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  const cudf::data_type type_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::scalar> left_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::scalar> right_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      return cudf::copy_if_else(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      return cudf::copy_if_else(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      return cudf::copy_if_else(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::copy_if_else(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::scalar> left_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::scalar> right_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    auto stream = cudf::get_default_stream();
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    auto mr = cudf::get_current_device_resource_ref();
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    cudf::size_type adjustedStart = static_cast<cudf::size_type>(startValue);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      adjustedStart = static_cast<cudf::size_type>(startValue - 1);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    startScalar_ = std::make_unique<cudf::numeric_scalar<cudf::size_type>>(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      cudf::size_type endPosition =
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:          adjustedStart + static_cast<cudf::size_type>(lengthValue);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      endScalar_ = std::make_unique<cudf::numeric_scalar<cudf::size_type>>(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      endScalar_ = std::make_unique<cudf::numeric_scalar<cudf::size_type>>(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    stepScalar_ = std::make_unique<cudf::numeric_scalar<cudf::size_type>>(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::strings::slice_strings(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::numeric_scalar<cudf::size_type>> startScalar_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::numeric_scalar<cudf::size_type>> endScalar_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::numeric_scalar<cudf::size_type>> stepScalar_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    // Coalesce is practically a cudf::replace_nulls over multiple columns.
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      return cudf::make_column_from_scalar(*literalScalar_, size, stream, mr);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      result = cudf::replace_nulls(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:      result = cudf::replace_nulls(asView(result), *literalScalar_, stream, mr);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::scalar> literalScalar_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::hashing::murmurhash3_x86_32(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  static cudf::table_view convertToTableView(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    std::vector<cudf::column_view> columns;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::table_view(columns);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::datetime::extract_datetime_component(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:        inputCol, cudf::datetime::datetime_component::YEAR, stream, mr);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::strings::count_characters(inputCol, stream, mr);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::strings::to_lower(inputCol, stream, mr);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    auto stream = cudf::get_default_stream();
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    auto mr = cudf::get_current_device_resource_ref();
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    pattern_ = std::make_unique<cudf::string_scalar>(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    return cudf::strings::like(
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:        cudf::string_scalar("", true, stream, mr),
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:  std::unique_ptr<cudf::string_scalar> pattern_;
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:            expr, cudf::binary_operator::GREATER);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:            expr, cudf::binary_operator::DIV);
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:    std::vector<std::unique_ptr<cudf::column>>& inputTableColumns,
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:          cudf::data_type(cudf_velox::veloxToCudfTypeId(expr_->type()));
+velox/experimental/cudf/expression/ExpressionEvaluator.cpp:        return cudf::cast(resultView, requestedType, stream, mr);
+velox/experimental/cudf/expression/AstExpression.h:// for ops that are not supported by cudf::ast
+velox/experimental/cudf/expression/AstExpression.h:cudf::ast::expression const& createAstTree(
+velox/experimental/cudf/expression/AstExpression.h:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/AstExpression.h:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/AstExpression.h:cudf::ast::expression const& createAstTree(
+velox/experimental/cudf/expression/AstExpression.h:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/AstExpression.h:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/AstExpression.h:  // Converts velox expressions to cudf::ast::tree, scalars and
+velox/experimental/cudf/expression/AstExpression.h:      std::vector<std::unique_ptr<cudf::column>>& inputTableColumns,
+velox/experimental/cudf/expression/AstExpression.h:  cudf::ast::tree cudfTree_;
+velox/experimental/cudf/expression/AstExpression.h:  std::vector<std::unique_ptr<cudf::scalar>> scalars_;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:const cudf::ast::expression& createRangeExpr(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    const cudf::ast::expression& columnRef,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  using Op = cudf::ast::ast_operator;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  using Operation = cudf::ast::operation;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  const cudf::ast::expression* lowerExpr = nullptr;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  const cudf::ast::expression* upperExpr = nullptr;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  auto addLiteral = [&](auto value) -> const cudf::ast::expression& {
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:        cudf::ast::literal{*static_cast<ScalarT*>(scalars.back().get())});
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:std::reference_wrapper<const cudf::ast::expression> buildBigintRangeExpr(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    const cudf::ast::expression& columnRef,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    using Op = cudf::ast::ast_operator;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    using Operation = cudf::ast::operation;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    auto addLiteral = [&](int64_t value) -> const cudf::ast::expression& {
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:      const cudf::ast::expression* lowerExpr = nullptr;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:      const cudf::ast::expression* upperExpr = nullptr;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    const cudf::ast::expression& columnRef,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    rmm::device_async_resource_ref mr) -> const cudf::ast::expression& {
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:      cudf::numeric_scalar<T>>(filter, tree, scalars, columnRef, stream, mr);
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:const cudf::ast::expression& createBytesRangeExpr(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    const cudf::ast::expression& columnRef,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:      cudf::string_scalar>(filter, tree, scalars, columnRef, stream, mr);
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:const cudf::ast::expression& buildInListExpr(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    const cudf::ast::expression& columnRef,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  using Op = cudf::ast::ast_operator;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  using Operation = cudf::ast::operation;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  std::vector<const cudf::ast::expression*> exprVec;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:        cudf::ast::literal{*static_cast<ScalarT*>(scalars.back().get())});
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  const cudf::ast::expression* result = exprVec[0];
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:std::reference_wrapper<const cudf::ast::expression> buildIntegerInListExpr(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    const cudf::ast::expression& columnRef,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    using Op = cudf::ast::ast_operator;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    using Operation = cudf::ast::operation;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    std::vector<const cudf::ast::expression*> exprVec;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    const cudf::ast::expression* result = exprVec[0];
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:cudf::ast::expression const& createAstFromSubfieldFilter(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  auto const& columnRef = tree.push(cudf::ast::column_reference(columnIndex));
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  using Op = cudf::ast::ast_operator;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  using Operation = cudf::ast::operation;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  auto stream = cudf::get_default_stream();
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  auto mr = cudf::get_current_device_resource_ref();
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:      return buildInListExpr<common::BytesValues, cudf::string_scalar>(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:      return buildInListExpr<common::NegatedBytesValues, cudf::string_scalar>(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:          std::make_unique<cudf::numeric_scalar<bool>>(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:          cudf::ast::literal{
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:              *static_cast<cudf::numeric_scalar<bool>*>(scalars.back().get())});
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:cudf::ast::expression const& createAstFromSubfieldFilters(
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    cudf::ast::tree& tree,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:    std::vector<std::unique_ptr<cudf::scalar>>& scalars,
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  using Op = cudf::ast::ast_operator;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  using Operation = cudf::ast::operation;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  std::vector<const cudf::ast::expression*> exprRefs;
+velox/experimental/cudf/expression/SubfieldFiltersToAst.cpp:  const cudf::ast::expression* result = exprRefs[0];
+velox/experimental/cudf/expression/AST_Registration_Plan.md:     `cudf::size_type ast_operator_arity(ast_operator op)`
+velox/experimental/cudf/expression/AST_Registration_Plan.md:     `ast_operator_return_type(ast_operator op, std::vector<cudf::data_type> const& operand_types)`
+velox/experimental/cudf/connectors/hive/CudfHiveTableHandle.h:      const cudf::data_type cudfDataType,
+velox/experimental/cudf/connectors/hive/CudfHiveTableHandle.h:  const cudf::data_type cudfDataType() const {
+velox/experimental/cudf/connectors/hive/CudfHiveTableHandle.h:  const cudf::data_type cudfDataType_;
+velox/experimental/cudf/connectors/hive/CMakeLists.txt:  PUBLIC cudf::cudf velox_cudf_expression
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.h:        "Dynamic filters not yet implemented by cudf::CudfHiveConnector.");
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.h:  // Create a cudf::io::chunked_parquet_reader with the given split.
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.h:  std::unique_ptr<cudf::io::chunked_parquet_reader> createSplitReader();
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.h:  cudf::io::parquet_reader_options readerOptions_;
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.h:  std::unique_ptr<cudf::io::datasource> datasource_;
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.h:  std::unique_ptr<cudf::io::chunked_parquet_reader> splitReader_;
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.h:  std::vector<std::unique_ptr<cudf::scalar>> subfieldScalars_;
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.h:  cudf::ast::tree subfieldTree_;
+velox/experimental/cudf/connectors/hive/CudfHiveConnectorSplit.h:  const std::unique_ptr<cudf::io::source_info> cudfSourceInfo;
+velox/experimental/cudf/connectors/hive/CudfHiveConnectorSplit.h:  const cudf::io::source_info& getCudfSourceInfo() const {
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.h:  std::optional<cudf::size_type> numRows() const;
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.h:  cudf::data_type timestampType() const;
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.h:  cudf::data_type timestampTypeSession(const config::ConfigBase* session) const;
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:cudf::io::compression_type getCompressionType(
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:  using CompressionType = cudf::io::compression_type;
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:  // Convert the input RowVectorPtr to cudf::table
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:      cudfInput, "Failed to convert input RowVectorPtr to cudf::table");
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:std::unique_ptr<cudf::io::chunked_parquet_writer>
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:CudfHiveDataSink::createCudfWriter(cudf::table_view cudfTable) {
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:  const auto sinkInfo = cudf::io::sink_info(
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:      cudf::io::chunked_parquet_writer_options::builder(sinkInfo)
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:  return std::make_unique<cudf::io::chunked_parquet_writer>(cudfWriterOptions);
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:cudf::io::table_input_metadata CudfHiveDataSink::createCudfTableInputMetadata(
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:    cudf::table_view cudfTable) {
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:  auto tableInputMetadata = cudf::io::table_input_metadata(cudfTable);
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:      cudf::io::column_in_metadata&, const CudfHiveColumnHandle&)>
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.cpp:      setColumnName = [&](cudf::io::column_in_metadata& colMeta,
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:std::optional<cudf::size_type> CudfHiveConfig::numRows() const {
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:  auto numRows = config_->get<cudf::size_type>(kNumRows);
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:      ? std::make_optional<cudf::size_type>(numRows.value())
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:cudf::data_type CudfHiveConfig::timestampType() const {
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:  const auto unit = config_->get<cudf::type_id>(
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:      kTimestampType, cudf::type_id::TIMESTAMP_MILLISECONDS /*milli*/);
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:      unit == cudf::type_id::TIMESTAMP_DAYS /*days*/ ||
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:          unit == cudf::type_id::TIMESTAMP_SECONDS /*seconds*/ ||
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:          unit == cudf::type_id::TIMESTAMP_MILLISECONDS /*milli*/ ||
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:          unit == cudf::type_id::TIMESTAMP_MICROSECONDS /*micro*/ ||
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:          unit == cudf::type_id::TIMESTAMP_NANOSECONDS /*nano*/,
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:  return cudf::data_type(cudf::type_id{unit});
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:cudf::data_type CudfHiveConfig::timestampTypeSession(
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:  const auto unit = session->get<cudf::type_id>(
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:      config_->get<cudf::type_id>(
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:          kTimestampType, cudf::type_id::TIMESTAMP_MILLISECONDS /*milli*/));
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:      unit == cudf::type_id::TIMESTAMP_DAYS /*days*/ ||
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:          unit == cudf::type_id::TIMESTAMP_SECONDS /*seconds*/ ||
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:          unit == cudf::type_id::TIMESTAMP_MILLISECONDS /*milli*/ ||
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:          unit == cudf::type_id::TIMESTAMP_MICROSECONDS /*micro*/ ||
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:          unit == cudf::type_id::TIMESTAMP_NANOSECONDS /*nano*/,
+velox/experimental/cudf/connectors/hive/CudfHiveConfig.cpp:  return cudf::data_type(cudf::type_id{unit});
+velox/experimental/cudf/connectors/hive/CudfHiveConnectorSplit.cpp:      cudfSourceInfo(std::make_unique<cudf::io::source_info>(filePath)) {}
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:// A cudf::io::datasource that serves bytes via Velox BufferedInput so that
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:class BufferedInputDataSource : public cudf::io::datasource {
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:  std::unique_ptr<cudf::table> cudfTable;
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:        cudfTableColumns, stream_, cudf::get_current_device_resource_ref());
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:    std::vector<std::unique_ptr<cudf::column>> originalColumns;
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:        std::make_unique<cudf::table>(std::move(originalColumns));
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:    cudfTable = cudf::apply_boolean_mask(
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:        cudf::get_current_device_resource_ref());
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:    std::vector<std::unique_ptr<cudf::column>> originalColumns;
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:    cudfTable = std::make_unique<cudf::table>(std::move(originalColumns));
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:  // Create a `cudf::io::chunked_parquet_reader` SplitReader
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:std::unique_ptr<cudf::io::chunked_parquet_reader>
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:      return cudf::io::source_info{split_->filePath};
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:      return cudf::io::source_info{split_->filePath};
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:      return cudf::io::source_info{split_->filePath};
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:    return cudf::io::source_info{datasource_.get()};
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:      cudf::io::parquet_reader_options::builder(std::move(sourceInfo))
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:  return std::make_unique<cudf::io::chunked_parquet_reader>(
+velox/experimental/cudf/connectors/hive/CudfHiveDataSource.cpp:      cudf::get_current_device_resource_ref());
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.h:  std::unique_ptr<cudf::io::chunked_parquet_writer> createCudfWriter(
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.h:      cudf::table_view cudfTable);
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.h:  cudf::io::table_input_metadata createCudfTableInputMetadata(
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.h:      cudf::table_view cudfTable);
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.h:  std::unique_ptr<cudf::io::chunked_parquet_writer> writer_;
+velox/experimental/cudf/connectors/hive/CudfHiveDataSink.h:  std::vector<cudf::io::sorting_column> sortingColumns_;
+velox/experimental/cudf/connectors/hive/WriterOptions.h:using namespace cudf::io;
+velox/experimental/cudf/connectors/hive/WriterOptions.h: * @brief Struct to 1:1 correspond with cudf::io::chunked_parquet_reader_options
+velox/experimental/cudf/connectors/hive/WriterOptions.h:  cudf::size_type rowGroupSizeRows = default_row_group_size_rows;
+velox/experimental/cudf/connectors/hive/WriterOptions.h:  cudf::size_type maxPageSizeRows = default_max_page_size_rows;
+velox/experimental/cudf/connectors/hive/WriterOptions.h:  std::optional<cudf::size_type> maxPageFragmentSize;
+velox/experimental/cudf/benchmarks/CudfTpchBenchmark.cpp:    "Output table chunk read limit for cudf::parquet_chunked_reader.");
+velox/experimental/cudf/benchmarks/CudfTpchBenchmark.cpp:    "Pass read limit for cudf::parquet_chunked_reader.");
+velox/experimental/cudf/vector/CMakeLists.txt:target_link_libraries(velox_cudf_vector cudf::cudf velox_exception velox_common_base velox_vector)
+velox/experimental/cudf/vector/CudfVector.h:      std::unique_ptr<cudf::table>&& table,
+velox/experimental/cudf/vector/CudfVector.h:  cudf::table_view getTableView() const {
+velox/experimental/cudf/vector/CudfVector.h:  std::unique_ptr<cudf::table>&& release() {
+velox/experimental/cudf/vector/CudfVector.h:  std::unique_ptr<cudf::table> table_;
+velox/experimental/cudf/vector/CudfVector.cpp:std::pair<uint64_t, std::unique_ptr<cudf::column>> getColumnSize(
+velox/experimental/cudf/vector/CudfVector.cpp:    std::unique_ptr<cudf::column> column) {
+velox/experimental/cudf/vector/CudfVector.cpp:  std::vector<std::unique_ptr<cudf::column>> children;
+velox/experimental/cudf/vector/CudfVector.cpp:  auto reconstitutedColumn = std::make_unique<cudf::column>(
+velox/experimental/cudf/vector/CudfVector.cpp:/// @note This is a workaround because cudf::table doesn't have an API to get
+velox/experimental/cudf/vector/CudfVector.cpp:std::pair<uint64_t, std::unique_ptr<cudf::table>> getTableSize(
+velox/experimental/cudf/vector/CudfVector.cpp:    std::unique_ptr<cudf::table>&& table) {
+velox/experimental/cudf/vector/CudfVector.cpp:  std::vector<std::unique_ptr<cudf::column>> columnsOut;
+velox/experimental/cudf/vector/CudfVector.cpp:      totalBytes, std::make_unique<cudf::table>(std::move(columnsOut)));
+velox/experimental/cudf/vector/CudfVector.cpp:    std::unique_ptr<cudf::table>&& table,
+velox/experimental/cudf/exec/CudfLimit.cpp:    auto slicedTable = cudf::slice(
+velox/experimental/cudf/exec/CudfLimit.cpp:        std::make_unique<cudf::table>(slicedTable[0], cudfInput->stream());
+velox/experimental/cudf/exec/CudfLimit.cpp:  auto slicedTable = cudf::slice(
+velox/experimental/cudf/exec/CudfLimit.cpp:      std::make_unique<cudf::table>(slicedTable[0], cudfInput->stream());
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:cudf::type_id veloxToCudfTypeId(const TypePtr& type) {
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::BOOL8;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::INT8;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::INT16;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      //   return cudf::type_id::...;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:        return cudf::type_id::TIMESTAMP_DAYS;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::INT32;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::INT64;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::FLOAT32;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::FLOAT64;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::STRING;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::STRING;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::TIMESTAMP_NANOSECONDS;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    // case TypeKind::HUGEINT: return cudf::type_id::DURATION_DAYS;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    // case TypeKind::DATE: return cudf::type_id::DURATION_DAYS;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    // case TypeKind::INTERVAL_DAY_TIME: return cudf::type_id::EMPTY;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    // case TypeKind::SHORT_DECIMAL: return cudf::type_id::DECIMAL64;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    // case TypeKind::LONG_DECIMAL: return cudf::type_id::DECIMAL128;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::LIST;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    // case TypeKind::MAP: return cudf::type_id::EMPTY;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::STRUCT;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    // case TypeKind::UNKNOWN: return cudf::type_id::EMPTY;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    // case TypeKind::FUNCTION: return cudf::type_id::EMPTY;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    // case TypeKind::OPAQUE: return cudf::type_id::EMPTY;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    // case TypeKind::INVALID: return cudf::type_id::EMPTY;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:      return cudf::type_id::EMPTY;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:std::unique_ptr<cudf::table> toCudfTable(
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:  auto tbl = cudf::from_arrow(&arrowSchema, &arrowArray, stream);
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    const cudf::table_view& table,
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    const std::vector<cudf::column_metadata>& metadata,
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:  auto arrowDeviceArray = cudf::to_arrow_host(table, stream);
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:  auto arrowSchema = cudf::to_arrow_schema(table, metadata);
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:std::vector<cudf::column_metadata>
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:  std::vector<cudf::column_metadata> metadata;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    metadata.push_back(cudf::column_metadata(namePrefix + std::to_string(i)));
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    const cudf::table_view& table,
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    const cudf::table_view& table,
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:  std::vector<cudf::column_metadata> metadata;
+velox/experimental/cudf/exec/VeloxCudfInterop.cpp:    metadata.emplace_back(cudf::column_metadata(name));
+velox/experimental/cudf/exec/CudfHashJoin.h: * cudf::size_type limits, and manages CUDA stream coordination between build
+velox/experimental/cudf/exec/CudfHashJoin.h:      std::vector<std::shared_ptr<cudf::table>>,
+velox/experimental/cudf/exec/CudfHashJoin.h:      std::vector<std::shared_ptr<cudf::hash_join>>>;
+velox/experimental/cudf/exec/CudfHashJoin.h: * cudf::size_type limits and coordinates with other driver threads to ensure
+velox/experimental/cudf/exec/CudfHashJoin.h:  cudf::ast::tree tree_;
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<std::unique_ptr<cudf::scalar>> scalars_;
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<cudf::size_type> leftKeyIndices_;
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<cudf::size_type> rightKeyIndices_;
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<cudf::size_type> leftColumnIndicesToGather_;
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<cudf::size_type> rightColumnIndicesToGather_;
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<std::unique_ptr<cudf::column>> rightMatchedFlags_;
+velox/experimental/cudf/exec/CudfHashJoin.h:  static constexpr auto oobPolicy = cudf::out_of_bounds_policy::NULLIFY;
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<std::unique_ptr<cudf::table>> innerJoin(
+velox/experimental/cudf/exec/CudfHashJoin.h:      std::unique_ptr<cudf::table> const& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<std::unique_ptr<cudf::table>> leftJoin(
+velox/experimental/cudf/exec/CudfHashJoin.h:      std::unique_ptr<cudf::table> const& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<std::unique_ptr<cudf::table>> rightJoin(
+velox/experimental/cudf/exec/CudfHashJoin.h:      std::unique_ptr<cudf::table> const& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<std::unique_ptr<cudf::table>> leftSemiFilterJoin(
+velox/experimental/cudf/exec/CudfHashJoin.h:      std::unique_ptr<cudf::table> const& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<std::unique_ptr<cudf::table>> rightSemiFilterJoin(
+velox/experimental/cudf/exec/CudfHashJoin.h:      std::unique_ptr<cudf::table> const& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::vector<std::unique_ptr<cudf::table>> antiJoin(
+velox/experimental/cudf/exec/CudfHashJoin.h:      std::unique_ptr<cudf::table>&& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::unique_ptr<cudf::table> unfilteredOutput(
+velox/experimental/cudf/exec/CudfHashJoin.h:      cudf::table_view leftTableView,
+velox/experimental/cudf/exec/CudfHashJoin.h:      cudf::column_view leftIndicesCol,
+velox/experimental/cudf/exec/CudfHashJoin.h:      cudf::table_view rightTableView,
+velox/experimental/cudf/exec/CudfHashJoin.h:      cudf::column_view rightIndicesCol,
+velox/experimental/cudf/exec/CudfHashJoin.h:  std::unique_ptr<cudf::table> filteredOutput(
+velox/experimental/cudf/exec/CudfHashJoin.h:      cudf::table_view leftTableView,
+velox/experimental/cudf/exec/CudfHashJoin.h:      cudf::column_view leftIndicesCol,
+velox/experimental/cudf/exec/CudfHashJoin.h:      cudf::table_view rightTableView,
+velox/experimental/cudf/exec/CudfHashJoin.h:      cudf::column_view rightIndicesCol,
+velox/experimental/cudf/exec/CudfHashJoin.h:      std::function<std::vector<std::unique_ptr<cudf::column>>(
+velox/experimental/cudf/exec/CudfHashJoin.h:          std::vector<std::unique_ptr<cudf::column>>&&,
+velox/experimental/cudf/exec/CudfHashJoin.h:          cudf::column_view)> func,
+velox/experimental/cudf/exec/CudfConversion.cpp:cudf::size_type preferredGpuBatchSizeRows(
+velox/experimental/cudf/exec/CudfConversion.cpp:  constexpr cudf::size_type kDefaultGpuBatchSizeRows = 100000;
+velox/experimental/cudf/exec/CudfConversion.cpp:  cudf::get_default_stream().synchronize();
+velox/experimental/cudf/exec/CudfConversion.cpp:    std::unique_ptr<cudf::table> tbl = inputs_.front()->release();
+velox/experimental/cudf/exec/CudfConversion.cpp:      auto partitions = std::vector<cudf::size_type>{
+velox/experimental/cudf/exec/CudfConversion.cpp:          static_cast<cudf::size_type>(targetBatchSize - totalSize)};
+velox/experimental/cudf/exec/CudfConversion.cpp:      auto tableSplits = cudf::split(cudfTableView, partitions);
+velox/experimental/cudf/exec/CudfConversion.cpp:      auto firstPart = std::make_unique<cudf::table>(tableSplits[0], stream);
+velox/experimental/cudf/exec/CudfConversion.cpp:      auto secondPart = std::make_unique<cudf::table>(tableSplits[1], stream);
+velox/experimental/cudf/exec/CudfHashAggregation.h:    cudf::aggregation::Kind kind;
+velox/experimental/cudf/exec/CudfHashAggregation.h:        cudf::table_view const& tbl,
+velox/experimental/cudf/exec/CudfHashAggregation.h:        std::vector<cudf::groupby::aggregation_request>& requests) = 0;
+velox/experimental/cudf/exec/CudfHashAggregation.h:    virtual std::unique_ptr<cudf::column> doReduce(
+velox/experimental/cudf/exec/CudfHashAggregation.h:        cudf::table_view const& input,
+velox/experimental/cudf/exec/CudfHashAggregation.h:    virtual std::unique_ptr<cudf::column> makeOutputColumn(
+velox/experimental/cudf/exec/CudfHashAggregation.h:        std::vector<cudf::groupby::aggregation_result>& results,
+velox/experimental/cudf/exec/CudfHashAggregation.h:        cudf::aggregation::Kind kind,
+velox/experimental/cudf/exec/CudfHashAggregation.h:      std::unique_ptr<cudf::table> tbl,
+velox/experimental/cudf/exec/CudfHashAggregation.h:      std::unique_ptr<cudf::table> tbl,
+velox/experimental/cudf/exec/CudfHashAggregation.h:      std::unique_ptr<cudf::table> tbl,
+velox/experimental/cudf/exec/CudfHashAggregation.h:  // Global means it's an aggregation without groupby. Like cudf::reduce
+velox/experimental/cudf/exec/CMakeLists.txt:  PUBLIC cudf::cudf
+velox/experimental/cudf/exec/Utilities.cpp:  cudf::experimental::prefetch::enable_prefetching("hash_join");
+velox/experimental/cudf/exec/Utilities.cpp:  cudf::experimental::prefetch::enable_prefetching("gather");
+velox/experimental/cudf/exec/Utilities.cpp:  cudf::experimental::prefetch::enable_prefetching("column_view::get_data");
+velox/experimental/cudf/exec/Utilities.cpp:  cudf::experimental::prefetch::enable_prefetching(
+velox/experimental/cudf/exec/Utilities.cpp:cudf::detail::cuda_stream_pool& cudfGlobalStreamPool() {
+velox/experimental/cudf/exec/Utilities.cpp:  return cudf::detail::global_cuda_stream_pool();
+velox/experimental/cudf/exec/Utilities.cpp:std::unique_ptr<cudf::table> concatenateTables(
+velox/experimental/cudf/exec/Utilities.cpp:    std::vector<std::unique_ptr<cudf::table>> tables,
+velox/experimental/cudf/exec/Utilities.cpp:  std::vector<cudf::table_view> tableViews;
+velox/experimental/cudf/exec/Utilities.cpp:  return cudf::concatenate(
+velox/experimental/cudf/exec/Utilities.cpp:      tableViews, stream, cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/Utilities.cpp:std::unique_ptr<cudf::table> makeEmptyTable(TypePtr const& inputType) {
+velox/experimental/cudf/exec/Utilities.cpp:  std::vector<std::unique_ptr<cudf::column>> emptyColumns;
+velox/experimental/cudf/exec/Utilities.cpp:      auto structColumn = std::make_unique<cudf::column>(
+velox/experimental/cudf/exec/Utilities.cpp:          cudf::data_type(cudf::type_id::STRUCT),
+velox/experimental/cudf/exec/Utilities.cpp:      auto emptyColumn = cudf::make_empty_column(
+velox/experimental/cudf/exec/Utilities.cpp:  return std::make_unique<cudf::table>(std::move(emptyColumns));
+velox/experimental/cudf/exec/Utilities.cpp:std::unique_ptr<cudf::table> getConcatenatedTable(
+velox/experimental/cudf/exec/Utilities.cpp:  auto tableViews = std::vector<cudf::table_view>();
+velox/experimental/cudf/exec/Utilities.cpp:  cudf::detail::join_streams(inputStreams, stream);
+velox/experimental/cudf/exec/Utilities.cpp:  auto output = cudf::concatenate(
+velox/experimental/cudf/exec/Utilities.cpp:      tableViews, stream, cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/Utilities.cpp:std::vector<std::unique_ptr<cudf::table>> getConcatenatedTableBatched(
+velox/experimental/cudf/exec/Utilities.cpp:  std::vector<std::unique_ptr<cudf::table>> concatTables;
+velox/experimental/cudf/exec/Utilities.cpp:  auto tableViews = std::vector<cudf::table_view>();
+velox/experimental/cudf/exec/Utilities.cpp:  cudf::detail::join_streams(inputStreams, stream);
+velox/experimental/cudf/exec/Utilities.cpp:  std::vector<std::unique_ptr<cudf::table>> outputTables;
+velox/experimental/cudf/exec/Utilities.cpp:      static_cast<size_t>(std::numeric_limits<cudf::size_type>::max());
+velox/experimental/cudf/exec/Utilities.cpp:          cudf::concatenate(
+velox/experimental/cudf/exec/Utilities.cpp:              std::vector<cudf::table_view>(
+velox/experimental/cudf/exec/Utilities.cpp:              cudf::get_current_device_resource_ref()));
+velox/experimental/cudf/exec/Utilities.cpp:        cudf::concatenate(
+velox/experimental/cudf/exec/Utilities.cpp:            std::vector<cudf::table_view>(
+velox/experimental/cudf/exec/Utilities.cpp:            cudf::get_current_device_resource_ref()));
+velox/experimental/cudf/exec/CudfOrderBy.h:  std::vector<cudf::size_type> sortKeys_;
+velox/experimental/cudf/exec/CudfOrderBy.h:  std::vector<cudf::order> columnOrder_;
+velox/experimental/cudf/exec/CudfOrderBy.h:  std::vector<cudf::null_order> nullOrder_;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    auto [_, null_count] = cudf::bitmask_and(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  auto buildKeyIndices = std::vector<cudf::size_type>(rightKeys.size());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    buildKeyIndices[i] = static_cast<cudf::size_type>(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::shared_ptr<cudf::hash_join>> hashObjects;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        (buildHashJoin) ? std::make_shared<cudf::hash_join>(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                              cudf::null_equality::UNEQUAL,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::shared_ptr<cudf::table>> shared_tbls;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  leftKeyIndices_ = std::vector<cudf::size_type>(leftKeys.size());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    leftKeyIndices_[i] = static_cast<cudf::size_type>(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  rightKeyIndices_ = std::vector<cudf::size_type>(rightKeys.size());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    rightKeyIndices_[i] = static_cast<cudf::size_type>(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  leftColumnIndicesToGather_ = std::vector<cudf::size_type>();
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  rightColumnIndicesToGather_ = std::vector<cudf::size_type>();
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          static_cast<cudf::size_type>(channel.value()));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          static_cast<cudf::size_type>(channel.value()));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  auto [_, null_count] = cudf::bitmask_and(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          auto or_result = cudf::binary_operation(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:              cudf::binary_operator::BITWISE_OR,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:              cudf::data_type{cudf::type_id::BOOL8},
+velox/experimental/cudf/exec/CudfHashJoin.cpp:              cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:std::unique_ptr<cudf::table> CudfHashJoinProbe::unfilteredOutput(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    cudf::table_view leftTableView,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    cudf::column_view leftIndicesCol,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    cudf::table_view rightTableView,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    cudf::column_view rightIndicesCol,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::unique_ptr<cudf::column>> joinedCols;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  auto leftResult = cudf::gather(leftInput, leftIndicesCol, oobPolicy, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      cudf::gather(rightInput, rightIndicesCol, oobPolicy, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  return std::make_unique<cudf::table>(std::move(joinedCols));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:std::unique_ptr<cudf::table> CudfHashJoinProbe::filteredOutput(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    cudf::table_view leftTableView,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    cudf::column_view leftIndicesCol,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    cudf::table_view rightTableView,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    cudf::column_view rightIndicesCol,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::function<std::vector<std::unique_ptr<cudf::column>>(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        std::vector<std::unique_ptr<cudf::column>>&&,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::column_view)> func,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      cudf::gather(leftTableView, leftIndicesCol, oobPolicy, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      cudf::gather(rightTableView, rightIndicesCol, oobPolicy, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::unique_ptr<cudf::column>> joinedCols = leftResult->release();
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      joinedCols, stream, cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      std::vector<std::unique_ptr<cudf::column>>(outputType_->names().size());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  return std::make_unique<cudf::table>(std::move(joinedCols));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:std::vector<std::unique_ptr<cudf::table>> CudfHashJoinProbe::innerJoin(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::unique_ptr<cudf::table> const& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::unique_ptr<cudf::table>> cudfOutputs;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::device_span<cudf::size_type const>{*leftJoinIndices};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::device_span<cudf::size_type const>{*rightJoinIndices};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    auto leftIndicesCol = cudf::column_view{leftIndicesSpan};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    auto rightIndicesCol = cudf::column_view{rightIndicesSpan};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::vector<std::unique_ptr<cudf::column>> joinedCols;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:              std::vector<std::unique_ptr<cudf::column>>&& joinedCols,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:              cudf::column_view filterColumn) {
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                std::make_unique<cudf::table>(std::move(joinedCols));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                cudf::apply_boolean_mask(*filterTable, filterColumn, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:std::vector<std::unique_ptr<cudf::table>> CudfHashJoinProbe::leftJoin(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::unique_ptr<cudf::table> const& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::unique_ptr<cudf::table>> cudfOutputs;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::device_span<cudf::size_type const>{*leftJoinIndices};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::device_span<cudf::size_type const>{*rightJoinIndices};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    auto leftIndicesCol = cudf::column_view{leftIndicesSpan};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    auto rightIndicesCol = cudf::column_view{rightIndicesSpan};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::vector<std::unique_ptr<cudf::column>> joinedCols;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                            std::vector<std::unique_ptr<cudf::column>>&&
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                            cudf::column_view filterColumn) {
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::groupby::groupby keysleftIndicesColGrouper(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::table_view{{leftIndicesCol}},
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::null_policy::EXCLUDE,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::sorted::NO);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        std::vector<cudf::groupby::aggregation_request> requests;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        requests.emplace_back(cudf::groupby::aggregation_request{});
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        requests.emplace_back(cudf::groupby::aggregation_request{});
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::numeric_scalar<cudf::size_type>(0, true, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::sequence(leftIndicesCol.size(), zero_scalar, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::make_min_aggregation<cudf::groupby_aggregation>());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::numeric_scalar<std::int64_t>(0, true, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::replace_nulls(uniqueFilter->view(), zero_scalar_64, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        uniqueFilter = cudf::binary_operation(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::binary_operator::EQUAL,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::data_type{cudf::type_id::BOOL8},
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        auto filteredMinIndicesTable = cudf::apply_boolean_mask(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::table_view{{minIndices->view()}},
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          std::vector<std::unique_ptr<cudf::scalar>> nullScalars;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          std::vector<std::reference_wrapper<cudf::scalar const>>
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          std::vector<cudf::column_view> rightColViews;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                cudf::make_empty_scalar_like(joinedCols[col]->view(), stream));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                std::reference_wrapper<cudf::scalar const>(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          auto nullifiedRightTable = cudf::scatter(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:              cudf::table_view(rightColViews),
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        auto true_scalar = cudf::numeric_scalar<bool>(true, true);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        std::vector<std::reference_wrapper<cudf::scalar const>> source_scalars{
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        auto filteredColumnTable = cudf::scatter(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::table_view{{filterColumn}},
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        auto filterTable = std::make_unique<cudf::table>(std::move(joinedCols));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::apply_boolean_mask(*filterTable, updatedFilterColumn, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:std::vector<std::unique_ptr<cudf::table>> CudfHashJoinProbe::rightJoin(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::unique_ptr<cudf::table> const& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::unique_ptr<cudf::table>> cudfOutputs;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      auto true_scalar = cudf::numeric_scalar<bool>(true, true, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      auto true_col = cudf::make_column_from_scalar(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      auto flags_table = cudf::table_view({rightMatchedFlags_[i]->view()});
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      auto rightIdxCol = cudf::column_view{
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          cudf::device_span<cudf::size_type const>{*rightJoinIndices}};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      auto updated_flags_tbl = cudf::scatter(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          cudf::table_view({true_col->view()}),
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::device_span<cudf::size_type const>{*leftJoinIndices};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::device_span<cudf::size_type const>{*rightJoinIndices};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    auto leftIndicesCol = cudf::column_view{leftIndicesSpan};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    auto rightIndicesCol = cudf::column_view{rightIndicesSpan};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::vector<std::unique_ptr<cudf::column>> joinedCols;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:              std::vector<std::unique_ptr<cudf::column>>&& joinedCols,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:              cudf::column_view filterColumn) {
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                std::make_unique<cudf::table>(std::move(joinedCols));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                cudf::apply_boolean_mask(*filterTable, filterColumn, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            auto rightIdxCol = cudf::column_view{rightIndicesSpan};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            auto filteredIdxTable = cudf::apply_boolean_mask(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                cudf::table_view{std::vector<cudf::column_view>{rightIdxCol}},
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            auto true_scalar = cudf::numeric_scalar<bool>(true, true, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            auto true_col = cudf::make_column_from_scalar(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            auto flags_table = cudf::table_view({rightMatchedFlags->view()});
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            auto updated_flags_tbl = cudf::scatter(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                cudf::table_view({true_col->view()}),
+velox/experimental/cudf/exec/CudfHashJoin.cpp:                cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:std::vector<std::unique_ptr<cudf::table>> CudfHashJoinProbe::leftSemiFilterJoin(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::unique_ptr<cudf::table> const& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::unique_ptr<cudf::table>> cudfOutputs;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::unique_ptr<rmm::device_uvector<cudf::size_type>> leftJoinIndices;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      leftJoinIndices = cudf::mixed_left_semi_join(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          cudf::null_equality::UNEQUAL,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      leftJoinIndices = cudf::left_semi_join(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          cudf::null_equality::UNEQUAL,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::device_span<cudf::size_type const>{*leftJoinIndices};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    auto leftIndicesCol = cudf::column_view{leftIndicesSpan};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    auto rightIndicesCol = cudf::empty_like(leftIndicesCol);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:std::vector<std::unique_ptr<cudf::table>>
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::unique_ptr<cudf::table> const& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::unique_ptr<cudf::table>> cudfOutputs;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::unique_ptr<rmm::device_uvector<cudf::size_type>> rightJoinIndices;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    rightJoinIndices = cudf::mixed_left_semi_join(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::null_equality::UNEQUAL,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    rightJoinIndices = cudf::left_semi_join(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::null_equality::UNEQUAL,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      cudf::device_span<cudf::size_type const>{*rightJoinIndices};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  auto rightIndicesCol = cudf::column_view{rightIndicesSpan};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  auto leftIndicesCol = cudf::empty_like(rightIndicesCol);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:std::vector<std::unique_ptr<cudf::table>> CudfHashJoinProbe::antiJoin(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    std::unique_ptr<cudf::table>&& leftTable,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::unique_ptr<cudf::table>> cudfOutputs;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::has_nulls(leftTable->view().select(leftKeyIndices_));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::has_nulls(rightTableView.select(rightKeyIndices_));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      leftTable = cudf::drop_nulls(leftTable->view(), leftKeyIndices_, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::unique_ptr<rmm::device_uvector<cudf::size_type>> leftJoinIndices;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:    leftJoinIndices = cudf::mixed_left_anti_join(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::null_equality::UNEQUAL,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        cudf::has_nulls(rightTableView.select(rightKeyIndices_));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      leftJoinIndices = std::make_unique<rmm::device_uvector<cudf::size_type>>(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          0, stream, cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      leftJoinIndices = cudf::left_anti_join(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          cudf::null_equality::UNEQUAL,
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      cudf::device_span<cudf::size_type const>{*leftJoinIndices};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  auto leftIndicesCol = cudf::column_view{leftIndicesSpan};
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  auto rightIndicesCol = cudf::empty_like(leftIndicesCol);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      std::vector<std::unique_ptr<cudf::table>> toConcat;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        auto boolMask = cudf::unary_operation(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            flags->view(), cudf::unary_operator::NOT, stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:            cudf::apply_boolean_mask(rightInput, boolMask->view(), stream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        std::vector<std::unique_ptr<cudf::column>> outCols(outputType_->size());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          auto nullScalar = cudf::make_default_constructed_scalar(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:              cudf::data_type{leftCudfType});
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          outCols[outIdx] = cudf::make_column_from_scalar(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:              *nullScalar, m, stream, cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfHashJoin.cpp:        toConcat.push_back(std::make_unique<cudf::table>(std::move(outCols)));
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      // to fit in cudf::size_type. In case of a right join which doesn't have a
+velox/experimental/cudf/exec/CudfHashJoin.cpp:  std::vector<std::unique_ptr<cudf::table>> cudfOutputs;
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      auto false_scalar = cudf::numeric_scalar<bool>(false, true, initStream);
+velox/experimental/cudf/exec/CudfHashJoin.cpp:      auto flags_col = cudf::make_column_from_scalar(
+velox/experimental/cudf/exec/CudfHashJoin.cpp:          false_scalar, n, initStream, cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/ToCudf.cpp:  cudf::set_current_device_resource(mr.get());
+velox/experimental/cudf/exec/CudfTopN.cpp:        sortingOrder.isAscending() ? cudf::order::ASCENDING
+velox/experimental/cudf/exec/CudfTopN.cpp:                                   : cudf::order::DESCENDING);
+velox/experimental/cudf/exec/CudfTopN.cpp:            ? cudf::null_order::BEFORE
+velox/experimental/cudf/exec/CudfTopN.cpp:            : cudf::null_order::AFTER);
+velox/experimental/cudf/exec/CudfTopN.cpp:  std::vector<cudf::table_view> tableViews;
+velox/experimental/cudf/exec/CudfTopN.cpp:      cudf::merge(tableViews, sortKeys_, columnOrder_, nullOrder_, stream, mr);
+velox/experimental/cudf/exec/CudfTopN.cpp:      cudf::split(
+velox/experimental/cudf/exec/CudfTopN.cpp:      std::make_unique<cudf::table>(topk),
+velox/experimental/cudf/exec/CudfTopN.cpp:std::unique_ptr<cudf::table> CudfTopN::getTopK(
+velox/experimental/cudf/exec/CudfTopN.cpp:    cudf::table_view const& values,
+velox/experimental/cudf/exec/CudfTopN.cpp:      cudf::stable_sorted_order(keys, columnOrder_, nullOrder_, stream, mr);
+velox/experimental/cudf/exec/CudfTopN.cpp:      cudf::split(indices->view(), {std::min(k, indices->size())}, stream)
+velox/experimental/cudf/exec/CudfTopN.cpp:  return cudf::detail::gather(
+velox/experimental/cudf/exec/CudfTopN.cpp:      cudf::out_of_bounds_policy::DONT_CHECK,
+velox/experimental/cudf/exec/CudfTopN.cpp:      cudf::detail::negative_index_policy::NOT_ALLOWED,
+velox/experimental/cudf/exec/CudfTopN.cpp:  auto mr = cudf::get_current_device_resource_ref();
+velox/experimental/cudf/exec/CudfTopN.cpp:    auto mr = cudf::get_current_device_resource_ref();
+velox/experimental/cudf/exec/CudfTopN.cpp:  auto mr = cudf::get_current_device_resource_ref();
+velox/experimental/cudf/exec/CudfLocalPartition.cpp:        std::vector<cudf::size_type> partitionKeyIndices;
+velox/experimental/cudf/exec/CudfLocalPartition.cpp:          partitionKeyIndices.push_back(static_cast<cudf::size_type>(idx));
+velox/experimental/cudf/exec/CudfLocalPartition.cpp:        return cudf::hash_partition(
+velox/experimental/cudf/exec/CudfLocalPartition.cpp:            cudf::hash_id::HASH_MURMUR3,
+velox/experimental/cudf/exec/CudfLocalPartition.cpp:            cudf::DEFAULT_HASH_SEED,
+velox/experimental/cudf/exec/CudfLocalPartition.cpp:        return cudf::round_robin_partition(
+velox/experimental/cudf/exec/CudfLocalPartition.cpp:        cudf::split(partitionedTable->view(), partitionOffsets);
+velox/experimental/cudf/exec/CudfLocalPartition.cpp:              std::make_unique<cudf::table>(partitionData),
+velox/experimental/cudf/exec/VeloxCudfInterop.h:cudf::type_id veloxToCudfTypeId(const TypePtr& type);
+velox/experimental/cudf/exec/VeloxCudfInterop.h:std::unique_ptr<cudf::table> toCudfTable(
+velox/experimental/cudf/exec/VeloxCudfInterop.h:    const cudf::table_view& table,
+velox/experimental/cudf/exec/VeloxCudfInterop.h:    const cudf::table_view& table,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:              cudf::aggregation::KIND,                                        \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        cudf::table_view const& tbl,                                          \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        std::vector<cudf::groupby::aggregation_request>& requests) override { \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:          cudf::make_##name##_aggregation<cudf::groupby_aggregation>());      \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:    std::unique_ptr<cudf::column> makeOutputColumn(                           \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        std::vector<cudf::groupby::aggregation_result>& results,              \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:          cudf::data_type(cudf_velox::veloxToCudfTypeId(resultType));         \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        col = cudf::cast(*col, cudfType, stream);                             \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:    std::unique_ptr<cudf::column> doReduce(                                   \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        cudf::table_view const& input,                                        \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:          cudf::make_##name##_aggregation<cudf::reduce_aggregation>();        \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:          cudf::data_type(cudf_velox::veloxToCudfTypeId(outputType));         \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      auto const resultScalar = cudf::reduce(                                 \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      return cudf::make_column_from_scalar(*resultScalar, 1, stream);         \
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::aggregation::COUNT_VALID,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      cudf::table_view const& tbl,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      std::vector<cudf::groupby::aggregation_request>& requests) override {
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:    std::unique_ptr<cudf::groupby_aggregation> aggRequest =
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        ? cudf::make_count_aggregation<cudf::groupby_aggregation>(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:              constant == nullptr ? cudf::null_policy::EXCLUDE
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:                                  : cudf::null_policy::INCLUDE)
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        : cudf::make_sum_aggregation<cudf::groupby_aggregation>();
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  std::unique_ptr<cudf::column> doReduce(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      cudf::table_view const& input,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      auto resultScalar = cudf::numeric_scalar<int64_t>(count);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      return cudf::make_column_from_scalar(resultScalar, 1, stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:          cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      auto const cudfOutputType = cudf::data_type(cudf::type_id::INT64);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      auto const resultScalar = cudf::reduce(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      return cudf::make_column_from_scalar(*resultScalar, 1, stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  std::unique_ptr<cudf::column> makeOutputColumn(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      std::vector<cudf::groupby::aggregation_result>& results,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        cudf::data_type(cudf_velox::veloxToCudfTypeId(resultType));
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      col = cudf::cast(*col, cudfOutputType, stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::aggregation::MEAN,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      cudf::table_view const& tbl,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      std::vector<cudf::groupby::aggregation_request>& requests) override {
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_mean_aggregation<cudf::groupby_aggregation>());
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_count_aggregation<cudf::groupby_aggregation>(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:                cudf::null_policy::EXCLUDE));
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  std::unique_ptr<cudf::column> makeOutputColumn(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      std::vector<cudf::groupby::aggregation_result>& results,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto const cudfSumType = cudf::data_type(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto const cudfCountType = cudf::data_type(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        if (sum->type() != cudf::data_type(cudfSumType)) {
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:          sum = cudf::cast(*sum, cudf::data_type(cudfSumType), stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        if (count->type() != cudf::data_type(cudfCountType)) {
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:          count = cudf::cast(*count, cudf::data_type(cudfCountType), stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto children = std::vector<std::unique_ptr<cudf::column>>();
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        return std::make_unique<cudf::column>(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::data_type(cudf::type_id::STRUCT),
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto const cudfSumType = cudf::data_type(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto const cudfCountType = cudf::data_type(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        if (sum->type() != cudf::data_type(cudfSumType)) {
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:          sum = cudf::cast(*sum, cudf::data_type(cudfSumType), stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        if (count->type() != cudf::data_type(cudfCountType)) {
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:          count = cudf::cast(*count, cudf::data_type(cudfCountType), stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto children = std::vector<std::unique_ptr<cudf::column>>();
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        return std::make_unique<cudf::column>(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::data_type(cudf::type_id::STRUCT),
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto avg = cudf::binary_operation(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::binary_operator::DIV,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::data_type(cudf_velox::veloxToCudfTypeId(resultType)),
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  std::unique_ptr<cudf::column> doReduce(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      cudf::table_view const& input,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_mean_aggregation<cudf::reduce_aggregation>();
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::data_type(cudf_velox::veloxToCudfTypeId(outputType));
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto const resultScalar = cudf::reduce(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        return cudf::make_column_from_scalar(*resultScalar, 1, stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::data_type(cudf_velox::veloxToCudfTypeId(sumType));
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::data_type(cudf_velox::veloxToCudfTypeId(countType));
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto const sumResultScalar = cudf::reduce(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_column_from_scalar(*sumResultScalar, 1, stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto countCol = cudf::make_column_from_scalar(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::numeric_scalar<int64_t>(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        auto children = std::vector<std::unique_ptr<cudf::column>>();
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        return std::make_unique<cudf::column>(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::data_type(cudf::type_id::STRUCT),
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::reduce(sumCol, *sumAggRequest, sumCol.type(), stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_column_from_scalar(*sumResultScalar, 1, stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::reduce(countCol, *countAggRequest, countCol.type(), stream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::data_type(cudf_velox::veloxToCudfTypeId(outputType));
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        return cudf::binary_operation(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:            cudf::binary_operator::DIV,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  // (mean/<sum, count>) are in the output of cudf::groupby::aggregate().
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  // done in cudf by passing sort information to cudf::groupby() constructor.
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:    std::vector<cudf::table_view> tablesToConcat;
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:    cudf::detail::join_streams(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        cudf::concatenate(tablesToConcat, partialOutputStream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:    std::vector<cudf::table_view> tablesToConcat;
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:    cudf::detail::join_streams(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:        cudf::concatenate(tablesToConcat, partialOutputStream);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:    std::unique_ptr<cudf::table> tbl,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  cudf::groupby::groupby groupByOwner(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      ignoreNullKeys_ ? cudf::null_policy::EXCLUDE
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:                      : cudf::null_policy::INCLUDE);
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  std::vector<cudf::groupby::aggregation_request> requests;
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  std::vector<std::unique_ptr<cudf::column>> resultColumns;
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  auto resultTable = std::make_unique<cudf::table>(std::move(resultColumns));
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:    std::unique_ptr<cudf::table> tbl,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  std::vector<std::unique_ptr<cudf::column>> resultColumns;
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      std::make_unique<cudf::table>(std::move(resultColumns)),
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:    std::unique_ptr<cudf::table> tbl,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:  auto result = cudf::distinct(
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      cudf::duplicate_keep_option::KEEP_FIRST,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      cudf::null_equality::EQUAL,
+velox/experimental/cudf/exec/CudfHashAggregation.cpp:      cudf::nan_equality::ALL_EQUAL,
+velox/experimental/cudf/exec/CudfFilterProject.cpp:  auto outputTable = std::make_unique<cudf::table>(std::move(outputColumns));
+velox/experimental/cudf/exec/CudfFilterProject.cpp:    std::vector<std::unique_ptr<cudf::column>>& inputTableColumns,
+velox/experimental/cudf/exec/CudfFilterProject.cpp:      inputTableColumns, stream, cudf::get_current_device_resource_ref(), true);
+velox/experimental/cudf/exec/CudfFilterProject.cpp:    auto isAllTrue = cudf::reduce(
+velox/experimental/cudf/exec/CudfFilterProject.cpp:        *cudf::make_all_aggregation<cudf::reduce_aggregation>(),
+velox/experimental/cudf/exec/CudfFilterProject.cpp:        cudf::data_type(cudf::type_id::BOOL8),
+velox/experimental/cudf/exec/CudfFilterProject.cpp:        cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfFilterProject.cpp:    using ScalarType = cudf::scalar_type_t<bool>;
+velox/experimental/cudf/exec/CudfFilterProject.cpp:        std::make_unique<cudf::table>(std::move(inputTableColumns));
+velox/experimental/cudf/exec/CudfFilterProject.cpp:        cudf::apply_boolean_mask(*filterTable, filterColumnView, stream);
+velox/experimental/cudf/exec/CudfFilterProject.cpp:std::vector<std::unique_ptr<cudf::column>> CudfFilterProject::project(
+velox/experimental/cudf/exec/CudfFilterProject.cpp:    std::vector<std::unique_ptr<cudf::column>>& inputTableColumns,
+velox/experimental/cudf/exec/CudfFilterProject.cpp:        cudf::get_current_device_resource_ref(),
+velox/experimental/cudf/exec/CudfFilterProject.cpp:  std::vector<std::unique_ptr<cudf::column>> outputColumns(outputType_->size());
+velox/experimental/cudf/exec/CudfFilterProject.cpp:    if (std::holds_alternative<std::unique_ptr<cudf::column>>(columnOrView)) {
+velox/experimental/cudf/exec/CudfFilterProject.cpp:          std::move(std::get<std::unique_ptr<cudf::column>>(columnOrView));
+velox/experimental/cudf/exec/CudfFilterProject.cpp:      auto view = std::get<cudf::column_view>(columnOrView);
+velox/experimental/cudf/exec/CudfFilterProject.cpp:          std::make_unique<cudf::column>(
+velox/experimental/cudf/exec/CudfFilterProject.cpp:              view, stream, cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfFilterProject.cpp:      outputColumns[identity.outputChannel] = std::make_unique<cudf::column>(
+velox/experimental/cudf/exec/CudfFilterProject.cpp:          cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfOrderBy.cpp:        sortingOrder.isAscending() ? cudf::order::ASCENDING
+velox/experimental/cudf/exec/CudfOrderBy.cpp:                                   : cudf::order::DESCENDING);
+velox/experimental/cudf/exec/CudfOrderBy.cpp:            ? cudf::null_order::BEFORE
+velox/experimental/cudf/exec/CudfOrderBy.cpp:            : cudf::null_order::AFTER);
+velox/experimental/cudf/exec/CudfOrderBy.cpp:      cudf::sort_by_key(values, keys, columnOrder_, nullOrder_, stream);
+velox/experimental/cudf/exec/DebugUtil.cpp:    const cudf::table_view& table,
+velox/experimental/cudf/exec/Utilities.h:[[nodiscard]] cudf::detail::cuda_stream_pool& cudfGlobalStreamPool();
+velox/experimental/cudf/exec/Utilities.h:[[nodiscard]] std::unique_ptr<cudf::table> concatenateTables(
+velox/experimental/cudf/exec/Utilities.h:    std::vector<std::unique_ptr<cudf::table>> tables,
+velox/experimental/cudf/exec/Utilities.h:[[nodiscard]] std::unique_ptr<cudf::table> getConcatenatedTable(
+velox/experimental/cudf/exec/Utilities.h: * limits imposed by cudf::size_type i.e. 32-bit signed integer. Unlike
+velox/experimental/cudf/exec/Utilities.h: * cudf::size_type
+velox/experimental/cudf/exec/Utilities.h:[[nodiscard]] std::vector<std::unique_ptr<cudf::table>>
+velox/experimental/cudf/exec/DebugUtil.h:      const cudf::table_view& table,
+velox/experimental/cudf/exec/CudfAssignUniqueId.cpp:      input_->size(), stream, cudf::get_current_device_resource_ref());
+velox/experimental/cudf/exec/CudfAssignUniqueId.cpp:      std::make_unique<cudf::table>(std::move(columns)),
+velox/experimental/cudf/exec/CudfAssignUniqueId.cpp:std::unique_ptr<cudf::column> CudfAssignUniqueId::generateIdColumn(
+velox/experimental/cudf/exec/CudfAssignUniqueId.cpp:  auto d_starts_column_view = cudf::column_view(
+velox/experimental/cudf/exec/CudfAssignUniqueId.cpp:      cudf::data_type(cudf::type_id::INT64),
+velox/experimental/cudf/exec/CudfAssignUniqueId.cpp:  auto d_sizes_column_view = cudf::column_view(
+velox/experimental/cudf/exec/CudfAssignUniqueId.cpp:      cudf::data_type(cudf::type_id::INT64),
+velox/experimental/cudf/exec/CudfAssignUniqueId.cpp:  auto list_sequence = cudf::lists::sequences(
+velox/experimental/cudf/exec/CudfFilterProject.h:      std::vector<std::unique_ptr<cudf::column>>& inputTableColumns,
+velox/experimental/cudf/exec/CudfFilterProject.h:  std::vector<std::unique_ptr<cudf::column>> project(
+velox/experimental/cudf/exec/CudfFilterProject.h:      std::vector<std::unique_ptr<cudf::column>>& inputTableColumns,
+velox/experimental/cudf/exec/CudfAssignUniqueId.h:  std::unique_ptr<cudf::column> generateIdColumn(
+velox/experimental/cudf/exec/CudfTopN.h:  std::vector<cudf::size_type> sortKeys_;
+velox/experimental/cudf/exec/CudfTopN.h:  std::vector<cudf::order> columnOrder_;
+velox/experimental/cudf/exec/CudfTopN.h:  std::vector<cudf::null_order> nullOrder_;
+velox/experimental/cudf/exec/CudfTopN.h:  std::unique_ptr<cudf::table> getTopK(
+velox/experimental/cudf/exec/CudfTopN.h:      cudf::table_view const& values,
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:      const cudf::ast::expression& expr) {
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:    auto stream = cudf::get_default_stream();
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:    auto mr = cudf::get_current_device_resource_ref();
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:          cudf::compute_column(cudfTable->view(), expr, stream, mr);
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:      EXPECT_EQ(cudfResult->type().id(), cudf::type_id::BOOL8);
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:      auto resultTable = std::make_unique<cudf::table>(
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:          std::vector<std::unique_ptr<cudf::column>>{});
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:      std::vector<std::unique_ptr<cudf::column>> cols;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:          std::move(const_cast<std::unique_ptr<cudf::column>&>(cudfResult)));
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:      resultTable = std::make_unique<cudf::table>(std::move(cols));
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:        cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:        std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  auto stream = cudf::get_default_stream();
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  auto mr = cudf::get_current_device_resource_ref();
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:      cudf::compute_column(cudfTable->view(), combinedExpr, stream, mr);
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  EXPECT_EQ(cudfResult->type().id(), cudf::type_id::BOOL8);
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  auto resultTable = std::make_unique<cudf::table>(
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:      std::vector<std::unique_ptr<cudf::column>>{});
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::column>> cols;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:      std::move(const_cast<std::unique_ptr<cudf::column>&>(cudfResult)));
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  resultTable = std::make_unique<cudf::table>(std::move(cols));
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  cudf::ast::tree tree;
+velox/experimental/cudf/tests/SubfieldFilterAstTest.cpp:  std::vector<std::unique_ptr<cudf::scalar>> scalars;
+velox/experimental/cudf/tests/CudfFunctionBaseTest.h:    auto stream = cudf::get_default_stream();
+velox/experimental/cudf/tests/CudfFunctionBaseTest.h:        inputColumns, stream, cudf::get_current_device_resource_ref());
+velox/experimental/cudf/tests/CudfFunctionBaseTest.h:    cudf::table_view resultTable({filterColumnView});
+velox/experimental/cudf/tests/utils/CMakeLists.txt:  cudf::cudf
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:    cudf::io::table_input_metadata& tableMeta,
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:  std::function<void(cudf::io::column_in_metadata&, std::string)>
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:          [&](cudf::io::column_in_metadata& colMeta, std::string defaultName) {
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:  std::vector<std::unique_ptr<cudf::table>> cudfTables;
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:      auto stream = cudf::get_default_stream();
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:  auto const sinkInfo = cudf::io::sink_info(filePath);
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:      cudf::io::table_input_metadata(cudfTables[0]->view());
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:  auto options = cudf::io::chunked_parquet_writer_options::builder(sinkInfo)
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:  cudf::io::chunked_parquet_writer writer(options);
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:  auto const sinkInfo = cudf::io::sink_info(filePath);
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:  auto stream = cudf::get_default_stream();
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:  auto tableInputMetadata = cudf::io::table_input_metadata(cudfTable->view());
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:      cudf::io::parquet_writer_options::builder(sinkInfo, cudfTable->view())
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:  cudf::io::write_parquet(options);
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.cpp:            cudf::data_type{veloxToCudfTypeId(tableColumnTypes.at(i))}));
+velox/experimental/cudf/tests/utils/CudfHiveConnectorTestBase.h:      const cudf::data_type data_type,

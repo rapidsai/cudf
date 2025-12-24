@@ -19,7 +19,7 @@ std::unique_ptr<cudf::column> segmented_any(
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "segmented_any() operation requires output type `BOOL8`");
@@ -27,7 +27,7 @@ std::unique_ptr<cudf::column> segmented_any(
   using reducer = simple::detail::bool_result_column_dispatcher<op::max>;
   // A maximum over bool types is used to implement any()
   return cudf::type_dispatcher(
-    col.type(), reducer{}, col, offsets, null_handling, init, stream, mr);
+    col.type(), reducer{}, col, offsets, null_handling, init, stream, resources);
 }
 
 }  // namespace detail

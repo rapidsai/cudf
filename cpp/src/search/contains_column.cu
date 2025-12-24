@@ -24,16 +24,17 @@ struct contains_column_dispatch {
   std::unique_ptr<column> operator()(column_view const& haystack,
                                      column_view const& needles,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
   {
     auto result_v = detail::contains(table_view{{haystack}},
                                      table_view{{needles}},
                                      null_equality::EQUAL,
                                      nan_equality::ALL_EQUAL,
                                      stream,
-                                     mr);
+                                     resources);
     return std::make_unique<column>(
-      std::move(result_v), detail::copy_bitmask(needles, stream, mr), needles.null_count());
+      std::move(result_v), detail::copy_bitmask(needles, stream,
+                  resources), needles.null_count());
   }
 };
 
@@ -42,16 +43,16 @@ std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
   column_view const& haystack_in,
   column_view const& needles_in,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  cudf::memory_resources resources) const
 {
   dictionary_column_view const haystack(haystack_in);
   dictionary_column_view const needles(needles_in);
   // first combine keys so both dictionaries have the same set
   auto needles_matched = dictionary::detail::add_keys(
-    needles, haystack.keys(), stream, cudf::get_current_device_resource_ref());
+    needles, haystack.keys(), stream, resources.get_temporary_mr());
   auto const needles_view = dictionary_column_view(needles_matched->view());
   auto haystack_matched   = dictionary::detail::set_keys(
-    haystack, needles_view.keys(), stream, cudf::get_current_device_resource_ref());
+    haystack, needles_view.keys(), stream, resources.get_temporary_mr());
   auto const haystack_view = dictionary_column_view(haystack_matched->view());
 
   // now just use the indices for the contains
@@ -62,7 +63,7 @@ std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
                                haystack_indices,
                                needles_indices,
                                stream,
-                               mr);
+                               resources);
 }
 
 }  // namespace
@@ -70,10 +71,10 @@ std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   return cudf::type_dispatcher(
-    haystack.type(), contains_column_dispatch{}, haystack, needles, stream, mr);
+    haystack.type(), contains_column_dispatch{}, haystack, needles, stream, resources);
 }
 
 }  // namespace detail
@@ -81,10 +82,10 @@ std::unique_ptr<column> contains(column_view const& haystack,
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needles, stream, mr);
+  return detail::contains(haystack, needles, stream, resources);
 }
 
 }  // namespace cudf

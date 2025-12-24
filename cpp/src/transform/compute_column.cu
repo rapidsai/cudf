@@ -29,7 +29,7 @@ namespace detail {
 std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   // If evaluating the expression may produce null outputs we create a nullable
   // output column and follow the null-supporting expression evaluation code
@@ -44,7 +44,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
     has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
 
   auto output_column = cudf::make_fixed_width_column(
-    parser.output_type(), table.num_rows(), output_column_mask_state, stream, mr);
+    parser.output_type(), table.num_rows(), output_column_mask_state, stream, resources);
   if (table.num_rows() == 0) { return output_column; }
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
@@ -111,10 +111,10 @@ std::unique_ptr<column> compute_column(table_view const& table,
 std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_column(table, expr, stream, mr);
+  return detail::compute_column(table, expr, stream, resources);
 }
 
 }  // namespace cudf

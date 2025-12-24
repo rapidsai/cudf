@@ -16,7 +16,7 @@ std::unique_ptr<column> group_min(column_view const& values,
                                   size_type num_groups,
                                   cudf::device_span<size_type const> group_labels,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()
@@ -27,7 +27,7 @@ std::unique_ptr<column> group_min(column_view const& values,
                          num_groups,
                          group_labels,
                          stream,
-                         mr);
+                         resources);
 }
 
 }  // namespace detail

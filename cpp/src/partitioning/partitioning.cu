@@ -406,9 +406,9 @@ struct copy_block_partitions_dispatcher {
                                      size_type const* scanned_block_partition_sizes,
                                      size_type grid_size,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
-    rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
+    rmm::device_buffer output(input.size() * sizeof(DataType), stream, resources);
 
     copy_block_partitions_impl(input.data<DataType>(),
                                static_cast<DataType*>(output.data()),
@@ -434,7 +434,7 @@ struct copy_block_partitions_dispatcher {
                                      size_type const* scanned_block_partition_sizes,
                                      size_type grid_size,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     // Use move_to_output_buffer to create an equivalent gather map
     auto gather_map = compute_gather_map(input.size(),
@@ -451,7 +451,7 @@ struct copy_block_partitions_dispatcher {
                                              out_of_bounds_policy::DONT_CHECK,
                                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                                              stream,
-                                             mr);
+                                             resources);
     return std::move(gather_table->release().front());
   }
 };
@@ -464,7 +464,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   size_type num_partitions,
   uint32_t seed,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto const num_rows = table_to_hash.num_rows();
 
@@ -478,7 +478,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   auto grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
 
   // Allocate array to hold which partition each row belongs to
-  auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
+  auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream, resources.get_temporary_mr());
 
   // Array to hold the size of each partition computed by each block
   //  i.e., { {block0 partition0 size, block1 partition0 size, ...},
@@ -486,17 +486,17 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   //          ...
   //          {block0 partition(num_partitions-1) size, block1
   //          partition(num_partitions -1) size, ...} }
-  auto block_partition_sizes = rmm::device_uvector<size_type>(grid_size * num_partitions, stream);
+  auto block_partition_sizes = rmm::device_uvector<size_type>(grid_size * num_partitions, stream, resources.get_temporary_mr());
 
   auto scanned_block_partition_sizes =
-    rmm::device_uvector<size_type>(grid_size * num_partitions, stream);
+    rmm::device_uvector<size_type>(grid_size * num_partitions, stream, resources.get_temporary_mr());
 
   // Holds the total number of rows in each partition
   auto global_partition_sizes = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_partitions, stream, cudf::get_current_device_resource_ref());
+    num_partitions, stream, resources.get_temporary_mr());
 
   auto row_partition_offset = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_rows, stream, cudf::get_current_device_resource_ref());
+    num_rows, stream, resources.get_temporary_mr());
 
   auto const row_hasher = detail::row::hash::row_hasher(table_to_hash, stream);
   auto const hasher =
@@ -548,7 +548,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
   // Compute exclusive scan of all blocks' partition sizes in-place to determine
   // the starting point for each blocks portion of each partition in the output
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                          block_partition_sizes.begin(),
                          block_partition_sizes.end(),
                          scanned_block_partition_sizes.data());
@@ -556,7 +556,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   // Compute exclusive scan of size of each partition to determine offset
   // location of each partition in final output.
   // TODO This can be done independently on a separate stream
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                          global_partition_sizes.begin(),
                          global_partition_sizes.end(),
                          global_partition_sizes.begin());
@@ -584,7 +584,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                                           scanned_block_partition_sizes.data(),
                                                           grid_size,
                                                           stream,
-                                                          mr);
+                                                          resources);
     });
 
     if (has_nested_nulls(input)) {
@@ -600,7 +600,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
       // Handle bitmask using gather to take advantage of ballot_sync
       detail::gather_bitmask(
-        input, gather_map.begin(), output_cols, detail::gather_bitmask_op::DONT_CHECK, stream, mr);
+        input, gather_map.begin(), output_cols, detail::gather_bitmask_op::DONT_CHECK, stream, resources);
     }
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
@@ -617,7 +617,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
       row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
     // Use the resulting scatter map to materialize the output
-    auto output = detail::scatter(input, row_partition_numbers, input, stream, mr);
+    auto output = detail::scatter(input, row_partition_numbers, input, stream, resources);
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
     return std::pair(std::move(output), std::move(partition_offsets));
@@ -650,7 +650,7 @@ struct dispatch_map_type {
     column_view const& partition_map,
     size_type num_partitions,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+    cudf::memory_resources resources) const
     requires(is_index_type<MapType>())
   {
     // Build a histogram of the number of rows in each partition
@@ -684,7 +684,7 @@ struct dispatch_map_type {
     // `histogram` was created with an extra entry at the end such that an
     // exclusive scan will put the total number of rows at the end
     thrust::exclusive_scan(
-      rmm::exec_policy(stream), histogram.begin(), histogram.end(), histogram.begin());
+      rmm::exec_policy(stream, resources.get_temporary_mr()), histogram.begin(), histogram.end(), histogram.begin());
 
     // Copy offsets to host before the transform below modifies the histogram
     auto const partition_offsets = cudf::detail::make_std_vector(histogram, stream);
@@ -695,7 +695,7 @@ struct dispatch_map_type {
 
     // For each `partition_map[i]`, atomically increment the corresponding
     // partition offset to determine `i`s location in the output
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       partition_map.begin<MapType>(),
                       partition_map.end<MapType>(),
                       scatter_map.begin(),
@@ -704,7 +704,7 @@ struct dispatch_map_type {
                       });
 
     // Scatter the rows into their partitions
-    auto scattered = detail::scatter(t, scatter_map, t, stream, mr);
+    auto scattered = detail::scatter(t, scatter_map, t, stream, resources);
 
     return std::pair(std::move(scattered), std::move(partition_offsets));
   }
@@ -753,7 +753,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   int num_partitions,
   uint32_t seed,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto table_to_hash = input.select(columns_to_hash);
 
@@ -764,10 +764,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   if (has_nested_nulls(table_to_hash)) {
     return hash_partition_table<hash_function, true>(
-      input, table_to_hash, num_partitions, seed, stream, mr);
+      input, table_to_hash, num_partitions, seed, stream, resources);
   } else {
     return hash_partition_table<hash_function, false>(
-      input, table_to_hash, num_partitions, seed, stream, mr);
+      input, table_to_hash, num_partitions, seed, stream, resources);
   }
 }
 }  // namespace
@@ -777,7 +777,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   column_view const& partition_map,
   size_type num_partitions,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(t.num_rows() == partition_map.size(),
                "Size mismatch between table and partition map.");
@@ -789,7 +789,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   }
 
   return cudf::type_dispatcher(
-    partition_map.type(), dispatch_map_type{}, t, partition_map, num_partitions, stream, mr);
+    partition_map.type(), dispatch_map_type{}, t, partition_map, num_partitions, stream, resources);
 }
 }  // namespace detail
 
@@ -801,7 +801,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   hash_id hash_function,
   uint32_t seed,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
@@ -812,10 +812,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
           CUDF_FAIL("IdentityHash does not support this data type");
       }
       return detail::hash_partition<cudf::detail::IdentityHash>(
-        input, columns_to_hash, num_partitions, seed, stream, mr);
+        input, columns_to_hash, num_partitions, seed, stream, resources);
     case (hash_id::HASH_MURMUR3):
       return detail::hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
-        input, columns_to_hash, num_partitions, seed, stream, mr);
+        input, columns_to_hash, num_partitions, seed, stream, resources);
     default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }
 }
@@ -826,10 +826,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   column_view const& partition_map,
   size_type num_partitions,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(t, partition_map, num_partitions, stream, mr);
+  return detail::partition(t, partition_map, num_partitions, stream, resources);
 }
 
 }  // namespace cudf

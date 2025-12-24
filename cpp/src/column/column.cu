@@ -36,7 +36,7 @@
 namespace cudf {
 
 // Copy ctor w/ optional stream/mr
-column::column(column const& other, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+column::column(column const& other, rmm::cuda_stream_view stream, cudf::memory_resources resources)
   : _type{other._type},
     _size{other._size},
     _data{other._data, stream, mr},
@@ -45,7 +45,8 @@ column::column(column const& other, rmm::cuda_stream_view stream, rmm::device_as
 {
   _children.reserve(other.num_children());
   for (auto const& c : other._children) {
-    _children.emplace_back(std::make_unique<column>(*c, stream, mr));
+    _children.emplace_back(std::make_unique<column>(*c, stream,
+                  resources));
   }
 }
 
@@ -164,7 +165,7 @@ struct create_column_from_view {
     requires(std::is_same_v<ColumnType, cudf::string_view>)
   {
     cudf::strings_column_view sview(view);
-    return cudf::strings::detail::copy_slice(sview, 0, view.size(), stream, mr);
+    return cudf::strings::detail::copy_slice(sview, 0, view.size(), stream, resources);
   }
 
   template <typename ColumnType>
@@ -180,13 +181,16 @@ struct create_column_from_view {
                                       nullptr,
                                       0,
                                       dict_view.offset());
-      children.emplace_back(std::make_unique<column>(indices_view, stream, mr));
-      children.emplace_back(std::make_unique<column>(dict_view.keys(), stream, mr));
+      children.emplace_back(std::make_unique<column>(indices_view, stream,
+                  resources));
+      children.emplace_back(std::make_unique<column>(dict_view.keys(), stream,
+                  resources));
     }
     return std::make_unique<column>(view.type(),
                                     view.size(),
                                     rmm::device_buffer{0, stream, mr},
-                                    cudf::detail::copy_bitmask(view, stream, mr),
+                                    cudf::detail::copy_bitmask(view, stream,
+                  resources),
                                     view.null_count(),
                                     std::move(children));
   }
@@ -195,7 +199,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
     requires(cudf::is_fixed_width<ColumnType>())
   {
-    auto op       = [&](auto const& child) { return std::make_unique<column>(child, stream, mr); };
+    auto op       = [&](auto const& child) { return std::make_unique<column>(child, stream, resources); };
     auto begin    = thrust::make_transform_iterator(view.child_begin(), op);
     auto children = std::vector<std::unique_ptr<column>>(begin, begin + view.num_children());
 
@@ -207,7 +211,8 @@ struct create_column_from_view {
         view.size() * cudf::size_of(view.type()),
         stream,
         mr},
-      cudf::detail::copy_bitmask(view, stream, mr),
+      cudf::detail::copy_bitmask(view, stream,
+                  resources),
       view.null_count(),
       std::move(children));
   }
@@ -217,7 +222,7 @@ struct create_column_from_view {
     requires(std::is_same_v<ColumnType, cudf::list_view>)
   {
     auto lists_view = lists_column_view(view);
-    return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream, mr);
+    return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream, resources);
   }
 
   template <typename ColumnType>
@@ -236,7 +241,7 @@ struct create_column_from_view {
                    std::back_inserter(children),
                    [begin, end, stream = this->stream, mr = this->mr](auto child) {
                      return std::make_unique<column>(
-                       cudf::detail::slice(child, begin, end, stream), stream, mr);
+                       cudf::detail::slice(child, begin, end, stream), stream, resources);
                    });
 
     auto num_rows = view.size();
@@ -244,15 +249,16 @@ struct create_column_from_view {
     return make_structs_column(num_rows,
                                std::move(children),
                                view.null_count(),
-                               cudf::detail::copy_bitmask(view.null_mask(), begin, end, stream, mr),
+                               cudf::detail::copy_bitmask(view.null_mask(), begin, end, stream,
+                  resources),
                                stream,
-                               mr);
+                               resources);
   }
 };
 }  // anonymous namespace
 
 // Copy from a view
-column::column(column_view view, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+column::column(column_view view, rmm::cuda_stream_view stream, cudf::memory_resources resources)
   :  // Move is needed here because the dereference operator of unique_ptr returns
      // an lvalue reference, which would otherwise dispatch to the copy constructor
     column{std::move(*type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))}

@@ -181,7 +181,7 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
 std::unique_ptr<table> contains_multiple(strings_column_view const& input,
                                          strings_column_view const& targets,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_EXPECTS(
     not targets.is_empty(), "Must specify at least one target string.", std::invalid_argument);
@@ -191,8 +191,8 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
   auto const d_targets = column_device_view::create(targets.parent(), stream);
 
   // copy the first byte of each target and sort them
-  auto first_bytes = rmm::device_uvector<u_char>(targets.size(), stream);
-  auto indices     = rmm::device_uvector<size_type>(targets.size(), stream);
+  auto first_bytes = rmm::device_uvector<u_char>(targets.size(), stream, resources.get_temporary_mr());
+  auto indices     = rmm::device_uvector<size_type>(targets.size(), stream, resources.get_temporary_mr());
   {
     auto tgt_itr = thrust::make_transform_iterator(
       d_targets->begin<string_view>(),
@@ -209,16 +209,16 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
     std::size_t tmp_bytes = 0;
     cub::DeviceMergeSort::SortPairsCopy(
       nullptr, tmp_bytes, tgt_itr, count_itr, keys_out, vals_out, num_items, cmp_op, sv);
-    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, resources.get_temporary_mr());
     cub::DeviceMergeSort::SortPairsCopy(
       tmp_stg.data(), tmp_bytes, tgt_itr, count_itr, keys_out, vals_out, num_items, cmp_op, sv);
   }
 
   // remove duplicates to help speed up lower_bound
-  auto offsets = rmm::device_uvector<size_type>(targets.size(), stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end());
+  auto offsets = rmm::device_uvector<size_type>(targets.size(), stream, resources.get_temporary_mr());
+  thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), offsets.begin(), offsets.end());
   auto const end = thrust::unique_by_key(
-    rmm::exec_policy_nosync(stream), first_bytes.begin(), first_bytes.end(), offsets.begin());
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), first_bytes.begin(), first_bytes.end(), offsets.begin());
   auto const unique_count =
     static_cast<size_type>(cuda::std::distance(first_bytes.begin(), end.first));
 
@@ -226,10 +226,11 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
   auto const results_iter = cudf::detail::make_counting_transform_iterator(0, [&](int i) {
     return make_numeric_column(data_type{type_id::BOOL8},
                                input.size(),
-                               cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                               cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                input.null_count(),
                                stream,
-                               mr);
+                               resources);
   });
   auto results = std::vector<std::unique_ptr<column>>(results_iter, results_iter + targets.size());
   auto d_results = [&] {
@@ -239,7 +240,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
       });
     auto host_results_pointers =
       std::vector<bool*>(host_results_pointer_iter, host_results_pointer_iter + results.size());
-    return cudf::detail::make_device_uvector_async(host_results_pointers, stream, mr);
+    return cudf::detail::make_device_uvector_async(host_results_pointers, stream, resources);
   }();
 
   constexpr cudf::thread_index_type block_size = 256;
@@ -273,7 +274,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
       (targets.size() <= targets_threshold) ? (block_size * targets.size()) : 0;
     auto const work_mem_size =
       (targets.size() <= targets_threshold) ? 0 : tile_size * targets.size() * input.size();
-    auto working_memory = rmm::device_uvector<bool>(work_mem_size, stream);
+    auto working_memory = rmm::device_uvector<bool>(work_mem_size, stream, resources.get_temporary_mr());
 
     cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()) * tile_size,
                                block_size};
@@ -297,10 +298,10 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
 std::unique_ptr<table> contains_multiple(strings_column_view const& strings,
                                          strings_column_view const& targets,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_multiple(strings, targets, stream, mr);
+  return detail::contains_multiple(strings, targets, stream, resources);
 }
 
 }  // namespace strings

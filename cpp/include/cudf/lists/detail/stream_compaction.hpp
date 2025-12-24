@@ -21,7 +21,7 @@ namespace lists::detail {
 std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr);
+                                           cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::lists::distinct(lists_column_view const&, null_equality, nan_equality,
@@ -32,7 +32,7 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                                  nan_equality nans_equal,
                                  duplicate_keep_option keep_option,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 
 }  // namespace lists::detail
 }  // namespace CUDF_EXPORT cudf

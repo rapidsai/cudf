@@ -22,9 +22,9 @@ std::unique_ptr<cudf::scalar> quantile(column_view const& col,
                                        cudf::interpolation interpolation,
                                        cudf::data_type const output_type,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
-  auto current_mr = cudf::get_current_device_resource_ref();
+  auto current_mr = resources.get_temporary_mr();
   auto sorted_indices =
     cudf::detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
   auto valid_sorted_indices =
@@ -34,13 +34,13 @@ std::unique_ptr<cudf::scalar> quantile(column_view const& col,
   auto exact   = output_type.id() == cudf::type_id::FLOAT64;
   auto col_ptr = cudf::detail::quantile(
     col, {quantile_value}, interpolation, valid_sorted_indices, exact, stream, current_mr);
-  auto result = cudf::detail::get_element(*col_ptr, 0, stream, mr);
+  auto result = cudf::detail::get_element(*col_ptr, 0, stream, resources);
   if (result->type().id() == output_type.id()) { return result; }
   return cudf::type_dispatcher(output_type,
                                cudf::reduction::simple::detail::cast_numeric_scalar_fn<double>{},
                                static_cast<numeric_scalar<double>*>(result.get()),
                                stream,
-                               mr);
+                               resources);
 }
 }  // namespace detail
 }  // namespace reduction

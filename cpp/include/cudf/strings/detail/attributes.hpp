@@ -17,7 +17,7 @@ namespace detail {
  */
 std::unique_ptr<column> count_characters(strings_column_view const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr);
+                                         cudf::memory_resources resources);
 
 }  // namespace detail
 }  // namespace strings

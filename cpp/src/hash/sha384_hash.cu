@@ -60,19 +60,19 @@ struct SHA384Hash : HashBase<SHA384Hash> {
 
 std::unique_ptr<column> sha384(table_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
-  return sha_hash<SHA384Hash>(input, stream, mr);
+  return sha_hash<SHA384Hash>(input, stream, resources);
 }
 
 }  // namespace detail
 
 std::unique_ptr<column> sha384(table_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::sha384(input, stream, mr);
+  return detail::sha384(input, stream, resources);
 }
 
 }  // namespace hashing

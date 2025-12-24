@@ -129,7 +129,7 @@ void find_matches_in_hash_table(HashTableType const& hash_table,
   } else {
     auto stencil = thrust::counting_iterator<size_type>{0};
     auto const row_bitmask =
-      cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
+      cudf::detail::bitmask_and(probe, stream, resources.get_temporary_mr()).first;
     auto const pred =
       cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
 
@@ -188,7 +188,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
     } else {
       auto stencil = thrust::counting_iterator<size_type>{0};
       auto const row_bitmask =
-        cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref()).first;
+        cudf::detail::bitmask_and(_build, stream, resources.get_temporary_mr()).first;
       auto const pred =
         cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
 
@@ -221,7 +221,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 distinct_hash_join::inner_join(cudf::table_view const& probe,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr) const
+                               cudf::memory_resources resources) const
 {
   cudf::scoped_range range{"distinct_hash_join::inner_join"};
 
@@ -229,16 +229,18 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
 
   // If output size is zero, return immediately
   if (probe_table_num_rows == 0) {
-    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream,
+                  resources),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream,
+                  resources));
   }
 
   auto build_indices =
-    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
+    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, resources);
   auto probe_indices =
-    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
+    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, resources);
 
-  auto found_indices = rmm::device_uvector<size_type>(probe_table_num_rows, stream);
+  auto found_indices = rmm::device_uvector<size_type>(probe_table_num_rows, stream, resources.get_temporary_mr());
   auto const found_begin =
     thrust::make_transform_output_iterator(found_indices.begin(), output_fn{});
 
@@ -302,7 +304,7 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
   auto const output_begin =
     thrust::make_zip_iterator(build_indices->begin(), probe_indices->begin());
   auto const output_end =
-    thrust::copy_if(rmm::exec_policy_nosync(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     tuple_iter,
                     tuple_iter + probe_table_num_rows,
                     found_indices.begin(),
@@ -320,7 +322,7 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
 std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
   cudf::table_view const& probe,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  cudf::memory_resources resources) const
 {
   cudf::scoped_range range{"distinct_hash_join::left_join"};
 
@@ -328,11 +330,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
 
   // If output size is zero, return empty
   if (probe_table_num_rows == 0) {
-    return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
+    return std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources);
   }
 
   auto build_indices =
-    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
+    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, resources);
   auto const output_begin =
     thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
 
@@ -358,7 +360,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
   } else {
     // If build table is empty, return probe table
     if (this->_build.num_rows() == 0) {
-      thrust::fill(rmm::exec_policy_nosync(stream),
+      thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                    build_indices->begin(),
                    build_indices->end(),
                    cudf::JoinNoMatch);
@@ -414,16 +416,16 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 distinct_hash_join::inner_join(cudf::table_view const& probe,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr) const
+                               cudf::memory_resources resources) const
 {
-  return _impl->inner_join(probe, stream, mr);
+  return _impl->inner_join(probe, stream, resources);
 }
 
 std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
   cudf::table_view const& probe,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  cudf::memory_resources resources) const
 {
-  return _impl->left_join(probe, stream, mr);
+  return _impl->left_join(probe, stream, resources);
 }
 }  // namespace cudf

@@ -46,7 +46,7 @@ struct all_fn {
   template <typename T>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(std::is_arithmetic_v<T>)
   {
     auto const d_dict = cudf::column_device_view::create(input, stream);
@@ -57,12 +57,12 @@ struct all_fn {
       return thrust::make_transform_iterator(pair_iter, null_iter);
     }();
     auto d_result =
-      cudf::detail::device_scalar<int32_t>(1, stream, cudf::get_current_device_resource_ref());
-    thrust::for_each_n(rmm::exec_policy(stream),
+      cudf::detail::device_scalar<int32_t>(1, stream, resources.get_temporary_mr());
+    thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                        thrust::make_counting_iterator<size_type>(0),
                        input.size(),
                        all_true_fn<decltype(iter)>{iter, d_result.data()});
-    return std::make_unique<numeric_scalar<bool>>(d_result.value(stream), true, stream, mr);
+    return std::make_unique<numeric_scalar<bool>>(d_result.value(stream), true, stream, resources);
   }
   template <typename T>
   std::unique_ptr<scalar> operator()(column_view const&,
@@ -80,18 +80,18 @@ std::unique_ptr<cudf::scalar> all(column_view const& col,
                                   cudf::data_type const output_dtype,
                                   std::optional<std::reference_wrapper<scalar const>> init,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "all() operation can be applied with output type `BOOL8` only");
 
   if (cudf::is_dictionary(col.type())) {
     return cudf::type_dispatcher(
-      dictionary_column_view(col).keys().type(), detail::all_fn{}, col, stream, mr);
+      dictionary_column_view(col).keys().type(), detail::all_fn{}, col, stream, resources);
   }
   using reducer = simple::detail::bool_result_element_dispatcher<op::min>;
   // dispatch for non-dictionary types
-  return cudf::type_dispatcher(col.type(), reducer{}, col, init, stream, mr);
+  return cudf::type_dispatcher(col.type(), reducer{}, col, init, stream, resources);
 }
 
 }  // namespace detail

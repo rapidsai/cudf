@@ -34,7 +34,7 @@ namespace lists::detail {
  */
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr);
+                                    cudf::memory_resources resources);
 
 }  // namespace lists::detail
 }  // namespace CUDF_EXPORT cudf

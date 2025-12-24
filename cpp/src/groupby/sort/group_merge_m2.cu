@@ -65,14 +65,14 @@ std::unique_ptr<column> merge_m2(column_view const& values,
                                  device_span<size_type const> group_offsets,
                                  size_type num_groups,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   auto result_counts = make_numeric_column(
-    data_type(type_to_id<count_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<count_type>()), num_groups, mask_state::UNALLOCATED, stream, resources);
   auto result_means = make_numeric_column(
-    data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, resources);
   auto result_M2s = make_numeric_column(
-    data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, resources);
 
   auto const out_iter =
     thrust::make_zip_iterator(result_counts->mutable_view().template data<count_type>(),
@@ -88,7 +88,7 @@ std::unique_ptr<column> merge_m2(column_view const& values,
                                        count_valid.template begin<count_type>(),
                                        mean_values.template begin<result_type>(),
                                        M2_values.template begin<result_type>()};
-  thrust::transform(rmm::exec_policy_nosync(stream), iter, iter + num_groups, out_iter, fn);
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), iter, iter + num_groups, out_iter, fn);
 
   // Output is a structs column containing the merged values of `COUNT_VALID`, `MEAN`, and `M2`.
   std::vector<std::unique_ptr<column>> out_columns;
@@ -96,7 +96,7 @@ std::unique_ptr<column> merge_m2(column_view const& values,
   out_columns.emplace_back(std::move(result_means));
   out_columns.emplace_back(std::move(result_M2s));
   return make_structs_column(
-    num_groups, std::move(out_columns), 0, rmm::device_buffer{0, stream, mr}, stream, mr);
+    num_groups, std::move(out_columns), 0, rmm::device_buffer{0, stream, mr}, stream, resources);
 }
 
 }  // namespace
@@ -105,7 +105,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        device_span<size_type const> group_offsets,
                                        size_type num_groups,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_EXPECTS(values.type().id() == type_id::STRUCT,
                "Input to `group_merge_m2` must be a structs column.");
@@ -123,8 +123,9 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                "Input to `group_merge_m2` has invalid children type.");
 
   return count_type_id == type_id::INT64
-           ? merge_m2<int64_t>(values, group_offsets, num_groups, stream, mr)
-           : merge_m2<result_type>(values, group_offsets, num_groups, stream, mr);
+           ? merge_m2<int64_t>(values, group_offsets, num_groups, stream,
+                  resources)
+           : merge_m2<result_type>(values, group_offsets, num_groups, stream, resources);
 }
 
 }  // namespace detail

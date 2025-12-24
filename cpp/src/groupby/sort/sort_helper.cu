@@ -89,7 +89,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
                                                numeric_scalar<size_type>(0, true, stream),
                                                numeric_scalar<size_type>(1, true, stream),
                                                stream,
-                                               cudf::get_current_device_resource_ref());
+                                               resources.get_temporary_mr());
     return sliced_key_sorted_order();
   }
 
@@ -98,7 +98,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
                               ? std::vector(_keys.num_columns(), null_order::AFTER)
                               : _null_precedence;
     _key_sorted_order     = cudf::detail::stable_sorted_order(
-      _keys, {}, precedence, stream, cudf::get_current_device_resource_ref());
+      _keys, {}, precedence, stream, resources.get_temporary_mr());
   } else {  // Pandas style
     // Temporarily prepend the keys table with a column that indicates the
     // presence of a null value within a row. This allows moving all rows that
@@ -114,7 +114,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
     }();
 
     _key_sorted_order = cudf::detail::stable_sorted_order(
-      augmented_keys, {}, precedence, stream, cudf::get_current_device_resource_ref());
+      augmented_keys, {}, precedence, stream, resources.get_temporary_mr());
 
     // All rows with one or more null values are at the end of the resulting sorted order.
   }
@@ -143,13 +143,13 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
     // Using a temporary buffer for intermediate transform results from the iterator containing
     // the comparator speeds up compile-time significantly without much degradation in
     // runtime performance over using the comparator directly in thrust::unique_copy.
-    auto result       = rmm::device_uvector<bool>(size, stream);
+    auto result       = rmm::device_uvector<bool>(size, stream, resources.get_temporary_mr());
     auto const itr    = thrust::make_counting_iterator<size_type>(0);
     auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
     auto const ufn    = cudf::detail::unique_copy_fn<decltype(itr), decltype(row_eq)>{
       itr, duplicate_keep_option::KEEP_FIRST, row_eq, size - 1};
-    thrust::transform(rmm::exec_policy(stream), itr, itr + size, result.begin(), ufn);
-    result_end = thrust::copy_if(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()), itr, itr + size, result.begin(), ufn);
+    result_end = thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                  itr,
                                  itr + size,
                                  result.begin(),
@@ -158,7 +158,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   } else {
     auto const d_key_equal = comparator.equal_to<false>(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
-    result_end = thrust::unique_copy(rmm::exec_policy(stream),
+    result_end = thrust::unique_copy(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                      thrust::counting_iterator<size_type>(0),
                                      thrust::counting_iterator<size_type>(size),
                                      group_offsets->begin(),
@@ -212,7 +212,7 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
                           scatter_map,
                           table_view({temp_labels->view()}),
                           stream,
-                          cudf::get_current_device_resource_ref());
+                          resources.get_temporary_mr());
 
   _unsorted_keys_labels = std::move(t_unsorted_keys_labels->release()[0]);
 
@@ -224,13 +224,13 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
   if (_keys_bitmask_column) return _keys_bitmask_column->view();
 
   auto [row_bitmask, null_count] =
-    cudf::detail::bitmask_and(_keys, stream, cudf::get_current_device_resource_ref());
+    cudf::detail::bitmask_and(_keys, stream, resources.get_temporary_mr());
 
   auto const zero = numeric_scalar<int8_t>(0, true, stream);
   // Create a temporary variable and only set _keys_bitmask_column right before the return.
   // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto keys_bitmask_column = cudf::detail::sequence(
-    _keys.num_rows(), zero, zero, stream, cudf::get_current_device_resource_ref());
+    _keys.num_rows(), zero, zero, stream, resources.get_temporary_mr());
   keys_bitmask_column->set_null_mask(std::move(row_bitmask), null_count);
 
   _keys_bitmask_column = std::move(keys_bitmask_column);
@@ -238,14 +238,14 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
 }
 
 sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
-  column_view const& values, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  column_view const& values, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
   column_ptr values_sort_order =
     cudf::detail::stable_sorted_order(table_view({unsorted_keys_labels(stream), values}),
                                       {},
                                       std::vector<null_order>(2, null_order::AFTER),
                                       stream,
-                                      mr);
+                                      resources);
 
   // Zero-copy slice this sort order so that its new size is num_keys()
   column_view gather_map =
@@ -256,13 +256,13 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
                                                   cudf::out_of_bounds_policy::DONT_CHECK,
                                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                   stream,
-                                                  mr);
+                                                  resources);
 
   return std::move(sorted_values_table->release()[0]);
 }
 
 sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
-  column_view const& values, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  column_view const& values, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
   auto gather_map = key_sort_order(stream);
 
@@ -271,13 +271,13 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
                                                    cudf::out_of_bounds_policy::DONT_CHECK,
                                                    cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                    stream,
-                                                   mr);
+                                                   resources);
 
   return std::move(grouped_values_table->release()[0]);
 }
 
 std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view stream,
-                                                        rmm::device_async_resource_ref mr)
+                                                        cudf::memory_resources resources)
 {
   auto idx_data = key_sort_order(stream).data<size_type>();
 
@@ -291,18 +291,18 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
                               gather_map_it + num_groups(stream),
                               out_of_bounds_policy::DONT_CHECK,
                               stream,
-                              mr);
+                              resources);
 }
 
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view stream,
-                                                        rmm::device_async_resource_ref mr)
+                                                        cudf::memory_resources resources)
 {
   return cudf::detail::gather(_keys,
                               key_sort_order(stream),
                               cudf::out_of_bounds_policy::DONT_CHECK,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,
                               stream,
-                              mr);
+                              resources);
 }
 
 }  // namespace sort

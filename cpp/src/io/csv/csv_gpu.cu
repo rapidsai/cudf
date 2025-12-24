@@ -759,7 +759,7 @@ size_t __host__ count_blank_rows(cudf::io::parse_options_view const& opts,
   auto const comment  = opts.comment != '\0' ? opts.comment : newline;
   auto const carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
   return thrust::count_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, newline, comment, carriage] __device__(uint64_t const pos) {
@@ -778,7 +778,7 @@ device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view co
   auto const comment  = options.comment != '\0' ? options.comment : newline;
   auto const carriage = (options.skipblanklines && options.terminator == '\n') ? '\r' : comment;
   auto new_end        = thrust::remove_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, d_size, newline, comment, carriage] __device__(uint64_t const pos) {
@@ -801,7 +801,7 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   int const grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
   auto d_stats = cudf::detail::make_zeroed_device_uvector_async<column_type_histogram>(
-    num_active_columns, stream, cudf::get_current_device_resource_ref());
+    num_active_columns, stream, resources.get_temporary_mr());
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
@@ -842,7 +842,7 @@ uint32_t __host__ gather_row_offsets(parse_options_view const& options,
                                      rmm::cuda_stream_view stream)
 {
   uint32_t dim_grid = 1 + (chunk_size / rowofs_block_bytes);
-  auto ctxtree      = rmm::device_uvector<packed_rowctx_t>(dim_grid * bk_ctxtree_size, stream);
+  auto ctxtree      = rmm::device_uvector<packed_rowctx_t>(dim_grid * bk_ctxtree_size, stream, resources.get_temporary_mr());
 
   gather_row_offsets_gpu<<<dim_grid, rowofs_block_dim, 0, stream.value()>>>(
     row_ctx,

@@ -25,7 +25,7 @@ namespace detail {
  */
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr);
+                                   cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::to_dlpack
@@ -34,7 +34,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
  */
 DLManagedTensor* to_dlpack(table_view const& input,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr);
+                           cudf::memory_resources resources);
 
 /**
  * @brief Return a maximum precision for a given type.

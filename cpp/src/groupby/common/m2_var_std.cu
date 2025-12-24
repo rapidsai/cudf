@@ -43,7 +43,7 @@ struct m2_functor {
                 size_type size,
                 rmm::cuda_stream_view stream) const noexcept
   {
-    thrust::tabulate(rmm::exec_policy_nosync(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      target,
                      target + size,
                      [sum_sqr, sum, count] __device__(size_type const idx) {
@@ -87,13 +87,13 @@ std::unique_ptr<column> compute_m2(data_type source_type,
                                    column_view const& sum,
                                    column_view const& count,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   auto output = make_numeric_column(cudf::detail::target_type(source_type, aggregation::M2),
                                     sum.size(),
                                     mask_state::UNALLOCATED,
                                     stream,
-                                    mr);
+                                    resources);
   type_dispatcher(source_type, m2_functor{}, output->mutable_view(), sum_sqr, sum, count, stream);
   return output;
 }
@@ -121,10 +121,10 @@ template <typename TargetType, typename TransformFunc>
 std::unique_ptr<column> compute_variance_std(TransformFunc&& transform_fn,
                                              size_type size,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   auto output = make_numeric_column(
-    data_type(type_to_id<TargetType>()), size, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<TargetType>()), size, mask_state::UNALLOCATED, stream, resources);
 
   // Since we may have new null rows depending on the group count, we need to generate a new null
   // mask from scratch.
@@ -132,10 +132,10 @@ std::unique_ptr<column> compute_variance_std(TransformFunc&& transform_fn,
 
   auto const out_it =
     thrust::make_zip_iterator(output->mutable_view().begin<TargetType>(), validity.begin());
-  thrust::tabulate(rmm::exec_policy_nosync(stream), out_it, out_it + size, transform_fn);
+  thrust::tabulate(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), out_it, out_it + size, transform_fn);
 
   auto [null_mask, null_count] =
-    cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
+    cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, resources);
   if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
 
   return output;
@@ -147,7 +147,7 @@ std::unique_ptr<column> compute_variance(column_view const& m2,
                                          column_view const& count,
                                          size_type ddof,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   check_input_types(m2, count);
 
@@ -159,14 +159,14 @@ std::unique_ptr<column> compute_variance(column_view const& m2,
     if (group_count == 0 || df <= 0) { return {VarianceType{}, false}; }
     return {m2[idx] / df, true};
   };
-  return compute_variance_std<VarianceType>(transform_func, m2.size(), stream, mr);
+  return compute_variance_std<VarianceType>(transform_func, m2.size(), stream, resources);
 }
 
 std::unique_ptr<column> compute_std(column_view const& m2,
                                     column_view const& count,
                                     size_type ddof,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   check_input_types(m2, count);
 
@@ -178,7 +178,7 @@ std::unique_ptr<column> compute_std(column_view const& m2,
     if (group_count == 0 || df <= 0) { return {StdType{}, false}; }
     return {cuda::std::sqrt(m2[idx] / df), true};
   };
-  return compute_variance_std<StdType>(transform_func, m2.size(), stream, mr);
+  return compute_variance_std<StdType>(transform_func, m2.size(), stream, resources);
 }
 
 }  // namespace cudf::groupby::detail

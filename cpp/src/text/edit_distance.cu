@@ -278,7 +278,7 @@ CUDF_KERNEL void levenshtein_kernel(cudf::column_device_view d_strings,
 std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& input,
                                             cudf::strings_column_view const& targets,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
   if (input.is_empty()) { return cudf::make_empty_column(output_type); }
@@ -296,7 +296,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& inp
 
   // calculate the size of the compute-buffer
   rmm::device_uvector<std::ptrdiff_t> offsets(input.size() + 1, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(input.size()),
                     offsets.begin(),
@@ -310,7 +310,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& inp
   auto d_buffer = compute_buffer.data();
 
   auto results = cudf::make_fixed_width_column(
-    output_type, input.size(), rmm::device_buffer{0, stream, mr}, 0, stream, mr);
+    output_type, input.size(), rmm::device_buffer{0, stream, mr}, 0, stream, resources);
   auto d_results = results->mutable_view().data<cudf::size_type>();
 
   constexpr auto block_size = 256L;
@@ -373,7 +373,7 @@ struct calculate_matrix_compute_buffer_fn {
  */
 std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view const& input,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+                                                   cudf::memory_resources resources)
 {
   auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
   if (input.is_empty()) { return cudf::make_empty_column(output_type); }
@@ -393,8 +393,8 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   auto const n_upper     = (input.size() * (input.size() - 1L)) / 2L;
   auto const output_size = input.size() * input.size();
   rmm::device_uvector<std::ptrdiff_t> offsets(n_upper + 1, stream);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end(), 0);
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), offsets.begin(), offsets.end(), 0);
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::counting_iterator<cudf::size_type>(0),
                      output_size,
                      calculate_matrix_compute_buffer_fn{*d_strings, offsets.data()});
@@ -410,10 +410,10 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
 
   // compute the edit distance into the output column
   auto results = cudf::make_fixed_width_column(
-    output_type, output_size, rmm::device_buffer{0, stream, mr}, 0, stream, mr);
+    output_type, output_size, rmm::device_buffer{0, stream, mr}, 0, stream, resources);
   auto d_results = results->mutable_view().data<cudf::size_type>();
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::counting_iterator<cudf::size_type>(0),
     output_size,
     edit_distance_matrix_levenshtein_algorithm{*d_strings, d_buffer, offsets.data(), d_results});
@@ -424,14 +424,14 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
                            cudf::numeric_scalar<cudf::size_type>(0, true, stream),
                            cudf::numeric_scalar<cudf::size_type>(input.size(), true, stream),
                            stream,
-                           mr);
+                           resources);
   return cudf::make_lists_column(input.size(),
                                  std::move(offsets_column),
                                  std::move(results),
                                  0,  // no nulls
                                  rmm::device_buffer{0, stream, mr},
                                  stream,
-                                 mr);
+                                 resources);
 }
 
 }  // namespace detail
@@ -444,10 +444,10 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
 std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& input,
                                             cudf::strings_column_view const& targets,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::edit_distance(input, targets, stream, mr);
+  return detail::edit_distance(input, targets, stream, resources);
 }
 
 /**
@@ -455,10 +455,10 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& inp
  */
 std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view const& input,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+                                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::edit_distance_matrix(input, stream, mr);
+  return detail::edit_distance_matrix(input, stream, resources);
 }
 
 }  // namespace nvtext

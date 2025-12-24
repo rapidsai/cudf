@@ -42,7 +42,7 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
                                    size_type source_end,
                                    size_type target_begin,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr);
+                                   cudf::memory_resources resources);
 
 }  // namespace strings::detail
 }  // namespace CUDF_EXPORT cudf

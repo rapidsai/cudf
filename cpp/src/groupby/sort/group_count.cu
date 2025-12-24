@@ -27,14 +27,14 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
                                           cudf::device_span<size_type const> group_labels,
                                           size_type num_groups,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 
   auto result = make_numeric_column(
-    data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, resources);
 
   if (num_groups == 0) { return result; }
 
@@ -49,14 +49,14 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
                                         return static_cast<size_type>(b);
                                       }));
 
-    thrust::reduce_by_key(rmm::exec_policy(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                           group_labels.begin(),
                           group_labels.end(),
                           bitmask_iterator,
                           thrust::make_discard_iterator(),
                           result->mutable_view().begin<size_type>());
   } else {
-    thrust::reduce_by_key(rmm::exec_policy(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                           group_labels.begin(),
                           group_labels.end(),
                           thrust::make_constant_iterator(1),
@@ -70,16 +70,16 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
 std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group_offsets,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
 
   auto result = make_numeric_column(
-    data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, resources);
 
   if (num_groups == 0) { return result; }
 
-  thrust::adjacent_difference(rmm::exec_policy(stream),
+  thrust::adjacent_difference(rmm::exec_policy(stream, resources.get_temporary_mr()),
                               group_offsets.begin() + 1,
                               group_offsets.end(),
                               result->mutable_view().begin<size_type>());

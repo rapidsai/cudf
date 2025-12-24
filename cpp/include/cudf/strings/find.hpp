@@ -46,7 +46,7 @@ std::unique_ptr<column> find(
   size_type start                   = 0,
   size_type stop                    = -1,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a column of character position values where the target
@@ -77,7 +77,7 @@ std::unique_ptr<column> rfind(
   size_type start                   = 0,
   size_type stop                    = -1,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a column of character position values where the target
@@ -104,7 +104,7 @@ std::unique_ptr<column> find(
   strings_column_view const& target,
   size_type start                   = 0,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a column of character position values where the index-th target
@@ -137,7 +137,7 @@ std::unique_ptr<column> find_instance(
   string_scalar const& target,
   size_type instance                = 0,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -158,7 +158,7 @@ std::unique_ptr<column> contains(
   strings_column_view const& input,
   string_scalar const& target,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -183,7 +183,7 @@ std::unique_ptr<column> contains(
   strings_column_view const& input,
   strings_column_view const& targets,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -205,7 +205,7 @@ std::unique_ptr<column> starts_with(
   strings_column_view const& input,
   string_scalar const& target,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -231,7 +231,7 @@ std::unique_ptr<column> starts_with(
   strings_column_view const& input,
   strings_column_view const& targets,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -253,7 +253,7 @@ std::unique_ptr<column> ends_with(
   strings_column_view const& input,
   string_scalar const& target,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -279,7 +279,7 @@ std::unique_ptr<column> ends_with(
   strings_column_view const& input,
   strings_column_view const& targets,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace CUDF_EXPORT cudf

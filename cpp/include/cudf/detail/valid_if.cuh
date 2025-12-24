@@ -80,7 +80,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
                                                   InputIterator end,
                                                   Predicate p,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
+                                                  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 

@@ -34,7 +34,7 @@ class device_scalar : public rmm::device_scalar<T> {
 
   explicit device_scalar(
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    cudf::memory_resources resources = cudf::get_current_device_resource_ref())
     : rmm::device_scalar<T>(stream, mr), bounce_buffer{make_pinned_vector<T>(1, stream)}
   {
   }
@@ -42,7 +42,7 @@ class device_scalar : public rmm::device_scalar<T> {
   explicit device_scalar(
     T const& initial_value,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    cudf::memory_resources resources = cudf::get_current_device_resource_ref())
     : rmm::device_scalar<T>(stream, mr), bounce_buffer{make_pinned_vector<T>(1, stream)}
   {
     bounce_buffer[0] = initial_value;
@@ -51,7 +51,7 @@ class device_scalar : public rmm::device_scalar<T> {
 
   device_scalar(device_scalar const& other,
                 rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+                cudf::memory_resources resources = cudf::get_current_device_resource_ref())
     : rmm::device_scalar<T>(other, stream, mr), bounce_buffer{make_pinned_vector<T>(1, stream)}
   {
   }

@@ -308,14 +308,15 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              PatternIterator const patterns_itr,
                              string_view const& d_escape,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   auto results = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   if (input.is_empty()) { return results; }
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
@@ -325,7 +326,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
   if ((input.size() == input.null_count()) ||
       ((last_offset - first_offset) / (input.size() - input.null_count())) <
         AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       results->mutable_view().data<bool>(),
@@ -349,7 +350,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              string_scalar const& pattern,
                              string_scalar const& escape_character,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_EXPECTS(pattern.is_valid(stream), "Parameter pattern must be valid", std::invalid_argument);
   CUDF_EXPECTS(escape_character.is_valid(stream),
@@ -363,25 +364,25 @@ std::unique_ptr<column> like(strings_column_view const& input,
 
   auto const d_pattern    = pattern.value(stream);
   auto const patterns_itr = thrust::make_constant_iterator(d_pattern);
-  return like(input, patterns_itr, d_escape, stream, mr);
+  return like(input, patterns_itr, d_escape, stream, resources);
 }
 
 std::unique_ptr<column> like(strings_column_view const& input,
                              std::string_view const& pattern,
                              std::string_view const& escape_character,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   auto const ptn = string_scalar(pattern, true, stream);
   auto const esc = string_scalar(escape_character, true, stream);
-  return like(input, ptn, esc, stream, mr);
+  return like(input, ptn, esc, stream, resources);
 }
 
 std::unique_ptr<column> like(strings_column_view const& input,
                              strings_column_view const& patterns,
                              string_scalar const& escape_character,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_EXPECTS(patterns.size() == input.size(),
                "Number of patterns must match the input size",
@@ -400,7 +401,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
 
   auto const d_patterns   = column_device_view::create(patterns.parent(), stream);
   auto const patterns_itr = d_patterns->begin<string_view>();
-  return like(input, patterns_itr, d_escape, stream, mr);
+  return like(input, patterns_itr, d_escape, stream, resources);
 }
 
 }  // namespace detail
@@ -411,30 +412,30 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              string_scalar const& pattern,
                              string_scalar const& escape_character,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::like(input, pattern, escape_character, stream, mr);
+  return detail::like(input, pattern, escape_character, stream, resources);
 }
 
 std::unique_ptr<column> like(strings_column_view const& input,
                              std::string_view const& pattern,
                              std::string_view const& escape_character,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::like(input, pattern, escape_character, stream, mr);
+  return detail::like(input, pattern, escape_character, stream, resources);
 }
 
 std::unique_ptr<column> like(strings_column_view const& input,
                              strings_column_view const& patterns,
                              string_scalar const& escape_character,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::like(input, patterns, escape_character, stream, mr);
+  return detail::like(input, patterns, escape_character, stream, resources);
 }
 
 }  // namespace strings

@@ -25,7 +25,7 @@ namespace detail {
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr);
+                                    cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::set_null_mask(bitmask_type*, size_type, size_type, bool)
@@ -199,7 +199,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const* mask,
                                 size_type begin_bit,
                                 size_type end_bit,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr);
+                                cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::copy_bitmask(column_view const& view, rmm::device_async_resource_ref)
@@ -208,7 +208,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const* mask,
  */
 rmm::device_buffer copy_bitmask(column_view const& view,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr);
+                                cudf::memory_resources resources);
 
 /**
  * @copydoc bitmask_and(host_span<bitmask_type const* const>, host_span<size_type> const,
@@ -221,7 +221,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type cons
                                                      host_span<size_type const> masks_begin_bits,
                                                      size_type mask_size_bits,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr);
+                                                     cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::bitmask_and
@@ -230,7 +230,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type cons
  */
 std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr);
+                                                     cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::segmented_bitmask_and
@@ -239,7 +239,7 @@ std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_typ
 segmented_bitmask_and(host_span<column_view const> colviews,
                       host_span<size_type const> segment_offsets,
                       rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr);
+                      cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::bitmask_or
@@ -248,7 +248,7 @@ segmented_bitmask_and(host_span<column_view const> colviews,
  */
 std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr);
+                                                    cudf::memory_resources resources);
 
 /**
  * @brief Performs a bitwise AND of the specified bitmasks,
@@ -281,7 +281,7 @@ cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
 void set_all_valid_null_masks(column_view const& input,
                               column& output,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr);
+                              cudf::memory_resources resources);
 
 }  // namespace detail
 

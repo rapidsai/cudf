@@ -143,7 +143,7 @@ struct format_compiler {
 
     // create program in device memory
     d_items =
-      cudf::detail::make_device_uvector(items, stream, cudf::get_current_device_resource_ref());
+      cudf::detail::make_device_uvector(items, stream, resources.get_temporary_mr());
   }
 
   format_item const* compiled_format_items() { return d_items.data(); }
@@ -387,7 +387,7 @@ struct dispatch_from_durations_fn {
   std::unique_ptr<column> operator()(column_view const& durations,
                                      std::string_view format,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(cudf::is_duration<T>())
   {
     CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
@@ -400,13 +400,13 @@ struct dispatch_from_durations_fn {
     auto d_column           = *column;
 
     // copy null mask
-    rmm::device_buffer null_mask = cudf::detail::copy_bitmask(durations, stream, mr);
+    rmm::device_buffer null_mask = cudf::detail::copy_bitmask(durations, stream, resources);
 
     auto [offsets, chars] =
       make_strings_children(from_durations_fn<T>{d_column, d_format_items, compiler.items_count()},
                             strings_count,
                             stream,
-                            mr);
+                            resources);
 
     return make_strings_column(strings_count,
                                std::move(offsets),
@@ -650,7 +650,7 @@ struct dispatch_to_durations_fn {
     auto d_items   = compiler.compiled_format_items();
     auto d_results = results_view.data<T>();
     parse_duration<T> pfn{d_strings, d_items, compiler.items_count()};
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
                       d_results,
@@ -672,20 +672,20 @@ struct dispatch_to_durations_fn {
 std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string_view format,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   size_type strings_count = durations.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(
-    durations.type(), dispatch_from_durations_fn{}, durations, format, stream, mr);
+    durations.type(), dispatch_from_durations_fn{}, durations, format, stream, resources);
 }
 
 std::unique_ptr<column> to_durations(strings_column_view const& input,
                                      data_type duration_type,
                                      std::string_view format,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
@@ -699,10 +699,11 @@ std::unique_ptr<column> to_durations(strings_column_view const& input,
 
   auto results      = make_duration_column(duration_type,
                                       strings_count,
-                                      cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                      cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                       input.null_count(),
                                       stream,
-                                      mr);
+                                      resources);
   auto results_view = results->mutable_view();
   cudf::type_dispatcher(
     duration_type, dispatch_to_durations_fn(), d_column, format, results_view, stream);
@@ -715,20 +716,20 @@ std::unique_ptr<column> to_durations(strings_column_view const& input,
 std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string_view format,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_durations(durations, format, stream, mr);
+  return detail::from_durations(durations, format, stream, resources);
 }
 
 std::unique_ptr<column> to_durations(strings_column_view const& input,
                                      data_type duration_type,
                                      std::string_view format,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_durations(input, duration_type, format, stream, mr);
+  return detail::to_durations(input, duration_type, format, stream, resources);
 }
 
 }  // namespace strings

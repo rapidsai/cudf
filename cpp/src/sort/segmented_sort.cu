@@ -29,7 +29,7 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
   auto offset_begin  = offsets.begin<size_type>();
   auto offset_end    = offsets.end<size_type>();
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     counting_iter,
                     counting_iter + segment_ids.size(),
                     segment_ids.begin(),
@@ -47,10 +47,10 @@ std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
                                                std::vector<order> const& column_order,
                                                std::vector<null_order> const& null_precedence,
                                                rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
+                                               cudf::memory_resources resources)
 {
   return segmented_sorted_order_common<sort_method::UNSTABLE>(
-    keys, segment_offsets, column_order, null_precedence, stream, mr);
+    keys, segment_offsets, column_order, null_precedence, stream, resources);
 }
 
 std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
@@ -59,10 +59,10 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
                                              std::vector<order> const& column_order,
                                              std::vector<null_order> const& null_precedence,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   return segmented_sort_by_key_common<sort_method::UNSTABLE>(
-    values, keys, segment_offsets, column_order, null_precedence, stream, mr);
+    values, keys, segment_offsets, column_order, null_precedence, stream, resources);
 }
 
 }  // namespace detail
@@ -72,11 +72,11 @@ std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
                                                std::vector<order> const& column_order,
                                                std::vector<null_order> const& null_precedence,
                                                rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
+                                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_sorted_order(
-    keys, segment_offsets, column_order, null_precedence, stream, mr);
+    keys, segment_offsets, column_order, null_precedence, stream, resources);
 }
 
 std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
@@ -85,11 +85,11 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
                                              std::vector<order> const& column_order,
                                              std::vector<null_order> const& null_precedence,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_sort_by_key(
-    values, keys, segment_offsets, column_order, null_precedence, stream, mr);
+    values, keys, segment_offsets, column_order, null_precedence, stream, resources);
 }
 
 }  // namespace cudf

@@ -68,7 +68,7 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
   int32_t decimal_places            = 0,
   rounding_method method            = rounding_method::HALF_UP,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Rounds all the values in a column to the specified number of decimal places.
@@ -107,7 +107,7 @@ std::unique_ptr<column> round_decimal(
   int32_t decimal_places            = 0,
   rounding_method method            = rounding_method::HALF_UP,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

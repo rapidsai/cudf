@@ -108,7 +108,7 @@ struct compute_children_offsets_fn {
         return offsets_pair{lhs.first + rhs.first, lhs.second + rhs.second};
       });
     return cudf::detail::make_device_uvector(
-      offsets, stream, cudf::get_current_device_resource_ref());
+      offsets, stream, resources.get_temporary_mr());
   }
 
  private:
@@ -130,7 +130,7 @@ struct dispatch_compute_indices {
                                      offsets_pair const* d_offsets,
                                      size_type const* d_map_to_keys,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(cudf::is_relationally_comparable<Element, Element>())
   {
     auto keys_view     = column_device_view::create(all_keys, stream);
@@ -156,13 +156,13 @@ struct dispatch_compute_indices {
 
     // create the indices output column
     auto result = make_numeric_column(
-      all_indices.type(), all_indices.size(), mask_state::UNALLOCATED, stream, mr);
+      all_indices.type(), all_indices.size(), mask_state::UNALLOCATED, stream, resources);
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     // new indices values are computed by matching the concatenated keys to the new key set
 
 #ifdef NDEBUG
-    thrust::lower_bound(rmm::exec_policy(stream),
+    thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
                         begin,
                         end,
                         all_itr,
@@ -173,7 +173,7 @@ struct dispatch_compute_indices {
     // There is a problem with thrust::lower_bound and the output_indexalator.
     // https://github.com/NVIDIA/thrust/issues/1452; thrust team created nvbug 3322776
     // This is a workaround.
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       all_itr,
                       all_itr + all_indices.size(),
                       result_itr,
@@ -197,7 +197,7 @@ struct dispatch_compute_indices {
 
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   // exception here is the same behavior as in cudf::concatenate
   CUDF_EXPECTS(not columns.empty(), "Unexpected empty list of columns to concatenate.");
@@ -217,7 +217,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     return keys;
   });
   auto all_keys =
-    cudf::detail::concatenate(keys_views, stream, cudf::get_current_device_resource_ref());
+    cudf::detail::concatenate(keys_views, stream, resources.get_temporary_mr());
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
@@ -227,7 +227,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                            null_equality::EQUAL,
                                            nan_equality::ALL_EQUAL,
                                            stream,
-                                           mr);
+                                           resources);
   auto sorted_keys = cudf::detail::sort(table_keys->view(),
                                         std::vector<order>{order::ASCENDING},
                                         std::vector<null_order>{null_order::BEFORE},
@@ -245,7 +245,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     }
     return dict_view.get_indices_annotated();  // nicely includes validity mask and view offset
   });
-  auto all_indices        = cudf::detail::concatenate(indices_views, stream, mr);
+  auto all_indices        = cudf::detail::concatenate(indices_views, stream, resources);
   auto const indices_size = all_indices->size();
 
   // build a vector of values to map the old indices to the concatenated keys
@@ -257,7 +257,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     }));
   // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     children_offsets.begin() + 1,
     children_offsets.end(),
     indices_itr,
@@ -275,7 +275,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                         children_offsets.data(),
                                         map_to_keys.data(),
                                         stream,
-                                        mr);
+                                        resources);
 
   // remove the bitmask from the all_indices
   auto null_count = all_indices->null_count();  // get before release()

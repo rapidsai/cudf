@@ -102,12 +102,12 @@ class murmur_device_row_hasher {
 std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
                                            uint64_t seed,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   auto output1 = make_numeric_column(
-    data_type(type_id::UINT64), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
+    data_type(type_id::UINT64), input.num_rows(), mask_state::UNALLOCATED, stream, resources);
   auto output2 = make_numeric_column(
-    data_type(type_id::UINT64), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
+    data_type(type_id::UINT64), input.num_rows(), mask_state::UNALLOCATED, stream, resources);
 
   if (!input.is_empty()) {
     bool const nullable   = has_nulls(input);
@@ -116,7 +116,7 @@ std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
     auto d_output2        = output2->mutable_view().data<uint64_t>();
 
     // Compute the hash value for each row
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                        thrust::counting_iterator<size_type>(0),
                        input.num_rows(),
                        murmur_device_row_hasher(nullable, *input_view, seed, d_output1, d_output2));
@@ -133,10 +133,10 @@ std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
 std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
                                            uint64_t seed,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::murmurhash3_x64_128(input, seed, stream, mr);
+  return detail::murmurhash3_x64_128(input, seed, stream, resources);
 }
 
 }  // namespace hashing

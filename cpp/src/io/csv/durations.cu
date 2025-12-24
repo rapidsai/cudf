@@ -164,7 +164,7 @@ struct dispatch_from_durations_fn {
   template <typename T>
   std::unique_ptr<column> operator()(column_view const& durations,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(cudf::is_duration<T>())
   {
     size_type strings_count = durations.size();
@@ -172,21 +172,21 @@ struct dispatch_from_durations_fn {
     auto d_column           = *column;
 
     // copy null mask
-    rmm::device_buffer null_mask = cudf::detail::copy_bitmask(durations, stream, mr);
+    rmm::device_buffer null_mask = cudf::detail::copy_bitmask(durations, stream, resources);
 
     // build offsets column
     auto offsets_transformer_itr =
       cudf::detail::make_counting_transform_iterator(0, duration_to_string_size_fn<T>{d_column});
     auto [offsets_column, chars_bytes] = cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, resources);
     auto d_new_offsets =
       cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
     // build chars column
-    auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
+    auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, resources);
     auto d_chars    = chars_data.data();
 
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
                        duration_to_string_fn<T>{d_column, d_new_offsets, d_chars});
@@ -213,12 +213,12 @@ struct dispatch_from_durations_fn {
 
 std::unique_ptr<column> pandas_format_durations(column_view const& durations,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources resources)
 {
   size_type strings_count = durations.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
-  return type_dispatcher(durations.type(), dispatch_from_durations_fn{}, durations, stream, mr);
+  return type_dispatcher(durations.type(), dispatch_from_durations_fn{}, durations, stream, resources);
 }
 
 }  // namespace csv

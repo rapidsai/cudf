@@ -35,26 +35,26 @@ bool need_handle_nulls(column_view const& input, null_policy null_handling)
 std::unique_ptr<scalar> collect_list(column_view const& col,
                                      null_policy null_handling,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   if (need_handle_nulls(col, null_handling)) {
     auto d_view             = column_device_view::create(col, stream);
     auto filter             = cudf::detail::validity_accessor(*d_view);
-    auto null_purged_table  = cudf::detail::copy_if(table_view{{col}}, filter, stream, mr);
+    auto null_purged_table  = cudf::detail::copy_if(table_view{{col}}, filter, stream, resources);
     column* null_purged_col = null_purged_table->release().front().release();
     null_purged_col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
-    return std::make_unique<list_scalar>(std::move(*null_purged_col), true, stream, mr);
+    return std::make_unique<list_scalar>(std::move(*null_purged_col), true, stream, resources);
   } else {
-    return make_list_scalar(col, stream, mr);
+    return make_list_scalar(col, stream, resources);
   }
 }
 
 std::unique_ptr<scalar> merge_lists(lists_column_view const& col,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   auto flatten_col = col.get_sliced_child(stream);
-  return make_list_scalar(flatten_col, stream, mr);
+  return make_list_scalar(flatten_col, stream, resources);
 }
 
 std::unique_ptr<scalar> collect_set(column_view const& col,
@@ -62,14 +62,14 @@ std::unique_ptr<scalar> collect_set(column_view const& col,
                                     null_equality nulls_equal,
                                     nan_equality nans_equal,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   // `input_as_collect_list` is the result of the input column that has been processed to obey
   // the given null handling behavior.
   [[maybe_unused]] auto const [input_as_collect_list, unused_scalar] = [&] {
     if (need_handle_nulls(col, null_handling)) {
       // Only call `collect_list` when we need to handle nulls.
-      auto scalar = collect_list(col, null_handling, stream, mr);
+      auto scalar = collect_list(col, null_handling, stream, resources);
       return std::pair(static_cast<list_scalar*>(scalar.get())->view(), std::move(scalar));
     }
 
@@ -82,16 +82,16 @@ std::unique_ptr<scalar> collect_set(column_view const& col,
                                                nulls_equal,
                                                nans_equal,
                                                stream,
-                                               mr);
+                                               resources);
 
-  return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, mr);
+  return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, resources);
 }
 
 std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    null_equality nulls_equal,
                                    nan_equality nans_equal,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   auto flatten_col    = col.get_sliced_child(stream);
   auto distinct_table = cudf::detail::distinct(table_view{{flatten_col}},
@@ -100,8 +100,8 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                                nulls_equal,
                                                nans_equal,
                                                stream,
-                                               mr);
-  return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, mr);
+                                               resources);
+  return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, resources);
 }
 }  // namespace detail
 }  // namespace reduction

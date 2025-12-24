@@ -80,7 +80,7 @@ struct quantiles_functor {
                                      device_span<double const> quantile,
                                      interpolation interpolation,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(std::is_arithmetic_v<T>)
   {
     using ResultType = cudf::detail::target_type_t<T, aggregation::QUANTILE>;
@@ -89,7 +89,7 @@ struct quantiles_functor {
                                       group_sizes.size() * quantile.size(),
                                       mask_state::UNINITIALIZED,
                                       stream,
-                                      mr);
+                                      resources);
     // TODO (dm): Support for no-materialize index indirection values
     // TODO (dm): Future optimization: add column order to aggregation request
     //            so that sorting isn't required. Then add support for pre-sorted
@@ -98,12 +98,12 @@ struct quantiles_functor {
     auto values_view     = column_device_view::create(values, stream);
     auto group_size_view = column_device_view::create(group_sizes, stream);
     auto result_view     = mutable_column_device_view::create(result->mutable_view(), stream);
-    auto null_count      = cudf::detail::device_scalar<cudf::size_type>(0, stream, mr);
+    auto null_count      = cudf::detail::device_scalar<cudf::size_type>(0, stream, resources);
 
     // For each group, calculate quantile
     if (!cudf::is_dictionary(values.type())) {
       auto values_iter = values_view->begin<T>();
-      thrust::for_each_n(rmm::exec_policy(stream),
+      thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                          thrust::make_counting_iterator(0),
                          num_groups,
                          calculate_quantile_fn<ResultType, decltype(values_iter)>{
@@ -117,7 +117,7 @@ struct quantiles_functor {
                            null_count.data()});
     } else {
       auto values_iter = cudf::dictionary::detail::make_dictionary_iterator<T>(*values_view);
-      thrust::for_each_n(rmm::exec_policy(stream),
+      thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                          thrust::make_counting_iterator(0),
                          num_groups,
                          calculate_quantile_fn<ResultType, decltype(values_iter)>{
@@ -153,10 +153,10 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                                         std::vector<double> const& quantiles,
                                         interpolation interp,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   auto dv_quantiles = cudf::detail::make_device_uvector_async(
-    quantiles, stream, cudf::get_current_device_resource_ref());
+    quantiles, stream, resources.get_temporary_mr());
 
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()
@@ -171,7 +171,7 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                          dv_quantiles,
                          interp,
                          stream,
-                         mr);
+                         resources);
 }
 
 }  // namespace detail

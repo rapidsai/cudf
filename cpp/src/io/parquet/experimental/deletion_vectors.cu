@@ -89,14 +89,14 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   std::optional<size_t> start_row,
   size_type num_rows,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto const num_row_groups = static_cast<size_type>(row_group_num_rows.size());
 
   if (row_group_offsets.empty()) {
-    auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream, mr);
+    auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream, resources);
     auto row_indices_iter = static_cast<size_t*>(row_indices.data());
-    thrust::sequence(rmm::exec_policy_nosync(stream),
+    thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      row_indices_iter,
                      row_indices_iter + num_rows,
                      start_row.value_or(size_t{0}));
@@ -115,37 +115,37 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   std::inclusive_scan(
     row_group_num_rows.begin(), row_group_num_rows.end(), row_group_span_offsets.begin() + 1);
 
-  auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream, mr);
+  auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream, resources);
   auto row_indices_iter = static_cast<size_t*>(row_indices.data());
-  thrust::fill(rmm::exec_policy_nosync(stream), row_indices_iter, row_indices_iter + num_rows, 1);
+  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), row_indices_iter, row_indices_iter + num_rows, 1);
 
-  auto row_group_keys = rmm::device_uvector<size_type>(num_rows, stream);
-  thrust::fill(rmm::exec_policy_nosync(stream), row_group_keys.begin(), row_group_keys.end(), 0);
+  auto row_group_keys = rmm::device_uvector<size_type>(num_rows, stream, resources.get_temporary_mr());
+  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), row_group_keys.begin(), row_group_keys.end(), 0);
 
   // Scatter row group offsets and row group indices (or span indices) to their corresponding
   // row group span offsets
   auto d_row_group_offsets = cudf::detail::make_device_uvector_async(
-    row_group_offsets, stream, cudf::get_current_device_resource_ref());
+    row_group_offsets, stream, resources.get_temporary_mr());
   auto d_row_group_span_offsets = cudf::detail::make_device_uvector_async(
-    row_group_span_offsets, stream, cudf::get_current_device_resource_ref());
+    row_group_span_offsets, stream, resources.get_temporary_mr());
   auto in_iter =
     thrust::make_zip_iterator(d_row_group_offsets.begin(), thrust::counting_iterator<size_type>(0));
   auto out_iter = thrust::make_zip_iterator(row_indices_iter, row_group_keys.begin());
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                   in_iter,
                   in_iter + num_row_groups,
                   d_row_group_span_offsets.begin(),
                   out_iter);
 
   // Fill in the the rest of the row group span indices
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          row_group_keys.begin(),
                          row_group_keys.end(),
                          row_group_keys.begin(),
                          cuda::maximum<cudf::size_type>());
 
   // Segmented inclusive scan to compute the rest of the row indices
-  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                 row_group_keys.begin(),
                                 row_group_keys.end(),
                                 row_indices_iter,
@@ -178,11 +178,11 @@ std::unique_ptr<cudf::column> compute_partial_row_index_column(
   size_type num_rows,
   bool is_unspecified_row_group_data,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   // Build a simple row index column if the row group offsets and counts are unspecified
   if (is_unspecified_row_group_data) {
-    return compute_row_index_column({}, {}, start_row, num_rows, stream, mr);
+    return compute_row_index_column({}, {}, start_row, num_rows, stream, resources);
   }
 
   // Compute current table chunk's vectors of row group row offsets and counts from the input queues
@@ -213,7 +213,7 @@ std::unique_ptr<cudf::column> compute_partial_row_index_column(
   }
 
   // Compute the row index column with the computed row group row offsets and counts
-  return compute_row_index_column(row_offsets, row_counts, std::nullopt, num_rows, stream, mr);
+  return compute_row_index_column(row_offsets, row_counts, std::nullopt, num_rows, stream, resources);
 }
 
 /**
@@ -232,9 +232,9 @@ std::unique_ptr<cudf::column> build_row_mask_column(cudf::column_view const& row
                                                     roaring_bitmap_type const& deletion_vector,
                                                     size_type num_rows,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
+                                                    cudf::memory_resources resources)
 {
-  auto row_mask = rmm::device_buffer(num_rows, stream, mr);
+  auto row_mask = rmm::device_buffer(num_rows, stream, resources);
 
   // Iterator to negate and store the output value from `contains_async`
   auto row_mask_iter = thrust::make_transform_output_iterator(
@@ -260,7 +260,7 @@ chunked_parquet_reader::chunked_parquet_reader(
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
   : _start_row{0},
     _is_unspecified_row_group_data{row_group_offsets.empty()},
     _stream{stream},
@@ -317,7 +317,7 @@ chunked_parquet_reader::chunked_parquet_reader(
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
   : chunked_parquet_reader(chunk_read_limit,
                            std::size_t{0},
                            options,
@@ -376,7 +376,7 @@ table_with_metadata chunked_parquet_reader::read_chunk()
                                         _deletion_vector->roaring_bitmap,
                                         num_rows,
                                         _stream,
-                                        cudf::get_current_device_resource_ref());
+                                        resources.get_temporary_mr());
   return table_with_metadata{
     // Supply user-provided mr to apply_boolean_mask to allocate output table's memory
     cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), _stream, _mr),
@@ -391,7 +391,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                  cudf::host_span<size_t const> row_group_offsets,
                                  cudf::host_span<size_type const> row_group_num_rows,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_EXPECTS(
     row_group_offsets.size() == row_group_num_rows.size(),
@@ -439,10 +439,11 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                         deletion_vector,
                                         num_rows,
                                         stream,
-                                        cudf::get_current_device_resource_ref());
+                                        resources.get_temporary_mr());
   return table_with_metadata{
     // Supply user-provided mr to apply_boolean_mask to allocate output table's memory
-    cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), stream, mr),
+    cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), stream,
+                  resources),
     std::move(metadata)};
 }
 

@@ -66,7 +66,7 @@ std::vector<packed_table> contiguous_split(
   cudf::table_view const& input,
   std::vector<size_type> const& splits,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 namespace detail {
 
@@ -240,7 +240,7 @@ class chunked_pack {
  */
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                    cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Produce the metadata used for packing a table stored in a contiguous buffer.

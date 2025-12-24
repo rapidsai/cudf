@@ -20,7 +20,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                                           cudf::device_span<size_type const> group_offsets,
                                           size_type num_groups,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_EXPECTS(values.type().id() == type_id::LIST,
                "Input to `group_merge_lists` must be a lists column.");
@@ -28,7 +28,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                "Input to `group_merge_lists` must be a non-nullable lists column.");
 
   auto offsets_column = make_numeric_column(
-    data_type(type_to_id<size_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<size_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, resources);
 
   // Generate offsets of the output lists column by gathering from the provided group offsets and
   // the input list offsets.
@@ -40,7 +40,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
   //
   //   then, the output offsets_column is [0, 5, 8].
   //
-  thrust::gather(rmm::exec_policy(stream),
+  thrust::gather(rmm::exec_policy(stream, resources.get_temporary_mr()),
                  group_offsets.begin(),
                  group_offsets.end(),
                  lists_column_view(values).offsets_begin(),
@@ -48,7 +48,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
 
   // The child column of the output lists column is just copied from the input column.
   auto child_column =
-    std::make_unique<column>(lists_column_view(values).get_sliced_child(stream), stream, mr);
+    std::make_unique<column>(lists_column_view(values).get_sliced_child(stream), stream, resources);
 
   return make_lists_column(num_groups,
                            std::move(offsets_column),
@@ -56,7 +56,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                            0,
                            rmm::device_buffer{},
                            stream,
-                           mr);
+                           resources);
 }
 
 }  // namespace detail

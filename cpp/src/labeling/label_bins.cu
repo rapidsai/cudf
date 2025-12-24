@@ -101,10 +101,10 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    column_view const& left_edges,
                                    column_view const& right_edges,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   auto output = make_numeric_column(
-    data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, resources);
   auto output_mutable_view = output->mutable_view();
   auto output_begin        = output_mutable_view.begin<size_type>();
   auto output_end          = output_mutable_view.end<size_type>();
@@ -124,14 +124,14 @@ std::unique_ptr<column> label_bins(column_view const& input,
   using RandomAccessIterator = decltype(left_edges_device_view->begin<T>());
 
   if (input.has_nulls()) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       input_device_view->pair_begin<T, true>(),
                       input_device_view->pair_end<T, true>(),
                       output_begin,
                       bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
                         left_begin, left_end, right_begin));
   } else {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       input_device_view->pair_begin<T, false>(),
                       input_device_view->pair_end<T, false>(),
                       output_begin,
@@ -139,7 +139,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                         left_begin, left_end, right_begin));
   }
 
-  auto mask_and_count = valid_if(output_begin, output_end, filter_null_sentinel(), stream, mr);
+  auto mask_and_count = valid_if(output_begin, output_end, filter_null_sentinel(), stream, resources);
 
   output->set_null_mask(std::move(mask_and_count.first), mask_and_count.second);
   return output;
@@ -166,21 +166,21 @@ struct bin_type_dispatcher {
                                      column_view const& right_edges,
                                      inclusive right_inclusive,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(detail::is_supported_bin_type<T>())
   {
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
       return label_bins<T, cuda::std::less_equal<T>, cuda::std::less_equal<T>>(
-        input, left_edges, right_edges, stream, mr);
+        input, left_edges, right_edges, stream, resources);
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
       return label_bins<T, cuda::std::less_equal<T>, cuda::std::less<T>>(
-        input, left_edges, right_edges, stream, mr);
+        input, left_edges, right_edges, stream, resources);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
       return label_bins<T, cuda::std::less<T>, cuda::std::less_equal<T>>(
-        input, left_edges, right_edges, stream, mr);
+        input, left_edges, right_edges, stream, resources);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
       return label_bins<T, cuda::std::less<T>, cuda::std::less<T>>(
-        input, left_edges, right_edges, stream, mr);
+        input, left_edges, right_edges, stream, resources);
 
     CUDF_FAIL("Undefined inclusive setting.");
   }
@@ -195,7 +195,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    column_view const& right_edges,
                                    inclusive right_inclusive,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
@@ -218,7 +218,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                                 right_edges,
                                                 right_inclusive,
                                                 stream,
-                                                mr);
+                                                resources);
 }
 
 }  // namespace detail
@@ -230,10 +230,10 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    column_view const& right_edges,
                                    inclusive right_inclusive,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::label_bins(
-    input, left_edges, left_inclusive, right_edges, right_inclusive, stream, mr);
+    input, left_edges, left_inclusive, right_edges, right_inclusive, stream, resources);
 }
 }  // namespace cudf

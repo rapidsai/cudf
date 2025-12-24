@@ -276,12 +276,13 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
     row_group_indices, dictionary_page_data, dictionary_col_schemas, options, stream);
 
   // Decompress dictionary pages if needed and store uncompressed buffers here
-  auto const mr                          = cudf::get_current_device_resource_ref();
+  auto const mr                          = resources.get_temporary_mr();
   auto decompressed_dictionary_page_data = std::optional<rmm::device_buffer>{};
   if (has_compressed_data) {
     // Use the `decompress_page_data` utility to decompress dictionary pages (passed as pass_pages)
     decompressed_dictionary_page_data =
-      std::get<0>(parquet::detail::decompress_page_data(chunks, pages, {}, {}, stream, mr));
+      std::get<0>(parquet::detail::decompress_page_data(chunks, pages, {}, {}, stream,
+                  resources));
     pages.host_to_device_async(stream);
   }
 
@@ -326,7 +327,7 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_row_mask_with_page_
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
@@ -343,7 +344,7 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_row_mask_with_page_
     _output_column_schemas,
     expr_conv.get_converted_expr().value(),
     stream,
-    mr);
+    resources);
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
@@ -833,7 +834,7 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
       cudf::detail::compute_column(*read_table,
                                    _expr_conv.get_converted_expr().value().get(),
                                    _stream,
-                                   cudf::get_current_device_resource_ref());
+                                   resources.get_temporary_mr());
     CUDF_EXPECTS(final_row_mask->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
 

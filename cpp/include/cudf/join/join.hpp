@@ -124,7 +124,7 @@ inner_join(cudf::table_view const& left_keys,
            cudf::table_view const& right_keys,
            null_equality compare_nulls       = null_equality::EQUAL,
            rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-           rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+           cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to a
@@ -165,7 +165,7 @@ left_join(cudf::table_view const& left_keys,
           cudf::table_view const& right_keys,
           null_equality compare_nulls       = null_equality::EQUAL,
           rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+          cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to a
@@ -206,7 +206,7 @@ full_join(cudf::table_view const& left_keys,
           cudf::table_view const& right_keys,
           null_equality compare_nulls       = null_equality::EQUAL,
           rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+          cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a cross join on two tables (`left`, `right`)
@@ -235,7 +235,7 @@ std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Filters join result indices based on a conditional predicate and join type.
@@ -314,7 +314,7 @@ filter_join_indices(cudf::table_view const& left,
                     cudf::ast::expression const& predicate,
                     cudf::join_kind join_kind,
                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                    cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 

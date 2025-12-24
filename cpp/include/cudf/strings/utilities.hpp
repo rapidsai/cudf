@@ -22,7 +22,7 @@ namespace strings {
 rmm::device_uvector<string_view> create_string_vector_from_column(
   cudf::strings_column_view const strings,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Return the threshold size for a strings column to use int64 offsets

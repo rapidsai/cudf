@@ -23,26 +23,26 @@ std::unique_ptr<column> stable_sorted_order(table_view const& input,
                                             std::vector<order> const& column_order,
                                             std::vector<null_order> const& null_precedence,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
-  return sorted_order<sort_method::STABLE>(input, column_order, null_precedence, stream, mr);
+  return sorted_order<sort_method::STABLE>(input, column_order, null_precedence, stream, resources);
 }
 
 std::unique_ptr<table> stable_sort(table_view const& input,
                                    std::vector<order> const& column_order,
                                    std::vector<null_order> const& null_precedence,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   // fast-path sort conditions: single, fixed-width column with no nulls
   if (input.num_columns() == 1 && is_radix_sortable(input.column(0))) {
     auto order  = (column_order.empty() ? order::ASCENDING : column_order.front());
-    auto output = sort_radix(input.column(0), order == order::ASCENDING, stream, mr);
+    auto output = sort_radix(input.column(0), order == order::ASCENDING, stream, resources);
     std::vector<std::unique_ptr<column>> columns;
     columns.emplace_back(std::move(output));
     return std::make_unique<table>(std::move(columns));
   }
-  return detail::stable_sort_by_key(input, input, column_order, null_precedence, stream, mr);
+  return detail::stable_sort_by_key(input, input, column_order, null_precedence, stream, resources);
 }
 
 std::unique_ptr<table> stable_sort_by_key(table_view const& values,
@@ -50,20 +50,20 @@ std::unique_ptr<table> stable_sort_by_key(table_view const& values,
                                           std::vector<order> const& column_order,
                                           std::vector<null_order> const& null_precedence,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_EXPECTS(values.num_rows() == keys.num_rows(),
                "Mismatch in number of rows for values and keys");
 
   auto sorted_order = detail::stable_sorted_order(
-    keys, column_order, null_precedence, stream, cudf::get_current_device_resource_ref());
+    keys, column_order, null_precedence, stream, resources.get_temporary_mr());
 
   return detail::gather(values,
                         sorted_order->view(),
                         out_of_bounds_policy::DONT_CHECK,
                         detail::negative_index_policy::NOT_ALLOWED,
                         stream,
-                        mr);
+                        resources);
 }
 }  // namespace detail
 
@@ -71,20 +71,20 @@ std::unique_ptr<column> stable_sorted_order(table_view const& input,
                                             std::vector<order> const& column_order,
                                             std::vector<null_order> const& null_precedence,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_sorted_order(input, column_order, null_precedence, stream, mr);
+  return detail::stable_sorted_order(input, column_order, null_precedence, stream, resources);
 }
 
 std::unique_ptr<table> stable_sort(table_view const& input,
                                    std::vector<order> const& column_order,
                                    std::vector<null_order> const& null_precedence,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_sort(input, column_order, null_precedence, stream, mr);
+  return detail::stable_sort(input, column_order, null_precedence, stream, resources);
 }
 
 std::unique_ptr<table> stable_sort_by_key(table_view const& values,
@@ -92,10 +92,10 @@ std::unique_ptr<table> stable_sort_by_key(table_view const& values,
                                           std::vector<order> const& column_order,
                                           std::vector<null_order> const& null_precedence,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_sort_by_key(values, keys, column_order, null_precedence, stream, mr);
+  return detail::stable_sort_by_key(values, keys, column_order, null_precedence, stream, resources);
 }
 
 }  // namespace cudf

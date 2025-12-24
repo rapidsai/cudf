@@ -46,11 +46,11 @@ struct scan_dispatcher {
   std::unique_ptr<column> operator()(column_view const& input,
                                      bitmask_type const*,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(cuda::std::is_arithmetic_v<T>)
   {
     auto output_column =
-      detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
+      detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, resources);
     mutable_column_view output = output_column->mutable_view();
 
     auto d_input  = column_device_view::create(input, stream);
@@ -61,7 +61,7 @@ struct scan_dispatcher {
     // CUB 2.0.0 requires that the binary operator returns the same type as the identity.
     auto const binary_op = cudf::detail::cast_functor<T>(Op{});
     thrust::exclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input.size(), output.data<T>(), identity, binary_op);
+      rmm::exec_policy(stream, resources.get_temporary_mr()), begin, begin + input.size(), output.data<T>(), identity, binary_op);
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;
@@ -81,19 +81,20 @@ std::unique_ptr<column> scan_exclusive(column_view const& input,
                                        scan_aggregation const& agg,
                                        null_policy null_handling,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   auto [mask, null_count] = [&] {
     if (null_handling == null_policy::EXCLUDE) {
-      return std::make_pair(std::move(detail::copy_bitmask(input, stream, mr)), input.null_count());
+      return std::make_pair(std::move(detail::copy_bitmask(input, stream,
+                  resources)), input.null_count());
     } else if (input.nullable()) {
-      return mask_scan(input, scan_type::EXCLUSIVE, stream, mr);
+      return mask_scan(input, scan_type::EXCLUSIVE, stream, resources);
     }
     return std::make_pair(rmm::device_buffer{}, size_type{0});
   }();
 
   auto output = scan_agg_dispatch<scan_dispatcher>(
-    input, agg, static_cast<bitmask_type*>(mask.data()), stream, mr);
+    input, agg, static_cast<bitmask_type*>(mask.data()), stream, resources);
   output->set_null_mask(std::move(mask), null_count);
 
   return output;

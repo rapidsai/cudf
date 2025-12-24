@@ -175,7 +175,7 @@ struct replace_kernel_forwarder {
                                            cudf::column_view const& values_to_replace,
                                            cudf::column_view const& replacement_values,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
   {
     cudf::detail::device_scalar<cudf::size_type> valid_counter(0, stream);
     cudf::size_type* valid_count = valid_counter.data();
@@ -194,7 +194,7 @@ struct replace_kernel_forwarder {
                                             ? cudf::mask_allocation_policy::ALWAYS
                                             : cudf::mask_allocation_policy::NEVER;
       return cudf::detail::allocate_like(
-        input_col, input_col.size(), mask_allocation_policy, stream, mr);
+        input_col, input_col.size(), mask_allocation_policy, stream, resources);
     }();
 
     auto output_view = output->mutable_view();
@@ -235,10 +235,10 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   cudf::column_view const& values_to_replace,
   cudf::column_view const& replacement_values,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   return cudf::strings::detail::find_and_replace_all(
-    input_col, values_to_replace, replacement_values, stream, mr);
+    input_col, values_to_replace, replacement_values, stream, resources);
 }
 
 template <>
@@ -247,7 +247,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
   cudf::column_view const& values_to_replace,
   cudf::column_view const& replacement_values,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto input        = cudf::dictionary_column_view(input_col);
   auto values       = cudf::dictionary_column_view(values_to_replace);
@@ -257,14 +257,14 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
     auto new_keys = cudf::detail::concatenate(
       std::vector<cudf::column_view>({values.keys(), replacements.keys()}),
       stream,
-      cudf::get_current_device_resource_ref());
-    return cudf::dictionary::detail::add_keys(input, new_keys->view(), stream, mr);
+      resources.get_temporary_mr());
+    return cudf::dictionary::detail::add_keys(input, new_keys->view(), stream, resources);
   }();
   auto matched_view   = cudf::dictionary_column_view(matched_input->view());
   auto matched_values = cudf::dictionary::detail::set_keys(
-    values, matched_view.keys(), stream, cudf::get_current_device_resource_ref());
+    values, matched_view.keys(), stream, resources.get_temporary_mr());
   auto matched_replacements = cudf::dictionary::detail::set_keys(
-    replacements, matched_view.keys(), stream, cudf::get_current_device_resource_ref());
+    replacements, matched_view.keys(), stream, resources.get_temporary_mr());
 
   auto indices_type = matched_view.indices().type();
   auto new_indices  = cudf::type_dispatcher<cudf::dispatch_storage_type>(
@@ -274,7 +274,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
     cudf::dictionary_column_view(matched_values->view()).indices(),
     cudf::dictionary_column_view(matched_replacements->view()).get_indices_annotated(),
     stream,
-    mr);
+    resources);
   auto null_count     = new_indices->null_count();
   auto contents       = new_indices->release();
   auto indices_column = std::make_unique<cudf::column>(
@@ -294,7 +294,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    cudf::column_view const& values_to_replace,
                                                    cudf::column_view const& replacement_values,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+                                                   cudf::memory_resources resources)
 {
   CUDF_EXPECTS(values_to_replace.size() == replacement_values.size(),
                "values_to_replace and replacement_values size mismatch.");
@@ -306,7 +306,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
   CUDF_EXPECTS(not values_to_replace.has_nulls(), "values_to_replace must not have nulls");
 
   if (input_col.is_empty() or values_to_replace.is_empty() or replacement_values.is_empty()) {
-    return std::make_unique<cudf::column>(input_col, stream, mr);
+    return std::make_unique<cudf::column>(input_col, stream, resources);
   }
 
   return cudf::type_dispatcher<dispatch_storage_type>(input_col.type(),
@@ -315,7 +315,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                       values_to_replace,
                                                       replacement_values,
                                                       stream,
-                                                      mr);
+                                                      resources);
 }
 
 }  // namespace detail
@@ -335,8 +335,8 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    cudf::column_view const& values_to_replace,
                                                    cudf::column_view const& replacement_values,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+                                                   cudf::memory_resources resources)
 {
-  return detail::find_and_replace_all(input_col, values_to_replace, replacement_values, stream, mr);
+  return detail::find_and_replace_all(input_col, values_to_replace, replacement_values, stream, resources);
 }
 }  // namespace cudf

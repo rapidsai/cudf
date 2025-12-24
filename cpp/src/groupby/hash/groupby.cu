@@ -72,7 +72,7 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
                                         bool const keys_have_nulls,
                                         null_policy const include_null_keys,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   auto const null_keys_are_equal  = null_equality::EQUAL;
   auto const has_null             = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
@@ -86,11 +86,11 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
   if (cudf::detail::has_nested_columns(keys)) {
     auto const d_row_equal = comparator.equal_to<true>(has_null, null_keys_are_equal);
     return compute_groupby<nullable_row_comparator_t>(
-      keys, requests, skip_rows_with_nulls, d_row_equal, d_row_hash, cache, stream, mr);
+      keys, requests, skip_rows_with_nulls, d_row_equal, d_row_hash, cache, stream, resources);
   } else {
     auto const d_row_equal = comparator.equal_to<false>(has_null, null_keys_are_equal);
     return compute_groupby<row_comparator_t>(
-      keys, requests, skip_rows_with_nulls, d_row_equal, d_row_hash, cache, stream, mr);
+      keys, requests, skip_rows_with_nulls, d_row_equal, d_row_hash, cache, stream, resources);
   }
 }
 
@@ -171,13 +171,14 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   host_span<aggregation_request const> requests,
   null_policy include_null_keys,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   cudf::detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys =
-    dispatch_groupby(keys, requests, &cache, cudf::has_nulls(keys), include_null_keys, stream, mr);
+    dispatch_groupby(keys, requests, &cache, cudf::has_nulls(keys), include_null_keys, stream, resources);
 
-  return std::pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
+  return std::pair(std::move(unique_keys), extract_results(requests, cache, stream,
+                  resources));
 }
 }  // namespace cudf::groupby::detail::hash

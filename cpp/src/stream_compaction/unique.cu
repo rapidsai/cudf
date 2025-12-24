@@ -42,7 +42,7 @@ std::unique_ptr<table> unique(table_view const& input,
                               duplicate_keep_option keep,
                               null_equality nulls_equal,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   // If keep is KEEP_ANY, just alias it to KEEP_FIRST.
   if (keep == duplicate_keep_option::KEEP_ANY) { keep = duplicate_keep_option::KEEP_FIRST; }
@@ -51,7 +51,7 @@ std::unique_ptr<table> unique(table_view const& input,
   if (num_rows == 0 or input.num_columns() == 0 or keys.empty()) { return empty_like(input); }
 
   auto unique_indices = make_numeric_column(
-    data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, resources);
   auto mutable_view = mutable_column_device_view::create(*unique_indices, stream);
   auto keys_view    = input.select(keys);
 
@@ -64,15 +64,15 @@ std::unique_ptr<table> unique(table_view const& input,
       // runtime performance over using the comparator directly in thrust::unique_copy.
       auto row_equal =
         comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
-      auto d_results = rmm::device_uvector<bool>(num_rows, stream);
+      auto d_results = rmm::device_uvector<bool>(num_rows, stream, resources.get_temporary_mr());
       auto itr       = thrust::make_counting_iterator<size_type>(0);
       thrust::transform(
-        rmm::exec_policy(stream),
+        rmm::exec_policy(stream, resources.get_temporary_mr()),
         itr,
         itr + num_rows,
         d_results.begin(),
         unique_copy_fn<decltype(itr), decltype(row_equal)>{itr, keep, row_equal, num_rows - 1});
-      auto result_end = thrust::copy_if(rmm::exec_policy(stream),
+      auto result_end = thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                         itr,
                                         itr + num_rows,
                                         d_results.begin(),
@@ -103,7 +103,7 @@ std::unique_ptr<table> unique(table_view const& input,
                         out_of_bounds_policy::DONT_CHECK,
                         detail::negative_index_policy::NOT_ALLOWED,
                         stream,
-                        mr);
+                        resources);
 }
 }  // namespace detail
 
@@ -112,10 +112,10 @@ std::unique_ptr<table> unique(table_view const& input,
                               duplicate_keep_option const keep,
                               null_equality nulls_equal,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::unique(input, keys, keep, nulls_equal, stream, mr);
+  return detail::unique(input, keys, keep, nulls_equal, stream, resources);
 }
 
 }  // namespace cudf

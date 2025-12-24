@@ -126,7 +126,7 @@ std::unique_ptr<column> build_lists_child_column_recursive(
   cudf::lists_column_view const& source_lists_column_view,
   cudf::lists_column_view const& target_lists_column_view,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  cudf::memory_resources resources);
 
 }  // namespace detail
 }  // namespace lists

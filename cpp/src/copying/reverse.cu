@@ -26,7 +26,7 @@ namespace cudf {
 namespace detail {
 std::unique_ptr<table> reverse(table_view const& source_table,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   size_type num_rows = source_table.num_rows();
   auto elements      = make_counting_transform_iterator(
@@ -35,31 +35,32 @@ std::unique_ptr<table> reverse(table_view const& source_table,
     }));
   auto elements_end = elements + source_table.num_rows();
 
-  return gather(source_table, elements, elements_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
+  return gather(source_table, elements, elements_end, out_of_bounds_policy::DONT_CHECK, stream, resources);
 }
 
 std::unique_ptr<column> reverse(column_view const& source_column,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   return std::move(
-    cudf::detail::reverse(table_view({source_column}), stream, mr)->release().front());
+    cudf::detail::reverse(table_view({source_column}), stream,
+                  resources)->release().front());
 }
 }  // namespace detail
 
 std::unique_ptr<table> reverse(table_view const& source_table,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(source_table, stream, mr);
+  return detail::reverse(source_table, stream, resources);
 }
 
 std::unique_ptr<column> reverse(column_view const& source_column,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(source_column, stream, mr);
+  return detail::reverse(source_column, stream, resources);
 }
 }  // namespace cudf

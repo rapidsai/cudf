@@ -64,10 +64,10 @@ struct sorted_order_radix_fn {
   void radix_sort()
   {
     auto d_in   = input.begin<T>();
-    auto output = rmm::device_uvector<T>(input.size(), stream);
+    auto output = rmm::device_uvector<T>(input.size(), stream, resources.get_temporary_mr());
     auto d_out  = output.begin();  // not returned
-    auto seqs   = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    thrust::sequence(rmm::exec_policy_nosync(stream), seqs.begin(), seqs.end(), 0);
+    auto seqs   = rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
+    thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), seqs.begin(), seqs.end(), 0);
     auto dv_in  = seqs.begin();
     auto dv_out = indices.begin<cudf::size_type>();
 
@@ -80,13 +80,13 @@ struct sorted_order_radix_fn {
     if (ascending) {
       cub::DeviceRadixSort::SortPairs(
         nullptr, tmp_bytes, d_in, d_out, dv_in, dv_out, n, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, resources.get_temporary_mr());
       cub::DeviceRadixSort::SortPairs(
         tmp_stg.data(), tmp_bytes, d_in, d_out, dv_in, dv_out, n, 0, end_bit, sv);
     } else {
       cub::DeviceRadixSort::SortPairsDescending(
         nullptr, tmp_bytes, d_in, d_out, dv_in, dv_out, n, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, resources.get_temporary_mr());
       cub::DeviceRadixSort::SortPairsDescending(
         tmp_stg.data(), tmp_bytes, d_in, d_out, dv_in, dv_out, n, 0, end_bit, sv);
     }
@@ -101,12 +101,12 @@ struct sorted_order_radix_fn {
     // pair_out/d_out is not returned to the caller but used as an intermediate
     auto pair_out = rmm::device_uvector<float_pair<T>>(input.size(), stream);
     auto d_out    = pair_out.begin();
-    auto vals     = rmm::device_uvector<size_type>(indices.size(), stream);
+    auto vals     = rmm::device_uvector<size_type>(indices.size(), stream, resources.get_temporary_mr());
     auto dv_in    = vals.begin();
     auto dv_out   = indices.begin<cudf::size_type>();
 
     auto zip_out = thrust::make_zip_iterator(d_in, dv_in);
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::counting_iterator<size_type>(0),
                       thrust::counting_iterator<size_type>(input.size()),
                       zip_out,
@@ -121,13 +121,13 @@ struct sorted_order_radix_fn {
     if (ascending) {
       cub::DeviceRadixSort::SortPairs(
         nullptr, tmp_bytes, d_in, d_out, dv_in, dv_out, n, decomposer, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, resources.get_temporary_mr());
       cub::DeviceRadixSort::SortPairs(
         tmp_stg.data(), tmp_bytes, d_in, d_out, dv_in, dv_out, n, decomposer, 0, end_bit, sv);
     } else {
       cub::DeviceRadixSort::SortPairsDescending(
         nullptr, tmp_bytes, d_in, d_out, dv_in, dv_out, n, decomposer, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, resources.get_temporary_mr());
       cub::DeviceRadixSort::SortPairsDescending(
         tmp_stg.data(), tmp_bytes, d_in, d_out, dv_in, dv_out, n, decomposer, 0, end_bit, sv);
     }

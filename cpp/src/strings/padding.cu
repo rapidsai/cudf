@@ -95,7 +95,7 @@ std::unique_ptr<column> pad(strings_column_view const& input,
                             side_type side,
                             std::string_view fill_char,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+                            cudf::memory_resources resources)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS(!fill_char.empty(), "fill_char parameter must not be empty");
@@ -107,20 +107,21 @@ std::unique_ptr<column> pad(strings_column_view const& input,
   auto [offsets_column, chars] = [&] {
     if (side == side_type::LEFT) {
       auto fn = pad_fn<side_type::LEFT>{*d_strings, width, fill_char_size, d_fill_char};
-      return make_strings_children(fn, input.size(), stream, mr);
+      return make_strings_children(fn, input.size(), stream, resources);
     } else if (side == side_type::RIGHT) {
       auto fn = pad_fn<side_type::RIGHT>{*d_strings, width, fill_char_size, d_fill_char};
-      return make_strings_children(fn, input.size(), stream, mr);
+      return make_strings_children(fn, input.size(), stream, resources);
     }
     auto fn = pad_fn<side_type::BOTH>{*d_strings, width, fill_char_size, d_fill_char};
-    return make_strings_children(fn, input.size(), stream, mr);
+    return make_strings_children(fn, input.size(), stream, resources);
   }();
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 namespace {
@@ -156,26 +157,27 @@ struct zfill_fn {
 std::unique_ptr<column> zfill(strings_column_view const& input,
                               size_type width,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto widths    = thrust::constant_iterator<size_type>(width);
   auto [offsets_column, chars] =
-    make_strings_children(zfill_fn<decltype(widths)>{*d_strings, widths}, input.size(), stream, mr);
+    make_strings_children(zfill_fn<decltype(widths)>{*d_strings, widths}, input.size(), stream, resources);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 std::unique_ptr<column> zfill_by_widths(strings_column_view const& input,
                                         column_view const& widths,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS(widths.size() == input.size(),
@@ -187,13 +189,14 @@ std::unique_ptr<column> zfill_by_widths(strings_column_view const& input,
   auto widths_itr = cudf::detail::indexalator_factory::make_input_iterator(widths);
 
   auto [offsets_column, chars] = make_strings_children(
-    zfill_fn<decltype(widths_itr)>{*d_strings, widths_itr}, input.size(), stream, mr);
+    zfill_fn<decltype(widths_itr)>{*d_strings, widths_itr}, input.size(), stream, resources);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 }  // namespace detail
@@ -205,28 +208,28 @@ std::unique_ptr<column> pad(strings_column_view const& input,
                             side_type side,
                             std::string_view fill_char,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::pad(input, width, side, fill_char, stream, mr);
+  return detail::pad(input, width, side, fill_char, stream, resources);
 }
 
 std::unique_ptr<column> zfill(strings_column_view const& input,
                               size_type width,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::zfill(input, width, stream, mr);
+  return detail::zfill(input, width, stream, resources);
 }
 
 std::unique_ptr<column> zfill_by_widths(strings_column_view const& input,
                                         column_view const& widths,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::zfill_by_widths(input, widths, stream, mr);
+  return detail::zfill_by_widths(input, widths, stream, resources);
 }
 
 }  // namespace strings

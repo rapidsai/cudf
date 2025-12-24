@@ -25,18 +25,19 @@ namespace detail {
 std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& value,
                                                             size_type size,
                                                             rmm::cuda_stream_view stream,
-                                                            rmm::device_async_resource_ref mr)
+                                                            cudf::memory_resources resources)
 {
   if (size == 0) {
     return make_lists_column(0,
                              make_empty_column(type_to_id<size_type>()),
                              empty_like(value.view()),
                              0,
-                             cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream, mr),
+                             cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream,
+                  resources),
                              stream,
-                             mr);
+                             resources);
   }
-  auto mr_final = size == 1 ? mr : cudf::get_current_device_resource_ref();
+  auto mr_final = size == 1 ? mr : resources.get_temporary_mr();
 
   // Handcraft a 1-row column
   auto sizes_itr = thrust::constant_iterator<size_type>(value.view().size());
@@ -73,28 +74,28 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
 
 std::unique_ptr<column> make_empty_lists_column(data_type child_type,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources resources)
 {
   auto offsets = make_empty_column(data_type(type_to_id<size_type>()));
   auto child   = make_empty_column(child_type);
   return make_lists_column(
-    0, std::move(offsets), std::move(child), 0, rmm::device_buffer{}, stream, mr);
+    0, std::move(offsets), std::move(child), 0, rmm::device_buffer{}, stream, resources);
 }
 
 std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
                                                     data_type child_type,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
+                                                    cudf::memory_resources resources)
 {
   auto offsets = [&] {
     auto offsets_buff =
-      cudf::detail::make_zeroed_device_uvector_async<size_type>(size + 1, stream, mr);
+      cudf::detail::make_zeroed_device_uvector_async<size_type>(size + 1, stream, resources);
     return std::make_unique<column>(std::move(offsets_buff), rmm::device_buffer{}, 0);
   }();
   auto child     = make_empty_column(child_type);
-  auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+  auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, resources);
   return make_lists_column(
-    size, std::move(offsets), std::move(child), size, std::move(null_mask), stream, mr);
+    size, std::move(offsets), std::move(child), size, std::move(null_mask), stream, resources);
 }
 
 }  // namespace detail
@@ -102,9 +103,9 @@ std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
 
 std::unique_ptr<column> make_empty_lists_column(data_type child_type,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources resources)
 {
-  return lists::detail::make_empty_lists_column(child_type, stream, mr);
+  return lists::detail::make_empty_lists_column(child_type, stream, resources);
 }
 
 /**
@@ -116,7 +117,7 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
                                           size_type null_count,
                                           rmm::device_buffer&& null_mask,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   if (null_count > 0) { CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable."); }
   CUDF_EXPECTS(

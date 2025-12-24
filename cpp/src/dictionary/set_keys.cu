@@ -53,7 +53,7 @@ struct dispatch_compute_indices {
   std::unique_ptr<column> operator()(dictionary_column_view const& input,
                                      column_view const& new_keys,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(cudf::is_relationally_comparable<Element, Element>())
   {
     auto dictionary_view = column_device_view::create(input.parent(), stream);
@@ -68,12 +68,12 @@ struct dispatch_compute_indices {
                                       input.size(),
                                       mask_state::UNALLOCATED,
                                       stream,
-                                      mr);
+                                      resources);
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
 
 #ifdef NDEBUG
-    thrust::lower_bound(rmm::exec_policy(stream),
+    thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
                         begin,
                         end,
                         dictionary_itr,
@@ -84,7 +84,7 @@ struct dispatch_compute_indices {
     // There is a problem with thrust::lower_bound and the output_indexalator
     // https://github.com/NVIDIA/thrust/issues/1452; thrust team created nvbug 3322776
     // This is a workaround.
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       dictionary_itr,
                       dictionary_itr + input.size(),
                       result_itr,
@@ -111,7 +111,7 @@ struct dispatch_compute_indices {
 std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& new_keys,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "keys parameter must not have nulls");
   auto keys = dictionary_column.keys();
@@ -126,7 +126,7 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
                                               null_equality::EQUAL,
                                               nan_equality::ALL_EQUAL,
                                               stream,
-                                              mr);
+                                              resources);
   auto sorted_keys   = cudf::detail::sort(distinct_keys->view(),
                                         std::vector<order>{order::ASCENDING},
                                         std::vector<null_order>{null_order::BEFORE},
@@ -136,7 +136,7 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
   std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
 
   // compute the new nulls
-  auto matches   = cudf::detail::contains(keys_column->view(), keys, stream, mr);
+  auto matches   = cudf::detail::contains(keys_column->view(), keys, stream, resources);
   auto d_matches = matches->view().data<bool>();
   auto indices_itr =
     cudf::detail::indexalator_factory::make_input_iterator(dictionary_column.indices());
@@ -150,7 +150,7 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
       return d_matches[indices_itr[idx]];
     },
     stream,
-    mr);
+    resources);
 
   // compute the new indices
   auto indices_column = type_dispatcher(keys_column->type(),
@@ -158,7 +158,7 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
                                         dictionary_column,
                                         keys_column->view(),
                                         stream,
-                                        mr);
+                                        resources);
 
   // create column with keys_column and indices_column
   return make_dictionary_column(std::move(keys_column),
@@ -170,21 +170,21 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
 std::vector<std::unique_ptr<column>> match_dictionaries(
   cudf::host_span<dictionary_column_view const> input,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   std::vector<column_view> keys(input.size());
   std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
-  auto new_keys  = cudf::detail::concatenate(keys, stream, cudf::get_current_device_resource_ref());
+  auto new_keys  = cudf::detail::concatenate(keys, stream, resources.get_temporary_mr());
   auto keys_view = new_keys->view();
   std::vector<std::unique_ptr<column>> result(input.size());
-  std::transform(input.begin(), input.end(), result.begin(), [keys_view, mr, stream](auto& col) {
-    return set_keys(col, keys_view, stream, mr);
+  std::transform(input.begin(), input.end(), result.begin(), [keys_view, resources, stream](auto& col) {
+    return set_keys(col, keys_view, stream, resources);
   });
   return result;
 }
 
 std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_dictionaries(
-  std::vector<table_view> tables, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  std::vector<table_view> tables, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
   // Make a copy of all the column views from each table_view
   std::vector<std::vector<column_view>> updated_columns;
@@ -206,7 +206,7 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_d
           return dictionary_column_view(t.column(col_idx));
         });
       // now match the keys in these dictionary columns
-      auto dict_cols = dictionary::detail::match_dictionaries(dict_views, stream, mr);
+      auto dict_cols = dictionary::detail::match_dictionaries(dict_views, stream, resources);
       // replace the updated_columns vector entries for the set of columns at col_idx
       auto dict_col_idx = 0;
       for (auto& v : updated_columns)
@@ -235,19 +235,19 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_d
 std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& keys,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::set_keys(dictionary_column, keys, stream, mr);
+  return detail::set_keys(dictionary_column, keys, stream, resources);
 }
 
 std::vector<std::unique_ptr<column>> match_dictionaries(
   cudf::host_span<dictionary_column_view const> input,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::match_dictionaries(input, stream, mr);
+  return detail::match_dictionaries(input, stream, resources);
 }
 
 }  // namespace dictionary

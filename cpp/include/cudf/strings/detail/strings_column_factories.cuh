@@ -52,7 +52,7 @@ template <typename IndexPairIterator>
 std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                                             IndexPairIterator end,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   size_type strings_count = cuda::std::distance(begin, end);
@@ -109,7 +109,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                                             size_type null_count,
                                             rmm::device_buffer&& null_mask,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   size_type strings_count = cuda::std::distance(offsets_begin, offsets_end) - 1;

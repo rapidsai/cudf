@@ -89,12 +89,13 @@ struct out_of_place_copy_range_dispatch {
     cudf::size_type source_end,
     cudf::size_type target_begin,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    cudf::memory_resources resources = resources.get_temporary_mr())
   {
-    auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
+    auto p_ret = std::make_unique<cudf::column>(target, stream, resources);
     if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end, stream)) {
       p_ret->set_null_mask(
-        cudf::detail::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
+        cudf::detail::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream,
+                  resources), 0);
     }
 
     if (source_end != source_begin) {  // otherwise no-op
@@ -120,10 +121,10 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   cudf::size_type source_end,
   cudf::size_type target_begin,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   return cudf::strings::detail::copy_range(
-    source, target, source_begin, source_end, target_begin, stream, mr);
+    source, target, source_begin, source_end, target_begin, stream, resources);
 }
 
 template <>
@@ -132,7 +133,7 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   cudf::size_type source_end,
   cudf::size_type target_begin,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   // check the keys in the source and target
   cudf::dictionary_column_view const dict_source(source);
@@ -143,10 +144,10 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
 
   // combine keys so both dictionaries have the same set
   auto target_matched =
-    cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), stream, mr);
+    cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), stream, resources);
   auto const target_view = cudf::dictionary_column_view(target_matched->view());
   auto source_matched    = cudf::dictionary::detail::set_keys(
-    dict_source, target_view.keys(), stream, cudf::get_current_device_resource_ref());
+    dict_source, target_view.keys(), stream, resources.get_temporary_mr());
   auto const source_view = cudf::dictionary_column_view(source_matched->view());
 
   // build the new indices by calling in_place_copy_range on just the indices
@@ -223,7 +224,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    size_type source_end,
                                    size_type target_begin,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_EXPECTS((source_begin >= 0) && (source_end <= source.size()) &&
                  (source_begin <= source_end) && (target_begin >= 0) &&
@@ -239,7 +240,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
     source_end,
     target_begin,
     stream,
-    mr);
+    resources);
 }
 
 }  // namespace detail
@@ -262,10 +263,10 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    size_type source_end,
                                    size_type target_begin,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_range(source, target, source_begin, source_end, target_begin, stream, mr);
+  return detail::copy_range(source, target, source_begin, source_end, target_begin, stream, resources);
 }
 
 }  // namespace cudf

@@ -48,18 +48,18 @@ struct reverse_characters_fn {
 
 std::unique_ptr<column> reverse(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
   // copy the column; replace data in the chars column
-  auto result          = std::make_unique<column>(input.parent(), stream, mr);
+  auto result          = std::make_unique<column>(input.parent(), stream, resources);
   auto sv              = strings_column_view(result->view());
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(sv.offsets());
   auto d_chars         = result->mutable_view().head<char>();
 
   auto const d_column = column_device_view::create(input.parent(), stream);
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      thrust::counting_iterator<size_type>(0),
                      input.size(),
                      reverse_characters_fn{*d_column, d_offsets, d_chars});
@@ -71,10 +71,10 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
 
 std::unique_ptr<column> reverse(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(input, stream, mr);
+  return detail::reverse(input, stream, resources);
 }
 
 }  // namespace strings

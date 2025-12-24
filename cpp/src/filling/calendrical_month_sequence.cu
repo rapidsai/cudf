@@ -21,10 +21,10 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
                                                          scalar const& init,
                                                          size_type months,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::device_async_resource_ref mr)
+                                                         cudf::memory_resources resources)
 {
   return type_dispatcher(
-    init.type(), calendrical_month_sequence_functor{}, size, init, months, stream, mr);
+    init.type(), calendrical_month_sequence_functor{}, size, init, months, stream, resources);
 }
 }  // namespace detail
 
@@ -32,10 +32,10 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
                                                          scalar const& init,
                                                          size_type months,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::device_async_resource_ref mr)
+                                                         cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::calendrical_month_sequence(size, init, months, stream, mr);
+  return detail::calendrical_month_sequence(size, init, months, stream, resources);
 }
 
 }  // namespace cudf

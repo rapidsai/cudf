@@ -33,9 +33,9 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
-    auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
+    auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, resources);
 
     using ScalarType = cudf::scalar_type_t<T>;
     auto typed_s     = static_cast<ScalarType*>(s.get());
@@ -56,12 +56,12 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     auto device_col = column_device_view::create(input, stream);
 
-    rmm::device_scalar<string_view> temp_data(stream, mr);
-    cudf::detail::device_scalar<bool> temp_valid(stream, mr);
+    rmm::device_scalar<string_view> temp_data(stream, resources);
+    cudf::detail::device_scalar<bool> temp_valid(stream, resources);
 
     device_single_thread(
       [buffer   = temp_data.data(),
@@ -73,14 +73,14 @@ struct get_element_functor {
       },
       stream);
 
-    return std::make_unique<string_scalar>(temp_data, temp_valid.value(stream), stream, mr);
+    return std::make_unique<string_scalar>(temp_data, temp_valid.value(stream), stream, resources);
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, dictionary32>>* p = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     auto dict_view    = dictionary_column_view(input);
     auto indices_iter = detail::indexalator_factory::make_input_iterator(dict_view.indices());
@@ -97,7 +97,7 @@ struct get_element_functor {
       stream);
 
     if (!key_index_scalar.is_valid(stream)) {
-      return make_default_constructed_scalar(dict_view.keys().type(), stream, mr);
+      return make_default_constructed_scalar(dict_view.keys().type(), stream, resources);
     }
 
     // retrieve the key element using the key-index
@@ -106,14 +106,14 @@ struct get_element_functor {
                            dict_view.keys(),
                            key_index_scalar.value(stream),
                            stream,
-                           mr);
+                           resources);
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, list_view>>* p = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     bool valid               = is_element_valid_sync(input, index, stream);
     auto const child_col_idx = lists_column_view::child_column_index;
@@ -122,14 +122,15 @@ struct get_element_functor {
       lists_column_view lcv(input);
       // Make a copy of the row
       auto row_slice_contents =
-        lists::detail::copy_slice(lcv, index, index + 1, stream, mr)->release();
+        lists::detail::copy_slice(lcv, index, index + 1, stream,
+                  resources)->release();
       // Construct scalar with row data
       return std::make_unique<list_scalar>(
-        std::move(*row_slice_contents.children[child_col_idx]), valid, stream, mr);
+        std::move(*row_slice_contents.children[child_col_idx]), valid, stream, resources);
     } else {
       auto empty_row_contents = empty_like(input)->release();
       return std::make_unique<list_scalar>(
-        std::move(*empty_row_contents.children[child_col_idx]), valid, stream, mr);
+        std::move(*empty_row_contents.children[child_col_idx]), valid, stream, resources);
     }
   }
 
@@ -137,14 +138,14 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     using Type = typename T::rep;
 
     auto device_col = column_device_view::create(input, stream);
 
     auto result = std::make_unique<fixed_point_scalar<T>>(
-      Type{}, numeric::scale_type{input.type().scale()}, false, stream, mr);
+      Type{}, numeric::scale_type{input.type().scale()}, false, stream, resources);
 
     device_single_thread(
       [buffer   = result->data(),
@@ -163,13 +164,14 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     bool valid = is_element_valid_sync(input, index, stream);
     auto row_contents =
-      std::make_unique<column>(slice(input, index, index + 1, stream), stream, mr)->release();
+      std::make_unique<column>(slice(input, index, index + 1, stream), stream,
+                  resources)->release();
     auto scalar_contents = table(std::move(row_contents.children));
-    return std::make_unique<struct_scalar>(std::move(scalar_contents), valid, stream, mr);
+    return std::make_unique<struct_scalar>(std::move(scalar_contents), valid, stream, resources);
   }
 };
 
@@ -178,10 +180,10 @@ struct get_element_functor {
 std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds", std::out_of_range);
-  return type_dispatcher(input.type(), get_element_functor{}, input, index, stream, mr);
+  return type_dispatcher(input.type(), get_element_functor{}, input, index, stream, resources);
 }
 
 }  // namespace detail
@@ -189,10 +191,10 @@ std::unique_ptr<scalar> get_element(column_view const& input,
 std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_element(input, index, stream, mr);
+  return detail::get_element(input, index, stream, resources);
 }
 
 }  // namespace cudf

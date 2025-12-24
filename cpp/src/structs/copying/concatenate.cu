@@ -29,7 +29,7 @@ namespace detail {
  */
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   // get ordered children
   auto ordered_children = extract_ordered_struct_children(columns, stream);
@@ -41,7 +41,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                  ordered_children.end(),
                  std::back_inserter(children),
                  [mr, stream](host_span<column_view const> cols) {
-                   return cudf::detail::concatenate(cols, stream, mr);
+                   return cudf::detail::concatenate(cols, stream, resources);
                  });
 
   // get total length from concatenated children; if no child exists, we would compute it
@@ -61,7 +61,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
 
   // assemble into outgoing list column
   return make_structs_column(
-    total_length, std::move(children), null_count, std::move(null_mask), stream, mr);
+    total_length, std::move(children), null_count, std::move(null_mask), stream, resources);
 }
 
 }  // namespace detail

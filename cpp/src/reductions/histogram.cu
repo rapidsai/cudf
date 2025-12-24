@@ -63,23 +63,23 @@ auto gather_histogram(table_view const& input,
                       device_span<size_type const> distinct_indices,
                       std::unique_ptr<column>&& distinct_counts,
                       rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr)
+                      cudf::memory_resources resources)
 {
   auto distinct_rows = cudf::detail::gather(input,
                                             distinct_indices,
                                             out_of_bounds_policy::DONT_CHECK,
                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
                                             stream,
-                                            mr);
+                                            resources);
 
   std::vector<std::unique_ptr<column>> struct_children;
   struct_children.emplace_back(std::move(distinct_rows->release().front()));
   struct_children.emplace_back(std::move(distinct_counts));
   auto output_structs = make_structs_column(
-    static_cast<size_type>(distinct_indices.size()), std::move(struct_children), 0, {}, stream, mr);
+    static_cast<size_type>(distinct_indices.size()), std::move(struct_children), 0, {}, stream, resources);
 
   return std::make_unique<cudf::list_scalar>(
-    std::move(*output_structs.release()), true, stream, mr);
+    std::move(*output_structs.release()), true, stream, resources);
 }
 
 }  // namespace
@@ -101,7 +101,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<colum
 compute_row_frequencies(table_view const& input,
                         std::optional<column_view> const& partial_counts,
                         rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr)
+                        cudf::memory_resources resources)
 {
   auto const has_nested_columns = cudf::detail::has_nested_columns(input);
 
@@ -131,8 +131,8 @@ compute_row_frequencies(table_view const& input,
   size_t const num_rows = input.num_rows();
 
   // Construct a vector to store reduced counts and init to zero
-  rmm::device_uvector<histogram_count_type> reduction_results(num_rows, stream, mr);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+  rmm::device_uvector<histogram_count_type> reduction_results(num_rows, stream, resources);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                              reduction_results.begin(),
                              reduction_results.end(),
                              histogram_count_type{0});
@@ -155,7 +155,7 @@ compute_row_frequencies(table_view const& input,
   // Compute frequencies (aka distinct counts) for the input rows.
   // Note that we consider null and NaNs as always equal.
   thrust::for_each(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_t>(0),
     thrust::make_counting_iterator<size_t>(num_rows),
     [set_ref = row_set_ref,
@@ -173,10 +173,10 @@ compute_row_frequencies(table_view const& input,
   auto const set_size = row_set.size(stream);
 
   // Vector of distinct indices
-  auto distinct_indices = std::make_unique<rmm::device_uvector<size_type>>(set_size, stream, mr);
+  auto distinct_indices = std::make_unique<rmm::device_uvector<size_type>>(set_size, stream, resources);
   // Column of distinct counts
   auto distinct_counts = make_numeric_column(
-    data_type{type_to_id<histogram_count_type>()}, set_size, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<histogram_count_type>()}, set_size, mask_state::UNALLOCATED, stream, resources);
 
   // Copy row indices and counts to the output if counts are non-zero
   auto const input_it = thrust::make_zip_iterator(
@@ -187,27 +187,27 @@ compute_row_frequencies(table_view const& input,
   // Reduction results above are either group sizes of equal rows, or `0`.
   // The final output is non-zero group sizes only.
   thrust::copy_if(
-    rmm::exec_policy_nosync(stream), input_it, input_it + num_rows, output_it, is_not_zero{});
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), input_it, input_it + num_rows, output_it, is_not_zero{});
 
   return {std::move(distinct_indices), std::move(distinct_counts)};
 }
 
 std::unique_ptr<cudf::scalar> histogram(column_view const& input,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   // Empty group should be handled before reaching here.
   CUDF_EXPECTS(input.size() > 0, "Input should not be empty.", std::invalid_argument);
 
   auto const input_tv = table_view{{input}};
   auto [distinct_indices, distinct_counts] =
-    compute_row_frequencies(input_tv, std::nullopt, stream, mr);
-  return gather_histogram(input_tv, *distinct_indices, std::move(distinct_counts), stream, mr);
+    compute_row_frequencies(input_tv, std::nullopt, stream, resources);
+  return gather_histogram(input_tv, *distinct_indices, std::move(distinct_counts), stream, resources);
 }
 
 std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   // Empty group should be handled before reaching here.
   CUDF_EXPECTS(input.size() > 0, "Input should not be empty.", std::invalid_argument);
@@ -225,8 +225,8 @@ std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
 
   auto const values_tv = table_view{{input_values}};
   auto [distinct_indices, distinct_counts] =
-    compute_row_frequencies(values_tv, input_counts, stream, mr);
-  return gather_histogram(values_tv, *distinct_indices, std::move(distinct_counts), stream, mr);
+    compute_row_frequencies(values_tv, input_counts, stream, resources);
+  return gather_histogram(values_tv, *distinct_indices, std::move(distinct_counts), stream, resources);
 }
 
 }  // namespace cudf::reduction::detail

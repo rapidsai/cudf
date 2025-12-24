@@ -27,7 +27,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& input,
                                          size_type start,
                                          size_type end,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid start parameter value.");
@@ -40,7 +40,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& input,
       input.offsets(), {offsets_offset, offsets_offset + strings_count + 1}, stream)
       .front(),
     stream,
-    mr);
+    resources);
   auto const chars_offset =
     offsets_offset == 0 ? 0L : get_offset_value(offsets_column->view(), 0, stream);
   if (chars_offset > 0) {
@@ -49,7 +49,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& input,
       cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
     auto input_offsets =
       cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), offsets_offset);
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       input_offsets,
                       input_offsets + offsets_column->size(),
                       d_offsets,
@@ -65,7 +65,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& input,
 
   // slice the null mask
   auto null_mask = cudf::detail::copy_bitmask(
-    input.null_mask(), offsets_offset, offsets_offset + strings_count, stream, mr);
+    input.null_mask(), offsets_offset, offsets_offset + strings_count, stream, resources);
 
   auto null_count = cudf::detail::null_count(
     static_cast<bitmask_type const*>(null_mask.data()), 0, strings_count, stream);

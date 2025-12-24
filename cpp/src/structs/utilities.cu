@@ -97,7 +97,7 @@ struct table_flattener {
                   std::vector<null_order> const& null_precedence,
                   column_nullability nullability,
                   rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr)
+                  cudf::memory_resources resources)
     : column_order{column_order},
       null_precedence{null_precedence},
       nullability{nullability},
@@ -113,7 +113,7 @@ struct table_flattener {
    */
   void superimpose_nulls(table_view const& input_table)
   {
-    auto [table, tmp_nullable_data] = push_down_nulls(input_table, stream, mr);
+    auto [table, tmp_nullable_data] = push_down_nulls(input_table, stream, resources);
     this->input                     = std::move(table);
     this->nullable_data             = std::move(tmp_nullable_data);
   }
@@ -136,10 +136,12 @@ struct table_flattener {
     // sure the flattening results are tables having the same number of columns.
 
     if (nullability == column_nullability::FORCE || col.has_nulls()) {
-      validity_as_column.push_back(cudf::detail::is_valid(col, stream, mr));
+      validity_as_column.push_back(cudf::detail::is_valid(col, stream,
+                  resources));
       if (col.has_nulls()) {
         // copy bitmask is needed only if the column has null
-        validity_as_column.back()->set_null_mask(cudf::detail::copy_bitmask(col, stream, mr),
+        validity_as_column.back()->set_null_mask(cudf::detail::copy_bitmask(col, stream,
+                  resources),
                                                  col.null_count());
       }
       flat_columns.push_back(validity_as_column.back()->view());
@@ -194,7 +196,7 @@ std::unique_ptr<flattened_table> flatten_nested_columns(
   std::vector<null_order> const& null_precedence,
   column_nullability nullability,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
   if (not has_struct) {
@@ -226,7 +228,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
                                           size_type null_count,
                                           std::unique_ptr<column>&& input,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   if (input->type().id() == cudf::type_id::EMPTY) {
@@ -238,7 +240,8 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
   auto const num_rows = input->size();
 
   if (!input->nullable()) {
-    input->set_null_mask(cudf::detail::copy_bitmask(null_mask, 0, num_rows, stream, mr),
+    input->set_null_mask(cudf::detail::copy_bitmask(null_mask, 0, num_rows, stream,
+                  resources),
                          null_count);
   } else {
     auto current_mask = input->mutable_view().null_mask();
@@ -273,7 +276,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
                               new_null_count,
                               std::move(child),
                               stream,
-                              mr);
+                              resources);
   }
   return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
                                   num_rows,
@@ -303,7 +306,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(
   host_span<bitmask_type const* const> null_masks,
   std::vector<std::unique_ptr<column>> inputs,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
@@ -374,7 +377,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(
     num_rows,
     segment_offsets,
     stream,
-    mr);
+    resources);
 
   // Create new struct column and its descendants with updated null masks
   // Recursively updates each column and its children with their new null masks
@@ -414,7 +417,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(
  * @copydoc cudf::structs::detail::push_down_nulls
  */
 std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  column_view const& input, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
   auto ret_nullable_data = temporary_nullable_data{};
   if (input.type().id() != type_id::STRUCT) {
@@ -451,7 +454,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
                                                               std::vector<size_type>{0, 0},
                                                               child.offset() + child.size(),
                                                               stream,
-                                                              mr);
+                                                              resources);
       ret_nullable_data.new_null_masks.push_back(std::move(new_mask));
       return std::pair{
         reinterpret_cast<bitmask_type const*>(ret_nullable_data.new_null_masks.back().data()),
@@ -473,7 +476,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
   auto ret_children    = std::vector<column_view>{};
 
   std::for_each(child_begin, child_end, [&](auto const& child) {
-    auto [processed_child, child_nullable_data] = push_down_nulls_no_sanitize(child, stream, mr);
+    auto [processed_child, child_nullable_data] = push_down_nulls_no_sanitize(child, stream, resources);
     ret_children.emplace_back(std::move(processed_child));
     ret_nullable_data.emplace_back(std::move(child_nullable_data));
   });
@@ -508,10 +511,10 @@ std::unique_ptr<column> superimpose_and_sanitize_nulls(bitmask_type const* null_
                                                        size_type null_count,
                                                        std::unique_ptr<column>&& input,
                                                        rmm::cuda_stream_view stream,
-                                                       rmm::device_async_resource_ref mr)
+                                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  input = superimpose_nulls(null_mask, null_count, std::move(input), stream, mr);
+  input = superimpose_nulls(null_mask, null_count, std::move(input), stream, resources);
 
   nvtxRangePushA("purging");
   if (auto const input_view = input->view(); cudf::detail::has_nonempty_nulls(input_view, stream)) {
@@ -520,7 +523,7 @@ std::unique_ptr<column> superimpose_and_sanitize_nulls(bitmask_type const* null_
     // This is to make sure all the columns (top level + all children) have consistent offsets.
     // Otherwise, the sanitized children may have offsets that are different from the others and
     // also different from the parent column, causing data corruption.
-    return cudf::detail::purge_nonempty_nulls(input_view, stream, mr);
+    return cudf::detail::purge_nonempty_nulls(input_view, stream, resources);
   }
   nvtxRangePop();
 
@@ -531,17 +534,18 @@ std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
   host_span<bitmask_type const* const> null_masks,
   std::vector<std::unique_ptr<column>> inputs,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  inputs = superimpose_nulls(null_masks, std::move(inputs), stream, mr);
+  inputs = superimpose_nulls(null_masks, std::move(inputs), stream, resources);
 
   std::vector<std::unique_ptr<column>> purged_columns;
   for (auto& input : inputs) {
     auto const input_view = input->view();
     auto const nullbool   = cudf::detail::has_nonempty_nulls(input_view, stream);
     if (nullbool) {
-      purged_columns.emplace_back(cudf::detail::purge_nonempty_nulls(input_view, stream, mr));
+      purged_columns.emplace_back(cudf::detail::purge_nonempty_nulls(input_view, stream,
+                  resources));
     } else {
       purged_columns.emplace_back(std::move(input));
     }
@@ -553,7 +557,7 @@ std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
 std::vector<std::unique_ptr<column>> enforce_null_consistency(
   std::vector<std::unique_ptr<column>> columns,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
@@ -601,7 +605,7 @@ std::vector<std::unique_ptr<column>> enforce_null_consistency(
   // Apply parent struct nulls to all child columns (if there are any struct columns)
   if (!struct_root_masks.empty()) {
     struct_child_cols =
-      superimpose_and_sanitize_nulls(struct_root_masks, std::move(struct_child_cols), stream, mr);
+      superimpose_and_sanitize_nulls(struct_root_masks, std::move(struct_child_cols), stream, resources);
   }
 
   // Rebuild struct columns with the updated child columns
@@ -629,14 +633,15 @@ std::vector<std::unique_ptr<column>> enforce_null_consistency(
 
 std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view const& input,
                                                                 rmm::cuda_stream_view stream,
-                                                                rmm::device_async_resource_ref mr)
+                                                                cudf::memory_resources resources)
 {
-  auto output = push_down_nulls_no_sanitize(input, stream, mr);
+  auto output = push_down_nulls_no_sanitize(input, stream, resources);
 
   if (auto const output_view = output.first;
       cudf::detail::has_nonempty_nulls(output_view, stream)) {
     output.second.new_columns.emplace_back(
-      cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
+      cudf::detail::purge_nonempty_nulls(output_view, stream,
+                  resources));
     output.first = output.second.new_columns.back()->view();
 
     // Don't need the temp null mask anymore, as we will create a new column.
@@ -650,12 +655,12 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
 
 std::pair<table_view, temporary_nullable_data> push_down_nulls(table_view const& table,
                                                                rmm::cuda_stream_view stream,
-                                                               rmm::device_async_resource_ref mr)
+                                                               cudf::memory_resources resources)
 {
   auto processed_columns = std::vector<column_view>{};
   auto nullable_data     = temporary_nullable_data{};
   for (auto const& col : table) {
-    auto [processed_col, col_nullable_data] = push_down_nulls(col, stream, mr);
+    auto [processed_col, col_nullable_data] = push_down_nulls(col, stream, resources);
     processed_columns.emplace_back(std::move(processed_col));
     nullable_data.emplace_back(std::move(col_nullable_data));
   }

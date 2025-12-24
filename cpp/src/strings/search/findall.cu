@@ -65,14 +65,14 @@ std::unique_ptr<column> findall_util(column_device_view const& d_strings,
                                      int64_t total_matches,
                                      size_type const* d_offsets,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   rmm::device_uvector<string_index_pair> indices(total_matches, stream);
 
   launch_for_each_kernel(
     findall_fn{d_strings, d_offsets, indices.data()}, d_prog, d_strings.size(), stream);
 
-  return make_strings_column(indices.begin(), indices.end(), stream, mr);
+  return make_strings_column(indices.begin(), indices.end(), stream, resources);
 }
 
 }  // namespace
@@ -81,10 +81,10 @@ std::unique_ptr<column> findall_util(column_device_view const& d_strings,
 std::unique_ptr<column> findall(strings_column_view const& input,
                                 regex_program const& prog,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   if (input.is_empty()) {
-    return cudf::lists::detail::make_empty_lists_column(input.parent().type(), stream, mr);
+    return cudf::lists::detail::make_empty_lists_column(input.parent().type(), stream, resources);
   }
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
@@ -93,22 +93,23 @@ std::unique_ptr<column> findall(strings_column_view const& input,
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   // Create lists offsets column
-  auto const sizes              = count_matches(*d_strings, *d_prog, stream, mr);
+  auto const sizes              = count_matches(*d_strings, *d_prog, stream, resources);
   auto [offsets, total_matches] = cudf::detail::make_offsets_child_column(
-    sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
+    sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, resources);
   auto const d_offsets = offsets->view().data<size_type>();
 
   // Build strings column of the matches
-  auto strings_output = findall_util(*d_strings, *d_prog, total_matches, d_offsets, stream, mr);
+  auto strings_output = findall_util(*d_strings, *d_prog, total_matches, d_offsets, stream, resources);
 
   // Build the lists column from the offsets and the strings
   return make_lists_column(input.size(),
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                           cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                            stream,
-                           mr);
+                           resources);
 }
 
 namespace {
@@ -131,14 +132,15 @@ struct find_re_fn {
 std::unique_ptr<column> find_re(strings_column_view const& input,
                                 regex_program const& prog,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   if (input.is_empty()) { return results; }
 
   auto d_results       = results->mutable_view().data<size_type>();
@@ -155,19 +157,19 @@ std::unique_ptr<column> find_re(strings_column_view const& input,
 std::unique_ptr<column> findall(strings_column_view const& input,
                                 regex_program const& prog,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall(input, prog, stream, mr);
+  return detail::findall(input, prog, stream, resources);
 }
 
 std::unique_ptr<column> find_re(strings_column_view const& input,
                                 regex_program const& prog,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::find_re(input, prog, stream, mr);
+  return detail::find_re(input, prog, stream, resources);
 }
 
 }  // namespace strings

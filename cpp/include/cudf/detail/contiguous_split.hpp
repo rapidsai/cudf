@@ -23,7 +23,7 @@ namespace detail {
 std::vector<packed_table> contiguous_split(cudf::table_view const& input,
                                            std::vector<size_type> const& splits,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr);
+                                           cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::pack
@@ -32,7 +32,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
  **/
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr);
+                    cudf::memory_resources resources);
 
 // opaque implementation of `metadata_builder` since it needs to use
 // `serialized_column`, which is only defined in pack.cpp

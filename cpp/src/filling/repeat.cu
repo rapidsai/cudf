@@ -73,7 +73,7 @@ struct count_checker {
     if (static_cast<int64_t>(std::numeric_limits<T>::max()) >
         std::numeric_limits<cudf::size_type>::max()) {
       auto max = thrust::reduce(
-        rmm::exec_policy(stream), count.begin<T>(), count.end<T>(), 0, cuda::maximum<T>());
+        rmm::exec_policy(stream, resources.get_temporary_mr()), count.begin<T>(), count.end<T>(), 0, cuda::maximum<T>());
       CUDF_EXPECTS(max <= std::numeric_limits<cudf::size_type>::max(),
                    "count exceeds the column size limit",
                    std::overflow_error);
@@ -95,7 +95,7 @@ namespace detail {
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_EXPECTS(input_table.num_rows() == count.size(), "in and count must have equal size");
   CUDF_EXPECTS(not count.has_nulls(), "count cannot contain nulls");
@@ -106,11 +106,11 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
   rmm::device_uvector<cudf::size_type> offsets(count.size(), stream);
   thrust::inclusive_scan(
-    rmm::exec_policy(stream), count_iter, count_iter + count.size(), offsets.begin());
+    rmm::exec_policy(stream, resources.get_temporary_mr()), count_iter, count_iter + count.size(), offsets.begin());
 
   size_type output_size{offsets.back_element(stream)};
   rmm::device_uvector<size_type> indices(output_size, stream);
-  thrust::upper_bound(rmm::exec_policy(stream),
+  thrust::upper_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       offsets.begin(),
                       offsets.end(),
                       thrust::make_counting_iterator(0),
@@ -118,13 +118,13 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                       indices.begin());
 
   return gather(
-    input_table, indices.begin(), indices.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
+    input_table, indices.begin(), indices.end(), out_of_bounds_policy::DONT_CHECK, stream, resources);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                               size_type count,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   if ((input_table.num_rows() == 0) || (count == 0)) { return cudf::empty_like(input_table); }
 
@@ -139,7 +139,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
     cuda::proclaim_return_type<size_type>([count] __device__(size_type i) { return i / count; }));
   auto map_end = map_begin + output_size;
 
-  return gather(input_table, map_begin, map_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
+  return gather(input_table, map_begin, map_end, out_of_bounds_policy::DONT_CHECK, stream, resources);
 }
 
 }  // namespace detail
@@ -147,19 +147,19 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, stream, mr);
+  return detail::repeat(input_table, count, stream, resources);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                               size_type count,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, stream, mr);
+  return detail::repeat(input_table, count, stream, resources);
 }
 
 }  // namespace cudf

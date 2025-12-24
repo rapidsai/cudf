@@ -71,7 +71,7 @@ std::unique_ptr<column> replace_slice(strings_column_view const& input,
                                       size_type start,
                                       size_type stop,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
@@ -85,13 +85,14 @@ std::unique_ptr<column> replace_slice(strings_column_view const& input,
 
   // this utility calls the given functor to build the offsets and chars columns
   auto [offsets_column, chars] = make_strings_children(
-    replace_slice_fn{*d_strings, d_repl, start, stop}, input.size(), stream, mr);
+    replace_slice_fn{*d_strings, d_repl, start, stop}, input.size(), stream, resources);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 }  // namespace detail
@@ -101,10 +102,10 @@ std::unique_ptr<column> replace_slice(strings_column_view const& input,
                                       size_type start,
                                       size_type stop,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_slice(input, repl, start, stop, stream, mr);
+  return detail::replace_slice(input, repl, start, stop, stream, resources);
 }
 
 }  // namespace strings

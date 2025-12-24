@@ -57,10 +57,10 @@ struct sequence_functor {
                                      scalar const& init,
                                      scalar const& step,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(cudf::is_numeric<T>() and not cudf::is_boolean<T>())
   {
-    auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, mr);
+    auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, resources);
     auto result_device_view = mutable_column_device_view::create(*result, stream);
 
     auto n_init =
@@ -71,7 +71,7 @@ struct sequence_functor {
     // not using thrust::sequence because it requires init and step to be passed as
     // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,
     // which is undesirable from a performance perspective.
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      result_device_view->begin<T>(),
                      result_device_view->end<T>(),
                      tabulator<T>{n_init, n_step});
@@ -83,10 +83,10 @@ struct sequence_functor {
   std::unique_ptr<column> operator()(size_type size,
                                      scalar const& init,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(cudf::is_numeric<T>() and not cudf::is_boolean<T>())
   {
-    auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, mr);
+    auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, resources);
     auto result_device_view = mutable_column_device_view::create(*result, stream);
 
     auto n_init =
@@ -95,7 +95,7 @@ struct sequence_functor {
     // not using thrust::sequence because it requires init and step to be passed as
     // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,
     // which is undesirable from a performance perspective.
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      result_device_view->begin<T>(),
                      result_device_view->end<T>(),
                      const_tabulator<T>{n_init});
@@ -117,7 +117,7 @@ std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  scalar const& step,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_EXPECTS(cudf::have_same_types(init, step),
                "init and step must be of the same type.",
@@ -128,19 +128,19 @@ std::unique_ptr<column> sequence(size_type size,
   CUDF_EXPECTS(init.is_valid(stream), "init must be a valid scalar", std::invalid_argument);
   CUDF_EXPECTS(step.is_valid(stream), "step must be a valid scalar", std::invalid_argument);
 
-  return type_dispatcher(init.type(), sequence_functor{}, size, init, step, stream, mr);
+  return type_dispatcher(init.type(), sequence_functor{}, size, init, step, stream, resources);
 }
 
 std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_EXPECTS(size >= 0, "size must be >= 0", std::invalid_argument);
   CUDF_EXPECTS(is_numeric(init.type()), "init scalar type must be numeric", cudf::data_type_error);
   CUDF_EXPECTS(init.is_valid(stream), "init must be a valid scalar", std::invalid_argument);
 
-  return type_dispatcher(init.type(), sequence_functor{}, size, init, stream, mr);
+  return type_dispatcher(init.type(), sequence_functor{}, size, init, stream, resources);
 }
 
 }  // namespace detail
@@ -149,19 +149,19 @@ std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  scalar const& step,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequence(size, init, step, stream, mr);
+  return detail::sequence(size, init, step, stream, resources);
 }
 
 std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequence(size, init, stream, mr);
+  return detail::sequence(size, init, stream, resources);
 }
 
 }  // namespace cudf

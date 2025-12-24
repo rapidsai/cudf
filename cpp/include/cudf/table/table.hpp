@@ -46,7 +46,7 @@ class table {
    */
   explicit table(table const& other,
                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
   /**
    * @brief Moves the contents from a vector of `unique_ptr`s to columns to
    * construct a new table.
@@ -65,7 +65,7 @@ class table {
    */
   table(table_view view,
         rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-        rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+        cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Returns the number of columns in the table

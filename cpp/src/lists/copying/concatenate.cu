@@ -47,11 +47,11 @@ namespace {
 std::unique_ptr<column> merge_offsets(host_span<lists_column_view const> columns,
                                       size_type total_list_count,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   // outgoing offsets
   auto merged_offsets = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, total_list_count + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_id::INT32}, total_list_count + 1, mask_state::UNALLOCATED, stream, resources);
   mutable_column_device_view d_merged_offsets(*merged_offsets, 0, 0);
 
   // merge offsets
@@ -66,7 +66,7 @@ std::unique_ptr<column> merge_offsets(host_span<lists_column_view const> columns
         (c.offset() > 0 ? cudf::detail::get_value<size_type>(c.offsets(), c.offset(), stream) : 0);
       column_device_view offsets(c.offsets(), nullptr, nullptr);
       thrust::transform(
-        rmm::exec_policy(stream),
+        rmm::exec_policy(stream, resources.get_temporary_mr()),
         offsets.begin<size_type>() + c.offset(),
         offsets.begin<size_type>() + c.offset() + c.size() + 1,
         d_merged_offsets.begin<size_type>() + count,
@@ -87,7 +87,7 @@ std::unique_ptr<column> merge_offsets(host_span<lists_column_view const> columns
  */
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   std::vector<lists_column_view> lists_columns;
   lists_columns.reserve(columns.size());
@@ -107,16 +107,16 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                   total_list_count += l.size();
                   children.push_back(l.get_sliced_child(stream));
                 });
-  auto data = cudf::detail::concatenate(children, stream, mr);
+  auto data = cudf::detail::concatenate(children, stream, resources);
 
   // merge offsets
-  auto offsets = merge_offsets(lists_columns, total_list_count, stream, mr);
+  auto offsets = merge_offsets(lists_columns, total_list_count, stream, resources);
 
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
   rmm::device_buffer null_mask = cudf::detail::create_null_mask(
-    total_list_count, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
+    total_list_count, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, resources);
   auto null_mask_data = static_cast<bitmask_type*>(null_mask.data());
   auto const null_count =
     has_nulls ? cudf::detail::concatenate_masks(columns, null_mask_data, stream) : size_type{0};
@@ -128,7 +128,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                            null_count,
                            std::move(null_mask),
                            stream,
-                           mr);
+                           resources);
 }
 
 }  // namespace detail

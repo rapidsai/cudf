@@ -59,7 +59,7 @@ struct dispatch_from_arrow_device {
                               data_type type,
                               bool skip_mask,
                               rmm::cuda_stream_view,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
   {
     size_type const num_rows   = input->length;
     size_type const offset     = input->offset;
@@ -81,7 +81,7 @@ dispatch_tuple_t get_column(ArrowSchemaView* schema,
                             data_type type,
                             bool skip_mask,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr);
+                            cudf::memory_resources resources);
 
 template <>
 dispatch_tuple_t dispatch_from_arrow_device::operator()<bool>(ArrowSchemaView* schema,
@@ -89,7 +89,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<bool>(ArrowSchemaView* s
                                                               data_type type,
                                                               bool skip_mask,
                                                               rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr)
+                                                              cudf::memory_resources resources)
 {
   if (input->length == 0) {
     return std::make_tuple<column_view, owned_columns_t>(
@@ -107,7 +107,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<bool>(ArrowSchemaView* s
     input->offset,
     input->offset + input->length,
     stream,
-    mr);
+    resources);
   auto const has_nulls = skip_mask ? false : input->buffers[validity_buffer_idx] != nullptr;
   if (has_nulls) {
     auto out_mask = cudf::detail::copy_bitmask(
@@ -115,7 +115,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<bool>(ArrowSchemaView* s
       input->offset,
       input->offset + input->length,
       stream,
-      mr);
+      resources);
     out_col->set_null_mask(std::move(out_mask), input->null_count);
   }
 
@@ -132,7 +132,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
   data_type type,
   bool skip_mask,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   if (input->length == 0) {
     return std::make_tuple<column_view, owned_columns_t>(
@@ -173,7 +173,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::dictionary32>(
   data_type type,
   bool skip_mask,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   ArrowSchemaView keys_schema_view;
   NANOARROW_THROW_NOT_OK(
@@ -181,7 +181,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::dictionary32>(
 
   auto const keys_type = arrow_to_cudf_type(&keys_schema_view);
   auto [keys_view, owned_cols] =
-    get_column(&keys_schema_view, input->dictionary, keys_type, true, stream, mr);
+    get_column(&keys_schema_view, input->dictionary, keys_type, true, stream, resources);
 
   auto const dict_indices_type = [&schema]() -> data_type {
     // cudf dictionary requires a signed type for the indices
@@ -222,7 +222,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::struct_view>(
   data_type type,
   bool skip_mask,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   std::vector<column_view> children;
   owned_columns_t out_owned_cols;
@@ -235,7 +235,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::struct_view>(
       ArrowSchemaView view;
       NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
       auto type              = arrow_to_cudf_type(&view);
-      auto [out_view, owned] = get_column(&view, child, type, false, stream, mr);
+      auto [out_view, owned] = get_column(&view, child, type, false, stream, resources);
       if (out_owned_cols.empty()) {
         out_owned_cols = std::move(owned);
       } else {
@@ -267,7 +267,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::list_view>(
   data_type type,
   bool skip_mask,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(schema->type != NANOARROW_TYPE_LARGE_LIST,
                "Large list types are not supported",
@@ -287,7 +287,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::list_view>(
     ArrowSchemaViewInit(&child_schema_view, schema->schema->children[0], nullptr));
   auto child_type = arrow_to_cudf_type(&child_schema_view);
   auto [child_view, owned] =
-    get_column(&child_schema_view, input->children[0], child_type, false, stream, mr);
+    get_column(&child_schema_view, input->children[0], child_type, false, stream, resources);
 
   // in the scenario where we were sliced and there are more elements in the child_view
   // than can be referenced by the sliced offsets, we need to slice the child_view
@@ -312,7 +312,7 @@ dispatch_tuple_t get_column(ArrowSchemaView* schema,
                             data_type type,
                             bool skip_mask,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+                            cudf::memory_resources resources)
 {
   CUDF_EXPECTS(
     input->length <= static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
@@ -321,7 +321,8 @@ dispatch_tuple_t get_column(ArrowSchemaView* schema,
 
   return type.id() != type_id::EMPTY
            ? std::move(type_dispatcher(
-               type, dispatch_from_arrow_device{}, schema, input, type, skip_mask, stream, mr))
+               type, dispatch_from_arrow_device{}, schema, input, type, skip_mask, stream,
+                  resources))
            : std::make_tuple<column_view, owned_columns_t>({data_type(type_id::EMPTY),
                                                             static_cast<size_type>(input->length),
                                                             nullptr,
@@ -335,7 +336,7 @@ dispatch_tuple_t get_column(ArrowSchemaView* schema,
 unique_table_view_t from_arrow_device(ArrowSchema const* schema,
                                       ArrowDeviceArray const* input,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_EXPECTS(schema != nullptr && input != nullptr,
                "input ArrowSchema and ArrowDeviceArray must not be NULL",
@@ -372,7 +373,7 @@ unique_table_view_t from_arrow_device(ArrowSchema const* schema,
       ArrowSchemaView view;
       NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
       auto type              = arrow_to_cudf_type(&view);
-      auto [out_view, owned] = get_column(&view, child, type, false, stream, mr);
+      auto [out_view, owned] = get_column(&view, child, type, false, stream, resources);
       if (owned_mem.empty()) {
         owned_mem = std::move(owned);
       } else {
@@ -390,7 +391,7 @@ unique_table_view_t from_arrow_device(ArrowSchema const* schema,
 unique_column_view_t from_arrow_device_column(ArrowSchema const* schema,
                                               ArrowDeviceArray const* input,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   CUDF_EXPECTS(schema != nullptr && input != nullptr,
                "input ArrowSchema and ArrowDeviceArray must not be NULL",
@@ -412,7 +413,7 @@ unique_column_view_t from_arrow_device_column(ArrowSchema const* schema,
   }
 
   auto type             = arrow_to_cudf_type(&view);
-  auto [colview, owned] = get_column(&view, &input->array, type, false, stream, mr);
+  auto [colview, owned] = get_column(&view, &input->array, type, false, stream, resources);
   return unique_column_view_t{new column_view{colview},
                               custom_view_deleter<cudf::column_view>{std::move(owned)}};
 }
@@ -422,21 +423,21 @@ unique_column_view_t from_arrow_device_column(ArrowSchema const* schema,
 unique_table_view_t from_arrow_device(ArrowSchema const* schema,
                                       ArrowDeviceArray const* input,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
-  return detail::from_arrow_device(schema, input, stream, mr);
+  return detail::from_arrow_device(schema, input, stream, resources);
 }
 
 unique_column_view_t from_arrow_device_column(ArrowSchema const* schema,
                                               ArrowDeviceArray const* input,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
-  return detail::from_arrow_device_column(schema, input, stream, mr);
+  return detail::from_arrow_device_column(schema, input, stream, resources);
 }
 
 }  // namespace cudf

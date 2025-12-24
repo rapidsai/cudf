@@ -94,7 +94,7 @@ struct extract_fn {
 std::unique_ptr<column> extract_all_record(strings_column_view const& input,
                                            regex_program const& prog,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   auto const strings_count = input.size();
   auto const d_strings     = column_device_view::create(input.parent(), stream);
@@ -108,16 +108,16 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Get the match counts for each string.
   // This column will become the output lists child offsets column.
-  auto counts   = count_matches(*d_strings, *d_prog, stream, mr);
+  auto counts   = count_matches(*d_strings, *d_prog, stream, resources);
   auto d_counts = counts->mutable_view().data<size_type>();
 
   // Compute null output rows
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    d_counts, d_counts + strings_count, [] __device__(auto v) { return v > 0; }, stream, mr);
+    d_counts, d_counts + strings_count, [] __device__(auto v) { return v > 0; }, stream, resources);
 
   // Return an empty lists column if there are no valid rows
   if (strings_count == null_count) {
-    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING}, stream, mr);
+    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING}, stream, resources);
   }
 
   // Convert counts into offsets.
@@ -127,7 +127,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
       return d_counts[idx] * groups;
     }));
   auto [offsets, total_strings] =
-    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + strings_count, stream, mr);
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + strings_count, stream, resources);
   auto d_offsets = offsets->view().data<size_type>();
 
   rmm::device_uvector<string_index_pair> indices(total_strings, stream);
@@ -135,7 +135,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
   launch_for_each_kernel(
     extract_fn{*d_strings, d_offsets, indices.data()}, *d_prog, strings_count, stream);
 
-  auto strings_output = make_strings_column(indices.begin(), indices.end(), stream, mr);
+  auto strings_output = make_strings_column(indices.begin(), indices.end(), stream, resources);
 
   // Build the lists column from the offsets and the strings.
   return make_lists_column(strings_count,
@@ -144,7 +144,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
                            null_count,
                            std::move(null_mask),
                            stream,
-                           mr);
+                           resources);
 }
 
 }  // namespace detail
@@ -154,10 +154,10 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 std::unique_ptr<column> extract_all_record(strings_column_view const& input,
                                            regex_program const& prog,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_all_record(input, prog, stream, mr);
+  return detail::extract_all_record(input, prog, stream, resources);
 }
 
 }  // namespace strings

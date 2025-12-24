@@ -24,7 +24,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
                                   std::vector<size_type> const& keys,
                                   cudf::size_type keep_threshold,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr);
+                                  cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::drop_nans(table_view const&, std::vector<size_type> const&,
@@ -34,7 +34,7 @@ std::unique_ptr<table> drop_nans(table_view const& input,
                                  std::vector<size_type> const& keys,
                                  cudf::size_type keep_threshold,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::apply_boolean_mask
@@ -42,7 +42,7 @@ std::unique_ptr<table> drop_nans(table_view const& input,
 std::unique_ptr<table> apply_boolean_mask(table_view const& input,
                                           column_view const& boolean_mask,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr);
+                                          cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::unique
@@ -52,7 +52,7 @@ std::unique_ptr<table> unique(table_view const& input,
                               duplicate_keep_option keep,
                               null_equality nulls_equal,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr);
+                              cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::distinct
@@ -63,7 +63,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 null_equality nulls_equal,
                                 nan_equality nans_equal,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr);
+                                cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::stable_distinct
@@ -74,7 +74,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                        null_equality nulls_equal,
                                        nan_equality nans_equal,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr);
+                                       cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::distinct_indices
@@ -86,7 +86,7 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                                 null_equality nulls_equal,
                                                 nan_equality nans_equal,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr);
+                                                cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::unique_count(column_view const&, null_policy, nan_policy, rmm::cuda_stream_view)

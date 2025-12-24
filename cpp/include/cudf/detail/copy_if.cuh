@@ -44,7 +44,7 @@ template <typename Filter>
 std::unique_ptr<table> copy_if(table_view const& input,
                                Filter filter,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 

@@ -176,7 +176,7 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest
 std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& input,
                                                    column_view const& percentiles,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+                                                   cudf::memory_resources resources)
 {
   tdigest_column_view tdv(input);
 
@@ -189,7 +189,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
                                                           weight.size(),
                                                           mask_state::UNALLOCATED,
                                                           stream,
-                                                          cudf::get_current_device_resource_ref());
+                                                          resources.get_temporary_mr());
   auto keys               = cudf::detail::make_counting_transform_iterator(
     0,
     cuda::proclaim_return_type<std::ptrdiff_t>(
@@ -199,7 +199,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
           offsets_begin,
           cuda::std::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
       }));
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                 keys,
                                 keys + weight.size(),
                                 weight.begin<double>(),
@@ -225,7 +225,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
   }();
 
   auto result = cudf::make_fixed_width_column(
-    data_type{type_id::FLOAT64}, num_output_values, std::move(null_mask), null_count, stream, mr);
+    data_type{type_id::FLOAT64}, num_output_values, std::move(null_mask), null_count, stream, resources);
 
   auto centroids = cudf::detail::make_counting_transform_iterator(
     0, make_centroid{tdv.means().begin<double>(), tdv.weights().begin<double>()});
@@ -251,7 +251,7 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
                                             std::unique_ptr<column>&& min_values,
                                             std::unique_ptr<column>&& max_values,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   CUDF_EXPECTS(tdigest_offsets->size() == num_rows + 1,
                "Encountered unexpected offset count in make_tdigest_column");
@@ -268,40 +268,40 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
   inner_children.push_back(std::move(centroid_means));
   inner_children.push_back(std::move(centroid_weights));
   auto tdigest_data =
-    cudf::make_structs_column(centroids_size, std::move(inner_children), 0, {}, stream, mr);
+    cudf::make_structs_column(centroids_size, std::move(inner_children), 0, {}, stream, resources);
 
   // grouped into lists
   auto tdigest = cudf::make_lists_column(
-    num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {}, stream, mr);
+    num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {}, stream, resources);
 
   // create the final column
   std::vector<std::unique_ptr<column>> children;
   children.push_back(std::move(tdigest));
   children.push_back(std::move(min_values));
   children.push_back(std::move(max_values));
-  return make_structs_column(num_rows, std::move(children), 0, {}, stream, mr);
+  return make_structs_column(num_rows, std::move(children), 0, {}, stream, resources);
 }
 
 std::unique_ptr<column> make_empty_tdigests_column(size_type num_rows,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+                                                   cudf::memory_resources resources)
 {
   auto offsets = cudf::make_fixed_width_column(
-    data_type(type_id::INT32), num_rows + 1, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
+    data_type(type_id::INT32), num_rows + 1, mask_state::UNALLOCATED, stream, resources);
+  thrust::fill(rmm::exec_policy(stream, resources.get_temporary_mr()),
                offsets->mutable_view().begin<size_type>(),
                offsets->mutable_view().end<size_type>(),
                0);
 
   auto min_col = cudf::make_numeric_column(
-    data_type(type_id::FLOAT64), num_rows, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
+    data_type(type_id::FLOAT64), num_rows, mask_state::UNALLOCATED, stream, resources);
+  thrust::fill(rmm::exec_policy(stream, resources.get_temporary_mr()),
                min_col->mutable_view().begin<double>(),
                min_col->mutable_view().end<double>(),
                0);
   auto max_col = cudf::make_numeric_column(
-    data_type(type_id::FLOAT64), num_rows, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
+    data_type(type_id::FLOAT64), num_rows, mask_state::UNALLOCATED, stream, resources);
+  thrust::fill(rmm::exec_policy(stream, resources.get_temporary_mr()),
                max_col->mutable_view().begin<double>(),
                max_col->mutable_view().end<double>(),
                0);
@@ -313,7 +313,7 @@ std::unique_ptr<column> make_empty_tdigests_column(size_type num_rows,
                              std::move(min_col),
                              std::move(max_col),
                              stream,
-                             mr);
+                             resources);
 }
 
 /**
@@ -327,11 +327,12 @@ std::unique_ptr<column> make_empty_tdigests_column(size_type num_rows,
  * @returns An empty tdigest scalar.
  */
 std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
+                                                  cudf::memory_resources resources)
 {
-  auto contents = make_empty_tdigests_column(1, stream, mr)->release();
+  auto contents = make_empty_tdigests_column(1, stream,
+                  resources)->release();
   return std::make_unique<struct_scalar>(
-    std::move(*std::make_unique<table>(std::move(contents.children))), true, stream, mr);
+    std::move(*std::make_unique<table>(std::move(contents.children))), true, stream, resources);
 }
 
 }  // namespace detail
@@ -339,7 +340,7 @@ std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
 std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   tdigest_column_view tdv(input);
   CUDF_EXPECTS(percentiles.type().id() == type_id::FLOAT64,
@@ -347,14 +348,14 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
 
   // output is a list column with each row containing percentiles.size() percentile values
   auto offsets = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, resources);
   auto const all_empty_rows =
-    thrust::count_if(rmm::exec_policy(stream),
+    thrust::count_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      detail::size_begin(input),
                      detail::size_begin(input) + input.size(),
                      [] __device__(auto const x) { return x == 0; }) == input.size();
   auto row_size_iter = thrust::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                          row_size_iter,
                          row_size_iter + input.size() + 1,
                          offsets->mutable_view().begin<size_type>());
@@ -366,34 +367,36 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       cudf::make_empty_column(type_id::FLOAT64),
       input.size(),
       cudf::detail::create_null_mask(
-        input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr),
+        input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream),
+                  resources),
       stream,
-      mr);
+      resources);
   }
 
   // if any of the input digests are empty, nullify the corresponding output rows (values will be
   // uninitialized)
-  auto [bitmask, null_count] = [stream, mr, &tdv]() {
+  auto [bitmask, null_count] = [stream, resources, &tdv]() {
     auto tdigest_is_empty = thrust::make_transform_iterator(
       detail::size_begin(tdv),
       cuda::proclaim_return_type<size_type>(
         [] __device__(size_type tdigest_size) -> size_type { return tdigest_size == 0; }));
     auto const null_count =
-      thrust::reduce(rmm::exec_policy(stream), tdigest_is_empty, tdigest_is_empty + tdv.size(), 0);
+      thrust::reduce(rmm::exec_policy(stream, resources.get_temporary_mr()), tdigest_is_empty, tdigest_is_empty + tdv.size(), 0);
     if (null_count == 0) {
       return std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, null_count};
     }
     return cudf::detail::valid_if(
-      tdigest_is_empty, tdigest_is_empty + tdv.size(), cuda::std::logical_not{}, stream, mr);
+      tdigest_is_empty, tdigest_is_empty + tdv.size(), cuda::std::logical_not{}, stream, resources);
   }();
 
   return cudf::make_lists_column(input.size(),
                                  std::move(offsets),
-                                 detail::compute_approx_percentiles(input, percentiles, stream, mr),
+                                 detail::compute_approx_percentiles(input, percentiles, stream,
+                  resources),
                                  null_count,
                                  std::move(bitmask),
                                  stream,
-                                 mr);
+                                 resources);
 }
 
 }  // namespace tdigest
@@ -401,10 +404,10 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
 std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return tdigest::percentile_approx(input, percentiles, stream, mr);
+  return tdigest::percentile_approx(input, percentiles, stream, resources);
 }
 
 }  // namespace cudf

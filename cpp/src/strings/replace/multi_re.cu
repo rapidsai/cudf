@@ -133,11 +133,11 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                                    strings_column_view const& replacements,
                                    regex_flags const flags,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   if (patterns.empty()) {  // if no patterns; just return a copy
-    return std::make_unique<column>(input.parent(), stream, mr);
+    return std::make_unique<column>(input.parent(), stream, resources);
   }
 
   CUDF_EXPECTS(!replacements.has_nulls(), "Parameter replacements must not have any nulls");
@@ -159,7 +159,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
 
   auto d_max_prog        = **max_prog;
   auto const buffer_size = d_max_prog.working_memory_size(input.size());
-  auto d_buffer          = rmm::device_buffer(buffer_size, stream);
+  auto d_buffer          = rmm::device_buffer(buffer_size, stream, resources.get_temporary_mr());
 
   // copy all the reprog_device instances to a device memory array
   auto progs = cudf::detail::make_empty_host_vector<reprog_device>(h_progs.size(), stream);
@@ -171,24 +171,25 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                    return *prog;
                  });
   auto d_progs =
-    cudf::detail::make_device_uvector_async(progs, stream, cudf::get_current_device_resource_ref());
+    cudf::detail::make_device_uvector_async(progs, stream, resources.get_temporary_mr());
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_repls   = column_device_view::create(replacements.parent(), stream);
 
-  auto found_ranges = rmm::device_uvector<found_range>(d_progs.size() * input.size(), stream);
+  auto found_ranges = rmm::device_uvector<found_range>(d_progs.size() * input.size(), stream, resources.get_temporary_mr());
 
   auto [offsets_column, chars] = make_strings_children(
     replace_multi_regex_fn{*d_strings, d_progs, found_ranges.data(), *d_repls},
     input.size(),
     stream,
-    mr);
+    resources);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 }  // namespace detail
@@ -200,10 +201,10 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    strings_column_view const& replacements,
                                    regex_flags const flags,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(strings, patterns, replacements, flags, stream, mr);
+  return detail::replace_re(strings, patterns, replacements, flags, stream, resources);
 }
 
 }  // namespace strings

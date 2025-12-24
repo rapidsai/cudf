@@ -39,7 +39,7 @@ namespace detail {
 std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& new_keys,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
   auto old_keys = dictionary_column.keys();  // [a,b,c,d,f]
@@ -48,7 +48,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
   auto combined_keys = cudf::detail::concatenate(
-    std::vector<column_view>{old_keys, new_keys}, stream, cudf::get_current_device_resource_ref());
+    std::vector<column_view>{old_keys, new_keys}, stream, resources.get_temporary_mr());
 
   // Drop duplicates from the combined keys, then sort the result.
   // sort(distinct([a,b,c,d,f,d,b,e])) = [a,b,c,d,e,f]
@@ -58,11 +58,12 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
                                            null_equality::EQUAL,
                                            nan_equality::ALL_EQUAL,
                                            stream,
-                                           mr);
+                                           resources);
   std::vector<order> column_order{order::ASCENDING};
   std::vector<null_order> null_precedence{null_order::AFTER};  // should be no nulls here
   auto sorted_keys =
-    cudf::detail::sort(table_keys->view(), column_order, null_precedence, stream, mr)->release();
+    cudf::detail::sort(table_keys->view(), column_order, null_precedence, stream,
+                  resources)->release();
 
   std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
   // create a map for the indices
@@ -72,7 +73,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
                                                column_order,
                                                null_precedence,
                                                stream,
-                                               mr);
+                                               resources);
   // now create the indices column -- map old values to the new ones
   // gather([4,0,3,1,2,2,2,4,0],[0,1,2,3,5]) = [5,0,3,1,2,2,2,5,0]
   column_view indices_view(dictionary_column.indices().type(),
@@ -106,14 +107,15 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
     }
     // otherwise we need to convert the gather result
     column_view cast_view(gather_result.type(), indices_size, gather_result.head(), nullptr, 0);
-    return cudf::detail::cast(cast_view, indices_type, stream, mr);
+    return cudf::detail::cast(cast_view, indices_type, stream, resources);
   }();
 
   // create new dictionary column with keys_column and indices_column
   // null mask has not changed
   return make_dictionary_column(std::move(keys_column),
                                 std::move(indices_column),
-                                cudf::detail::copy_bitmask(dictionary_column.parent(), stream, mr),
+                                cudf::detail::copy_bitmask(dictionary_column.parent(), stream,
+                  resources),
                                 dictionary_column.null_count());
 }
 
@@ -122,10 +124,10 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
 std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& keys,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::add_keys(dictionary_column, keys, stream, mr);
+  return detail::add_keys(dictionary_column, keys, stream, resources);
 }
 
 }  // namespace dictionary

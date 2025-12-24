@@ -28,7 +28,7 @@ namespace structs::detail {
 template <typename Op>
 std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr);
+                                       cudf::memory_resources resources);
 
 }  // namespace structs::detail
 }  // namespace CUDF_EXPORT cudf

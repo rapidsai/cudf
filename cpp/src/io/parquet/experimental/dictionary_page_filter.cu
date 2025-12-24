@@ -1046,7 +1046,7 @@ struct dictionary_caster {
     cudf::host_span<ast::literal* const> literals,
     cudf::host_span<ast::ast_operator const> operators,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+    cudf::memory_resources resources)
   {
     // Host vectors to store the running number of hash set slots and decoded values for all
     // dictionaries
@@ -1079,7 +1079,7 @@ struct dictionary_caster {
       });
 
     // Get the default device resource ref for temporary memory allocations
-    auto const default_mr = cudf::get_current_device_resource_ref();
+    auto const default_mr = resources.get_temporary_mr();
 
     // Device vectors to store the running number of hash set slots and decoded values for all
     // dictionaries
@@ -1122,7 +1122,7 @@ struct dictionary_caster {
     std::for_each(
       thrust::counting_iterator(0), thrust::counting_iterator(total_num_literals), [&](auto i) {
         // Allocate the results buffer using the user-provided memory resource (output memory)
-        results_buffers[i]   = rmm::device_buffer(total_row_groups, stream, mr);
+        results_buffers[i]   = rmm::device_buffer(total_row_groups, stream, resources);
         host_results_ptrs[i] = static_cast<bool*>(results_buffers[i].data());
       });
     if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
@@ -1225,13 +1225,13 @@ struct dictionary_caster {
     cudf::host_span<ast::literal* const> literals,
     cudf::host_span<ast::ast_operator const> operators,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+    cudf::memory_resources resources)
   {
     // Get the total number of scalars and literals
     auto const total_num_literals = static_cast<cudf::size_type>(literals.size());
 
     // Get the default device resource ref for temporary memory allocations
-    auto const default_mr = cudf::get_current_device_resource_ref();
+    auto const default_mr = resources.get_temporary_mr();
 
     // Host vector of scalar device views from all literals
     std::vector<ast::generic_scalar_device_view> host_scalars;
@@ -1252,7 +1252,7 @@ struct dictionary_caster {
     std::for_each(
       thrust::counting_iterator(0), thrust::counting_iterator(total_num_literals), [&](auto i) {
         // Allocate the results buffer using the user-provided memory resource (output memory)
-        results_buffers[i]   = rmm::device_buffer(total_row_groups, stream, mr);
+        results_buffers[i]   = rmm::device_buffer(total_row_groups, stream, resources);
         host_results_ptrs[i] = static_cast<bool*>(results_buffers[i].data());
       });
 
@@ -1317,7 +1317,7 @@ struct dictionary_caster {
     cudf::host_span<ast::literal* const> literals,
     cudf::host_span<ast::ast_operator const> operators,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+    cudf::memory_resources resources)
   {
     // Boolean, List, Struct, Dictionary types are not supported
     if constexpr (not is_supported_dictionary_type<T>) {
@@ -1330,16 +1330,16 @@ struct dictionary_caster {
           dtype == literal->get_data_type() and
             cudf::have_same_types(
               cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
-              cudf::scalar_type_t<T>(T{}, false, stream, cudf::get_current_device_resource_ref())),
+              cudf::scalar_type_t<T>(T{}, false, stream, resources.get_temporary_mr())),
           "Mismatched predicate column and literal types");
       });
 
       // If there are only a few literals, just evaluate expression while decoding dictionary data
       if (literals.size() <= MAX_INLINE_LITERALS) {
-        return evaluate_few_literals<T>(literals, operators, stream, mr);
+        return evaluate_few_literals<T>(literals, operators, stream, resources);
       } else {
         // Else, decode dictionaries to `cudf::static_set`s and evaluate all expressions
-        return evaluate_many_literals<T>(literals, operators, stream, mr);
+        return evaluate_many_literals<T>(literals, operators, stream, resources);
       }
     }
   }
@@ -1505,7 +1505,7 @@ aggregate_reader_metadata::apply_dictionary_filter(
   std::vector<std::unique_ptr<cudf::column>> dictionary_membership_columns;
 
   // Memory resource to allocate dictionary membership columns with
-  auto const mr = cudf::get_current_device_resource_ref();
+  auto const mr = resources.get_temporary_mr();
 
   // Dictionary column index currently being processed
   cudf::size_type dictionary_col_idx = 0;
@@ -1540,7 +1540,7 @@ aggregate_reader_metadata::apply_dictionary_filter(
                                                                        literals[input_col_idx],
                                                                        operators[input_col_idx],
                                                                        stream,
-                                                                       mr);
+                                                                       resources);
 
       // Add the built columns to the vector of columns
       dictionary_membership_columns.insert(dictionary_membership_columns.end(),

@@ -123,7 +123,7 @@ struct dltensor_context {
 namespace detail {
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_EXPECTS(nullptr != managed_tensor, "managed_tensor is null");
   auto const& tensor = managed_tensor->dl_tensor;
@@ -193,7 +193,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   // Allocate columns and copy data from tensor
   std::vector<std::unique_ptr<column>> columns(num_columns);
   for (auto& col : columns) {
-    col = make_numeric_column(dtype, num_rows, mask_state::UNALLOCATED, stream, mr);
+    col = make_numeric_column(dtype, num_rows, mask_state::UNALLOCATED, stream, resources);
 
     CUDF_CUDA_TRY(cudaMemcpyAsync(col->mutable_view().head<void>(),
                                   reinterpret_cast<void*>(tensor_data),
@@ -209,7 +209,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
 
 DLManagedTensor* to_dlpack(table_view const& input,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           cudf::memory_resources resources)
 {
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();
@@ -260,7 +260,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
   size_t const stride_bytes = num_rows * size_of(type);
   size_t const total_bytes  = stride_bytes * num_cols;
 
-  context->buffer = rmm::device_buffer(total_bytes, stream, mr);
+  context->buffer = rmm::device_buffer(total_bytes, stream, resources);
   tensor.data     = context->buffer.data();
 
   auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data);
@@ -289,18 +289,18 @@ DLManagedTensor* to_dlpack(table_view const& input,
 
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_dlpack(managed_tensor, stream, mr);
+  return detail::from_dlpack(managed_tensor, stream, resources);
 }
 
 DLManagedTensor* to_dlpack(table_view const& input,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_dlpack(input, stream, mr);
+  return detail::to_dlpack(input, stream, resources);
 }
 
 }  // namespace cudf

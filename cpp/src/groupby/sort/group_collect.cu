@@ -40,7 +40,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   column_view const& offsets,
   size_type num_groups,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto values_device_view = column_device_view::create(values, stream);
 
@@ -50,7 +50,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
 
   // Purge null entries in grouped values.
   auto null_purged_entries =
-    cudf::detail::copy_if(table_view{{values}}, not_null_pred, stream, mr)->release();
+    cudf::detail::copy_if(table_view{{values}}, not_null_pred, stream,
+                  resources)->release();
 
   auto null_purged_values = std::move(null_purged_entries.front());
   null_purged_values->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
@@ -59,7 +60,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   rmm::device_uvector<size_type> null_purged_sizes(num_groups, stream);
 
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_groups),
     null_purged_sizes.begin(),
@@ -71,7 +72,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
     });
 
   auto null_purged_offsets = std::get<0>(cudf::detail::make_offsets_child_column(
-    null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream, mr));
+    null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream,
+                  resources));
 
   return std::pair(std::move(null_purged_values), std::move(null_purged_offsets));
 }
@@ -81,14 +83,14 @@ std::unique_ptr<column> group_collect(column_view const& values,
                                       size_type num_groups,
                                       null_policy null_handling,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   auto [child_column,
         offsets_column] = [null_handling, num_groups, &values, &group_offsets, stream, mr] {
     auto offsets_column = make_numeric_column(
-      data_type(type_to_id<size_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
+      data_type(type_to_id<size_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, resources);
 
-    thrust::copy(rmm::exec_policy(stream),
+    thrust::copy(rmm::exec_policy(stream, resources.get_temporary_mr()),
                  group_offsets.begin(),
                  group_offsets.end(),
                  offsets_column->mutable_view().template begin<size_type>());
@@ -97,9 +99,10 @@ std::unique_ptr<column> group_collect(column_view const& values,
     // those elements must be filtered out, and offsets recomputed.
     if (null_handling == null_policy::EXCLUDE && values.has_nulls()) {
       return cudf::groupby::detail::purge_null_entries(
-        values, offsets_column->view(), num_groups, stream, mr);
+        values, offsets_column->view(), num_groups, stream, resources);
     } else {
-      return std::pair(std::make_unique<cudf::column>(values, stream, mr),
+      return std::pair(std::make_unique<cudf::column>(values, stream,
+                  resources),
                        std::move(offsets_column));
     }
   }();
@@ -110,7 +113,7 @@ std::unique_ptr<column> group_collect(column_view const& values,
                            0,
                            rmm::device_buffer{0, stream, mr},
                            stream,
-                           mr);
+                           resources);
 }
 }  // namespace detail
 }  // namespace groupby
