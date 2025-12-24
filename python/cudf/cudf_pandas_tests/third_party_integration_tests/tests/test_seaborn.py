@@ -1,33 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+
 import pandas as pd
 import pytest
 import seaborn as sns
-from matplotlib.axes import Axes
-from matplotlib.collections import PathCollection
-from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle
-from pandas._testing import assert_equal
 
 
-def assert_plots_equal(expect, got):
-    if isinstance(expect, Axes) and isinstance(got, Axes):
-        for expect_ch, got_ch in zip(
-            expect.get_children(), got.get_children(), strict=True
-        ):
-            assert type(expect_ch) is type(got_ch)
-            if isinstance(expect_ch, Line2D):
-                assert_equal(expect_ch.get_xdata(), got_ch.get_xdata())
-                assert_equal(expect_ch.get_ydata(), got_ch.get_ydata())
-            elif isinstance(expect_ch, Rectangle):
-                assert expect_ch.get_height() == got_ch.get_height()
-    elif isinstance(expect, PathCollection) and isinstance(
-        got, PathCollection
-    ):
-        assert_equal(expect.get_offsets()[:, 0], got.get_offsets()[:, 0])
-        assert_equal(expect.get_offsets()[:, 1], got.get_offsets()[:, 1])
-    else:
-        assert_equal(expect, got)
+def assert_plots_equal(expect: bytes, got: bytes):
+    # these are the PNGs that we saved in-memory.
+    assert expect == got
 
 
 pytestmark = pytest.mark.assert_eq(fn=assert_plots_equal)
@@ -47,15 +28,20 @@ def df():
 
 def test_bar(df):
     ax = sns.barplot(data=df, x="x", y="y")
-    return ax
+    return [x.get_height() for x in ax.patches]
 
 
 def test_scatter(df):
     ax = sns.scatterplot(data=df, x="x", y="y", hue="hue")
-    return ax
+    assert len(ax.collections) == 1
+    paths = ax.collections[0].get_paths()
+    assert len(paths) == 1
+    return paths[0].vertices.tolist()
 
 
 def test_lineplot_with_sns_data():
     df = sns.load_dataset("flights")
     ax = sns.lineplot(data=df, x="month", y="passengers")
-    return ax
+    paths = ax.collections[0].get_paths()
+    assert len(paths) == 1
+    return paths[0].vertices.tolist()
