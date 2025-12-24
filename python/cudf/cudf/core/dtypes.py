@@ -243,31 +243,6 @@ class CategoricalDtype(_BaseDtype):
         """
         return self._ordered
 
-    @classmethod
-    def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
-        """
-        Convert a ``pandas.CategrocialDtype`` to ``cudf.CategoricalDtype``
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> pd_dtype = pd.CategoricalDtype(categories=['b', 'a'], ordered=True)
-        >>> pd_dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
-        >>> cudf_dtype = cudf.CategoricalDtype.from_pandas(pd_dtype)
-        >>> cudf_dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
-        """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Pass the pandas.CategoricalDtype categories and ordered to the CategoricalDtype constructor instead.",
-            FutureWarning,
-        )
-        return CategoricalDtype(
-            categories=dtype.categories, ordered=dtype.ordered
-        )
-
     def to_pandas(self) -> pd.CategoricalDtype:
         """
         Convert a ``cudf.CategoricalDtype`` to ``pandas.CategoricalDtype``
@@ -1054,18 +1029,6 @@ class IntervalDtype(StructDtype):
     def to_arrow(self) -> ArrowIntervalType:
         return ArrowIntervalType(
             cudf_dtype_to_pa_type(self.subtype), self.closed
-        )
-
-    @classmethod
-    def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> Self:
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Pass the pandas.IntervalDtype subtype and closed to the IntervalDtype constructor instead.",
-            FutureWarning,
-        )
-        return cls(
-            subtype=pd_dtype.subtype,
-            closed="right" if pd_dtype.closed is None else pd_dtype.closed,
         )
 
     def to_pandas(self) -> pd.IntervalDtype:
