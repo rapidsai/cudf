@@ -125,7 +125,6 @@ outputs:
         - libnvjitlink-dev
         - rapids-logger =0.2
         - zlib ${{ zlib_version }}
-        - cuda-cudart-dev
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - cuda-nvrtc
@@ -146,7 +145,6 @@ outputs:
         - ${{ pin_subpackage("libcudf", upper_bound="x.x") }}
       ignore_run_exports:
         by_name:
-          - cuda-cudart
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
@@ -187,7 +185,6 @@ outputs:
         - ${{ pin_subpackage("libcudf", exact=True) }}
       ignore_run_exports:
         by_name:
-          - cuda-cudart
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
@@ -260,7 +257,6 @@ outputs:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - cuda-version =${{ cuda_version }}
         - cuda-nvtx-dev
-        - cuda-cudart-dev
       run:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
@@ -269,7 +265,6 @@ outputs:
         from_package:
           - cuda-nvtx-dev
         by_name:
-          - cuda-cudart
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
@@ -307,7 +302,6 @@ outputs:
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - cuda-version =${{ cuda_version }}
         - libcurand-dev
-        - cuda-cudart-dev
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
@@ -317,7 +311,6 @@ outputs:
         from_package:
           - libcurand-dev
         by_name:
-          - cuda-cudart
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version

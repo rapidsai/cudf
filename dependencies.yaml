@@ -590,7 +590,6 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - cuda-cudart-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - libcufile-dev
