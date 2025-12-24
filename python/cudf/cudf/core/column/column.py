@@ -517,9 +517,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 f"Expected a Buffer object or None for mask, got {type(mask).__name__}"
             )
-        new_plc_column = self.to_pylibcudf(
-            mode="read", use_base=False
-        ).with_mask(new_mask, new_null_count)
+        new_plc_column = self.to_pylibcudf(mode="read").with_mask(
+            new_mask, new_null_count
+        )
         return (
             type(self)
             .from_pylibcudf(  # type: ignore[return-value]
@@ -612,9 +612,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     # underlying buffers as exposed before this function can itself be exposed
     # publicly.  User requests to convert to pylibcudf must assume that the
     # data may be modified afterwards.
-    def to_pylibcudf(
-        self, mode: Literal["read", "write"], *, use_base: bool = True
-    ) -> plc.Column:
+    def to_pylibcudf(self, mode: Literal["read", "write"]) -> plc.Column:
         """Convert this Column to a pylibcudf.Column.
 
         This function will generate a pylibcudf Column pointing to the same
@@ -627,53 +625,27 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             to may be modified by the caller. If "read", the data pointed to
             must not be modified by the caller.  Failure to fulfill this
             contract will cause incorrect behavior.
-        use_base : bool, default True
-            Whether to use the column's base data, mask, and children,
-            or data, mask, and children relative to a 0 offset.
 
         Returns
         -------
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        # TODO: Categoricals will need to be treated differently eventually.
-        # There is no 1-1 correspondence between cudf and libcudf for
-        # categoricals because cudf supports ordered and unordered categoricals
-        # while libcudf supports only unordered categoricals (see
-        # https://github.com/rapidsai/cudf/pull/8567).
-        if isinstance(self.dtype, cudf.CategoricalDtype):
-            col = self.base_children[0]
-        else:
-            col = self
-
-        dtype = dtype_to_pylibcudf_type(col.dtype)
+        dtype = dtype_to_pylibcudf_type(self.dtype)
 
         data = None
-        if col.base_data is not None:
-            data_buff = col.base_data
-            if not use_base:
-                assert col.data is not None
-                data_buff = col.data
-            data = ROCAIWrapper(data_buff, mode)
+        if self.base_data is not None:
+            data = ROCAIWrapper(self.base_data, mode)
 
         mask = None
-        if self.nullable:
-            # TODO: Are we intentionally use self's mask instead of col's?
-            # Where is the mask stored for categoricals?
-            assert self.base_mask is not None
-            mask_buff = self.base_mask
-            if not use_base:
-                assert self.mask is not None
-                mask_buff = self.mask
-            mask = ROCAIWrapper(mask_buff, mode)
+        if self.base_mask is not None:
+            mask = ROCAIWrapper(self.base_mask, mode)
 
         children = []
-        if col.base_children:
+        if self.base_children:
             children = [
-                child_column.to_pylibcudf(mode=mode, use_base=use_base)
-                for child_column in (
-                    col.base_children if use_base else col.children
-                )
+                child_column.to_pylibcudf(mode=mode)
+                for child_column in self.base_children
             ]
 
         return plc.Column(
@@ -682,7 +654,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             data,
             mask,
             self.null_count,
-            self.offset if use_base else 0,
+            self.offset,
             children,
         )
 
@@ -2111,7 +2083,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "data": (data_ptr, False),
             "version": 3,
         }
-        data_buf = self._data if self._data is not None else self.base_data
+        data_buf = self.data
         if data_buf is not None:
             self._exposed_buffers.add(data_buf)
         if self.nullable and self.has_nulls():
