@@ -39,7 +39,8 @@ def test_hash_partition(partitioning_data):
         schema=pa.schema([pa.field("", pa.int64(), nullable=False)] * 3),
     )
     assert_table_eq(expect, got)
-    assert offsets == [0]
+    # Should return num_partitions + 1 offsets: [0, 3] for 1 partition with 3 rows
+    assert offsets == [0, 3]
 
 
 def test_round_robin_partition(partitioning_data):
@@ -50,4 +51,5 @@ def test_round_robin_partition(partitioning_data):
         schema=pa.schema([pa.field("", pa.int64(), nullable=False)] * 3),
     )
     assert_table_eq(expect, got)
-    assert offsets == [0]
+    # Should return num_partitions + 1 offsets: [0, 3] for 1 partition with 3 rows
+    assert offsets == [0, 3]

@@ -49,7 +49,8 @@ cpdef tuple[Table, list] hash_partition(
     Returns
     -------
     tuple[Table, list[int]]
-        An output table and a vector of row offsets to each partition
+        An output table and a list of `num_partitions + 1` row offsets where
+        partition `i` contains rows in the range `[offsets[i], offsets[i+1])`
     """
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     cdef vector[libcudf_types.size_type] c_columns_to_hash = columns_to_hash
@@ -100,7 +101,8 @@ cpdef tuple[Table, list] partition(
     Returns
     -------
     tuple[Table, list[int]]
-        An output table and a list of row offsets to each partition
+        An output table and a list of `num_partitions + 1` row offsets where
+        partition `i` contains rows in the range `[offsets[i], offsets[i+1])`
     """
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     cdef int c_num_partitions = num_partitions
@@ -148,8 +150,8 @@ cpdef tuple[Table, list] round_robin_partition(
     Returns
     -------
     tuple[Table, list[int]]
-        The partitioned table and the partition offsets
-        for each partition within the table.
+        The partitioned table and a list of `num_partitions + 1` partition offsets
+        where partition `i` contains rows in the range `[offsets[i], offsets[i+1])`.
     """
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     cdef int c_num_partitions = num_partitions
