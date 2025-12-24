@@ -430,6 +430,8 @@ add_library(
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu
+  src/groupby/sort/group_max_by.cu
+  src/groupby/sort/group_min_by.cu
   src/groupby/sort/group_bitwise.cu
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
@@ -630,6 +632,8 @@ add_library(
   src/reductions/any.cu
   src/reductions/argmax.cu
   src/reductions/argmin.cu
+  src/reductions/max_by.cu
+  src/reductions/min_by.cu
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/count.cpp

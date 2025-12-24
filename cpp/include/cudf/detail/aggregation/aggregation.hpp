@@ -65,6 +65,10 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class argmin_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class min_by_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class max_by_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class nunique_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class nth_element_aggregation const& agg);
@@ -130,6 +134,8 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class quantile_aggregation const& agg);
   virtual void visit(class argmax_aggregation const& agg);
   virtual void visit(class argmin_aggregation const& agg);
+  virtual void visit(class min_by_aggregation const& agg);
+  virtual void visit(class max_by_aggregation const& agg);
   virtual void visit(class nunique_aggregation const& agg);
   virtual void visit(class nth_element_aggregation const& agg);
   virtual void visit(class row_number_aggregation const& agg);
@@ -586,6 +592,44 @@ class argmin_aggregation final : public rolling_aggregation,
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<argmin_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a min_by aggregation
+ */
+class min_by_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  min_by_aggregation() : aggregation(MIN_BY) {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<min_by_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a max_by aggregation
+ */
+class max_by_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  max_by_aggregation() : aggregation(MAX_BY) {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<max_by_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -1502,6 +1546,20 @@ struct target_type_impl<Source, aggregation::ARGMIN> {
   using type = size_type;
 };
 
+// MIN_BY returns the value column type (second child of struct input)
+// For struct types, the target type is determined by the second child column at runtime
+template <typename Source>
+struct target_type_impl<Source, aggregation::MIN_BY> {
+  using type = Source;
+};
+
+// MAX_BY returns the value column type (second child of struct input)
+// For struct types, the target type is determined by the second child column at runtime
+template <typename Source>
+struct target_type_impl<Source, aggregation::MAX_BY> {
+  using type = Source;
+};
+
 // Always use size_type accumulator for NUNIQUE
 template <typename Source>
 struct target_type_impl<Source, aggregation::NUNIQUE> {
@@ -1697,6 +1755,10 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::ARGMAX>(std::forward<Ts>(args)...);
     case aggregation::ARGMIN:
       return f.template operator()<aggregation::ARGMIN>(std::forward<Ts>(args)...);
+    case aggregation::MIN_BY:
+      return f.template operator()<aggregation::MIN_BY>(std::forward<Ts>(args)...);
+    case aggregation::MAX_BY:
+      return f.template operator()<aggregation::MAX_BY>(std::forward<Ts>(args)...);
     case aggregation::NUNIQUE:
       return f.template operator()<aggregation::NUNIQUE>(std::forward<Ts>(args)...);
     case aggregation::NTH_ELEMENT:

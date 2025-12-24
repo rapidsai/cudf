@@ -133,6 +133,18 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, min_by_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, max_by_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, nunique_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -339,6 +351,16 @@ void aggregation_finalizer::visit(argmax_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(argmin_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(min_by_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(max_by_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -719,6 +741,30 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_argmin_aggregation<groupby_aggregation>();
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
 make_argmin_aggregation<reduce_aggregation>();
+
+/// Factory to create a MIN_BY aggregation
+template <typename Base>
+std::unique_ptr<Base> make_min_by_aggregation()
+{
+  return std::make_unique<detail::min_by_aggregation>();
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_min_by_aggregation<aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_min_by_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_min_by_aggregation<reduce_aggregation>();
+
+/// Factory to create a MAX_BY aggregation
+template <typename Base>
+std::unique_ptr<Base> make_max_by_aggregation()
+{
+  return std::make_unique<detail::max_by_aggregation>();
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_max_by_aggregation<aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_max_by_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_max_by_aggregation<reduce_aggregation>();
 
 /// Factory to create an NUNIQUE aggregation
 template <typename Base>
