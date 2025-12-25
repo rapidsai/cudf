@@ -119,9 +119,11 @@ struct extract_index {
 /**
  * @brief Comparator adapter for probe-time comparison (two-table).
  *
- * Used with non-primitive row comparators that expect typed index types.
+ * @tparam Equal The underlying equality comparator type
+ * @tparam CastToSizeType If true, cast indices to size_type (for primitive row comparators).
+ *         If false, pass typed indices directly (for non-primitive row comparators).
  */
-template <typename Equal>
+template <typename Equal, bool CastToSizeType = false>
 struct probe_comparator {
   probe_comparator(Equal const& d_equal) : _d_equal{d_equal} {}
 
@@ -130,29 +132,12 @@ struct probe_comparator {
     cuco::pair<hash_value_type, rhs_index_type> const& rhs) const noexcept
   {
     if (lhs.first != rhs.first) { return false; }
-    return _d_equal(lhs.second, rhs.second);
-  }
-
- private:
-  Equal _d_equal;
-};
-
-/**
- * @brief Comparator adapter for primitive row operators (probe-time).
- *
- * Used with primitive row comparators that expect size_type indices.
- */
-template <typename Equal>
-struct primitive_probe_comparator {
-  primitive_probe_comparator(Equal const& d_equal) : _d_equal{d_equal} {}
-
-  __device__ constexpr auto operator()(
-    cuco::pair<hash_value_type, lhs_index_type> const& lhs,
-    cuco::pair<hash_value_type, rhs_index_type> const& rhs) const noexcept
-  {
-    if (lhs.first != rhs.first) { return false; }
-    return _d_equal(static_cast<cudf::size_type>(lhs.second),
-                    static_cast<cudf::size_type>(rhs.second));
+    if constexpr (CastToSizeType) {
+      return _d_equal(static_cast<cudf::size_type>(lhs.second),
+                      static_cast<cudf::size_type>(rhs.second));
+    } else {
+      return _d_equal(lhs.second, rhs.second);
+    }
   }
 
  private:
@@ -435,7 +420,7 @@ class key_remap_table : public key_remap_table_interface {
       auto const iter = cudf::detail::make_counting_transform_iterator(
         0, make_key_pair<lhs_index_type, decltype(d_hasher)>{d_hasher});
 
-      find_matches(iter, primitive_probe_comparator{d_equal}, probe_keys, output_begin, stream);
+      find_matches(iter, probe_comparator<decltype(d_equal), true>{d_equal}, probe_keys, output_begin, stream);
     } else {
       auto const two_table_equal = cudf::detail::row::equality::two_table_comparator(
         preprocessed_probe, _preprocessed_build);
