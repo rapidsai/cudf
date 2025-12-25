@@ -19,6 +19,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
@@ -396,6 +397,8 @@ class key_remap_table : public key_remap_table_interface {
       return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream, mr);
     }
 
+    // Schema validation is done by the caller (key_remapping_impl::probe)
+
     auto result =
       std::make_unique<rmm::device_uvector<cudf::size_type>>(probe_num_rows, stream, mr);
     auto const output_begin =
@@ -562,7 +565,8 @@ class key_remapping_impl {
   key_remapping_impl(cudf::table_view const& build,
                      cudf::null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
-    : _compare_nulls{compare_nulls},
+    : _build{build},
+      _compare_nulls{compare_nulls},
       _table{create_key_remap_table(build, compare_nulls, 0.5, stream)}
   {
   }
@@ -572,7 +576,23 @@ class key_remapping_impl {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
   {
+    // Validate column count (always, even for empty probe tables)
+    CUDF_EXPECTS(keys.num_columns() == _build.num_columns(),
+                 "Mismatch in number of columns to be joined on",
+                 std::invalid_argument);
+
+    // Empty probe table returns immediately (no type validation needed)
+    if (keys.num_rows() == 0) {
+      return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream, mr);
+    }
+
+    // Validate column types match
+    CUDF_EXPECTS(cudf::have_same_types(_build, keys),
+                 "Mismatch in joining column data types",
+                 cudf::data_type_error);
+
     if (_table == nullptr) {
+      // Build table was empty - all probe keys are not found
       auto result =
         std::make_unique<rmm::device_uvector<cudf::size_type>>(keys.num_rows(), stream, mr);
       thrust::fill(rmm::exec_policy_nosync(stream), result->begin(), result->end(), cudf::JoinNoMatch);
@@ -594,6 +614,7 @@ class key_remapping_impl {
   cudf::null_equality get_compare_nulls() const { return _compare_nulls; }
 
  private:
+  cudf::table_view _build;
   cudf::null_equality _compare_nulls;
   std::unique_ptr<key_remap_table_interface> _table;
 };
@@ -619,12 +640,13 @@ std::unique_ptr<cudf::column> key_remapping::remap_build_keys(
 {
   CUDF_FUNC_RANGE();
 
-  if (keys.num_rows() == 0) {
+  // Call probe to get indices (also validates schema)
+  auto indices = _impl->probe(keys, stream, mr);
+
+  if (indices->size() == 0) {
     return cudf::make_numeric_column(
       cudf::data_type{cudf::type_id::INT32}, 0, cudf::mask_state::UNALLOCATED, stream, mr);
   }
-
-  auto indices = _impl->probe(keys, stream, mr);
 
   // Replace JoinNoMatch with BUILD_NULL sentinel
   thrust::replace(rmm::exec_policy_nosync(stream),
@@ -645,12 +667,13 @@ std::unique_ptr<cudf::column> key_remapping::remap_probe_keys(
 {
   CUDF_FUNC_RANGE();
 
-  if (keys.num_rows() == 0) {
+  // Call probe to get indices (also validates schema)
+  auto indices = _impl->probe(keys, stream, mr);
+
+  if (indices->size() == 0) {
     return cudf::make_numeric_column(
       cudf::data_type{cudf::type_id::INT32}, 0, cudf::mask_state::UNALLOCATED, stream, mr);
   }
-
-  auto indices = _impl->probe(keys, stream, mr);
 
   // Replace JoinNoMatch with NOT_FOUND sentinel
   thrust::replace(rmm::exec_policy_nosync(stream),

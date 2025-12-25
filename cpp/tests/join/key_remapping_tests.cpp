@@ -627,3 +627,93 @@ TEST_F(KeyRemappingTest, DoubleWithNulls)
   // Null row should get BUILD_NULL sentinel
   EXPECT_EQ(host_ids_unequal[2], cudf::KEY_REMAP_BUILD_NULL);
 }
+
+// Schema validation tests: probe table must match build table schema
+
+TEST_F(KeyRemappingTest, ProbeSchemaMismatchColumnCount)
+{
+  // Build with 2 columns
+  column_wrapper<int32_t> build_col1{1, 2, 3};
+  column_wrapper<int32_t> build_col2{4, 5, 6};
+  auto build_table = cudf::table_view{{build_col1, build_col2}};
+
+  cudf::key_remapping remap{build_table};
+
+  // Probe with 1 column - should throw
+  column_wrapper<int32_t> probe_col{1, 2};
+  auto probe_table = cudf::table_view{{probe_col}};
+
+  EXPECT_THROW((void)remap.remap_probe_keys(probe_table), std::invalid_argument);
+  EXPECT_THROW((void)remap.remap_build_keys(probe_table), std::invalid_argument);
+}
+
+TEST_F(KeyRemappingTest, ProbeSchemaMismatchColumnType)
+{
+  // Build with INT32
+  column_wrapper<int32_t> build_col{1, 2, 3};
+  auto build_table = cudf::table_view{{build_col}};
+
+  cudf::key_remapping remap{build_table};
+
+  // Probe with INT64 - should throw due to type mismatch
+  column_wrapper<int64_t> probe_col{1, 2, 3};
+  auto probe_table = cudf::table_view{{probe_col}};
+
+  EXPECT_THROW((void)remap.remap_probe_keys(probe_table), cudf::data_type_error);
+  EXPECT_THROW((void)remap.remap_build_keys(probe_table), cudf::data_type_error);
+}
+
+TEST_F(KeyRemappingTest, ProbeSchemaMismatchNestedVsPrimitive)
+{
+  // Build with struct column
+  column_wrapper<int32_t> child1{1, 2, 3};
+  strcol_wrapper child2{"a", "b", "c"};
+  auto struct_col  = cudf::test::structs_column_wrapper{{child1, child2}};
+  auto build_table = cudf::table_view{{struct_col}};
+
+  cudf::key_remapping remap{build_table};
+
+  // Probe with primitive column - should throw due to type mismatch
+  column_wrapper<int32_t> probe_col{1, 2, 3};
+  auto probe_table = cudf::table_view{{probe_col}};
+
+  EXPECT_THROW((void)remap.remap_probe_keys(probe_table), cudf::data_type_error);
+  EXPECT_THROW((void)remap.remap_build_keys(probe_table), cudf::data_type_error);
+}
+
+TEST_F(KeyRemappingTest, ProbeSchemaMismatchStructFields)
+{
+  // Build with struct{INT32, STRING}
+  column_wrapper<int32_t> build_child1{1, 2, 3};
+  strcol_wrapper build_child2{"a", "b", "c"};
+  auto build_struct = cudf::test::structs_column_wrapper{{build_child1, build_child2}};
+  auto build_table  = cudf::table_view{{build_struct}};
+
+  cudf::key_remapping remap{build_table};
+
+  // Probe with struct{INT32, INT32} - different field types, should throw
+  column_wrapper<int32_t> probe_child1{1, 2, 3};
+  column_wrapper<int32_t> probe_child2{4, 5, 6};
+  auto probe_struct = cudf::test::structs_column_wrapper{{probe_child1, probe_child2}};
+  auto probe_table  = cudf::table_view{{probe_struct}};
+
+  EXPECT_THROW((void)remap.remap_probe_keys(probe_table), cudf::data_type_error);
+  EXPECT_THROW((void)remap.remap_build_keys(probe_table), cudf::data_type_error);
+}
+
+TEST_F(KeyRemappingTest, EmptyProbeSchemaMismatchColumnCount)
+{
+  // Build with 2 columns
+  column_wrapper<int32_t> build_col1{1, 2, 3};
+  column_wrapper<int32_t> build_col2{4, 5, 6};
+  auto build_table = cudf::table_view{{build_col1, build_col2}};
+
+  cudf::key_remapping remap{build_table};
+
+  // Empty probe with 1 column - should still throw due to column count mismatch
+  column_wrapper<int32_t> probe_col{};
+  auto probe_table = cudf::table_view{{probe_col}};
+
+  EXPECT_THROW((void)remap.remap_probe_keys(probe_table), std::invalid_argument);
+  EXPECT_THROW((void)remap.remap_build_keys(probe_table), std::invalid_argument);
+}
