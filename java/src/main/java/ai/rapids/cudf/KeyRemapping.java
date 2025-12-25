@@ -260,17 +260,22 @@ public class KeyRemapping implements AutoCloseable {
   }
 
   /**
-   * Remap keys from the build table to integer IDs.
+   * Remap build keys to integer IDs.
    * <p>
    * For each row in the input, returns the integer ID assigned to that key.
+   * The keys table must have the same schema (number and types of columns) as
+   * the build table used to construct this object.
    * </p>
    * <ul>
    *   <li>Keys that match a build table key: return a non-negative integer</li>
+   *   <li>Keys with nulls (when nullEquality is EQUAL): return the ID assigned to null keys</li>
    *   <li>Keys with nulls (when nullEquality is UNEQUAL): return {@link #BUILD_NULL_SENTINEL}</li>
    * </ul>
    *
-   * @param keys The keys to remap
+   * @param keys The keys to remap (must have same schema as build table)
    * @return A column of INT32 values with the remapped key IDs (caller must close)
+   * @throws IllegalArgumentException if keys has different number of columns than build table
+   * @throws CudfException if keys has different column types than build table
    */
   public ColumnVector remapBuildKeys(Table keys) {
     if (isClosed) {
@@ -280,18 +285,24 @@ public class KeyRemapping implements AutoCloseable {
   }
 
   /**
-   * Remap keys from a probe table to integer IDs.
+   * Remap probe keys to integer IDs.
    * <p>
    * For each row in the input, returns the integer ID assigned to that key.
+   * The keys table must have the same schema (number and types of columns) as
+   * the build table used to construct this object.
    * </p>
    * <ul>
    *   <li>Keys that match a build table key: return a non-negative integer</li>
    *   <li>Keys not found in build table: return {@link #NOT_FOUND_SENTINEL}</li>
+   *   <li>Keys with nulls (when nullEquality is EQUAL): return the ID assigned to null keys,
+   *       or {@link #NOT_FOUND_SENTINEL} if no null keys exist in build table</li>
    *   <li>Keys with nulls (when nullEquality is UNEQUAL): return {@link #NOT_FOUND_SENTINEL}</li>
    * </ul>
    *
-   * @param keys The probe keys to remap
+   * @param keys The probe keys to remap (must have same schema as build table)
    * @return A column of INT32 values with the remapped key IDs (caller must close)
+   * @throws IllegalArgumentException if keys has different number of columns than build table
+   * @throws CudfException if keys has different column types than build table
    */
   public ColumnVector remapProbeKeys(Table keys) {
     if (isClosed) {

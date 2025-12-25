@@ -10,12 +10,15 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/key_remapping.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <algorithm>
 #include <set>
@@ -30,11 +33,9 @@ struct KeyRemappingTest : public cudf::test::BaseFixture {
   template <typename T>
   std::vector<T> to_host(cudf::column_view const& col)
   {
-    std::vector<T> result(col.size());
-    auto status =
-      cudaMemcpy(result.data(), col.data<T>(), col.size() * sizeof(T), cudaMemcpyDeviceToHost);
-    EXPECT_EQ(status, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(status);
-    return result;
+    return cudf::detail::make_std_vector<T>(
+      cudf::device_span<T const>{col.data<T>(), static_cast<std::size_t>(col.size())},
+      cudf::get_default_stream());
   }
 
   // Verify that equal keys in the input map to equal IDs in the output

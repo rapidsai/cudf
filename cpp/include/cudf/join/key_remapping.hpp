@@ -58,13 +58,13 @@ class key_remapping {
   key_remapping& operator=(key_remapping&&)      = delete;
 
   /**
-   * @brief Constructs a key remapping structure from build keys
+   * @brief Constructs a key remapping structure from the given build keys.
    *
    * @throw cudf::logic_error if the build table has no columns
    *
    * @param build The build table containing the keys to remap
    * @param compare_nulls Controls whether null key values should match or not.
-   *        When EQUAL, null keys are treated as equal.
+   *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
    *        When UNEQUAL, rows with null keys map to KEY_REMAP_BUILD_NULL.
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
@@ -73,13 +73,17 @@ class key_remapping {
                 rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @brief Remap keys from the build table to integer IDs
+   * @brief Remap build keys to integer IDs.
    *
    * For each row in the input, returns the integer ID assigned to that key.
    * - Keys that match a build table key: return a non-negative integer
+   * - Keys with nulls (when compare_nulls is EQUAL): return the ID assigned to null keys
    * - Keys with nulls (when compare_nulls is UNEQUAL): return KEY_REMAP_BUILD_NULL
    *
-   * @param keys The keys to remap
+   * @throw std::invalid_argument if keys has different number of columns than build table
+   * @throw cudf::data_type_error if keys has different column types than build table
+   *
+   * @param keys The keys to remap (must have same schema as build table)
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
    *
@@ -91,14 +95,19 @@ class key_remapping {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
-   * @brief Remap keys from a probe table to integer IDs
+   * @brief Remap probe keys to integer IDs.
    *
    * For each row in the input, returns the integer ID assigned to that key.
    * - Keys that match a build table key: return a non-negative integer
    * - Keys not found in build table: return KEY_REMAP_NOT_FOUND
+   * - Keys with nulls (when compare_nulls is EQUAL): return the ID assigned to null keys,
+   *   or KEY_REMAP_NOT_FOUND if no null keys exist in build table
    * - Keys with nulls (when compare_nulls is UNEQUAL): return KEY_REMAP_NOT_FOUND
    *
-   * @param keys The probe keys to remap
+   * @throw std::invalid_argument if keys has different number of columns than build table
+   * @throw cudf::data_type_error if keys has different column types than build table
+   *
+   * @param keys The probe keys to remap (must have same schema as build table)
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
    *
