@@ -70,8 +70,8 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       // Step 1: Build key remapping (with metrics disabled, the metrics need to be calcualted
       //  for the join type selection heuristic, either way)
-      // constexpr bool compute_metrics = false;
-      constexpr bool compute_metrics = true;
+      constexpr bool compute_metrics = false;
+      
       cudf::key_remapping remap(build_keys, NullEquality, compute_metrics, cudf::get_default_stream());
 
       // Step 2: Remap build and probe keys to integers
