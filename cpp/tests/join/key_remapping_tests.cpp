@@ -718,3 +718,59 @@ TEST_F(KeyRemappingTest, EmptyProbeSchemaMismatchColumnCount)
   EXPECT_THROW((void)remap.remap_probe_keys(probe_table), std::invalid_argument);
   EXPECT_THROW((void)remap.remap_build_keys(probe_table), std::invalid_argument);
 }
+
+// Tests for optional metrics computation
+
+TEST_F(KeyRemappingTest, MetricsEnabled)
+{
+  column_wrapper<int32_t> build_col{1, 2, 2, 3, 3, 3};
+  auto build_table = cudf::table_view{{build_col}};
+
+  // Default: metrics enabled
+  cudf::key_remapping remap{build_table};
+
+  EXPECT_TRUE(remap.has_metrics());
+  EXPECT_EQ(remap.get_distinct_count(), 3);
+  EXPECT_EQ(remap.get_max_duplicate_count(), 3);
+}
+
+TEST_F(KeyRemappingTest, MetricsDisabled)
+{
+  column_wrapper<int32_t> build_col{1, 2, 2, 3, 3, 3};
+  auto build_table = cudf::table_view{{build_col}};
+
+  // Explicitly disable metrics
+  cudf::key_remapping remap{build_table, cudf::null_equality::EQUAL, false};
+
+  EXPECT_FALSE(remap.has_metrics());
+  EXPECT_THROW((void)remap.get_distinct_count(), cudf::logic_error);
+  EXPECT_THROW((void)remap.get_max_duplicate_count(), cudf::logic_error);
+}
+
+TEST_F(KeyRemappingTest, MetricsDisabledRemapStillWorks)
+{
+  column_wrapper<int32_t> build_col{10, 20, 20, 30};
+  auto build_table = cudf::table_view{{build_col}};
+
+  // Disable metrics but remapping should still work
+  cudf::key_remapping remap{build_table, cudf::null_equality::EQUAL, false};
+
+  // Remap build keys
+  auto build_result = remap.remap_build_keys(build_table);
+  auto build_ids    = to_host<int32_t>(build_result->view());
+
+  // Equal keys should have equal IDs
+  EXPECT_EQ(build_ids[1], build_ids[2]);  // Both 20s
+  EXPECT_NE(build_ids[0], build_ids[1]);  // 10 vs 20
+  EXPECT_NE(build_ids[1], build_ids[3]);  // 20 vs 30
+
+  // Remap probe keys
+  column_wrapper<int32_t> probe_col{20, 40, 10};
+  auto probe_table  = cudf::table_view{{probe_col}};
+  auto probe_result = remap.remap_probe_keys(probe_table);
+  auto probe_ids    = to_host<int32_t>(probe_result->view());
+
+  EXPECT_EQ(probe_ids[0], build_ids[1]);                  // 20 matches
+  EXPECT_EQ(probe_ids[1], cudf::KEY_REMAP_NOT_FOUND);     // 40 not found
+  EXPECT_EQ(probe_ids[2], build_ids[0]);                  // 10 matches
+}

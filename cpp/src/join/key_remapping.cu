@@ -180,6 +180,25 @@ struct adjusted_count_fn {
 };
 
 /**
+ * @brief Functor for inserting keys without tracking metrics.
+ *
+ * Used when compute_metrics is false. Simply inserts keys without recording
+ * insertion results, providing better performance when metrics aren't needed.
+ */
+template <typename SetRef, typename KeyIter>
+struct insert_only_fn {
+  mutable SetRef set_ref;  // mutable because insert is non-const
+  KeyIter key_iter;
+  cudf::bitmask_type const* bitmask_ptr;
+
+  __device__ void operator()(cudf::size_type idx) const
+  {
+    bool const is_valid = (bitmask_ptr == nullptr) || cudf::bit_is_set(bitmask_ptr, idx);
+    if (is_valid) { set_ref.insert(key_iter[idx]); }
+  }
+};
+
+/**
  * @brief Functor for inserting keys and recording insertion results.
  *
  * For each row, inserts the key into the hash set and records:
@@ -231,6 +250,11 @@ class key_remap_table_interface {
     rmm::device_async_resource_ref mr) const = 0;
 
   /**
+   * @brief Check if metrics were computed during construction.
+   */
+  virtual bool has_metrics() const = 0;
+
+  /**
    * @brief Get the number of distinct keys in the hash table.
    */
   virtual cudf::size_type get_distinct_count() const = 0;
@@ -267,9 +291,9 @@ class key_remap_table : public key_remap_table_interface {
   key_remap_table& operator=(key_remap_table&&)      = default;
 
   /**
-   * @brief Construct a key remap hash table with counting.
+   * @brief Construct a key remap hash table with optional metrics.
    *
-   * Computes distinct_count and max_duplicate_count during construction.
+   * @param compute_metrics If true, compute distinct_count and max_duplicate_count.
    */
   template <typename RowHasher>
   key_remap_table(
@@ -278,6 +302,7 @@ class key_remap_table : public key_remap_table_interface {
     Comparator const& comparator,
     RowHasher const& row_hasher,
     cudf::null_equality compare_nulls,
+    bool compute_metrics,
     rmm::cuda_stream_view stream)
     : _build_has_nested_columns{cudf::has_nested_columns(build)},
       _compare_nulls{compare_nulls},
@@ -293,6 +318,7 @@ class key_remap_table : public key_remap_table_interface {
                   cuco_storage_type{},
                   rmm::mr::polymorphic_allocator<char>{},
                   stream.value()},
+      _has_metrics{compute_metrics},
       _distinct_count{0},
       _max_duplicate_count{0}
   {
@@ -302,13 +328,6 @@ class key_remap_table : public key_remap_table_interface {
     cudf::size_type const build_num_rows{_build.num_rows()};
     if (build_num_rows == 0) { return; }
 
-    // Allocate arrays to track insertion results (no atomics needed for counting)
-    rmm::device_uvector<bool> insert_markers(build_num_rows, stream);
-    rmm::device_uvector<cudf::size_type> inserted_indices(build_num_rows, stream);
-
-    // Get hash table reference for insert_and_find
-    auto set_ref = _hash_table.ref(cuco::op::insert_and_find);
-
     // Create the key pair iterator
     auto const key_iter = cudf::detail::make_counting_transform_iterator(
       0, make_key_pair<rhs_index_type, RowHasher>{row_hasher});
@@ -317,12 +336,21 @@ class key_remap_table : public key_remap_table_interface {
     bool const skip_nulls =
       (_compare_nulls == cudf::null_equality::UNEQUAL) && cudf::nullable(build);
 
-    // Create functor and run insert
-    if (skip_nulls) {
-      // Compute row validity mask
-      auto const row_bitmask =
-        cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref()).first;
-      auto const bitmask_ptr = reinterpret_cast<cudf::bitmask_type const*>(row_bitmask.data());
+    // Compute bitmask if needed
+    auto const row_bitmask =
+      skip_nulls
+        ? cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref()).first
+        : rmm::device_buffer{};
+    auto const bitmask_ptr =
+      skip_nulls ? reinterpret_cast<cudf::bitmask_type const*>(row_bitmask.data()) : nullptr;
+
+    if (compute_metrics) {
+      // Allocate arrays to track insertion results
+      rmm::device_uvector<bool> insert_markers(build_num_rows, stream);
+      rmm::device_uvector<cudf::size_type> inserted_indices(build_num_rows, stream);
+
+      // Get hash table reference for insert_and_find
+      auto set_ref = _hash_table.ref(cuco::op::insert_and_find);
 
       thrust::for_each_n(
         rmm::exec_policy_nosync(stream),
@@ -330,53 +358,51 @@ class key_remap_table : public key_remap_table_interface {
         build_num_rows,
         insert_and_record_fn<decltype(set_ref), decltype(key_iter)>{
           set_ref, key_iter, insert_markers.data(), inserted_indices.data(), bitmask_ptr});
-    } else {
-      thrust::for_each_n(
-        rmm::exec_policy_nosync(stream),
+
+      // Compute distinct count: count rows where insertion succeeded
+      _distinct_count = thrust::count(rmm::exec_policy_nosync(stream),
+                                      insert_markers.begin(),
+                                      insert_markers.end(),
+                                      true);
+
+      // Compute max duplicate count via sort + reduce_by_key
+      thrust::sort(
+        rmm::exec_policy_nosync(stream), inserted_indices.begin(), inserted_indices.end());
+
+      rmm::device_uvector<cudf::size_type> unique_keys(build_num_rows, stream);
+      rmm::device_uvector<cudf::size_type> key_counts(build_num_rows, stream);
+
+      auto const reduce_end = thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
+                                                    inserted_indices.begin(),
+                                                    inserted_indices.end(),
+                                                    thrust::make_constant_iterator(1),
+                                                    unique_keys.begin(),
+                                                    key_counts.begin());
+
+      auto const num_unique_groups =
+        static_cast<cudf::size_type>(reduce_end.second - key_counts.begin());
+
+      using adjusted_fn_type =
+        adjusted_count_fn<decltype(unique_keys.begin()), decltype(key_counts.begin())>;
+      auto const adjusted_counts = thrust::make_transform_iterator(
         thrust::make_counting_iterator<cudf::size_type>(0),
-        build_num_rows,
-        insert_and_record_fn<decltype(set_ref), decltype(key_iter)>{
-          set_ref, key_iter, insert_markers.data(), inserted_indices.data(), nullptr});
+        adjusted_fn_type{unique_keys.begin(), key_counts.begin()});
+
+      _max_duplicate_count = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                            adjusted_counts,
+                                            adjusted_counts + num_unique_groups,
+                                            cudf::size_type{0},
+                                            thrust::maximum<cudf::size_type>{});
+    } else {
+      // Simple insert without metrics tracking
+      auto set_ref = _hash_table.ref(cuco::op::insert);
+
+      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                         thrust::make_counting_iterator<cudf::size_type>(0),
+                         build_num_rows,
+                         insert_only_fn<decltype(set_ref), decltype(key_iter)>{
+                           set_ref, key_iter, bitmask_ptr});
     }
-
-    // Compute distinct count: count rows where insertion succeeded
-    _distinct_count = thrust::count(rmm::exec_policy_nosync(stream),
-                                    insert_markers.begin(),
-                                    insert_markers.end(),
-                                    true);
-
-    // Compute max duplicate count via sort + reduce_by_key
-    // Sort indices so equal values are adjacent
-    thrust::sort(rmm::exec_policy_nosync(stream), inserted_indices.begin(), inserted_indices.end());
-
-    // Count occurrences of each unique index using reduce_by_key
-    // We allocate for worst case (all unique) but typically use less
-    rmm::device_uvector<cudf::size_type> unique_keys(build_num_rows, stream);
-    rmm::device_uvector<cudf::size_type> key_counts(build_num_rows, stream);
-
-    auto const reduce_end = thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                                                  inserted_indices.begin(),
-                                                  inserted_indices.end(),
-                                                  thrust::make_constant_iterator(1),
-                                                  unique_keys.begin(),
-                                                  key_counts.begin());
-
-    auto const num_unique_groups =
-      static_cast<cudf::size_type>(reduce_end.second - key_counts.begin());
-
-    // Find the maximum count (skip index -1 which represents null/invalid rows)
-    // Create an iterator that returns 0 for null rows and the actual count otherwise
-    using adjusted_fn_type =
-      adjusted_count_fn<decltype(unique_keys.begin()), decltype(key_counts.begin())>;
-    auto const adjusted_counts = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<cudf::size_type>(0),
-      adjusted_fn_type{unique_keys.begin(), key_counts.begin()});
-
-    _max_duplicate_count = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                          adjusted_counts,
-                                          adjusted_counts + num_unique_groups,
-                                          cudf::size_type{0},
-                                          thrust::maximum<cudf::size_type>{});
   }
 
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> probe(
@@ -447,9 +473,19 @@ class key_remap_table : public key_remap_table_interface {
     return result;
   }
 
-  cudf::size_type get_distinct_count() const override { return _distinct_count; }
+  bool has_metrics() const override { return _has_metrics; }
 
-  cudf::size_type get_max_duplicate_count() const override { return _max_duplicate_count; }
+  cudf::size_type get_distinct_count() const override
+  {
+    CUDF_EXPECTS(_has_metrics, "Metrics were not computed during construction");
+    return _distinct_count;
+  }
+
+  cudf::size_type get_max_duplicate_count() const override
+  {
+    CUDF_EXPECTS(_has_metrics, "Metrics were not computed during construction");
+    return _max_duplicate_count;
+  }
 
  private:
   template <typename IterType, typename EqualType, typename FoundIterator>
@@ -488,6 +524,7 @@ class key_remap_table : public key_remap_table_interface {
   cudf::table_view _build;
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> _preprocessed_build;
   hash_table_type _hash_table;
+  bool _has_metrics;
   cudf::size_type _distinct_count;
   cudf::size_type _max_duplicate_count;
 };
@@ -497,6 +534,7 @@ class key_remap_table : public key_remap_table_interface {
  */
 std::unique_ptr<key_remap_table_interface> create_key_remap_table(cudf::table_view const& build,
                                                                   cudf::null_equality compare_nulls,
+                                                                  bool compute_metrics,
                                                                   rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -517,6 +555,7 @@ std::unique_ptr<key_remap_table_interface> create_key_remap_table(cudf::table_vi
                                                               comparator_type{d_equal},
                                                               d_hasher,
                                                               compare_nulls,
+                                                              compute_metrics,
                                                               stream);
   }
 
@@ -535,6 +574,7 @@ std::unique_ptr<key_remap_table_interface> create_key_remap_table(cudf::table_vi
                                                               comparator_type{d_equal},
                                                               d_hasher,
                                                               compare_nulls,
+                                                              compute_metrics,
                                                               stream);
   } else {
     auto const d_equal =
@@ -546,6 +586,7 @@ std::unique_ptr<key_remap_table_interface> create_key_remap_table(cudf::table_vi
                                                               comparator_type{d_equal},
                                                               d_hasher,
                                                               compare_nulls,
+                                                              compute_metrics,
                                                               stream);
   }
 }
@@ -559,10 +600,12 @@ class key_remapping_impl {
  public:
   key_remapping_impl(cudf::table_view const& build,
                      cudf::null_equality compare_nulls,
+                     bool compute_metrics,
                      rmm::cuda_stream_view stream)
     : _build{build},
       _compare_nulls{compare_nulls},
-      _table{create_key_remap_table(build, compare_nulls, stream)}
+      _compute_metrics{compute_metrics},
+      _table{create_key_remap_table(build, compare_nulls, compute_metrics, stream)}
   {
   }
 
@@ -596,14 +639,23 @@ class key_remapping_impl {
     return _table->probe(keys, stream, mr);
   }
 
+  bool has_metrics() const
+  {
+    return _table ? _table->has_metrics() : _compute_metrics;
+  }
+
   cudf::size_type get_distinct_count() const
   {
-    return _table ? _table->get_distinct_count() : 0;
+    if (_table) { return _table->get_distinct_count(); }
+    CUDF_EXPECTS(_compute_metrics, "Metrics were not computed during construction");
+    return 0;
   }
 
   cudf::size_type get_max_duplicate_count() const
   {
-    return _table ? _table->get_max_duplicate_count() : 0;
+    if (_table) { return _table->get_max_duplicate_count(); }
+    CUDF_EXPECTS(_compute_metrics, "Metrics were not computed during construction");
+    return 0;
   }
 
   cudf::null_equality get_compare_nulls() const { return _compare_nulls; }
@@ -611,6 +663,7 @@ class key_remapping_impl {
  private:
   cudf::table_view _build;
   cudf::null_equality _compare_nulls;
+  bool _compute_metrics;
   std::unique_ptr<key_remap_table_interface> _table;
 };
 
@@ -620,8 +673,9 @@ class key_remapping_impl {
 
 key_remapping::key_remapping(cudf::table_view const& build,
                              null_equality compare_nulls,
+                             bool compute_metrics,
                              rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<detail::key_remapping_impl>(build, compare_nulls, stream)}
+  : _impl{std::make_unique<detail::key_remapping_impl>(build, compare_nulls, compute_metrics, stream)}
 {
   CUDF_EXPECTS(build.num_columns() > 0, "Build table must have at least one column");
 }
@@ -676,6 +730,8 @@ std::unique_ptr<cudf::column> key_remapping::remap_probe_keys(
   CUDF_FUNC_RANGE();
   return remap_keys_internal(*_impl, keys, KEY_REMAP_NOT_FOUND, stream, mr);
 }
+
+bool key_remapping::has_metrics() const { return _impl->has_metrics(); }
 
 size_type key_remapping::get_distinct_count() const { return _impl->get_distinct_count(); }
 

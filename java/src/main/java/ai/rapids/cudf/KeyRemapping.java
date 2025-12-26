@@ -116,6 +116,7 @@ public class KeyRemapping implements AutoCloseable {
 
   private final KeyRemappingCleaner cleaner;
   private final NullEquality nullEquality;
+  private final boolean computeMetrics;
   private boolean isClosed = false;
 
   /**
@@ -130,12 +131,16 @@ public class KeyRemapping implements AutoCloseable {
    *        will be incremented; the caller retains ownership of this table.
    * @param nullEquality how null key values should be compared.
    *        When UNEQUAL, rows with null keys map to {@link #BUILD_NULL_SENTINEL}.
+   * @param computeMetrics if true, compute distinct_count and max_duplicate_count.
+   *        If false, skip metrics computation for better performance; calling
+   *        {@link #getDistinctCount()} or {@link #getMaxDuplicateCount()} will throw.
    */
-  public KeyRemapping(Table buildKeys, NullEquality nullEquality) {
+  public KeyRemapping(Table buildKeys, NullEquality nullEquality, boolean computeMetrics) {
     this.nullEquality = nullEquality;
+    this.computeMetrics = computeMetrics;
     Table buildTable = new Table(buildKeys.getColumns());
     try {
-      long handle = create(buildTable.getNativeView(), nullEquality.nullsEqual);
+      long handle = create(buildTable.getNativeView(), nullEquality.nullsEqual, computeMetrics);
       this.cleaner = new KeyRemappingCleaner(buildTable, handle);
       MemoryCleaner.register(this, cleaner);
     } catch (Throwable t) {
@@ -149,12 +154,23 @@ public class KeyRemapping implements AutoCloseable {
   }
 
   /**
-   * Construct a key remapping structure from build keys with nulls comparing equal.
+   * Construct a key remapping structure from build keys with metrics computation enabled.
+   *
+   * @param buildKeys table containing the keys to build from
+   * @param nullEquality how null key values should be compared
+   */
+  public KeyRemapping(Table buildKeys, NullEquality nullEquality) {
+    this(buildKeys, nullEquality, true);
+  }
+
+  /**
+   * Construct a key remapping structure from build keys with nulls comparing equal
+   * and metrics computation enabled.
    *
    * @param buildKeys table containing the keys to build from
    */
   public KeyRemapping(Table buildKeys) {
-    this(buildKeys, NullEquality.EQUAL);
+    this(buildKeys, NullEquality.EQUAL, true);
   }
 
   @Override
@@ -189,9 +205,22 @@ public class KeyRemapping implements AutoCloseable {
   }
 
   /**
+   * Check if metrics (distinct_count, max_duplicate_count) were computed.
+   *
+   * @return true if metrics are available, false if computeMetrics was false during construction
+   */
+  public boolean hasMetrics() {
+    if (isClosed) {
+      throw new IllegalStateException("KeyRemapping is already closed");
+    }
+    return hasMetrics(cleaner.nativeHandle);
+  }
+
+  /**
    * Get the number of distinct keys in the build table.
    *
    * @return The count of unique key combinations found during build
+   * @throws IllegalStateException if computeMetrics was false during construction
    */
   public int getDistinctCount() {
     if (isClosed) {
@@ -204,6 +233,7 @@ public class KeyRemapping implements AutoCloseable {
    * Get the maximum number of times any single key appears in the build table.
    *
    * @return The maximum duplicate count across all distinct keys
+   * @throws IllegalStateException if computeMetrics was false during construction
    */
   public int getMaxDuplicateCount() {
     if (isClosed) {
@@ -312,8 +342,9 @@ public class KeyRemapping implements AutoCloseable {
   }
 
   // Native methods
-  private static native long create(long tableView, boolean compareNulls);
+  private static native long create(long tableView, boolean compareNulls, boolean computeMetrics);
   private static native void destroy(long handle);
+  private static native boolean hasMetrics(long handle);
   private static native int getDistinctCount(long handle);
   private static native int getMaxDuplicateCount(long handle);
   private static native long remapBuildKeys(long handle, long keysTableView);

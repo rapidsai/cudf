@@ -66,10 +66,14 @@ class key_remapping {
    * @param compare_nulls Controls whether null key values should match or not.
    *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
    *        When UNEQUAL, rows with null keys map to KEY_REMAP_BUILD_NULL.
+   * @param compute_metrics If true (default), compute distinct_count and max_duplicate_count.
+   *        If false, skip metrics computation for better performance; calling get_distinct_count()
+   *        or get_max_duplicate_count() will throw.
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   key_remapping(cudf::table_view const& build,
                 null_equality compare_nulls  = null_equality::EQUAL,
+                bool compute_metrics         = true,
                 rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
@@ -119,7 +123,16 @@ class key_remapping {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
+   * @brief Check if metrics (distinct_count, max_duplicate_count) were computed.
+   *
+   * @return true if metrics are available, false if compute_metrics was false during construction
+   */
+  [[nodiscard]] bool has_metrics() const;
+
+  /**
    * @brief Get the number of distinct keys in the build table
+   *
+   * @throw cudf::logic_error if compute_metrics was false during construction
    *
    * @return The count of unique key combinations found during build
    */
@@ -127,6 +140,8 @@ class key_remapping {
 
   /**
    * @brief Get the maximum number of times any single key appears
+   *
+   * @throw cudf::logic_error if compute_metrics was false during construction
    *
    * @return The maximum duplicate count across all distinct keys
    */
