@@ -1203,38 +1203,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self.set_base_mask(mask)
 
         with acquire_spill_lock():
-            # Create a pylibcudf column to modify in-place
-            plc_col = self.to_pylibcudf(mode="write")
-            plc.filling.fill_in_place(
-                plc_col,
-                begin,
-                end,
-                fill_value,
-            )
-            # fill_in_place modifies the buffers but doesn't update metadata
-            # We need to recompute null_count if filling with null values
-            if not fill_value.is_valid(DEFAULT_STREAM):
-                # Recompute null_count from the mask
-                plc_mask = plc_col.null_mask()
-                assert (
-                    plc_mask is not None
-                )  # Must have mask after filling with null
-                new_null_count = plc.null_mask.null_count(
-                    plc_mask,
-                    self.offset,
-                    self.offset + self.size,
+            with self.access(mode="write"):
+                plc.filling.fill_in_place(
+                    self.plc_column,
+                    begin,
+                    end,
+                    fill_value,
                 )
-                # Create a new column with the updated null_count
-                plc_col = plc.Column(
-                    data_type=plc_col.type(),
-                    size=plc_col.size(),
-                    data=plc_col.data(),
-                    mask=plc_col.null_mask(),
-                    null_count=new_null_count,
-                    offset=plc_col.offset(),
-                    children=plc_col.children(),
-                )
-            self.plc_column = plc_col
             self._recompute_data()
             self._mask = None
             self._clear_cache()
