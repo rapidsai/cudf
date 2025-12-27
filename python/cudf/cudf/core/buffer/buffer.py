@@ -348,12 +348,12 @@ class Buffer(Serializable):
         self, mode: Literal["read", "write"] | None = None
     ) -> Literal["read", "write"]:
         """Get the current access mode for the buffer."""
-        if mode is not None:
-            return mode
         # TODO: Convert to a try-except once we require all ptr access to be within the
         # context manager. Then we will also remove the default "read" mode.
         if self._access_mode_stack:
             return self._access_mode_stack[-1]
+        if mode is not None:
+            return mode
         return "read"
 
     def get_ptr(self, *, mode: Literal["read", "write"] | None = None) -> int:
