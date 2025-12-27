@@ -285,10 +285,14 @@ class _ColumnAccessContext:
     def __init__(self, column: ColumnBase, mode: Literal["read", "write"]):
         self._column = column
         self._stack = ExitStack()
-        if (data := column.data) is not None:
-            self._stack.enter_context(data.access(mode=mode))
-        if (mask := column.mask) is not None:
-            self._stack.enter_context(mask.access(mode=mode))
+        if (base_data := column.base_data) is not None:
+            self._stack.enter_context(base_data.access(mode=mode))
+            if (data := column.data) is not None and data is not base_data:
+                self._stack.enter_context(data.access(mode=mode))
+        if (base_mask := column.base_mask) is not None:
+            self._stack.enter_context(base_mask.access(mode=mode))
+            if (mask := column.mask) is not None and mask is not base_mask:
+                self._stack.enter_context(mask.access(mode=mode))
         for child in self._column.children:
             self._stack.enter_context(child.access(mode=mode))
 
