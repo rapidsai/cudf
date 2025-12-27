@@ -12,6 +12,7 @@ from collections.abc import (
     MutableSequence,
     Sequence,
 )
+from contextlib import ExitStack
 from decimal import Decimal
 from functools import cached_property
 from itertools import chain
@@ -95,6 +96,7 @@ from cudf.utils.utils import (
 if TYPE_CHECKING:
     import builtins
     from collections.abc import Generator, Mapping
+    from types import TracebackType
 
     from cudf._typing import ColumnLike, Dtype, DtypeObj, NoDefault, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
@@ -275,6 +277,34 @@ def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
     return arrow_array
 
 
+class _ColumnAccessContext:
+    """Context manager for access mode control on underlying buffers."""
+
+    __slots__ = ("_column", "_stack")
+
+    def __init__(self, column: ColumnBase, mode: Literal["read", "write"]):
+        self._column = column
+        self._stack = ExitStack()
+        if (data := column.data) is not None:
+            self._stack.enter_context(data.access(mode=mode))
+        if (mask := column.mask) is not None:
+            self._stack.enter_context(mask.access(mode=mode))
+        for child in self._column.children:
+            self._stack.enter_context(child.access(mode=mode))
+
+    def __enter__(self) -> ColumnBase:
+        return self._column
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> Literal[False]:
+        self._stack.__exit__(exc_type, exc_val, exc_tb)
+        return False
+
+
 class ColumnBase(Serializable, BinaryOperand, Reducible):
     """
     A ColumnBase stores columnar data in device memory.
@@ -429,6 +459,31 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         plc.null_mask.copy_bitmask(self.plc_column)
                     )
         return self._mask
+
+    def access(
+        self, *, mode: Literal["read", "write"], **kwargs: Any
+    ) -> _ColumnAccessContext:
+        """Context manager for controlled buffer access.
+
+        Mediates access to all the underlying buffers of the column. Within this
+        context, all their ptr accesses will respect the specified access mode. The
+        **kwargs allows subclasses to extend with additional parameters.
+
+        Parameters
+        ----------
+        mode : {"read", "write"}, default "read"
+            Access mode for the buffer.
+            - "read": ptr access will not trigger copy-on-write
+            - "write": ptr access will trigger copy-on-write if needed
+        **kwargs
+            Additional parameters for subclass implementations.
+
+        Returns
+        -------
+        _BufferAccessContext
+            A context manager that controls the access mode.
+        """
+        return _ColumnAccessContext(self, mode)
 
     def set_base_mask(self, value: None | Buffer) -> None:
         """
@@ -1405,15 +1460,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return self._fill(value, start, stop, inplace=True)
             else:
                 with acquire_spill_lock():
-                    return type(self).from_pylibcudf(
-                        plc.copying.copy_range(
-                            value.plc_column,
-                            self.to_pylibcudf(mode="write"),
-                            0,
-                            num_keys,
-                            start,
+                    with self.access(mode="write"):
+                        return type(self).from_pylibcudf(
+                            plc.copying.copy_range(
+                                value.plc_column,
+                                self.plc_column,
+                                0,
+                                num_keys,
+                                start,
+                            )
                         )
-                    )
 
         # step != 1, create a scatter map with arange
         scatter_map = cast(
@@ -1459,13 +1515,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         if key.dtype.kind == "b":
             with acquire_spill_lock():
-                plc_table = plc.copying.boolean_mask_scatter(
-                    plc.Table([value.plc_column])
-                    if isinstance(value, ColumnBase)
-                    else [value],
-                    plc.Table([self.to_pylibcudf(mode="write")]),
-                    key.plc_column,
-                )
+                with self.access(mode="write"):
+                    plc_table = plc.copying.boolean_mask_scatter(
+                        plc.Table([value.plc_column])
+                        if isinstance(value, ColumnBase)
+                        else [value],
+                        plc.Table([self.plc_column]),
+                        key.plc_column,
+                    )
                 return (
                     type(self)  # type: ignore[return-value]
                     .from_pylibcudf(plc_table.columns()[0])
