@@ -1344,6 +1344,16 @@ cdef class Column:
         """The number of null elements in the column."""
         return self._null_count
 
+    cpdef void set_null_count(self, size_type null_count):
+        """Set the null count of the column.
+
+        Parameters
+        ----------
+        null_count : size_type
+            The new null count of the column.
+        """
+        self._null_count = null_count
+
     cpdef list children(self):
         """The children of the column."""
         return self._children
