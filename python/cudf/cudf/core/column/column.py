@@ -161,42 +161,6 @@ class MaskCAIWrapper:
         )
 
 
-class ROCAIWrapper:
-    # A wrapper that exposes the __cuda_array_interface__ of a buffer as read-only to
-    # avoid copy-on-write issues.
-    def __init__(self, buffer: Buffer, mode: Literal["read", "write"]) -> None:
-        self._buffer = buffer
-        self._mode = mode
-
-    @property
-    def owner(self) -> Buffer:
-        # This property is how get_buffer_owner in buffer/utils.py knows to access the
-        # owner transitively, which is needed for correctness with copy-on-write
-        return self._buffer
-
-    @property
-    def __cuda_array_interface__(self) -> Mapping:
-        with self._buffer.access(mode=self._mode):
-            return {
-                "data": (self._buffer.ptr, False),
-                "shape": (self._buffer.size,),
-                "strides": None,
-                "typestr": "|u1",
-                "version": 3,
-            }
-
-    @property
-    def ptr(self) -> int:
-        """Device pointer (Span protocol)."""
-        with self._buffer.access(mode=self._mode):
-            return self._buffer.ptr
-
-    @property
-    def size(self) -> int:
-        """Size in bytes (Span protocol)."""
-        return self._buffer.size
-
-
 def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
     # Recursively replace all-null nested arrays with arrow NullArrays and make all
     # types nullable in the schema even if the columns contain no nulls
@@ -428,11 +392,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @property
     def base_data(self) -> None | Buffer:
         """Get data buffer from pylibcudf column."""
-        data = self.plc_column.data()
-        # Unwrap ROCAIWrapper if present (can occur after to_pylibcudf operations)
-        if isinstance(data, ROCAIWrapper):
-            return data._buffer
-        return data  # type: ignore[return-value]
+        return cast(Buffer | None, self.plc_column.data())
 
     @property
     def data(self) -> None | Buffer:
@@ -448,11 +408,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @property
     def base_mask(self) -> None | Buffer:
         """Get mask buffer from pylibcudf column."""
-        mask = self.plc_column.null_mask()
-        # Unwrap ROCAIWrapper if present (can occur after to_pylibcudf operations)
-        if isinstance(mask, ROCAIWrapper):
-            return mask._buffer
-        return mask  # type: ignore[return-value]
+        return cast(Buffer | None, self.plc_column.null_mask())
 
     @property
     def mask(self) -> None | Buffer:
@@ -690,32 +646,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        dtype = dtype_to_pylibcudf_type(self.dtype)
-
-        data = None
-        if self.base_data is not None:
-            data = ROCAIWrapper(self.base_data, mode)
-
-        mask = None
-        if self.base_mask is not None:
-            mask = ROCAIWrapper(self.base_mask, mode)
-
-        children = []
-        if self.base_children:
-            children = [
-                child_column.to_pylibcudf(mode=mode)
-                for child_column in self.base_children
-            ]
-
-        return plc.Column(
-            dtype,
-            self.size,
-            data,
-            mask,
-            self.null_count,
-            self.offset,
-            children,
-        )
+        # TODO: Unwrap buffers into raw gpumemoryview objects to remove cudf memory
+        # semantics when converting to pylibcudf
+        return self.plc_column
 
     @classmethod
     def from_pylibcudf(
