@@ -176,18 +176,20 @@ class ROCAIWrapper:
 
     @property
     def __cuda_array_interface__(self) -> Mapping:
-        return {
-            "data": (self._buffer.get_ptr(mode=self._mode), False),
-            "shape": (self._buffer.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 3,
-        }
+        with self._buffer.access(mode=self._mode):
+            return {
+                "data": (self._buffer.ptr, False),
+                "shape": (self._buffer.size,),
+                "strides": None,
+                "typestr": "|u1",
+                "version": 3,
+            }
 
     @property
     def ptr(self) -> int:
         """Device pointer (Span protocol)."""
-        return self._buffer.get_ptr(mode=self._mode)
+        with self._buffer.access(mode=self._mode):
+            return self._buffer.ptr
 
     @property
     def size(self) -> int:
@@ -1158,7 +1160,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @acquire_spill_lock()
     def _get_mask_as_column(self) -> ColumnBase:
         plc_column = plc.transform.mask_to_bools(
-            self.base_mask.get_ptr(mode="read"),  # type: ignore[union-attr]
+            self.base_mask.ptr,  # type: ignore[union-attr]
             self.offset,
             self.offset + len(self),
         )
@@ -2088,8 +2090,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.data is None:
             data_ptr = 0
         else:
-            original_ptr = self.data.get_ptr(mode="read")
-            data_ptr = self.data.get_ptr(mode="write")
+            original_ptr = self.data.ptr
+            with self.access(mode="write"):
+                data_ptr = self.data.ptr
             # Check if a new buffer was created or if the underlying data was modified
             if cudf.get_option("copy_on_write") and (data_ptr != original_ptr):
                 # The offset must be reset to 0 because we have migrated to a new copied
@@ -2124,8 +2127,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             assert mask is not None
             # Handle copy-on-write for mask
             if mask is not None:
-                original_mask_ptr = mask.get_ptr(mode="read")
-                mask_ptr = mask.get_ptr(mode="write")
+                original_mask_ptr = mask.ptr
+                with mask.access(mode="write"):
+                    mask_ptr = mask.ptr
                 # Check if a new buffer was created or if the underlying data was modified
                 if cudf.get_option("copy_on_write") and (
                     mask_ptr != original_mask_ptr

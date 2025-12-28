@@ -305,7 +305,14 @@ class Buffer(Serializable):
     @property
     def ptr(self) -> int:
         """Device pointer (Span protocol)."""
-        return self.get_ptr(mode="read")
+        # TODO: Convert to a try-except once we require all ptr access to be within the
+        # context manager. Then we will also remove the default "read" mode.
+        mode = (
+            self._access_mode_stack[-1] if self._access_mode_stack else "read"
+        )
+        if mode == "write" and get_option("copy_on_write"):
+            self.make_single_owner_inplace()
+        return self._owner.ptr + self._offset
 
     def access(self, *, mode: Literal["read", "write"], **kwargs):
         """Context manager for controlled buffer access.
@@ -343,23 +350,6 @@ class Buffer(Serializable):
         return self.__class__(
             owner=self._owner, offset=self._offset + start, size=stop - start
         )
-
-    def _get_mode(
-        self, mode: Literal["read", "write"] | None = None
-    ) -> Literal["read", "write"]:
-        """Get the current access mode for the buffer."""
-        # TODO: Convert to a try-except once we require all ptr access to be within the
-        # context manager. Then we will also remove the default "read" mode.
-        if self._access_mode_stack:
-            return self._access_mode_stack[-1]
-        if mode is not None:
-            return mode
-        return "read"
-
-    def get_ptr(self, *, mode: Literal["read", "write"] | None = None) -> int:
-        if self._get_mode(mode) == "write" and get_option("copy_on_write"):
-            self.make_single_owner_inplace()
-        return self._owner.ptr + self._offset
 
     def memoryview(self) -> memoryview:
         return self._owner.memoryview(offset=self._offset, size=self._size)
@@ -416,13 +406,14 @@ class Buffer(Serializable):
         """Implementation of the CUDA Array Interface."""
         if get_option("copy_on_write"):
             self.make_single_owner_inplace()
-        return {
-            "data": (self.get_ptr(mode="write"), False),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 3,
-        }
+        with self.access(mode="write"):
+            return {
+                "data": (self.ptr, False),
+                "shape": (self.size,),
+                "strides": None,
+                "typestr": "|u1",
+                "version": 3,
+            }
 
     def make_single_owner_inplace(self) -> None:
         """Make sure this slice is the only one pointing to the owner.
