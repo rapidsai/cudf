@@ -159,7 +159,7 @@ def test_spillable_buffer(manager: SpillManager):
 @pytest.mark.parametrize(
     "attribute",
     [
-        "get_ptr",
+        "ptr",
         "memoryview",
         "is_spilled",
         "spillable",
@@ -423,10 +423,10 @@ def test_get_ptr(manager: SpillManager, target):
     assert buf.spillable
     assert len(buf.owner._spill_locks) == 0
     with acquire_spill_lock():
-        buf.get_ptr(mode="read")
+        buf.ptr
         assert not buf.spillable
         with acquire_spill_lock():
-            buf.get_ptr(mode="read")
+            buf.ptr
             assert not buf.spillable
         assert not buf.spillable
     assert buf.spillable
@@ -546,7 +546,7 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     assert len(buf.owner._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], Buffer)
-    assert frames[0].get_ptr(mode="read") == buf.get_ptr(mode="read")
+    assert frames[0].ptr == buf.ptr
 
     frames[0] = cupy.array(frames[0], copy=True)
     df2 = protocol.deserialize(header, frames)
@@ -712,7 +712,8 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
         # Write access trigger copy of `a` into `b` but since `a` is spilled
         # the copy is done in host memory and `a` remains spilled.
         with acquire_spill_lock():
-            b.get_ptr(mode="write")
+            with b.access(mode="write"):
+                b.ptr
         assert a.is_spilled
         assert not b.is_spilled
 
@@ -735,7 +736,8 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
         assert a.owner == b.owner
         # Write access trigger copy of `a` into `b` in device memory
         with acquire_spill_lock():
-            b.get_ptr(mode="write")
+            with b.access(mode="write"):
+                b.ptr
         assert a.owner != b.owner
         assert not a.is_spilled
         assert not b.is_spilled
@@ -749,13 +751,13 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
 
         # Read access with a spill lock unspill `a` and allows copy-on-write
         with acquire_spill_lock():
-            a.get_ptr(mode="read")
+            a.ptr
         b = a.copy(deep=False)
         assert a.owner == b.owner
         assert not a.is_spilled
 
         # Read access without a spill lock exposes `a` and forces a deep copy
-        a.get_ptr(mode="read")
+        a.ptr
         b = a.copy(deep=False)
         assert a.owner != b.owner
         assert not a.is_spilled
