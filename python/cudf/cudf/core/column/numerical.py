@@ -397,7 +397,20 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
         with acquire_spill_lock():
-            mask, _ = plc.transform.nans_to_nulls(self.plc_column)
+            # When computing a null mask to set back to the column, since the column may
+            # have been sliced and have an offset, we need to compute the mask of the
+            # equivalent unsliced column so that the mask bits will be appropriately
+            # shifted..
+            shifted_column = plc.Column(
+                self.plc_column.type(),
+                self.plc_column.size() + self.plc_column.offset(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                0,
+                self.plc_column.children(),
+            )
+            mask, _ = plc.transform.nans_to_nulls(shifted_column)
             return self.set_mask(as_buffer(mask))
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
