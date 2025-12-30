@@ -28,8 +28,8 @@ static void bench_table_to_array(nvbench::state& state)
   auto stream     = cudf::get_default_stream();
 
   rmm::device_buffer output(num_rows * num_cols * sizeof(int32_t), stream);
-  auto span = cudf::device_span<cuda::std::byte>(reinterpret_cast<cuda::std::byte*>(output.data()),
-                                                 output.size());
+  auto span = cuda::std::span<cuda::std::byte>(reinterpret_cast<cuda::std::byte*>(output.data()),
+                                               output.size());
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.add_global_memory_reads<int32_t>(num_rows * num_cols);   // all bytes are read

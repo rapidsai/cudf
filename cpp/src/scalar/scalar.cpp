@@ -103,7 +103,7 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 {
   std::string result(size(), '\0');
   detail::cuda_memcpy(host_span<char>{result.data(), result.size()},
-                      device_span<char const>{data(), _data.size()},
+                      cuda::std::span<char const>{data(), _data.size()},
                       stream);
   return result;
 }

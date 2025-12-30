@@ -29,8 +29,8 @@ namespace detail {
  *
  * @return Boolean value; true if string is found, false otherwise
  */
-__device__ inline bool serialized_trie_contains(device_span<serial_trie_node const> trie,
-                                                device_span<char const> key)
+__device__ inline bool serialized_trie_contains(cuda::std::span<serial_trie_node const> trie,
+                                                cuda::std::span<char const> key)
 {
   if (trie.empty()) { return false; }
   if (key.empty()) { return trie.front().is_leaf; }

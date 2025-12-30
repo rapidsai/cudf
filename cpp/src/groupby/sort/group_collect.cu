@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -77,7 +77,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
 }
 
 std::unique_ptr<column> group_collect(column_view const& values,
-                                      cudf::device_span<size_type const> group_offsets,
+                                      cuda::std::span<size_type const> group_offsets,
                                       size_type num_groups,
                                       null_policy null_handling,
                                       rmm::cuda_stream_view stream,

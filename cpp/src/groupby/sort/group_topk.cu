@@ -20,7 +20,7 @@ namespace detail {
 std::unique_ptr<column> group_top_k(size_type k,
                                     order topk_order,
                                     column_view const& values,
-                                    cudf::device_span<size_type const> group_offsets,
+                                    cuda::std::span<size_type const> group_offsets,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {

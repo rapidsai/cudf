@@ -447,7 +447,7 @@ class corresponding_rows_not_equivalent {
 };
 
 // Stringify the inconsistent values resulted from the comparison of two columns element-wise
-std::string stringify_column_differences(cudf::device_span<int const> differences,
+std::string stringify_column_differences(cuda::std::span<int const> differences,
                                          column_view const& lhs,
                                          column_view const& rhs,
                                          column_view const& lhs_row_indices,
@@ -900,13 +900,13 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
     auto num_bitmasks      = num_bitmask_words(c.size());
     auto [bitmask_span, _] = [&] {
       if (c.offset() == 0) {
-        return std::pair{cudf::device_span<bitmask_type const>(c.null_mask(), num_bitmasks),
+        return std::pair{cuda::std::span<bitmask_type const>(c.null_mask(), num_bitmasks),
                          rmm::device_buffer{}};
       }
       auto mask = copy_bitmask(c.null_mask(), c.offset(), c.offset() + c.size());
-      return std::pair{cudf::device_span<bitmask_type const>(
-                         static_cast<bitmask_type*>(mask.data()), num_bitmasks),
-                       std::move(mask)};
+      return std::pair{
+        cuda::std::span<bitmask_type const>(static_cast<bitmask_type*>(mask.data()), num_bitmasks),
+        std::move(mask)};
     }();
     return cudf::detail::make_std_vector(bitmask_span, cudf::get_default_stream());
   } else {
@@ -935,7 +935,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
   using namespace numeric;
   using Rep = typename T::rep;
 
-  auto col_span       = cudf::device_span<Rep const>(c.begin<Rep>(), c.size());
+  auto col_span       = cuda::std::span<Rep const>(c.begin<Rep>(), c.size());
   auto host_rep_types = cudf::detail::make_host_vector(col_span, cudf::get_default_stream());
 
   auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
@@ -962,7 +962,7 @@ struct strings_to_host_fn {
     requires(std::is_same_v<OffsetType, int32_t> || std::is_same_v<OffsetType, int64_t>)
   {
     auto const h_offsets = cudf::detail::make_std_vector(
-      cudf::device_span<OffsetType const>(offsets.data<OffsetType>(), offsets.size()), stream);
+      cuda::std::span<OffsetType const>(offsets.data<OffsetType>(), offsets.size()), stream);
     // build std::string vector from chars and offsets
     std::transform(std::begin(h_offsets),
                    std::end(h_offsets) - 1,
@@ -991,7 +991,7 @@ std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(c
   if (c.size() > c.null_count()) {
     auto const scv     = strings_column_view(c);
     auto const h_chars = cudf::detail::make_std_vector<char>(
-      cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
+      cuda::std::span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
     auto offsets =
       cudf::slice(scv.offsets(), {scv.offset(), scv.offset() + scv.size() + 1}).front();
     cudf::type_dispatcher(

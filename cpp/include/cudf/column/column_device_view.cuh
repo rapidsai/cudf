@@ -536,7 +536,7 @@ class alignas(16) column_device_view : public column_device_view_core {
    *
    * @return A span containing the children of this column
    */
-  [[nodiscard]] __device__ device_span<column_device_view const> children() const noexcept
+  [[nodiscard]] __device__ cuda::std::span<column_device_view const> children() const noexcept
   {
     return {static_cast<column_device_view*>(d_children), static_cast<std::size_t>(_num_children)};
   }

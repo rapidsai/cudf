@@ -105,7 +105,7 @@ class datasource {
    * @param buffer Device buffer object
    * @return Constructed datasource object
    */
-  static std::unique_ptr<datasource> create(cudf::device_span<std::byte const> buffer);
+  static std::unique_ptr<datasource> create(cuda::std::span<std::byte const> buffer);
 
   /**
    * @brief Creates a source from an user implemented datasource object.

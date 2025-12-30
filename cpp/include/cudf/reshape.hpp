@@ -118,7 +118,7 @@ std::unique_ptr<column> byte_cast(
  * @param stream CUDA stream used for memory operations
  */
 void table_to_array(table_view const& input,
-                    device_span<cuda::std::byte> output,
+                    cuda::std::span<cuda::std::byte> output,
                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /** @} */  // end of group

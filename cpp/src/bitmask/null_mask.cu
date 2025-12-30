@@ -156,11 +156,11 @@ __device__ void set_null_mask_impl(bitmask_type* __restrict__ destination,
 }
 
 template <mask_set_mode MODE>
-CUDF_KERNEL void set_null_masks_kernel(cudf::device_span<bitmask_type*> destinations,
-                                       cudf::device_span<size_type const> begin_bits,
-                                       cudf::device_span<size_type const> end_bits,
-                                       cudf::device_span<bool const> valids,
-                                       cudf::device_span<size_type const> numbers_of_mask_words)
+CUDF_KERNEL void set_null_masks_kernel(cuda::std::span<bitmask_type*> destinations,
+                                       cuda::std::span<size_type const> begin_bits,
+                                       cuda::std::span<size_type const> end_bits,
+                                       cuda::std::span<bool const> valids,
+                                       cuda::std::span<size_type const> numbers_of_mask_words)
 {
   auto const bitmask_idx = cg::this_grid().block_rank();
   // Return early if nothing to do
@@ -232,7 +232,8 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
 
   // Create device vectors from host spans
   auto const mr     = rmm::mr::get_current_device_resource_ref();
-  auto destinations = cudf::detail::make_device_uvector_async<bitmask_type*>(bitmasks, stream, mr);
+  auto destinations = cudf::detail::make_device_uvector_async<bitmask_type*>(
+    cudf::host_span<bitmask_type* const>(bitmasks), stream, mr);
   auto const d_begin_bits = cudf::detail::make_device_uvector_async(begin_bits, stream, mr);
   auto const d_end_bits   = cudf::detail::make_device_uvector_async(end_bits, stream, mr);
   auto const d_valids     = cudf::detail::make_device_uvector_async(valids, stream, mr);
@@ -250,7 +251,11 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
   block_size = std::min<size_t>(block_size, 1024);
 
   set_null_masks_kernel<MODE><<<num_bitmasks, block_size, 0, stream.value()>>>(
-    destinations, d_begin_bits, d_end_bits, d_valids, number_of_mask_words);
+    destinations,
+    d_begin_bits,
+    d_end_bits,
+    cuda::std::span<bool const>(d_valids.data(), d_valids.size()),
+    number_of_mask_words);
   CUDF_CHECK_CUDA(stream.value());
 }
 
@@ -556,7 +561,7 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
 }
 
 // Inplace Bitwise AND of the masks
-cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
+cudf::size_type inplace_bitmask_and(cuda::std::span<bitmask_type> dest_mask,
                                     host_span<bitmask_type const* const> masks,
                                     host_span<size_type const> begin_bits,
                                     size_type mask_size,

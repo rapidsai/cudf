@@ -261,7 +261,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Count of set bits
  */
-cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
+cudf::size_type inplace_bitmask_and(cuda::std::span<bitmask_type> dest_mask,
                                     host_span<bitmask_type const* const> masks,
                                     host_span<size_type const> masks_begin_bits,
                                     size_type mask_size_bits,

@@ -169,7 +169,7 @@ std::unique_ptr<scalar> reduce(
  */
 std::unique_ptr<column> segmented_reduce(
   column_view const& segmented_values,
-  device_span<size_type const> offsets,
+  cuda::std::span<size_type const> offsets,
   segmented_reduce_aggregation const& agg,
   data_type output_type,
   null_policy null_handling,
@@ -195,7 +195,7 @@ std::unique_ptr<column> segmented_reduce(
  */
 std::unique_ptr<column> segmented_reduce(
   column_view const& segmented_values,
-  device_span<size_type const> offsets,
+  cuda::std::span<size_type const> offsets,
   segmented_reduce_aggregation const& agg,
   data_type output_type,
   null_policy null_handling,

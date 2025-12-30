@@ -28,7 +28,7 @@ namespace groupby {
 namespace detail {
 
 std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_value,
-                                            device_span<size_type const> group_labels,
+                                            cuda::std::span<size_type const> group_labels,
                                             cudf::replace_policy replace_policy,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)

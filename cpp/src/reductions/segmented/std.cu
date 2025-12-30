@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,7 +15,7 @@ namespace reduction {
 namespace detail {
 
 std::unique_ptr<cudf::column> segmented_standard_deviation(column_view const& col,
-                                                           device_span<size_type const> offsets,
+                                                           cuda::std::span<size_type const> offsets,
                                                            cudf::data_type const output_dtype,
                                                            null_policy null_handling,
                                                            size_type ddof,

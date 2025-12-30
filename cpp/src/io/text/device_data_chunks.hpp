@@ -11,14 +11,14 @@ namespace cudf::io::text {
 
 class device_span_data_chunk : public device_data_chunk {
  public:
-  device_span_data_chunk(device_span<char const> data) : _data(data) {}
+  device_span_data_chunk(cuda::std::span<char const> data) : _data(data) {}
 
   [[nodiscard]] char const* data() const override { return _data.data(); }
   [[nodiscard]] std::size_t size() const override { return _data.size(); }
-  operator device_span<char const>() const override { return _data; }
+  operator cuda::std::span<char const>() const override { return _data; }
 
  private:
-  device_span<char const> _data;
+  cuda::std::span<char const> _data;
 };
 
 class device_uvector_data_chunk : public device_data_chunk {
@@ -32,7 +32,7 @@ class device_uvector_data_chunk : public device_data_chunk {
 
   [[nodiscard]] char const* data() const override { return _data.data(); }
   [[nodiscard]] std::size_t size() const override { return _data.size(); }
-  operator device_span<char const>() const override { return _data; }
+  operator cuda::std::span<char const>() const override { return _data; }
 
  private:
   rmm::device_uvector<char> _data;

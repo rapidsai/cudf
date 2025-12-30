@@ -52,14 +52,14 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
   auto d_expected_weight = cudf::detail::make_device_uvector_async(
     h_expected_weight, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
-  auto map = cudf::device_span<cudf::size_type const>(d_expected_src);
+  auto map = cuda::std::span<cudf::size_type const>(d_expected_src);
   auto sampled_result_mean =
     std::move(cudf::gather(cudf::table_view({result_mean}), map)->release().front());
   auto sampled_result_weight =
     std::move(cudf::gather(cudf::table_view({result_weight}), map)->release().front());
 
-  auto expected_mean   = cudf::device_span<double const>(d_expected_mean);
-  auto expected_weight = cudf::device_span<double const>(d_expected_weight);
+  auto expected_mean   = cuda::std::span<double const>(d_expected_mean);
+  auto expected_weight = cuda::std::span<double const>(d_expected_weight);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_mean, *sampled_result_mean);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_weight, *sampled_result_weight);
 }

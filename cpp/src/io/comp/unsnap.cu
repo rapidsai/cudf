@@ -59,15 +59,15 @@ struct unsnap_state_s {
   CUDF_HOST_DEVICE constexpr unsnap_state_s() noexcept {
   }  // required to compile on ctk-12.2 + aarch64
 
-  uint8_t const* base{};           ///< base ptr of compressed stream
-  uint8_t const* end{};            ///< end of compressed stream
-  uint32_t uncompressed_size{};    ///< uncompressed stream size
-  uint32_t bytes_left{};           ///< remaining bytes to decompress
-  int32_t error{};                 ///< current error status
-  uint32_t tstart{};               ///< start time for perf logging
-  volatile unsnap_queue_s q{};     ///< queue for cross-warp communication
-  device_span<uint8_t const> src;  ///< input for current block
-  device_span<uint8_t> dst;        ///< output for current block
+  uint8_t const* base{};               ///< base ptr of compressed stream
+  uint8_t const* end{};                ///< end of compressed stream
+  uint32_t uncompressed_size{};        ///< uncompressed stream size
+  uint32_t bytes_left{};               ///< remaining bytes to decompress
+  int32_t error{};                     ///< current error status
+  uint32_t tstart{};                   ///< start time for perf logging
+  volatile unsnap_queue_s q{};         ///< queue for cross-warp communication
+  cuda::std::span<uint8_t const> src;  ///< input for current block
+  cuda::std::span<uint8_t> dst;        ///< output for current block
 };
 
 inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
@@ -620,9 +620,9 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
  */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  unsnap_kernel(device_span<device_span<uint8_t const> const> inputs,
-                device_span<device_span<uint8_t> const> outputs,
-                device_span<codec_exec_result> results)
+  unsnap_kernel(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                cuda::std::span<codec_exec_result> results)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
   __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
@@ -635,8 +635,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   if (!t) {
     s->src         = inputs[strm_id];
     s->dst         = outputs[strm_id];
-    auto cur       = s->src.begin();
-    auto const end = s->src.end();
+    auto cur       = s->src.data();
+    auto const end = s->src.data() + s->src.size();
     s->error       = 0;
     if (cur < end) {
       // Read uncompressed size (varint), limited to 32-bit
@@ -697,9 +697,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 }
 
-void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
-                device_span<device_span<uint8_t> const> outputs,
-                device_span<codec_exec_result> results,
+void gpu_unsnap(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                cuda::std::span<codec_exec_result> results,
                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);           // 4 warps per stream, 1 stream per block
@@ -709,7 +709,8 @@ void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
 }
 
 __global__ void get_snappy_uncompressed_size_kernel(
-  device_span<device_span<uint8_t const> const> inputs, device_span<size_t> uncompressed_sizes)
+  cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+  cuda::std::span<size_t> uncompressed_sizes)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx >= inputs.size()) return;
@@ -734,8 +735,8 @@ __global__ void get_snappy_uncompressed_size_kernel(
   uncompressed_sizes[idx] = 0;
 }
 
-void get_snappy_uncompressed_size(device_span<device_span<uint8_t const> const> inputs,
-                                  device_span<size_t> uncompressed_sizes,
+void get_snappy_uncompressed_size(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                                  cuda::std::span<size_t> uncompressed_sizes,
                                   rmm::cuda_stream_view stream)
 {
   int threads_per_block = 128;

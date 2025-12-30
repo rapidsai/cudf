@@ -70,9 +70,9 @@ __device__ inline bool substr_eq(const char* data,
   return true;
 }
 
-void validate_token_stream(device_span<char const> d_input,
-                           device_span<PdaTokenT> tokens,
-                           device_span<SymbolOffsetT> token_indices,
+void validate_token_stream(cuda::std::span<char const> d_input,
+                           cuda::std::span<PdaTokenT> tokens,
+                           cuda::std::span<SymbolOffsetT> token_indices,
                            cudf::io::json_reader_options const& options,
                            rmm::cuda_stream_view stream)
 {
@@ -288,7 +288,7 @@ void validate_token_stream(device_span<char const> d_input,
                     predicate);
 
   using scan_type            = write_if::scan_type;
-  auto conditional_write     = write_if{tokens.begin(), num_tokens};
+  auto conditional_write     = write_if{tokens.data(), num_tokens};
   auto conditional_output_it = thrust::tabulate_output_iterator(conditional_write);
   auto binary_op             = cuda::proclaim_return_type<scan_type>(
     [] __device__(scan_type prev, scan_type curr) -> scan_type {

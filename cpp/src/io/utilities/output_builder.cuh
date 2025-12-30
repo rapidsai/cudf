@@ -45,7 +45,7 @@ class split_device_span {
 
   split_device_span() = default;
 
-  explicit constexpr split_device_span(device_span<T> head, device_span<T> tail = {})
+  explicit constexpr split_device_span(cuda::std::span<T> head, cuda::std::span<T> tail = {})
     : _head{head}, _tail{tail}
   {
   }
@@ -57,17 +57,17 @@ class split_device_span {
 
   [[nodiscard]] constexpr size_type size() const { return _head.size() + _tail.size(); }
 
-  [[nodiscard]] constexpr device_span<T> head() const { return _head; }
+  [[nodiscard]] constexpr cuda::std::span<T> head() const { return _head; }
 
-  [[nodiscard]] constexpr device_span<T> tail() const { return _tail; }
+  [[nodiscard]] constexpr cuda::std::span<T> tail() const { return _tail; }
 
   [[nodiscard]] constexpr iterator begin() const;
 
   [[nodiscard]] constexpr iterator end() const;
 
  private:
-  device_span<T> _head;
-  device_span<T> _tail;
+  cuda::std::span<T> _head;
+  cuda::std::span<T> _tail;
 };
 
 /**
@@ -342,9 +342,9 @@ class output_builder {
    * @param vector The vector.
    * @return The span of unused elements.
    */
-  static device_span<T> get_free_span(rmm::device_uvector<T>& vector)
+  static cuda::std::span<T> get_free_span(rmm::device_uvector<T>& vector)
   {
-    return device_span<T>{vector.data() + vector.size(), vector.capacity() - vector.size()};
+    return cuda::std::span<T>{vector.data() + vector.size(), vector.capacity() - vector.size()};
   }
 
   size_type _size{0};

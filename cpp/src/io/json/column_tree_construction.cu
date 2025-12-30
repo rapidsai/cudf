@@ -37,7 +37,7 @@ using row_offset_t = size_type;
 
 #ifdef CSR_DEBUG_PRINT
 template <typename T>
-void print(device_span<T const> d_vec, std::string name, rmm::cuda_stream_view stream)
+void print(cuda::std::span<T const> d_vec, std::string name, rmm::cuda_stream_view stream)
 {
   stream.synchronize();
   auto h_vec = cudf::detail::make_std_vector(d_vec, stream);
@@ -52,9 +52,9 @@ void print(device_span<T const> d_vec, std::string name, rmm::cuda_stream_view s
 namespace experimental::detail {
 
 struct level_ordering {
-  device_span<TreeDepthT const> node_levels;
-  device_span<NodeIndexT const> col_ids;
-  device_span<NodeIndexT const> parent_node_ids;
+  cuda::std::span<TreeDepthT const> node_levels;
+  cuda::std::span<NodeIndexT const> col_ids;
+  cuda::std::span<NodeIndexT const> parent_node_ids;
   __device__ bool operator()(NodeIndexT lhs_node_id, NodeIndexT rhs_node_id) const
   {
     auto lhs_parent_col_id = parent_node_ids[lhs_node_id] == parent_node_sentinel
@@ -73,7 +73,7 @@ struct level_ordering {
 };
 
 struct parent_nodeids_to_colids {
-  device_span<NodeIndexT const> rev_mapped_col_ids;
+  cuda::std::span<NodeIndexT const> rev_mapped_col_ids;
   __device__ auto operator()(NodeIndexT parent_node_id) -> NodeIndexT
   {
     return parent_node_id == parent_node_sentinel ? parent_node_sentinel
@@ -95,10 +95,10 @@ struct parent_nodeids_to_colids {
  */
 std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   tree_meta_t& node_tree,
-  device_span<NodeIndexT const> original_col_ids,
-  device_span<NodeIndexT const> sorted_col_ids,
-  device_span<NodeIndexT const> ordered_node_ids,
-  device_span<row_offset_t const> row_offsets,
+  cuda::std::span<NodeIndexT const> original_col_ids,
+  cuda::std::span<NodeIndexT const> sorted_col_ids,
+  cuda::std::span<NodeIndexT const> ordered_node_ids,
+  cuda::std::span<row_offset_t const> row_offsets,
   bool is_array_of_arrays,
   NodeIndexT row_array_parent_col_id,
   rmm::cuda_stream_view stream)
@@ -182,7 +182,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
 #endif
 
   auto construct_row_idx = [&stream](NodeIndexT num_columns,
-                                     device_span<NodeIndexT const> parent_col_ids) {
+                                     cuda::std::span<NodeIndexT const> parent_col_ids) {
     auto row_idx = cudf::detail::make_zeroed_device_uvector_async<NodeIndexT>(
       static_cast<std::size_t>(num_columns + 1), stream, cudf::get_current_device_resource_ref());
     // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
@@ -230,8 +230,8 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   };
 
   auto construct_col_idx = [&stream](NodeIndexT num_columns,
-                                     device_span<NodeIndexT const> parent_col_ids,
-                                     device_span<NodeIndexT const> row_idx) {
+                                     cuda::std::span<NodeIndexT const> parent_col_ids,
+                                     cuda::std::span<NodeIndexT const> row_idx) {
     rmm::device_uvector<NodeIndexT> col_idx((num_columns - 1) * 2, stream);
     thrust::fill(rmm::exec_policy_nosync(stream), col_idx.begin(), col_idx.end(), -1);
     // excluding root node, construct scatter map

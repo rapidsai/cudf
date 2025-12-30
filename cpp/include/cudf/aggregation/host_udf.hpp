@@ -150,7 +150,7 @@ struct reduce_host_udf : host_udf_base {
  *
  *   [[nodiscard]] std::unique_ptr<column> operator()(
  *     column_view const& input,
- *     device_span<size_type const> offsets,
+ *     cuda::std::span<size_type const> offsets,
  *     data_type output_dtype,
  *     null_policy null_handling,
  *     std::optional<std::reference_wrapper<scalar const>> init,
@@ -192,7 +192,7 @@ struct segmented_reduce_host_udf : host_udf_base {
    */
   [[nodiscard]] virtual std::unique_ptr<column> operator()(
     column_view const& input,
-    device_span<size_type const> offsets,
+    cuda::std::span<size_type const> offsets,
     data_type output_dtype,
     null_policy null_handling,
     std::optional<std::reference_wrapper<scalar const>> init,
@@ -306,12 +306,12 @@ struct groupby_host_udf : host_udf_base {
   /**
    * @brief Callback to access the offsets separating groups.
    */
-  std::function<device_span<size_type const>(void)> callback_group_offsets;
+  std::function<cuda::std::span<size_type const>(void)> callback_group_offsets;
 
   /**
    * @brief Callback to access the group labels (which is also the same as group indices).
    */
-  std::function<device_span<size_type const>(void)> callback_group_labels;
+  std::function<cuda::std::span<size_type const>(void)> callback_group_labels;
 
   /**
    * @brief Callback to access the result from other groupby aggregations.
@@ -370,7 +370,7 @@ struct groupby_host_udf : host_udf_base {
    *
    * @return The array of group offsets.
    */
-  [[nodiscard]] device_span<size_type const> get_group_offsets() const
+  [[nodiscard]] cuda::std::span<size_type const> get_group_offsets() const
   {
     CUDF_EXPECTS(callback_group_offsets, "Uninitialized callback_group_offsets.");
     return callback_group_offsets();
@@ -381,7 +381,7 @@ struct groupby_host_udf : host_udf_base {
    *
    * @return The array of group labels.
    */
-  [[nodiscard]] device_span<size_type const> get_group_labels() const
+  [[nodiscard]] cuda::std::span<size_type const> get_group_labels() const
   {
     CUDF_EXPECTS(callback_group_labels, "Uninitialized callback_group_labels.");
     return callback_group_labels();

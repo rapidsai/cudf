@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,7 +35,7 @@ namespace detail {
  */
 rmm::device_uvector<size_type> segmented_counts(bitmask_type const* null_mask,
                                                 bool has_nulls,
-                                                device_span<size_type const> offsets,
+                                                cuda::std::span<size_type const> offsets,
                                                 null_policy null_handling,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::device_async_resource_ref mr);

@@ -454,8 +454,8 @@ auto batched_decompress_get_temp_size_sync(compression_type compression,
 
 // Overload for internal use that takes device pointers and sizes directly
 size_t batched_decompress_temp_size_ex(compression_type compression,
-                                       device_span<void const* const> input_data_ptrs,
-                                       device_span<size_t const> input_data_sizes,
+                                       cuda::std::span<void const* const> input_data_ptrs,
+                                       cuda::std::span<size_t const> input_data_sizes,
                                        size_t max_uncomp_chunk_size,
                                        size_t max_total_uncomp_size,
                                        rmm::cuda_stream_view stream)
@@ -509,7 +509,7 @@ bool is_batched_decompress_temp_size_ex_supported(compression_type compression)
 }
 
 size_t batched_decompress_temp_size_ex(compression_type compression,
-                                       device_span<device_span<uint8_t const> const> inputs,
+                                       cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
                                        size_t max_uncomp_chunk_size,
                                        size_t max_total_uncomp_size,
                                        rmm::cuda_stream_view stream)
@@ -521,9 +521,9 @@ size_t batched_decompress_temp_size_ex(compression_type compression,
 }
 
 void batched_decompress(compression_type compression,
-                        device_span<device_span<uint8_t const> const> inputs,
-                        device_span<device_span<uint8_t> const> outputs,
-                        device_span<codec_exec_result> results,
+                        cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                        cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                        cuda::std::span<codec_exec_result> results,
                         size_t max_uncomp_chunk_size,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
@@ -608,9 +608,9 @@ size_t compress_max_output_chunk_size(compression_type compression,
 }
 
 void batched_compress(compression_type compression,
-                      device_span<device_span<uint8_t const> const> inputs,
-                      device_span<device_span<uint8_t> const> outputs,
-                      device_span<codec_exec_result> results,
+                      cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                      cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                      cuda::std::span<codec_exec_result> results,
                       rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(inputs.size() > 0, "inputs must be non-empty");
@@ -820,10 +820,10 @@ void load_nvcomp_library()
     rmm::device_uvector<uint8_t> d_compressed(max_compressed_size, stream);
 
     // Prepare parameters for compression
-    cudf::detail::hostdevice_vector<device_span<uint8_t const>> hd_inputs(1, stream);
+    cudf::detail::hostdevice_vector<cuda::std::span<uint8_t const>> hd_inputs(1, stream);
     hd_inputs[0] = d_input;
     hd_inputs.host_to_device_async(stream);
-    cudf::detail::hostdevice_vector<device_span<uint8_t>> hd_outputs(1, stream);
+    cudf::detail::hostdevice_vector<cuda::std::span<uint8_t>> hd_outputs(1, stream);
     hd_outputs[0] = d_compressed;
     hd_outputs.host_to_device_async(stream);
     cudf::detail::hostdevice_vector<codec_exec_result> hd_results(1, stream);

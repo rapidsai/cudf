@@ -32,7 +32,7 @@ namespace detail {
  * @return The data in device spans all set to value
  */
 template <typename T>
-void batched_memset(cudf::host_span<cudf::device_span<T> const> host_buffers,
+void batched_memset(cudf::host_span<cuda::std::span<T> const> host_buffers,
                     T const value,
                     rmm::cuda_stream_view stream)
 {

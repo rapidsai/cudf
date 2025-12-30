@@ -136,9 +136,9 @@ rmm::device_buffer decompress_stripe_data(
   // This is still a valid input, thus do not be panick.
   if (decomp_data.is_empty()) { return decomp_data; }
 
-  rmm::device_uvector<device_span<uint8_t const>> inflate_in(
+  rmm::device_uvector<cuda::std::span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
-  rmm::device_uvector<device_span<uint8_t>> inflate_out(
+  rmm::device_uvector<cuda::std::span<uint8_t>> inflate_out(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<codec_exec_result> inflate_res(num_compressed_blocks, stream);
   thrust::fill(rmm::exec_policy_nosync(stream),
@@ -180,8 +180,10 @@ rmm::device_buffer decompress_stripe_data(
   any_block_failure[0] = false;
   any_block_failure.host_to_device_async(stream);
 
-  device_span<device_span<uint8_t const>> inflate_in_view{inflate_in.data(), num_compressed_blocks};
-  device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
+  cuda::std::span<cuda::std::span<uint8_t const>> inflate_in_view{inflate_in.data(),
+                                                                  num_compressed_blocks};
+  cuda::std::span<cuda::std::span<uint8_t>> inflate_out_view{inflate_out.data(),
+                                                             num_compressed_blocks};
   cudf::io::detail::decompress(decompressor.compression(),
                                inflate_in_view,
                                inflate_out_view,
@@ -203,10 +205,10 @@ rmm::device_buffer decompress_stripe_data(
                    });
 
   if (num_uncompressed_blocks > 0) {
-    device_span<device_span<uint8_t const>> copy_in_view{inflate_in.data() + num_compressed_blocks,
-                                                         num_uncompressed_blocks};
-    device_span<device_span<uint8_t>> copy_out_view{inflate_out.data() + num_compressed_blocks,
-                                                    num_uncompressed_blocks};
+    cuda::std::span<cuda::std::span<uint8_t const>> copy_in_view{
+      inflate_in.data() + num_compressed_blocks, num_uncompressed_blocks};
+    cuda::std::span<cuda::std::span<uint8_t>> copy_out_view{
+      inflate_out.data() + num_compressed_blocks, num_uncompressed_blocks};
     cudf::io::detail::gpu_copy_uncompressed_blocks(copy_in_view, copy_out_view, stream);
   }
 

@@ -39,8 +39,8 @@ TYPED_TEST(ColumnViewSpanTests, device_span_conversion_round_trip)
   auto col_view = cudf::column_view{*col};
 
   // Test implicit conversion, round trip
-  cudf::device_span<TypeParam const> device_span_from_col_view = col_view;
-  cudf::column_view col_view_from_device_span                  = device_span_from_col_view;
+  cuda::std::span<TypeParam const> device_span_from_col_view = col_view;
+  cudf::column_view col_view_from_device_span                = device_span_from_col_view;
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_view, col_view_from_device_span);
 }
 
@@ -50,7 +50,7 @@ TEST_F(ColumnViewSpanErrorTests, device_span_type_mismatch)
 {
   auto col      = example_column<int32_t>();
   auto col_view = cudf::column_view{*col};
-  EXPECT_THROW((void)cudf::device_span<float const>{col_view}, cudf::logic_error);
+  EXPECT_THROW((void)cuda::std::span<float const>{col_view}, cudf::logic_error);
 }
 
 TEST_F(ColumnViewSpanErrorTests, device_span_nullable_column)
@@ -58,7 +58,7 @@ TEST_F(ColumnViewSpanErrorTests, device_span_nullable_column)
   auto col = example_column<int32_t>();
   col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_NULL), col->size());
   auto col_view = cudf::column_view{*col};
-  EXPECT_THROW((void)cudf::device_span<int32_t const>{col_view}, cudf::logic_error);
+  EXPECT_THROW((void)cuda::std::span<int32_t const>{col_view}, cudf::logic_error);
 }
 
 TYPED_TEST(ColumnViewSpanTests, std_span_conversion_to_span)

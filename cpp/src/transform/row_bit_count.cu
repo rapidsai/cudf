@@ -404,9 +404,9 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
  * @param segment_length The number of rows in each segment for which the total size is computed
  * @param max_branch_depth Maximum depth of the span stack needed per-thread
  */
-CUDF_KERNEL void compute_segment_sizes(device_span<column_device_view const> cols,
-                                       device_span<column_info const> info,
-                                       device_span<size_type> output,
+CUDF_KERNEL void compute_segment_sizes(cuda::std::span<column_device_view const> cols,
+                                       cuda::std::span<column_info const> info,
+                                       cuda::std::span<size_type> output,
                                        size_type segment_length,
                                        size_type max_branch_depth)
 {

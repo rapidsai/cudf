@@ -178,7 +178,7 @@ struct hash_probe_result {
 
   __device__ __forceinline__ hash_probe_result(
     pair_expression_equality<has_nulls> const& key_equal,
-    cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+    cuda::std::span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
     cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
     std::size_t probe_idx)
   {
@@ -218,7 +218,7 @@ struct hash_probe_result {
  */
 template <bool has_nulls>
 struct hash_table_prober {
-  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage_;
+  cuda::std::span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage_;
   pair_expression_equality<has_nulls> const& key_equal_;
   cuco::pair<hash_value_type, cudf::size_type> const& probe_key_;
   std::size_t probe_idx_;
@@ -227,7 +227,7 @@ struct hash_table_prober {
 
   __device__ __forceinline__ hash_table_prober(
     pair_expression_equality<has_nulls> const& key_equal,
-    cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+    cuda::std::span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
     cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
     cuda::std::pair<hash_value_type, hash_value_type> const& hash_idx)
     : hash_table_storage_{hash_table_storage},

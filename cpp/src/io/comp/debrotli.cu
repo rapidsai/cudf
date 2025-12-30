@@ -1903,9 +1903,9 @@ static __device__ void ProcessCommands(debrotli_state_s* s, brotli_dictionary_s 
  * blocks)
  */
 CUDF_KERNEL void __launch_bounds__(block_size, 2)
-  gpu_debrotli_kernel(device_span<device_span<uint8_t const> const> inputs,
-                      device_span<device_span<uint8_t> const> outputs,
-                      device_span<codec_exec_result> results,
+  gpu_debrotli_kernel(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                      cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                      cuda::std::span<codec_exec_result> results,
                       uint8_t* scratch,
                       uint32_t scratch_size)
 {
@@ -2068,9 +2068,9 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs)
 #include <stdio.h>
 #endif
 
-void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
-                  device_span<device_span<uint8_t> const> outputs,
-                  device_span<codec_exec_result> results,
+void gpu_debrotli(cuda::std::span<cuda::std::span<uint8_t const> const> inputs,
+                  cuda::std::span<cuda::std::span<uint8_t> const> outputs,
+                  cuda::std::span<codec_exec_result> results,
                   rmm::cuda_stream_view stream)
 {
   // Scratch memory for decompressing

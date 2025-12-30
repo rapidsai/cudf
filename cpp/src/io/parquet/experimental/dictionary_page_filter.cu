@@ -95,7 +95,7 @@ using storage_ref_type = typename storage_type::ref_type;
  */
 template <SupportedDictionaryType T>
 struct insert_hash_functor {
-  cudf::device_span<T const> const decoded_data;
+  cuda::std::span<T const> const decoded_data;
   uint32_t const seed{DEFAULT_HASH_SEED};
   constexpr __device__ __forceinline__ typename hasher_type<T>::result_type operator()(
     key_type key) const noexcept
@@ -126,7 +126,7 @@ struct query_hash_functor {
  */
 template <SupportedDictionaryType T>
 struct insert_equality_functor {
-  cudf::device_span<T const> const decoded_data;
+  cuda::std::span<T const> const decoded_data;
   constexpr __device__ __forceinline__ bool operator()(key_type lhs_key,
                                                        key_type rhs_key) const noexcept
   {
@@ -141,7 +141,7 @@ struct insert_equality_functor {
  */
 template <SupportedDictionaryType T>
 struct query_equality_functor {
-  cudf::device_span<T const> const decoded_data;
+  cuda::std::span<T const> const decoded_data;
   constexpr __device__ __forceinline__ bool operator()(T const& value, key_type key) const noexcept
   {
     return value == decoded_data[key];
@@ -316,8 +316,8 @@ __device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
  * @param physical_type Parquet physical type of the column
  */
 template <SupportedDictionaryType T>
-CUDF_KERNEL void query_dictionaries(cudf::device_span<T> decoded_data,
-                                    cudf::device_span<bool*> results,
+CUDF_KERNEL void query_dictionaries(cuda::std::span<T> decoded_data,
+                                    cuda::std::span<bool*> results,
                                     ast::generic_scalar_device_view const* scalars,
                                     ast::ast_operator const* operators,
                                     slot_type* set_storage,
@@ -628,7 +628,7 @@ __device__ cudf::string_view decode_string_value(uint8_t const* page_data,
  */
 CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
   build_string_dictionaries(PageInfo const* pages,
-                            cudf::device_span<cudf::string_view> decoded_data,
+                            cuda::std::span<cudf::string_view> decoded_data,
                             slot_type* set_storage,
                             cudf::size_type const* set_offsets,
                             cudf::size_type const* value_offsets,
@@ -724,7 +724,7 @@ template <SupportedFixedWidthType T>
 CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
   build_fixed_width_dictionaries(PageInfo const* pages,
                                  ColumnChunkDesc const* chunks,
-                                 cudf::device_span<T> decoded_data,
+                                 cuda::std::span<T> decoded_data,
                                  slot_type* set_storage,
                                  cudf::size_type const* set_offsets,
                                  cudf::size_type const* value_offsets,
@@ -801,7 +801,7 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
  */
 CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
   evaluate_few_string_literals(PageInfo const* pages,
-                               cudf::device_span<bool*> results,
+                               cuda::std::span<bool*> results,
                                ast::generic_scalar_device_view const* scalars,
                                ast::ast_operator const* operators,
                                cudf::size_type total_num_scalars,
@@ -917,7 +917,7 @@ template <SupportedFixedWidthType T>
 CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
   evaluate_few_fixed_width_literals(PageInfo const* pages,
                                     ColumnChunkDesc const* chunks,
-                                    cudf::device_span<bool*> results,
+                                    cuda::std::span<bool*> results,
                                     ast::generic_scalar_device_view const* scalars,
                                     ast::ast_operator const* operators,
                                     parquet::Type physical_type,

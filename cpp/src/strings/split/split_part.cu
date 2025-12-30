@@ -32,8 +32,8 @@ namespace {
 struct split_part_ws_tokenizer_fn : base_ws_split_tokenizer<split_part_ws_tokenizer_fn> {
   __device__ void process_tokens(int64_t pos_begin,
                                  int64_t pos_end,
-                                 device_span<int64_t const> delimiters,
-                                 device_span<string_index_pair> d_tokens) const
+                                 cuda::std::span<int64_t const> delimiters,
+                                 cuda::std::span<string_index_pair> d_tokens) const
   {
     auto const base_ptr    = d_strings.head<char>();
     auto const token_count = static_cast<size_type>(d_tokens.size());
