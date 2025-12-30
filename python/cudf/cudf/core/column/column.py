@@ -578,12 +578,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # Optimization: for non-sliced columns, children == base_children (just references)
             self._children = self.base_children
         else:
-            # Compute children from the column view (children factoring self.size and offset)
-            # Use plc_column.children() which are already offset-aware
-            plc_children = self.plc_column.children()
+            # Slice each base child using the parent's offset and size
             self._children = tuple(
-                ColumnBase.from_pylibcudf(plc_child, data_ptr_exposed=False)
-                for plc_child in plc_children
+                base_child.slice(self.offset, self.offset + self.size)
+                for base_child in self.base_children
             )
 
     def _mimic_inplace(
