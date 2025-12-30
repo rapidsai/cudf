@@ -99,6 +99,7 @@ max_allowed_size_compressed = '75M'
 addopts = "--tb=native --strict-config --strict-markers"
 empty_parameter_set_mark = "fail_at_collect"
 filterwarnings = [
+    "error",
     "error::FutureWarning",
     "error::DeprecationWarning",
     # some third-party dependencies (e.g. 'boto3') still using datetime.datetime.utcnow()
