@@ -132,11 +132,11 @@ class CategoricalColumn(column.ColumnBase):
         # Convert values to categorical dtype like self
         return self, column.as_column(values, dtype=self.dtype)
 
-    @property
-    def children(self) -> tuple[NumericalColumn]:
+    def _recompute_children(self) -> None:
         if self.offset == 0 and self.size == self.base_size:
-            return super().children  # type: ignore[return-value]
-        if self._children is None:
+            # Optimization: for non-sliced columns, children == base_children (just references)
+            self._children = self.base_children  # type: ignore[assignment]
+        else:
             # Pass along size, offset, null_count from __init__
             # which doesn't necessarily match the attributes of plc_column
             # Use base_children[0]'s plc_column as it has the actual codes data
@@ -148,6 +148,9 @@ class CategoricalColumn(column.ColumnBase):
                 exposed=False,
             )
             self._children = (child,)
+
+    @property
+    def children(self) -> tuple[NumericalColumn]:
         return self._children
 
     @property

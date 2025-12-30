@@ -327,6 +327,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers: set[Buffer] = set()
         self._recompute_data()
+        self._recompute_children()
 
     def _get_children_from_pylibcudf_column(
         self,
@@ -500,6 +501,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
         self._clear_cache()
+        self._recompute_children()
 
     def _clear_cache(self) -> None:
         self._distinct_count.clear()
@@ -557,23 +559,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def children(self) -> tuple[ColumnBase, ...]:
-        if self.offset == 0 and self.size == self.base_size:
-            self._children = self.base_children
-        if self._children is None:
-            if not self.base_children:
-                self._children = ()
-            else:
-                # Compute children from the column view (children factoring self.size)
-                children = ColumnBase.from_pylibcudf(
-                    self.plc_column.copy()
-                ).base_children
-                dtypes = (
-                    base_child.dtype for base_child in self.base_children
-                )
-                self._children = tuple(
-                    child._with_type_metadata(dtype)
-                    for child, dtype in zip(children, dtypes, strict=True)
-                )
+        """Return the offset-aware children columns."""
+        assert self._children is not None
         return self._children
 
     def set_base_children(self, value: tuple[ColumnBase, ...]) -> None:
@@ -584,7 +571,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if any(not isinstance(child, ColumnBase) for child in value):
             raise TypeError("All children must be Columns.")
 
-        self._children = None
         self._base_children = value
 
     def _recompute_data(self) -> None:
@@ -600,6 +586,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             end = start + self.size * self.dtype.itemsize
             self._data = self.base_data[start:end]
 
+    def _recompute_children(self) -> None:
+        """Recompute the offset-aware children columns."""
+        # Check for empty base_children first to avoid accessing properties on empty collections
+        if not self.base_children:
+            self._children = ()
+        elif self.offset == 0 and self.size == self.base_size:
+            # Optimization: for non-sliced columns, children == base_children (just references)
+            self._children = self.base_children
+        else:
+            # Slice each base child using the parent's offset and size
+            self._children = tuple(
+                base_child.slice(self.offset, self.offset + self.size)
+                for base_child in self.base_children
+            )
+
     def _mimic_inplace(
         self, other_col: Self, inplace: bool = False
     ) -> None | Self:
@@ -614,8 +615,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self.plc_column = other_col.plc_column
             self._base_children = other_col._base_children
             self._recompute_data()
+            self._recompute_children()
             self._mask = None
-            self._children = None
             self._clear_cache()
             return None
         else:
