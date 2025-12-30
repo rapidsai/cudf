@@ -55,7 +55,8 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
     def __getitem__(self, i):
         if i == 0:
-            return self._buf.get_ptr(mode="write")
+            with self._buf.access(mode="write"):
+                return self._buf.ptr
         elif i == 1:
             return False
         raise IndexError("tuple index out of range")

@@ -226,6 +226,24 @@ class BufferOwner(Serializable):
         )
 
 
+# TODO: Thread-safety
+class _BufferAccessContext:
+    """Context manager for buffer access mode control."""
+
+    __slots__ = ("_buffer",)
+
+    def __init__(self, buffer: Buffer, mode: Literal["read", "write"]):
+        self._buffer = buffer
+        buffer._access_mode_stack.append(mode)
+
+    def __enter__(self):
+        return self._buffer
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._buffer._access_mode_stack.pop()
+        return False
+
+
 class Buffer(Serializable):
     """A buffer that represents a slice or view of a `BufferOwner`.
 
@@ -264,6 +282,7 @@ class Buffer(Serializable):
         self._owner = owner
         self._offset = offset
         self._size = size
+        self._access_mode_stack: list[Literal["read", "write"]] = []
         # Track this slice for copy-on-write
         if get_option("copy_on_write"):
             self._owner._slices.add(self)
@@ -286,7 +305,37 @@ class Buffer(Serializable):
     @property
     def ptr(self) -> int:
         """Device pointer (Span protocol)."""
-        return self.get_ptr(mode="read")
+        # TODO: Convert to a try-except once we require all ptr access to be within the
+        # context manager. Then we will also remove the default "read" mode.
+        mode = (
+            self._access_mode_stack[-1] if self._access_mode_stack else "read"
+        )
+        if mode == "write" and get_option("copy_on_write"):
+            self.make_single_owner_inplace()
+        return self._owner.ptr + self._offset
+
+    def access(self, *, mode: Literal["read", "write"], **kwargs):
+        """Context manager for controlled buffer access.
+
+        Within this context, the buffer's ptr property will respect the
+        specified access mode. The **kwargs allows subclasses to extend with additional
+        parameters.
+
+        Parameters
+        ----------
+        mode : {"read", "write"}, default "read"
+            Access mode for the buffer. If copy-on-write is enabled:
+            - "read": ptr access will not trigger copy-on-write
+            - "write": ptr access will trigger copy-on-write if needed
+        **kwargs
+            Additional parameters for subclass implementations.
+
+        Returns
+        -------
+        _BufferAccessContext
+            A context manager that controls the access mode.
+        """
+        return _BufferAccessContext(self, mode)
 
     def __getitem__(self, key: slice) -> Self:
         """Create a new slice of the buffer."""
@@ -301,11 +350,6 @@ class Buffer(Serializable):
         return self.__class__(
             owner=self._owner, offset=self._offset + start, size=stop - start
         )
-
-    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
-        if mode == "write" and get_option("copy_on_write"):
-            self.make_single_owner_inplace()
-        return self._owner.ptr + self._offset
 
     def memoryview(self) -> memoryview:
         return self._owner.memoryview(offset=self._offset, size=self._size)
@@ -362,13 +406,14 @@ class Buffer(Serializable):
         """Implementation of the CUDA Array Interface."""
         if get_option("copy_on_write"):
             self.make_single_owner_inplace()
-        return {
-            "data": (self.get_ptr(mode="write"), False),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 3,
-        }
+        with self.access(mode="write"):
+            return {
+                "data": (self.ptr, False),
+                "shape": (self.size,),
+                "strides": None,
+                "typestr": "|u1",
+                "version": 3,
+            }
 
     def make_single_owner_inplace(self) -> None:
         """Make sure this slice is the only one pointing to the owner.
