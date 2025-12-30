@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-
 import pandas as pd
 import pytest
 import seaborn as sns

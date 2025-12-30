@@ -207,6 +207,5 @@ def pytest_unconfigure(config):
                     config.stash[file_handle_key].write(f.read())
                 os.remove(worker_result)
     # Close our file
-    file_handle = config.stash[file_handle_key]
-    file_handle.close()
+    config.stash[file_handle_key].close()
     del config.stash[file_handle_key]
