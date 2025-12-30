@@ -81,16 +81,23 @@ def test_merge():
 @pytest.mark.skipif(
     not at_least_n_gpus(2), reason="Machine does not have two GPUs"
 )
-@pytest.mark.usefixtures("dask_client")
 def test_ucx_seriesgroupby():
     pytest.importorskip("distributed_ucxx")
 
-    # Repro Issue#3913
-    df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [5, 1, 2, 5]})
-    dask_df = dask_cudf.from_cudf(df, npartitions=2)
-    dask_df_g = dask_df.groupby(["a"]).b.sum().compute()
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=Warning, message="Port")
+        with (
+            dask_cuda.LocalCUDACluster(
+                n_workers=3, dashboard_address=None
+            ) as cluster,
+            cluster.get_client(),
+        ):
+            # Repro Issue#3913
+            df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [5, 1, 2, 5]})
+            dask_df = dask_cudf.from_cudf(df, npartitions=2)
+            dask_df_g = dask_df.groupby(["a"]).b.sum().compute()
 
-    assert dask_df_g.name == "b"
+            assert dask_df_g.name == "b"
 
 
 @pytest.mark.usefixtures("dask_client")
