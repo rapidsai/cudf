@@ -149,7 +149,7 @@ ConfigureNVBench(
 ConfigureNVBench(
   JOIN_NVBENCH join/left_join.cu join/conditional_join.cu join/join.cu join/mixed_join.cu
   join/distinct_join.cu join/filter_join_indices.cu join/multiplicity_join.cu
-  join/sort_merge_join.cu join/join_heuristics.cu
+  join/sort_merge_join.cu join/join_heuristics.cu join/key_remap_build.cu join/join_on_int32.cu
 )
 
 # ##################################################################################################
