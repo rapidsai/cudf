@@ -176,7 +176,6 @@ def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
         result = testfunction(**testargs)
         # Tuple-based key-value pairs, key is the node-id
         try:
-            # so the warning is here. This isn't great.
             pickle.dump(
                 (get_full_nodeid(pyfuncitem), result),
                 pyfuncitem.config.stash[file_handle_key],

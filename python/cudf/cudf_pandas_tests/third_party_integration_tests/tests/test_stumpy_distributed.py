@@ -34,10 +34,13 @@ def dask_client(worker_id: str):
         worker_index = int(worker_id.removeprefix("gw"))
     else:
         worker_index = 0
-    scheduler_port = 8123 + worker_index
+    scheduler_port = 8123 + 8 * worker_index
 
     with LocalCluster(
-        n_workers=4, threads_per_worker=1, scheduler_port=scheduler_port
+        n_workers=4,
+        threads_per_worker=1,
+        scheduler_port=scheduler_port,
+        dashboard_address=None,
     ) as cluster:
         with Client(cluster) as dask_client:
             yield dask_client
