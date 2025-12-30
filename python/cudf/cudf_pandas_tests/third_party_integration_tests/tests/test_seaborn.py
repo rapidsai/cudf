@@ -6,8 +6,8 @@ import pytest
 import seaborn as sns
 
 
-def assert_plots_equal(expect: bytes, got: bytes):
-    # these are the PNGs that we saved in-memory.
+def assert_plots_equal(expect, got):
+    # these are the coordinates of the matplotlib objects.
     assert expect == got
 
 
@@ -28,7 +28,7 @@ def df():
 
 def test_bar(df):
     ax = sns.barplot(data=df, x="x", y="y")
-    return [x.get_height() for x in ax.patches]
+    return [x.get_height().item() for x in ax.patches]
 
 
 def test_scatter(df):
@@ -41,7 +41,7 @@ def test_scatter(df):
 
 def test_lineplot_with_sns_data():
     df = sns.load_dataset("flights")
-    ax = sns.lineplot(data=df, x="month", y="passengers")
+    ax = sns.lineplot(data=df, x="month", y="passengers", seed=0)
     paths = ax.collections[0].get_paths()
     assert len(paths) == 1
     return paths[0].vertices.tolist()
