@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-import os
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -27,23 +27,17 @@ pytestmark = pytest.mark.assert_eq(fn=stumpy_assert_equal)
 
 # Shared dask client for all tests in this module
 @pytest.fixture(scope="module")
-def dask_client(worker_id: str):
-    worker_count = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "0"))
+def dask_client():
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=Warning, message="Port")
 
-    if worker_count > 0:
-        worker_index = int(worker_id.removeprefix("gw"))
-    else:
-        worker_index = 0
-    scheduler_port = 8123 + 8 * worker_index
-
-    with LocalCluster(
-        n_workers=4,
-        threads_per_worker=1,
-        scheduler_port=scheduler_port,
-        dashboard_address=None,
-    ) as cluster:
-        with Client(cluster) as dask_client:
-            yield dask_client
+        with LocalCluster(
+            n_workers=4,
+            threads_per_worker=1,
+            dashboard_address=None,
+        ) as cluster:
+            with Client(cluster) as dask_client:
+                yield dask_client
 
 
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
