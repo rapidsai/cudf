@@ -9,7 +9,6 @@ import pytest
 import dask
 from dask import array as da, dataframe as dd
 from dask.distributed import Client
-from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
 
 import cudf
 import rmm
@@ -25,8 +24,8 @@ def at_least_n_gpus(n):
     return ngpus >= n
 
 
-@pytest.fixture
-def dask_client(loop, worker_id: str):  # noqa: F811
+@pytest.fixture(scope="module")
+def dask_client(worker_id: str):
     worker_count = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "0"))
     if worker_count > 0:
         # Avoid port conflicts with multiple test runners
@@ -42,7 +41,6 @@ def dask_client(loop, worker_id: str):  # noqa: F811
 
         with dask_cuda.LocalCUDACluster(
             n_workers=1,
-            loop=loop,
             scheduler_port=scheduler_port,
             dashboard_address=dashboard_address,
         ) as cluster:
