@@ -75,7 +75,6 @@ requirements:
     - libcudf =${{ version }}
     - pylibcudf =${{ version }}
     - rmm =${{ minor_version }}
-    - cuda-cudart-dev
     - cuda-nvrtc
     - if: linux and x86_64
       then:
@@ -94,7 +93,6 @@ requirements:
     - pylibcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
-    - cuda-cudart
     - if: cuda_major == "12"
       then: cuda-python >=12.9.2,<13.0
       else: cuda-python >=13.0.1,<14.0
@@ -108,7 +106,6 @@ requirements:
     - rich
   ignore_run_exports:
     from_package:
-      - cuda-cudart-dev
       - if: linux and x86_64
         then: libcufile-dev
     by_name:

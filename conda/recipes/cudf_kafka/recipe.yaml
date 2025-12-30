@@ -73,16 +73,13 @@ requirements:
     - libcudf_kafka =${{ version }}
     - rapids-build-backend >=0.4.0,<0.5.0
     - scikit-build-core >=0.10.0
-    - cuda-cudart-dev
   run:
     - python
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
     - libcudf_kafka =${{ version }}
     - pylibcudf =${{ version }}
-    - cuda-cudart
   ignore_run_exports:
     from_package:
-      - cuda-cudart-dev
     by_name:
       - cuda-version
 

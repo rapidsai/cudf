@@ -58,12 +58,9 @@ option(CUDA_ENABLE_LINEINFO
 )
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 
-# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
-option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-
-set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
-
-if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
+# Stream testing requires dynamic CUDA runtime linking, which is no longer supported
+set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+if(BUILD_SHARED_LIBS)
   set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
 endif()
 
@@ -97,7 +94,6 @@ message(
   VERBOSE
   "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler): ${CUDA_ENABLE_LINEINFO}"
 )
-message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 message(VERBOSE
         "CUDF: Build with remote IO (e.g. AWS S3) support through KvikIO: ${CUDF_KVIKIO_REMOTE_IO}"
 )
@@ -990,7 +986,7 @@ if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
 endif()
 
-rapids_cuda_set_runtime(cudf USE_STATIC ${CUDA_STATIC_RUNTIME})
+rapids_cuda_set_runtime(cudf USE_STATIC ON)
 
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
@@ -1037,7 +1033,7 @@ if(CUDF_BUILD_TESTUTIL)
     PUBLIC cudf
     PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
   )
-  rapids_cuda_set_runtime(cudftest_default_stream USE_STATIC ${CUDA_STATIC_RUNTIME})
+  rapids_cuda_set_runtime(cudftest_default_stream USE_STATIC ON)
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
@@ -1068,7 +1064,7 @@ if(CUDF_BUILD_TESTUTIL)
     cudftestutil INTERFACE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
                            "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
-  rapids_cuda_set_runtime(cudftestutil USE_STATIC ${CUDA_STATIC_RUNTIME})
+  rapids_cuda_set_runtime(cudftestutil USE_STATIC ON)
   add_library(cudf::cudftestutil ALIAS cudftestutil)
 
   add_library(cudftestutil_impl INTERFACE)
@@ -1115,12 +1111,10 @@ endif()
 
 # * build cudf_identify_stream_usage --------------------------------------------------------------
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  if(CUDA_STATIC_RUNTIME)
-    message(
-      FATAL_ERROR
-        "Stream identification cannot be used with a static CUDA runtime. Please set CUDA_STATIC_RUNTIME=OFF or CUDF_BUILD_STREAMS_TEST_UTIL=OFF."
-    )
-  endif()
+  message(
+    FATAL_ERROR
+      "Stream identification is not supported because it requires dynamic CUDA runtime linking. Please set CUDF_BUILD_STREAMS_TEST_UTIL=OFF."
+  )
 
   # Libraries for stream-related testing. We build the library twice, one with STREAM_MODE_TESTING
   # on and one with it set to off. Each test will then be configured to use the appropriate library
@@ -1146,9 +1140,9 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
-    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart_static rmm::rmm)
 
-    rapids_cuda_set_runtime(${_tgt} USE_STATIC ${CUDA_STATIC_RUNTIME})
+    rapids_cuda_set_runtime(${_tgt} USE_STATIC ON)
     add_library(cudf::${_tgt} ALIAS ${_tgt})
 
     if("${_mode}" STREQUAL "testing")
