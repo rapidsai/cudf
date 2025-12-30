@@ -517,9 +517,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 f"Expected a Buffer object or None for mask, got {type(mask).__name__}"
             )
-        new_plc_column = self.to_pylibcudf(mode="read").with_mask(
-            new_mask, new_null_count
-        )
+        new_plc_column = self.plc_column.with_mask(new_mask, new_null_count)
         return (
             type(self)
             .from_pylibcudf(  # type: ignore[return-value]
@@ -692,37 +690,33 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 new_dtype, col.size(), plc.types.MaskState.ALL_NULL
             )
 
-        # Ensure data and mask are cudf Buffers to avoid repeated as_buffer() calls
-        data_needs_wrapping = (
-            data := col.data()
-        ) is not None and not isinstance(data, Buffer)
-        mask_needs_wrapping = (
-            mask := col.null_mask()
-        ) is not None and not isinstance(mask, Buffer)
+        # Typically non-Buffers will be gpumemoryview objects produced as new memory
+        # from pylibcudf. If the underlying data is already a buffer it must be
+        # shallow-copied to track that we are now sharing the same BufferOwner.
+        data = col.data()
+        if data is not None:
+            if isinstance(data, Buffer):
+                data = data.copy(deep=False)
+            else:
+                data = as_buffer(data, exposed=data_ptr_exposed)
 
-        if data_needs_wrapping or mask_needs_wrapping:
-            new_data = (
-                as_buffer(data, exposed=data_ptr_exposed)
-                if data_needs_wrapping
-                else data
-            )
-            new_mask = (
-                as_buffer(mask, exposed=data_ptr_exposed)
-                if mask_needs_wrapping
-                else mask
-            )
+        mask = col.null_mask()
+        if mask is not None:
+            if isinstance(mask, Buffer):
+                mask = mask.copy(deep=False)
+            else:
+                mask = as_buffer(mask, exposed=data_ptr_exposed)
 
-            # Reconstruct column with Buffer objects
-            col = plc.Column(
-                data_type=col.type(),
-                size=col.size(),
-                data=new_data,
-                mask=new_mask,
-                null_count=col.null_count(),
-                offset=col.offset(),
-                children=col.children(),
-                validate=False,
-            )
+        col = plc.Column(
+            data_type=col.type(),
+            size=col.size(),
+            data=data,
+            mask=mask,
+            null_count=col.null_count(),
+            offset=col.offset(),
+            children=col.children(),
+            validate=False,
+        )
 
         dtype = dtype_from_pylibcudf_column(col)
 

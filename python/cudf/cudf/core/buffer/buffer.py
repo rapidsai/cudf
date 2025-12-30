@@ -194,8 +194,8 @@ class BufferOwner(Serializable):
 
     @property
     def ptr(self) -> int:
-        """Device pointer (Span protocol)."""
-        return self.get_ptr(mode="read")
+        """Device pointer to the start of the buffer (Span protocol)."""
+        return self._ptr
 
     def mark_exposed(self) -> None:
         """Mark the buffer as "exposed" permanently
@@ -208,30 +208,6 @@ class BufferOwner(Serializable):
         """
         self._exposed = True
 
-    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
-        """Device pointer to the start of the buffer.
-
-        Parameters
-        ----------
-        mode : str
-            Supported values are {"read", "write"}
-            If "write", the data pointed to may be modified
-            by the caller. If "read", the data pointed to
-            must not be modified by the caller.
-            Failure to fulfill this contract will cause
-            incorrect behavior.
-
-        Returns
-        -------
-        int
-            The device pointer as an integer
-
-        See Also
-        --------
-        SpillableBuffer.get_ptr
-        """
-        return self._ptr
-
     def memoryview(
         self, *, offset: int = 0, size: int | None = None
     ) -> memoryview:
@@ -239,7 +215,7 @@ class BufferOwner(Serializable):
         size = self._size if size is None else size
         host_buf = host_memory_allocation(size)
         rmm.pylibrmm.device_buffer.copy_ptr_to_host(
-            self.get_ptr(mode="read") + offset, host_buf
+            self.ptr + offset, host_buf
         )
         return memoryview(host_buf).toreadonly()
 
@@ -329,7 +305,7 @@ class Buffer(Serializable):
     def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
         if mode == "write" and get_option("copy_on_write"):
             self.make_single_owner_inplace()
-        return self._owner.get_ptr(mode=mode) + self._offset
+        return self._owner.ptr + self._offset
 
     def memoryview(self) -> memoryview:
         return self._owner.memoryview(offset=self._offset, size=self._size)
@@ -374,7 +350,7 @@ class Buffer(Serializable):
         # Otherwise, we create a new copy of the memory
         owner = type(self._owner).from_device_memory(
             rmm.DeviceBuffer(
-                ptr=self._owner.get_ptr(mode="read") + self._offset,
+                ptr=self._owner.ptr + self._offset,
                 size=self.size,
             ),
             exposed=False,
