@@ -63,7 +63,7 @@ def adjacency_matrix():
 def test_cugraph_from_pandas_edgelist(df, algo):
     G = cugraph.Graph()
     G.from_pandas_edgelist(df)
-    G.store_transposed = True if algo == "katz_centrality" else False
+    G.store_transposed = algo == "katz_centrality"
     return getattr(cugraph, algo)(G).to_pandas().values
 
 
@@ -71,7 +71,7 @@ def test_cugraph_from_pandas_edgelist(df, algo):
 def test_cugraph_from_pandas_adjacency(adjacency_matrix, algo):
     G = cugraph.Graph()
     G.from_pandas_adjacency(adjacency_matrix)
-    G.store_transposed = True if algo == "katz_centrality" else False
+    G.store_transposed = algo == "katz_centrality"
     res = getattr(cugraph, algo)(G).to_pandas()
     return res.sort_values(list(res.columns)).values
 
@@ -80,7 +80,7 @@ def test_cugraph_from_pandas_adjacency(adjacency_matrix, algo):
 def test_cugraph_from_numpy_array(df, algo):
     G = cugraph.Graph()
     G.from_numpy_array(df.values)
-    G.store_transposed = True if algo == "katz_centrality" else False
+    G.store_transposed = algo == "katz_centrality"
     return getattr(cugraph, algo)(G).to_pandas().values
 
 
