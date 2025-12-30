@@ -65,7 +65,11 @@ def get_polars_versions(polars_range, latest_only=False):
                 url, timeout=timeout, context=ssl_context
             ) as response:
                 data = json.loads(response.read())
-        except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            TimeoutError,
+        ) as e:
             if isinstance(e, urllib.error.HTTPError):
                 code = e.code
             else:
