@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// Enable 64-bit thrust offsets to support large join outputs (> INT32_MAX rows)
+// This is mostly a compile time change as thrust will switch between 32-bit
+// and 64-bit offsets as needed.
+#undef THRUST_FORCE_32_BIT_OFFSET_TYPE
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -170,6 +175,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
   auto const count_matches =
     thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
+
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
   thrust::copy_if(rmm::exec_policy_nosync(stream),
                   thrust::counting_iterator(0),
@@ -178,19 +184,26 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                   nonzero_matches.begin(),
                   cuda::std::identity{});
 
+  // Use 64-bit prefix sums to handle large output sizes (> INT32_MAX rows)
+  // The prefix sums can exceed INT32_MAX even though individual match counts are small
+  auto match_offsets =
+    cudf::detail::make_zeroed_device_uvector_async<int64_t>(match_counts->size(), stream, temp_mr);
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          match_counts->begin(),
                          match_counts->end(),
-                         match_counts->begin());
-  auto const total_matches = match_counts->back_element(stream);
+                         match_offsets.begin(),
+                         int64_t{0},
+                         cuda::std::plus<int64_t>{});
+  auto const total_matches = static_cast<std::size_t>(match_offsets.back_element(stream));
 
   // populate larger indices
   auto larger_indices =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
+
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   nonzero_matches.begin(),
                   nonzero_matches.end(),
-                  thrust::permutation_iterator(match_counts->begin(), nonzero_matches.begin()),
+                  thrust::permutation_iterator(match_offsets.begin(), nonzero_matches.begin()),
                   larger_indices.begin());
   thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          larger_indices.begin(),
@@ -206,10 +219,10 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 
   auto smaller_tabulate_it = thrust::tabulate_output_iterator(
     [nonzero_matches = nonzero_matches.begin(),
-     match_counts    = match_counts->begin(),
+     match_offsets   = match_offsets.begin(),
      smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
       auto const lhs_idx   = nonzero_matches[idx];
-      auto const pos       = match_counts[lhs_idx];
+      auto const pos       = match_offsets[lhs_idx];
       smaller_indices[pos] = lb;
     });
   auto smaller_it = thrust::transform_iterator(
