@@ -154,7 +154,7 @@ class NumericalColumn(NumericalBaseColumn):
                 col = col.astype(dtype)  # type: ignore[assignment]
             col = col.fillna(np.nan)
 
-        return cp.asarray(col.data).view(dtype)
+        return cp.asarray(col).view(dtype)
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
         if isinstance(value, (bool, np.bool_)) and self.dtype.kind != "b":
