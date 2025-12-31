@@ -76,9 +76,10 @@ void nvbench_key_remap_build(nvbench::state& state,
 
   // Generate table with controlled cardinality using create_random_table directly
   double const null_probability = Nullable ? 0.3 : 0;
-  auto const profile =
-    data_profile{data_profile_builder().null_probability(null_probability).cardinality(cardinality)};
-  auto table = create_random_table(dtypes, row_count{static_cast<cudf::size_type>(num_rows)}, profile);
+  auto const profile            = data_profile{
+    data_profile_builder().null_probability(null_probability).cardinality(cardinality)};
+  auto table =
+    create_random_table(dtypes, row_count{static_cast<cudf::size_type>(num_rows)}, profile);
 
   auto const keys = table->view();
 
@@ -102,10 +103,8 @@ void nvbench_key_remap_build(nvbench::state& state,
 }
 
 // Data types to test
-using key_remap_datatypes = nvbench::enum_type_list<data_type::INT32,
-                                                    data_type::INT64,
-                                                    data_type::STRING,
-                                                    data_type::STRUCT>;
+using key_remap_datatypes =
+  nvbench::enum_type_list<data_type::INT32, data_type::INT64, data_type::STRING, data_type::STRUCT>;
 
 // Cardinality distributions
 using cardinality_list = nvbench::enum_type_list<Cardinality::ALL_UNIQUE,
@@ -118,11 +117,8 @@ using cardinality_list = nvbench::enum_type_list<Cardinality::ALL_UNIQUE,
 using nullable_list = nvbench::enum_type_list<false>;
 
 NVBENCH_BENCH_TYPES(nvbench_key_remap_build,
-                    NVBENCH_TYPE_AXES(nullable_list,
-                                      key_remap_datatypes,
-                                      cardinality_list))
+                    NVBENCH_TYPE_AXES(nullable_list, key_remap_datatypes, cardinality_list))
   .set_name("key_remap_build")
   .set_type_axes_names({"Nullable", "DataType", "Cardinality"})
   .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
   .add_int64_axis("num_keys", {1, 2, 3});
-

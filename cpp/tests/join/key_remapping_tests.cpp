@@ -770,7 +770,7 @@ TEST_F(KeyRemappingTest, MetricsDisabledRemapStillWorks)
   auto probe_result = remap.remap_probe_keys(probe_table);
   auto probe_ids    = to_host<int32_t>(probe_result->view());
 
-  EXPECT_EQ(probe_ids[0], build_ids[1]);                  // 20 matches
-  EXPECT_EQ(probe_ids[1], cudf::KEY_REMAP_NOT_FOUND);     // 40 not found
-  EXPECT_EQ(probe_ids[2], build_ids[0]);                  // 10 matches
+  EXPECT_EQ(probe_ids[0], build_ids[1]);               // 20 matches
+  EXPECT_EQ(probe_ids[1], cudf::KEY_REMAP_NOT_FOUND);  // 40 not found
+  EXPECT_EQ(probe_ids[2], build_ids[0]);               // 10 matches
 }

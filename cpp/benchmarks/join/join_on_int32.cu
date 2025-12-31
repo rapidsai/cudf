@@ -33,13 +33,7 @@
  */
 
 // Cardinality distributions (same as key_remap_build)
-enum class Cardinality {
-  ALL_UNIQUE,
-  HIGH_UNIQUE,
-  MED_UNIQUE,
-  LOW_UNIQUE,
-  SINGLE_KEY
-};
+enum class Cardinality { ALL_UNIQUE, HIGH_UNIQUE, MED_UNIQUE, LOW_UNIQUE, SINGLE_KEY };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   Cardinality,
@@ -91,14 +85,15 @@ std::unique_ptr<cudf::column> generate_int32_keys(cudf::size_type num_rows, cudf
 
   // Divide each element by divisor to create duplicates
   auto divisor_scalar = cudf::make_fixed_width_scalar<cudf::size_type>(divisor, stream);
-  return cudf::binary_operation(
-    seq->view(), *divisor_scalar, cudf::binary_operator::DIV, cudf::data_type{cudf::type_id::INT32});
+  return cudf::binary_operation(seq->view(),
+                                *divisor_scalar,
+                                cudf::binary_operator::DIV,
+                                cudf::data_type{cudf::type_id::INT32});
 }
 
 template <Cardinality Card, JoinAlgo Algo>
 void nvbench_join_on_int32(nvbench::state& state,
-                           nvbench::type_list<nvbench::enum_type<Card>,
-                                              nvbench::enum_type<Algo>>)
+                           nvbench::type_list<nvbench::enum_type<Card>, nvbench::enum_type<Algo>>)
 {
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
@@ -163,9 +158,7 @@ using cardinality_list = nvbench::enum_type_list<Cardinality::ALL_UNIQUE,
 // Join algorithms
 using join_algo_list = nvbench::enum_type_list<JoinAlgo::HASH, JoinAlgo::SORT_MERGE>;
 
-NVBENCH_BENCH_TYPES(nvbench_join_on_int32,
-                    NVBENCH_TYPE_AXES(cardinality_list, join_algo_list))
+NVBENCH_BENCH_TYPES(nvbench_join_on_int32, NVBENCH_TYPE_AXES(cardinality_list, join_algo_list))
   .set_name("join_on_int32")
   .set_type_axes_names({"Cardinality", "JoinAlgo"})
   .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000});
-

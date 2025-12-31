@@ -35,9 +35,9 @@
  */
 
 enum class heuristic_method : int32_t {
-  DISTINCT_COUNT = 0,     // cudf::distinct_count API
-  GROUPBY_MAX    = 1,     // groupby count + max reduction
-  KEY_REMAPPING  = 2      // key_remapping with metrics
+  DISTINCT_COUNT = 0,  // cudf::distinct_count API
+  GROUPBY_MAX    = 1,  // groupby count + max reduction
+  KEY_REMAPPING  = 2   // key_remapping with metrics
 };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
@@ -54,10 +54,10 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
 
 // Cardinality ratios - fraction of rows that are unique
 enum class cardinality_ratio : int32_t {
-  ALL_UNIQUE   = 0,   // Every row is unique (cardinality = num_rows)
-  HIGH_UNIQUE  = 1,   // 10% of rows are unique
-  LOW_UNIQUE   = 2,   // 0.1% of rows are unique
-  SINGLE_KEY   = 3    // All rows have the same key (cardinality = 1)
+  ALL_UNIQUE  = 0,  // Every row is unique (cardinality = num_rows)
+  HIGH_UNIQUE = 1,  // 10% of rows are unique
+  LOW_UNIQUE  = 2,  // 0.1% of rows are unique
+  SINGLE_KEY  = 3   // All rows have the same key (cardinality = 1)
 };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
@@ -74,27 +74,24 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto) { return std::string{}; })
 
 using HEURISTIC_METHODS = nvbench::enum_type_list<heuristic_method::DISTINCT_COUNT,
-                                                   heuristic_method::GROUPBY_MAX,
-                                                   heuristic_method::KEY_REMAPPING>;
+                                                  heuristic_method::GROUPBY_MAX,
+                                                  heuristic_method::KEY_REMAPPING>;
 
 using CARDINALITY_RATIOS = nvbench::enum_type_list<cardinality_ratio::ALL_UNIQUE,
-                                                    cardinality_ratio::HIGH_UNIQUE,
-                                                    cardinality_ratio::LOW_UNIQUE,
-                                                    cardinality_ratio::SINGLE_KEY>;
+                                                   cardinality_ratio::HIGH_UNIQUE,
+                                                   cardinality_ratio::LOW_UNIQUE,
+                                                   cardinality_ratio::SINGLE_KEY>;
 
 // Simplified data types for this benchmark
-using HEURISTIC_DATATYPES = nvbench::enum_type_list<data_type::INT32,
-                                                     data_type::INT64,
-                                                     data_type::STRING,
-                                                     data_type::STRUCT>;
+using HEURISTIC_DATATYPES =
+  nvbench::enum_type_list<data_type::INT32, data_type::INT64, data_type::STRING, data_type::STRUCT>;
 
 template <bool Nullable, data_type DataType, heuristic_method Method, cardinality_ratio Cardinality>
-void nvbench_join_heuristics(
-  nvbench::state& state,
-  nvbench::type_list<nvbench::enum_type<Nullable>,
-                     nvbench::enum_type<DataType>,
-                     nvbench::enum_type<Method>,
-                     nvbench::enum_type<Cardinality>>)
+void nvbench_join_heuristics(nvbench::state& state,
+                             nvbench::type_list<nvbench::enum_type<Nullable>,
+                                                nvbench::enum_type<DataType>,
+                                                nvbench::enum_type<Method>,
+                                                nvbench::enum_type<Cardinality>>)
 {
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const num_keys = state.get_int64("num_keys");
@@ -120,7 +117,7 @@ void nvbench_join_heuristics(
   auto const dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
   double const null_probability = Nullable ? 0.1 : 0;
-  auto const profile = data_profile{
+  auto const profile            = data_profile{
     data_profile_builder().null_probability(null_probability).cardinality(cardinality)};
   auto table = create_random_table(dtypes, row_count{num_rows}, profile, 42);
 
@@ -148,7 +145,7 @@ void nvbench_join_heuristics(
       // Group by keys and count occurrences
       cudf::groupby::groupby gb(keys);
       std::vector<cudf::groupby::aggregation_request> requests;
-      
+
       // We need a values column for aggregation - use first key column
       cudf::groupby::aggregation_request req;
       req.values = keys.column(0);
@@ -162,22 +159,20 @@ void nvbench_join_heuristics(
 
       // Get max duplicate count via max reduction on count column
       auto const& counts_column = results[0].results[0];
-      auto max_count = cudf::reduce(*counts_column,
-                                     *cudf::make_max_aggregation<cudf::reduce_aggregation>(),
-                                     counts_column->type());
+      auto max_count            = cudf::reduce(*counts_column,
+                                    *cudf::make_max_aggregation<cudf::reduce_aggregation>(),
+                                    counts_column->type());
     });
   } else if constexpr (Method == heuristic_method::KEY_REMAPPING) {
     // Approach 3: key_remapping with metrics
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       constexpr bool compute_metrics = true;
-      cudf::key_remapping remap(keys, 
-                                 cudf::null_equality::EQUAL, 
-                                 compute_metrics,
-                                 cudf::get_default_stream());
-      
+      cudf::key_remapping remap(
+        keys, cudf::null_equality::EQUAL, compute_metrics, cudf::get_default_stream());
+
       // Get both metrics
       auto distinct_count = remap.get_distinct_count();
-      auto max_dup_count = remap.get_max_duplicate_count();
+      auto max_dup_count  = remap.get_max_duplicate_count();
     });
   }
 
@@ -194,4 +189,3 @@ NVBENCH_BENCH_TYPES(nvbench_join_heuristics,
   .set_type_axes_names({"Nullable", "DataType", "Method", "Cardinality"})
   .add_int64_axis("num_rows", {1'000'000, 10'000'000, 100'000'000})
   .add_int64_axis("num_keys", {1, 2, 3});
-

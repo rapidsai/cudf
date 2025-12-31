@@ -9,20 +9,17 @@
 
 extern "C" {
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_KeyRemapping_create(JNIEnv* env,
-                                                                jclass,
-                                                                jlong j_table,
-                                                                jboolean j_compare_nulls,
-                                                                jboolean j_compute_metrics)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_KeyRemapping_create(
+  JNIEnv* env, jclass, jlong j_table, jboolean j_compare_nulls, jboolean j_compute_metrics)
 {
   JNI_NULL_CHECK(env, j_table, "table handle is null", 0);
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto tview          = reinterpret_cast<cudf::table_view const*>(j_table);
-    auto nulleq         = j_compare_nulls ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto tview  = reinterpret_cast<cudf::table_view const*>(j_table);
+    auto nulleq = j_compare_nulls ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     auto compute_metrics = static_cast<bool>(j_compute_metrics);
-    auto remap_ptr      = new cudf::key_remapping(*tview, nulleq, compute_metrics);
+    auto remap_ptr       = new cudf::key_remapping(*tview, nulleq, compute_metrics);
     return reinterpret_cast<jlong>(remap_ptr);
   }
   JNI_CATCH(env, 0);

@@ -33,12 +33,12 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
     return;
   }
 
-  auto const num_keys      = state.get_int64("num_keys");
-  auto const use_remap     = state.get_int64("use_key_remap") != 0;
-  auto const left_size     = static_cast<cudf::size_type>(state.get_int64("left_size"));
-  auto const right_size    = static_cast<cudf::size_type>(state.get_int64("right_size"));
-  auto const multiplicity  = 1;
-  auto const selectivity   = 0.3;
+  auto const num_keys     = state.get_int64("num_keys");
+  auto const use_remap    = state.get_int64("use_key_remap") != 0;
+  auto const left_size    = static_cast<cudf::size_type>(state.get_int64("left_size"));
+  auto const right_size   = static_cast<cudf::size_type>(state.get_int64("right_size"));
+  auto const multiplicity = 1;
+  auto const selectivity  = 0.3;
 
   if (right_size > left_size) {
     state.skip("Skip large right table");
@@ -71,8 +71,9 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
       // Step 1: Build key remapping (with metrics disabled, the metrics need to be calcualted
       //  for the join type selection heuristic, either way)
       constexpr bool compute_metrics = false;
-      
-      cudf::key_remapping remap(build_keys, NullEquality, compute_metrics, cudf::get_default_stream());
+
+      cudf::key_remapping remap(
+        build_keys, NullEquality, compute_metrics, cudf::get_default_stream());
 
       // Step 2: Remap build and probe keys to integers
       auto remapped_build = remap.remap_build_keys(build_keys);
@@ -106,11 +107,9 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
 }
 
 // Sort-merge inner join with multiple data types and optional key remapping
-NVBENCH_BENCH_TYPES(nvbench_sort_merge_inner_join,
-                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
-                                      JOIN_NULL_EQUALITY,
-                                      JOIN_DATATYPES,
-                                      JOIN_ALGORITHM))
+NVBENCH_BENCH_TYPES(
+  nvbench_sort_merge_inner_join,
+  NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES, JOIN_ALGORITHM))
   .set_name("sort_merge_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType", "Algorithm"})
   .add_int64_axis("num_keys", nvbench::range(1, 3, 1))
