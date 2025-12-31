@@ -413,15 +413,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def mask(self) -> None | Buffer:
-        if self._mask is None:
-            if self.base_mask is None or self.offset == 0:
-                self._mask = self.base_mask
-            else:
-                with acquire_spill_lock():
-                    self._mask = as_buffer(
-                        plc.null_mask.copy_bitmask(self.plc_column)
-                    )
-        return self._mask
+        return self.base_mask
 
     def access(
         self, *, mode: Literal["read", "write"], **kwargs: Any
