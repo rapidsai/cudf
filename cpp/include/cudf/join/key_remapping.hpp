@@ -38,16 +38,6 @@ constexpr size_type KEY_REMAP_NOT_FOUND = -1;
 constexpr size_type KEY_REMAP_BUILD_NULL = -2;
 
 /**
- * @brief Algorithm for computing metrics (distinct_count, max_duplicate_count)
- *
- * This is primarily for benchmarking purposes to compare algorithm performance.
- */
-enum class key_remap_metrics_algo : int32_t {
-  SORT_REDUCE = 0,  ///< Use sort + reduce_by_key (scales better with high duplicates)
-  ATOMIC      = 1   ///< Use per-key atomicAdd (faster for low duplicates)
-};
-
-/**
  * @brief Remaps keys to unique integer IDs
  *
  * Each distinct key in the build table is assigned a unique non-negative integer ID.
@@ -84,27 +74,6 @@ class key_remapping {
   key_remapping(cudf::table_view const& build,
                 null_equality compare_nulls  = null_equality::EQUAL,
                 bool compute_metrics         = true,
-                rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-  /**
-   * @brief Constructs a key remapping structure with explicit algorithm selection.
-   *
-   * This overload allows selecting between different algorithms for computing
-   * distinct_count and max_duplicate_count metrics. This is primarily useful
-   * for benchmarking different implementation strategies.
-   *
-   * @throw cudf::logic_error if the build table has no columns
-   *
-   * @param build The build table containing the keys to remap
-   * @param compare_nulls Controls whether null key values should match or not
-   * @param compute_metrics If true, compute distinct_count and max_duplicate_count
-   * @param metrics_algo Algorithm to use for metrics computation
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
-  key_remapping(cudf::table_view const& build,
-                null_equality compare_nulls,
-                bool compute_metrics,
-                key_remap_metrics_algo metrics_algo,
                 rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**

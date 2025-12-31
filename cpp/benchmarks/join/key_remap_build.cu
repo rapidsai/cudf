@@ -12,13 +12,11 @@
 
 #include <nvbench/nvbench.cuh>
 
-#include <algorithm>
-
 /**
  * @brief Benchmark for key_remapping build phase with metrics computation.
  *
  * This benchmark isolates the key_remapping construction time (including metrics)
- * to compare different metrics computation algorithms across various data distributions.
+ * to measure performance across various data types and distributions.
  *
  * Uses controlled cardinality settings for create_random_table to ensure predictable
  * key distributions:
@@ -52,23 +50,11 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   },
   [](auto) { return std::string{}; })
 
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  cudf::key_remap_metrics_algo,
-  [](auto value) {
-    switch (value) {
-      case cudf::key_remap_metrics_algo::SORT_REDUCE: return "SORT_REDUCE";
-      case cudf::key_remap_metrics_algo::ATOMIC: return "ATOMIC";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-template <bool Nullable, data_type DataType, Cardinality Card, cudf::key_remap_metrics_algo Algo>
+template <bool Nullable, data_type DataType, Cardinality Card>
 void nvbench_key_remap_build(nvbench::state& state,
                              nvbench::type_list<nvbench::enum_type<Nullable>,
                                                 nvbench::enum_type<DataType>,
-                                                nvbench::enum_type<Card>,
-                                                nvbench::enum_type<Algo>>)
+                                                nvbench::enum_type<Card>>)
 {
   auto const num_rows = state.get_int64("num_rows");
   auto const num_keys = state.get_int64("num_keys");
@@ -106,7 +92,6 @@ void nvbench_key_remap_build(nvbench::state& state,
     cudf::key_remapping remap(keys,
                               cudf::null_equality::EQUAL,
                               true,  // compute_metrics
-                              Algo,
                               cudf::get_default_stream());
     // Access metrics to ensure they're computed
     auto dc = remap.get_distinct_count();
@@ -129,20 +114,15 @@ using cardinality_list = nvbench::enum_type_list<Cardinality::ALL_UNIQUE,
                                                  Cardinality::LOW_UNIQUE,
                                                  Cardinality::SINGLE_KEY>;
 
-// Metrics algorithms
-using algo_list = nvbench::enum_type_list<cudf::key_remap_metrics_algo::SORT_REDUCE,
-                                          cudf::key_remap_metrics_algo::ATOMIC>;
-
 // Nullable options
 using nullable_list = nvbench::enum_type_list<false>;
 
 NVBENCH_BENCH_TYPES(nvbench_key_remap_build,
                     NVBENCH_TYPE_AXES(nullable_list,
                                       key_remap_datatypes,
-                                      cardinality_list,
-                                      algo_list))
+                                      cardinality_list))
   .set_name("key_remap_build")
-  .set_type_axes_names({"Nullable", "DataType", "Cardinality", "Algorithm"})
+  .set_type_axes_names({"Nullable", "DataType", "Cardinality"})
   .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
   .add_int64_axis("num_keys", {1, 2, 3});
 
