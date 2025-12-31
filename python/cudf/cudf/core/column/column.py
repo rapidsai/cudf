@@ -2020,39 +2020,31 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
-        # Get data pointer and handle copy-on-write for data
-        if self.data is None:
-            data_ptr = 0
-        else:
-            original_ptr = self.data.ptr
-            with self.access(mode="write"):
-                data_ptr = self.data.ptr
-            # Check if a new buffer was created or if the underlying data was modified
-            if cudf.get_option("copy_on_write") and (data_ptr != original_ptr):
-                # The offset must be reset to 0 because we have migrated to a new copied
-                # buffer starting at the old offset.
-                self.plc_column = plc.Column(
-                    data_type=self.plc_column.type(),
-                    size=self.plc_column.size(),
-                    data=self.data,  # Use the new buffer directly
-                    mask=self.plc_column.null_mask(),
-                    null_count=self.plc_column.null_count(),
-                    offset=0,
-                    children=self.plc_column.children(),
-                )
-                # Recompute _data since we updated plc_column
-                self._recompute_data()
-
-        output = {
-            "shape": (len(self),),
-            "strides": (self.dtype.itemsize,),
-            "typestr": self.dtype.str,
-            "data": (data_ptr, False),
-            "version": 3,
-        }
+        # pandas produces non-writeable numpy arrays when CoW is enabled, which cupy
+        # does not support. Our options are either to copy the data preemptively to
+        # avoid handing out a pointer that allows modification of the data, or to allow
+        # such modification even though it doesn't match pandas default behavior. Since
+        # numpy arrays can be trivially made writeable by just changing their flag,
+        # allowing modification here seems like the better option since otherwise we
+        # would forbid modification altogether. Moreover, preemptive copying would
+        # increase memory pressure unnecessarily.
         data_buf = self.data
-        if data_buf is not None:
-            self._exposed_buffers.add(data_buf)
+        if data_buf is None:
+            raise ValueError(
+                "__cuda_array_interface__ not supported for columns with no data buffer"
+            )
+        self._exposed_buffers.add(data_buf)
+        with data_buf.access(mode="read"):
+            output = {
+                "shape": (len(self),),
+                "strides": (self.dtype.itemsize,),
+                "typestr": self.dtype.str,
+                "data": (
+                    data_buf.ptr + self.offset * self.dtype.itemsize,
+                    False,
+                ),
+                "version": 3,
+            }
         if self.nullable and self.has_nulls():
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
