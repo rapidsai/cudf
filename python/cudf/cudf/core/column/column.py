@@ -397,7 +397,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def data(self) -> None | Buffer:
-        return self._data
+        return self.base_data
 
     @property
     def nullable(self) -> bool:
