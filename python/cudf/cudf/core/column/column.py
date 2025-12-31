@@ -1103,10 +1103,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @cached_property
     def memory_usage(self) -> int:
         n = 0
-        if self.data is not None:
-            n += self.data.size
+        if self.base_data is not None:
+            n += self.base_data.size
         if self.nullable:
             n += plc.null_mask.bitmask_allocation_size_bytes(self.size)
+        for child in self.base_children:
+            n += child.memory_usage
         return n
 
     def _fill(

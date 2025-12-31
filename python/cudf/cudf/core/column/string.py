@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import itertools
 import re
-from functools import cached_property, lru_cache
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -181,17 +181,6 @@ class StringColumn(ColumnBase, Scannable):
                 self._end_offset = 0
 
         return self._end_offset
-
-    @cached_property
-    def memory_usage(self) -> int:
-        n = super().memory_usage
-        if len(self.base_children) == 1:
-            child0_size = (self.size + 1) * self.base_children[
-                0
-            ].dtype.itemsize
-
-            n += child0_size
-        return n
 
     @property
     def base_size(self) -> int:

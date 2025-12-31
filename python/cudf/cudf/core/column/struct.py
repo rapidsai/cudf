@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -144,14 +143,6 @@ class StructColumn(ColumnBase):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
-
-    @cached_property
-    def memory_usage(self) -> int:
-        n = super().memory_usage
-        for child in self.children:
-            n += child.memory_usage
-
-        return n
 
     def element_indexing(self, index: int) -> dict[Any, Any] | None:
         result = super().element_indexing(index)

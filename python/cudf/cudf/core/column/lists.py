@@ -120,38 +120,6 @@ class ListColumn(ColumnBase):
         # TODO: handle if self.has_nulls(): case
         return self
 
-    @cached_property
-    def memory_usage(self) -> int:
-        n = super().memory_usage
-        child0_size = (self.size + 1) * self.base_children[0].dtype.itemsize
-        current_base_child = self.base_children[1]
-        current_offset = self.offset
-        n += child0_size
-        while type(current_base_child) is ListColumn:
-            child0_size = (
-                current_base_child.size + 1 - current_offset
-            ) * current_base_child.base_children[0].dtype.itemsize
-            n += child0_size
-            current_offset_col = current_base_child.base_children[0]
-            if not len(current_offset_col):
-                # See https://github.com/rapidsai/cudf/issues/16164 why
-                # offset column can be uninitialized
-                break
-            current_offset = current_offset_col.element_indexing(
-                current_offset
-            )
-            current_base_child = current_base_child.base_children[1]
-
-        n += (
-            current_base_child.size - current_offset
-        ) * current_base_child.dtype.itemsize
-
-        if current_base_child.nullable:
-            n += plc.null_mask.bitmask_allocation_size_bytes(
-                current_base_child.size
-            )
-        return n
-
     def element_indexing(self, index: int) -> list:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
