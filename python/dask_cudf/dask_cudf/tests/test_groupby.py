@@ -250,7 +250,6 @@ def test_groupby_split_out(split_out, column):
 @pytest.mark.parametrize(
     "by", ["a", "b", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]]
 )
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_groupby_dropna_cudf(dropna, by):
     # NOTE: This test is borrowed from upstream dask
     #       (dask/dask/dataframe/tests/test_groupby.py)
