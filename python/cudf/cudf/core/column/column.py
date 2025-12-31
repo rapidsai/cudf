@@ -2197,11 +2197,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             codes_dtype = np.dtype(header["codes_dtype"])
         else:
             codes_dtype = None
+        offset = header.get("offset", 0)
         if mask is None:
             null_count = 0
         else:
             null_count = plc.null_mask.null_count(
-                mask, header["offset"], header["size"] + header["offset"]
+                mask, offset, header["size"] + offset
             )
         if isinstance(dtype, IntervalDtype):
             # TODO: Handle in dtype_to_pylibcudf_type?
@@ -2219,7 +2220,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 data,
                 mask,
                 null_count,
-                header["offset"],
+                offset,
                 [child.plc_column for child in children],
                 validate=False,  # Skip validation to avoid triggering SpillableBuffer.ptr
             )
