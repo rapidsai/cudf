@@ -211,6 +211,33 @@ class StringColumn(ColumnBase, Scannable):
             assert self.base_data is not None
             self._data = self.base_data[self.start_offset : self.end_offset]
 
+    def _recompute_children(self) -> None:
+        if not self.base_children:
+            self._children = ()
+        elif (
+            self.offset == 0
+            and len(self.base_children) > 0
+            and self.size == self.base_children[0].size - 1
+        ):
+            # Optimization: for non-sliced columns, children == base_children
+            self._children = self.base_children  # type: ignore[assignment]
+        else:
+            # String columns have one child: the offsets column
+            # For a string column with size N, the offsets child has size N+1
+
+            # Step 1: Slice the offsets column to get the correct size
+            offsets_child = self.base_children[0]
+            sliced_offsets = offsets_child.slice(
+                self.offset, self.offset + self.size + 1
+            )
+
+            # Step 2: Adjust the offsets to be relative to the sliced data
+            # by subtracting the first offset value (start_offset)
+            chars_offset = self.start_offset
+            adjusted_offsets = sliced_offsets - chars_offset
+
+            self._children = (adjusted_offsets,)  # type: ignore[assignment]
+
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
             return True

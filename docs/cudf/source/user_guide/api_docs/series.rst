@@ -542,7 +542,6 @@ Serialization / IO / conversion
    Series.to_pandas
    Series.to_string
    Series.from_arrow
-   Series.from_pandas
    Series.hash_values
    Series.to_pylibcudf
    Series.from_pylibcudf
