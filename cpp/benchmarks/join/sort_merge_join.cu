@@ -68,7 +68,7 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
   if (use_remap) {
     // Benchmark with key remapping
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      // Step 1: Build key remapping (with metrics disabled, the metrics need to be calcualted
+      // Step 1: Build key remapping (with metrics disabled, the metrics need to be calculated
       //  for the join type selection heuristic, either way)
       constexpr bool compute_metrics = false;
 
