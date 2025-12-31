@@ -307,7 +307,7 @@ compute_mixed_join_matches_per_row(
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_join(
+perform_mixed_join(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,
@@ -555,6 +555,145 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                             mr);
 }
 
+// Mixed join class implementation
+template <typename Hasher>
+class mixed_join {
+ public:
+  mixed_join(table_view const& build_equality,
+             null_equality compare_nulls,
+             rmm::cuda_stream_view stream)
+    : _hash_joiner(std::make_unique<cudf::hash_join>(build_equality, compare_nulls, stream))
+  {
+  }
+
+  mixed_join(table_view const& build_equality,
+             nullable_join has_nulls,
+             null_equality compare_nulls,
+             double load_factor,
+             rmm::cuda_stream_view stream)
+    : _hash_joiner(std::make_unique<cudf::hash_join>(
+        build_equality, has_nulls, compare_nulls, load_factor, stream))
+  {
+  }
+
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  inner_join(table_view const& probe_equality,
+             table_view const& probe_conditional,
+             table_view const& build_conditional,
+             ast::expression const& binary_predicate,
+             output_size_data_type output_size_data,
+             rmm::cuda_stream_view stream,
+             rmm::device_async_resource_ref mr) const
+  {
+    auto [left_indices, right_indices] =
+      _hash_joiner->inner_join(probe_equality, std::nullopt, stream, mr);
+
+    return cudf::filter_join_indices(
+      probe_conditional,
+      build_conditional,
+      cudf::device_span<size_type const>(left_indices->begin(), left_indices->size()),
+      cudf::device_span<size_type const>(right_indices->begin(), right_indices->size()),
+      binary_predicate,
+      join_kind::INNER_JOIN,
+      stream,
+      mr);
+  }
+
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  left_join(table_view const& probe_equality,
+            table_view const& probe_conditional,
+            table_view const& build_conditional,
+            ast::expression const& binary_predicate,
+            output_size_data_type output_size_data,
+            rmm::cuda_stream_view stream,
+            rmm::device_async_resource_ref mr) const
+  {
+    auto [left_indices, right_indices] =
+      _hash_joiner->left_join(probe_equality, std::nullopt, stream, mr);
+
+    return cudf::filter_join_indices(
+      probe_conditional,
+      build_conditional,
+      cudf::device_span<size_type const>(left_indices->begin(), left_indices->size()),
+      cudf::device_span<size_type const>(right_indices->begin(), right_indices->size()),
+      binary_predicate,
+      join_kind::LEFT_JOIN,
+      stream,
+      mr);
+  }
+
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  full_join(table_view const& probe_equality,
+            table_view const& probe_conditional,
+            table_view const& build_conditional,
+            ast::expression const& binary_predicate,
+            output_size_data_type output_size_data,
+            rmm::cuda_stream_view stream,
+            rmm::device_async_resource_ref mr) const
+  {
+    auto [left_indices, right_indices] =
+      _hash_joiner->full_join(probe_equality, std::nullopt, stream, mr);
+
+    return cudf::filter_join_indices(
+      probe_conditional,
+      build_conditional,
+      cudf::device_span<size_type const>(left_indices->begin(), left_indices->size()),
+      cudf::device_span<size_type const>(right_indices->begin(), right_indices->size()),
+      binary_predicate,
+      join_kind::FULL_JOIN,
+      stream,
+      mr);
+  }
+
+  [[nodiscard]] std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+  inner_join_size(table_view const& probe_equality,
+                  table_view const& probe_conditional,
+                  table_view const& build_conditional,
+                  ast::expression const& binary_predicate,
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr) const
+  {
+    auto [left_indices, right_indices] = this->inner_join(
+      probe_equality, probe_conditional, build_conditional, binary_predicate, {}, stream, mr);
+
+    return {left_indices->size(), std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr)};
+  }
+
+  [[nodiscard]] std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+  left_join_size(table_view const& probe_equality,
+                 table_view const& probe_conditional,
+                 table_view const& build_conditional,
+                 ast::expression const& binary_predicate,
+                 rmm::cuda_stream_view stream,
+                 rmm::device_async_resource_ref mr) const
+  {
+    auto [left_indices, right_indices] = this->left_join(
+      probe_equality, probe_conditional, build_conditional, binary_predicate, {}, stream, mr);
+
+    return {left_indices->size(), std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr)};
+  }
+
+  [[nodiscard]] std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+  full_join_size(table_view const& probe_equality,
+                 table_view const& probe_conditional,
+                 table_view const& build_conditional,
+                 ast::expression const& binary_predicate,
+                 rmm::cuda_stream_view stream,
+                 rmm::device_async_resource_ref mr) const
+  {
+    auto [left_indices, right_indices] = this->full_join(
+      probe_equality, probe_conditional, build_conditional, binary_predicate, {}, stream, mr);
+
+    return {left_indices->size(), std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr)};
+  }
+
+ private:
+  std::unique_ptr<cudf::hash_join> _hash_joiner;
+};
+
 }  // namespace detail
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -571,16 +710,16 @@ mixed_inner_join(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mixed_join(left_equality,
-                            right_equality,
-                            left_conditional,
-                            right_conditional,
-                            binary_predicate,
-                            compare_nulls,
-                            join_kind::INNER_JOIN,
-                            output_size_data,
-                            stream,
-                            mr);
+  return detail::perform_mixed_join(left_equality,
+                                    right_equality,
+                                    left_conditional,
+                                    right_conditional,
+                                    binary_predicate,
+                                    compare_nulls,
+                                    join_kind::INNER_JOIN,
+                                    output_size_data,
+                                    stream,
+                                    mr);
 }
 
 std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
@@ -618,16 +757,16 @@ mixed_left_join(table_view const& left_equality,
                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mixed_join(left_equality,
-                            right_equality,
-                            left_conditional,
-                            right_conditional,
-                            binary_predicate,
-                            compare_nulls,
-                            join_kind::LEFT_JOIN,
-                            output_size_data,
-                            stream,
-                            mr);
+  return detail::perform_mixed_join(left_equality,
+                                    right_equality,
+                                    left_conditional,
+                                    right_conditional,
+                                    binary_predicate,
+                                    compare_nulls,
+                                    join_kind::LEFT_JOIN,
+                                    output_size_data,
+                                    stream,
+                                    mr);
 }
 
 std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_join_size(
@@ -665,16 +804,129 @@ mixed_full_join(table_view const& left_equality,
                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mixed_join(left_equality,
-                            right_equality,
-                            left_conditional,
-                            right_conditional,
-                            binary_predicate,
-                            compare_nulls,
-                            join_kind::FULL_JOIN,
-                            output_size_data,
-                            stream,
-                            mr);
+  return detail::perform_mixed_join(left_equality,
+                                    right_equality,
+                                    left_conditional,
+                                    right_conditional,
+                                    binary_predicate,
+                                    compare_nulls,
+                                    join_kind::FULL_JOIN,
+                                    output_size_data,
+                                    stream,
+                                    mr);
+}
+
+// Mixed join class public API implementations
+cudf::mixed_join::mixed_join(table_view const& build_equality,
+                             null_equality compare_nulls,
+                             rmm::cuda_stream_view stream)
+  : _impl{std::make_unique<impl_type>(build_equality, compare_nulls, stream)}
+{
+}
+
+cudf::mixed_join::mixed_join(table_view const& build_equality,
+                             nullable_join has_nulls,
+                             null_equality compare_nulls,
+                             double load_factor,
+                             rmm::cuda_stream_view stream)
+  : _impl{
+      std::make_unique<impl_type>(build_equality, has_nulls, compare_nulls, load_factor, stream)}
+{
+}
+
+cudf::mixed_join::~mixed_join() = default;
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+cudf::mixed_join::inner_join(table_view const& probe_equality,
+                             table_view const& probe_conditional,
+                             table_view const& build_conditional,
+                             ast::expression const& binary_predicate,
+                             output_size_data_type output_size_data,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr) const
+{
+  return _impl->inner_join(probe_equality,
+                           probe_conditional,
+                           build_conditional,
+                           binary_predicate,
+                           output_size_data,
+                           stream,
+                           mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+cudf::mixed_join::left_join(table_view const& probe_equality,
+                            table_view const& probe_conditional,
+                            table_view const& build_conditional,
+                            ast::expression const& binary_predicate,
+                            output_size_data_type output_size_data,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr) const
+{
+  return _impl->left_join(probe_equality,
+                          probe_conditional,
+                          build_conditional,
+                          binary_predicate,
+                          output_size_data,
+                          stream,
+                          mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+cudf::mixed_join::full_join(table_view const& probe_equality,
+                            table_view const& probe_conditional,
+                            table_view const& build_conditional,
+                            ast::expression const& binary_predicate,
+                            output_size_data_type output_size_data,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr) const
+{
+  return _impl->full_join(probe_equality,
+                          probe_conditional,
+                          build_conditional,
+                          binary_predicate,
+                          output_size_data,
+                          stream,
+                          mr);
+}
+
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+cudf::mixed_join::inner_join_size(table_view const& probe_equality,
+                                  table_view const& probe_conditional,
+                                  table_view const& build_conditional,
+                                  ast::expression const& binary_predicate,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr) const
+{
+  return _impl->inner_join_size(
+    probe_equality, probe_conditional, build_conditional, binary_predicate, stream, mr);
+}
+
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+cudf::mixed_join::left_join_size(table_view const& probe_equality,
+                                 table_view const& probe_conditional,
+                                 table_view const& build_conditional,
+                                 ast::expression const& binary_predicate,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr) const
+{
+  return _impl->left_join_size(
+    probe_equality, probe_conditional, build_conditional, binary_predicate, stream, mr);
+}
+
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+cudf::mixed_join::full_join_size(table_view const& probe_equality,
+                                 table_view const& probe_conditional,
+                                 table_view const& build_conditional,
+                                 ast::expression const& binary_predicate,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr) const
+{
+  return _impl->full_join_size(
+    probe_equality, probe_conditional, build_conditional, binary_predicate, stream, mr);
 }
 
 }  // namespace cudf

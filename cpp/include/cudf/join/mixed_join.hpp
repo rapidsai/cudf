@@ -6,6 +6,8 @@
 #pragma once
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/hashing.hpp>
+#include <cudf/join/hash_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -395,6 +397,208 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   null_equality compare_nulls       = null_equality::EQUAL,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+// Forward declarations
+namespace detail {
+template <typename T>
+class mixed_join;
+}  // namespace detail
+
+/**
+ * @brief Mixed join that builds hash table on equality columns and probes with
+ * conditional predicates in subsequent member functions.
+ *
+ * This class enables a mixed join scheme that:
+ * 1. Builds hash table once on equality columns
+ * 2. Probes multiple times with different conditional columns/predicates
+ * 3. Reuses the hash table for efficient repeated queries
+ *
+ * Each join operation internally performs two steps:
+ * - Equality-based hash join on the equality columns
+ * - Conditional filtering using the provided predicate
+ */
+class mixed_join {
+ public:
+  using impl_type = typename cudf::detail::mixed_join<
+    cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>>;  ///< Implementation type
+
+  mixed_join() = delete;
+  ~mixed_join();
+  mixed_join(mixed_join const&)            = delete;
+  mixed_join(mixed_join&&)                 = delete;
+  mixed_join& operator=(mixed_join const&) = delete;
+  mixed_join& operator=(mixed_join&&)      = delete;
+
+  /**
+   * @brief Construct a mixed_join object for subsequent probe calls.
+   *
+   * @note The `mixed_join` object must not outlive the table viewed by
+   * `build_equality`, else behavior is undefined.
+   *
+   * @throws std::invalid_argument if the build table has no columns
+   *
+   * @param build_equality The build table equality columns for hash table construction
+   * @param compare_nulls Controls whether null join-key values should match or not
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  mixed_join(cudf::table_view const& build_equality,
+             null_equality compare_nulls,
+             rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @copydoc mixed_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
+   *
+   * @throws std::invalid_argument if load_factor is not greater than 0 and less than or equal to 1
+   *
+   * @param has_nulls Flag to indicate if there exists any nulls in the build/probe equality tables
+   * @param load_factor The hash table occupancy ratio in (0,1]
+   */
+  mixed_join(cudf::table_view const& build_equality,
+             nullable_join has_nulls,
+             null_equality compare_nulls,
+             double load_factor,
+             rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief Returns row indices for a mixed inner join.
+   *
+   * Performs equality join on the hash table built from build_equality columns,
+   * then filters results using the provided conditional predicate.
+   *
+   * @param probe_equality The probe table equality columns (must match build schema)
+   * @param probe_conditional The probe table conditional columns (referenced by predicate)
+   * @param build_conditional The build table conditional columns (referenced by predicate)
+   * @param binary_predicate AST expression for conditional filtering
+   * @param output_size_data Optional precomputed output size information
+   * @param stream CUDA stream for operations
+   * @param mr Device memory resource
+   *
+   * @return Pair of [left_indices, right_indices] for the join result
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  inner_join(cudf::table_view const& probe_equality,
+             cudf::table_view const& probe_conditional,
+             cudf::table_view const& build_conditional,
+             cudf::ast::expression const& binary_predicate,
+             output_size_data_type output_size_data = {},
+             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Returns row indices for a mixed left join.
+   *
+   * Similar to inner_join but preserves all probe table rows.
+   *
+   * @param probe_equality The probe table equality columns
+   * @param probe_conditional The probe table conditional columns
+   * @param build_conditional The build table conditional columns
+   * @param binary_predicate AST expression for conditional filtering
+   * @param output_size_data Optional precomputed output size information
+   * @param stream CUDA stream for operations
+   * @param mr Device memory resource
+   *
+   * @return Pair of [left_indices, right_indices] for the join result
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  left_join(cudf::table_view const& probe_equality,
+            cudf::table_view const& probe_conditional,
+            cudf::table_view const& build_conditional,
+            cudf::ast::expression const& binary_predicate,
+            output_size_data_type output_size_data = {},
+            rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+            rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Returns row indices for a mixed full join.
+   *
+   * Similar to inner_join but preserves all rows from both tables.
+   *
+   * @param probe_equality The probe table equality columns
+   * @param probe_conditional The probe table conditional columns
+   * @param build_conditional The build table conditional columns
+   * @param binary_predicate AST expression for conditional filtering
+   * @param output_size_data Optional precomputed output size information
+   * @param stream CUDA stream for operations
+   * @param mr Device memory resource
+   *
+   * @return Pair of [left_indices, right_indices] for the join result
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  full_join(cudf::table_view const& probe_equality,
+            cudf::table_view const& probe_conditional,
+            cudf::table_view const& build_conditional,
+            cudf::ast::expression const& binary_predicate,
+            output_size_data_type output_size_data = {},
+            rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+            rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Returns the exact output size for a mixed inner join.
+   *
+   * @param probe_equality The probe table equality columns
+   * @param probe_conditional The probe table conditional columns
+   * @param build_conditional The build table conditional columns
+   * @param binary_predicate AST expression for conditional filtering
+   * @param stream CUDA stream for operations
+   * @param mr Device memory resource
+   *
+   * @return Pair of [output_size, match_counts]
+   */
+  [[nodiscard]] std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+  inner_join_size(
+    cudf::table_view const& probe_equality,
+    cudf::table_view const& probe_conditional,
+    cudf::table_view const& build_conditional,
+    cudf::ast::expression const& binary_predicate,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Returns the exact output size for a mixed left join.
+   *
+   * @param probe_equality The probe table equality columns
+   * @param probe_conditional The probe table conditional columns
+   * @param build_conditional The build table conditional columns
+   * @param binary_predicate AST expression for conditional filtering
+   * @param stream CUDA stream for operations
+   * @param mr Device memory resource
+   *
+   * @return Pair of [output_size, match_counts]
+   */
+  [[nodiscard]] std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+  left_join_size(cudf::table_view const& probe_equality,
+                 cudf::table_view const& probe_conditional,
+                 cudf::table_view const& build_conditional,
+                 cudf::ast::expression const& binary_predicate,
+                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Returns the exact output size for a mixed full join.
+   *
+   * @param probe_equality The probe table equality columns
+   * @param probe_conditional The probe table conditional columns
+   * @param build_conditional The build table conditional columns
+   * @param binary_predicate AST expression for conditional filtering
+   * @param stream CUDA stream for operations
+   * @param mr Device memory resource
+   *
+   * @return Pair of [output_size, match_counts]
+   */
+  [[nodiscard]] std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+  full_join_size(cudf::table_view const& probe_equality,
+                 cudf::table_view const& probe_conditional,
+                 cudf::table_view const& build_conditional,
+                 cudf::ast::expression const& binary_predicate,
+                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+ private:
+  std::unique_ptr<impl_type const> _impl;  ///< Pointer to implementation
+};
 
 /** @} */  // end of group
 
