@@ -12,6 +12,14 @@ from .column cimport Column
 
 cpdef DeviceBuffer copy_bitmask(Column col, Stream stream=*, DeviceMemoryResource mr=*)
 
+cpdef DeviceBuffer copy_bitmask_from_bitmask(
+    object bitmask,
+    size_type begin_bit,
+    size_type end_bit,
+    Stream stream=*,
+    DeviceMemoryResource mr=*
+)
+
 cpdef size_t bitmask_allocation_size_bytes(size_type number_of_bits)
 
 cpdef DeviceBuffer create_null_mask(

@@ -68,6 +68,54 @@ cpdef DeviceBuffer copy_bitmask(
 
     return buffer_to_python(move(db), stream, mr)
 
+
+cpdef DeviceBuffer copy_bitmask_from_bitmask(
+    object bitmask,
+    size_type begin_bit,
+    size_type end_bit,
+    Stream stream=None,
+    DeviceMemoryResource mr=None
+):
+    """Copies a portion of a bitmask into a ``DeviceBuffer``.
+
+    For details, see :cpp:func:`copy_bitmask`.
+
+    Parameters
+    ----------
+    bitmask : Span-like object
+        Object with ptr and size attributes (e.g., gpumemoryview, Buffer, DeviceBuffer).
+    begin_bit : size_type
+        The starting bit index (inclusive).
+    end_bit : size_type
+        The ending bit index (exclusive).
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource for allocations.
+
+    Returns
+    -------
+    rmm.DeviceBuffer
+        A ``DeviceBuffer`` containing ``col``'s bitmask, or an empty
+        ``DeviceBuffer`` if ``col`` is not nullable
+    """
+    cdef device_buffer db
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+    cdef uintptr_t ptr = bitmask.ptr
+
+    with nogil:
+        db = cpp_null_mask.copy_bitmask(
+            <bitmask_type*>ptr,
+            begin_bit,
+            end_bit,
+            stream.view(),
+            mr.get_mr()
+        )
+
+    return buffer_to_python(move(db), stream, mr)
+
+
 cpdef size_t bitmask_allocation_size_bytes(size_type number_of_bits):
     """
     Computes the required bytes necessary to represent the specified number of bits

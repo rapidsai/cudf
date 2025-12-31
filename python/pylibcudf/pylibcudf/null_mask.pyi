@@ -14,6 +14,13 @@ def copy_bitmask(
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> DeviceBuffer: ...
+def copy_bitmask_from_bitmask(
+    bitmask: Span,
+    begin_bit: int,
+    end_bit: int,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> DeviceBuffer: ...
 def bitmask_allocation_size_bytes(number_of_bits: int) -> int: ...
 def create_null_mask(
     size: int,
