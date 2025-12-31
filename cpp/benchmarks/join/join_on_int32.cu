@@ -5,10 +5,14 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/table_utilities.hpp>
-#include <benchmarks/join/join_common.hpp>
 
+#include <cudf/binaryop.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/sort_merge_join.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -19,6 +23,13 @@
  * This simulates the join phase after key remapping, where complex keys have
  * been converted to simple INT32 IDs. Comparing this with key_remap_build times
  * shows what percentage of total join time is spent on metrics computation.
+ *
+ * Uses controlled key generation to create predictable cardinality distributions:
+ * - ALL_UNIQUE: Sequential keys 0, 1, 2, ... (exactly num_rows unique keys)
+ * - HIGH_UNIQUE: Each key repeated ~10 times
+ * - MED_UNIQUE: Each key repeated ~100 times
+ * - LOW_UNIQUE: Each key repeated ~1000 times
+ * - SINGLE_KEY: All rows have the same key
  */
 
 // Cardinality distributions (same as key_remap_build)
@@ -57,37 +68,72 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   },
   [](auto) { return std::string{}; })
 
+/**
+ * @brief Generate an INT32 key column with controlled cardinality.
+ *
+ * For a given number of rows and divisor:
+ * - keys[i] = i / divisor
+ * This creates (num_rows / divisor) unique keys, each appearing ~divisor times.
+ */
+std::unique_ptr<cudf::column> generate_int32_keys(cudf::size_type num_rows, cudf::size_type divisor)
+{
+  auto stream = cudf::get_default_stream();
+
+  // Generate sequence 0, 1, 2, ..., num_rows-1
+  auto init = cudf::make_fixed_width_scalar<cudf::size_type>(0, stream);
+  auto step = cudf::make_fixed_width_scalar<cudf::size_type>(1, stream);
+  auto seq  = cudf::sequence(num_rows, *init, *step, stream);
+
+  if (divisor == 1) {
+    // ALL_UNIQUE: return sequence directly
+    return seq;
+  }
+
+  // Divide each element by divisor to create duplicates
+  auto divisor_scalar = cudf::make_fixed_width_scalar<cudf::size_type>(divisor, stream);
+  return cudf::binary_operation(
+    seq->view(), *divisor_scalar, cudf::binary_operator::DIV, cudf::data_type{cudf::type_id::INT32});
+}
+
 template <Cardinality Card, JoinAlgo Algo>
 void nvbench_join_on_int32(nvbench::state& state,
                            nvbench::type_list<nvbench::enum_type<Card>,
                                               nvbench::enum_type<Algo>>)
 {
-  auto const num_rows = state.get_int64("num_rows");
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
-  // Determine multiplicity based on cardinality
-  int multiplicity = 1;
-  if constexpr (Card == Cardinality::ALL_UNIQUE) {
-    multiplicity = 1;
-  } else if constexpr (Card == Cardinality::HIGH_UNIQUE) {
-    multiplicity = 10;
-  } else if constexpr (Card == Cardinality::MED_UNIQUE) {
-    multiplicity = 100;
-  } else if constexpr (Card == Cardinality::LOW_UNIQUE) {
-    multiplicity = 1000;
-  } else if constexpr (Card == Cardinality::SINGLE_KEY) {
-    multiplicity = num_rows;
+  // Skip HASH join with SINGLE_KEY for large row counts - output is num_rows^2 which
+  // requires enormous memory. Only run smallest size (10K rows = 100M output rows).
+  if constexpr (Card == Cardinality::SINGLE_KEY && Algo == JoinAlgo::HASH) {
+    if (num_rows > 10'000) {
+      state.skip("HASH join with SINGLE_KEY: output size num_rows^2 exceeds memory");
+      return;
+    }
   }
 
-  double selectivity = 0.5;
+  // Determine divisor based on cardinality (higher divisor = more duplicates)
+  cudf::size_type divisor = 1;
+  if constexpr (Card == Cardinality::ALL_UNIQUE) {
+    divisor = 1;  // Each key appears once
+  } else if constexpr (Card == Cardinality::HIGH_UNIQUE) {
+    divisor = 10;  // Each key appears ~10 times
+  } else if constexpr (Card == Cardinality::MED_UNIQUE) {
+    divisor = 100;  // Each key appears ~100 times
+  } else if constexpr (Card == Cardinality::LOW_UNIQUE) {
+    divisor = 1000;  // Each key appears ~1000 times
+  } else if constexpr (Card == Cardinality::SINGLE_KEY) {
+    divisor = num_rows;  // All rows have key 0
+  }
 
-  // Generate INT32 key tables (simulating remapped keys)
-  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(data_type::INT32)), 1);
+  // Generate controlled INT32 key columns
+  auto left_keys  = generate_int32_keys(num_rows, divisor);
+  auto right_keys = generate_int32_keys(num_rows, divisor);
 
-  auto [left_table, right_table] = generate_input_tables<false>(
-    dtypes, num_rows, num_rows, 0, multiplicity, selectivity);
-
-  auto const left  = left_table->view();
-  auto const right = right_table->view();
+  // Create table views
+  std::vector<cudf::column_view> left_cols  = {left_keys->view()};
+  std::vector<cudf::column_view> right_cols = {right_keys->view()};
+  cudf::table_view left(left_cols);
+  cudf::table_view right(right_cols);
 
   auto const input_size = estimate_size(left) + estimate_size(right);
   state.add_element_count(input_size, "input_size");
@@ -121,5 +167,5 @@ NVBENCH_BENCH_TYPES(nvbench_join_on_int32,
                     NVBENCH_TYPE_AXES(cardinality_list, join_algo_list))
   .set_name("join_on_int32")
   .set_type_axes_names({"Cardinality", "JoinAlgo"})
-  .add_int64_axis("num_rows", {1'000'000, 10'000'000, 100'000'000});
+  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000});
 

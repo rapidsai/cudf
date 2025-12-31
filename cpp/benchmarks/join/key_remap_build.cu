@@ -12,19 +12,29 @@
 
 #include <nvbench/nvbench.cuh>
 
+#include <algorithm>
+
 /**
  * @brief Benchmark for key_remapping build phase with metrics computation.
  *
  * This benchmark isolates the key_remapping construction time (including metrics)
  * to compare different metrics computation algorithms across various data distributions.
+ *
+ * Uses controlled cardinality settings for create_random_table to ensure predictable
+ * key distributions:
+ * - ALL_UNIQUE: cardinality = num_rows (all unique keys)
+ * - HIGH_UNIQUE: cardinality = num_rows / 10 (10% unique)
+ * - MED_UNIQUE: cardinality = num_rows / 100 (1% unique)
+ * - LOW_UNIQUE: cardinality = num_rows / 1000 (0.1% unique)
+ * - SINGLE_KEY: cardinality = 1 (all duplicates)
  */
 
 // Cardinality distributions for testing
 enum class Cardinality {
-  ALL_UNIQUE,   // 100% unique keys (multiplicity = 1)
-  HIGH_UNIQUE,  // 10% unique keys (multiplicity = 10)
-  MED_UNIQUE,   // 1% unique keys (multiplicity = 100)
-  LOW_UNIQUE,   // 0.1% unique keys (multiplicity = 1000)
+  ALL_UNIQUE,   // 100% unique keys
+  HIGH_UNIQUE,  // 10% unique keys
+  MED_UNIQUE,   // 1% unique keys
+  LOW_UNIQUE,   // 0.1% unique keys
   SINGLE_KEY    // 1 unique key (all duplicates)
 };
 
@@ -64,25 +74,26 @@ void nvbench_key_remap_build(nvbench::state& state,
   auto const num_keys = state.get_int64("num_keys");
   auto dtypes         = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  // Determine multiplicity based on cardinality
-  int multiplicity = 1;
+  // Determine cardinality (number of unique keys) based on distribution
+  cudf::size_type cardinality = 0;
   if constexpr (Card == Cardinality::ALL_UNIQUE) {
-    multiplicity = 1;
+    cardinality = num_rows;  // All keys unique
   } else if constexpr (Card == Cardinality::HIGH_UNIQUE) {
-    multiplicity = 10;
+    cardinality = std::max(cudf::size_type{1}, static_cast<cudf::size_type>(num_rows / 10));
   } else if constexpr (Card == Cardinality::MED_UNIQUE) {
-    multiplicity = 100;
+    cardinality = std::max(cudf::size_type{1}, static_cast<cudf::size_type>(num_rows / 100));
   } else if constexpr (Card == Cardinality::LOW_UNIQUE) {
-    multiplicity = 1000;
+    cardinality = std::max(cudf::size_type{1}, static_cast<cudf::size_type>(num_rows / 1000));
   } else if constexpr (Card == Cardinality::SINGLE_KEY) {
-    multiplicity = num_rows;
+    cardinality = 1;  // All rows have the same key
   }
 
-  double selectivity = 0.5;
+  // Generate table with controlled cardinality using create_random_table directly
+  double const null_probability = Nullable ? 0.3 : 0;
+  auto const profile =
+    data_profile{data_profile_builder().null_probability(null_probability).cardinality(cardinality)};
+  auto table = create_random_table(dtypes, row_count{static_cast<cudf::size_type>(num_rows)}, profile);
 
-  // Generate table
-  auto [table, _] = generate_input_tables<Nullable>(
-    dtypes, num_rows, num_rows, 0, multiplicity, selectivity);
   auto const keys = table->view();
 
   auto const input_size = estimate_size(keys);
@@ -132,6 +143,6 @@ NVBENCH_BENCH_TYPES(nvbench_key_remap_build,
                                       algo_list))
   .set_name("key_remap_build")
   .set_type_axes_names({"Nullable", "DataType", "Cardinality", "Algorithm"})
-  .add_int64_axis("num_rows", {1'000'000, 10'000'000, 100'000'000})
+  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
   .add_int64_axis("num_keys", {1, 2, 3});
 
