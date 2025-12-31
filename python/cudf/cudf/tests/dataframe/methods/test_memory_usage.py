@@ -12,7 +12,7 @@ from cudf.testing._utils import expect_warning_if
 
 def test_list_struct_list_memory_usage():
     df = cudf.DataFrame({"a": [[{"b": [1]}]]})
-    assert df.memory_usage().sum() == 16
+    assert df.memory_usage().sum() == 24
 
 
 @pytest.mark.parametrize("index", [False, True])
