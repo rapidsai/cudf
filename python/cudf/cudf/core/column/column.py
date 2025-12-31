@@ -2146,13 +2146,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 header["dtype"] = self.dtype.str
             header["dtype-is-cudf-serialized"] = False
 
-        if self.data is not None:
-            data_header, data_frames = self.data.device_serialize()
+        if self.base_data is not None:
+            data_header, data_frames = self.base_data.device_serialize()
             header["data"] = data_header
             frames.extend(data_frames)
 
-        if self.mask is not None:
-            mask_header, mask_frames = self.mask.device_serialize()
+        if self.base_mask is not None:
+            mask_header, mask_frames = self.base_mask.device_serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
         if self.children:
@@ -2166,6 +2166,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             header["codes_dtype"] = self.codes.dtype.str  # type: ignore[attr-defined]
         header["size"] = self.size
         header["frame_count"] = len(frames)
+        header["offset"] = self.offset
         return header, frames
 
     @classmethod
@@ -2207,7 +2208,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask is None:
             null_count = 0
         else:
-            null_count = plc.null_mask.null_count(mask, 0, header["size"])
+            null_count = plc.null_mask.null_count(
+                mask, header["offset"], header["size"] + header["offset"]
+            )
         if isinstance(dtype, IntervalDtype):
             # TODO: Handle in dtype_to_pylibcudf_type?
             plc_type = plc.DataType(plc.TypeId.STRUCT)
@@ -2216,18 +2219,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 codes_dtype if codes_dtype is not None else dtype
             )
         if isinstance(dtype, CategoricalDtype):
-            data = children.pop(0)
-
-        plc_column = plc.Column(
-            plc_type,
-            header["size"],
-            data,
-            mask,
-            null_count,
-            0,
-            [child.plc_column for child in children],
-            validate=False,  # Skip validation to avoid triggering SpillableBuffer.ptr
-        )
+            plc_column = children.pop(0).plc_column
+        else:
+            plc_column = plc.Column(
+                plc_type,
+                header["size"],
+                data,
+                mask,
+                null_count,
+                header["offset"],
+                [child.plc_column for child in children],
+                validate=False,  # Skip validation to avoid triggering SpillableBuffer.ptr
+            )
         return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
