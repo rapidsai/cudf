@@ -18,6 +18,7 @@ authors = [
     { name = "NVIDIA Corporation" },
 ]
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "cudf==26.2.*,>=0.0.0a0",
@@ -64,9 +65,6 @@ Homepage = "https://github.com/rapidsai/cudf"
 build-backend = "setuptools.build_meta"
 dependencies-file = "../../dependencies.yaml"
 matrix-entry = "cuda_suffixed=true"
-
-[tool.setuptools]
-license-files = ["LICENSE"]
 
 [tool.setuptools.dynamic]
 version = {file = "dask_cudf/VERSION"}

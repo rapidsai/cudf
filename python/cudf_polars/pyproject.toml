@@ -18,6 +18,7 @@ authors = [
     { name = "NVIDIA Corporation" },
 ]
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "nvidia-ml-py>=12",
@@ -61,9 +62,6 @@ rapidsmpf = [
 
 [project.urls]
 Homepage = "https://github.com/rapidsai/cudf"
-
-[tool.setuptools]
-license-files = ["LICENSE"]
 
 [tool.setuptools.dynamic]
 version = {file = "cudf_polars/VERSION"}
