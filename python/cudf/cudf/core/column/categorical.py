@@ -646,7 +646,16 @@ class CategoricalColumn(column.ColumnBase):
             return self.codes
         gather_map = self.codes.astype(SIZE_TYPE_DTYPE).fillna(0)
         out = self.categories.take(gather_map)
-        out = out.set_mask(self.mask)
+        mask = self.mask
+        if self.offset > 0 and mask is not None:
+            mask = cudf.core.buffer.as_buffer(
+                plc.null_mask.copy_bitmask_from_bitmask(
+                    mask,
+                    self.offset,
+                    mask.size - self.offset,
+                )
+            )
+        out = out.set_mask(mask)
         return out
 
     def copy(self, deep: bool = True) -> Self:
