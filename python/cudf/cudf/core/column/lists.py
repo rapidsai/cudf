@@ -76,6 +76,40 @@ class ListColumn(ColumnBase):
             children[1]._with_type_metadata(dtype.element_type),
         )
 
+    def _recompute_children(self) -> None:
+        """Recompute the offset-aware children columns with proper type metadata."""
+        if not self.base_children:
+            self._children = ()
+        elif self.offset == 0 and self.size == self.base_size:
+            # Optimization: for non-sliced columns, children == base_children
+            self._children = self.base_children  # type: ignore[assignment]
+        else:
+            # List columns have special structure:
+            # - Child 0 (offsets): size = parent.size + 1, slice from [offset, offset+size+1)
+            # - Child 1 (values): slice based on the offset values
+            offsets_child = self.base_children[0]
+            values_child = self.base_children[1]
+
+            # Slice offsets: get size+1 offsets starting from self.offset
+            sliced_offsets = offsets_child.slice(
+                self.offset, self.offset + self.size + 1
+            )
+
+            # Get the range of values to slice: from first offset to last offset
+            # The offsets tell us where in the values array each list starts/ends
+            first_offset = offsets_child.element_indexing(self.offset)
+            last_offset = offsets_child.element_indexing(
+                self.offset + self.size
+            )
+
+            # Slice the values child to only include the values we need
+            sliced_values = values_child.slice(first_offset, last_offset)
+
+            # Adjust offsets to be relative to the sliced values (subtract first_offset)
+            adjusted_offsets = sliced_offsets - first_offset
+
+            self._children = (adjusted_offsets, sliced_values)  # type: ignore[assignment]
+
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
