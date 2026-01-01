@@ -189,17 +189,6 @@ class StringColumn(ColumnBase, Scannable):
         else:
             return self.base_children[0].size - 1
 
-    def _recompute_data(self) -> None:
-        if (
-            self.offset == 0
-            and len(self.base_children) > 0
-            and self.size == self.base_children[0].size - 1
-        ):
-            self._data = self.base_data
-        else:
-            assert self.base_data is not None
-            self._data = self.base_data[self.start_offset : self.end_offset]
-
     def _recompute_children(self) -> None:
         if not self.base_children:
             self._children = ()

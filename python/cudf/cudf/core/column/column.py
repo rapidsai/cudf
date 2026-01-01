@@ -253,12 +253,8 @@ class _ColumnAccessContext:
         self._stack = ExitStack()
         if (base_data := column.base_data) is not None:
             self._stack.enter_context(base_data.access(mode=mode))
-            if (data := column.data) is not None and data is not base_data:
-                self._stack.enter_context(data.access(mode=mode))
         if (base_mask := column.base_mask) is not None:
             self._stack.enter_context(base_mask.access(mode=mode))
-            if (mask := column.mask) is not None and mask is not base_mask:
-                self._stack.enter_context(mask.access(mode=mode))
         for child in self._column.children:
             self._stack.enter_context(child.access(mode=mode))
 
@@ -326,7 +322,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # are destroyed, all references to this column will be removed as well,
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers: set[Buffer] = set()
-        self._recompute_data()
         self._recompute_children()
 
     def _get_children_from_pylibcudf_column(
@@ -565,19 +560,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         self._base_children = value
 
-    def _recompute_data(self) -> None:
-        """Recompute the offset-aware data buffer."""
-        if self.base_data is None:
-            self._data = None
-        elif self.offset == 0 and self.size == self.base_size:
-            # Optimization: for non-sliced columns, data == base_data (just a reference)
-            self._data = self.base_data
-        else:
-            # Compute offset-aware slice (O(1) operation, just pointer arithmetic)
-            start = self.offset * self.dtype.itemsize
-            end = start + self.size * self.dtype.itemsize
-            self._data = self.base_data[start:end]
-
     def _recompute_children(self) -> None:
         """Recompute the offset-aware children columns."""
         # Check for empty base_children first to avoid accessing properties on empty collections
@@ -606,7 +588,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
             self._base_children = other_col._base_children
-            self._recompute_data()
             self._recompute_children()
             self._mask = None
             self._clear_cache()
@@ -1144,7 +1125,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     end,
                     fill_value,
                 )
-            self._recompute_data()
             self._mask = None
             self._clear_cache()
         return self
@@ -1208,8 +1188,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     offset=col.plc_column.offset(),
                     children=[c.plc_column for c in col.base_children],
                 )
-
-                col._recompute_data()
 
             col.set_base_mask(
                 self.base_mask.copy(deep=False)
