@@ -308,13 +308,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.plc_column = plc_column
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        self._children: tuple[ColumnBase, ...] | None = None
         children = self._get_children_from_pylibcudf_column(
             self.plc_column,
             dtype,
             exposed,
         )
-        self.set_base_children(children)
+        self.set_children(children)
         # The set of exposed buffers associated with this column. These buffers must be
         # kept alive for the lifetime of this column since anything that accessed the
         # CAI of this column will still be pointing to those buffers. As such objects
@@ -420,9 +419,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         return _ColumnAccessContext(self, mode)
 
-    def set_base_mask(self, value: None | Buffer) -> None:
+    def _set_mask_inplace(self, value: None | Buffer) -> None:
         """
-        Replaces the base mask buffer of the column inplace. This does not
+        Replaces the mask buffer of the column inplace. This does not
         modify size or offset in any way, so the passed mask is expected to be
         compatible with the current offset.
         """
@@ -449,9 +448,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         " sized allocation."
                     )
                 raise ValueError(error_msg)
-
-        # Clear offset-aware caches
-        self._children = None
 
         # Update plc_column with the new mask and compute null_count eagerly
         if value is not None:
@@ -525,9 +521,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def children(self) -> tuple[ColumnBase, ...]:
-        return self._base_children
+        return self._children
 
-    def set_base_children(self, value: tuple[ColumnBase, ...]) -> None:
+    def set_children(self, value: tuple[ColumnBase, ...]) -> None:
         if not isinstance(value, tuple):
             raise TypeError(
                 f"Expected a tuple of Columns for children, got {type(value).__name__}"
@@ -535,9 +531,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if any(not isinstance(child, ColumnBase) for child in value):
             raise TypeError("All children must be Columns.")
 
-        self._base_children = value
-        # For backwards compatibility, allow setting children via set_base_children
-        # This can be removed once all callers are updated
         self._children = value
 
     def _mimic_inplace(
@@ -552,7 +545,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if inplace:
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
-            self._base_children = other_col._base_children
+            self._children = other_col._children
             self._clear_cache()
             return None
         else:
@@ -1078,7 +1071,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     self.size, plc.types.MaskState.ALL_VALID
                 )
             )
-            self.set_base_mask(mask)
+            self._set_mask_inplace(mask)
 
         with acquire_spill_lock():
             with self.access(mode="write"):
@@ -1131,7 +1124,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             # copy-on-write and spilling logic tracked on the Buffers
             # so copy over the Buffers from self
-            col.set_base_children(
+            col.set_children(
                 tuple(child.copy(deep=False) for child in self.children)
             )
 
@@ -1149,7 +1142,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     children=[c.plc_column for c in col.children],
                 )
 
-            col.set_base_mask(
+            col._set_mask_inplace(
                 self.mask.copy(deep=False) if self.mask is not None else None
             )
             return col
@@ -1990,8 +1983,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 if cudf.get_option("copy_on_write") and (
                     mask_ptr != original_mask_ptr
                 ):
-                    # Update base_mask to match the new mask buffer
-                    self.set_base_mask(self.mask)
+                    # Update mask to match the new mask buffer
+                    self._set_mask_inplace(self.mask)
             output["mask"] = mask
             self._exposed_buffers.add(mask)
         return output
