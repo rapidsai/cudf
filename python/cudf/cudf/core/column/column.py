@@ -321,7 +321,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # are destroyed, all references to this column will be removed as well,
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers: set[Buffer] = set()
-        self._recompute_children()
 
     def _get_children_from_pylibcudf_column(
         self,
@@ -473,7 +472,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
         self._clear_cache()
-        self._recompute_children()
 
     def _clear_cache(self) -> None:
         self._distinct_count.clear()
@@ -526,14 +524,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return self.plc_column.offset()
 
     @property
-    def base_children(self) -> tuple[ColumnBase, ...]:
-        return self._base_children
-
-    @property
     def children(self) -> tuple[ColumnBase, ...]:
-        """Return the offset-aware children columns."""
-        assert self._children is not None
-        return self._children
+        return self._base_children
 
     def set_base_children(self, value: tuple[ColumnBase, ...]) -> None:
         if not isinstance(value, tuple):
@@ -544,21 +536,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise TypeError("All children must be Columns.")
 
         self._base_children = value
-
-    def _recompute_children(self) -> None:
-        """Recompute the offset-aware children columns."""
-        # Check for empty base_children first to avoid accessing properties on empty collections
-        if not self.base_children:
-            self._children = ()
-        elif self.offset == 0:
-            # Optimization: for non-sliced columns, children == base_children (just references)
-            self._children = self.base_children
-        else:
-            # Slice each base child using the parent's offset and size
-            self._children = tuple(
-                base_child.slice(self.offset, self.offset + self.size)
-                for base_child in self.base_children
-            )
+        # For backwards compatibility, allow setting children via set_base_children
+        # This can be removed once all callers are updated
+        self._children = value
 
     def _mimic_inplace(
         self, other_col: Self, inplace: bool = False
@@ -573,7 +553,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
             self._base_children = other_col._base_children
-            self._recompute_children()
             self._clear_cache()
             return None
         else:
@@ -1064,7 +1043,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             n += self.data.size
         if self.nullable:
             n += plc.null_mask.bitmask_allocation_size_bytes(self.size)
-        for child in self.base_children:
+        for child in self.children:
             n += child.memory_usage
         return n
 
@@ -1153,7 +1132,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # copy-on-write and spilling logic tracked on the Buffers
             # so copy over the Buffers from self
             col.set_base_children(
-                tuple(child.copy(deep=False) for child in self.base_children)
+                tuple(child.copy(deep=False) for child in self.children)
             )
 
             value = (
@@ -1167,7 +1146,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     mask=col.plc_column.null_mask(),
                     null_count=col.plc_column.null_count(),
                     offset=col.plc_column.offset(),
-                    children=[c.plc_column for c in col.base_children],
+                    children=[c.plc_column for c in col.children],
                 )
 
             col.set_base_mask(
@@ -2104,9 +2083,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             mask_header, mask_frames = self.mask.device_serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
-        if self.base_children:
+        if self.children:
             child_headers, child_frames = zip(
-                *(c.device_serialize() for c in self.base_children),
+                *(c.device_serialize() for c in self.children),
                 strict=True,
             )
             header["subheaders"] = list(child_headers)

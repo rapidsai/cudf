@@ -260,10 +260,8 @@ def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
     assert lhs.size == rhs.size
     assert lhs.offset == rhs.offset
     assert lhs.size == rhs.size
-    assert len(lhs.base_children) == len(rhs.base_children)
-    for lhs_child, rhs_child in zip(
-        lhs.base_children, rhs.base_children, strict=True
-    ):
+    assert len(lhs.children) == len(rhs.children)
+    for lhs_child, rhs_child in zip(lhs.children, rhs.children, strict=True):
         assert_column_memory_eq(lhs_child, rhs_child)
     if isinstance(lhs, cudf.core.column.CategoricalColumn) and isinstance(
         rhs, cudf.core.column.CategoricalColumn

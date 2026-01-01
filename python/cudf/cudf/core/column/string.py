@@ -153,12 +153,9 @@ class StringColumn(ColumnBase, Scannable):
     @property
     def start_offset(self) -> int:
         if self._start_offset is None:
-            if (
-                len(self.base_children) == 1
-                and self.offset < self.base_children[0].size
-            ):
+            if len(self.children) == 1 and self.offset < self.children[0].size:
                 self._start_offset = int(
-                    self.base_children[0].element_indexing(self.offset)
+                    self.children[0].element_indexing(self.offset)
                 )
             else:
                 self._start_offset = 0
@@ -169,45 +166,16 @@ class StringColumn(ColumnBase, Scannable):
     def end_offset(self) -> int:
         if self._end_offset is None:
             if (
-                len(self.base_children) == 1
-                and (self.offset + self.size) < self.base_children[0].size
+                len(self.children) == 1
+                and (self.offset + self.size) < self.children[0].size
             ):
                 self._end_offset = int(
-                    self.base_children[0].element_indexing(
-                        self.offset + self.size
-                    )
+                    self.children[0].element_indexing(self.offset + self.size)
                 )
             else:
                 self._end_offset = 0
 
         return self._end_offset
-
-    def _recompute_children(self) -> None:
-        if not self.base_children:
-            self._children = ()
-        elif (
-            self.offset == 0
-            and len(self.base_children) > 0
-            and self.size == self.base_children[0].size - 1
-        ):
-            # Optimization: for non-sliced columns, children == base_children
-            self._children = self.base_children  # type: ignore[assignment]
-        else:
-            # String columns have one child: the offsets column
-            # For a string column with size N, the offsets child has size N+1
-
-            # Step 1: Slice the offsets column to get the correct size
-            offsets_child = self.base_children[0]
-            sliced_offsets = offsets_child.slice(
-                self.offset, self.offset + self.size + 1
-            )
-
-            # Step 2: Adjust the offsets to be relative to the sliced data
-            # by subtracting the first offset value (start_offset)
-            chars_offset = self.start_offset
-            adjusted_offsets = sliced_offsets - chars_offset
-
-            self._children = (adjusted_offsets,)  # type: ignore[assignment]
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
@@ -253,7 +221,7 @@ class StringColumn(ColumnBase, Scannable):
         # All null string columns fail to convert in libcudf, so we must short-circuit
         # the call to super().to_arrow().
         # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if len(self.base_children) == 0 or self.null_count == len(self):
+        if len(self.children) == 0 or self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )

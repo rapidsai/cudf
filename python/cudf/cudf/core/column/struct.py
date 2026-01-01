@@ -78,20 +78,6 @@ class StructColumn(ColumnBase):
             )
         )
 
-    def _recompute_children(self) -> None:
-        """Recompute the offset-aware children columns with proper type metadata."""
-        if not self.base_children:
-            self._children = ()
-        elif self.offset == 0:
-            # Optimization: for non-sliced columns, children == base_children
-            self._children = self.base_children  # type: ignore[assignment]
-        else:
-            # Slice each child using the parent's offset and size
-            self._children = tuple(  # type: ignore[assignment]
-                base_child.slice(self.offset, self.offset + self.size)
-                for base_child in self.base_children
-            )
-
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
@@ -183,7 +169,7 @@ class StructColumn(ColumnBase):
         if isinstance(dtype, IntervalDtype):
             new_children = [
                 child.astype(dtype.subtype).plc_column
-                for child in self.base_children
+                for child in self.children
             ]
             new_plc_column = plc.Column(
                 plc.DataType(plc.TypeId.STRUCT),
@@ -201,7 +187,7 @@ class StructColumn(ColumnBase):
             )
         elif isinstance(dtype, StructDtype):
             new_children = [
-                self.base_children[i]
+                self.children[i]
                 ._with_type_metadata(dtype.fields[f])
                 .plc_column
                 for i, f in enumerate(dtype.fields.keys())

@@ -94,9 +94,8 @@ def test_column_offset_and_size(pandas_input, offset, size):
 
     if isinstance(col.dtype, cudf.CategoricalDtype):
         assert col.size == col.codes.size
-    elif cudf.api.types.is_string_dtype(col.dtype):
-        if col.size > 0:
-            assert col.size == (col.children[0].size - 1)
+    # Note: String columns no longer have offset-aware children,
+    # so children[0].size represents the full buffer, not the sliced view
 
     got = cudf.Series._from_column(col)
 
