@@ -2147,9 +2147,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             mask_header, mask_frames = self.base_mask.device_serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
-        if self.children:
+        if self.base_children:
             child_headers, child_frames = zip(
-                *(c.device_serialize() for c in self.children),
+                *(c.device_serialize() for c in self.base_children),
                 strict=True,
             )
             header["subheaders"] = list(child_headers)
