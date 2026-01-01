@@ -533,8 +533,8 @@ class NumericalColumn(NumericalBaseColumn):
         return plc.Column(
             data_type=dtype_to_pylibcudf_type(dtype),
             size=self.size,
-            data=self.astype(np.dtype(np.int64)).base_data,
-            mask=self.base_mask,
+            data=self.astype(np.dtype(np.int64)).data,
+            mask=self.mask,
             null_count=self.null_count,
             offset=self.offset,
             children=[],

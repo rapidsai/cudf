@@ -89,24 +89,24 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
             mi2 = mi1.copy(deep=deep)
 
             # Assert ._levels identity
-            lptrs = [lv._column.base_data.ptr for lv in mi1._levels]
-            rptrs = [lv._column.base_data.ptr for lv in mi2._levels]
+            lptrs = [lv._column.data.ptr for lv in mi1._levels]
+            rptrs = [lv._column.data.ptr for lv in mi2._levels]
 
             assert all(
                 (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)
             )
 
             # Assert ._codes identity
-            lptrs = [c.base_data.ptr for c in mi1._codes]
-            rptrs = [c.base_data.ptr for c in mi2._codes]
+            lptrs = [c.data.ptr for c in mi1._codes]
+            rptrs = [c.data.ptr for c in mi2._codes]
 
             assert all(
                 (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)
             )
 
             # Assert ._data identity
-            lptrs = [d.base_data.ptr for d in mi1._columns]
-            rptrs = [d.base_data.ptr for d in mi2._columns]
+            lptrs = [d.data.ptr for d in mi1._columns]
+            rptrs = [d.data.ptr for d in mi2._columns]
 
             assert all(
                 (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)

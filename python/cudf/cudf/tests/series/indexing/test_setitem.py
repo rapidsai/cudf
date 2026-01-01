@@ -483,9 +483,7 @@ def test_series_setitem_partial_slice_cow_on():
         assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
 
         new_slice = actual[2:]
-        assert (
-            new_slice._column.base_data.owner == actual._column.base_data.owner
-        )
+        assert new_slice._column.data.owner == actual._column.data.owner
         new_slice[0:2] = 10
         assert_eq(new_slice, cudf.Series([10, 10, 5], index=[2, 3, 4]))
         assert_eq(actual, cudf.Series([1, 2, 3, 4, 5]))
@@ -502,8 +500,8 @@ def test_series_setitem_partial_slice_cow_off():
 
         new_slice = actual[2:]
         # Since COW is off, a slice should point to the same memory
-        ptr1 = new_slice._column.base_data.ptr
-        ptr2 = actual._column.base_data.ptr
+        ptr1 = new_slice._column.data.ptr
+        ptr2 = actual._column.data.ptr
         assert ptr1 == ptr2
 
         new_slice[0:2] = 10

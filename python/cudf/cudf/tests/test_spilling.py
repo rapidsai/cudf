@@ -101,8 +101,8 @@ def single_column_df_data(df: cudf.DataFrame) -> SpillableBuffer:
 
 
 def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
-    """Access `.base_data` of the column of a standard dataframe"""
-    ret = df._data._data["a"].base_data
+    """Access `.data` of the column of a standard dataframe"""
+    ret = df._data._data["a"].data
     assert isinstance(ret, SpillableBuffer)
     return ret
 

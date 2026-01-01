@@ -255,8 +255,8 @@ def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
     def get_ptr(x) -> int:
         return x.ptr if x else 0
 
-    assert get_ptr(lhs.base_data) == get_ptr(rhs.base_data)
-    assert get_ptr(lhs.base_mask) == get_ptr(rhs.base_mask)
+    assert get_ptr(lhs.data) == get_ptr(rhs.data)
+    assert get_ptr(lhs.mask) == get_ptr(rhs.mask)
     assert lhs.base_size == rhs.base_size
     assert lhs.offset == rhs.offset
     assert lhs.size == rhs.size

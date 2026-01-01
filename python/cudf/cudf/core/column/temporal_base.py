@@ -255,8 +255,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         new_plc_column = plc.Column(
             data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
             size=self.size,
-            data=self.base_data,
-            mask=self.base_mask,
+            data=self.data,
+            mask=self.mask,
             null_count=self.null_count,
             offset=self.offset,
             children=[],

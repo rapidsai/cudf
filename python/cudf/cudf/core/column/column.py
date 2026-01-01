@@ -251,10 +251,10 @@ class _ColumnAccessContext:
     def __init__(self, column: ColumnBase, mode: Literal["read", "write"]):
         self._column = column
         self._stack = ExitStack()
-        if (base_data := column.base_data) is not None:
-            self._stack.enter_context(base_data.access(mode=mode))
-        if (base_mask := column.base_mask) is not None:
-            self._stack.enter_context(base_mask.access(mode=mode))
+        if (data := column.data) is not None:
+            self._stack.enter_context(data.access(mode=mode))
+        if (mask := column.mask) is not None:
+            self._stack.enter_context(mask.access(mode=mode))
         for child in self._column.children:
             self._stack.enter_context(child.access(mode=mode))
 
@@ -373,8 +373,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def base_size(self) -> int:
-        assert self.base_data is not None
-        return int(self.base_data.size / self.dtype.itemsize)
+        assert self.data is not None
+        return int(self.data.size / self.dtype.itemsize)
 
     @property
     def dtype(self) -> DtypeObj:
@@ -385,29 +385,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return self.plc_column.size()
 
     @property
-    def base_data(self) -> None | Buffer:
+    def data(self) -> None | Buffer:
         """Get data buffer from pylibcudf column."""
         return cast(Buffer | None, self.plc_column.data())
 
     @property
-    def data(self) -> None | Buffer:
-        return self.base_data
-
-    @property
     def nullable(self) -> bool:
-        return self.base_mask is not None
+        return self.mask is not None
 
     def has_nulls(self, include_nan: bool = False) -> bool:
         return int(self.null_count) != 0
 
     @property
-    def base_mask(self) -> None | Buffer:
+    def mask(self) -> None | Buffer:
         """Get mask buffer from pylibcudf column."""
         return cast(Buffer | None, self.plc_column.null_mask())
-
-    @property
-    def mask(self) -> None | Buffer:
-        return self.base_mask
 
     def access(
         self, *, mode: Literal["read", "write"], **kwargs: Any
@@ -1064,7 +1056,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @acquire_spill_lock()
     def _get_mask_as_column(self) -> ColumnBase:
         plc_column = plc.transform.mask_to_bools(
-            self.base_mask.ptr,  # type: ignore[union-attr]
+            self.mask.ptr,  # type: ignore[union-attr]
             self.offset,
             self.offset + len(self),
         )
@@ -1073,8 +1065,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @cached_property
     def memory_usage(self) -> int:
         n = 0
-        if self.base_data is not None:
-            n += self.base_data.size
+        if self.data is not None:
+            n += self.data.size
         if self.nullable:
             n += plc.null_mask.bitmask_allocation_size_bytes(self.size)
         for child in self.base_children:
@@ -1170,9 +1162,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
 
             value = (
-                self.base_data.copy(deep=False)
-                if self.base_data is not None
-                else None
+                self.data.copy(deep=False) if self.data is not None else None
             )
             if not isinstance(self.dtype, CategoricalDtype):
                 col.plc_column = plc.Column(
@@ -1186,9 +1176,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
 
             col.set_base_mask(
-                self.base_mask.copy(deep=False)
-                if self.base_mask is not None
-                else None
+                self.mask.copy(deep=False) if self.mask is not None else None
             )
             return col
 
@@ -2112,13 +2100,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 header["dtype"] = self.dtype.str
             header["dtype-is-cudf-serialized"] = False
 
-        if self.base_data is not None:
-            data_header, data_frames = self.base_data.device_serialize()
+        if self.data is not None:
+            data_header, data_frames = self.data.device_serialize()
             header["data"] = data_header
             frames.extend(data_frames)
 
-        if self.base_mask is not None:
-            mask_header, mask_frames = self.base_mask.device_serialize()
+        if self.mask is not None:
+            mask_header, mask_frames = self.mask.device_serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
         if self.base_children:
