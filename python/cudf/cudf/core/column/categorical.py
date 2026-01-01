@@ -113,12 +113,6 @@ class CategoricalColumn(column.ColumnBase):
             type(self).from_pylibcudf(plc_column, data_ptr_exposed=exposed),
         )
 
-    @property
-    def base_size(self) -> int:
-        return int(
-            (self.base_children[0].size) / self.base_children[0].dtype.itemsize
-        )
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
             encoded = self._encode(item)
@@ -133,7 +127,7 @@ class CategoricalColumn(column.ColumnBase):
         return self, column.as_column(values, dtype=self.dtype)
 
     def _recompute_children(self) -> None:
-        if self.offset == 0 and self.size == self.base_size:
+        if self.offset == 0:
             # Optimization: for non-sliced columns, children == base_children (just references)
             self._children = self.base_children  # type: ignore[assignment]
         else:

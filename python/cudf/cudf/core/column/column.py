@@ -372,11 +372,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return pd.NA
 
     @property
-    def base_size(self) -> int:
-        assert self.data is not None
-        return int(self.data.size / self.dtype.itemsize)
-
-    @property
     def dtype(self) -> DtypeObj:
         return self._dtype
 
@@ -441,14 +436,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if value is not None:
             # bitmask size must be relative to offset = 0 data.
             required_size = plc.null_mask.bitmask_allocation_size_bytes(
-                self.base_size
+                self.size
             )
             if value.size < required_size:
                 error_msg = (
                     "The Buffer for mask is smaller than expected, "
                     f"got {value.size} bytes, expected {required_size} bytes."
                 )
-                if self.offset > 0 or self.size < self.base_size:
+                if self.offset > 0:
                     error_msg += (
                         "\n\nNote: The mask is expected to be sized according "
                         "to the base allocation as opposed to the offsetted or"
@@ -555,7 +550,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # Check for empty base_children first to avoid accessing properties on empty collections
         if not self.base_children:
             self._children = ()
-        elif self.offset == 0 and self.size == self.base_size:
+        elif self.offset == 0:
             # Optimization: for non-sliced columns, children == base_children (just references)
             self._children = self.base_children
         else:
@@ -1101,7 +1096,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # Create mask sized for base buffer to preserve view semantics
             mask = as_buffer(
                 plc.null_mask.create_null_mask(
-                    self.base_size, plc.types.MaskState.ALL_VALID
+                    self.size, plc.types.MaskState.ALL_VALID
                 )
             )
             self.set_base_mask(mask)

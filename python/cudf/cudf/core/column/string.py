@@ -182,13 +182,6 @@ class StringColumn(ColumnBase, Scannable):
 
         return self._end_offset
 
-    @property
-    def base_size(self) -> int:
-        if len(self.base_children) == 0:
-            return 0
-        else:
-            return self.base_children[0].size - 1
-
     def _recompute_children(self) -> None:
         if not self.base_children:
             self._children = ()

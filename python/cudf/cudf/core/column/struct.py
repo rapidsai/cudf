@@ -82,7 +82,7 @@ class StructColumn(ColumnBase):
         """Recompute the offset-aware children columns with proper type metadata."""
         if not self.base_children:
             self._children = ()
-        elif self.offset == 0 and self.size == self.base_size:
+        elif self.offset == 0:
             # Optimization: for non-sliced columns, children == base_children
             self._children = self.base_children  # type: ignore[assignment]
         else:
@@ -116,13 +116,6 @@ class StructColumn(ColumnBase):
                 f"{type(dtype).__name__} must be a StructDtype exactly."
             )
         return dtype
-
-    @property
-    def base_size(self) -> int:
-        if self.base_children:
-            return len(self.base_children[0])
-        else:
-            return self.size + self.offset
 
     def to_pandas(
         self,

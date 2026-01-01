@@ -80,7 +80,7 @@ class ListColumn(ColumnBase):
         """Recompute the offset-aware children columns with proper type metadata."""
         if not self.base_children:
             self._children = ()
-        elif self.offset == 0 and self.size == self.base_size:
+        elif self.offset == 0:
             # Optimization: for non-sliced columns, children == base_children
             self._children = self.base_children  # type: ignore[assignment]
         else:
@@ -138,13 +138,6 @@ class ListColumn(ColumnBase):
             )
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
-
-    @property
-    def base_size(self) -> int:
-        # in some cases, libcudf will return an empty ListColumn with no
-        # indices; in these cases, we must manually set the base_size to 0 to
-        # avoid it being negative
-        return max(0, len(self.base_children[0]) - 1)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         # Lists only support __add__, which concatenates lists.
