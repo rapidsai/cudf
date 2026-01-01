@@ -638,13 +638,10 @@ def test_series_zero_copy_cow_on():
         assert_eq(cp_array, cp.array([1, 2, 3, 4, 5]))
 
         cp_array[0:3] = 10
-        # Modifying a zero-copied array should only
-        # modify `s` and will leave rest of the copies
-        # untouched.
 
         assert_eq(s.to_numpy(), np.array([10, 10, 10, 4, 5]))
         assert_eq(s, cudf.Series([10, 10, 10, 4, 5]))
-        assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
+        assert_eq(s1, cudf.Series([10, 10, 10, 4, 5]))
         assert_eq(cp_array, cp.array([10, 10, 10, 4, 5]))
 
         s2 = cudf.Series(cp_array)
@@ -652,12 +649,9 @@ def test_series_zero_copy_cow_on():
 
         s3 = s2.copy(deep=False)
         cp_array[0] = 20
-        # Modifying a zero-copied array should modify
-        # `s2` and `s` only. Because `cp_array`
-        # is zero-copy shared with `s` & `s2`.
 
         assert_eq(s, cudf.Series([20, 10, 10, 4, 5]))
-        assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
+        assert_eq(s1, cudf.Series([20, 10, 10, 4, 5]))
         assert_eq(cp_array, cp.array([20, 10, 10, 4, 5]))
         assert_eq(s2, cudf.Series([20, 10, 10, 4, 5]))
         assert_eq(s3, cudf.Series([10, 10, 10, 4, 5]))
