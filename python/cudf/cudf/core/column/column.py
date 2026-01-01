@@ -308,7 +308,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.plc_column = plc_column
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        self._mask: Buffer | None = None
         self._children: tuple[ColumnBase, ...] | None = None
         children = self._get_children_from_pylibcudf_column(
             self.plc_column,
@@ -466,7 +465,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 raise ValueError(error_msg)
 
         # Clear offset-aware caches
-        self._mask = None
         self._children = None
 
         # Update plc_column with the new mask and compute null_count eagerly
@@ -589,7 +587,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self.plc_column = other_col.plc_column
             self._base_children = other_col._base_children
             self._recompute_children()
-            self._mask = None
             self._clear_cache()
             return None
         else:
@@ -1125,7 +1122,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     end,
                     fill_value,
                 )
-            self._mask = None
             self._clear_cache()
         return self
 
