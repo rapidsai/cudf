@@ -40,6 +40,9 @@ class _SpillableBufferAccessContext(_BufferAccessContext):
 
     __slots__ = ("_scope", "_spill_lock")
 
+    _buffer: "SpillableBuffer"  # Type hint for mypy
+    _spill_lock: SpillLock | None
+
     def __init__(
         self,
         buffer: "SpillableBuffer",
@@ -57,24 +60,30 @@ class _SpillableBufferAccessContext(_BufferAccessContext):
         scope : {"internal", "external"}
             Spill scope - internal for temporary access, external for permanent exposure.
         """
-        # Initialize base class (handles mode stack)
+        # Initialize base class (just stores buffer and mode)
         super().__init__(buffer, mode)
-
         self._scope = scope
         self._spill_lock = None
 
+    def __enter__(self) -> "SpillableBuffer":
+        """Enter the context, setting up mode stack and spill locks."""
+        # Call parent to push mode onto stack
+        result = super().__enter__()
+
         # Handle spill locking based on scope
-        if scope == "internal":
+        if self._scope == "internal":
             # Create temporary spill lock for this context
             self._spill_lock = SpillLock()
-            buffer._owner.spill_lock(self._spill_lock)
-        elif scope == "external":
+            self._buffer._owner.spill_lock(self._spill_lock)
+        elif self._scope == "external":
             # Permanently mark as exposed (unspillable)
-            buffer._owner.mark_exposed()
+            self._buffer._owner.mark_exposed()
         else:
             raise ValueError(
-                f"Invalid scope: {scope!r}. Must be 'internal' or 'external'."
+                f"Invalid scope: {self._scope!r}. Must be 'internal' or 'external'."
             )
+
+        return result
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> Literal[False]:
         """Exit the context, cleaning up mode stack and releasing spill lock.

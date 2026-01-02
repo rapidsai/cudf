@@ -246,7 +246,9 @@ def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
 class _ColumnAccessContext:
     """Context manager for access mode control on underlying buffers."""
 
-    __slots__ = ("_column", "_stack")
+    __slots__ = ("_column", "_kwargs", "_stack")
+
+    _stack: ExitStack | None
 
     def __init__(self, column: ColumnBase, **kwargs: Any):
         """Initialize column access context.
@@ -259,21 +261,31 @@ class _ColumnAccessContext:
             Parameters to propagate to buffer access (e.g., mode, scope).
         """
         self._column = column
-        self._stack = ExitStack()
-        # Propagate all kwargs transparently to all buffers
-        if (base_data := column.base_data) is not None:
-            self._stack.enter_context(base_data.access(**kwargs))
-            if (data := column.data) is not None and data is not base_data:
-                self._stack.enter_context(data.access(**kwargs))
-        if (base_mask := column.base_mask) is not None:
-            self._stack.enter_context(base_mask.access(**kwargs))
-            if (mask := column.mask) is not None and mask is not base_mask:
-                self._stack.enter_context(mask.access(**kwargs))
-        # Recursively handle children (important for nested structures)
-        for child in self._column.children:
-            self._stack.enter_context(child.access(**kwargs))
+        self._kwargs = kwargs
+        self._stack = None
 
     def __enter__(self) -> ColumnBase:
+        """Enter the context, setting up access for all column buffers."""
+        self._stack = ExitStack()
+        stack = self._stack.__enter__()
+
+        # Propagate all kwargs transparently to all buffers
+        if (base_data := self._column.base_data) is not None:
+            stack.enter_context(base_data.access(**self._kwargs))
+            if (
+                data := self._column.data
+            ) is not None and data is not base_data:
+                stack.enter_context(data.access(**self._kwargs))
+        if (base_mask := self._column.base_mask) is not None:
+            stack.enter_context(base_mask.access(**self._kwargs))
+            if (
+                mask := self._column.mask
+            ) is not None and mask is not base_mask:
+                stack.enter_context(mask.access(**self._kwargs))
+        # Recursively handle children (important for nested structures)
+        for child in self._column.children:
+            stack.enter_context(child.access(**self._kwargs))
+
         return self._column
 
     def __exit__(
@@ -282,6 +294,7 @@ class _ColumnAccessContext:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> Literal[False]:
+        assert self._stack is not None
         self._stack.__exit__(exc_type, exc_val, exc_tb)
         return False
 
