@@ -159,6 +159,22 @@ struct reduction_function<Source, cudf::aggregation::ARGMAX> : public base_reduc
 };
 
 template <typename Source>
+struct reduction_function<Source, cudf::aggregation::MIN_BY> : public base_reduction_function {
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  {
+    return min_by(params.col, params.stream, params.mr);
+  }
+};
+
+template <typename Source>
+struct reduction_function<Source, cudf::aggregation::MAX_BY> : public base_reduction_function {
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  {
+    return max_by(params.col, params.stream, params.mr);
+  }
+};
+
+template <typename Source>
   requires(std::is_arithmetic_v<Source>)
 struct reduction_function<Source, cudf::aggregation::ANY> : public base_reduction_function {
   [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const

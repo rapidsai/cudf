@@ -100,6 +100,8 @@ class aggregation {
     QUANTILE,           ///< compute specified quantile(s)
     ARGMAX,             ///< Index of max element
     ARGMIN,             ///< Index of min element
+    MIN_BY,             ///< get value of one column at the index of min value in another column
+    MAX_BY,             ///< get value of one column at the index of max value in another column
     NUNIQUE,            ///< count number of unique elements
     NTH_ELEMENT,        ///< get the nth element
     ROW_NUMBER,         ///< get row-number of current index (relative to rolling window)
@@ -388,6 +390,32 @@ std::unique_ptr<Base> make_argmax_aggregation();
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_argmin_aggregation();
+
+/**
+ * @brief Factory to create a MIN_BY aggregation
+ *
+ * MIN_BY returns the value from a column at the row where another column has the minimum value.
+ * This aggregation requires the input to be a struct column with exactly two children:
+ * - The first child (index 0) is the ordering column, used to find the minimum
+ * - The second child (index 1) is the value column, whose value at the minimum row is returned
+ *
+ * @return A MIN_BY aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_min_by_aggregation();
+
+/**
+ * @brief Factory to create a MAX_BY aggregation
+ *
+ * MAX_BY returns the value from a column at the row where another column has the maximum value.
+ * This aggregation requires the input to be a struct column with exactly two children:
+ * - The first child (index 0) is the ordering column, used to find the maximum
+ * - The second child (index 1) is the value column, whose value at the maximum row is returned
+ *
+ * @return A MAX_BY aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_max_by_aggregation();
 
 /**
  * @brief Factory to create a NUNIQUE aggregation

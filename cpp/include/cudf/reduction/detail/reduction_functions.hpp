@@ -130,6 +130,42 @@ std::unique_ptr<scalar> argmax(column_view const& col,
                                rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Computes value from one column at the index of minimum value in another column.
+ *
+ * MIN_BY returns the value from the second child column at the row where the first child
+ * column has its minimum value. The input must be a struct column with exactly two children:
+ * the ordering column (first) and the value column (second).
+ *
+ * If all elements in the ordering column are null, output scalar is null.
+ *
+ * @param col Struct column with ordering and value columns
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Value at the minimum index as scalar
+ */
+std::unique_ptr<scalar> min_by(column_view const& col,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Computes value from one column at the index of maximum value in another column.
+ *
+ * MAX_BY returns the value from the second child column at the row where the first child
+ * column has its maximum value. The input must be a struct column with exactly two children:
+ * the ordering column (first) and the value column (second).
+ *
+ * If all elements in the ordering column are null, output scalar is null.
+ *
+ * @param col Struct column with ordering and value columns
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Value at the maximum index as scalar
+ */
+std::unique_ptr<scalar> max_by(column_view const& col,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr);
+
+/**
  * @brief Computes any of elements in input column is true when typecasted to bool
  *
  * If all elements in input column are null, output scalar is null.

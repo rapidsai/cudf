@@ -164,6 +164,66 @@ std::unique_ptr<column> group_argmin(column_view const& values,
                                      rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Internal API to calculate group-wise values based on minimum of ordering column.
+ *
+ * MIN_BY returns the value from the second child column at the row where the first child
+ * column has its minimum value within each group. The input must be a struct column with
+ * exactly two children: the ordering column (first) and the value column (second).
+ *
+ * @code{.pseudo}
+ * values       = STRUCT{ ordering: [2, 1, 4, -1, -2, <NA>, 4, <NA>],
+ *                        value:    [5, 7, 3,  9,  2,  100, 8,  200] }
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * num_groups   = 4
+ *
+ * group_min_by = [7, 2, 8, <NA>]
+ * @endcode
+ *
+ * @param values Struct column with ordering and value columns
+ * @param num_groups Number of groups
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param key_sort_order Indices indicating sort order of groupby keys
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_min_by(column_view const& values,
+                                     size_type num_groups,
+                                     cudf::device_span<size_type const> group_labels,
+                                     column_view const& key_sort_order,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Internal API to calculate group-wise values based on maximum of ordering column.
+ *
+ * MAX_BY returns the value from the second child column at the row where the first child
+ * column has its maximum value within each group. The input must be a struct column with
+ * exactly two children: the ordering column (first) and the value column (second).
+ *
+ * @code{.pseudo}
+ * values       = STRUCT{ ordering: [2, 1, 4, -1, -2, <NA>, 4, <NA>],
+ *                        value:    [5, 7, 3,  9,  2,  100, 8,  200] }
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * num_groups   = 4
+ *
+ * group_max_by = [3, 9, 8, <NA>]
+ * @endcode
+ *
+ * @param values Struct column with ordering and value columns
+ * @param num_groups Number of groups
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param key_sort_order Indices indicating sort order of groupby keys
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_max_by(column_view const& values,
+                                     size_type num_groups,
+                                     cudf::device_span<size_type const> group_labels,
+                                     column_view const& key_sort_order,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
+
+/**
  * @brief Internal API to calculate number of non-null values in each group of
  *  @p values
  *
