@@ -723,7 +723,9 @@ async def sink_node(
             )
             chunks.append(chunk)
 
-        count = max(1, len(chunks))
+        count = len(chunks)
+        if count == 0:  # pragma: no cover
+            raise ValueError("Expected at least one chunk in sink_node.")
 
         if ir.executor_options.sink_to_directory:
             _prepare_sink_directory(ir.sink.path)
@@ -744,16 +746,8 @@ async def sink_node(
                 )
         else:
             # Write chunks to a single file
-            # For a single chunk, use Sink.do_evaluate directly
-            # For multiple chunks, use _sink_to_file which handles chunked writing
             if count == 1:
-                if chunks:
-                    df = chunk_to_frame(chunks[0], child_ir)
-                else:
-                    # No data received - create an empty DataFrame
-                    stream = ir_context.get_cuda_stream()
-                    empty = empty_table_chunk(child_ir, context, stream)
-                    df = chunk_to_frame(empty, child_ir)
+                df = chunk_to_frame(chunks[0], child_ir)
                 await asyncio.to_thread(
                     Sink.do_evaluate,
                     *ir.sink._non_child_args,
