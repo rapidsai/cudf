@@ -99,11 +99,11 @@ cdef class Column:
     cpdef uint64_t device_buffer_size(self)
     cpdef Column with_mask(self, object, size_type, bint validate=*)
 
-    cpdef ListColumnView list_view(self)
-    cpdef StructColumnView struct_view(self)
+    cpdef ListsColumnView list_view(self)
+    cpdef StructsColumnView struct_view(self)
 
 
-cdef class ListColumnView:
+cdef class ListsColumnView:
     """Accessor for methods of a Column that are specific to lists."""
     cdef Column _column
     cpdef child(self)
@@ -112,7 +112,7 @@ cdef class ListColumnView:
     cpdef Column get_sliced_child(self, Stream stream=*)
 
 
-cdef class StructColumnView:
+cdef class StructsColumnView:
     cdef Column _column
     cpdef child(self)
     cpdef offsets(self)

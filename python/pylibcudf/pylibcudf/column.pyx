@@ -76,7 +76,7 @@ except ImportError as e:
     pa_err = e
 
 
-__all__ = ["Column", "ListColumnView", "is_c_contiguous"]
+__all__ = ["Column", "ListsColumnView", "StructsColumnView", "is_c_contiguous"]
 
 
 cdef is_iterable(obj):
@@ -1322,13 +1322,13 @@ cdef class Column:
         """The number of children of this column."""
         return self._num_children
 
-    cpdef ListColumnView list_view(self):
+    cpdef ListsColumnView list_view(self):
         """Accessor for methods of a Column that are specific to lists."""
-        return ListColumnView(self)
+        return ListsColumnView(self)
 
-    cpdef StructColumnView struct_view(self):
+    cpdef StructsColumnView struct_view(self):
         """Accessor for methods of a Column that are specific to structs."""
-        return StructColumnView(self)
+        return StructsColumnView(self)
 
     cpdef object data(self):
         """The data buffer of the column."""
@@ -1458,7 +1458,7 @@ cdef class Column:
         return self._to_schema(), self._to_device_array()
 
 
-cdef class ListColumnView:
+cdef class ListsColumnView:
     """Accessor for methods of a Column that are specific to lists."""
     def __init__(self, Column col):
         if col.type().id() != type_id.LIST:
@@ -1504,7 +1504,7 @@ cdef class ListColumnView:
         return Column.from_column_view(c_child, self._column)
 
 
-cdef class StructColumnView:
+cdef class StructsColumnView:
     """Accessor for methods of a Column that are specific to structs."""
     def __init__(self, Column col):
         if col.type().id() != type_id.STRUCT:
