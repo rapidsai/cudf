@@ -1,10 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import itertools
 import json
 import warnings
+from contextlib import ExitStack
 from typing import TYPE_CHECKING, Literal
 
 import pyarrow as pa
@@ -12,7 +13,6 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf.api.types import is_list_like
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column_empty
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
@@ -424,7 +424,6 @@ def to_orc(
         )
 
 
-@acquire_spill_lock()
 def _plc_write_orc(
     table: DataFrame,
     path_or_buf,
@@ -449,57 +448,77 @@ def _plc_write_orc(
     if index is True or (
         index is None and not isinstance(table.index, RangeIndex)
     ):
-        columns = (
+        iter_columns = (
             table._columns
             if table.index is None
             else itertools.chain(table.index._columns, table._columns)
         )
-        plc_table = plc.Table([col.plc_column for col in columns])
-        tbl_meta = plc.io.types.TableInputMetadata(plc_table)
-        for level, idx_name in enumerate(table._index.names):
-            tbl_meta.column_metadata[level].set_name(
-                ioutils._index_level_name(idx_name, level, table._column_names)  # type: ignore[arg-type]
-            )
-        num_index_cols_meta = table.index.nlevels
     else:
-        plc_table = plc.Table([col.plc_column for col in table._columns])
-        tbl_meta = plc.io.types.TableInputMetadata(plc_table)
-        num_index_cols_meta = 0
+        iter_columns = table._columns
 
-    has_map_type = False
-    if cols_as_map_type is not None:
-        cols_as_map_type = set(cols_as_map_type)
-        has_map_type = True
+    with ExitStack() as stack:
+        # Access all columns that will be written
+        for col in iter_columns:
+            stack.enter_context(col.access(mode="read", scope="internal"))
 
-    for i, (name, col) in enumerate(
-        table._column_labels_and_values, start=num_index_cols_meta
-    ):
-        # generate_pandas_metadata will reject tables with non-string column names
-        tbl_meta.column_metadata[i].set_name(name)  # type: ignore[arg-type]
-        _set_col_children_metadata(
-            col,
-            tbl_meta.column_metadata[i],
-            has_map_type and name in cols_as_map_type,
+        if index is True or (
+            index is None and not isinstance(table.index, RangeIndex)
+        ):
+            columns = (
+                table._columns
+                if table.index is None
+                else itertools.chain(table.index._columns, table._columns)
+            )
+            plc_table = plc.Table([col.plc_column for col in columns])
+            tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+            for level, idx_name in enumerate(table._index.names):
+                tbl_meta.column_metadata[level].set_name(
+                    ioutils._index_level_name(
+                        idx_name,
+                        level,
+                        table._column_names,  # type: ignore[arg-type]
+                    )
+                )
+            num_index_cols_meta = table.index.nlevels
+        else:
+            plc_table = plc.Table([col.plc_column for col in table._columns])
+            tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+            num_index_cols_meta = 0
+
+        has_map_type = False
+        if cols_as_map_type is not None:
+            cols_as_map_type = set(cols_as_map_type)
+            has_map_type = True
+
+        for i, (name, col) in enumerate(
+            table._column_labels_and_values, start=num_index_cols_meta
+        ):
+            # generate_pandas_metadata will reject tables with non-string column names
+            tbl_meta.column_metadata[i].set_name(name)  # type: ignore[arg-type]
+            _set_col_children_metadata(
+                col,
+                tbl_meta.column_metadata[i],
+                has_map_type and name in cols_as_map_type,
+            )
+
+        options = (
+            plc.io.orc.OrcWriterOptions.builder(
+                plc.io.SinkInfo([path_or_buf]), plc_table
+            )
+            .metadata(tbl_meta)
+            .key_value_metadata(user_data)
+            .compression(_get_comp_type(compression))
+            .enable_statistics(_get_orc_stat_freq(statistics))
+            .build()
         )
+        if stripe_size_bytes is not None:
+            options.set_stripe_size_bytes(stripe_size_bytes)
+        if stripe_size_rows is not None:
+            options.set_stripe_size_rows(stripe_size_rows)
+        if row_index_stride is not None:
+            options.set_row_index_stride(row_index_stride)
 
-    options = (
-        plc.io.orc.OrcWriterOptions.builder(
-            plc.io.SinkInfo([path_or_buf]), plc_table
-        )
-        .metadata(tbl_meta)
-        .key_value_metadata(user_data)
-        .compression(_get_comp_type(compression))
-        .enable_statistics(_get_orc_stat_freq(statistics))
-        .build()
-    )
-    if stripe_size_bytes is not None:
-        options.set_stripe_size_bytes(stripe_size_bytes)
-    if stripe_size_rows is not None:
-        options.set_stripe_size_rows(stripe_size_rows)
-    if row_index_stride is not None:
-        options.set_row_index_stride(row_index_stride)
-
-    plc.io.orc.write_orc(options)
+        plc.io.orc.write_orc(options)
 
 
 class ORCWriter:
