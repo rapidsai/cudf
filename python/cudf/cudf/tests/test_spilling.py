@@ -215,14 +215,17 @@ def test_creations(manager: SpillManager):
 
 
 def test_spillable_df_groupby(manager: SpillManager):
+    # This test verified old behavior where cached groupby objects held
+    # persistent spill locks. With the new access() pattern, spill locks
+    # are only temporary during operations, so this behavior no longer exists.
+    # The test is kept as a placeholder but no longer checks spill lock behavior.
     df = cudf.DataFrame({"a": [1, 1, 1]})
     gb = df.groupby("a")
     assert len(single_column_df_base_data(df).owner._spill_locks) == 0
-    gb._groupby
-    # `gb._groupby`, which is cached on `gb`, holds a spill lock
-    assert len(single_column_df_base_data(df).owner._spill_locks) == 1
-    assert not single_column_df_data(df).spillable
-    del gb
+    gb._groupby  # Access cached groupby
+    # With new access pattern, no persistent spill locks are held
+    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
+    # Data should remain spillable
     assert single_column_df_data(df).spillable
 
 
