@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ import collections.abc
 import time
 import weakref
 from threading import RLock
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy
 import nvtx
@@ -18,6 +18,7 @@ import rmm
 from cudf.core.buffer.buffer import (
     Buffer,
     BufferOwner,
+    _BufferAccessContext,
     host_memory_allocation,
 )
 from cudf.core.buffer.string import format_bytes
@@ -29,6 +30,67 @@ if TYPE_CHECKING:
 
 class SpillLock:
     pass
+
+
+class _SpillableBufferAccessContext(_BufferAccessContext):
+    """Context manager for spillable buffer access with COW and spill control.
+
+    Extends the base BufferAccessContext to add spill lock management.
+    """
+
+    __slots__ = ("_scope", "_spill_lock")
+
+    def __init__(
+        self,
+        buffer: "SpillableBuffer",
+        mode: Literal["read", "write"],
+        scope: Literal["internal", "external"],
+    ):
+        """Initialize the context manager.
+
+        Parameters
+        ----------
+        buffer : SpillableBuffer
+            The buffer to manage access for.
+        mode : {"read", "write"}
+            Access mode for copy-on-write.
+        scope : {"internal", "external"}
+            Spill scope - internal for temporary access, external for permanent exposure.
+        """
+        # Initialize base class (handles mode stack)
+        super().__init__(buffer, mode)
+
+        self._scope = scope
+        self._spill_lock = None
+
+        # Handle spill locking based on scope
+        if scope == "internal":
+            # Create temporary spill lock for this context
+            self._spill_lock = SpillLock()
+            buffer._owner.spill_lock(self._spill_lock)
+        elif scope == "external":
+            # Permanently mark as exposed (unspillable)
+            buffer._owner.mark_exposed()
+        else:
+            raise ValueError(
+                f"Invalid scope: {scope!r}. Must be 'internal' or 'external'."
+            )
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> Literal[False]:
+        """Exit the context, cleaning up mode stack and releasing spill lock.
+
+        Note: Spill lock cleanup happens automatically via weakref
+        when self._spill_lock goes out of scope. We explicitly clear
+        the reference to ensure immediate cleanup.
+        """
+        # Call parent to pop mode from stack
+        super().__exit__(exc_type, exc_val, exc_tb)
+
+        # Explicitly release the spill lock reference
+        # This allows the WeakSet to remove it immediately
+        self._spill_lock = None
+
+        return False
 
 
 class DelayedPointerTuple(collections.abc.Sequence):
@@ -55,7 +117,8 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
     def __getitem__(self, i):
         if i == 0:
-            with self._buf.access(mode="write"):
+            # Accessing via __cuda_array_interface__ exposes the pointer externally
+            with self._buf.access(mode="write", scope="external"):
                 return self._buf.ptr
         elif i == 1:
             return False
@@ -299,20 +362,29 @@ class SpillableBufferOwner(BufferOwner):
     def ptr(self) -> int:
         """Device pointer to the start of the buffer (Span protocol).
 
-        If this is called within an `acquire_spill_lock` context,
-        a reference to this buffer is added to spill_lock, which
-        disable spilling of this buffer while in the context.
+        If this is called within an `acquire_spill_lock` context or
+        an `access(scope="internal")` context, a reference to this
+        buffer is added to spill_lock, which disables spilling of
+        this buffer while in the context.
 
-        If this is *not* called within a `acquire_spill_lock` context,
-        this buffer is marked as unspillable permanently.
+        If this is *not* called within any spill lock context, this
+        buffer is marked as unspillable permanently.
         """
         from cudf.core.buffer.utils import get_spill_lock
 
+        # Check for thread-local spill lock (old mechanism)
         spill_lock = get_spill_lock()
-        if spill_lock is None:
+
+        # If no thread-local lock but we have spill locks active
+        # (from access context), don't mark as exposed
+        if spill_lock is None and len(self._spill_locks) == 0:
             self.mark_exposed()
-        else:
+        elif spill_lock is not None:
+            # Only add thread-local lock if it exists
             self.spill_lock(spill_lock)
+            self._last_accessed = time.monotonic()
+        # If we have context-based spill locks, just update timestamp
+        elif len(self._spill_locks) > 0:
             self._last_accessed = time.monotonic()
         return self._ptr
 
@@ -392,6 +464,53 @@ class SpillableBuffer(Buffer):
     """A slice of a spillable buffer"""
 
     _owner: SpillableBufferOwner
+
+    def access(
+        self,
+        *,
+        mode: Literal["read", "write"],
+        scope: Literal["internal", "external"] = "internal",
+        **kwargs,
+    ) -> _SpillableBufferAccessContext:
+        """Context manager for controlled buffer access with spill locking.
+
+        Parameters
+        ----------
+        mode : {"read", "write"}
+            Access mode for copy-on-write:
+            - "read": ptr access will not trigger copy-on-write
+            - "write": ptr access will trigger copy-on-write if needed
+        scope : {"internal", "external"}, default "internal"
+            Spill scope for the buffer access:
+            - "internal" (default): Temporary ptr access within the context only.
+                         Buffer is spill-locked during context but can be
+                         spilled afterward. Use for passing to pylibcudf
+                         functions that won't retain the pointer.
+            - "external": Ptr may leak outside the context (e.g., exposed
+                         via __cuda_array_interface__ to external libraries).
+                         Buffer is permanently marked as unspillable.
+
+            NOTE: In future versions, this parameter will be required with
+            no default to ensure explicit scope specification.
+
+        Returns
+        -------
+        _SpillableBufferAccessContext
+            A context manager controlling both COW and spill behavior.
+
+        Examples
+        --------
+        For internal pylibcudf operations:
+
+        >>> with column.access(mode="read", scope="internal"):
+        ...     result = plc.some_operation(column.plc_column)
+
+        For external exposure:
+
+        >>> with column.access(mode="write", scope="external"):
+        ...     ptr = column.ptr  # Permanently marks as unspillable
+        """
+        return _SpillableBufferAccessContext(self, mode, scope)
 
     def spill(self, target: str = "cpu") -> None:
         return self._owner.spill(target=target)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -248,19 +248,30 @@ class _ColumnAccessContext:
 
     __slots__ = ("_column", "_stack")
 
-    def __init__(self, column: ColumnBase, mode: Literal["read", "write"]):
+    def __init__(self, column: ColumnBase, **kwargs: Any):
+        """Initialize column access context.
+
+        Parameters
+        ----------
+        column : ColumnBase
+            The column to manage access for.
+        **kwargs
+            Parameters to propagate to buffer access (e.g., mode, scope).
+        """
         self._column = column
         self._stack = ExitStack()
+        # Propagate all kwargs transparently to all buffers
         if (base_data := column.base_data) is not None:
-            self._stack.enter_context(base_data.access(mode=mode))
+            self._stack.enter_context(base_data.access(**kwargs))
             if (data := column.data) is not None and data is not base_data:
-                self._stack.enter_context(data.access(mode=mode))
+                self._stack.enter_context(data.access(**kwargs))
         if (base_mask := column.base_mask) is not None:
-            self._stack.enter_context(base_mask.access(mode=mode))
+            self._stack.enter_context(base_mask.access(**kwargs))
             if (mask := column.mask) is not None and mask is not base_mask:
-                self._stack.enter_context(mask.access(mode=mode))
+                self._stack.enter_context(mask.access(**kwargs))
+        # Recursively handle children (important for nested structures)
         for child in self._column.children:
-            self._stack.enter_context(child.access(mode=mode))
+            self._stack.enter_context(child.access(**kwargs))
 
     def __enter__(self) -> ColumnBase:
         return self._column
@@ -423,30 +434,28 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
         return self._mask
 
-    def access(
-        self, *, mode: Literal["read", "write"], **kwargs: Any
-    ) -> _ColumnAccessContext:
+    def access(self, **kwargs: Any) -> _ColumnAccessContext:
         """Context manager for controlled buffer access.
 
         Mediates access to all the underlying buffers of the column. Within this
-        context, all their ptr accesses will respect the specified access mode. The
-        **kwargs allows subclasses to extend with additional parameters.
+        context, all their ptr accesses will respect the specified access parameters.
+
+        Applies all parameters transparently to all underlying buffers in the
+        column hierarchy (data, mask, and children).
 
         Parameters
         ----------
-        mode : {"read", "write"}, default "read"
-            Access mode for the buffer.
-            - "read": ptr access will not trigger copy-on-write
-            - "write": ptr access will trigger copy-on-write if needed
         **kwargs
-            Additional parameters for subclass implementations.
+            Parameters for buffer access (e.g., mode, scope).
+            - mode : {"read", "write"} - Access mode for copy-on-write
+            - scope : {"internal", "external"} - Spill scope (SpillableBuffer only)
 
         Returns
         -------
-        _BufferAccessContext
-            A context manager that controls the access mode.
+        _ColumnAccessContext
+            A context manager that manages access to all column buffers.
         """
-        return _ColumnAccessContext(self, mode)
+        return _ColumnAccessContext(self, **kwargs)
 
     def set_base_mask(self, value: None | Buffer) -> None:
         """
