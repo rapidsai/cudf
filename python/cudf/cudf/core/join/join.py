@@ -1,14 +1,14 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import itertools
+from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
 from cudf.core._internals import sorting
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import CategoricalDtype
@@ -30,7 +30,6 @@ if TYPE_CHECKING:
 
 class Merge:
     @staticmethod
-    @acquire_spill_lock()
     def _joiner(
         lhs: list[ColumnBase],
         rhs: list[ColumnBase],
@@ -41,15 +40,21 @@ class Merge:
         if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        left_rows, right_rows = join_func(
-            plc.Table([col.plc_column for col in lhs]),
-            plc.Table([col.plc_column for col in rhs]),
-            plc.types.NullEquality.EQUAL,
-        )
-        return (
-            ColumnBase.from_pylibcudf(left_rows),
-            ColumnBase.from_pylibcudf(right_rows),
-        )
+        with ExitStack() as stack:
+            for col in lhs:
+                stack.enter_context(col.access(mode="read", scope="internal"))
+            for col in rhs:
+                stack.enter_context(col.access(mode="read", scope="internal"))
+
+            left_rows, right_rows = join_func(
+                plc.Table([col.plc_column for col in lhs]),
+                plc.Table([col.plc_column for col in rhs]),
+                plc.types.NullEquality.EQUAL,
+            )
+            return (
+                ColumnBase.from_pylibcudf(left_rows),
+                ColumnBase.from_pylibcudf(right_rows),
+            )
 
     def __init__(
         self,
@@ -664,7 +669,6 @@ class Merge:
 
 class MergeSemi(Merge):
     @staticmethod
-    @acquire_spill_lock()
     def _joiner(  # type: ignore[override]
         lhs: list[ColumnBase],
         rhs: list[ColumnBase],
@@ -677,13 +681,19 @@ class MergeSemi(Merge):
         ) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        return ColumnBase.from_pylibcudf(
-            join_func(
-                plc.Table([col.plc_column for col in lhs]),
-                plc.Table([col.plc_column for col in rhs]),
-                plc.types.NullEquality.EQUAL,
-            )
-        ), None
+        with ExitStack() as stack:
+            for col in lhs:
+                stack.enter_context(col.access(mode="read", scope="internal"))
+            for col in rhs:
+                stack.enter_context(col.access(mode="read", scope="internal"))
+
+            return ColumnBase.from_pylibcudf(
+                join_func(
+                    plc.Table([col.plc_column for col in lhs]),
+                    plc.Table([col.plc_column for col in rhs]),
+                    plc.types.NullEquality.EQUAL,
+                )
+            ), None
 
     def _merge_results(self, lhs: DataFrame, rhs: DataFrame):
         # semi-join result includes only lhs columns

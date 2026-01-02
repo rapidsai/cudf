@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING, cast
 
 import pylibcudf as plc
 
-from cudf.core.buffer import acquire_spill_lock
-
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -16,23 +14,26 @@ if TYPE_CHECKING:
     from cudf.core.column.numerical import NumericalColumn
 
 
-@acquire_spill_lock()
 def gather(
     columns: Iterable[ColumnBase],
     gather_map: NumericalColumn,
     nullify: bool = False,
 ) -> list[plc.Column]:
-    plc_tbl = plc.copying.gather(
-        plc.Table([col.plc_column for col in columns]),
-        gather_map.plc_column,
-        plc.copying.OutOfBoundsPolicy.NULLIFY
-        if nullify
-        else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-    )
-    return plc_tbl.columns()
+    with ExitStack() as stack:
+        for col in columns:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+        stack.enter_context(gather_map.access(mode="read", scope="internal"))
+
+        plc_tbl = plc.copying.gather(
+            plc.Table([col.plc_column for col in columns]),
+            gather_map.plc_column,
+            plc.copying.OutOfBoundsPolicy.NULLIFY
+            if nullify
+            else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        )
+        return plc_tbl.columns()
 
 
-@acquire_spill_lock()
 def scatter(
     sources: list[ColumnBase] | list[plc.Scalar],
     scatter_map: NumericalColumn,
@@ -82,14 +83,18 @@ def scatter(
     return plc_tbl.columns()
 
 
-@acquire_spill_lock()
 def columns_split(
     input_columns: Iterable[ColumnBase], splits: list[int]
 ) -> list[list[plc.Column]]:
-    return [
-        plc_tbl.columns()
-        for plc_tbl in plc.copying.split(
-            plc.Table([col.plc_column for col in input_columns]),
-            splits,
-        )
-    ]
+    with ExitStack() as stack:
+        cols_list = list(input_columns)
+        for col in cols_list:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+
+        return [
+            plc_tbl.columns()
+            for plc_tbl in plc.copying.split(
+                plc.Table([col.plc_column for col in cols_list]),
+                splits,
+            )
+        ]

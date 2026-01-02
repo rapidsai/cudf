@@ -1,18 +1,16 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from contextlib import ExitStack
 from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
-
-from cudf.core.buffer import acquire_spill_lock
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
 
 
-@acquire_spill_lock()
 def drop_nulls(
     columns: list[ColumnBase],
     how: Literal["any", "all"] = "any",
@@ -48,15 +46,18 @@ def drop_nulls(
     else:
         keep_threshold = len(keys)
 
-    plc_table = plc.stream_compaction.drop_nulls(
-        plc.Table([col.plc_column for col in columns]),
-        keys,
-        keep_threshold,
-    )
-    return plc_table.columns()
+    with ExitStack() as stack:
+        for col in columns:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+
+        plc_table = plc.stream_compaction.drop_nulls(
+            plc.Table([col.plc_column for col in columns]),
+            keys,
+            keep_threshold,
+        )
+        return plc_table.columns()
 
 
-@acquire_spill_lock()
 def apply_boolean_mask(
     columns: list[ColumnBase], boolean_mask: ColumnBase
 ) -> list[plc.Column]:
@@ -72,14 +73,18 @@ def apply_boolean_mask(
     -------
     columns obtained from applying mask
     """
-    plc_table = plc.stream_compaction.apply_boolean_mask(
-        plc.Table([col.plc_column for col in columns]),
-        boolean_mask.plc_column,
-    )
-    return plc_table.columns()
+    with ExitStack() as stack:
+        for col in columns:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+        stack.enter_context(boolean_mask.access(mode="read", scope="internal"))
+
+        plc_table = plc.stream_compaction.apply_boolean_mask(
+            plc.Table([col.plc_column for col in columns]),
+            boolean_mask.plc_column,
+        )
+        return plc_table.columns()
 
 
-@acquire_spill_lock()
 def drop_duplicates(
     columns: list[ColumnBase],
     keys: list[int] | None = None,
@@ -109,13 +114,17 @@ def drop_duplicates(
     if (keep_option := _keep_options.get(keep)) is None:
         raise ValueError('keep must be either "first", "last" or False')
 
-    plc_table = plc.stream_compaction.stable_distinct(
-        plc.Table([col.plc_column for col in columns]),
-        keys if keys is not None else list(range(len(columns))),
-        keep_option,
-        plc.types.NullEquality.EQUAL
-        if nulls_are_equal
-        else plc.types.NullEquality.UNEQUAL,
-        plc.types.NanEquality.ALL_EQUAL,
-    )
-    return plc_table.columns()
+    with ExitStack() as stack:
+        for col in columns:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+
+        plc_table = plc.stream_compaction.stable_distinct(
+            plc.Table([col.plc_column for col in columns]),
+            keys if keys is not None else list(range(len(columns))),
+            keep_option,
+            plc.types.NullEquality.EQUAL
+            if nulls_are_equal
+            else plc.types.NullEquality.UNEQUAL,
+            plc.types.NanEquality.ALL_EQUAL,
+        )
+        return plc_table.columns()

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import textwrap
 import types
 import warnings
 from collections.abc import Mapping
+from contextlib import ExitStack
 from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -24,7 +25,6 @@ from cudf.api.types import is_list_like, is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import (
     ColumnBase,
     as_column,
@@ -758,7 +758,10 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     @cached_property
     def _groupby(self) -> types.SimpleNamespace:
-        with acquire_spill_lock() as spill_lock:
+        with ExitStack() as stack:
+            for col in self.grouping._key_columns:
+                stack.enter_context(col.access(mode="read", scope="internal"))
+
             plc_groupby = plc.groupby.GroupBy(
                 plc.Table(
                     [col.plc_column for col in self.grouping._key_columns]
@@ -767,7 +770,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                 if self._dropna
                 else plc.types.NullPolicy.INCLUDE,
             )
-            # Do we need this because we just check _spill_locks in test_spillable_df_groupby?
+            # Store the spill locks in the namespace
+            spill_lock = list(stack._exit_callbacks)  # type: ignore[attr-defined]
             return types.SimpleNamespace(
                 plc_groupby=plc_groupby, _spill_locks=spill_lock
             )
@@ -1105,10 +1109,17 @@ class GroupBy(Serializable, Reducible, Scannable):
                 join_keys = map(list, zip(*join_keys, strict=True))
                 # By construction, left and right keys are related by
                 # a permutation, so we can use an inner join.
-                with acquire_spill_lock():
+                with ExitStack() as stack:
+                    join_keys_list = list(join_keys)
+                    for cols in join_keys_list:
+                        for col in cols:
+                            stack.enter_context(
+                                col.access(mode="read", scope="internal")
+                            )
+
                     plc_tables = [
                         plc.Table([col.plc_column for col in cols])
-                        for cols in join_keys
+                        for cols in join_keys_list
                     ]
                     left_plc, right_plc = plc.join.inner_join(
                         plc_tables[0],
@@ -1591,11 +1602,24 @@ class GroupBy(Serializable, Reducible, Scannable):
                 keys = cp.random.default_rng(seed=random_state).random(
                     size=nrows
                 )
-                with acquire_spill_lock():
+                with ExitStack() as stack:
+                    indices_col = as_column(indices)
+                    keys_col = as_column(keys)
+                    group_offsets_col = as_column(group_offsets)
+                    stack.enter_context(
+                        indices_col.access(mode="read", scope="internal")
+                    )
+                    stack.enter_context(
+                        keys_col.access(mode="read", scope="internal")
+                    )
+                    stack.enter_context(
+                        group_offsets_col.access(mode="read", scope="internal")
+                    )
+
                     plc_table = plc.sorting.stable_segmented_sort_by_key(
-                        plc.Table([as_column(indices).plc_column]),
-                        plc.Table([as_column(keys).plc_column]),
-                        as_column(group_offsets).plc_column,
+                        plc.Table([indices_col.plc_column]),
+                        plc.Table([keys_col.plc_column]),
+                        group_offsets_col.plc_column,
                         [plc.types.Order.ASCENDING],
                         [plc.types.NullOrder.AFTER],
                     )
@@ -2444,13 +2468,18 @@ class GroupBy(Serializable, Reducible, Scannable):
         # interleave: combines the correlation or covariance results for each
         # column-pair into a single column
 
-        @acquire_spill_lock()
         def interleave_columns(source_columns):
-            return ColumnBase.from_pylibcudf(
-                plc.reshape.interleave_columns(
-                    plc.Table([c.plc_column for c in source_columns])
+            with ExitStack() as stack:
+                for col in source_columns:
+                    stack.enter_context(
+                        col.access(mode="read", scope="internal")
+                    )
+
+                return ColumnBase.from_pylibcudf(
+                    plc.reshape.interleave_columns(
+                        plc.Table([c.plc_column for c in source_columns])
+                    )
                 )
-            )
 
         res = DataFrame._from_data(
             {

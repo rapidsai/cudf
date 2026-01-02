@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
@@ -11,7 +12,6 @@ import numpy as np
 import pylibcudf as plc
 
 import cudf
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, column_empty
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
@@ -138,7 +138,14 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 .slice(no_nans.null_count, len(no_nans))
                 .astype(np.dtype(np.int32))
             )
-            with acquire_spill_lock():
+            with ExitStack() as stack:
+                stack.enter_context(
+                    no_nans.access(mode="read", scope="internal")
+                )
+                stack.enter_context(
+                    indices.access(mode="read", scope="internal")
+                )
+
                 plc_column = plc.quantiles.quantile(
                     no_nans.plc_column,
                     q,
@@ -252,7 +259,8 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if how not in {"half_even", "half_up"}:
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
-        with acquire_spill_lock():
+        with ExitStack() as stack:
+            stack.enter_context(self.access(mode="read", scope="internal"))
             return type(self).from_pylibcudf(
                 plc.round.round(self.plc_column, decimals, plc_how)
             )
@@ -266,7 +274,8 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         unaryop_str = unaryop.upper()
         unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
-        with acquire_spill_lock():
+        with ExitStack() as stack:
+            stack.enter_context(self.access(mode="read", scope="internal"))
             return type(self).from_pylibcudf(
                 plc.unary.unary_operation(self.plc_column, unaryop_enum)
             )

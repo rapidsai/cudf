@@ -1,12 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from contextlib import ExitStack
 from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
-
-from cudf.core.buffer import acquire_spill_lock
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -14,7 +13,6 @@ if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
 
 
-@acquire_spill_lock()
 def is_sorted(
     source_columns: Iterable[ColumnBase],
     ascending: Iterable[bool],
@@ -45,11 +43,16 @@ def is_sorted(
         ``null_position``, False otherwise.
     """
     column_order, null_precedence = ordering(ascending, na_position)
-    return plc.sorting.is_sorted(
-        plc.Table([col.plc_column for col in source_columns]),
-        column_order,
-        null_precedence,
-    )
+    with ExitStack() as stack:
+        cols_list = list(source_columns)
+        for col in cols_list:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+
+        return plc.sorting.is_sorted(
+            plc.Table([col.plc_column for col in cols_list]),
+            column_order,
+            null_precedence,
+        )
 
 
 def ordering(
@@ -88,7 +91,6 @@ def ordering(
     return c_column_order, c_null_precedence
 
 
-@acquire_spill_lock()
 def order_by(
     columns_from_table: Iterable[ColumnBase],
     ascending: Iterable[bool],
@@ -121,16 +123,20 @@ def order_by(
     func = (
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
-    return func(
-        plc.Table(
-            [col.plc_column for col in columns_from_table],
-        ),
-        column_order,
-        null_precedence,
-    )
+    with ExitStack() as stack:
+        cols_list = list(columns_from_table)
+        for col in cols_list:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+
+        return func(
+            plc.Table(
+                [col.plc_column for col in cols_list],
+            ),
+            column_order,
+            null_precedence,
+        )
 
 
-@acquire_spill_lock()
 def sort_by_key(
     values: Iterable[ColumnBase],
     keys: Iterable[ColumnBase],
@@ -167,15 +173,22 @@ def sort_by_key(
     func = (
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
     )
-    return func(
-        plc.Table([col.plc_column for col in values]),
-        plc.Table([col.plc_column for col in keys]),
-        column_order,
-        null_precedence,
-    ).columns()
+    with ExitStack() as stack:
+        values_list = list(values)
+        keys_list = list(keys)
+        for col in values_list:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+        for col in keys_list:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+
+        return func(
+            plc.Table([col.plc_column for col in values_list]),
+            plc.Table([col.plc_column for col in keys_list]),
+            column_order,
+            null_precedence,
+        ).columns()
 
 
-@acquire_spill_lock()
 def search_sorted(
     source: Iterable[ColumnBase],
     values: Iterable[ColumnBase],
@@ -206,9 +219,17 @@ def search_sorted(
         plc.search,
         "lower_bound" if side == "left" else "upper_bound",
     )
-    return func(
-        plc.Table([col.plc_column for col in source]),
-        plc.Table([col.plc_column for col in values]),
-        column_order,
-        null_precedence,
-    )
+    with ExitStack() as stack:
+        source_list = list(source)
+        values_list = list(values)
+        for col in source_list:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+        for col in values_list:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+
+        return func(
+            plc.Table([col.plc_column for col in source_list]),
+            plc.Table([col.plc_column for col in values_list]),
+            column_order,
+            null_precedence,
+        )
