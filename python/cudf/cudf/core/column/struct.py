@@ -79,6 +79,20 @@ class StructColumn(ColumnBase):
             )
         )
 
+    def _recompute_children(self) -> None:
+        """Recompute the offset-aware children columns with proper type metadata."""
+        if not self.base_children:
+            self._children = ()
+        elif self.offset == 0 and self.size == self.base_size:
+            # Optimization: for non-sliced columns, children == base_children
+            self._children = self.base_children  # type: ignore[assignment]
+        else:
+            # Slice each child using the parent's offset and size
+            self._children = tuple(  # type: ignore[assignment]
+                base_child.slice(self.offset, self.offset + self.size)
+                for base_child in self.base_children
+            )
+
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.

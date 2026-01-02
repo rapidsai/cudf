@@ -163,7 +163,7 @@ outputs:
         - test -f $PREFIX/include/cudf/column/column.hpp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
-      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license }}
       summary: ${{ load_from_file("python/libcudf/pyproject.toml").project.description }}
 
   - package:
@@ -283,7 +283,7 @@ outputs:
           - libnvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
-      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license }}
       summary: libcudf example executables
 
   - package:
@@ -332,5 +332,5 @@ outputs:
           - libnvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
-      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license }}
       summary: libcudf test & benchmark executables
