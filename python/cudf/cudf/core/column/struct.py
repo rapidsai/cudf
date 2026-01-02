@@ -78,6 +78,18 @@ class StructColumn(ColumnBase):
             )
         )
 
+    def _get_sliced_child(self, idx: int) -> ColumnBase:
+        """
+        Get a child column properly sliced to match the parent's view.
+
+        Uses libcudf's structs_column_view.get_sliced_child().
+        """
+        if idx < 0 or idx >= len(self._children):
+            raise IndexError(f"Index {idx} out of range for {len(self._children)} children")
+
+        sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
+        return type(self._children[idx]).from_pylibcudf(sliced_plc_col)
+
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.

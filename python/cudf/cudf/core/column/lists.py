@@ -76,6 +76,23 @@ class ListColumn(ColumnBase):
             children[1]._with_type_metadata(dtype.element_type),
         )
 
+    def _get_sliced_child(self, idx: int) -> ColumnBase:
+        """
+        Get a child column properly sliced to match the parent's view.
+
+        Uses libcudf's lists_column_view.get_sliced_child() for the elements child.
+        """
+        if idx < 0 or idx >= len(self._children):
+            raise IndexError(f"Index {idx} out of range for {len(self._children)} children")
+
+        # Use libcudf's get_sliced_child for elements child (idx 1)
+        if idx == 1:
+            sliced_plc_col = self.plc_column.list_view().get_sliced_child()
+            return type(self._children[idx]).from_pylibcudf(sliced_plc_col)
+
+        # For offsets child (idx 0), return as stored
+        return self._children[idx]
+
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
@@ -127,6 +144,9 @@ class ListColumn(ColumnBase):
         Column containing the elements of each list (may itself be a
         ListColumn)
         """
+        # Use libcudf's get_sliced_child for proper slicing
+        if self.offset > 0:
+            return self._get_sliced_child(1)
         return self.children[1]
 
     @property
