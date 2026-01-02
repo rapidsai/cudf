@@ -1501,7 +1501,8 @@ cdef class ListsColumnView:
         stream = _get_stream(stream)
 
         cdef column_view c_child = self.view().get_sliced_child(stream.view())
-        return Column.from_column_view(c_child, self._column)
+        # Use the original elements child (child 1) as owner
+        return Column.from_column_view(c_child, self._column.child(1))
 
 
 cdef class StructsColumnView:
@@ -1549,7 +1550,8 @@ cdef class StructsColumnView:
         stream = _get_stream(stream)
 
         cdef column_view c_child = self.view().get_sliced_child(index, stream.view())
-        return Column.from_column_view(c_child, self._column)
+        # Use the original child as owner to get correct data buffer
+        return Column.from_column_view(c_child, self._column.child(index))
 
 
 def is_c_contiguous(
