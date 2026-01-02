@@ -74,7 +74,8 @@ class _SpillableBufferAccessContext(_BufferAccessContext):
         if self._scope == "internal":
             # Create temporary spill lock for this context
             self._spill_lock = SpillLock()
-            self._buffer._owner.spill_lock(self._spill_lock)
+            with self._buffer._owner.lock:
+                self._buffer._owner._spill_locks.add(self._spill_lock)
         elif self._scope == "external":
             # Permanently mark as exposed (unspillable)
             self._buffer._owner.mark_exposed()
@@ -290,9 +291,16 @@ class SpillableBufferOwner(BufferOwner):
             if ptr_type == target:
                 return
 
-            if not self.spillable:
+            # Allow unspilling (cpu->gpu) even when buffer has spill locks
+            # Only prevent spilling to CPU when buffer is unspillable
+            if not self.spillable and target == "cpu":
                 raise ValueError(
                     f"Cannot in-place move an unspillable buffer: {self}"
+                )
+            # For unspilling (target=="gpu"), also check if exposed
+            if not self.spillable and target == "gpu" and self.exposed:
+                raise ValueError(
+                    f"Cannot in-place move an exposed buffer: {self}"
                 )
 
             if (ptr_type, target) == ("gpu", "cpu"):
@@ -392,8 +400,11 @@ class SpillableBufferOwner(BufferOwner):
             # Only add thread-local lock if it exists
             self.spill_lock(spill_lock)
             self._last_accessed = time.monotonic()
-        # If we have context-based spill locks, just update timestamp
+        # If we have context-based spill locks, unspill if needed
         elif len(self._spill_locks) > 0:
+            with self.lock:
+                if self.is_spilled:
+                    self.spill(target="gpu")
             self._last_accessed = time.monotonic()
         return self._ptr
 
@@ -448,7 +459,12 @@ class SpillableBufferOwner(BufferOwner):
             if self.spillable:
                 self.spill(target="cpu")
                 return self._ptr_desc["memoryview"][offset : offset + size]
+            elif self.is_spilled:
+                # Buffer is spilled but not spillable (has spill locks)
+                # Can still return the host memoryview directly
+                return self._ptr_desc["memoryview"][offset : offset + size]
             else:
+                # Buffer is on GPU and not spillable (exposed or has spill locks)
                 assert self._ptr_desc["type"] == "gpu"
                 ret = host_memory_allocation(size)
                 rmm.pylibrmm.device_buffer.copy_ptr_to_host(
