@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """IO logic for the RapidsMPF streaming runtime."""
 
@@ -18,6 +18,7 @@ from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
     Scan,
+    Sink,
     _cast_literals_to_physical_types,
     _parquet_physical_types,
 )
@@ -27,7 +28,13 @@ from cudf_polars.experimental.base import (
     IOPartitionPlan,
     PartitionInfo,
 )
-from cudf_polars.experimental.io import SplitScan, scan_partition_plan
+from cudf_polars.experimental.io import (
+    SplitScan,
+    StreamingSink,
+    _prepare_sink_directory,
+    _sink_to_file,
+    scan_partition_plan,
+)
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
@@ -40,6 +47,9 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     Metadata,
+    chunk_to_frame,
+    empty_table_chunk,
+    process_children,
 )
 
 if TYPE_CHECKING:
@@ -671,4 +681,131 @@ def _(
                 parquet_options=parquet_options,
             )
         ]
+    return nodes, channels
+
+
+@define_py_node()
+async def sink_node(
+    context: Context,
+    ir: StreamingSink,
+    ir_context: IRExecutionContext,
+    ch_in: ChannelPair,
+    ch_out: ChannelPair,
+) -> None:
+    """
+    Sink node for rapidsmpf - writes data chunks to a file.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    ir
+        The StreamingSink node.
+    ir_context
+        The execution context for the IR node.
+    ch_in
+        The input ChannelPair.
+    ch_out
+        The output ChannelPair for returning an empty result DataFrame.
+    """
+    async with shutdown_on_error(
+        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
+    ):
+        # Drain the metadata channel (we don't need it for sinking)
+        await ch_in.recv_metadata(context)
+
+        child_ir = ir.children[0]
+
+        chunks: list[TableChunk] = []
+        while (msg := await ch_in.data.recv(context)) is not None:
+            chunk = TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
+            chunks.append(chunk)
+
+        count = max(1, len(chunks))
+
+        if ir.executor_options.sink_to_directory:
+            _prepare_sink_directory(ir.sink.path)
+            suffix = ir.sink.kind.lower()
+            width = math.ceil(math.log10(count)) if count > 1 else 1
+            for i, chunk in enumerate(chunks):
+                df = chunk_to_frame(chunk, child_ir)
+                part_path = f"{ir.sink.path}/part.{str(i).zfill(width)}.{suffix}"
+                await asyncio.to_thread(
+                    Sink.do_evaluate,
+                    ir.sink.schema,
+                    ir.sink.kind,
+                    part_path,
+                    ir.sink.parquet_options,
+                    ir.sink.options,
+                    df,
+                    context=ir_context,
+                )
+        else:
+            # Write chunks to a single file
+            # For a single chunk, use Sink.do_evaluate directly
+            # For multiple chunks, use _sink_to_file which handles chunked writing
+            if count == 1:
+                if chunks:
+                    df = chunk_to_frame(chunks[0], child_ir)
+                else:
+                    # No data received - create an empty DataFrame
+                    stream = ir_context.get_cuda_stream()
+                    empty = empty_table_chunk(child_ir, context, stream)
+                    df = chunk_to_frame(empty, child_ir)
+                await asyncio.to_thread(
+                    Sink.do_evaluate,
+                    *ir.sink._non_child_args,
+                    df,
+                    context=ir_context,
+                )
+            else:
+                # Multiple chunks - use chunked writer
+                writer_state = None
+                for i, chunk in enumerate(chunks):
+                    df = chunk_to_frame(chunk, child_ir)
+                    finalize = i == count - 1
+                    writer_state = await asyncio.to_thread(
+                        _sink_to_file,
+                        ir.sink.kind,
+                        ir.sink.path,
+                        ir.sink.options,
+                        finalize,
+                        writer_state,
+                        df,
+                    )
+
+        # Send metadata indicating a single empty result chunk
+        await ch_out.send_metadata(context, Metadata(1, duplicated=True))
+
+        # Send an empty result chunk (sink returns empty DataFrame)
+        stream = ir_context.get_cuda_stream()
+        empty_chunk = empty_table_chunk(ir, context, stream)
+        await ch_out.data.send(context, Message(0, empty_chunk))
+        await ch_out.data.drain(context)
+
+
+@generate_ir_sub_network.register(StreamingSink)
+def _(
+    ir: StreamingSink, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
+    """Generate network for StreamingSink node."""
+    # Process children
+    nodes, channels = process_children(ir, rec)
+
+    # Create output ChannelManager for the sink
+    channels[ir] = ChannelManager(rec.state["context"])
+
+    # Create sink node - it consumes from child, writes to file, and returns empty
+    nodes[ir] = [
+        sink_node(
+            rec.state["context"],
+            ir,
+            rec.state["ir_context"],
+            channels[ir.children[0]].reserve_output_slot(),
+            channels[ir].reserve_input_slot(),
+        )
+    ]
+
     return nodes, channels
