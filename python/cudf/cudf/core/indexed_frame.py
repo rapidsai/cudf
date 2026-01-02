@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 """Base class for Frame types that have an index."""
 
@@ -11,6 +11,7 @@ import textwrap
 import warnings
 from collections import Counter
 from collections.abc import Mapping
+from contextlib import ExitStack
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -40,7 +41,6 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, stream_compaction
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -2932,7 +2932,9 @@ class IndexedFrame(Frame):
                 "Provided seed value has no effect for the hash method "
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
-        with acquire_spill_lock():
+        with ExitStack() as stack:
+            for col in self._columns:
+                stack.enter_context(col.access(mode="read", scope="internal"))
             plc_table = plc.Table([c.plc_column for c in self._columns])
             if method == "murmur3":
                 plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
@@ -3069,7 +3071,9 @@ class IndexedFrame(Frame):
             if keep_index and not has_range_index
             else self._columns
         )
-        with acquire_spill_lock():
+        with ExitStack() as stack:
+            for col in columns_to_slice:
+                stack.enter_context(col.access(mode="read", scope="internal"))
             plc_tables = plc.copying.slice(
                 plc.Table([col.plc_column for col in columns_to_slice]),
                 [start, stop],
@@ -3268,7 +3272,9 @@ class IndexedFrame(Frame):
         if (keep_option := _keep_options.get(keep)) is None:
             raise ValueError('keep must be either "first", "last" or False')
 
-        with acquire_spill_lock():
+        with ExitStack() as stack:
+            for col in columns:
+                stack.enter_context(col.access(mode="read", scope="internal"))
             plc_column = plc.stream_compaction.distinct_indices(
                 plc.Table([col.plc_column for col in columns]),
                 keep_option,
@@ -3289,7 +3295,14 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def _empty_like(self, keep_index: bool = True) -> Self:
-        with acquire_spill_lock():
+        with ExitStack() as stack:
+            cols = (
+                itertools.chain(self.index._columns, self._columns)
+                if keep_index
+                else self._columns
+            )
+            for col in cols:
+                stack.enter_context(col.access(mode="read", scope="internal"))
             plc_table = plc.copying.empty_like(
                 plc.Table(
                     [
@@ -3325,7 +3338,6 @@ class IndexedFrame(Frame):
             splits,
         )
 
-        @acquire_spill_lock()
         def split_from_pylibcudf(split: list[plc.Column]) -> list[ColumnBase]:
             return [ColumnBase.from_pylibcudf(col) for col in split]
 
@@ -3557,7 +3569,6 @@ class IndexedFrame(Frame):
         """
         raise NotImplementedError
 
-    @acquire_spill_lock()
     @_performance_tracking
     def _apply(self, func, kernel_class, *args, **kwargs):
         """Apply `func` across the rows of the frame."""
@@ -5445,7 +5456,9 @@ class IndexedFrame(Frame):
         else:
             idx_cols = ()
 
-        with acquire_spill_lock():
+        with ExitStack() as stack:
+            for col in itertools.chain(idx_cols, self._columns):
+                stack.enter_context(col.access(mode="read", scope="internal"))
             plc_table = plc.lists.explode_outer(
                 plc.Table(
                     [
@@ -5537,7 +5550,9 @@ class IndexedFrame(Frame):
         -------
         The indexed frame containing the tiled "rows".
         """
-        with acquire_spill_lock():
+        with ExitStack() as stack:
+            for col in itertools.chain(self.index._columns, self._columns):
+                stack.enter_context(col.access(mode="read", scope="internal"))
             plc_table = plc.reshape.tile(
                 plc.Table(
                     [
