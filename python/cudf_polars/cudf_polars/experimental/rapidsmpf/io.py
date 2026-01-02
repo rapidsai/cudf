@@ -770,12 +770,10 @@ async def sink_node(
                         df,
                     )
 
-        # Send metadata indicating a single empty result chunk
-        await ch_out.send_metadata(context, Metadata(1, duplicated=True))
-
-        # Send an empty result chunk (sink returns empty DataFrame)
+        # Signal completion on the metadata and data channels with empty results
         stream = ir_context.get_cuda_stream()
         empty_chunk = empty_table_chunk(ir, context, stream)
+        await ch_out.send_metadata(context, Metadata(1, duplicated=True))
         await ch_out.data.send(context, Message(0, empty_chunk))
         await ch_out.data.drain(context)
 
