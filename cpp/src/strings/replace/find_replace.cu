@@ -55,21 +55,21 @@ std::unique_ptr<cudf::column> find_and_replace_all(
   cudf::strings_column_view const& values_to_replace,
   cudf::strings_column_view const& replacement_values,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto d_input             = cudf::column_device_view::create(input.parent(), stream);
   auto d_values_to_replace = cudf::column_device_view::create(values_to_replace.parent(), stream);
   auto d_replacements      = cudf::column_device_view::create(replacement_values.parent(), stream);
 
-  auto indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
+  auto indices = rmm::device_uvector<string_index_pair>(input.size(), stream, resources.get_temporary_mr());
 
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(input.size()),
                     indices.begin(),
                     find_replace_fn{*d_input, *d_values_to_replace, *d_replacements});
 
-  return make_strings_column(indices.begin(), indices.end(), stream, mr);
+  return make_strings_column(indices.begin(), indices.end(), stream, resources);
 }
 
 }  // namespace detail

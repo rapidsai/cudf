@@ -17,7 +17,7 @@ namespace lists::detail {
  */
 std::unique_ptr<column> reverse(lists_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr);
+                                cudf::memory_resources resources);
 
 }  // namespace lists::detail
 }  // namespace CUDF_EXPORT cudf

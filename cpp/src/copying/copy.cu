@@ -69,7 +69,7 @@ struct copy_if_else_functor_impl<T, std::enable_if_t<is_rep_layout_compatible<T>
                                      bool right_nullable,
                                      Filter filter,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     auto p_lhs      = get_iterable_device_view{}(lhs_h, stream);
     auto p_rhs      = get_iterable_device_view{}(rhs_h, stream);
@@ -85,7 +85,7 @@ struct copy_if_else_functor_impl<T, std::enable_if_t<is_rep_layout_compatible<T>
                                 filter,
                                 lhs.type(),
                                 stream,
-                                mr);
+                                resources);
   }
 };
 
@@ -102,7 +102,7 @@ struct copy_if_else_functor_impl<string_view> {
                                      bool right_nullable,
                                      Filter filter,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     using T = string_view;
 
@@ -113,7 +113,7 @@ struct copy_if_else_functor_impl<string_view> {
 
     auto lhs_iter = cudf::detail::make_optional_iterator<T>(lhs, nullate::DYNAMIC{left_nullable});
     auto rhs_iter = cudf::detail::make_optional_iterator<T>(rhs, nullate::DYNAMIC{right_nullable});
-    return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
+    return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, resources);
   }
 };
 
@@ -154,10 +154,10 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      size_type size,
                                                      Filter is_left,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                     cudf::memory_resources resources)
 {
   auto gather_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
+  auto const gather_map_end = thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                               thrust::make_counting_iterator(size_type{0}),
                                               thrust::make_counting_iterator(size_type{size}),
                                               gather_map.begin(),
@@ -170,14 +170,14 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                     out_of_bounds_policy::DONT_CHECK,
                                                     negative_index_policy::NOT_ALLOWED,
                                                     stream,
-                                                    cudf::get_current_device_resource_ref());
+                                                    resources.get_temporary_mr());
 
   auto result = cudf::detail::scatter(
     table_view{std::vector<column_view>{scatter_src_lhs->get_column(0).view()}},
     gather_map,
     table_view{std::vector<column_view>{rhs}},
     stream,
-    mr);
+    resources);
 
   return std::move(result->release()[0]);
 }
@@ -188,10 +188,10 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                      size_type size,
                                                      Filter is_left,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                     cudf::memory_resources resources)
 {
   auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
+  auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                                thrust::make_counting_iterator(size_type{0}),
                                                thrust::make_counting_iterator(size_type{size}),
                                                scatter_map.begin(),
@@ -206,7 +206,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                    0};
 
   auto result = cudf::detail::scatter(
-    scatter_source, scatter_map_column_view, table_view{std::vector<column_view>{rhs}}, stream, mr);
+    scatter_source, scatter_map_column_view, table_view{std::vector<column_view>{rhs}}, stream, resources);
 
   return std::move(result->release()[0]);
 }
@@ -217,9 +217,9 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      size_type size,
                                                      Filter is_left,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                     cudf::memory_resources resources)
 {
-  return scatter_gather_based_if_else(rhs, lhs, size, logical_not{is_left}, stream, mr);
+  return scatter_gather_based_if_else(rhs, lhs, size, logical_not{is_left}, stream, resources);
 }
 
 template <typename Filter>
@@ -228,10 +228,10 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                      size_type size,
                                                      Filter is_left,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                     cudf::memory_resources resources)
 {
-  auto rhs_col = cudf::make_column_from_scalar(rhs, size, stream, mr);
-  return scatter_gather_based_if_else(lhs, rhs_col->view(), size, is_left, stream, mr);
+  auto rhs_col = cudf::make_column_from_scalar(rhs, size, stream, resources);
+  return scatter_gather_based_if_else(lhs, rhs_col->view(), size, is_left, stream, resources);
 }
 
 template <>
@@ -244,9 +244,9 @@ struct copy_if_else_functor_impl<struct_view> {
                                      bool,
                                      Filter filter,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
-    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
+    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, resources);
   }
 };
 
@@ -260,9 +260,9 @@ struct copy_if_else_functor_impl<list_view> {
                                      bool,
                                      Filter filter,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
-    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
+    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, resources);
   }
 };
 
@@ -276,9 +276,9 @@ struct copy_if_else_functor_impl<dictionary32> {
                                      bool,
                                      Filter filter,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
-    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
+    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, resources);
   }
 };
 
@@ -295,10 +295,10 @@ struct copy_if_else_functor {
                                      bool right_nullable,
                                      Filter filter,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
   {
     copy_if_else_functor_impl<T> copier{};
-    return copier(lhs, rhs, size, left_nullable, right_nullable, filter, stream, mr);
+    return copier(lhs, rhs, size, left_nullable, right_nullable, filter, stream, resources);
   }
 };
 
@@ -310,7 +310,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
                                      bool right_nullable,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_EXPECTS(boolean_mask.type() == data_type(type_id::BOOL8),
                "Boolean mask column must be of type type_id::BOOL8",
@@ -339,7 +339,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
                                                       right_nullable,
                                                       filter,
                                                       stream,
-                                                      mr);
+                                                      resources);
 }
 
 };  // namespace
@@ -348,7 +348,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs and rhs columns",
@@ -358,14 +358,14 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
   CUDF_EXPECTS(
     cudf::have_same_types(lhs, rhs), "Both inputs must be of the same type", cudf::data_type_error);
 
-  return copy_if_else(lhs, rhs, lhs.has_nulls(), rhs.has_nulls(), boolean_mask, stream, mr);
+  return copy_if_else(lhs, rhs, lhs.has_nulls(), rhs.has_nulls(), boolean_mask, stream, resources);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_EXPECTS(boolean_mask.size() == rhs.size(),
                "Boolean mask column must be the same size as rhs column",
@@ -373,14 +373,14 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
   CUDF_EXPECTS(
     cudf::have_same_types(rhs, lhs), "Both inputs must be of the same type", cudf::data_type_error);
 
-  return copy_if_else(lhs, rhs, !lhs.is_valid(stream), rhs.has_nulls(), boolean_mask, stream, mr);
+  return copy_if_else(lhs, rhs, !lhs.is_valid(stream), rhs.has_nulls(), boolean_mask, stream, resources);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs column",
@@ -388,19 +388,19 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
   CUDF_EXPECTS(
     cudf::have_same_types(lhs, rhs), "Both inputs must be of the same type", cudf::data_type_error);
 
-  return copy_if_else(lhs, rhs, lhs.has_nulls(), !rhs.is_valid(stream), boolean_mask, stream, mr);
+  return copy_if_else(lhs, rhs, lhs.has_nulls(), !rhs.is_valid(stream), boolean_mask, stream, resources);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_EXPECTS(
     cudf::have_same_types(lhs, rhs), "Both inputs must be of the same type", cudf::data_type_error);
   return copy_if_else(
-    lhs, rhs, !lhs.is_valid(stream), !rhs.is_valid(stream), boolean_mask, stream, mr);
+    lhs, rhs, !lhs.is_valid(stream), !rhs.is_valid(stream), boolean_mask, stream, resources);
 }
 
 };  // namespace detail
@@ -409,40 +409,40 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, stream, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, stream, resources);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, stream, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, stream, resources);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, stream, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, stream, resources);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, stream, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, stream, resources);
 }
 
 }  // namespace cudf

@@ -82,7 +82,7 @@ struct list_gatherer {
 std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                          gather_data const& gd,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   // gather map iterator for this level (N)
   auto gather_map_begin = thrust::make_transform_iterator(
@@ -97,7 +97,7 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                            gather_map_begin + gather_map_size,
                                            out_of_bounds_policy::DONT_CHECK,
                                            stream,
-                                           mr);
+                                           resources);
   auto leaf_column  = std::move(gather_table->release().front());
 
   if (column.null_count() == 0) { leaf_column->set_null_mask(rmm::device_buffer{}, 0); }
@@ -111,7 +111,7 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
 std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                                            gather_data& gd,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   // gather map iterator for this level (N)
   auto gather_map_begin = thrust::make_transform_iterator(
@@ -131,7 +131,7 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
       gather_map_begin + gather_map_size,
       [cdv = *list_cdv] __device__(int index) { return cdv.is_valid(index); },
       stream,
-      mr);
+      resources);
     null_mask  = std::move(validity.first);
     null_count = validity.second;
   }
@@ -139,12 +139,12 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
   // generate gather_data for next level (N+1), potentially recycling the temporary
   // base_offsets buffer.
   gather_data child_gd = make_gather_data<false>(
-    list, gather_map_begin, gather_map_size, std::move(gd.base_offsets), stream, mr);
+    list, gather_map_begin, gather_map_size, std::move(gd.base_offsets), stream, resources);
 
   // the nesting case.
   if (list.child().type() == cudf::data_type{type_id::LIST}) {
     // gather children.
-    auto child = gather_list_nested(list.get_sliced_child(stream), child_gd, stream, mr);
+    auto child = gather_list_nested(list.get_sliced_child(stream), child_gd, stream, resources);
 
     // return the nested column
     return make_lists_column(gather_map_size,
@@ -153,11 +153,11 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                              null_count,
                              std::move(null_mask),
                              stream,
-                             mr);
+                             resources);
   }
 
   // it's a leaf.  do a regular gather
-  auto child = gather_list_leaf(list.get_sliced_child(stream), child_gd, stream, mr);
+  auto child = gather_list_leaf(list.get_sliced_child(stream), child_gd, stream, resources);
 
   // assemble final column
   return make_lists_column(gather_map_size,
@@ -166,7 +166,7 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                            null_count,
                            std::move(null_mask),
                            stream,
-                           mr);
+                           resources);
 }
 
 }  // namespace detail

@@ -63,7 +63,7 @@ std::unique_ptr<column> make_numeric_column(data_type type,
                                             size_type size,
                                             mask_state state,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(type.id() != type_id::EMPTY && is_numeric(type),
@@ -75,7 +75,8 @@ std::unique_ptr<column> make_numeric_column(data_type type,
     type,
     size,
     rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-    detail::create_null_mask(size, state, stream, mr),
+    detail::create_null_mask(size, state, stream,
+                  resources),
     state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
     std::vector<std::unique_ptr<column>>{});
 }
@@ -85,7 +86,7 @@ std::unique_ptr<column> make_fixed_point_column(data_type type,
                                                 size_type size,
                                                 mask_state state,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_fixed_point(type), "Invalid, non-fixed_point type.", cudf::data_type_error);
@@ -95,7 +96,8 @@ std::unique_ptr<column> make_fixed_point_column(data_type type,
     type,
     size,
     rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-    detail::create_null_mask(size, state, stream, mr),
+    detail::create_null_mask(size, state, stream,
+                  resources),
     state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
     std::vector<std::unique_ptr<column>>{});
 }
@@ -105,7 +107,7 @@ std::unique_ptr<column> make_timestamp_column(data_type type,
                                               size_type size,
                                               mask_state state,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+                                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.", cudf::data_type_error);
@@ -115,7 +117,8 @@ std::unique_ptr<column> make_timestamp_column(data_type type,
     type,
     size,
     rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-    detail::create_null_mask(size, state, stream, mr),
+    detail::create_null_mask(size, state, stream,
+                  resources),
     state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
     std::vector<std::unique_ptr<column>>{});
 }
@@ -125,7 +128,7 @@ std::unique_ptr<column> make_duration_column(data_type type,
                                              size_type size,
                                              mask_state state,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_duration(type), "Invalid, non-duration type.", cudf::data_type_error);
@@ -135,7 +138,8 @@ std::unique_ptr<column> make_duration_column(data_type type,
     type,
     size,
     rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-    detail::create_null_mask(size, state, stream, mr),
+    detail::create_null_mask(size, state, stream,
+                  resources),
     state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
     std::vector<std::unique_ptr<column>>{});
 }
@@ -145,7 +149,7 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
                                                 size_type size,
                                                 mask_state state,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(type.id() != type_id::EMPTY && is_fixed_width(type),
@@ -153,24 +157,26 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
                cudf::data_type_error);
 
   // clang-format off
-  if      (is_timestamp  (type)) return make_timestamp_column  (type, size, state, stream, mr);
-  else if (is_duration   (type)) return make_duration_column   (type, size, state, stream, mr);
-  else if (is_fixed_point(type)) return make_fixed_point_column(type, size, state, stream, mr);
-  else                           return make_numeric_column    (type, size, state, stream, mr);
+  if      (is_timestamp  (type)) return make_timestamp_column  (type, size, state, stream, resources);
+  else if (is_duration   (type)) return make_duration_column   (type, size, state, stream, resources);
+  else if (is_fixed_point(type)) return make_fixed_point_column(type, size, state, stream, resources);
+  else                           return make_numeric_column    (type, size, state, stream, resources);
   // clang-format on
 }
 
 std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
                                                     size_type size,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
+                                                    cudf::memory_resources resources)
 {
   if (size == 0) return make_empty_column(type_id::DICTIONARY32);
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
   CUDF_EXPECTS(s.is_valid(stream), "cannot create a dictionary with a null key");
   return make_dictionary_column(
-    make_column_from_scalar(s, 1, stream, mr),
-    make_column_from_scalar(numeric_scalar<int32_t>(0, true, stream), size, stream, mr),
+    make_column_from_scalar(s, 1, stream,
+                  resources),
+    make_column_from_scalar(numeric_scalar<int32_t>(0, true, stream), size, stream,
+                  resources),
     rmm::device_buffer{0, stream, mr},
     0);
 }

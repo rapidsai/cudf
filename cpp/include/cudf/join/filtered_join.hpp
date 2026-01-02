@@ -121,7 +121,7 @@ class filtered_join {
   [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> semi_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+    cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Returns a vector of row indices corresponding to a anti-join
@@ -148,7 +148,7 @@ class filtered_join {
   [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> anti_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+    cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
  private:
   set_as_build_table _reuse_tbl;

@@ -83,7 +83,7 @@ std::unique_ptr<cudf::column> multibyte_split(
   std::string_view delimiter,
   parse_options options             = {},
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 

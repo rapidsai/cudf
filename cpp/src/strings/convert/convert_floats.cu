@@ -63,7 +63,7 @@ struct dispatch_to_floats_fn {
     requires(std::is_floating_point_v<FloatType>)
   {
     auto d_results = output_column.data<FloatType>();
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_column.size()),
                       d_results,
@@ -84,7 +84,7 @@ struct dispatch_to_floats_fn {
 std::unique_ptr<column> to_floats(strings_column_view const& input,
                                   data_type output_type,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
@@ -95,10 +95,11 @@ std::unique_ptr<column> to_floats(strings_column_view const& input,
   // create float output column copying the strings null-mask
   auto results      = make_numeric_column(output_type,
                                      strings_count,
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   auto results_view = results->mutable_view();
   // fill output column with floats
   type_dispatcher(output_type, dispatch_to_floats_fn{}, d_strings, results_view, stream);
@@ -113,10 +114,10 @@ std::unique_ptr<column> to_floats(strings_column_view const& input,
 std::unique_ptr<column> to_floats(strings_column_view const& input,
                                   data_type output_type,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_floats(input, output_type, stream, mr);
+  return detail::to_floats(input, output_type, stream, resources);
 }
 
 namespace detail {
@@ -385,7 +386,7 @@ struct dispatch_from_floats_fn {
   template <typename FloatType>
   std::unique_ptr<column> operator()(column_view const& floats,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(std::is_floating_point_v<FloatType>)
   {
     size_type strings_count = floats.size();
@@ -393,10 +394,10 @@ struct dispatch_from_floats_fn {
     auto d_column           = *column;
 
     // copy the null mask
-    rmm::device_buffer null_mask = cudf::detail::copy_bitmask(floats, stream, mr);
+    rmm::device_buffer null_mask = cudf::detail::copy_bitmask(floats, stream, resources);
 
     auto [offsets, chars] =
-      make_strings_children(from_floats_fn<FloatType>{d_column}, strings_count, stream, mr);
+      make_strings_children(from_floats_fn<FloatType>{d_column}, strings_count, stream, resources);
 
     return make_strings_column(strings_count,
                                std::move(offsets),
@@ -421,12 +422,12 @@ struct dispatch_from_floats_fn {
 // This will convert all float column types into a strings column.
 std::unique_ptr<column> from_floats(column_view const& floats,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   size_type strings_count = floats.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
-  return type_dispatcher(floats.type(), dispatch_from_floats_fn{}, floats, stream, mr);
+  return type_dispatcher(floats.type(), dispatch_from_floats_fn{}, floats, stream, resources);
 }
 
 }  // namespace detail
@@ -434,29 +435,30 @@ std::unique_ptr<column> from_floats(column_view const& floats,
 // external API
 std::unique_ptr<column> from_floats(column_view const& floats,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_floats(floats, stream, mr);
+  return detail::from_floats(floats, stream, resources);
 }
 
 namespace detail {
 std::unique_ptr<column> is_float(strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_column       = *strings_column;
   // create output column
   auto results   = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   auto d_results = results->mutable_view().data<bool>();
   // check strings for valid float chars
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(input.size()),
                     d_results,
@@ -473,10 +475,10 @@ std::unique_ptr<column> is_float(strings_column_view const& input,
 // external API
 std::unique_ptr<column> is_float(strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_float(input, stream, mr);
+  return detail::is_float(input, stream, resources);
 }
 
 }  // namespace strings

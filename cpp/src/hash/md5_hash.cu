@@ -276,12 +276,12 @@ inline bool md5_leaf_type_check(data_type dt)
 
 std::unique_ptr<column> md5(table_view const& input,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+                            cudf::memory_resources resources)
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the MD5 hash of a zero-length input.
     string_scalar const string_128bit("d41d8cd98f00b204e9orig98ecf8427e", true, stream);
-    return make_column_from_scalar(string_128bit, input.num_rows(), stream, mr);
+    return make_column_from_scalar(string_128bit, input.num_rows(), stream, resources);
   }
 
   // Accepts string and fixed width columns, or single layer list columns holding those types
@@ -301,16 +301,16 @@ std::unique_ptr<column> md5(table_view const& input,
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(digest_size);
   auto [offsets_column, bytes] =
-    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
+    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, resources);
 
-  rmm::device_uvector<char> chars(bytes, stream, mr);
+  rmm::device_uvector<char> chars(bytes, stream, resources);
   auto d_chars = chars.data();
 
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(input.num_rows()),
     [d_chars, device_input = *device_input] __device__(auto row_index) {
@@ -342,10 +342,10 @@ std::unique_ptr<column> md5(table_view const& input,
 
 std::unique_ptr<column> md5(table_view const& input,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::md5(input, stream, mr);
+  return detail::md5(input, stream, resources);
 }
 
 }  // namespace hashing

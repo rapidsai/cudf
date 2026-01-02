@@ -1077,7 +1077,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
   // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
   _d_nullability = cudf::detail::make_device_uvector_async(
-    _nullability, stream, cudf::get_current_device_resource_ref());
+    _nullability, stream, resources.get_temporary_mr());
 
   _is_list = (_max_rep_level > 0);
 
@@ -1149,7 +1149,7 @@ void init_row_group_fragments(cudf::detail::hostdevice_2dvector<PageFragment>& f
                               rmm::cuda_stream_view stream)
 {
   auto d_partitions = cudf::detail::make_device_uvector_async(
-    partitions, stream, cudf::get_current_device_resource_ref());
+    partitions, stream, resources.get_temporary_mr());
   InitRowGroupFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
   frag.device_to_host(stream);
 }
@@ -1169,7 +1169,7 @@ void calculate_page_fragments(device_span<PageFragment> frag,
                               rmm::cuda_stream_view stream)
 {
   auto d_frag_sz = cudf::detail::make_device_uvector_async(
-    frag_sizes, stream, cudf::get_current_device_resource_ref());
+    frag_sizes, stream, resources.get_temporary_mr());
   CalculatePageFragments(frag, d_frag_sz, stream);
 }
 
@@ -1514,7 +1514,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
   rmm::device_uvector<codec_exec_result> comp_res(max_comp_pages, stream);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy(stream, resources.get_temporary_mr()),
                comp_res.begin(),
                comp_res.end(),
                codec_exec_result{0, codec_status::FAILURE});
@@ -1769,7 +1769,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   part_frag_offset.push_back(part_frag_offset.back() + num_frag_in_part.back());
 
   auto d_part_frag_offset = cudf::detail::make_device_uvector_async(
-    part_frag_offset, stream, cudf::get_current_device_resource_ref());
+    part_frag_offset, stream, resources.get_temporary_mr());
   cudf::detail::hostdevice_2dvector<PageFragment> row_group_fragments(
     num_columns, num_fragments, stream);
 
@@ -2049,9 +2049,9 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   rmm::device_uvector<uint32_t> rep_level_histogram(rep_histogram_bfr_size, stream);
 
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), def_level_histogram.begin(), def_level_histogram.end(), 0);
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), def_level_histogram.begin(), def_level_histogram.end(), 0);
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), rep_level_histogram.begin(), rep_level_histogram.end(), 0);
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), rep_level_histogram.begin(), rep_level_histogram.end(), 0);
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);

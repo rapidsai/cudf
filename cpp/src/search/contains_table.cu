@@ -27,7 +27,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                    null_equality compare_nulls,
                                    nan_equality compare_nans,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_EXPECTS(cudf::have_same_types(haystack, needles), "Column types mismatch");
 
@@ -41,7 +41,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     cudf::detail::row::equality::preprocessed_table::create(haystack, stream);
 
   // The output vector.
-  auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
+  auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, resources);
 
   // Only use primitive row operators for non-floating-point types since they don't handle NaN
   // equality

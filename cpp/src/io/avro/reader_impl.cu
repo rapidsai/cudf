@@ -190,7 +190,7 @@ rmm::device_buffer decompress_data(datasource& source,
       cudf::detail::hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
     auto inflate_stats =
       cudf::detail::hostdevice_vector<codec_exec_result>(meta.block_list.size(), stream);
-    thrust::fill(rmm::exec_policy(stream),
+    thrust::fill(rmm::exec_policy(stream, resources.get_temporary_mr()),
                  inflate_stats.d_begin(),
                  inflate_stats.d_end(),
                  codec_exec_result{0, codec_status::FAILURE});
@@ -294,7 +294,7 @@ rmm::device_buffer decompress_data(datasource& source,
 
     rmm::device_buffer decompressed_data(uncompressed_data_size, stream);
     rmm::device_uvector<device_span<uint8_t>> decompressed_blocks(num_blocks, stream);
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      decompressed_blocks.begin(),
                      decompressed_blocks.end(),
                      [off  = uncompressed_offsets.device_ptr(),
@@ -304,7 +304,7 @@ rmm::device_buffer decompress_data(datasource& source,
                      });
 
     rmm::device_uvector<codec_exec_result> decomp_results(num_blocks, stream);
-    thrust::fill(rmm::exec_policy_nosync(stream),
+    thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                  decomp_results.begin(),
                  decomp_results.end(),
                  codec_exec_result{0, codec_status::FAILURE});
@@ -316,7 +316,7 @@ rmm::device_buffer decompress_data(datasource& source,
                max_decomp_block_size,
                uncompressed_data_size,
                stream);
-    CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+    CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                uncompressed_sizes.d_begin(),
                                uncompressed_sizes.d_end(),
                                decomp_results.begin(),
@@ -346,14 +346,14 @@ std::vector<column_buffer> decode_data(metadata& meta,
                                        std::vector<std::pair<int, std::string>> const& selection,
                                        std::vector<data_type> const& column_types,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   auto out_buffers = std::vector<column_buffer>();
 
   for (size_t i = 0; i < column_types.size(); ++i) {
     auto col_idx     = selection[i].first;
     bool is_nullable = (meta.columns[col_idx].schema_null_idx >= 0);
-    out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, mr);
+    out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, resources);
   }
 
   // Build gpu schema
@@ -420,7 +420,7 @@ std::vector<column_buffer> decode_data(metadata& meta,
   }
 
   auto block_list = cudf::detail::make_device_uvector_async(
-    meta.block_list, stream, cudf::get_current_device_resource_ref());
+    meta.block_list, stream, resources.get_temporary_mr());
 
   schema_desc.host_to_device_async(stream);
 
@@ -456,7 +456,7 @@ std::vector<column_buffer> decode_data(metadata& meta,
 table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                               avro_reader_options const& options,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   auto skip_rows = options.get_skip_rows();
   auto num_rows  = options.get_num_rows();
@@ -522,8 +522,8 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
         }
       }
 
-      auto d_global_dict      = rmm::device_uvector<string_index_pair>(0, stream);
-      auto d_global_dict_data = rmm::device_uvector<char>(0, stream);
+      auto d_global_dict      = rmm::device_uvector<string_index_pair>(0, stream, resources.get_temporary_mr());
+      auto d_global_dict_data = rmm::device_uvector<char>(0, stream, resources.get_temporary_mr());
 
       if (total_dictionary_entries > 0) {
         auto h_global_dict =
@@ -550,9 +550,9 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
         }
 
         d_global_dict = cudf::detail::make_device_uvector_async(
-          h_global_dict, stream, cudf::get_current_device_resource_ref());
+          h_global_dict, stream, resources.get_temporary_mr());
         d_global_dict_data = cudf::detail::make_device_uvector_async(
-          h_global_dict_data, stream, cudf::get_current_device_resource_ref());
+          h_global_dict_data, stream, resources.get_temporary_mr());
 
         stream.synchronize();
       }
@@ -565,7 +565,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                                      selected_columns,
                                      column_types,
                                      stream,
-                                     mr);
+                                     resources);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
@@ -578,7 +578,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
     }
   }
 
-  out_columns = cudf::structs::detail::enforce_null_consistency(std::move(out_columns), stream, mr);
+  out_columns = cudf::structs::detail::enforce_null_consistency(std::move(out_columns), stream, resources);
 
   // Return column names
   metadata_out.schema_info.reserve(selected_columns.size());

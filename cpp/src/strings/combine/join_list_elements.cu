@@ -169,7 +169,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            separator_on_nulls separate_nulls,
                                            output_if_empty_list empty_list_policy,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
@@ -198,13 +198,13 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     separate_nulls,
                                                     empty_list_policy};
 
-  auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, resources);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(num_rows),
                            validities_fn{comp_fn},
                            stream,
-                           mr);
+                           resources);
 
   return make_strings_column(
     num_rows, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
@@ -242,7 +242,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            separator_on_nulls separate_nulls,
                                            output_if_empty_list empty_list_policy,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
@@ -273,13 +273,13 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     separate_nulls,
                                                     empty_list_policy};
 
-  auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, resources);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(num_rows),
                            validities_fn{comp_fn},
                            stream,
-                           mr);
+                           resources);
 
   return make_strings_column(
     num_rows, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
@@ -293,11 +293,11 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            separator_on_nulls separate_nulls,
                                            output_if_empty_list empty_list_policy,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::join_list_elements(
-    lists_strings_column, separator, narep, separate_nulls, empty_list_policy, stream, mr);
+    lists_strings_column, separator, narep, separate_nulls, empty_list_policy, stream, resources);
 }
 
 std::unique_ptr<column> join_list_elements(lists_column_view const& lists_strings_column,
@@ -307,7 +307,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            separator_on_nulls separate_nulls,
                                            output_if_empty_list empty_list_policy,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::join_list_elements(lists_strings_column,
@@ -317,7 +317,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                     separate_nulls,
                                     empty_list_policy,
                                     stream,
-                                    mr);
+                                    resources);
 }
 
 }  // namespace strings

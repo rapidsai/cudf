@@ -106,7 +106,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
@@ -115,8 +115,10 @@ std::unique_ptr<column> allocate_like(column_view const& input,
 
   return std::make_unique<column>(input.type(),
                                   size,
-                                  rmm::device_buffer(size * size_of(input.type()), stream, mr),
-                                  detail::create_null_mask(size, allocate_mask, stream, mr),
+                                  rmm::device_buffer(size * size_of(input.type()), stream,
+                  resources),
+                                  detail::create_null_mask(size, allocate_mask, stream,
+                  resources),
                                   0);
 }
 
@@ -170,20 +172,20 @@ std::unique_ptr<table> empty_like(table_view const& input_table)
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       mask_allocation_policy mask_alloc,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::allocate_like(input, input.size(), mask_alloc, stream, mr);
+  return detail::allocate_like(input, input.size(), mask_alloc, stream, resources);
 }
 
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::allocate_like(input, size, mask_alloc, stream, mr);
+  return detail::allocate_like(input, size, mask_alloc, stream, resources);
 }
 
 }  // namespace cudf

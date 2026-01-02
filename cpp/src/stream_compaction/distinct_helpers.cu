@@ -16,9 +16,9 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
-  auto output_indices = rmm::device_uvector<size_type>(num_rows, stream, mr);
+  auto output_indices = rmm::device_uvector<size_type>(num_rows, stream, resources);
 
   // If we don't care about order, just gather indices of distinct keys taken from set.
   if (keep == duplicate_keep_option::KEEP_ANY) {
@@ -29,15 +29,15 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
     return output_indices;
   }
 
-  auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream, mr);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+  auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream, resources);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                              reduction_results.begin(),
                              reduction_results.end(),
                              reduction_init_value(keep));
 
   auto set_ref = set.ref(cuco::op::insert_and_find);
 
-  thrust::for_each(rmm::exec_policy_nosync(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(num_rows),
                    [set_ref, keep, reduction_results = reduction_results.begin()] __device__(
@@ -63,7 +63,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
       // Reduction results with `KEEP_NONE` are either group sizes of equal rows, or `0`.
       // Thus, we only output index of the rows in the groups having group size of `1`.
       return thrust::copy_if(
-        rmm::exec_policy(stream),
+        rmm::exec_policy(stream, resources.get_temporary_mr()),
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_rows),
         output_indices.begin(),
@@ -77,7 +77,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
     // each group of equal rows (which are the desired output indices), or the value given by
     // `reduction_init_value()`.
     return thrust::copy_if(
-      rmm::exec_policy(stream),
+      rmm::exec_policy(stream, resources.get_temporary_mr()),
       reduction_results.begin(),
       reduction_results.end(),
       output_indices.begin(),
@@ -97,7 +97,7 @@ template rmm::device_uvector<size_type> reduce_by_row(
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  cudf::memory_resources resources);
 
 template rmm::device_uvector<size_type> reduce_by_row(
   distinct_set_t<cudf::detail::row::equality::device_row_comparator<
@@ -107,7 +107,7 @@ template rmm::device_uvector<size_type> reduce_by_row(
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  cudf::memory_resources resources);
 
 template rmm::device_uvector<size_type> reduce_by_row(
   distinct_set_t<cudf::detail::row::equality::device_row_comparator<
@@ -117,7 +117,7 @@ template rmm::device_uvector<size_type> reduce_by_row(
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  cudf::memory_resources resources);
 
 template rmm::device_uvector<size_type> reduce_by_row(
   distinct_set_t<cudf::detail::row::equality::device_row_comparator<
@@ -127,6 +127,6 @@ template rmm::device_uvector<size_type> reduce_by_row(
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  cudf::memory_resources resources);
 
 }  // namespace cudf::detail

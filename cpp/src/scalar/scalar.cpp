@@ -22,13 +22,15 @@ namespace cudf {
 scalar::scalar(data_type type,
                bool is_valid,
                rmm::cuda_stream_view stream,
-               rmm::device_async_resource_ref mr)
-  : _type(type), _is_valid(is_valid, stream, mr)
+               cudf::memory_resources resources)
+  : _type(type), _is_valid(is_valid, stream,
+                  resources)
 {
 }
 
-scalar::scalar(scalar const& other, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-  : _type(other.type()), _is_valid(other._is_valid, stream, mr)
+scalar::scalar(scalar const& other, rmm::cuda_stream_view stream, cudf::memory_resources resources)
+  : _type(other.type()), _is_valid(other._is_valid, stream,
+                  resources)
 {
 }
 
@@ -48,9 +50,11 @@ bool const* scalar::validity_data() const { return _is_valid.data(); }
 string_scalar::string_scalar(std::string_view string,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_id::STRING), is_valid, stream, mr),
-    _data(string.data(), string.size(), stream, mr)
+                             cudf::memory_resources resources)
+  : scalar(data_type(type_id::STRING), is_valid, stream,
+                  resources),
+    _data(string.data(), string.size(), stream,
+                  resources)
 {
   CUDF_EXPECTS(
     string.size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
@@ -60,33 +64,39 @@ string_scalar::string_scalar(std::string_view string,
 
 string_scalar::string_scalar(string_scalar const& other,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-  : scalar(other, stream, mr), _data(other._data, stream, mr)
+                             cudf::memory_resources resources)
+  : scalar(other, stream,
+                  resources), _data(other._data, stream,
+                  resources)
 {
 }
 
 string_scalar::string_scalar(rmm::device_scalar<value_type>& data,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-  : string_scalar(data.value(stream), is_valid, stream, mr)
+                             cudf::memory_resources resources)
+  : string_scalar(data.value(stream), is_valid, stream,
+                  resources)
 {
 }
 
 string_scalar::string_scalar(value_type const& source,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_id::STRING), is_valid, stream, mr),
-    _data(source.data(), source.size_bytes(), stream, mr)
+                             cudf::memory_resources resources)
+  : scalar(data_type(type_id::STRING), is_valid, stream,
+                  resources),
+    _data(source.data(), source.size_bytes(), stream,
+                  resources)
 {
 }
 
 string_scalar::string_scalar(rmm::device_buffer&& data,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_id::STRING), is_valid, stream, mr), _data(std::move(data))
+                             cudf::memory_resources resources)
+  : scalar(data_type(type_id::STRING), is_valid, stream,
+                  resources), _data(std::move(data))
 {
 }
 
@@ -113,7 +123,7 @@ fixed_point_scalar<T>::fixed_point_scalar(rep_type value,
                                           numeric::scale_type scale,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
   : scalar{data_type{type_to_id<T>(), static_cast<int32_t>(scale)}, is_valid, stream, mr},
     _data{value, stream, mr}
 {
@@ -123,7 +133,7 @@ template <typename T>
 fixed_point_scalar<T>::fixed_point_scalar(rep_type value,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
   : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr}, _data{value, stream, mr}
 {
 }
@@ -132,7 +142,7 @@ template <typename T>
 fixed_point_scalar<T>::fixed_point_scalar(T value,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
   : scalar{data_type{type_to_id<T>(), value.scale()}, is_valid, stream, mr},
     _data{value.value(), stream, mr}
 {
@@ -143,7 +153,7 @@ fixed_point_scalar<T>::fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
                                           numeric::scale_type scale,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
   : scalar{data_type{type_to_id<T>(), scale}, is_valid, stream, mr}, _data{std::move(data)}
 {
 }
@@ -151,8 +161,9 @@ fixed_point_scalar<T>::fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
 template <typename T>
 fixed_point_scalar<T>::fixed_point_scalar(fixed_point_scalar<T> const& other,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
-  : scalar{other, stream, mr}, _data(other._data, stream, mr)
+                                          cudf::memory_resources resources)
+  : scalar{other, stream, mr}, _data(other._data, stream,
+                  resources)
 {
 }
 
@@ -200,8 +211,10 @@ template <typename T>
 fixed_width_scalar<T>::fixed_width_scalar(T value,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_to_id<T>()), is_valid, stream, mr), _data(value, stream, mr)
+                                          cudf::memory_resources resources)
+  : scalar(data_type(type_to_id<T>()), is_valid, stream,
+                  resources), _data(value, stream,
+                  resources)
 {
 }
 
@@ -209,16 +222,18 @@ template <typename T>
 fixed_width_scalar<T>::fixed_width_scalar(rmm::device_scalar<T>&& data,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_to_id<T>()), is_valid, stream, mr), _data{std::move(data)}
+                                          cudf::memory_resources resources)
+  : scalar(data_type(type_to_id<T>()), is_valid, stream,
+                  resources), _data{std::move(data)}
 {
 }
 
 template <typename T>
 fixed_width_scalar<T>::fixed_width_scalar(fixed_width_scalar<T> const& other,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
-  : scalar{other, stream, mr}, _data(other._data, stream, mr)
+                                          cudf::memory_resources resources)
+  : scalar{other, stream, mr}, _data(other._data, stream,
+                  resources)
 {
 }
 
@@ -284,8 +299,9 @@ template <typename T>
 numeric_scalar<T>::numeric_scalar(T value,
                                   bool is_valid,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
-  : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+                                  cudf::memory_resources resources)
+  : detail::fixed_width_scalar<T>(value, is_valid, stream,
+                  resources)
 {
 }
 
@@ -293,15 +309,16 @@ template <typename T>
 numeric_scalar<T>::numeric_scalar(rmm::device_scalar<T>&& data,
                                   bool is_valid,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
-  : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
+                                  cudf::memory_resources resources)
+  : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream,
+                  resources)
 {
 }
 
 template <typename T>
 numeric_scalar<T>::numeric_scalar(numeric_scalar<T> const& other,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
   : detail::fixed_width_scalar<T>{other, stream, mr}
 {
 }
@@ -331,8 +348,9 @@ template <typename T>
 chrono_scalar<T>::chrono_scalar(T value,
                                 bool is_valid,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
-  : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+                                cudf::memory_resources resources)
+  : detail::fixed_width_scalar<T>(value, is_valid, stream,
+                  resources)
 {
 }
 
@@ -340,15 +358,16 @@ template <typename T>
 chrono_scalar<T>::chrono_scalar(rmm::device_scalar<T>&& data,
                                 bool is_valid,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
-  : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
+                                cudf::memory_resources resources)
+  : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream,
+                  resources)
 {
 }
 
 template <typename T>
 chrono_scalar<T>::chrono_scalar(chrono_scalar<T> const& other,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
   : detail::fixed_width_scalar<T>{other, stream, mr}
 {
 }
@@ -376,15 +395,16 @@ template <typename T>
 duration_scalar<T>::duration_scalar(rep_type value,
                                     bool is_valid,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
-  : chrono_scalar<T>(T{value}, is_valid, stream, mr)
+                                    cudf::memory_resources resources)
+  : chrono_scalar<T>(T{value}, is_valid, stream,
+                  resources)
 {
 }
 
 template <typename T>
 duration_scalar<T>::duration_scalar(duration_scalar<T> const& other,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
   : chrono_scalar<T>{other, stream, mr}
 {
 }
@@ -435,15 +455,16 @@ template <typename D>
 timestamp_scalar<T>::timestamp_scalar(D const& value,
                                       bool is_valid,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
-  : chrono_scalar<T>(T{typename T::duration{value}}, is_valid, stream, mr)
+                                      cudf::memory_resources resources)
+  : chrono_scalar<T>(T{typename T::duration{value}}, is_valid, stream,
+                  resources)
 {
 }
 
 template <typename T>
 timestamp_scalar<T>::timestamp_scalar(timestamp_scalar<T> const& other,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
   : chrono_scalar<T>{other, stream, mr}
 {
 }
@@ -479,23 +500,27 @@ TS_CTOR(timestamp_ns, int64_t)
 list_scalar::list_scalar(cudf::column_view const& data,
                          bool is_valid,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(data, stream, mr)
+                         cudf::memory_resources resources)
+  : scalar(data_type(type_id::LIST), is_valid, stream,
+                  resources), _data(data, stream,
+                  resources)
 {
 }
 
 list_scalar::list_scalar(cudf::column&& data,
                          bool is_valid,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(std::move(data))
+                         cudf::memory_resources resources)
+  : scalar(data_type(type_id::LIST), is_valid, stream,
+                  resources), _data(std::move(data))
 {
 }
 
 list_scalar::list_scalar(list_scalar const& other,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
-  : scalar{other, stream, mr}, _data(other._data, stream, mr)
+                         cudf::memory_resources resources)
+  : scalar{other, stream, mr}, _data(other._data, stream,
+                  resources)
 {
 }
 
@@ -503,17 +528,20 @@ column_view list_scalar::view() const { return _data.view(); }
 
 struct_scalar::struct_scalar(struct_scalar const& other,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-  : scalar{other, stream, mr}, _data(other._data, stream, mr)
+                             cudf::memory_resources resources)
+  : scalar{other, stream, mr}, _data(other._data, stream,
+                  resources)
 {
 }
 
 struct_scalar::struct_scalar(table_view const& data,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
-    _data{init_data(table{data, stream, mr}, is_valid, stream, mr)}
+                             cudf::memory_resources resources)
+  : scalar(data_type(type_id::STRUCT), is_valid, stream,
+                  resources),
+    _data{init_data(table{data, stream, mr}, is_valid, stream,
+                  resources)}
 {
   assert_valid_size();
 }
@@ -521,8 +549,9 @@ struct_scalar::struct_scalar(table_view const& data,
 struct_scalar::struct_scalar(host_span<column_view const> data,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
+                             cudf::memory_resources resources)
+  : scalar(data_type(type_id::STRUCT), is_valid, stream,
+                  resources),
     _data{
       init_data(table{table_view{std::vector<column_view>{data.begin(), data.end()}}, stream, mr},
                 is_valid,
@@ -535,9 +564,11 @@ struct_scalar::struct_scalar(host_span<column_view const> data,
 struct_scalar::struct_scalar(table&& data,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
-    _data{init_data(std::move(data), is_valid, stream, mr)}
+                             cudf::memory_resources resources)
+  : scalar(data_type(type_id::STRUCT), is_valid, stream,
+                  resources),
+    _data{init_data(std::move(data), is_valid, stream,
+                  resources)}
 {
   assert_valid_size();
 }
@@ -555,7 +586,7 @@ void struct_scalar::assert_valid_size()
 table struct_scalar::init_data(table&& data,
                                bool is_valid,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   if (is_valid) { return std::move(data); }
 
@@ -563,10 +594,10 @@ table struct_scalar::init_data(table&& data,
 
   // push validity mask down
   auto const validity = cudf::detail::create_null_mask(
-    1, mask_state::ALL_NULL, stream, cudf::get_current_device_resource_ref());
+    1, mask_state::ALL_NULL, stream, resources.get_temporary_mr());
   for (auto& col : data_cols) {
     col = cudf::structs::detail::superimpose_and_sanitize_nulls(
-      static_cast<bitmask_type const*>(validity.data()), 1, std::move(col), stream, mr);
+      static_cast<bitmask_type const*>(validity.data()), 1, std::move(col), stream, resources);
   }
 
   return table{std::move(data_cols)};

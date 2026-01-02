@@ -31,7 +31,7 @@ namespace detail {
 std::unique_ptr<column> encode(column_view const& input_column,
                                data_type indices_type,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_EXPECTS(is_signed(indices_type) && is_index_type(indices_type),
                "indices must be type signed integer",
@@ -40,7 +40,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
                "cannot encode a dictionary from a dictionary",
                std::invalid_argument);
 
-  auto codified       = cudf::detail::encode(cudf::table_view({input_column}), stream, mr);
+  auto codified       = cudf::detail::encode(cudf::table_view({input_column}), stream, resources);
   auto keys_table     = std::move(codified.first);
   auto indices_column = std::move(codified.second);
   auto keys_column    = std::move(keys_table->release().front());
@@ -51,18 +51,19 @@ std::unique_ptr<column> encode(column_view const& input_column,
         keys_column->view(), std::vector<size_type>{0, keys_column->size() - 1}, stream)
         .front(),
       stream,
-      mr);
+      resources);
     keys_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // remove the null-mask
   }
 
   if (indices_column->type() != indices_type) {
-    indices_column = cudf::detail::cast(indices_column->view(), indices_type, stream, mr);
+    indices_column = cudf::detail::cast(indices_column->view(), indices_type, stream, resources);
   }
 
   // create column with keys_column and indices_column
   return make_dictionary_column(std::move(keys_column),
                                 std::move(indices_column),
-                                cudf::detail::copy_bitmask(input_column, stream, mr),
+                                cudf::detail::copy_bitmask(input_column, stream,
+                  resources),
                                 input_column.null_count());
 }
 
@@ -83,10 +84,10 @@ data_type get_indices_type_for_size(size_type keys_size)
 std::unique_ptr<column> encode(column_view const& input_column,
                                data_type indices_type,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::encode(input_column, indices_type, stream, mr);
+  return detail::encode(input_column, indices_type, stream, resources);
 }
 
 }  // namespace dictionary

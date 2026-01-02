@@ -60,10 +60,10 @@ void compute_m2_fn(column_device_view const& values,
   // Using a temporary buffer for intermediate transform results instead of
   // using the transform-iterator directly in thrust::reduce_by_key
   // improves compile-time significantly.
-  auto m2_vals = rmm::device_uvector<ResultType>(values.size(), stream);
-  thrust::transform(rmm::exec_policy(stream), itr, itr + values.size(), m2_vals.begin(), m2_fn);
+  auto m2_vals = rmm::device_uvector<ResultType>(values.size(), stream, resources.get_temporary_mr());
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()), itr, itr + values.size(), m2_vals.begin(), m2_fn);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                         group_labels.begin(),
                         group_labels.end(),
                         m2_vals.begin(),
@@ -77,7 +77,7 @@ struct m2_functor {
                                      column_view const& group_means,
                                      cudf::device_span<size_type const> group_labels,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(std::is_arithmetic_v<T>)
   {
     using result_type = cudf::detail::target_type_t<T, aggregation::Kind::M2>;
@@ -85,7 +85,7 @@ struct m2_functor {
                                       group_means.size(),
                                       mask_state::UNALLOCATED,
                                       stream,
-                                      mr);
+                                      resources);
 
     auto const values_dv_ptr = column_device_view::create(values, stream);
     auto const d_values      = *values_dv_ptr;
@@ -118,13 +118,13 @@ std::unique_ptr<column> group_m2(column_view const& values,
                                  column_view const& group_means,
                                  cudf::device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
 
-  return type_dispatcher(values_type, m2_functor{}, values, group_means, group_labels, stream, mr);
+  return type_dispatcher(values_type, m2_functor{}, values, group_means, group_labels, stream, resources);
 }
 
 }  // namespace detail

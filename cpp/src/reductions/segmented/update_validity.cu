@@ -20,7 +20,7 @@ void segmented_update_validity(column& result,
                                null_policy null_handling,
                                std::optional<std::reference_wrapper<scalar const>> init,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   auto [output_null_mask, output_null_count] = cudf::detail::segmented_null_mask_reduction(
     col.null_mask(),
@@ -30,7 +30,7 @@ void segmented_update_validity(column& result,
     null_handling,
     init.has_value() ? std::optional(init.value().get().is_valid(stream)) : std::nullopt,
     stream,
-    mr);
+    resources);
   result.set_null_mask(std::move(output_null_mask), output_null_count);
 }
 

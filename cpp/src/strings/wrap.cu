@@ -85,7 +85,7 @@ template <typename device_execute_functor>
 std::unique_ptr<column> wrap(strings_column_view const& strings,
                              size_type width,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_EXPECTS(width > 0, "Positive wrap width required");
 
@@ -97,10 +97,10 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
   size_type null_count = strings.null_count();
 
   // copy null mask
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, resources);
 
   // build offsets column
-  auto offsets_column = std::make_unique<column>(strings.offsets(), stream, mr);  // makes a copy
+  auto offsets_column = std::make_unique<column>(strings.offsets(), stream, resources);  // makes a copy
   auto d_new_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
@@ -112,7 +112,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
 
   device_execute_functor d_execute_fctr{d_column, d_new_offsets, d_chars, width};
 
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      d_execute_fctr);
@@ -129,10 +129,10 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
 std::unique_ptr<column> wrap(strings_column_view const& strings,
                              size_type width,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::wrap<detail::execute_wrap>(strings, width, stream, mr);
+  return detail::wrap<detail::execute_wrap>(strings, width, stream, resources);
 }
 
 }  // namespace strings

@@ -66,11 +66,11 @@ struct sort_radix_fn {
     std::size_t tmp_bytes = 0;
     if (ascending) {
       cub::DeviceRadixSort::SortKeys(nullptr, tmp_bytes, d_in, d_out, n, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, resources.get_temporary_mr());
       cub::DeviceRadixSort::SortKeys(tmp_stg.data(), tmp_bytes, d_in, d_out, n, 0, end_bit, sv);
     } else {
       cub::DeviceRadixSort::SortKeysDescending(nullptr, tmp_bytes, d_in, d_out, n, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, resources.get_temporary_mr());
       cub::DeviceRadixSort::SortKeysDescending(
         tmp_stg.data(), tmp_bytes, d_in, d_out, n, 0, end_bit, sv);
     }
@@ -85,7 +85,7 @@ struct sort_radix_fn {
     auto pair_out = rmm::device_uvector<float_pair<T>>(input.size(), stream);
     auto d_out    = pair_out.begin();
 
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::counting_iterator<size_type>(0),
                       thrust::counting_iterator<size_type>(input.size()),
                       d_in,
@@ -100,17 +100,17 @@ struct sort_radix_fn {
     if (ascending) {
       cub::DeviceRadixSort::SortKeys(
         nullptr, tmp_bytes, d_in, d_out, n, decomposer, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, resources.get_temporary_mr());
       cub::DeviceRadixSort::SortKeys(
         tmp_stg.data(), tmp_bytes, d_in, d_out, n, decomposer, 0, end_bit, sv);
     } else {
       cub::DeviceRadixSort::SortKeysDescending(
         nullptr, tmp_bytes, d_in, d_out, n, decomposer, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, resources.get_temporary_mr());
       cub::DeviceRadixSort::SortKeysDescending(
         tmp_stg.data(), tmp_bytes, d_in, d_out, n, decomposer, 0, end_bit, sv);
     }
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       d_out,
                       d_out + input.size(),
                       output.begin<T>(),
@@ -150,9 +150,9 @@ bool is_radix_sortable(column_view const& column)
 std::unique_ptr<column> sort_radix(column_view const& input,
                                    bool ascending,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
-  auto result   = std::make_unique<column>(input, stream, mr);
+  auto result   = std::make_unique<column>(input, stream, resources);
   auto out_view = result->mutable_view();
   cudf::type_dispatcher<dispatch_storage_type>(input.type(),
                                                sort_radix_fn{input, out_view, ascending, stream});

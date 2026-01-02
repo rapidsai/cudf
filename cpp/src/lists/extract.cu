@@ -55,7 +55,7 @@ std::unique_ptr<cudf::column> make_index_child(column_view const& indices,
     cudf::detail::make_null_replacement_iterator(*d_indices, std::numeric_limits<size_type>::max());
   auto index_child =
     make_numeric_column(data_type{type_id::INT32}, indices.size(), mask_state::UNALLOCATED, stream);
-  thrust::copy_n(rmm::exec_policy(stream),
+  thrust::copy_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                  null_replaced_iter_begin,
                  indices.size(),
                  index_child->mutable_view().begin<size_type>());
@@ -78,7 +78,7 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
   auto index_child =  // [index, index, index, ..., index]
     make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream);
   thrust::fill_n(
-    rmm::exec_policy(stream), index_child->mutable_view().begin<size_type>(), num_rows, index);
+    rmm::exec_policy(stream, resources.get_temporary_mr()), index_child->mutable_view().begin<size_type>(), num_rows, index);
   return index_child;
 }
 
@@ -94,7 +94,7 @@ std::unique_ptr<cudf::column> make_index_offsets(size_type num_lists, rmm::cuda_
   return cudf::detail::sequence(num_lists + 1,
                                 cudf::scalar_type_t<size_type>(0, true, stream),
                                 stream,
-                                cudf::get_current_device_resource_ref());
+                                resources.get_temporary_mr());
 }
 
 }  // namespace
@@ -108,7 +108,7 @@ template <typename index_t>
 std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column,
                                                   index_t const& index,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
+                                                  cudf::memory_resources resources)
 {
   auto const num_lists = lists_column.size();
   if (num_lists == 0) { return empty_like(lists_column.child()); }
@@ -143,7 +143,7 @@ std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column
                                           index_lists_column->view(),
                                           out_of_bounds_policy::NULLIFY,
                                           stream,
-                                          mr);
+                                          resources);
 
   auto output =
     std::move(extracted_lists->release().children[lists_column_view::child_column_index]);
@@ -154,7 +154,7 @@ std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column
   // Thus, we need to superimpose nulls from the input column into the output to make sure each
   // input null list always results in a null output row.
   return cudf::structs::detail::superimpose_and_sanitize_nulls(
-    lists_column.null_mask(), lists_column.null_count(), std::move(output), stream, mr);
+    lists_column.null_mask(), lists_column.null_count(), std::move(output), stream, resources);
 }
 
 /**
@@ -164,17 +164,17 @@ std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              size_type const index,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
-  return detail::extract_list_element_impl(lists_column, index, stream, mr);
+  return detail::extract_list_element_impl(lists_column, index, stream, resources);
 }
 
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              column_view const& indices,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
-  return detail::extract_list_element_impl(lists_column, indices, stream, mr);
+  return detail::extract_list_element_impl(lists_column, indices, stream, resources);
 }
 
 }  // namespace detail
@@ -187,10 +187,10 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
 std::unique_ptr<column> extract_list_element(lists_column_view const& lists_column,
                                              size_type index,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_list_element(lists_column, index, stream, mr);
+  return detail::extract_list_element(lists_column, index, stream, resources);
 }
 
 /**
@@ -201,12 +201,12 @@ std::unique_ptr<column> extract_list_element(lists_column_view const& lists_colu
 std::unique_ptr<column> extract_list_element(lists_column_view const& lists_column,
                                              column_view const& indices,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(indices.size() == lists_column.size(),
                "Index column must have as many elements as lists column.");
-  return detail::extract_list_element(lists_column, indices, stream, mr);
+  return detail::extract_list_element(lists_column, indices, stream, resources);
 }
 
 }  // namespace lists

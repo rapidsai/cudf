@@ -50,7 +50,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        Hash const& d_row_hash,
                                        cudf::detail::result_cache* cache,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   auto const num_keys = keys.num_rows();
 
@@ -87,7 +87,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     }
 
     rmm::device_uvector<hash_value_type> hashes(num_keys, stream);
-    thrust::tabulate(rmm::exec_policy_nosync(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      hashes.begin(),
                      hashes.end(),
                      [d_row_hash, row_bitmask] __device__(size_type const idx) {
@@ -116,13 +116,13 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                                 out_of_bounds_policy::DONT_CHECK,
                                 cudf::detail::negative_index_policy::NOT_ALLOWED,
                                 stream,
-                                mr);
+                                resources);
   };
 
   // In case of no requests, we still need to generate a set of unique keys.
   if (requests.empty()) {
     thrust::for_each_n(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
       thrust::make_counting_iterator(0),
       num_keys,
       [set_ref = set.ref(cuco::op::insert), row_bitmask] __device__(size_type const idx) mutable {
@@ -139,7 +139,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
 
   // Compute all single pass aggs first.
   auto const [key_gather_map, has_compound_aggs] =
-    compute_single_pass_aggs(set, row_bitmask, requests, cache, stream, mr);
+    compute_single_pass_aggs(set, row_bitmask, requests, cache, stream, resources);
 
   if (has_compound_aggs) {
     for (auto const& request : requests) {
@@ -152,7 +152,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       // single-pass aggregations with linear transformations such as addition/multiplication (e.g.
       // for variance/stddev). In the future, if there are more compound aggregations that require
       // additional aggregation steps, we can revisit this design.
-      auto finalizer = hash_compound_agg_finalizer(col, cache, row_bitmask, stream, mr);
+      auto finalizer = hash_compound_agg_finalizer(col, cache, row_bitmask, stream, resources);
       for (auto&& agg : agg_v) {
         agg->finalize(finalizer);
       }
@@ -170,7 +170,7 @@ template std::unique_ptr<table> compute_groupby<row_comparator_t, row_hash_t>(
   row_hash_t const& d_row_hash,
   cudf::detail::result_cache* cache,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  cudf::memory_resources resources);
 
 template std::unique_ptr<table> compute_groupby<nullable_row_comparator_t, row_hash_t>(
   table_view const& keys,
@@ -180,5 +180,5 @@ template std::unique_ptr<table> compute_groupby<nullable_row_comparator_t, row_h
   row_hash_t const& d_row_hash,
   cudf::detail::result_cache* cache,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  cudf::memory_resources resources);
 }  // namespace cudf::groupby::detail::hash

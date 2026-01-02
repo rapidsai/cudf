@@ -35,20 +35,21 @@ namespace detail {
  */
 std::unique_ptr<column> count_elements(lists_column_view const& input,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   auto device_column = cudf::column_device_view::create(input.parent(), stream);
   auto d_column      = *device_column;
   // create output column
   auto output = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                         input.size(),
-                                        cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                        cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                         input.null_count(),
                                         stream,
-                                        mr);
+                                        resources);
 
   // fill in the sizes
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(input.size()),
                     output->mutable_view().begin<size_type>(),
@@ -64,10 +65,10 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
 
 std::unique_ptr<column> count_elements(lists_column_view const& input,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_elements(input, stream, mr);
+  return detail::count_elements(input, stream, resources);
 }
 
 }  // namespace lists

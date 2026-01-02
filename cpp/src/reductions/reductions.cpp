@@ -46,7 +46,7 @@ struct reduction_parameters {
                        data_type const output_dtype,
                        std::optional<std::reference_wrapper<scalar const>> init,
                        rmm::cuda_stream_view stream,
-                       rmm::device_async_resource_ref mr)
+                       cudf::memory_resources resources)
     : agg(agg), col(col), output_dtype(output_dtype), init(init), stream(stream), mr(std::move(mr))
   {
   }
@@ -479,7 +479,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                data_type output_dtype,
                                std::optional<std::reference_wrapper<scalar const>> init,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_EXPECTS(!init.has_value() || cudf::have_same_types(col, init.value().get()),
                "column and initial value must be the same type",
@@ -497,7 +497,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
 
   auto const dt =
     cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type() : col.type();
-  auto const params = reduction_parameters(agg, col, output_dtype, init, stream, mr);
+  auto const params = reduction_parameters(agg, col, output_dtype, init, stream, resources);
 
   return (col.size() == col.null_count())
            ? cudf::detail::dispatch_type_and_aggregation(
@@ -522,10 +522,10 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                reduce_aggregation const& agg,
                                data_type output_dtype,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return reduction::detail::reduce(col, agg, output_dtype, std::nullopt, stream, mr);
+  return reduction::detail::reduce(col, agg, output_dtype, std::nullopt, stream, resources);
 }
 
 std::unique_ptr<scalar> reduce(column_view const& col,
@@ -533,10 +533,10 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                data_type output_dtype,
                                std::optional<std::reference_wrapper<scalar const>> init,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
+                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return reduction::detail::reduce(col, agg, output_dtype, init, stream, mr);
+  return reduction::detail::reduce(col, agg, output_dtype, init, stream, resources);
 }
 
 }  // namespace cudf

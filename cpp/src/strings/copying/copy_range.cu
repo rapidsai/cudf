@@ -49,7 +49,7 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
                                    size_type source_end,
                                    size_type target_begin,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   auto target_end = target_begin + (source_end - source_begin);
   CUDF_EXPECTS(
@@ -57,7 +57,7 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
     "Range is out of bounds.",
     std::invalid_argument);
 
-  if (target_end == target_begin) { return std::make_unique<column>(target.parent(), stream, mr); }
+  if (target_end == target_begin) { return std::make_unique<column>(target.parent(), stream, resources); }
   auto source_device_view = column_device_view::create(source.parent(), stream);
   auto d_source           = *source_device_view;
   auto target_device_view = column_device_view::create(target.parent(), stream);
@@ -77,21 +77,21 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
                  : d_target.is_valid(idx);
       },
       stream,
-      mr);
+      resources);
   }();
 
   // create offsets
   auto sizes_begin = cudf::detail::make_counting_transform_iterator(
     0, compute_element_size{d_source, d_target, source_begin, target_begin, target_end});
   auto [offsets_column, chars_bytes] = cudf::strings::detail::make_offsets_child_column(
-    sizes_begin, sizes_begin + target.size(), stream, mr);
+    sizes_begin, sizes_begin + target.size(), stream, resources);
   auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
   // create chars
-  auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
+  auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, resources);
   auto d_chars    = chars_data.data();
   thrust::for_each(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(target.size()),
     [d_source, d_target, source_begin, target_begin, target_end, d_offsets, d_chars] __device__(

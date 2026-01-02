@@ -28,7 +28,7 @@ namespace detail {
 std::unique_ptr<column> to_booleans(strings_column_view const& input,
                                     string_scalar const& true_string,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
@@ -44,14 +44,15 @@ std::unique_ptr<column> to_booleans(strings_column_view const& input,
   // create output column copying the strings' null-mask
   auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -71,10 +72,10 @@ std::unique_ptr<column> to_booleans(strings_column_view const& input,
 std::unique_ptr<column> to_booleans(strings_column_view const& input,
                                     string_scalar const& true_string,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_booleans(input, true_string, stream, mr);
+  return detail::to_booleans(input, true_string, stream, resources);
 }
 
 namespace detail {
@@ -110,7 +111,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       string_scalar const& true_string,
                                       string_scalar const& false_string,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   size_type strings_count = booleans.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
@@ -127,10 +128,10 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   auto d_column = *column;
 
   // copy null mask
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, resources);
 
   auto [offsets, chars] =
-    make_strings_children(from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, mr);
+    make_strings_children(from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, resources);
 
   return make_strings_column(strings_count,
                              std::move(offsets),
@@ -147,10 +148,10 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       string_scalar const& true_string,
                                       string_scalar const& false_string,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_booleans(booleans, true_string, false_string, stream, mr);
+  return detail::from_booleans(booleans, true_string, false_string, stream, resources);
 }
 
 }  // namespace strings

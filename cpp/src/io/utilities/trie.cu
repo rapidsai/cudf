@@ -93,7 +93,7 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(std::vector<std::st
     // Only add the terminating character if any nodes were added
     if (has_children) { nodes.emplace_back(trie_terminating_character); }
   }
-  return cudf::detail::make_device_uvector(nodes, stream, cudf::get_current_device_resource_ref());
+  return cudf::detail::make_device_uvector(nodes, stream, resources.get_temporary_mr());
 }
 
 }  // namespace detail

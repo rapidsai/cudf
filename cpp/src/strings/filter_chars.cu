@@ -109,7 +109,7 @@ std::unique_ptr<column> filter_characters(
   filter_type keep_characters,
   string_scalar const& replacement,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
@@ -124,19 +124,20 @@ std::unique_ptr<column> filter_characters(
       return char_range{entry.first, entry.second};
     });
   rmm::device_uvector<char_range> table = cudf::detail::make_device_uvector_async(
-    htable, stream, cudf::get_current_device_resource_ref());
+    htable, stream, resources.get_temporary_mr());
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
   // this utility calls the strip_fn to build the offsets and chars columns
   filter_fn ffn{*d_strings, keep_characters, table.begin(), table.end(), d_replacement};
-  auto [offsets_column, chars] = make_strings_children(ffn, strings.size(), stream, mr);
+  auto [offsets_column, chars] = make_strings_children(ffn, strings.size(), stream, resources);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              chars.release(),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(strings.parent(), stream,
+                  resources));
 }
 
 }  // namespace detail
@@ -150,11 +151,11 @@ std::unique_ptr<column> filter_characters(
   filter_type keep_characters,
   string_scalar const& replacement,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters(
-    input, characters_to_filter, keep_characters, replacement, stream, mr);
+    input, characters_to_filter, keep_characters, replacement, stream, resources);
 }
 
 }  // namespace strings

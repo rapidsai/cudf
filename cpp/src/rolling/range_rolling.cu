@@ -57,7 +57,7 @@ rmm::device_uvector<cudf::size_type> nulls_per_group(column_view const& orderby,
                                   offsets.begin(),
                                   offsets.begin() + 1,
                                   stream.value());
-  auto tmp = rmm::device_buffer(bytes, stream);
+  auto tmp = rmm::device_buffer(bytes, stream, resources.get_temporary_mr());
   cub::DeviceSegmentedReduce::Sum(tmp.data(),
                                   bytes,
                                   is_null_it,
@@ -77,7 +77,7 @@ std::unique_ptr<column> make_range_window(
   null_order null_order,
   range_window_type window,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   bool const nulls_at_start = (order == order::ASCENDING && null_order == null_order::BEFORE) ||
@@ -93,7 +93,7 @@ std::unique_ptr<column> make_range_window(
                            nulls_at_start,
                            row_delta,
                            stream,
-                           mr);
+                           resources);
   };
   return std::visit(
     [&](auto&& window) -> std::unique_ptr<column> {
@@ -111,7 +111,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   range_window_type preceding,
   range_window_type following,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   if (group_keys.num_columns() > 0) {
     using sort_helper = cudf::groupby::detail::sort::sort_groupby_helper;
@@ -123,7 +123,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
     auto grouping = detail::rolling::preprocessed_group_info{labels, offsets, per_group_nulls};
     return {
       make_range_window(
-        orderby, grouping, rolling::direction::PRECEDING, order, null_order, preceding, stream, mr),
+        orderby, grouping, rolling::direction::PRECEDING, order, null_order, preceding, stream,
+                  resources),
       make_range_window(orderby,
                         grouping,
                         rolling::direction::FOLLOWING,
@@ -161,14 +162,14 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   range_window_type preceding,
   range_window_type following,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
     group_keys.num_columns() == 0 || group_keys.num_rows() == orderby.size(),
     "If a grouping table is provided, it must have same number of rows as the orderby column.");
   return detail::make_range_windows(
-    group_keys, orderby, order, null_order, preceding, following, stream, mr);
+    group_keys, orderby, order, null_order, preceding, following, stream, resources);
 }
 
 }  // namespace CUDF_EXPORT cudf

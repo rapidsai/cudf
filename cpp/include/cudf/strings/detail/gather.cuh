@@ -223,7 +223,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                                      MapIterator begin,
                                      MapIterator end,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   auto const output_count = std::distance(begin, end);
   if (output_count == 0) return make_empty_column(type_id::STRING);
@@ -367,7 +367,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                                      MapIterator end,
                                      bool nullify_out_of_bounds,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   if (nullify_out_of_bounds) return gather<true>(strings, begin, end, stream, mr);
   return gather<false>(strings, begin, end, stream, mr);

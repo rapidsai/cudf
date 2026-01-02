@@ -23,7 +23,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                               strings_column_view const& rhs,
                               cudf::detail::index_vector const& row_order,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   using cudf::detail::side;
   if (row_order.is_empty()) { return make_empty_column(type_id::STRING); }
@@ -38,7 +38,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
 
   // build vector of strings
   rmm::device_uvector<string_index_pair> indices(strings_count, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     indices.begin(),
@@ -55,7 +55,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                     });
 
   // convert vector into strings column
-  return make_strings_column(indices.begin(), indices.end(), stream, mr);
+  return make_strings_column(indices.begin(), indices.end(), stream, resources);
 }
 
 }  // namespace detail

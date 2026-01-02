@@ -27,7 +27,7 @@ std::unique_ptr<column> lower_bound(table_view const& haystack,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr);
+                                    cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::upper_bound
@@ -39,7 +39,7 @@ std::unique_ptr<column> upper_bound(table_view const& haystack,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr);
+                                    cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::contains(column_view const&, scalar const&, rmm::device_async_resource_ref)
@@ -56,7 +56,7 @@ bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_strea
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 
 /**
  * @brief Check if rows in the given `needles` table exist in the `haystack` table.
@@ -89,7 +89,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                    null_equality compare_nulls,
                                    nan_equality compare_nans,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr);
+                                   cudf::memory_resources resources);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

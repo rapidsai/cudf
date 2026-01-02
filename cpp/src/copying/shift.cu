@@ -42,7 +42,7 @@ std::pair<rmm::device_buffer, size_type> create_null_mask(column_device_view con
                                                           size_type offset,
                                                           scalar const& fill_value,
                                                           rmm::cuda_stream_view stream,
-                                                          rmm::device_async_resource_ref mr)
+                                                          cudf::memory_resources resources)
 {
   auto const size = input.size();
   auto func_validity =
@@ -54,7 +54,7 @@ std::pair<rmm::device_buffer, size_type> create_null_mask(column_device_view con
                           thrust::make_counting_iterator<size_type>(size),
                           func_validity,
                           stream,
-                          mr);
+                          resources);
 }
 
 struct shift_functor {
@@ -70,15 +70,15 @@ struct shift_functor {
                                      size_type offset,
                                      scalar const& fill_value,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(std::is_same_v<cudf::string_view, T>)
   {
     auto output = cudf::strings::detail::shift(
-      cudf::strings_column_view(input), offset, fill_value, stream, mr);
+      cudf::strings_column_view(input), offset, fill_value, stream, resources);
 
     if (input.nullable() || not fill_value.is_valid(stream)) {
       auto const d_input           = column_device_view::create(input, stream);
-      auto [null_mask, null_count] = create_null_mask(*d_input, offset, fill_value, stream, mr);
+      auto [null_mask, null_count] = create_null_mask(*d_input, offset, fill_value, stream, resources);
       output->set_null_mask(std::move(null_mask), null_count);
     }
 
@@ -90,7 +90,7 @@ struct shift_functor {
                                      size_type offset,
                                      scalar const& fill_value,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(cudf::is_fixed_width<T>())
   {
     using ScalarType = cudf::scalar_type_t<T>;
@@ -98,14 +98,14 @@ struct shift_functor {
 
     auto device_input = column_device_view::create(input, stream);
     auto output =
-      detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
+      detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, resources);
     auto device_output = mutable_column_device_view::create(*output, stream);
 
     auto const scalar_is_valid = scalar.is_valid(stream);
 
     if (input.nullable() || not scalar_is_valid) {
       auto [null_mask, null_count] =
-        create_null_mask(*device_input, offset, fill_value, stream, mr);
+        create_null_mask(*device_input, offset, fill_value, stream, resources);
       output->set_null_mask(std::move(null_mask), null_count);
     }
 
@@ -131,7 +131,7 @@ struct shift_functor {
         return out_of_bounds(size, src_idx) ? *fill : input.element<T>(src_idx);
       };
 
-    thrust::transform(rmm::exec_policy(stream), index_begin, index_end, data, func_value);
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()), index_begin, index_end, data, func_value);
 
     return output;
   }
@@ -145,7 +145,7 @@ std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_EXPECTS(cudf::have_same_types(input, fill_value),
                "shift requires each fill value type to match the corresponding column type.",
@@ -154,7 +154,7 @@ std::unique_ptr<column> shift(column_view const& input,
   if (input.is_empty()) { return empty_like(input); }
 
   return type_dispatcher<dispatch_storage_type>(
-    input.type(), shift_functor{}, input, offset, fill_value, stream, mr);
+    input.type(), shift_functor{}, input, offset, fill_value, stream, resources);
 }
 
 }  // namespace detail
@@ -163,10 +163,10 @@ std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::shift(input, offset, fill_value, stream, mr);
+  return detail::shift(input, offset, fill_value, stream, resources);
 }
 
 }  // namespace cudf

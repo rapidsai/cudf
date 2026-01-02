@@ -25,7 +25,7 @@ std::unique_ptr<cudf::scalar> nth_element(column_view const& col,
                                           size_type n,
                                           null_policy null_handling,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_EXPECTS(n >= -col.size() and n < col.size(), "Index out of bounds");
   auto wrap_n = [n](size_type size) { return (n < 0 ? size + n : n); };
@@ -41,18 +41,18 @@ std::unique_ptr<cudf::scalar> nth_element(column_view const& col,
                                       }));
     rmm::device_uvector<size_type> null_skipped_index(col.size(), stream);
     // null skipped index for valids only.
-    thrust::inclusive_scan(rmm::exec_policy(stream),
+    thrust::inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                            bitmask_iterator,
                            bitmask_iterator + col.size(),
                            null_skipped_index.begin());
 
     auto n_pos = thrust::upper_bound(
-      rmm::exec_policy(stream), null_skipped_index.begin(), null_skipped_index.end(), n);
+      rmm::exec_policy(stream, resources.get_temporary_mr()), null_skipped_index.begin(), null_skipped_index.end(), n);
     auto null_skipped_n = n_pos - null_skipped_index.begin();
-    return cudf::detail::get_element(col, null_skipped_n, stream, mr);
+    return cudf::detail::get_element(col, null_skipped_n, stream, resources);
   } else {
     n = wrap_n(col.size());
-    return cudf::detail::get_element(col, n, stream, mr);
+    return cudf::detail::get_element(col, n, stream, resources);
   }
 }
 

@@ -29,7 +29,7 @@ namespace detail {
 std::unique_ptr<column> replace_nulls(strings_column_view const& input,
                                       string_scalar const& repl,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   size_type strings_count = input.size();
   if (strings_count == 0) { return make_empty_column(type_id::STRING); }
@@ -47,13 +47,13 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& input,
                                     : d_strings.element<string_view>(idx).size_bytes();
     }));
   auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, resources);
   auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
   // build chars column
-  rmm::device_uvector<char> chars(bytes, stream, mr);
+  rmm::device_uvector<char> chars(bytes, stream, resources);
   auto d_chars = chars.data();
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_strings, d_repl, d_offsets, d_chars] __device__(size_type idx) {

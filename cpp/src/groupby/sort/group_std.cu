@@ -74,10 +74,10 @@ void reduce_by_key_fn(column_device_view const& values,
   // Using a temporary buffer for intermediate transform results instead of
   // using the transform-iterator directly in thrust::reduce_by_key
   // improves compile-time significantly.
-  auto vars = rmm::device_uvector<ResultType>(values.size(), stream);
-  thrust::transform(rmm::exec_policy(stream), itr, itr + values.size(), vars.begin(), var_fn);
+  auto vars = rmm::device_uvector<ResultType>(values.size(), stream, resources.get_temporary_mr());
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()), itr, itr + values.size(), vars.begin(), var_fn);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                         group_labels.begin(),
                         group_labels.end(),
                         vars.begin(),
@@ -93,7 +93,7 @@ struct var_functor {
                                      cudf::device_span<size_type const> group_labels,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(std::is_arithmetic_v<T>)
   {
     using ResultType = cudf::detail::target_type_t<T, aggregation::Kind::VARIANCE>;
@@ -102,7 +102,7 @@ struct var_functor {
                                                          group_sizes.size(),
                                                          mask_state::UNINITIALIZED,
                                                          stream,
-                                                         mr);
+                                                         resources);
 
     auto values_view = column_device_view::create(values, stream);
     auto d_values    = *values_view;
@@ -123,10 +123,10 @@ struct var_functor {
 
     // set nulls
     auto result_view  = mutable_column_device_view::create(*result, stream);
-    auto null_count   = cudf::detail::device_scalar<cudf::size_type>(0, stream, mr);
+    auto null_count   = cudf::detail::device_scalar<cudf::size_type>(0, stream, resources);
     auto d_null_count = null_count.data();
     thrust::for_each_n(
-      rmm::exec_policy(stream),
+      rmm::exec_policy(stream, resources.get_temporary_mr()),
       thrust::make_counting_iterator(0),
       group_sizes.size(),
       [d_result = *result_view, d_group_sizes, ddof, d_null_count] __device__(size_type i) {
@@ -166,14 +166,14 @@ std::unique_ptr<column> group_var(column_view const& values,
                                   cudf::device_span<size_type const> group_labels,
                                   size_type ddof,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
 
   return type_dispatcher(
-    values_type, var_functor{}, values, group_means, group_sizes, group_labels, ddof, stream, mr);
+    values_type, var_functor{}, values, group_means, group_sizes, group_labels, ddof, stream, resources);
 }
 
 }  // namespace detail

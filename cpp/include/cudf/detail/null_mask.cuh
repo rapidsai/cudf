@@ -236,7 +236,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(Binop op,
                                                        host_span<size_type const> masks_begin_bits,
                                                        size_type mask_size_bits,
                                                        rmm::cuda_stream_view stream,
-                                                       rmm::device_async_resource_ref mr)
+                                                       cudf::memory_resources resources)
 {
   auto dest_mask = rmm::device_buffer{bitmask_allocation_size_bytes(mask_size_bits), stream, mr};
   auto null_count =
@@ -260,7 +260,7 @@ segmented_bitmask_binop(Binop op,
                         size_type mask_size_bits,
                         host_span<size_type const> segment_offsets,
                         rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr)
+                        cudf::memory_resources resources)
 {
   auto const num_bytes = bitmask_allocation_size_bytes(mask_size_bits);
   CUDF_EXPECTS(
@@ -327,7 +327,7 @@ size_type inplace_bitmask_binop(Binop op,
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
                "Mask pointer cannot be null");
 
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref();
   cudf::detail::device_scalar<size_type> d_counter{0, stream, mr};
 
   auto d_masks      = cudf::detail::make_device_uvector_async(masks, stream, mr);
@@ -371,7 +371,7 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
   size_type mask_size_bits,
   host_span<size_type const> segment_offsets,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_EXPECTS(
     std::all_of(masks_begin_bits.begin(), masks_begin_bits.end(), [](auto b) { return b >= 0; }),
@@ -509,7 +509,7 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                                     OffsetIterator last_bit_indices_begin,
                                                     count_bits_policy count_bits,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
+                                                    cudf::memory_resources resources)
 {
   auto const num_ranges =
     static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
@@ -770,7 +770,7 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
   null_policy null_handling,
   std::optional<bool> valid_initial_value,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto const segments_begin =
     thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);

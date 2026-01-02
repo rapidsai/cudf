@@ -45,7 +45,7 @@ std::unique_ptr<column> sort_lists(
   order column_order,
   null_order null_precedence,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Segmented sort of the elements within a list in each row of a list column using stable
@@ -58,7 +58,7 @@ std::unique_ptr<column> stable_sort_lists(
   order column_order,
   null_order null_precedence,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace lists

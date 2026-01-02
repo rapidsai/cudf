@@ -36,17 +36,17 @@ namespace detail {
 std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view,
                                                    scan_type inclusive,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+                                                   cudf::memory_resources resources)
 {
   rmm::device_buffer mask =
-    detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
+    detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, resources);
   auto d_input   = column_device_view::create(input_view, stream);
   auto valid_itr = detail::make_validity_iterator(*d_input);
 
   auto first_null_position = [&] {
     size_type const first_null =
       thrust::find_if_not(
-        rmm::exec_policy(stream), valid_itr, valid_itr + input_view.size(), cuda::std::identity{}) -
+        rmm::exec_policy(stream, resources.get_temporary_mr()), valid_itr, valid_itr + input_view.size(), cuda::std::identity{}) -
       valid_itr;
     size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
     return std::min(input_view.size(), first_null + exclusive_offset);
@@ -65,10 +65,10 @@ struct scan_functor {
   static std::unique_ptr<column> invoke(column_view const& input_view,
                                         bitmask_type const*,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
   {
     auto output_column = detail::allocate_like(
-      input_view, input_view.size(), mask_allocation_policy::NEVER, stream, mr);
+      input_view, input_view.size(), mask_allocation_policy::NEVER, stream, resources);
     mutable_column_view result = output_column->mutable_view();
 
     auto d_input = column_device_view::create(input_view, stream);
@@ -78,7 +78,7 @@ struct scan_functor {
     // CUB 2.0.0 requires that the binary operator returns the same type as the identity.
     auto const binary_op = cudf::detail::cast_functor<T>(Op{});
     thrust::inclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), binary_op);
+      rmm::exec_policy(stream, resources.get_temporary_mr()), begin, begin + input_view.size(), result.data<T>(), binary_op);
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;
@@ -90,9 +90,9 @@ struct scan_functor<Op, cudf::string_view> {
   static std::unique_ptr<column> invoke(column_view const& input_view,
                                         bitmask_type const* mask,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
   {
-    return cudf::strings::detail::scan_inclusive<Op>(input_view, mask, stream, mr);
+    return cudf::strings::detail::scan_inclusive<Op>(input_view, mask, stream, resources);
   }
 };
 
@@ -101,9 +101,9 @@ struct scan_functor<Op, cudf::struct_view> {
   static std::unique_ptr<column> invoke(column_view const& input,
                                         bitmask_type const*,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
   {
-    return cudf::structs::detail::scan_inclusive<Op>(input, stream, mr);
+    return cudf::structs::detail::scan_inclusive<Op>(input, stream, resources);
   }
 };
 
@@ -141,10 +141,10 @@ struct scan_dispatcher {
   std::unique_ptr<column> operator()(column_view const& input,
                                      bitmask_type const* output_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(is_supported<T>())
   {
-    return scan_functor<Op, T>::invoke(input, output_mask, stream, mr);
+    return scan_functor<Op, T>::invoke(input, output_mask, stream, resources);
   }
 
   template <typename T, typename... Args>
@@ -161,19 +161,20 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        scan_aggregation const& agg,
                                        null_policy null_handling,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   auto [mask, null_count] = [&] {
     if (null_handling == null_policy::EXCLUDE) {
-      return std::make_pair(std::move(detail::copy_bitmask(input, stream, mr)), input.null_count());
+      return std::make_pair(std::move(detail::copy_bitmask(input, stream,
+                  resources)), input.null_count());
     } else if (input.nullable()) {
-      return mask_scan(input, scan_type::INCLUSIVE, stream, mr);
+      return mask_scan(input, scan_type::INCLUSIVE, stream, resources);
     }
     return std::make_pair(rmm::device_buffer{}, size_type{0});
   }();
 
   auto output = scan_agg_dispatch<scan_dispatcher>(
-    input, agg, static_cast<bitmask_type*>(mask.data()), stream, mr);
+    input, agg, static_cast<bitmask_type*>(mask.data()), stream, resources);
   // Use the null mask produced by the op for EWM
   if (agg.kind != aggregation::EWMA) { output->set_null_mask(std::move(mask), null_count); }
 
@@ -190,12 +191,12 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
                   content.children.end(),
                   [null_mask, null_count, stream, mr](auto& child) {
                     child = structs::detail::superimpose_and_sanitize_nulls(
-                      null_mask, null_count, std::move(child), stream, mr);
+                      null_mask, null_count, std::move(child), stream, resources);
                   });
 
     // Replace the children columns.
     output = cudf::create_structs_hierarchy(
-      num_rows, std::move(content.children), null_count, std::move(*content.null_mask), stream, mr);
+      num_rows, std::move(content.children), null_count, std::move(*content.null_mask), stream, resources);
   }
 
   return output;

@@ -48,7 +48,7 @@ std::unique_ptr<column> contains_re(
   strings_column_view const& input,
   regex_program const& prog,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a boolean column identifying rows which
@@ -76,7 +76,7 @@ std::unique_ptr<column> matches_re(
   strings_column_view const& input,
   regex_program const& prog,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the number of times the given regex_program's pattern
@@ -104,7 +104,7 @@ std::unique_ptr<column> count_re(
   strings_column_view const& input,
   regex_program const& prog,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a boolean column identifying rows which
@@ -154,7 +154,7 @@ std::unique_ptr<column> like(
   std::string_view const& pattern,
   std::string_view const& escape_character = "",
   rmm::cuda_stream_view stream             = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr        = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a boolean column identifying rows which
@@ -179,7 +179,7 @@ std::unique_ptr<column> like(
   string_scalar const& pattern,
   string_scalar const& escape_character = string_scalar(""),
   rmm::cuda_stream_view stream          = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr     = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a boolean column identifying rows which
@@ -219,7 +219,7 @@ std::unique_ptr<column> like(
   strings_column_view const& patterns,
   string_scalar const& escape_character = string_scalar(""),
   rmm::cuda_stream_view stream          = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr     = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

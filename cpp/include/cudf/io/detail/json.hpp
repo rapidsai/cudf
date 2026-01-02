@@ -28,7 +28,7 @@ namespace io::json::detail {
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& options,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr);
+                              cudf::memory_resources resources);
 
 /**
  * @brief Write an entire dataset to JSON format.
@@ -54,7 +54,7 @@ void write_json(data_sink* sink,
 void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& indata,
                              char delimiter,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr);
+                             cudf::memory_resources resources);
 
 /**
  * @brief Normalize unquoted whitespace (space and tab characters) using FST
@@ -74,7 +74,7 @@ std::
                        device_span<size_type const> col_offsets,
                        device_span<size_type const> col_lengths,
                        rmm::cuda_stream_view stream,
-                       rmm::device_async_resource_ref mr);
+                       cudf::memory_resources resources);
 
 }  // namespace io::json::detail
 }  // namespace CUDF_EXPORT cudf

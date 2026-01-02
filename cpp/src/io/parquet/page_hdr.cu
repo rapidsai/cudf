@@ -928,7 +928,7 @@ void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chu
                                     kernel_error::pointer error_code,
                                     rmm::cuda_stream_view stream)
 {
-  thrust::for_each(rmm::exec_policy_nosync(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                    thrust::counting_iterator(0),
                    thrust::counting_iterator<cudf::size_type>(pages.size()),
                    decode_page_headers_with_pgidx_fn{.colchunks          = chunks,

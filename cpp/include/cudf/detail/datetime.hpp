@@ -22,7 +22,7 @@ namespace detail {
 std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const& column,
                                                          datetime_component component,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::device_async_resource_ref mr);
+                                                         cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::last_day_of_month(cudf::column_view const&, rmm::cuda_stream_view,
@@ -31,7 +31,7 @@ std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const
  */
 std::unique_ptr<cudf::column> last_day_of_month(cudf::column_view const& column,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr);
+                                                cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::day_of_year(cudf::column_view const&, rmm::cuda_stream_view,
@@ -40,7 +40,7 @@ std::unique_ptr<cudf::column> last_day_of_month(cudf::column_view const& column,
  */
 std::unique_ptr<cudf::column> day_of_year(cudf::column_view const& column,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr);
+                                          cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::add_calendrical_months(cudf::column_view const&, cudf::column_view const&,
@@ -50,7 +50,7 @@ std::unique_ptr<cudf::column> day_of_year(cudf::column_view const& column,
 std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& timestamps,
                                                      cudf::column_view const& months,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr);
+                                                     cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::add_calendrical_months(cudf::column_view const&, cudf::scalar const&,
@@ -60,7 +60,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& ti
 std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& timestamps,
                                                      cudf::scalar const& months,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr);
+                                                     cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::is_leap_year(cudf::column_view const&, rmm::cuda_stream_view,
@@ -69,11 +69,11 @@ std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& ti
  */
 std::unique_ptr<cudf::column> is_leap_year(cudf::column_view const& column,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr);
+                                           cudf::memory_resources resources);
 
 std::unique_ptr<cudf::column> extract_quarter(cudf::column_view const& column,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr);
+                                              cudf::memory_resources resources);
 
 }  // namespace detail
 }  // namespace datetime

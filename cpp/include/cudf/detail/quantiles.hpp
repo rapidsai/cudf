@@ -26,7 +26,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  column_view const& ordered_indices,
                                  bool exact,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::quantiles()
@@ -40,7 +40,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  std::vector<order> const& column_order,
                                  std::vector<null_order> const& null_precedence,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::percentile_approx(tdigest_column_view const&, column_view const&,
@@ -51,7 +51,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
 std::unique_ptr<column> percentile_approx(tdigest::tdigest_column_view const& input,
                                           column_view const& percentiles,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr);
+                                          cudf::memory_resources resources);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

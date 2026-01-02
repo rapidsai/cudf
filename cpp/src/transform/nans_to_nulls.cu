@@ -24,7 +24,7 @@ namespace detail {
 struct dispatch_nan_to_null {
   template <typename T>
   std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> operator()(
-    column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    column_view const& input, rmm::cuda_stream_view stream, cudf::memory_resources resources)
     requires(std::is_floating_point_v<T>)
   {
     auto input_device_view_ptr = column_device_view::create(input, stream);
@@ -40,7 +40,7 @@ struct dispatch_nan_to_null {
                                    thrust::make_counting_iterator<cudf::size_type>(input.size()),
                                    pred,
                                    stream,
-                                   mr);
+                                   resources);
 
       return std::pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
     } else {
@@ -52,7 +52,7 @@ struct dispatch_nan_to_null {
                                    thrust::make_counting_iterator<cudf::size_type>(input.size()),
                                    pred,
                                    stream,
-                                   mr);
+                                   resources);
 
       return std::pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
     }
@@ -60,7 +60,7 @@ struct dispatch_nan_to_null {
 
   template <typename T>
   std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> operator()(
-    column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    column_view const& input, rmm::cuda_stream_view stream, cudf::memory_resources resources)
     requires(!std::is_floating_point_v<T>)
   {
     CUDF_FAIL("Input column can't be a non-floating type");
@@ -68,20 +68,20 @@ struct dispatch_nan_to_null {
 };
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  column_view const& input, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
   if (input.is_empty()) { return std::pair(std::make_unique<rmm::device_buffer>(), 0); }
 
-  return cudf::type_dispatcher(input.type(), dispatch_nan_to_null{}, input, stream, mr);
+  return cudf::type_dispatcher(input.type(), dispatch_nan_to_null{}, input, stream, resources);
 }
 
 }  // namespace detail
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  column_view const& input, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::nans_to_nulls(input, stream, mr);
+  return detail::nans_to_nulls(input, stream, resources);
 }
 
 }  // namespace cudf

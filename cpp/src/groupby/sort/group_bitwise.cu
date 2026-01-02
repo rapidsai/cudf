@@ -31,15 +31,15 @@ struct bitwise_group_reduction_functor {
                                      device_span<size_type const> group_labels,
                                      size_type num_groups,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
 
   {
     auto result =
-      make_fixed_width_column(values.type(), num_groups, mask_state::UNALLOCATED, stream, mr);
+      make_fixed_width_column(values.type(), num_groups, mask_state::UNALLOCATED, stream, resources);
     if (values.is_empty()) { return result; }
 
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
+      thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
                             inp_iter,
@@ -75,7 +75,7 @@ struct bitwise_group_reduction_functor {
                    cuda::std::logical_or{});
 
       auto [null_mask, null_count] =
-        cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
+        cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, resources);
       if (null_count > 0) { result->set_null_mask(std::move(null_mask), null_count); }
     }
     return result;
@@ -95,7 +95,7 @@ std::unique_ptr<column> group_bitwise(bitwise_op bit_op,
                                       device_span<size_type const> group_labels,
                                       size_type num_groups,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   return cudf::type_dispatcher(values.type(),
                                bitwise_group_reduction_functor{},
@@ -104,7 +104,7 @@ std::unique_ptr<column> group_bitwise(bitwise_op bit_op,
                                group_labels,
                                num_groups,
                                stream,
-                               mr);
+                               resources);
 }
 
 }  // namespace cudf::groupby::detail

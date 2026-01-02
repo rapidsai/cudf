@@ -85,7 +85,7 @@ std::unique_ptr<column> find_instance(strings_column_view const& input,
                                       string_scalar const& target,
                                       size_type instance,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_EXPECTS(
     instance >= 0, "Parameter instance must be positive integer or zero.", std::invalid_argument);
@@ -94,10 +94,11 @@ std::unique_ptr<column> find_instance(strings_column_view const& input,
   // create output column
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                      input.null_count(),
                                      stream,
-                                     mr);
+                                     resources);
   // if input is empty or all-null then we are done
   if (input.size() == input.null_count()) { return results; }
 
@@ -123,10 +124,10 @@ std::unique_ptr<column> find_instance(strings_column_view const& input,
                                       string_scalar const& target,
                                       size_type instance,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::find_instance(input, target, instance, stream, mr);
+  return detail::find_instance(input, target, instance, stream, resources);
 }
 
 }  // namespace strings

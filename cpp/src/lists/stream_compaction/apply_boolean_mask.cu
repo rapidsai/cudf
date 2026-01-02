@@ -29,7 +29,7 @@ namespace detail {
 std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_EXPECTS(boolean_mask.child().type().id() == type_id::BOOL8, "Mask must be of type BOOL8.");
   CUDF_EXPECTS(input.size() == boolean_mask.size(),
@@ -45,7 +45,8 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
   auto const make_filtered_child = [&] {
     auto filtered =
       cudf::detail::apply_boolean_mask(
-        cudf::table_view{{input.get_sliced_child(stream)}}, boolean_mask_sliced_child, stream, mr)
+        cudf::table_view{{input.get_sliced_child(stream)}}, boolean_mask_sliced_child, stream,
+                  resources)
         ->release();
     return std::move(filtered.front());
   };
@@ -62,18 +63,18 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                              null_policy::EXCLUDE,
                                              std::nullopt,
                                              stream,
-                                             cudf::get_current_device_resource_ref());
+                                             resources.get_temporary_mr());
     auto const d_sizes     = column_device_view::create(*sizes, stream);
     auto const sizes_begin = cudf::detail::make_null_replacement_iterator(*d_sizes, size_type{0});
     auto const sizes_end   = sizes_begin + sizes->size();
     auto output_offsets    = cudf::make_numeric_column(
-      offset_data_type, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
+      offset_data_type, num_rows + 1, mask_state::UNALLOCATED, stream, resources);
     auto output_offsets_view = output_offsets->mutable_view();
 
     // Could have attempted an exclusive_scan(), but it would not compute the last entry.
     // Instead, inclusive_scan(), followed by writing `0` to the head of the offsets column.
     thrust::inclusive_scan(
-      rmm::exec_policy(stream), sizes_begin, sizes_end, output_offsets_view.begin<size_type>() + 1);
+      rmm::exec_policy(stream, resources.get_temporary_mr()), sizes_begin, sizes_end, output_offsets_view.begin<size_type>() + 1);
     CUDF_CUDA_TRY(cudaMemsetAsync(
       output_offsets_view.begin<size_type>(), 0, sizeof(size_type), stream.value()));
     return output_offsets;
@@ -83,19 +84,20 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                  make_output_offsets(),
                                  make_filtered_child(),
                                  input.null_count(),
-                                 cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                 cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                  stream,
-                                 mr);
+                                 resources);
 }
 }  // namespace detail
 
 std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(input, boolean_mask, stream, mr);
+  return detail::apply_boolean_mask(input, boolean_mask, stream, resources);
 }
 
 }  // namespace cudf::lists

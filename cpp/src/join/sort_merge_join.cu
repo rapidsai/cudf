@@ -101,19 +101,19 @@ class merge {
   }
 
   std::unique_ptr<rmm::device_uvector<size_type>> matches_per_row(
-    rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+    rmm::cuda_stream_view stream, cudf::memory_resources resources);
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
-  operator()(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+  operator()(rmm::cuda_stream_view stream, cudf::memory_resources resources);
 };
 
 template <typename LargerIterator, typename SmallerIterator>
 std::unique_ptr<rmm::device_uvector<size_type>>
 merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view stream,
-                                                        rmm::device_async_resource_ref mr)
+                                                        cudf::memory_resources resources)
 {
-  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto temp_mr = resources.get_temporary_mr();
   // naive: iterate through larger table and binary search on smaller table
   auto const has_nulls       = has_nested_nulls(smaller) or has_nested_nulls(larger);
   auto const larger_numrows  = larger.num_rows();
@@ -127,7 +127,7 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
     sorted_smaller_order_begin,
     cuda::proclaim_return_type<detail::row::lhs_index_type>(
       [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
-  thrust::upper_bound(rmm::exec_policy_nosync(stream),
+  thrust::upper_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       smaller_it,
                       smaller_it + smaller_numrows,
                       cudf::detail::row::rhs_iterator(0),
@@ -138,7 +138,7 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
   auto match_counts_update_it =
     thrust::tabulate_output_iterator([match_counts = match_counts.begin()] __device__(
                                        size_type idx, size_type val) { match_counts[idx] -= val; });
-  thrust::lower_bound(rmm::exec_policy_nosync(stream),
+  thrust::lower_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       smaller_it,
                       smaller_it + smaller_numrows,
                       cudf::detail::row::rhs_iterator(0),
@@ -155,9 +155,9 @@ template <typename LargerIterator, typename SmallerIterator>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+                                                   cudf::memory_resources resources)
 {
-  auto temp_mr               = cudf::get_current_device_resource_ref();
+  auto temp_mr               = resources.get_temporary_mr();
   auto const has_nulls       = has_nested_nulls(smaller) or has_nested_nulls(larger);
   auto const larger_numrows  = larger.num_rows();
   auto const smaller_numrows = smaller.num_rows();
@@ -169,16 +169,16 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     match_counts->begin(),
     cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
   auto const count_matches =
-    thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
+    thrust::reduce(rmm::exec_policy(stream, resources.get_temporary_mr()), count_matches_it, count_matches_it + larger_numrows);
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
-  thrust::copy_if(rmm::exec_policy_nosync(stream),
+  thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                   thrust::counting_iterator(0),
                   thrust::counting_iterator(0) + larger_numrows,
                   match_counts->begin(),
                   nonzero_matches.begin(),
                   cuda::std::identity{});
 
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          match_counts->begin(),
                          match_counts->end(),
                          match_counts->begin());
@@ -186,22 +186,22 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 
   // populate larger indices
   auto larger_indices =
-    cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+    cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, resources);
+  thrust::scatter(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                   nonzero_matches.begin(),
                   nonzero_matches.end(),
                   thrust::permutation_iterator(match_counts->begin(), nonzero_matches.begin()),
                   larger_indices.begin());
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          larger_indices.begin(),
                          larger_indices.end(),
                          larger_indices.begin(),
                          thrust::maximum<size_type>{});
 
   // populate smaller indices
-  rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
+  rmm::device_uvector<size_type> smaller_indices(total_matches, stream, resources);
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), smaller_indices.begin(), smaller_indices.end(), 1);
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), smaller_indices.begin(), smaller_indices.end(), 1);
   auto const comparator = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
 
   auto smaller_tabulate_it = thrust::tabulate_output_iterator(
@@ -220,19 +220,19 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     nonzero_matches.begin(),
     cuda::proclaim_return_type<detail::row::rhs_index_type>(
       [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
-  thrust::lower_bound(rmm::exec_policy_nosync(stream),
+  thrust::lower_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       smaller_it,
                       smaller_it + smaller_numrows,
                       larger_it,
                       larger_it + nonzero_matches.size(),
                       smaller_tabulate_it,
                       comparator);
-  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                 larger_indices.begin(),
                                 larger_indices.end(),
                                 smaller_indices.begin(),
                                 smaller_indices.begin());
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     smaller_indices.begin(),
                     smaller_indices.end(),
                     smaller_indices.begin(),
@@ -249,7 +249,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stream_view stream)
 {
   auto table   = this->_table_view;
-  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto temp_mr = resources.get_temporary_mr();
   // remove rows that have nulls at any nesting level
   // step 1: identify nulls at root level
   auto [validity_mask, num_nulls] = cudf::bitmask_and(table, stream, temp_mr);
@@ -271,7 +271,7 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
       rmm::device_uvector<int32_t> offsets_subset(offsets.size(), stream, temp_mr);
       rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, temp_mr);
       auto unique_end = thrust::unique_by_key_copy(
-        rmm::exec_policy(stream),
+        rmm::exec_policy(stream, resources.get_temporary_mr()),
         thrust::reverse_iterator(lcv.offsets_end()),
         thrust::reverse_iterator(lcv.offsets_end()) + offsets.size(),
         thrust::reverse_iterator(thrust::counting_iterator(offsets.size())),
@@ -292,7 +292,7 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
                                               temp_mr);
 
       thrust::for_each(
-        rmm::exec_policy_nosync(stream),
+        rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
         thrust::counting_iterator(0),
         thrust::counting_iterator(0) + subset_size,
         list_nonnull_filter{static_cast<bitmask_type*>(validity_mask.data()),
@@ -350,7 +350,7 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
 
 void sort_merge_join::preprocessed_table::apply_nonnull_filter(rmm::cuda_stream_view stream)
 {
-  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto temp_mr = resources.get_temporary_mr();
   // construct bool column to apply mask
   cudf::scalar_type_t<bool> true_scalar(true, true, stream, temp_mr);
   auto bool_mask =
@@ -371,7 +371,7 @@ void sort_merge_join::preprocessed_table::preprocess_unprocessed_table(rmm::cuda
 
 void sort_merge_join::preprocessed_table::get_sorted_order(rmm::cuda_stream_view stream)
 {
-  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto temp_mr = resources.get_temporary_mr();
   std::vector<cudf::order> column_order(_null_processed_table_view.num_columns(),
                                         cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_precedence(_null_processed_table_view.num_columns(),
@@ -413,11 +413,11 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
   rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(_validity_mask.has_value() && _num_nulls.has_value(), "Mapping is not possible");
-  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto temp_mr = resources.get_temporary_mr();
   rmm::device_uvector<size_type> table_mapping(
     _table_view.num_rows() - _num_nulls.value(), stream, temp_mr);
   thrust::copy_if(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::counting_iterator<cudf::size_type>(0),
     thrust::counting_iterator<cudf::size_type>(_table_view.num_rows()),
     table_mapping.begin(),
@@ -435,7 +435,7 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
     auto is_right_nullable = has_nested_nulls(preprocessed_right._table_view);
     if (is_left_nullable) {
       auto left_mapping = preprocessed_left.map_table_to_unprocessed(stream);
-      thrust::transform(rmm::exec_policy_nosync(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         larger_indices.begin(),
                         larger_indices.end(),
                         larger_indices.begin(),
@@ -443,7 +443,7 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
     }
     if (is_right_nullable) {
       auto right_mapping = preprocessed_right.map_table_to_unprocessed(stream);
-      thrust::transform(rmm::exec_policy_nosync(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         smaller_indices.begin(),
                         smaller_indices.end(),
                         smaller_indices.begin(),
@@ -511,7 +511,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 sort_merge_join::inner_join(table_view const& left,
                             sorted is_left_sorted,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+                            cudf::memory_resources resources)
 {
   cudf::scoped_range range{"sort_merge_join::inner_join"};
   // Sanity checks
@@ -541,7 +541,7 @@ sort_merge_join::inner_join(table_view const& left,
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
     [this, stream, mr](auto& obj) {
-      auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+      auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, resources);
       postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
       stream.synchronize();
       return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
@@ -553,7 +553,7 @@ cudf::join_match_context sort_merge_join::inner_join_match_context(
   table_view const& left,
   sorted is_left_sorted,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   cudf::scoped_range range{"sort_merge_join::inner_join_match_context"};
   // Sanity checks
@@ -583,7 +583,7 @@ cudf::join_match_context sort_merge_join::inner_join_match_context(
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
     [this, left, stream, mr](auto& obj) {
-      auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
+      auto matches_per_row = obj.matches_per_row(stream, resources.get_temporary_mr());
       matches_per_row->resize(matches_per_row->size() - 1, stream);
       if (compare_nulls == null_equality::UNEQUAL &&
           has_nested_nulls(preprocessed_left._table_view)) {
@@ -591,9 +591,9 @@ cudf::join_match_context sort_merge_join::inner_join_match_context(
         // positions
         auto unprocessed_matches_per_row =
           cudf::detail::make_zeroed_device_uvector_async<size_type>(
-            preprocessed_left._table_view.num_rows(), stream, mr);
+            preprocessed_left._table_view.num_rows(), stream, resources);
         auto mapping = preprocessed_left.map_table_to_unprocessed(stream);
-        thrust::scatter(rmm::exec_policy_nosync(stream),
+        thrust::scatter(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         matches_per_row->begin(),
                         matches_per_row->end(),
                         mapping.begin(),
@@ -613,7 +613,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& context,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   cudf::scoped_range range{"sort_merge_join::partitioned_inner_join"};
   auto const left_partition_start_idx = context.left_start_idx;
@@ -624,13 +624,13 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
     auto left_mapping = preprocessed_left.map_table_to_unprocessed(stream);
     null_processed_table_start_idx =
       cuda::std::distance(left_mapping.begin(),
-                          thrust::lower_bound(rmm::exec_policy(stream),
+                          thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                               left_mapping.begin(),
                                               left_mapping.end(),
                                               left_partition_start_idx));
     null_processed_table_end_idx =
       cuda::std::distance(left_mapping.begin(),
-                          thrust::upper_bound(rmm::exec_policy(stream),
+                          thrust::upper_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                               left_mapping.begin(),
                                               left_mapping.end(),
                                               left_partition_end_idx - 1));
@@ -643,11 +643,11 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
   auto [preprocessed_right_indices, preprocessed_left_indices] = invoke_merge(
     preprocessed_right._null_processed_table_view,
     null_processed_left_partition,
-    [this, left_partition_start_idx, stream, mr](auto& obj) { return obj(stream, mr); },
+    [this, left_partition_start_idx, stream, mr](auto& obj) { return obj(stream, resources); },
     stream);
   // Map from slice to total null processed table
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     preprocessed_left_indices->begin(),
     preprocessed_left_indices->end(),
     preprocessed_left_indices->begin(),
@@ -664,11 +664,11 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
                       cudf::table_view const& right_keys,
                       null_equality compare_nulls,
                       rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr)
+                      cudf::memory_resources resources)
 {
   cudf::scoped_range range{"sort_merge_inner_join"};
   cudf::sort_merge_join obj(right_keys, sorted::NO, compare_nulls, stream);
-  return obj.inner_join(left_keys, sorted::NO, stream, mr);
+  return obj.inner_join(left_keys, sorted::NO, stream, resources);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -677,11 +677,11 @@ merge_inner_join(cudf::table_view const& left_keys,
                  cudf::table_view const& right_keys,
                  null_equality compare_nulls,
                  rmm::cuda_stream_view stream,
-                 rmm::device_async_resource_ref mr)
+                 cudf::memory_resources resources)
 {
   cudf::scoped_range range{"merge_inner_join"};
   cudf::sort_merge_join obj(right_keys, sorted::YES, compare_nulls, stream);
-  return obj.inner_join(left_keys, sorted::YES, stream, mr);
+  return obj.inner_join(left_keys, sorted::YES, stream, resources);
 }
 
 }  // namespace cudf

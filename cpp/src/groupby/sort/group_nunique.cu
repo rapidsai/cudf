@@ -68,14 +68,14 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                       cudf::device_span<size_type const> group_offsets,
                                       null_policy null_handling,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 
   auto result = make_numeric_column(
-    data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, resources);
 
   if (num_groups == 0) { return result; }
 
@@ -84,7 +84,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
   auto const d_values_view = column_device_view::create(values, stream);
 
-  auto d_result = rmm::device_uvector<size_type>(group_labels.size(), stream);
+  auto d_result = rmm::device_uvector<size_type>(group_labels.size(), stream, resources.get_temporary_mr());
 
   auto const comparator_helper = [&](auto const d_equal) {
     auto fn = is_unique_iterator_fn{nullate::DYNAMIC{values.has_nulls()},
@@ -93,7 +93,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                     null_handling,
                                     group_offsets.data(),
                                     group_labels.data()};
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(values.size()),
                       d_result.begin(),
@@ -112,7 +112,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
   // calling this with a vector instead of a transform iterator is 10x faster to compile;
   // it also helps that we are only calling it once for both conditions
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                         group_labels.begin(),
                         group_labels.end(),
                         d_result.begin(),

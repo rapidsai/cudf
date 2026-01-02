@@ -35,7 +35,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  std::vector<double> const& q,
                                  interpolation interp,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   auto quantile_idx_lookup = cuda::proclaim_return_type<size_type>(
     [sortmap, interp, size = input.num_rows()] __device__(double q) {
@@ -44,7 +44,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
     });
 
   auto const q_device =
-    cudf::detail::make_device_uvector_async(q, stream, cudf::get_current_device_resource_ref());
+    cudf::detail::make_device_uvector_async(q, stream, resources.get_temporary_mr());
 
   auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(), quantile_idx_lookup);
 
@@ -53,7 +53,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
                         quantile_idx_iter + q.size(),
                         out_of_bounds_policy::DONT_CHECK,
                         stream,
-                        mr);
+                        resources);
 }
 
 std::unique_ptr<table> quantiles(table_view const& input,
@@ -63,7 +63,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  std::vector<order> const& column_order,
                                  std::vector<null_order> const& null_precedence,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   if (q.empty()) { return empty_like(input); }
 
@@ -76,11 +76,11 @@ std::unique_ptr<table> quantiles(table_view const& input,
 
   if (is_input_sorted == sorted::YES) {
     return detail::quantiles(
-      input, thrust::make_counting_iterator<size_type>(0), q, interp, stream, mr);
+      input, thrust::make_counting_iterator<size_type>(0), q, interp, stream, resources);
   } else {
     auto sorted_idx = detail::sorted_order(
-      input, column_order, null_precedence, stream, cudf::get_current_device_resource_ref());
-    return detail::quantiles(input, sorted_idx->view().data<size_type>(), q, interp, stream, mr);
+      input, column_order, null_precedence, stream, resources.get_temporary_mr());
+    return detail::quantiles(input, sorted_idx->view().data<size_type>(), q, interp, stream, resources);
   }
 }
 
@@ -93,11 +93,11 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  std::vector<order> const& column_order,
                                  std::vector<null_order> const& null_precedence,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::quantiles(
-    input, q, interp, is_input_sorted, column_order, null_precedence, stream, mr);
+    input, q, interp, is_input_sorted, column_order, null_precedence, stream, resources);
 }
 
 }  // namespace cudf

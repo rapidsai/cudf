@@ -580,7 +580,7 @@ void infer_column_types(parse_options const& parse_opts,
   auto const column_stats = cudf::io::csv::gpu::detect_column_types(
     parse_opts.view(),
     data,
-    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(column_flags, stream, resources.get_temporary_mr()),
     row_offsets,
     num_inferred_columns,
     stream);
@@ -624,7 +624,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
                                        int32_t num_actual_columns,
                                        int32_t num_active_columns,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;
@@ -632,7 +632,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
 
   for (int col = 0, active_col = 0; col < num_actual_columns; ++col) {
     if (column_flags[col] & column_parse::enabled) {
-      auto out_buffer = column_buffer(column_types[active_col], num_records, true, stream, mr);
+      auto out_buffer = column_buffer(column_types[active_col], num_records, true, stream, resources);
 
       out_buffer.name = column_names[col];
       out_buffers.emplace_back(std::move(out_buffer));
@@ -649,16 +649,16 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
   }
 
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_active_columns, stream, cudf::get_current_device_resource_ref());
+    num_active_columns, stream, resources.get_temporary_mr());
 
   cudf::io::csv::gpu::decode_row_column_data(
     parse_opts.view(),
     data,
-    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(column_flags, stream, resources.get_temporary_mr()),
     row_offsets,
-    make_device_uvector_async(column_types, stream, cudf::get_current_device_resource_ref()),
-    make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref()),
-    make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(column_types, stream, resources.get_temporary_mr()),
+    make_device_uvector_async(h_data, stream, resources.get_temporary_mr()),
+    make_device_uvector_async(h_valid, stream, resources.get_temporary_mr()),
     d_valid_counts,
     stream);
 
@@ -720,7 +720,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
                              csv_reader_options const& reader_opts,
                              parse_options const& parse_opts,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   std::vector<char> header;
 
@@ -920,7 +920,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       num_actual_columns,
       num_active_columns,
       stream,
-      mr);
+      resources);
 
     cudf::string_scalar quotechar_scalar(std::string(1, parse_opts.quotechar), true, stream);
     cudf::string_scalar dblquotechar_scalar(std::string(2, parse_opts.quotechar), true, stream);
@@ -934,7 +934,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         // during the conversion stage
         std::unique_ptr<column> col = cudf::make_strings_column(*out_buffers[i]._strings, stream);
         out_columns.emplace_back(cudf::strings::detail::replace(
-          col->view(), dblquotechar_scalar, quotechar_scalar, -1, stream, mr));
+          col->view(), dblquotechar_scalar, quotechar_scalar, -1, stream,
+                  resources));
       } else {
         out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
       }
@@ -1059,11 +1060,11 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
 table_with_metadata read_csv(std::unique_ptr<cudf::io::datasource>&& source,
                              csv_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   auto parse_options = make_parse_options(options, stream);
 
-  return read_csv(source.get(), options, parse_options, stream, mr);
+  return read_csv(source.get(), options, parse_options, stream, resources);
 }
 
 }  // namespace csv

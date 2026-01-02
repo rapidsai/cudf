@@ -29,7 +29,7 @@ namespace detail {
 std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
                                         cudf::table_view const& right,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");
@@ -45,10 +45,10 @@ std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
   }
 
   // Repeat left table
-  auto left_repeated = detail::repeat(left, right.num_rows(), stream, mr);
+  auto left_repeated = detail::repeat(left, right.num_rows(), stream, resources);
 
   // Tile right table
-  auto right_tiled = detail::tile(right, left.num_rows(), stream, mr);
+  auto right_tiled = detail::tile(right, left.num_rows(), stream, resources);
 
   // Concatenate all repeated/tiled columns into one table
   auto left_repeated_columns = left_repeated->release();
@@ -64,10 +64,10 @@ std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
 std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
                                         cudf::table_view const& right,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::cross_join(left, right, stream, mr);
+  return detail::cross_join(left, right, stream, resources);
 }
 
 }  // namespace cudf

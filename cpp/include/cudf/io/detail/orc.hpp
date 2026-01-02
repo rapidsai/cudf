@@ -51,7 +51,7 @@ class reader {
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   orc_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr);
+                  cudf::memory_resources resources);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
@@ -86,7 +86,7 @@ class chunked_reader {
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           orc_reader_options const& options,
                           rmm::cuda_stream_view stream,
-                          rmm::device_async_resource_ref mr);
+                          cudf::memory_resources resources);
   /**
    * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t,
    * orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
@@ -98,7 +98,7 @@ class chunked_reader {
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           orc_reader_options const& options,
                           rmm::cuda_stream_view stream,
-                          rmm::device_async_resource_ref mr);
+                          cudf::memory_resources resources);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header.

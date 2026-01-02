@@ -27,7 +27,7 @@ namespace io::detail::csv {
 table_with_metadata read_csv(std::unique_ptr<cudf::io::datasource>&& source,
                              csv_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr);
+                             cudf::memory_resources resources);
 
 /**
  * @brief Write an entire dataset to CSV format.

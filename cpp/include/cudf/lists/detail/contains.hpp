@@ -22,7 +22,7 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  cudf::lists::duplicate_find_option find_option,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::lists::index_of(cudf::lists_column_view const&,
@@ -35,7 +35,7 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                  cudf::column_view const& search_keys,
                                  cudf::lists::duplicate_find_option find_option,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
@@ -46,7 +46,7 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
 std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
@@ -57,6 +57,6 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
 std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  cudf::column_view const& search_keys,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 }  // namespace lists::detail
 }  // namespace CUDF_EXPORT cudf

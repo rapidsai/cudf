@@ -25,17 +25,17 @@ std::unique_ptr<column> count_scan(column_view const& values,
                                    null_policy nulls,
                                    cudf::device_span<size_type const> group_labels,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   std::unique_ptr<column> result = make_fixed_width_column(
-    data_type{type_id::INT32}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_id::INT32}, group_labels.size(), mask_state::UNALLOCATED, stream, resources);
 
   if (group_labels.empty()) { return result; }
 
   auto resultview = result->mutable_view();
   // aggregation::COUNT_ALL
   if (nulls == null_policy::INCLUDE) {
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+    thrust::inclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                   group_labels.begin(),
                                   group_labels.end(),
                                   thrust::make_constant_iterator<size_type>(1),
@@ -46,7 +46,7 @@ std::unique_ptr<column> count_scan(column_view const& values,
       0, [d_values = *d_values] __device__(auto idx) -> cudf::size_type {
         return d_values.is_valid(idx);
       });
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+    thrust::inclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                   group_labels.begin(),
                                   group_labels.end(),
                                   itr,

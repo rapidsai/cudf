@@ -26,7 +26,7 @@ namespace detail {
 
 std::unique_ptr<column> reverse(lists_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
 
@@ -34,16 +34,16 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
 
   // The labels are also a map from each list element to its corresponding zero-based list index.
   auto const labels =
-    generate_labels(input, child.size(), stream, cudf::get_current_device_resource_ref());
+    generate_labels(input, child.size(), stream, resources.get_temporary_mr());
 
   // The offsets of the output lists column.
-  auto out_offsets = get_normalized_offsets(input, stream, mr);
+  auto out_offsets = get_normalized_offsets(input, stream, resources);
 
   // Build a gather map to copy the output list elements from the input list elements.
-  auto gather_map = rmm::device_uvector<size_type>(child.size(), stream);
+  auto gather_map = rmm::device_uvector<size_type>(child.size(), stream, resources.get_temporary_mr());
 
   // Build a segmented reversed order for the child column.
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
                      thrust::counting_iterator<size_type>(0),
                      child.size(),
                      [list_offsets = out_offsets->view().begin<size_type>(),
@@ -63,25 +63,26 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
                          out_of_bounds_policy::DONT_CHECK,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
                          stream,
-                         mr);
+                         resources);
 
   return cudf::make_lists_column(input.size(),
                                  std::move(out_offsets),
                                  std::move(child_segmented_reversed->release().front()),
                                  input.null_count(),
-                                 cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                 cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                  stream,
-                                 mr);
+                                 resources);
 }
 
 }  // namespace detail
 
 std::unique_ptr<column> reverse(lists_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+                                cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(input, stream, mr);
+  return detail::reverse(input, stream, resources);
 }
 
 }  // namespace cudf::lists

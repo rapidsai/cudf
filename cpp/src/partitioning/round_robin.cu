@@ -73,7 +73,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
   cudf::size_type num_partitions,
   cudf::size_type start_partition,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto nrows = input.num_rows();
 
@@ -87,14 +87,14 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 
   if (num_partitions == nrows) {
     rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
-    thrust::sequence(rmm::exec_policy(stream), partition_offsets.begin(), partition_offsets.end());
+    thrust::sequence(rmm::exec_policy(stream, resources.get_temporary_mr()), partition_offsets.begin(), partition_offsets.end());
 
     auto uniq_tbl = cudf::detail::gather(input,
                                          rotated_iter_begin,
                                          rotated_iter_begin + nrows,  // map
                                          cudf::out_of_bounds_policy::DONT_CHECK,
                                          stream,
-                                         mr);
+                                         resources);
 
     return std::pair(std::move(uniq_tbl), cudf::detail::make_std_vector(partition_offsets, stream));
   } else {  //( num_partitions > nrows )
@@ -103,7 +103,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     // copy rotated right partition indexes that
     // fall in the interval [0, nrows):
     //(this relies on a _stable_ copy_if())
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     rotated_iter_begin,
                     rotated_iter_begin + num_partitions,
                     d_row_indices.begin(),
@@ -115,7 +115,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                                          d_row_indices.end(),  // map
                                          cudf::out_of_bounds_policy::DONT_CHECK,
                                          stream,
-                                         mr);
+                                         resources);
 
     // offsets (part 1: compute partition sizes);
     // iterator for number of edges of the transposed bipartite graph;
@@ -128,7 +128,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 
     // offsets (part 2: compute partition offsets):
     rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream),
+    thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                            nedges_iter_begin,
                            nedges_iter_begin + num_partitions,
                            partition_offsets.begin());
@@ -145,7 +145,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
   cudf::size_type num_partitions,
   cudf::size_type start_partition,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   auto nrows = input.num_rows();
 
@@ -164,7 +164,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
   // handle degenerate case:
   //
   if (num_partitions >= nrows) {
-    return degenerate_partitions(input, num_partitions, start_partition, stream, mr);
+    return degenerate_partitions(input, num_partitions, start_partition, stream, resources);
   }
 
   auto np_max_size = nrows % num_partitions;  // # partitions of max size
@@ -225,7 +225,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
     }));
 
   auto uniq_tbl = cudf::detail::gather(
-    input, iter_begin, iter_begin + nrows, cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
+    input, iter_begin, iter_begin + nrows, cudf::out_of_bounds_policy::DONT_CHECK, stream, resources);
   auto ret_pair = std::pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
 
   // this has the effect of rotating the set of partition sizes
@@ -260,10 +260,10 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robi
   cudf::size_type num_partitions,
   cudf::size_type start_partition,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::round_robin_partition(input, num_partitions, start_partition, stream, mr);
+  return detail::round_robin_partition(input, num_partitions, start_partition, stream, resources);
 }
 
 }  // namespace cudf

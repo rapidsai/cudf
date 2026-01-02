@@ -55,7 +55,7 @@ namespace detail {
 std::unique_ptr<table> apply_boolean_mask(table_view const& input,
                                           column_view const& boolean_mask,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   if (boolean_mask.is_empty()) { return empty_like(input); }
 
@@ -67,9 +67,9 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
   auto device_boolean_mask = cudf::column_device_view::create(boolean_mask, stream);
 
   if (boolean_mask.has_nulls()) {
-    return detail::copy_if(input, boolean_mask_filter<true>{*device_boolean_mask}, stream, mr);
+    return detail::copy_if(input, boolean_mask_filter<true>{*device_boolean_mask}, stream, resources);
   } else {
-    return detail::copy_if(input, boolean_mask_filter<false>{*device_boolean_mask}, stream, mr);
+    return detail::copy_if(input, boolean_mask_filter<false>{*device_boolean_mask}, stream, resources);
   }
 }
 
@@ -81,9 +81,9 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
 std::unique_ptr<table> apply_boolean_mask(table_view const& input,
                                           column_view const& boolean_mask,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(input, boolean_mask, stream, mr);
+  return detail::apply_boolean_mask(input, boolean_mask, stream, resources);
 }
 }  // namespace cudf

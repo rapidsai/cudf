@@ -29,7 +29,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               out_of_bounds_policy bounds_policy,
                               negative_index_policy neg_indices,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_EXPECTS(not gather_map.has_nulls(), "gather_map contains nulls", std::invalid_argument);
 
@@ -46,9 +46,9 @@ std::unique_ptr<table> gather(table_view const& source_table,
                   thrust::make_transform_iterator(map_end, idx_converter),
                   bounds_policy,
                   stream,
-                  mr);
+                  resources);
   }
-  return gather(source_table, map_begin, map_end, bounds_policy, stream, mr);
+  return gather(source_table, map_begin, map_end, bounds_policy, stream, resources);
 }
 
 std::unique_ptr<table> gather(table_view const& source_table,
@@ -56,7 +56,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               out_of_bounds_policy bounds_policy,
                               negative_index_policy neg_indices,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_EXPECTS(gather_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
                "gather map size exceeds the column size limit",
@@ -66,7 +66,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                              gather_map.data(),
                              nullptr,
                              0);
-  return gather(source_table, map_col, bounds_policy, neg_indices, stream, mr);
+  return gather(source_table, map_col, bounds_policy, neg_indices, stream, resources);
 }
 
 }  // namespace detail
@@ -75,14 +75,14 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
                               out_of_bounds_policy bounds_policy,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
   auto index_policy = is_unsigned(gather_map.type()) ? detail::negative_index_policy::NOT_ALLOWED
                                                      : detail::negative_index_policy::ALLOWED;
 
-  return detail::gather(source_table, gather_map, bounds_policy, index_policy, stream, mr);
+  return detail::gather(source_table, gather_map, bounds_policy, index_policy, stream, resources);
 }
 
 }  // namespace cudf

@@ -547,7 +547,7 @@ transform_args ast_converter::compute_column(target target_id,
                                              ast::expression const& expr,
                                              ast_args const& args,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   ast_converter converter{stream, mr};
 
@@ -594,7 +594,7 @@ filter_args ast_converter::filter(target target_id,
                                   ast_args const& args,
                                   table_view const& filter_table,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  cudf::memory_resources resources)
 {
   ast_converter converter{stream, mr};
   auto [is_null_aware, _null_output] = converter.generate_code(target_id, expr, args);

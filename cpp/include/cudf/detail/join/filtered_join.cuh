@@ -142,7 +142,7 @@ class filtered_join {
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) = 0;
+    cudf::memory_resources resources) = 0;
 
   /**
    * Virtual anti join function overridden in derived classes
@@ -150,7 +150,7 @@ class filtered_join {
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) = 0;
+    cudf::memory_resources resources) = 0;
 
   /**
    * Virtual abstract base class destructor

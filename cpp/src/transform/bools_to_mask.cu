@@ -21,7 +21,7 @@
 namespace cudf {
 namespace detail {
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  column_view const& input, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
   CUDF_EXPECTS(input.type().id() == type_id::BOOL8, "Input is not of type bool");
 
@@ -34,12 +34,12 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
     // Nulls are considered false
     auto input_begin = make_null_replacement_iterator<bool>(input_device_view, false);
 
-    auto mask = detail::valid_if(input_begin, input_begin + input.size(), pred, stream, mr);
+    auto mask = detail::valid_if(input_begin, input_begin + input.size(), pred, stream, resources);
 
     return std::pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
   } else {
     auto mask = detail::valid_if(
-      input_device_view.begin<bool>(), input_device_view.end<bool>(), pred, stream, mr);
+      input_device_view.begin<bool>(), input_device_view.end<bool>(), pred, stream, resources);
 
     return std::pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
   }
@@ -48,10 +48,10 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
 }  // namespace detail
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  column_view const& input, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::bools_to_mask(input, stream, mr);
+  return detail::bools_to_mask(input, stream, resources);
 }
 
 }  // namespace cudf

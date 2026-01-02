@@ -23,7 +23,7 @@ namespace strings::detail {
 std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                     data_type output_type,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr);
+                                    cudf::memory_resources resources);
 
 /**
  * @copydoc from_integers(strings_column_view const&,rmm::device_async_resource_ref)
@@ -32,7 +32,7 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
  */
 std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr);
+                                      cudf::memory_resources resources);
 
 /**
  * @copydoc to_floats(strings_column_view const&,data_type,rmm::device_async_resource_ref)
@@ -42,7 +42,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
 std::unique_ptr<column> to_floats(strings_column_view const& strings,
                                   data_type output_type,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr);
+                                  cudf::memory_resources resources);
 
 /**
  * @copydoc from_floats(strings_column_view const&,rmm::device_async_resource_ref)
@@ -51,7 +51,7 @@ std::unique_ptr<column> to_floats(strings_column_view const& strings,
  */
 std::unique_ptr<column> from_floats(column_view const& floats,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr);
+                                    cudf::memory_resources resources);
 
 /**
  * @copydoc to_booleans(strings_column_view const&,string_scalar
@@ -62,7 +62,7 @@ std::unique_ptr<column> from_floats(column_view const& floats,
 std::unique_ptr<column> to_booleans(strings_column_view const& strings,
                                     string_scalar const& true_string,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr);
+                                    cudf::memory_resources resources);
 
 /**
  * @copydoc from_booleans(strings_column_view const&,string_scalar const&,string_scalar
@@ -74,7 +74,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       string_scalar const& true_string,
                                       string_scalar const& false_string,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr);
+                                      cudf::memory_resources resources);
 
 /**
  * @copydoc to_timestamps(strings_column_view const&,data_type,std::string_view,
@@ -86,7 +86,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
                                             data_type timestamp_type,
                                             std::string_view format,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr);
+                                            cudf::memory_resources resources);
 
 /**
  * @copydoc from_timestamps(strings_column_view const&,std::string_view,
@@ -98,7 +98,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         std::string_view format,
                                         strings_column_view const& names,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr);
+                                        cudf::memory_resources resources);
 
 /**
  * @copydoc to_durations(strings_column_view const&,data_type,std::string_view,
@@ -110,7 +110,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
                                      data_type duration_type,
                                      std::string_view format,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr);
+                                     cudf::memory_resources resources);
 
 /**
  * @copydoc from_durations(strings_column_view const&,std::string_view.
@@ -121,7 +121,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
 std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string_view format,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr);
+                                       cudf::memory_resources resources);
 
 /**
  * @copydoc to_fixed_point(strings_column_view const&,data_type,rmm::device_async_resource_ref)
@@ -131,7 +131,7 @@ std::unique_ptr<column> from_durations(column_view const& durations,
 std::unique_ptr<column> to_fixed_point(strings_column_view const& strings,
                                        data_type output_type,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr);
+                                       cudf::memory_resources resources);
 
 /**
  * @copydoc from_fixed_point(strings_column_view const&,rmm::device_async_resource_ref)
@@ -140,7 +140,7 @@ std::unique_ptr<column> to_fixed_point(strings_column_view const& strings,
  */
 std::unique_ptr<column> from_fixed_point(column_view const& integers,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr);
+                                         cudf::memory_resources resources);
 
 }  // namespace strings::detail
 }  // namespace CUDF_EXPORT cudf

@@ -24,7 +24,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                        null_equality nulls_equal,
                                        nan_equality nans_equal,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   if (input.num_rows() == 0 or input.num_columns() == 0 or keys.empty()) {
     return empty_like(input);
@@ -35,7 +35,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                                          nulls_equal,
                                                          nans_equal,
                                                          stream,
-                                                         cudf::get_current_device_resource_ref());
+                                                         resources.get_temporary_mr());
 
   // The only difference between this implementation and the unstable version
   // is that the stable implementation must retain the input order. The
@@ -45,10 +45,10 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
   // the need to sort the distinct indices, which is slower.
 
   auto const output_markers = [&] {
-    auto markers = rmm::device_uvector<bool>(input.num_rows(), stream);
-    thrust::uninitialized_fill(rmm::exec_policy(stream), markers.begin(), markers.end(), false);
+    auto markers = rmm::device_uvector<bool>(input.num_rows(), stream, resources.get_temporary_mr());
+    thrust::uninitialized_fill(rmm::exec_policy(stream, resources.get_temporary_mr()), markers.begin(), markers.end(), false);
     thrust::scatter(
-      rmm::exec_policy(stream),
+      rmm::exec_policy(stream, resources.get_temporary_mr()),
       thrust::constant_iterator<bool>(true, 0),
       thrust::constant_iterator<bool>(true, static_cast<size_type>(distinct_indices.size())),
       distinct_indices.begin(),
@@ -57,7 +57,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
   }();
 
   return cudf::detail::apply_boolean_mask(
-    input, cudf::device_span<bool const>(output_markers), stream, mr);
+    input, cudf::device_span<bool const>(output_markers), stream, resources);
 }
 
 }  // namespace detail
@@ -68,10 +68,10 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                        null_equality nulls_equal,
                                        nan_equality nans_equal,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_distinct(input, keys, keep, nulls_equal, nans_equal, stream, mr);
+  return detail::stable_distinct(input, keys, keep, nulls_equal, nans_equal, stream, resources);
 }
 
 }  // namespace cudf

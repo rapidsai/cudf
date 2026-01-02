@@ -58,7 +58,7 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
   // Each ColumnDeviceView instance may have child objects that
   // require setting some internal device pointers before being copied
   // from CPU to device.
-  auto const descendant_storage = new rmm::device_uvector<char>(descendant_storage_bytes, stream);
+  auto const descendant_storage = new rmm::device_uvector<char>(descendant_storage_bytes, stream, resources.get_temporary_mr());
 
   auto deleter = [descendant_storage](ColumnDeviceView* v) {
     v->destroy();

@@ -120,7 +120,7 @@ struct dispatch_to_fixed_point_fn {
   std::unique_ptr<column> operator()(strings_column_view const& input,
                                      data_type output_type,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(cudf::is_fixed_point<T>())
   {
     using DecimalType = device_storage_type_t<T>;
@@ -130,14 +130,15 @@ struct dispatch_to_fixed_point_fn {
     // create output column
     auto results   = make_fixed_point_column(output_type,
                                            input.size(),
-                                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                           cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                            input.null_count(),
                                            stream,
-                                           mr);
+                                           resources);
     auto d_results = results->mutable_view().data<DecimalType>();
 
     // convert strings into decimal values
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       d_results,
@@ -163,10 +164,10 @@ struct dispatch_to_fixed_point_fn {
 std::unique_ptr<column> to_fixed_point(strings_column_view const& input,
                                        data_type output_type,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   if (input.is_empty()) return make_empty_column(output_type);
-  return type_dispatcher(output_type, dispatch_to_fixed_point_fn{}, input, output_type, stream, mr);
+  return type_dispatcher(output_type, dispatch_to_fixed_point_fn{}, input, output_type, stream, resources);
 }
 
 }  // namespace detail
@@ -175,10 +176,10 @@ std::unique_ptr<column> to_fixed_point(strings_column_view const& input,
 std::unique_ptr<column> to_fixed_point(strings_column_view const& input,
                                        data_type output_type,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_fixed_point(input, output_type, stream, mr);
+  return detail::to_fixed_point(input, output_type, stream, resources);
 }
 
 namespace detail {
@@ -227,7 +228,7 @@ struct dispatch_from_fixed_point_fn {
   template <typename T>
   std::unique_ptr<column> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(cudf::is_fixed_point<T>())
   {
     using DecimalType = device_storage_type_t<T>;  // underlying value type
@@ -235,13 +236,14 @@ struct dispatch_from_fixed_point_fn {
     auto const d_column = column_device_view::create(input, stream);
 
     auto [offsets, chars] =
-      make_strings_children(from_fixed_point_fn<DecimalType>{*d_column}, input.size(), stream, mr);
+      make_strings_children(from_fixed_point_fn<DecimalType>{*d_column}, input.size(), stream, resources);
 
     return make_strings_column(input.size(),
                                std::move(offsets),
                                chars.release(),
                                input.null_count(),
-                               cudf::detail::copy_bitmask(input, stream, mr));
+                               cudf::detail::copy_bitmask(input, stream,
+                  resources));
   }
 
   template <typename T>
@@ -258,10 +260,10 @@ struct dispatch_from_fixed_point_fn {
 
 std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
-  return type_dispatcher(input.type(), dispatch_from_fixed_point_fn{}, input, stream, mr);
+  return type_dispatcher(input.type(), dispatch_from_fixed_point_fn{}, input, stream, resources);
 }
 
 }  // namespace detail
@@ -270,10 +272,10 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
 
 std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+                                         cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_fixed_point(input, stream, mr);
+  return detail::from_fixed_point(input, stream, resources);
 }
 
 namespace detail {
@@ -284,7 +286,7 @@ struct dispatch_is_fixed_point_fn {
   std::unique_ptr<column> operator()(strings_column_view const& input,
                                      data_type decimal_type,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+                                     cudf::memory_resources resources) const
     requires(cudf::is_fixed_point<T>())
   {
     using DecimalType = device_storage_type_t<T>;
@@ -294,14 +296,15 @@ struct dispatch_is_fixed_point_fn {
     // create output column
     auto results   = make_numeric_column(data_type{type_id::BOOL8},
                                        input.size(),
-                                       cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                       cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources),
                                        input.null_count(),
                                        stream,
-                                       mr);
+                                       resources);
     auto d_results = results->mutable_view().data<bool>();
 
     // check strings for valid fixed-point chars
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       d_results,
@@ -326,21 +329,21 @@ struct dispatch_is_fixed_point_fn {
 std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
                                        data_type decimal_type,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   if (input.is_empty()) return cudf::make_empty_column(type_id::BOOL8);
   return type_dispatcher(
-    decimal_type, dispatch_is_fixed_point_fn{}, input, decimal_type, stream, mr);
+    decimal_type, dispatch_is_fixed_point_fn{}, input, decimal_type, stream, resources);
 }
 }  // namespace detail
 
 std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
                                        data_type decimal_type,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_fixed_point(input, decimal_type, stream, mr);
+  return detail::is_fixed_point(input, decimal_type, stream, resources);
 }
 
 }  // namespace strings

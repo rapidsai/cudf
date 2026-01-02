@@ -91,7 +91,7 @@ struct has_nans {
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
-    return thrust::any_of(rmm::exec_policy(stream),
+    return thrust::any_of(rmm::exec_policy(stream, resources.get_temporary_mr()),
                           thrust::counting_iterator<cudf::size_type>(0),
                           thrust::counting_iterator<cudf::size_type>(input.size()),
                           check_for_nan<T>(device_view));
@@ -151,7 +151,7 @@ cudf::size_type distinct_count(table_view const& keys,
       // We must consider a row if any of its column entries is valid,
       // hence OR together the validities of the columns.
       auto const [row_bitmask, null_count] =
-        cudf::detail::bitmask_or(keys, stream, cudf::get_current_device_resource_ref());
+        cudf::detail::bitmask_or(keys, stream, resources.get_temporary_mr());
 
       // Unless all columns have a null mask, row_bitmask will be
       // null, and null_count will be zero. Equally, unless there is

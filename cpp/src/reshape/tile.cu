@@ -35,7 +35,7 @@ namespace detail {
 std::unique_ptr<table> tile(table_view const& in,
                             size_type count,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+                            cudf::memory_resources resources)
 {
   CUDF_EXPECTS(count >= 0, "Count cannot be negative");
 
@@ -47,17 +47,17 @@ std::unique_ptr<table> tile(table_view const& in,
   auto tiled_it     = cudf::detail::make_counting_transform_iterator(0, tile_functor{in_num_rows});
 
   return detail::gather(
-    in, tiled_it, tiled_it + out_num_rows, out_of_bounds_policy::DONT_CHECK, stream, mr);
+    in, tiled_it, tiled_it + out_num_rows, out_of_bounds_policy::DONT_CHECK, stream, resources);
 }
 }  // namespace detail
 
 std::unique_ptr<table> tile(table_view const& in,
                             size_type count,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::tile(in, count, stream, mr);
+  return detail::tile(in, count, stream, resources);
 }
 
 }  // namespace cudf

@@ -49,27 +49,27 @@ std::unique_ptr<column> fill(strings_column_view const& input,
                              size_type end,
                              string_scalar const& value,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cudf::memory_resources resources)
 {
   auto const strings_count = input.size();
   if (strings_count == 0) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS((begin >= 0) && (end <= strings_count),
                "Parameters [begin,end) are outside the range of the provided strings column");
   CUDF_EXPECTS(begin <= end, "Parameters [begin,end) have invalid range values");
-  if (begin == end) { return std::make_unique<column>(input.parent(), stream, mr); }
+  if (begin == end) { return std::make_unique<column>(input.parent(), stream, resources); }
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_value   = cudf::get_scalar_device_view(const_cast<string_scalar&>(value));
 
   auto fn = fill_fn{*d_strings, begin, end, d_value};
   rmm::device_uvector<string_index_pair> indices(strings_count, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(strings_count),
                     indices.begin(),
                     fn);
 
-  return make_strings_column(indices.begin(), indices.end(), stream, mr);
+  return make_strings_column(indices.begin(), indices.end(), stream, resources);
 }
 
 }  // namespace detail

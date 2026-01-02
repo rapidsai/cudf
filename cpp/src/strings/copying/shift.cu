@@ -82,7 +82,7 @@ std::unique_ptr<column> shift(strings_column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                              cudf::memory_resources resources)
 {
   auto d_fill_str = static_cast<string_scalar const&>(fill_value).value(stream);
 
@@ -94,7 +94,7 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   auto sizes_itr     = cudf::detail::make_counting_transform_iterator(
     0, output_sizes_fn{*d_input, d_fill_str, offset});
   auto [offsets_column, total_bytes] = cudf::strings::detail::make_offsets_child_column(
-    sizes_itr, sizes_itr + input.size(), stream, mr);
+    sizes_itr, sizes_itr + input.size(), stream, resources);
   auto offsets_view = offsets_column->view();
 
   // compute the shift-offset for the output characters child column
@@ -104,11 +104,11 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   }();
 
   // create output chars child column
-  rmm::device_uvector<char> chars(total_bytes, stream, mr);
+  rmm::device_uvector<char> chars(total_bytes, stream, resources);
   auto d_chars = chars.data();
 
   // run kernel to shift all the characters
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     thrust::counting_iterator<int64_t>(0),
                     thrust::counting_iterator<int64_t>(total_bytes),
                     d_chars,

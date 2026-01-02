@@ -16,7 +16,7 @@ namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @copydoc cudf::sequence(size_type size, scalar const& init, scalar const& step,
- *                                       rmm::device_async_resource_ref mr =
+ *                                       cudf::memory_resources resources =
  *cudf::get_current_device_resource_ref())
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -25,11 +25,11 @@ std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  scalar const& step,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::sequence(size_type size, scalar const& init,
-                                         rmm::device_async_resource_ref mr =
+                                         cudf::memory_resources resources =
  cudf::get_current_device_resource_ref())
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -37,13 +37,13 @@ std::unique_ptr<column> sequence(size_type size,
 std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                                 cudf::memory_resources resources);
 
 /**
  * @copydoc cudf::calendrical_month_sequence(size_type size,
  *                                           scalar const& init,
  *                                           size_type months,
- *                                           rmm::device_async_resource_ref mr)
+ *                                           cudf::memory_resources resources)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -51,7 +51,7 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
                                                          scalar const& init,
                                                          size_type months,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::device_async_resource_ref mr);
+                                                         cudf::memory_resources resources);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

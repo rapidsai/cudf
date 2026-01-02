@@ -20,7 +20,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
@@ -45,7 +45,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                             min_periods,
                                             agg,
                                             stream,
-                                            mr);
+                                            resources);
   } else {
     auto defaults_col =
       cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
@@ -56,7 +56,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                         min_periods,
                                         agg,
                                         stream,
-                                        mr);
+                                        resources);
   }
 }
 

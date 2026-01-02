@@ -34,7 +34,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                size_type min_periods,
                                                rolling_aggregation const& aggr,
                                                rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
+                                               cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
@@ -53,7 +53,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                     following_window_bounds.is_unbounded(),
                                     min_periods,
                                     aggr)) {
-    return optimized_unbounded_window(group_keys, input, aggr, stream, mr);
+    return optimized_unbounded_window(group_keys, input, aggr, stream, resources);
   }
 
   auto const preceding_window = preceding_window_bounds.value();
@@ -65,7 +65,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   if (group_keys.num_columns() == 0) {
     // No Groupby columns specified. Treat as one big group.
     return detail::rolling_window(
-      input, default_outputs, preceding_window, following_window, min_periods, aggr, stream, mr);
+      input, default_outputs, preceding_window, following_window, min_periods, aggr, stream, resources);
   }
 
   using sort_groupby_helper = cudf::groupby::detail::sort::sort_groupby_helper;
@@ -103,7 +103,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                             min_periods,
                                             aggr,
                                             stream,
-                                            mr);
+                                            resources);
   } else {
     namespace utils = cudf::detail::rolling;
     auto groups     = utils::grouped{group_labels.data(), group_offsets.data()};
@@ -112,7 +112,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     auto following =
       utils::make_clamped_window_iterator<utils::direction::FOLLOWING>(following_window, groups);
     return cudf::detail::rolling_window(
-      input, default_outputs, preceding, following, min_periods, aggr, stream, mr);
+      input, default_outputs, preceding, following, min_periods, aggr, stream, resources);
   }
 }
 
@@ -126,7 +126,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                size_type min_periods,
                                                rolling_aggregation const& aggr,
                                                rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
+                                               cudf::memory_resources resources)
 {
   return detail::grouped_rolling_window(group_keys,
                                         input,
@@ -136,7 +136,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                         min_periods,
                                         aggr,
                                         stream,
-                                        mr);
+                                        resources);
 }
 
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
@@ -146,7 +146,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                size_type min_periods,
                                                rolling_aggregation const& aggr,
                                                rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
+                                               cudf::memory_resources resources)
 {
   return grouped_rolling_window(group_keys,
                                 input,
@@ -155,7 +155,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                 min_periods,
                                 aggr,
                                 stream,
-                                mr);
+                                resources);
 }
 
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
@@ -165,7 +165,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                size_type min_periods,
                                                rolling_aggregation const& aggr,
                                                rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
+                                               cudf::memory_resources resources)
 {
   return detail::grouped_rolling_window(group_keys,
                                         input,
@@ -175,7 +175,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                         min_periods,
                                         aggr,
                                         stream,
-                                        mr);
+                                        resources);
 }
 
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
@@ -186,7 +186,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                size_type min_periods,
                                                rolling_aggregation const& aggr,
                                                rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
+                                               cudf::memory_resources resources)
 {
   return detail::grouped_rolling_window(group_keys,
                                         input,
@@ -196,7 +196,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                         min_periods,
                                         aggr,
                                         stream,
-                                        mr);
+                                        resources);
 }
 
 namespace detail {
@@ -209,7 +209,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                                                     range_window_type following,
                                                     host_span<rolling_request const> requests,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
+                                                    cudf::memory_resources resources)
 {
   std::vector<std::unique_ptr<column>> results;
   results.reserve(requests.size());
@@ -245,7 +245,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                    std::back_inserter(results),
                    [&](rolling_request const& req) {
                      return optimized_unbounded_window(
-                       group_keys, req.values, *req.aggregation, stream, mr);
+                       group_keys, req.values, *req.aggregation, stream, resources);
                    });
     return std::make_unique<table>(std::move(results));
   }
@@ -258,7 +258,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                        preceding,
                        following,
                        stream,
-                       cudf::get_current_device_resource_ref());
+                       resources.get_temporary_mr());
   auto const& preceding_view = preceding_column->view();
   auto const& following_view = following_column->view();
   std::transform(
@@ -267,7 +267,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                                         std::holds_alternative<unbounded>(following),
                                         req.min_periods,
                                         *req.aggregation)) {
-        return optimized_unbounded_window(group_keys, req.values, *req.aggregation, stream, mr);
+        return optimized_unbounded_window(group_keys, req.values, *req.aggregation, stream, resources);
       } else {
         return detail::rolling_window(req.values,
                                       preceding_view,
@@ -275,7 +275,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                                       req.min_periods,
                                       *req.aggregation,
                                       stream,
-                                      mr);
+                                      resources);
       }
     });
   return std::make_unique<table>(std::move(results));
@@ -305,7 +305,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                  d_orderby.is_null_nocheck(d_offsets[i]);
         }));
     auto is_before = thrust::reduce(
-      rmm::exec_policy_nosync(stream), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
     return is_before ? null_order::BEFORE : null_order::AFTER;
   } else {
     // Sort order is DESCENDING
@@ -323,7 +323,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                  d_orderby.is_null_nocheck(d_offsets[i + 1] - 1);
         }));
     auto is_before = thrust::reduce(
-      rmm::exec_policy_nosync(stream), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
     return is_before ? null_order::BEFORE : null_order::AFTER;
   }
 }
@@ -351,7 +351,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                                      size_type min_periods,
                                                      rolling_aggregation const& aggr,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                     cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
 
@@ -365,7 +365,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
   // Detect and bypass fully UNBOUNDED windows.
   if (can_optimize_unbounded_window(
         preceding.is_unbounded(), following.is_unbounded(), min_periods, aggr)) {
-    return optimized_unbounded_window(group_keys, input, aggr, stream, mr);
+    return optimized_unbounded_window(group_keys, input, aggr, stream, resources);
   }
 
   auto get_window_type = [](range_window_bounds const& bound) -> range_window_type {
@@ -399,7 +399,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                   null_order,
                                   get_window_type(preceding),
                                   stream,
-                                  cudf::get_current_device_resource_ref()),
+                                  resources.get_temporary_mr()),
         detail::make_range_window(order_by_column,
                                   grouping,
                                   rolling::direction::FOLLOWING,
@@ -408,7 +408,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                   null_order,
                                   get_window_type(following),
                                   stream,
-                                  cudf::get_current_device_resource_ref()),
+                                  resources.get_temporary_mr()),
       };
     } else {
       auto null_order =
@@ -427,12 +427,12 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                 get_window_type(preceding),
                                 get_window_type(following),
                                 stream,
-                                cudf::get_current_device_resource_ref());
+                                resources.get_temporary_mr());
     }
   }();
 
   return detail::rolling_window(
-    input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
+    input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, resources);
 }
 
 }  // namespace detail
@@ -458,7 +458,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                                      size_type min_periods,
                                                      rolling_aggregation const& aggr,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                     cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::grouped_range_rolling_window(group_keys,
@@ -470,7 +470,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                               min_periods,
                                               aggr,
                                               stream,
-                                              mr);
+                                              resources);
 }
 
 std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys,
@@ -481,7 +481,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                                                     range_window_type following,
                                                     host_span<rolling_request const> requests,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
+                                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(std::all_of(requests.begin(),
@@ -489,7 +489,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                            [](rolling_request const& req) { return req.min_periods > 0; }),
                "All min_periods must be positive");
   return detail::grouped_range_rolling_window(
-    group_keys, orderby, order, null_order, preceding, following, requests, stream, mr);
+    group_keys, orderby, order, null_order, preceding, following, requests, stream, resources);
 }
 
 }  // namespace cudf

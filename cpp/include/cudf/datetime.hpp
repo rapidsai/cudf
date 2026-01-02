@@ -59,7 +59,7 @@ std::unique_ptr<cudf::column> extract_datetime_component(
   cudf::column_view const& column,
   datetime_component component,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 /**
@@ -82,7 +82,7 @@ std::unique_ptr<cudf::column> extract_datetime_component(
 std::unique_ptr<cudf::column> last_day_of_month(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Computes the day number since the start of the year from the datetime and
@@ -98,7 +98,7 @@ std::unique_ptr<cudf::column> last_day_of_month(
 std::unique_ptr<cudf::column> day_of_year(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Adds or subtracts a number of months from the datetime type and returns a
@@ -135,7 +135,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::column_view const& months,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Adds or subtracts a number of months from the datetime type and returns a
@@ -172,7 +172,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::scalar const& months,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Check if the year of the given date is a leap year
@@ -191,7 +191,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
 std::unique_ptr<cudf::column> is_leap_year(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Extract the number of days in the month
@@ -209,7 +209,7 @@ std::unique_ptr<cudf::column> is_leap_year(
 std::unique_ptr<cudf::column> days_in_month(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Returns the quarter of the date
@@ -227,7 +227,7 @@ std::unique_ptr<cudf::column> days_in_month(
 std::unique_ptr<cudf::column> extract_quarter(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Fixed frequencies supported by datetime rounding functions ceil, floor, round.
@@ -258,7 +258,7 @@ std::unique_ptr<cudf::column> ceil_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Round datetimes down to the nearest multiple of the given frequency.
@@ -275,7 +275,7 @@ std::unique_ptr<cudf::column> floor_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Round datetimes to the nearest multiple of the given frequency.
@@ -292,7 +292,7 @@ std::unique_ptr<cudf::column> round_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 

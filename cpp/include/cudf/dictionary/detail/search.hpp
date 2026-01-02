@@ -25,7 +25,7 @@ namespace detail {
 std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
                                   scalar const& key,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr);
+                                  cudf::memory_resources resources);
 
 /**
  * @brief Get the index for a key if it were added to the given dictionary.
@@ -49,7 +49,7 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
 std::unique_ptr<scalar> get_insert_index(dictionary_column_view const& dictionary,
                                          scalar const& key,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr);
+                                         cudf::memory_resources resources);
 
 }  // namespace detail
 }  // namespace dictionary

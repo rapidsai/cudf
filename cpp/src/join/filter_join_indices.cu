@@ -42,7 +42,7 @@ filter_join_indices(cudf::table_view const& left,
                     ast::expression const& predicate,
                     join_kind join_kind,
                     rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr)
+                    cudf::memory_resources resources)
 {
   // Validate inputs
   CUDF_EXPECTS(left_indices.size() == right_indices.size(),
@@ -55,8 +55,10 @@ filter_join_indices(cudf::table_view const& left,
                std::invalid_argument);
 
   auto make_empty_result = [&]() {
-    return std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr)};
+    return std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream,
+                  resources),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream,
+                  resources)};
   };
 
   if (left_indices.empty()) { return make_empty_result(); }
@@ -66,7 +68,7 @@ filter_join_indices(cudf::table_view const& left,
 
   // Create expression parser
   auto const parser = ast::detail::expression_parser{
-    predicate, left, right, has_nulls, stream, cudf::get_current_device_resource_ref()};
+    predicate, left, right, has_nulls, stream, resources.get_temporary_mr()};
 
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The predicate expression must produce a Boolean output");
@@ -79,7 +81,7 @@ filter_join_indices(cudf::table_view const& left,
   auto right_table = table_device_view::create(right, stream);
 
   // Allocate array to store predicate evaluation results
-  auto predicate_results = rmm::device_uvector<bool>(left_indices.size(), stream);
+  auto predicate_results = rmm::device_uvector<bool>(left_indices.size(), stream, resources.get_temporary_mr());
 
   // Configure kernel parameters with dynamic shared memory calculation
   int device_id;
@@ -145,8 +147,10 @@ filter_join_indices(cudf::table_view const& left,
   auto right_ptr             = right_indices.data();
 
   auto make_result_vectors = [&](size_t size) {
-    return std::pair{std::make_unique<rmm::device_uvector<size_type>>(size, stream, mr),
-                     std::make_unique<rmm::device_uvector<size_type>>(size, stream, mr)};
+    return std::pair{std::make_unique<rmm::device_uvector<size_type>>(size, stream,
+                  resources),
+                     std::make_unique<rmm::device_uvector<size_type>>(size, stream,
+                  resources)};
   };
 
   // Handle different join semantics
@@ -155,7 +159,7 @@ filter_join_indices(cudf::table_view const& left,
     auto valid_predicate = [=] __device__(size_type i) -> bool { return predicate_results_ptr[i]; };
 
     auto const num_valid =
-      thrust::count_if(rmm::exec_policy_nosync(stream),
+      thrust::count_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                        thrust::counting_iterator{0},
                        thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
                        valid_predicate);
@@ -169,7 +173,7 @@ filter_join_indices(cudf::table_view const& left,
     auto output_iter = thrust::make_zip_iterator(
       cuda::std::tuple{filtered_left_indices->begin(), filtered_right_indices->begin()});
 
-    thrust::copy_if(rmm::exec_policy_nosync(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     input_iter,
                     input_iter + left_indices.size(),
                     thrust::counting_iterator{0},
@@ -192,7 +196,7 @@ filter_join_indices(cudf::table_view const& left,
     auto output_iter = thrust::make_zip_iterator(
       cuda::std::tuple{filtered_left_indices->begin(), filtered_right_indices->begin()});
 
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::counting_iterator{0},
                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
                       output_iter,
@@ -211,7 +215,7 @@ filter_join_indices(cudf::table_view const& left,
 
     // Count failed matches for output sizing
     auto const failed_matched_count =
-      thrust::count_if(rmm::exec_policy_nosync(stream),
+      thrust::count_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                        thrust::counting_iterator{0},
                        thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
                        is_failed_matched_pair);
@@ -223,7 +227,7 @@ filter_join_indices(cudf::table_view const& left,
 
     // Use two-step approach with optimized memory management
     // Step 1: Handle primary pairs
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::counting_iterator{0},
                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
                       thrust::make_zip_iterator(cuda::std::tuple{filtered_left_indices->begin(),
@@ -250,7 +254,7 @@ filter_join_indices(cudf::table_view const& left,
         0, [=] __device__(size_type i) -> cuda::std::tuple<size_type, size_type> {
           return cuda::std::tuple{JoinNoMatch, right_ptr[i]};
         });
-      thrust::copy_if(rmm::exec_policy_nosync(stream),
+      thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       failed_match_iter,
                       failed_match_iter + left_indices.size(),
                       thrust::counting_iterator{0},
@@ -277,11 +281,11 @@ filter_join_indices(cudf::table_view const& left,
                     ast::expression const& predicate,
                     cudf::join_kind join_kind,
                     rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr)
+                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_join_indices(
-    left, right, left_indices, right_indices, predicate, join_kind, stream, mr);
+    left, right, left_indices, right_indices, predicate, join_kind, stream, resources);
 }
 
 }  // namespace cudf

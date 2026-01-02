@@ -49,10 +49,10 @@ struct count_fn {
 std::unique_ptr<column> count_matches(column_device_view const& d_strings,
                                       reprog_device& d_prog,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      cudf::memory_resources resources)
 {
   auto results = make_numeric_column(
-    data_type{type_to_id<size_type>()}, d_strings.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, d_strings.size(), mask_state::UNALLOCATED, stream, resources);
 
   if (d_strings.size() == 0) { return results; }
 

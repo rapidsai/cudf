@@ -66,17 +66,17 @@ struct bloom_filter_caster {
       dtype == literal->get_data_type() and
         cudf::have_same_types(
           cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
-          cudf::scalar_type_t<T>(T{}, false, stream, cudf::get_current_device_resource_ref())),
+          cudf::scalar_type_t<T>(T{}, false, stream, resources.get_temporary_mr())),
       "Mismatched predicate column and literal types");
 
     // Filter properties
     auto constexpr bytes_per_block = sizeof(word_type) * policy_type::words_per_block;
 
-    rmm::device_buffer results{total_row_groups, stream, cudf::get_current_device_resource_ref()};
+    rmm::device_buffer results{total_row_groups, stream, resources.get_temporary_mr()};
     cudf::device_span<bool> results_span{static_cast<bool*>(results.data()), total_row_groups};
 
     // Query literal in bloom filters from each column chunk (row group).
-    thrust::tabulate(rmm::exec_policy_nosync(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      results_span.begin(),
                      results_span.end(),
                      [filter_span          = bloom_filter_spans.data(),
@@ -541,7 +541,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Copy bloom filter bitset spans to device
   auto const bloom_filter_spans = cudf::detail::make_device_uvector_async(
-    h_bloom_filter_spans, stream, cudf::get_current_device_resource_ref());
+    h_bloom_filter_spans, stream, resources.get_temporary_mr());
 
   // Create a bloom filter query table caster
   bloom_filter_caster const bloom_filter_col{bloom_filter_spans,

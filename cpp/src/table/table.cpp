@@ -15,13 +15,14 @@
 namespace cudf {
 
 // Copy the columns from another table
-table::table(table const& other, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+table::table(table const& other, rmm::cuda_stream_view stream, cudf::memory_resources resources)
   : _num_rows{other.num_rows()}
 {
   CUDF_FUNC_RANGE();
   _columns.reserve(other._columns.size());
   for (auto const& c : other._columns) {
-    _columns.emplace_back(std::make_unique<column>(*c, stream, mr));
+    _columns.emplace_back(std::make_unique<column>(*c, stream,
+                  resources));
   }
 }
 
@@ -42,13 +43,14 @@ table::table(std::vector<std::unique_ptr<column>>&& columns) : _columns{std::mov
 }
 
 // Copy the contents of a `table_view`
-table::table(table_view view, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+table::table(table_view view, rmm::cuda_stream_view stream, cudf::memory_resources resources)
   : _num_rows{view.num_rows()}
 {
   CUDF_FUNC_RANGE();
   _columns.reserve(view.num_columns());
   for (auto const& c : view) {
-    _columns.emplace_back(std::make_unique<column>(c, stream, mr));
+    _columns.emplace_back(std::make_unique<column>(c, stream,
+                  resources));
   }
 }
 

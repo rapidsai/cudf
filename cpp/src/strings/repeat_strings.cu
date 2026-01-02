@@ -33,13 +33,13 @@ namespace detail {
 std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                                              size_type repeat_times,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
-  if (!input.is_valid(stream)) { return std::make_unique<string_scalar>("", false, stream, mr); }
+  if (!input.is_valid(stream)) { return std::make_unique<string_scalar>("", false, stream, resources); }
   if (input.size() == 0 || repeat_times <= 0) {
-    return std::make_unique<string_scalar>("", true, stream, mr);
+    return std::make_unique<string_scalar>("", true, stream, resources);
   }
-  if (repeat_times == 1) { return std::make_unique<string_scalar>(input, stream, mr); }
+  if (repeat_times == 1) { return std::make_unique<string_scalar>(input, stream, resources); }
 
   CUDF_EXPECTS(input.size() <= std::numeric_limits<size_type>::max() / repeat_times,
                "The output size exceeds the column size limit",
@@ -47,10 +47,10 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
 
   auto const str_size = input.size();
   auto const iter     = thrust::make_counting_iterator(0);
-  auto buff           = rmm::device_buffer(repeat_times * input.size(), stream, mr);
+  auto buff           = rmm::device_buffer(repeat_times * input.size(), stream, resources);
 
   // Pull data from the input string into each byte of the output string.
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
                     iter,
                     iter + repeat_times * str_size,
                     static_cast<char*>(buff.data()),
@@ -58,7 +58,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                       return in_ptr[idx % str_size];
                     });
 
-  return std::make_unique<string_scalar>(std::move(buff), true, stream, mr);
+  return std::make_unique<string_scalar>(std::move(buff), true, stream, resources);
 }
 
 namespace {
@@ -70,10 +70,10 @@ namespace {
 auto generate_empty_output(strings_column_view const& input,
                            size_type strings_count,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           cudf::memory_resources resources)
 {
   auto offsets_column = make_numeric_column(
-    data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, resources);
   CUDF_CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<size_type>(),
                                 0,
                                 offsets_column->size() * sizeof(size_type),
@@ -83,7 +83,8 @@ auto generate_empty_output(strings_column_view const& input,
                              std::move(offsets_column),
                              rmm::device_buffer{},
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 /**
@@ -138,7 +139,7 @@ struct compute_size_and_repeat_fn {
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        size_type repeat_times,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   auto const strings_count = input.size();
   if (strings_count == 0) { return make_empty_column(type_id::STRING); }
@@ -146,22 +147,23 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   if (repeat_times <= 0) {
     // If the number of repetitions is not positive, each row of the output strings column will be
     // either an empty string (if the input row is not null), or a null (if the input row is null).
-    return generate_empty_output(input, strings_count, stream, mr);
+    return generate_empty_output(input, strings_count, stream, resources);
   }
 
   // If `repeat_times == 1`, just make a copy of the input.
-  if (repeat_times == 1) { return std::make_unique<column>(input.parent(), stream, mr); }
+  if (repeat_times == 1) { return std::make_unique<column>(input.parent(), stream, resources); }
 
   auto const strings_dv_ptr = column_device_view::create(input.parent(), stream);
   auto const fn = compute_size_and_repeat_fn{*strings_dv_ptr, repeat_times, input.has_nulls()};
 
   auto [offsets_column, chars] =
-    make_strings_children(fn, strings_count * repeat_times, strings_count, stream, mr);
+    make_strings_children(fn, strings_count * repeat_times, strings_count, stream, resources);
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream,
+                  resources));
 }
 
 namespace {
@@ -220,7 +222,7 @@ struct compute_sizes_and_repeat_fn {
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        column_view const& repeat_times,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_EXPECTS(input.size() == repeat_times.size(), "The input columns must have the same size.");
   CUDF_EXPECTS(cudf::is_index_type(repeat_times.type()),
@@ -240,13 +242,13 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                                              input.has_nulls(),
                                                              repeat_times.has_nulls()};
 
-  auto [offsets_column, chars] = make_strings_children(fn, strings_count, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(fn, strings_count, stream, resources);
 
   // We generate new bitmask by AND of the two input columns' bitmasks.
   // Note that if either of the input columns are nullable, the output column will also be nullable
   // but may not have nulls.
   auto [null_mask, null_count] =
-    cudf::detail::bitmask_and(table_view{{input.parent(), repeat_times}}, stream, mr);
+    cudf::detail::bitmask_and(table_view{{input.parent(), repeat_times}}, stream, resources);
 
   return make_strings_column(
     strings_count, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
@@ -256,28 +258,28 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                                              size_type repeat_times,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_string(input, repeat_times, stream, mr);
+  return detail::repeat_string(input, repeat_times, stream, resources);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        size_type repeat_times,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings(input, repeat_times, stream, mr);
+  return detail::repeat_strings(input, repeat_times, stream, resources);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        column_view const& repeat_times,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings(input, repeat_times, stream, mr);
+  return detail::repeat_strings(input, repeat_times, stream, resources);
 }
 
 }  // namespace strings

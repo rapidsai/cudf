@@ -72,13 +72,13 @@ template <typename Op>
 std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        bitmask_type const* mask,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   auto d_input = column_device_view::create(input, stream);
 
   // build indices of the scan operation results
   rmm::device_uvector<size_type> result_map(input.size(), stream);
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                          thrust::counting_iterator<size_type>(0),
                          thrust::counting_iterator<size_type>(input.size()),
                          result_map.begin(),
@@ -89,7 +89,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
     // this prevents un-sanitized null entries in the output
     auto null_itr = cudf::detail::make_counting_transform_iterator(0, null_iterator{mask});
     auto oob_val  = thrust::constant_iterator<size_type>(input.size());
-    thrust::scatter_if(rmm::exec_policy(stream),
+    thrust::scatter_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
                        oob_val,
                        oob_val + input.size(),
                        thrust::counting_iterator<size_type>(0),
@@ -103,19 +103,19 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
                                            cudf::out_of_bounds_policy::NULLIFY,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            stream,
-                                           mr);
+                                           resources);
   return std::move(result_table->release().front());
 }
 
 template std::unique_ptr<column> scan_inclusive<DeviceMin>(column_view const& input,
                                                            bitmask_type const* mask,
                                                            rmm::cuda_stream_view stream,
-                                                           rmm::device_async_resource_ref mr);
+                                                           cudf::memory_resources resources);
 
 template std::unique_ptr<column> scan_inclusive<DeviceMax>(column_view const& input,
                                                            bitmask_type const* mask,
                                                            rmm::cuda_stream_view stream,
-                                                           rmm::device_async_resource_ref mr);
+                                                           cudf::memory_resources resources);
 
 }  // namespace detail
 }  // namespace strings

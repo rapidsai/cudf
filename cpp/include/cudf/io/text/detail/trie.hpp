@@ -156,7 +156,7 @@ struct trie {
    */
   static trie create(std::string pattern,
                      rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref mr)
+                     cudf::memory_resources resources)
 
   {
     return create(std::vector<std::string>{std::move(pattern)}, stream, mr);
@@ -172,7 +172,7 @@ struct trie {
    */
   static trie create(std::vector<std::string> const& patterns,
                      rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref mr)
+                     cudf::memory_resources resources)
   {
     std::vector<char> tokens;
     std::vector<uint8_t> transitions;

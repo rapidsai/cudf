@@ -54,7 +54,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                      null_equality nulls_equal,
                                      nan_equality nans_equal,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   check_compatibility(lhs, rhs);
 
@@ -68,26 +68,26 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   auto const lhs_child = lhs.get_sliced_child(stream);
   auto const rhs_child = rhs.get_sliced_child(stream);
   auto const lhs_labels =
-    generate_labels(lhs, lhs_child.size(), stream, cudf::get_current_device_resource_ref());
+    generate_labels(lhs, lhs_child.size(), stream, resources.get_temporary_mr());
   auto const rhs_labels =
-    generate_labels(rhs, rhs_child.size(), stream, cudf::get_current_device_resource_ref());
+    generate_labels(rhs, rhs_child.size(), stream, resources.get_temporary_mr());
   auto const lhs_table = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table = table_view{{rhs_labels->view(), rhs_child}};
 
   // Check existence for each row of the rhs_table in lhs_table.
   auto const contained = cudf::detail::contains(
-    lhs_table, rhs_table, nulls_equal, nans_equal, stream, cudf::get_current_device_resource_ref());
+    lhs_table, rhs_table, nulls_equal, nans_equal, stream, resources.get_temporary_mr());
 
   auto const num_rows = lhs.size();
 
   // This stores the unique label values, used as scatter map.
-  auto list_indices = rmm::device_uvector<size_type>(num_rows, stream);
+  auto list_indices = rmm::device_uvector<size_type>(num_rows, stream, resources.get_temporary_mr());
 
   // Stores the result of checking overlap for non-empty lists.
-  auto overlap_results = rmm::device_uvector<bool>(num_rows, stream);
+  auto overlap_results = rmm::device_uvector<bool>(num_rows, stream, resources.get_temporary_mr());
 
   auto const labels_begin           = rhs_labels->view().begin<size_type>();
-  auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream),
+  auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                          labels_begin,  // keys
                                          labels_begin + rhs_labels->size(),  // keys
                                          contained.begin(),  // values to reduce
@@ -98,16 +98,16 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   auto const num_non_empty_segments = cuda::std::distance(overlap_results.begin(), end.second);
 
   auto [null_mask, null_count] =
-    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
+    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, resources);
   auto result = make_numeric_column(
-    data_type{type_to_id<bool>()}, num_rows, std::move(null_mask), null_count, stream, mr);
+    data_type{type_to_id<bool>()}, num_rows, std::move(null_mask), null_count, stream, resources);
   auto const result_begin = result->mutable_view().begin<bool>();
 
   // `overlap_results` only stores the results of non-empty lists.
   // We need to initialize `false` for the entire output array then scatter these results over.
   thrust::uninitialized_fill(
-    rmm::exec_policy(stream), result_begin, result_begin + num_rows, false);
-  thrust::scatter(rmm::exec_policy(stream),
+    rmm::exec_policy(stream, resources.get_temporary_mr()), result_begin, result_begin + num_rows, false);
+  thrust::scatter(rmm::exec_policy(stream, resources.get_temporary_mr()),
                   overlap_results.begin(),
                   overlap_results.begin() + num_non_empty_segments,
                   list_indices.begin(),
@@ -124,7 +124,7 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                            null_equality nulls_equal,
                                            nan_equality nans_equal,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   check_compatibility(lhs, rhs);
 
@@ -138,20 +138,20 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
   auto const lhs_child = lhs.get_sliced_child(stream);
   auto const rhs_child = rhs.get_sliced_child(stream);
   auto const lhs_labels =
-    generate_labels(lhs, lhs_child.size(), stream, cudf::get_current_device_resource_ref());
+    generate_labels(lhs, lhs_child.size(), stream, resources.get_temporary_mr());
   auto const rhs_labels =
-    generate_labels(rhs, rhs_child.size(), stream, cudf::get_current_device_resource_ref());
+    generate_labels(rhs, rhs_child.size(), stream, resources.get_temporary_mr());
   auto const lhs_table = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table = table_view{{rhs_labels->view(), rhs_child}};
 
   auto const contained = cudf::detail::contains(
-    lhs_table, rhs_table, nulls_equal, nans_equal, stream, cudf::get_current_device_resource_ref());
+    lhs_table, rhs_table, nulls_equal, nans_equal, stream, resources.get_temporary_mr());
 
   auto const intersect_table = cudf::detail::copy_if(
     rhs_table,
     [contained = contained.begin()] __device__(auto const idx) { return contained[idx]; },
     stream,
-    cudf::get_current_device_resource_ref());
+    resources.get_temporary_mr());
 
   // A stable algorithm is required to ensure that list labels remain contiguous.
   auto out_table = cudf::detail::stable_distinct(intersect_table->view(),
@@ -160,22 +160,22 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                                  nulls_equal,
                                                  nans_equal,
                                                  stream,
-                                                 mr);
+                                                 resources);
 
   auto const num_rows = lhs.size();
-  auto out_offsets    = reconstruct_offsets(out_table->get_column(0).view(), num_rows, stream, mr);
+  auto out_offsets    = reconstruct_offsets(out_table->get_column(0).view(), num_rows, stream, resources);
   auto [null_mask, null_count] =
-    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
+    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, resources);
   auto output = make_lists_column(num_rows,
                                   std::move(out_offsets),
                                   std::move(out_table->release().back()),
                                   null_count,
                                   std::move(null_mask),
                                   stream,
-                                  mr);
+                                  resources);
 
   if (auto const output_cv = output->view(); cudf::detail::has_nonempty_nulls(output_cv, stream)) {
-    return cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
+    return cudf::detail::purge_nonempty_nulls(output_cv, stream, resources);
   }
   return output;
 }
@@ -185,7 +185,7 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
                                        null_equality nulls_equal,
                                        nan_equality nans_equal,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   check_compatibility(lhs, rhs);
 
@@ -195,14 +195,14 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
     lists::detail::concatenate_rows(table_view{{lhs.parent(), rhs.parent()}},
                                     concatenate_null_policy::NULLIFY_OUTPUT_ROW,
                                     stream,
-                                    cudf::get_current_device_resource_ref());
+                                    resources.get_temporary_mr());
 
   return cudf::lists::detail::distinct(lists_column_view{union_col->view()},
                                        nulls_equal,
                                        nans_equal,
                                        duplicate_keep_option::KEEP_ANY,
                                        stream,
-                                       mr);
+                                       resources);
 }
 
 std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
@@ -210,7 +210,7 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                             null_equality nulls_equal,
                                             nan_equality nans_equal,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   check_compatibility(lhs, rhs);
 
@@ -225,20 +225,20 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
   auto const lhs_child = lhs.get_sliced_child(stream);
   auto const rhs_child = rhs.get_sliced_child(stream);
   auto const lhs_labels =
-    generate_labels(lhs, lhs_child.size(), stream, cudf::get_current_device_resource_ref());
+    generate_labels(lhs, lhs_child.size(), stream, resources.get_temporary_mr());
   auto const rhs_labels =
-    generate_labels(rhs, rhs_child.size(), stream, cudf::get_current_device_resource_ref());
+    generate_labels(rhs, rhs_child.size(), stream, resources.get_temporary_mr());
   auto const lhs_table = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table = table_view{{rhs_labels->view(), rhs_child}};
 
   auto const contained = cudf::detail::contains(
-    rhs_table, lhs_table, nulls_equal, nans_equal, stream, cudf::get_current_device_resource_ref());
+    rhs_table, lhs_table, nulls_equal, nans_equal, stream, resources.get_temporary_mr());
 
   auto const difference_table = cudf::detail::copy_if(
     lhs_table,
     [contained = contained.begin()] __device__(auto const idx) { return !contained[idx]; },
     stream,
-    cudf::get_current_device_resource_ref());
+    resources.get_temporary_mr());
 
   // A stable algorithm is required to ensure that list labels remain contiguous.
   auto out_table = cudf::detail::stable_distinct(difference_table->view(),
@@ -247,12 +247,12 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                                  nulls_equal,
                                                  nans_equal,
                                                  stream,
-                                                 mr);
+                                                 resources);
 
   auto const num_rows = lhs.size();
-  auto out_offsets    = reconstruct_offsets(out_table->get_column(0).view(), num_rows, stream, mr);
+  auto out_offsets    = reconstruct_offsets(out_table->get_column(0).view(), num_rows, stream, resources);
   auto [null_mask, null_count] =
-    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
+    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, resources);
 
   auto output = make_lists_column(num_rows,
                                   std::move(out_offsets),
@@ -260,10 +260,10 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                   null_count,
                                   std::move(null_mask),
                                   stream,
-                                  mr);
+                                  resources);
 
   if (auto const output_cv = output->view(); cudf::detail::has_nonempty_nulls(output_cv, stream)) {
-    return cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
+    return cudf::detail::purge_nonempty_nulls(output_cv, stream, resources);
   }
   return output;
 }
@@ -275,10 +275,10 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                      null_equality nulls_equal,
                                      nan_equality nans_equal,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::have_overlap(lhs, rhs, nulls_equal, nans_equal, stream, mr);
+  return detail::have_overlap(lhs, rhs, nulls_equal, nans_equal, stream, resources);
 }
 
 std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
@@ -286,10 +286,10 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                            null_equality nulls_equal,
                                            nan_equality nans_equal,
                                            rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+                                           cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::intersect_distinct(lhs, rhs, nulls_equal, nans_equal, stream, mr);
+  return detail::intersect_distinct(lhs, rhs, nulls_equal, nans_equal, stream, resources);
 }
 
 std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
@@ -297,10 +297,10 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
                                        null_equality nulls_equal,
                                        nan_equality nans_equal,
                                        rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+                                       cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::union_distinct(lhs, rhs, nulls_equal, nans_equal, stream, mr);
+  return detail::union_distinct(lhs, rhs, nulls_equal, nans_equal, stream, resources);
 }
 
 std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
@@ -308,10 +308,10 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                             null_equality nulls_equal,
                                             nan_equality nans_equal,
                                             rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+                                            cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::difference_distinct(lhs, rhs, nulls_equal, nans_equal, stream, mr);
+  return detail::difference_distinct(lhs, rhs, nulls_equal, nans_equal, stream, resources);
 }
 
 }  // namespace cudf::lists

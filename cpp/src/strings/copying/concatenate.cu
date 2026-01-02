@@ -79,15 +79,15 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
     });
   thrust::inclusive_scan(thrust::host, offset_it, input_offsets.end(), offset_it);
   auto d_input_offsets = cudf::detail::make_device_uvector_async(
-    input_offsets, stream, cudf::get_current_device_resource_ref());
+    input_offsets, stream, resources.get_temporary_mr());
   auto const output_size = input_offsets.back();
 
   // Compute the partition offsets and size of chars column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
-  auto d_partition_offsets = rmm::device_uvector<size_t>(views.size() + 1, stream);
+  auto d_partition_offsets = rmm::device_uvector<size_t>(views.size() + 1, stream, resources.get_temporary_mr());
   d_partition_offsets.set_element_to_zero_async(0, stream);  // zero first element
 
-  thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+  thrust::transform_inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
                                    device_views_ptr,
                                    device_views_ptr + views.size(),
                                    std::next(d_partition_offsets.begin()),
@@ -196,7 +196,7 @@ CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const*
 
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   // Compute output sizes
@@ -218,11 +218,11 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
 
   // create output chars column
-  rmm::device_uvector<char> output_chars(total_bytes, stream, mr);
+  rmm::device_uvector<char> output_chars(total_bytes, stream, resources);
   auto d_new_chars = output_chars.data();
 
   // create output offsets column
-  auto offsets_column = create_offsets_child_column(total_bytes, offsets_count, stream, mr);
+  auto offsets_column = create_offsets_child_column(total_bytes, offsets_count, stream, resources);
   auto itr_new_offsets =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
 
@@ -230,7 +230,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   size_type null_count{};
   if (has_nulls) {
     null_mask =
-      cudf::detail::create_null_mask(strings_count, mask_state::UNINITIALIZED, stream, mr);
+      cudf::detail::create_null_mask(strings_count, mask_state::UNINITIALIZED, stream, resources);
   }
 
   {  // Copy offsets columns with single kernel launch
