@@ -783,13 +783,8 @@ def _(
     ir: StreamingSink, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     """Generate network for StreamingSink node."""
-    # Process children
     nodes, channels = process_children(ir, rec)
-
-    # Create output ChannelManager for the sink
     channels[ir] = ChannelManager(rec.state["context"])
-
-    # Create sink node - it consumes from child, writes to file, and returns empty
     nodes[ir] = [
         sink_node(
             rec.state["context"],
