@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -29,7 +29,9 @@ from pylibcudf.libcudf.interop cimport (
 )
 from pylibcudf.libcudf.null_mask cimport bitmask_allocation_size_bytes
 from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
+from pylibcudf.libcudf.structs.structs_column_view cimport structs_column_view
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
@@ -1324,6 +1326,10 @@ cdef class Column:
         """Accessor for methods of a Column that are specific to lists."""
         return ListColumnView(self)
 
+    cpdef StructColumnView struct_view(self):
+        """Accessor for methods of a Column that are specific to structs."""
+        return StructColumnView(self)
+
     cpdef object data(self):
         """The data buffer of the column."""
         return self._data
@@ -1477,6 +1483,73 @@ cdef class ListColumnView:
         (even direct pylibcudf Cython users).
         """
         return lists_column_view(self._column.view())
+
+    cpdef Column get_sliced_child(self, Stream stream=None):
+        """
+        Get the list elements child properly sliced to match parent's view.
+
+        Parameters
+        ----------
+        stream : Stream, optional
+            CUDA stream to use
+
+        Returns
+        -------
+        Column
+            The sliced elements column
+        """
+        stream = _get_stream(stream)
+
+        cdef column_view c_child = self.view().get_sliced_child(stream.view())
+        return Column.from_column_view(c_child, self._column)
+
+
+cdef class StructColumnView:
+    """Accessor for methods of a Column that are specific to structs."""
+    def __init__(self, Column col):
+        if col.type().id() != type_id.STRUCT:
+            raise TypeError("Column is not a struct type")
+        self._column = col
+
+    __hash__ = None
+
+    cpdef child(self):
+        """The data column of the underlying list column."""
+        return self._column.child(1)
+
+    cpdef offsets(self):
+        """The offsets column of the underlying list column."""
+        return self._column.child(0)
+
+    cdef structs_column_view view(self) nogil:
+        """Generate a libcudf structs_column_view to pass to libcudf algorithms.
+
+        This method is for pylibcudf's functions to use to generate inputs when
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        return structs_column_view(self._column.view())
+
+    cpdef Column get_sliced_child(self, int index, Stream stream=None):
+        """
+        Get the struct elements child properly sliced to match parent's view.
+
+        Parameters
+        ----------
+        index : int
+            The index of the child to get.
+        stream : Stream, optional
+            CUDA stream to use
+
+        Returns
+        -------
+        Column
+            The sliced elements column
+        """
+        stream = _get_stream(stream)
+
+        cdef column_view c_child = self.view().get_sliced_child(index, stream.view())
+        return Column.from_column_view(c_child, self._column)
 
 
 def is_c_contiguous(
