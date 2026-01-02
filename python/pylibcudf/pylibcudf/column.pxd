@@ -89,6 +89,7 @@ cdef class Column:
     cpdef size_type num_children(self)
     cpdef size_type size(self)
     cpdef size_type null_count(self)
+    cpdef void set_null_count(self, size_type null_count)
     cpdef size_type offset(self)
     cpdef object data(self)
     cpdef object null_mask(self)
