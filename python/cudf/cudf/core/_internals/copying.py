@@ -20,12 +20,14 @@ def gather(
     nullify: bool = False,
 ) -> list[plc.Column]:
     with ExitStack() as stack:
-        for col in columns:
+        # Materialize iterator to avoid consuming it during access context setup
+        cols_list = list(columns)
+        for col in cols_list:
             stack.enter_context(col.access(mode="read", scope="internal"))
         stack.enter_context(gather_map.access(mode="read", scope="internal"))
 
         plc_tbl = plc.copying.gather(
-            plc.Table([col.plc_column for col in columns]),
+            plc.Table([col.plc_column for col in cols_list]),
             gather_map.plc_column,
             plc.copying.OutOfBoundsPolicy.NULLIFY
             if nullify

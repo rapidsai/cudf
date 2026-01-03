@@ -2723,13 +2723,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 raise ValueError("Partition map has invalid values")
 
         with ExitStack() as stack:
-            for col in source_columns:
+            # Materialize iterator to avoid consuming it during access context setup
+            source_columns_list = list(source_columns)
+            for col in source_columns_list:
                 stack.enter_context(col.access(mode="read", scope="internal"))
             stack.enter_context(
                 map_index.access(mode="read", scope="internal")
             )
             plc_table, offsets = plc.partitioning.partition(
-                plc.Table([col.plc_column for col in source_columns]),
+                plc.Table([col.plc_column for col in source_columns_list]),
                 map_index.plc_column,
                 map_size,
             )
@@ -5128,10 +5130,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             cols = self._columns
 
         with ExitStack() as stack:
-            for col in cols:
+            # Materialize iterator to avoid consuming it during access context setup
+            cols_list = list(cols)
+            for col in cols_list:
                 stack.enter_context(col.access(mode="read", scope="internal"))
             plc_table, offsets = plc.partitioning.hash_partition(
-                plc.Table([col.plc_column for col in cols]),
+                plc.Table([col.plc_column for col in cols_list]),
                 key_indices,
                 nparts,
             )

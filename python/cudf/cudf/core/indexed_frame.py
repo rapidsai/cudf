@@ -3072,10 +3072,12 @@ class IndexedFrame(Frame):
             else self._columns
         )
         with ExitStack() as stack:
-            for col in columns_to_slice:
+            # Materialize iterator to avoid consuming it during access context setup
+            cols_list = list(columns_to_slice)
+            for col in cols_list:
                 stack.enter_context(col.access(mode="read", scope="internal"))
             plc_tables = plc.copying.slice(
-                plc.Table([col.plc_column for col in columns_to_slice]),
+                plc.Table([col.plc_column for col in cols_list]),
                 [start, stop],
             )
             sliced = [
@@ -3331,24 +3333,36 @@ class IndexedFrame(Frame):
         if self._num_rows == 0:
             return []
 
-        columns_split = copying.columns_split(
-            itertools.chain(self.index._columns, self._columns)
-            if keep_index
-            else self._columns,
-            splits,
-        )
-
-        def split_from_pylibcudf(split: list[plc.Column]) -> list[ColumnBase]:
-            return [ColumnBase.from_pylibcudf(col) for col in split]
-
-        return [
-            self._from_columns_like_self(
-                split_from_pylibcudf(split),
-                self._column_names,
-                self.index.names if keep_index else None,
+        with ExitStack() as stack:
+            # Enter access context for all source columns
+            source_columns = (
+                itertools.chain(self.index._columns, self._columns)
+                if keep_index
+                else self._columns
             )
-            for split in columns_split
-        ]
+            # Materialize the iterator and enter contexts
+            source_columns_list = list(source_columns)
+            for col in source_columns_list:
+                stack.enter_context(col.access(mode="read", scope="internal"))
+
+            columns_split = copying.columns_split(
+                source_columns_list,
+                splits,
+            )
+
+            def split_from_pylibcudf(
+                split: list[plc.Column],
+            ) -> list[ColumnBase]:
+                return [ColumnBase.from_pylibcudf(col) for col in split]
+
+            return [
+                self._from_columns_like_self(
+                    split_from_pylibcudf(split),
+                    self._column_names,
+                    self.index.names if keep_index else None,
+                )
+                for split in columns_split
+            ]
 
     @_performance_tracking
     def bfill(
