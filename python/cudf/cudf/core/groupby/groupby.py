@@ -784,11 +784,13 @@ class GroupBy(Serializable, Reducible, Scannable):
             for col in self._groupby.key_columns:
                 stack.enter_context(col.access(mode="read", scope="internal"))
 
+            # Materialize iterator to avoid consuming it during access context setup
+            values_list = list(values)
             # Enter access context for value columns
-            for col in values:
+            for col in values_list:
                 stack.enter_context(col.access(mode="read", scope="internal"))
 
-            plc_columns = [col.plc_column for col in values]
+            plc_columns = [col.plc_column for col in values_list]
             if not plc_columns:
                 plc_table = None
             else:
