@@ -83,7 +83,9 @@ class ListColumn(ColumnBase):
         Uses libcudf's lists_column_view.get_sliced_child() for the elements child.
         """
         if idx < 0 or idx >= len(self._children):
-            raise IndexError(f"Index {idx} out of range for {len(self._children)} children")
+            raise IndexError(
+                f"Index {idx} out of range for {len(self._children)} children"
+            )
 
         # Use libcudf's get_sliced_child for elements child (idx 1)
         if idx == 1:
@@ -144,10 +146,7 @@ class ListColumn(ColumnBase):
         Column containing the elements of each list (may itself be a
         ListColumn)
         """
-        # Use libcudf's get_sliced_child for proper slicing
-        if self.offset > 0:
-            return self._get_sliced_child(1)
-        return self.children[1]
+        return self._get_sliced_child(1)
 
     @property
     def offsets(self) -> NumericalColumn:
