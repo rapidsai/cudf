@@ -2151,7 +2151,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 null_count,
                 offset,
                 [child.plc_column for child in children],
-                validate=False,  # Skip validation to avoid triggering SpillableBuffer.ptr
+                validate=False,
             )
         return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
 

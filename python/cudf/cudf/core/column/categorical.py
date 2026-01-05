@@ -69,7 +69,7 @@ class CategoricalColumn(column.ColumnBase):
     """
 
     dtype: CategoricalDtype
-    _children: "tuple[NumericalColumn]"
+    _children: tuple[NumericalColumn]
     _VALID_REDUCTIONS = {
         "max",
         "min",
@@ -130,8 +130,8 @@ class CategoricalColumn(column.ColumnBase):
         return self.dtype.categories._column
 
     @property
-    def codes(self) -> "NumericalColumn":
-        return cast("NumericalColumn", self.children[0])
+    def codes(self) -> NumericalColumn:
+        return cast(cudf.core.column.NumericalColumn, self.children[0])
 
     @property
     def ordered(self) -> bool | None:
@@ -563,7 +563,7 @@ class CategoricalColumn(column.ColumnBase):
             )
             return fill_value.codes.astype(self.codes.dtype)
 
-    def indices_of(self, value: ScalarLike) -> "NumericalColumn":
+    def indices_of(self, value: ScalarLike) -> NumericalColumn:
         return self.codes.indices_of(self._encode(value))
 
     @property
@@ -600,7 +600,7 @@ class CategoricalColumn(column.ColumnBase):
             ordered=bool(dtype.ordered),
         )
 
-    def as_numerical_column(self, dtype: np.dtype) -> "NumericalColumn":
+    def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:

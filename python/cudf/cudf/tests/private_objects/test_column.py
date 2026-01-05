@@ -89,13 +89,10 @@ def test_column_set_equal_length_object_by_mask():
 def test_column_offset_and_size(pandas_input, offset, size):
     col = as_column(pandas_input)
 
-    # Use column.slice() to preserve dtype information
     col = col.slice(offset, offset + size)
 
     if isinstance(col.dtype, cudf.CategoricalDtype):
         assert col.size == col.codes.size
-    # Note: String columns no longer have offset-aware children,
-    # so children[0].size represents the full buffer, not the sliced view
 
     got = cudf.Series._from_column(col)
 

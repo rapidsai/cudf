@@ -77,22 +77,16 @@ class ListColumn(ColumnBase):
         )
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
-        """
-        Get a child column properly sliced to match the parent's view.
-
-        Uses libcudf's lists_column_view.get_sliced_child() for the elements child.
-        """
+        """Get a child column properly sliced to match the parent's view."""
         if idx < 0 or idx >= len(self._children):
             raise IndexError(
                 f"Index {idx} out of range for {len(self._children)} children"
             )
 
-        # Use libcudf's get_sliced_child for elements child (idx 1)
         if idx == 1:
             sliced_plc_col = self.plc_column.list_view().get_sliced_child()
             return type(self._children[idx]).from_pylibcudf(sliced_plc_col)
 
-        # For offsets child (idx 0), return as stored
         return self._children[idx]
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:

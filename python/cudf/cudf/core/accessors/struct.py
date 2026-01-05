@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -63,7 +63,6 @@ class StructMethods(BaseAccessor):
         field_keys = list(struct_dtype_fields.keys())
         if key in struct_dtype_fields:
             pos = field_keys.index(key)
-            # Type narrowing: _column is always StructColumn for struct accessor
             assert isinstance(self._column, StructColumn)
             return self._return_or_inplace(
                 self._column._get_sliced_child(pos)._with_type_metadata(
@@ -75,7 +74,9 @@ class StructMethods(BaseAccessor):
         elif isinstance(key, int):
             try:
                 assert isinstance(self._column, StructColumn)
-                return self._return_or_inplace(self._column._get_sliced_child(key))
+                return self._return_or_inplace(
+                    self._column._get_sliced_child(key)
+                )
             except IndexError as err:
                 raise IndexError(f"Index {key} out of range") from err
         else:
