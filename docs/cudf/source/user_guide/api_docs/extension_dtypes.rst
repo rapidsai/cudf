@@ -24,7 +24,6 @@ Properties and Methods
     CategoricalDtype.deserialize
     CategoricalDtype.device_deserialize
     CategoricalDtype.device_serialize
-    CategoricalDtype.from_pandas
     CategoricalDtype.host_deserialize
     CategoricalDtype.host_serialize
     CategoricalDtype.is_dtype
