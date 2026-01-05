@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1323,7 +1323,7 @@ CUDF_KERNEL void preprocess_string_offsets_kernel(
                              min_row,
                              num_rows,
                              mask_filter{STRINGS_MASK_NON_DELTA_NON_DICT},
-                             page_processing_stage::DECODE)) {
+                             page_processing_stage::STRING_BOUNDS)) {
     return;
   }
 
