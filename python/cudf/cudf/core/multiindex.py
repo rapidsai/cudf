@@ -780,20 +780,18 @@ class MultiIndex(Index):
                 verify=False,
             )
         )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            data_table = cudf.concat(
-                [
-                    frame,
-                    cudf.DataFrame._from_data(
-                        ColumnAccessor(
-                            {"idx": column.as_column(range(len(frame)))},
-                            verify=False,
-                        )
-                    ),
-                ],
-                axis=1,
-            )
+        data_table = cudf.concat(
+            [
+                frame,
+                cudf.DataFrame._from_data(
+                    ColumnAccessor(
+                        {"idx": column.as_column(range(len(frame)))},
+                        verify=False,
+                    )
+                ),
+            ],
+            axis=1,
+        )
         # Sort indices in pandas compatible mode
         # because we want the indices to be fetched
         # in a deterministic order.
@@ -1711,47 +1709,6 @@ class MultiIndex(Index):
             names=self.names,
         )
 
-    @classmethod
-    @_performance_tracking
-    def from_pandas(
-        cls, multiindex: pd.MultiIndex, nan_as_null=no_default
-    ) -> Self:
-        """
-        Convert from a Pandas MultiIndex
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> pmi = pd.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
-        ...                     codes=[[0, 1], [1, 1]])
-        >>> cudf.from_pandas(pmi)
-        MultiIndex([('a', 'd'),
-                    ('b', 'd')],
-                   )
-        """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Pass the MultiIndex names, codes and levels to the MultiIndex constructor instead.",
-            FutureWarning,
-        )
-        if not isinstance(multiindex, pd.MultiIndex):
-            raise TypeError("not a pandas.MultiIndex")
-        if nan_as_null is no_default:
-            nan_as_null = (
-                False if cudf.get_option("mode.pandas_compatible") else None
-            )
-        return cls(
-            levels=multiindex.levels,
-            codes=multiindex.codes,
-            names=multiindex.names,
-            nan_as_null=nan_as_null,
-        )
-
     @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
     def is_unique(self) -> bool:
@@ -1825,8 +1782,7 @@ class MultiIndex(Index):
                     ('hello',     '1')],
                    names=['x', 'y'])
         """
-
-        return super().fillna(value=value)
+        return super()._fillna(value=value)
 
     @_performance_tracking
     def unique(self, level: int | None = None) -> Self | Index:

@@ -20,7 +20,6 @@ from pandas.api import types as pd_types  # noqa: TID251
 import pylibcudf as plc
 
 import cudf
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     _is_categorical_dtype,
@@ -473,22 +472,13 @@ def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
     )
 
 
-def _is_datetime64tz_dtype(obj):
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
-        return _wrap_pandas_is_dtype_api(pd_types.is_datetime64tz_dtype)(obj)
-
-
 def is_datetime64tz_dtype(obj):
-    # Do not remove until pandas 3.0 support is added.
-    assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
     warnings.warn(
         "is_datetime64tz_dtype is deprecated and will be removed in a future "
         "version.",
         FutureWarning,
     )
-    return _is_datetime64tz_dtype(obj)
+    return _wrap_pandas_is_dtype_api(pd_types.is_datetime64tz_dtype)(obj)
 
 
 # TODO: The below alias is removed for now since improving cudf categorical

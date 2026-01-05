@@ -8,13 +8,6 @@ import re
 import pandas as pd
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
-
-if PANDAS_GE_220:
-    _guess_datetime_format = pd.tseries.api.guess_datetime_format
-else:
-    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
-
 
 unit_to_nanoseconds_conversion = {
     "ns": 1,
@@ -34,7 +27,7 @@ def infer_format(element: str, **kwargs) -> str:
     if not cudf.get_option("mode.pandas_compatible"):
         # We allow "Z" but don't localize it to datetime64[ns, UTC] type (yet)
         element = element.replace("Z", "")
-    fmt = _guess_datetime_format(element, **kwargs)
+    fmt = pd.tseries.api.guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
         if "%z" in fmt or "%Z" in fmt:
@@ -58,11 +51,15 @@ def infer_format(element: str, **kwargs) -> str:
     second_parts = re.split(r"(\D+)", element_parts[1], maxsplit=1)
     subsecond_fmt = ".%" + str(len(second_parts[0])) + "f"
 
-    first_part = _guess_datetime_format(element_parts[0], **kwargs)
+    first_part = pd.tseries.api.guess_datetime_format(
+        element_parts[0], **kwargs
+    )
     # For the case where first_part is '00:00:03'
     if first_part is None:
         tmp = "1970-01-01 " + element_parts[0]
-        first_part = _guess_datetime_format(tmp, **kwargs).split(" ", 1)[1]
+        first_part = pd.tseries.api.guess_datetime_format(tmp, **kwargs).split(
+            " ", 1
+        )[1]
     if first_part is None:
         raise ValueError("Unable to infer the timestamp format from the data")
 
@@ -77,7 +74,9 @@ def infer_format(element: str, **kwargs) -> str:
 
         if len(second_part) > 1:
             # Only infer if second_parts is not an empty string.
-            second_part = _guess_datetime_format(second_part, **kwargs)
+            second_part = pd.tseries.api.guess_datetime_format(
+                second_part, **kwargs
+            )
     else:
         second_part = ""
 

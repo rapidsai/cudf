@@ -65,7 +65,7 @@ dependencies:
 - openpyxl
 - packaging
 - pandas
-- pandas==3.0.0rc0
+- pandas==3.0.0rc1
 - pandoc
 - polars>=1.29,<1.35
 - pre-commit
@@ -88,7 +88,7 @@ dependencies:
 - rich
 - rmm==26.2.*,>=0.0.0a0
 - s3fs>=2022.3.0
-- scikit-build-core>=0.10.0
+- scikit-build-core>=0.11.0
 - scipy
 - sphinx-autobuild
 - sphinx-copybutton

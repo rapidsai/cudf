@@ -25,8 +25,8 @@ if TYPE_CHECKING:
 
 def to_numeric(
     arg,
-    errors: Literal["raise", "coerce", "ignore"] = "raise",
-    downcast: Literal["integer", "signed", "unsigned", "float", None] = None,
+    errors: Literal["raise", "coerce"] = "raise",
+    downcast: Literal["integer", "signed", "unsigned", "float"] | None = None,
     dtype_backend=None,
 ):
     """
@@ -36,11 +36,10 @@ def to_numeric(
     ----------
     arg : column-convertible
         The object to convert to numeric types
-    errors : {'raise', 'ignore', 'coerce'}, defaults 'raise'
+    errors : {'raise', 'coerce'}, defaults 'raise'
         Policy to handle errors during parsing.
 
         * 'raise' will notify user all errors encountered.
-        * 'ignore' will skip error and returns ``arg``.
         * 'coerce' will leave invalid values as nulls.
     downcast : {'integer', 'signed', 'unsigned', 'float'}, defaults None
         If set, will try to down-convert the datatype of the
@@ -84,11 +83,6 @@ def to_numeric(
     2    3000
     dtype: int16
     >>> s = cudf.Series(['apple', '1.0', '3e3'])
-    >>> cudf.to_numeric(s, errors='ignore')
-    0    apple
-    1      1.0
-    2      3e3
-    dtype: object
     >>> cudf.to_numeric(s, errors='coerce')
     0      <NA>
     1       1.0
@@ -107,15 +101,8 @@ def to_numeric(
         raise NotImplementedError(
             "dtype_backend is not currently implemented."
         )
-    if errors not in {"raise", "ignore", "coerce"}:
+    if errors not in {"raise", "coerce"}:
         raise ValueError("invalid error value specified")
-    elif errors == "ignore":
-        warnings.warn(
-            "errors='ignore' is deprecated and will raise in "
-            "a future version. Use to_numeric without passing `errors` "
-            "and catch exceptions explicitly instead",
-            FutureWarning,
-        )
 
     if downcast not in {None, "integer", "signed", "unsigned", "float"}:
         raise ValueError("invalid downcasting method provided")
@@ -135,25 +122,13 @@ def to_numeric(
         if cat_dtype.kind in "iufb":
             col = col.astype(cat_dtype)
         else:
-            try:
-                col = _convert_str_col(
-                    col._get_decategorized_column(),  # type: ignore[attr-defined]
-                    errors,
-                    downcast,
-                )
-            except ValueError as e:
-                if errors == "ignore":
-                    return arg
-                else:
-                    raise e
+            col = _convert_str_col(
+                col._get_decategorized_column(),  # type: ignore[attr-defined]
+                errors,
+                downcast,
+            )
     elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
-        try:
-            col = _convert_str_col(col, errors, downcast)  # type: ignore[arg-type]
-        except ValueError as e:
-            if errors == "ignore":
-                return arg
-            else:
-                raise e
+        col = _convert_str_col(col, errors, downcast)  # type: ignore[arg-type]
     elif isinstance(dtype, (ListDtype, StructDtype)):
         raise ValueError("Input does not support nested datatypes")
     elif is_dtype_obj_numeric(dtype, include_decimal=False):
@@ -197,8 +172,8 @@ def to_numeric(
 
 def _convert_str_col(
     col: StringColumn,
-    errors: Literal["raise", "coerce", "ignore"],
-    _downcast: Literal["integer", "signed", "unsigned", "float", None] = None,
+    errors: Literal["raise", "coerce"],
+    downcast: Literal["integer", "signed", "unsigned", "float"] | None = None,
 ) -> NumericalColumn:
     """
     Converts a string column to numeric column
@@ -215,8 +190,8 @@ def _convert_str_col(
     Parameters
     ----------
     col : The string column to convert, must be string dtype
-    errors : {'raise', 'ignore', 'coerce'}, same as ``to_numeric``
-    _downcast : Same as ``to_numeric``, see description for use
+    errors : {'raise', 'coerce'}, same as ``to_numeric``
+    downcast : Same as ``to_numeric``, see description for use
 
     Returns
     -------
@@ -241,7 +216,7 @@ def _convert_str_col(
 
     is_float = converted_col.is_float()
     if is_float.all():
-        if _downcast in {"unsigned", "signed", "integer"}:
+        if downcast in {"unsigned", "signed", "integer"}:
             warnings.warn(
                 UserWarning(
                     "Downcasting from float to int will be "

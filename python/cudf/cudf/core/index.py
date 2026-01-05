@@ -421,68 +421,6 @@ class Index(SingleColumnFrame):
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
 
-    @classmethod
-    def from_pandas(cls, index: pd.Index, nan_as_null=no_default) -> Index:
-        """
-        Convert from a Pandas Index.
-
-        Parameters
-        ----------
-        index : Pandas Index object
-            A Pandas Index object which has to be converted
-            to cuDF Index.
-        nan_as_null : bool, Default None
-            If ``None``/``True``, converts ``np.nan`` values
-            to ``null`` values.
-            If ``False``, leaves ``np.nan`` values as is.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> import numpy as np
-        >>> data = [10, 20, 30, np.nan]
-        >>> pdi = pd.Index(data)
-        >>> cudf.Index.from_pandas(pdi)
-        Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
-        >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
-        Index([10.0, 20.0, 30.0, nan], dtype='float64')
-        """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Use the Index constructor instead.",
-            FutureWarning,
-        )
-        if nan_as_null is no_default:
-            nan_as_null = (
-                False if cudf.get_option("mode.pandas_compatible") else None
-            )
-
-        if not isinstance(index, pd.Index):
-            raise TypeError("Expected a pandas.Index, got {type(index)}")
-        if isinstance(index, pd.RangeIndex):
-            return cudf.RangeIndex(
-                start=index.start,
-                stop=index.stop,
-                step=index.step,
-                name=index.name,
-            )
-        elif isinstance(index, pd.DatetimeIndex):
-            return cudf.DatetimeIndex._from_data(
-                {None: as_column(index, nan_as_null=nan_as_null)},
-                name=index.name,
-                freq=index.freq.freqstr if index.freq else None,
-            )
-        else:
-            return cudf.Index._from_column(
-                as_column(index, nan_as_null=nan_as_null),
-                name=index.name,
-            )
-
     @cached_property
     def is_monotonic_increasing(self) -> bool:
         return super().is_monotonic_increasing
@@ -773,7 +711,7 @@ class Index(SingleColumnFrame):
 
         MultiIndex case
 
-        >>> idx1 = cudf.MultiIndex.from_pandas(
+        >>> idx1 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
         ...    )
@@ -784,7 +722,7 @@ class Index(SingleColumnFrame):
                     (2,  'Red'),
                     (2, 'Blue')],
                    )
-        >>> idx2 = cudf.MultiIndex.from_pandas(
+        >>> idx2 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[3, 3, 2, 2], ["Red", "Green", "Red", "Green"]]
         ...    )
@@ -901,12 +839,12 @@ class Index(SingleColumnFrame):
 
         MultiIndex case
 
-        >>> idx1 = cudf.MultiIndex.from_pandas(
+        >>> idx1 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[1, 1, 3, 4], ["Red", "Blue", "Red", "Blue"]]
         ...    )
         ... )
-        >>> idx2 = cudf.MultiIndex.from_pandas(
+        >>> idx2 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
         ...    )
@@ -1777,10 +1715,7 @@ class Index(SingleColumnFrame):
         if len(self) > mr and mr != 0:
             top = self[0:mr]
             bottom = self[-1 * mr :]
-
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                preprocess = cudf.concat([top, bottom])
+            preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
 
@@ -2412,7 +2347,7 @@ class RangeIndex(Index):
             return self if not copy else self.copy()
         return self._as_int_index().astype(dtype, copy=copy)
 
-    def fillna(self, value, downcast=None) -> Self:
+    def fillna(self, value) -> Self:
         return self.copy()
 
     @_performance_tracking
@@ -3169,8 +3104,6 @@ class DatetimeIndex(Index):
         data=None,
         freq=None,
         tz=None,
-        normalize: bool = False,
-        closed=None,
         ambiguous: Literal["raise"] = "raise",
         dayfirst: bool = False,
         yearfirst: bool = False,
@@ -3189,20 +3122,6 @@ class DatetimeIndex(Index):
 
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
-        if normalize is not False:
-            warnings.warn(
-                "The 'normalize' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("normalize == True is not yet supported")
-        if closed is not None:
-            warnings.warn(
-                "The 'closed' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("closed is not yet supported")
         if ambiguous != "raise":
             raise NotImplementedError("ambiguous is not yet supported")
         if dayfirst is not False:
@@ -4245,13 +4164,9 @@ class TimedeltaIndex(Index):
     ----------
     data : array-like (1-dimensional), optional
         Optional datetime-like data to construct index with.
-    unit : str, optional
-        This is not yet supported
     copy : bool
         Make a copy of input.
     freq : str, optional
-        This is not yet supported
-    closed : str, optional
         This is not yet supported
     dtype : str or :class:`numpy.dtype`, optional
         Data type for the output Index. If not specified, the
@@ -4295,9 +4210,7 @@ class TimedeltaIndex(Index):
     def __init__(
         self,
         data=None,
-        unit=None,
         freq=None,
-        closed=None,
         dtype=None,
         copy: bool = False,
         name=None,
@@ -4305,25 +4218,6 @@ class TimedeltaIndex(Index):
     ):
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
-
-        if closed is not None:
-            warnings.warn(
-                "The 'closed' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("closed is not yet supported")
-
-        if unit is not None:
-            warnings.warn(
-                "The 'unit' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError(
-                "unit is not yet supported, alternatively "
-                "dtype parameter is supported"
-            )
 
         name = _getdefault_name(data, name=name)
         col = as_column(data)

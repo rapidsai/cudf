@@ -42,8 +42,8 @@ class Merge:
             raise ValueError(f"Invalid join type {how}")
 
         left_rows, right_rows = join_func(
-            plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
-            plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
+            plc.Table([col.plc_column for col in lhs]),
+            plc.Table([col.plc_column for col in rhs]),
             plc.types.NullEquality.EQUAL,
         )
         return (
@@ -325,18 +325,8 @@ class Merge:
 
         if self.how == "cross":
             lib_table = plc.join.cross_join(
-                plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in self.lhs._columns
-                    ]
-                ),
-                plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in self.rhs._columns
-                    ]
-                ),
+                plc.Table([col.plc_column for col in self.lhs._columns]),
+                plc.Table([col.plc_column for col in self.rhs._columns]),
             )
             columns = lib_table.columns()
             left_names, right_names = (
@@ -689,8 +679,8 @@ class MergeSemi(Merge):
 
         return ColumnBase.from_pylibcudf(
             join_func(
-                plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
-                plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
+                plc.Table([col.plc_column for col in lhs]),
+                plc.Table([col.plc_column for col in rhs]),
                 plc.types.NullEquality.EQUAL,
             )
         ), None

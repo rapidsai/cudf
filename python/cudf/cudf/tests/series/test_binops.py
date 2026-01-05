@@ -15,15 +15,12 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_210,
-    PANDAS_GE_220,
     PANDAS_VERSION,
 )
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     _decimal_series,
     assert_exceptions_equal,
-    expect_warning_if,
     gen_rand_series,
 )
 
@@ -1152,11 +1149,6 @@ def test_series_compare_scalar(
             and not (
                 numeric_and_temporal_types_as_str == "datetime64[ns]"
                 and comparison_op in {operator.eq, operator.ne}
-            )
-            and not (
-                not PANDAS_GE_210
-                and numeric_and_temporal_types_as_str == "timedelta64[ns]"
-                and comparison_op in {operator.eq, operator.ne}
             ),
             reason=f"Fails with {numeric_and_temporal_types_as_str}",
         )
@@ -1177,15 +1169,8 @@ def test_series_compare_scalar(
         result1 = cudf.Series(result1)
         result2 = cudf.Series(result2)
 
-    with expect_warning_if(
-        not PANDAS_GE_210
-        and numeric_and_temporal_types_as_str
-        in {"datetime64[ns]", "timedelta64[ns]"}
-        and comparison_op in {operator.eq, operator.ne},
-        DeprecationWarning,
-    ):
-        np.testing.assert_equal(result1.to_numpy(), comparison_op(arr1, rhs))
-        np.testing.assert_equal(result2.to_numpy(), comparison_op(rhs, arr1))
+    np.testing.assert_equal(result1.to_numpy(), comparison_op(arr1, rhs))
+    np.testing.assert_equal(result2.to_numpy(), comparison_op(rhs, arr1))
 
 
 @pytest.mark.parametrize("lhs_nulls", ["none", "some"])
@@ -1604,20 +1589,6 @@ def test_datetime_dateoffset_binaryop(
             reason="https://github.com/pandas-dev/pandas/issues/57448",
         )
     )
-    if (
-        not PANDAS_GE_220
-        and dtype in {"datetime64[ms]", "datetime64[s]"}
-        and frequency in ("microseconds", "nanoseconds")
-        and n_periods != 0
-    ):
-        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
-    if (
-        not PANDAS_GE_220
-        and dtype == "datetime64[us]"
-        and frequency == "nanoseconds"
-        and n_periods != 0
-    ):
-        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
 
     date_col = [
         f"2000-01-01 00:00:{components}",
@@ -1732,21 +1703,6 @@ def test_datetime_dateoffset_binaryop_multiple(kwargs, op):
 def test_datetime_dateoffset_binaryop_reflected(
     n_periods, frequency, dtype, components
 ):
-    if (
-        not PANDAS_GE_220
-        and dtype in {"datetime64[ms]", "datetime64[s]"}
-        and frequency in ("microseconds", "nanoseconds")
-        and n_periods != 0
-    ):
-        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
-    if (
-        not PANDAS_GE_220
-        and dtype == "datetime64[us]"
-        and frequency == "nanoseconds"
-        and n_periods != 0
-    ):
-        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
-
     date_col = [
         f"2000-01-01 00:00:{components}",
         f"2000-01-31 00:00:{components}",

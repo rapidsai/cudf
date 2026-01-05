@@ -4,8 +4,7 @@
  */
 #pragma once
 
-#include <cudf/detail/utilities/cuda_memcpy.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -64,6 +63,8 @@ OutputIterator copy_if_safe(InputIterator first,
 /**
  * @brief Utility for calling `thrust::copy_if`.
  *
+ * @deprecated in 26.02 and to be removed in a future release. Use `cudf::detail::copy_if` instead.
+ *
  * This is a proxy for `thrust::copy_if` which is a workaround for its bug
  * (https://github.com/NVIDIA/thrust/issues/1302) where it cannot iterate over int-max values
  * `distance(first,last) > int-max` This calls thrust::copy_if in 2B chunks instead.
@@ -81,11 +82,12 @@ OutputIterator copy_if_safe(InputIterator first,
  *         times `pred` evaluated to `true` in the range `[first, last)`.
  */
 template <typename InputIterator, typename OutputIterator, typename Predicate>
-OutputIterator copy_if_safe(InputIterator first,
-                            InputIterator last,
-                            OutputIterator result,
-                            Predicate pred,
-                            rmm::cuda_stream_view stream)
+[[deprecated("Use cudf::detail::copy_if instead")]] OutputIterator copy_if_safe(
+  InputIterator first,
+  InputIterator last,
+  OutputIterator result,
+  Predicate pred,
+  rmm::cuda_stream_view stream)
 {
   auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
                                   static_cast<std::size_t>(std::numeric_limits<int>::max()));
@@ -98,6 +100,66 @@ OutputIterator copy_if_safe(InputIterator first,
     itr    = copy_end;
   }
   return result;
+}
+
+/**
+ * @brief Helper to copy elements satisfying a predicate using CUB with pinned memory
+ *
+ * This function copies elements from the input range that satisfy the given predicate
+ * to the output range, using CUB's DeviceSelect::If implementation with pinned memory
+ * for efficient device-to-host transfer of the number of selected elements.
+ *
+ * @tparam Predicate **[inferred]** Type of the unary predicate
+ * @tparam InputIterator **[inferred]** Type of device-accessible input iterator
+ * @tparam OutputIterator **[inferred]** Type of device-accessible output iterator
+ *
+ * @param begin Device-accessible iterator to start of input values
+ * @param end Device-accessible iterator to end of input values
+ * @param output Device-accessible iterator to start of output values
+ * @param predicate Unary predicate that returns true for elements to copy
+ * @param stream CUDA stream to use
+ * @return Iterator pointing to the end of the output range
+ */
+template <typename Predicate, typename InputIterator, typename OutputIterator>
+OutputIterator copy_if(InputIterator begin,
+                       InputIterator end,
+                       OutputIterator output,
+                       Predicate predicate,
+                       rmm::cuda_stream_view stream)
+{
+  auto const num_items = cuda::std::distance(begin, end);
+
+  // Device scalar to store the number of selected elements
+  auto num_selected =
+    cudf::detail::device_scalar<cuda::std::size_t>(stream, cudf::get_current_device_resource_ref());
+
+  // First call to get temporary storage size
+  size_t temp_storage_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceSelect::If(nullptr,
+                                      temp_storage_bytes,
+                                      begin,
+                                      output,
+                                      num_selected.data(),
+                                      num_items,
+                                      predicate,
+                                      stream.value()));
+
+  // Allocate temporary storage
+  rmm::device_buffer d_temp_storage(
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+
+  // Run copy_if
+  CUDF_CUDA_TRY(cub::DeviceSelect::If(d_temp_storage.data(),
+                                      temp_storage_bytes,
+                                      begin,
+                                      output,
+                                      num_selected.data(),
+                                      num_items,
+                                      predicate,
+                                      stream.value()));
+
+  // Copy number of selected elements back to host via pinned memory
+  return output + num_selected.value(stream);
 }
 
 /**
@@ -128,25 +190,19 @@ OutputType reduce(InputIterator begin,
 {
   auto const num_items = cuda::std::distance(begin, end);
 
-  // Device memory to store the result
-  auto d_result =
-    rmm::device_uvector<OutputType>(1, stream, cudf::get_current_device_resource_ref());
+  // Device scalar to store the result
+  auto result =
+    cudf::detail::device_scalar<OutputType>(stream, cudf::get_current_device_resource_ref());
 
   // Build environment with stream and memory resource for cub::DeviceReduce::Reduce
   auto env = cuda::std::execution::env{
     cuda::std::execution::prop{cuda::get_stream_t{}, cuda::stream_ref{stream.value()}},
     cuda::std::execution::prop{cuda::mr::get_memory_resource_t{},
                                cudf::get_current_device_resource_ref()}};
-  CUDF_CUDA_TRY(
-    cub::DeviceReduce::Reduce(begin, d_result.begin(), num_items, binary_op, init, env));
+  CUDF_CUDA_TRY(cub::DeviceReduce::Reduce(begin, result.data(), num_items, binary_op, init, env));
 
   // Copy result back to host via pinned memory
-  auto result = cudf::detail::make_pinned_vector<OutputType>(size_t{1}, stream);
-  cudf::detail::cuda_memcpy(cudf::host_span<OutputType>{&result.front(), size_t{1}},
-                            cudf::device_span<OutputType const>{d_result.begin(), size_t{1}},
-                            stream);
-
-  return result.front();
+  return result.value(stream);
 }
 
 /**
@@ -189,9 +245,9 @@ cuda::std::pair<KeysOutputIterator, ValuesOutputIterator> reduce_by_key(
 {
   auto const num_items = cuda::std::distance(keys_begin, keys_end);
 
-  // Device memory to store the number of runs (unique keys)
+  // Device scalar to store the number of runs (unique keys)
   auto d_num_runs =
-    rmm::device_uvector<cuda::std::size_t>(1, stream, cudf::get_current_device_resource_ref());
+    cudf::detail::device_scalar<cuda::std::size_t>(stream, cudf::get_current_device_resource_ref());
 
   // First call to get temporary storage size
   size_t temp_storage_bytes = 0;
@@ -201,7 +257,7 @@ cuda::std::pair<KeysOutputIterator, ValuesOutputIterator> reduce_by_key(
                                                keys_output,
                                                values_begin,
                                                values_output,
-                                               d_num_runs.begin(),
+                                               d_num_runs.data(),
                                                op,
                                                num_items,
                                                stream.value()));
@@ -217,19 +273,15 @@ cuda::std::pair<KeysOutputIterator, ValuesOutputIterator> reduce_by_key(
                                                keys_output,
                                                values_begin,
                                                values_output,
-                                               d_num_runs.begin(),
+                                               d_num_runs.data(),
                                                op,
                                                num_items,
                                                stream.value()));
 
   // Copy number of runs back to host via pinned memory
-  auto num_runs = cudf::detail::make_pinned_vector<cuda::std::size_t>(size_t{1}, stream);
-  cudf::detail::cuda_memcpy(
-    cudf::host_span<cuda::std::size_t>{&num_runs.front(), size_t{1}},
-    cudf::device_span<cuda::std::size_t const>{d_num_runs.begin(), size_t{1}},
-    stream);
+  auto const num_runs = d_num_runs.value(stream);
 
-  return {keys_output + num_runs.front(), values_output + num_runs.front()};
+  return {keys_output + num_runs, values_output + num_runs};
 }
 
 /**
@@ -266,15 +318,15 @@ OutputType transform_reduce(InputIterator begin,
 {
   auto const num_items = cuda::std::distance(begin, end);
 
-  // Device memory to store the result
-  auto d_result =
-    rmm::device_uvector<OutputType>(1, stream, cudf::get_current_device_resource_ref());
+  // Device scalar to store the result
+  auto result =
+    cudf::detail::device_scalar<OutputType>(stream, cudf::get_current_device_resource_ref());
 
   size_t temp_storage_bytes = 0;
   CUDF_CUDA_TRY(cub::DeviceReduce::TransformReduce(nullptr,
                                                    temp_storage_bytes,
                                                    begin,
-                                                   d_result.begin(),
+                                                   result.data(),
                                                    num_items,
                                                    reduce_op,
                                                    transform_op,
@@ -286,7 +338,7 @@ OutputType transform_reduce(InputIterator begin,
   CUDF_CUDA_TRY(cub::DeviceReduce::TransformReduce(d_temp_storage.data(),
                                                    temp_storage_bytes,
                                                    begin,
-                                                   d_result.begin(),
+                                                   result.data(),
                                                    num_items,
                                                    reduce_op,
                                                    transform_op,
@@ -294,12 +346,7 @@ OutputType transform_reduce(InputIterator begin,
                                                    stream.value()));
 
   // Copy result back to host via pinned memory
-  auto result = cudf::detail::make_pinned_vector<OutputType>(size_t{1}, stream);
-  cudf::detail::cuda_memcpy(cudf::host_span<OutputType>{&result.front(), size_t{1}},
-                            cudf::device_span<OutputType const>{d_result.begin(), size_t{1}},
-                            stream);
-
-  return result.front();
+  return result.value(stream);
 }
 
 /**
@@ -364,6 +411,37 @@ template <typename TransformOp, typename InputIterator>
 bool none_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_stream_view stream)
 {
   return not any_of(begin, end, op, stream);
+}
+
+/**
+ * @brief Helper to count elements satisfying a predicate using CUB with pinned memory
+ *
+ * This function counts elements in the input range that satisfy the given predicate,
+ * using CUB's transform_reduce implementation with pinned memory for efficient
+ * device-to-host transfer of the count.
+ *
+ * @tparam Predicate **[inferred]** Type of the unary predicate
+ * @tparam InputIterator **[inferred]** Type of device-accessible input iterator
+ *
+ * @param begin Device-accessible iterator to start of input values
+ * @param end Device-accessible iterator to end of input values
+ * @param predicate Unary predicate that returns true for elements to count
+ * @param stream CUDA stream to use
+ * @return The count of elements satisfying the predicate
+ */
+template <typename Predicate, typename InputIterator>
+cuda::std::size_t count_if(InputIterator begin,
+                           InputIterator end,
+                           Predicate predicate,
+                           rmm::cuda_stream_view stream)
+{
+  // Transform each element to 0 or 1 based on predicate, then sum
+  auto transform_op = [predicate] __device__(auto const& val) -> cuda::std::size_t {
+    return predicate(val) ? cuda::std::size_t{1} : cuda::std::size_t{0};
+  };
+
+  return transform_reduce(
+    begin, end, transform_op, cuda::std::size_t{0}, cuda::std::plus<>{}, stream);
 }
 
 }  // namespace cudf::detail

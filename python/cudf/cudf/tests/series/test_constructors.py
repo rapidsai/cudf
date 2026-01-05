@@ -15,7 +15,6 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_210,
     PANDAS_VERSION,
 )
 from cudf.core.buffer.spill_manager import get_global_manager
@@ -285,13 +284,7 @@ def test_series_unitness_np_datetimelike_units():
 
 
 def test_from_numpyextensionarray_string_object_pandas_compat_mode():
-    NumpyExtensionArray = (
-        pd.arrays.NumpyExtensionArray
-        if PANDAS_GE_210
-        else pd.arrays.PandasArray
-    )
-
-    data = NumpyExtensionArray(np.array(["a", None], dtype=object))
+    data = pd.arrays.NumpyExtensionArray(np.array(["a", None], dtype=object))
     with cudf.option_context("mode.pandas_compatible", True):
         result = cudf.Series(data)
     expected = pd.Series(data)
@@ -731,9 +724,7 @@ def test_to_from_arrow_nulls(all_supported_types_as_str):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s1.buffers()[0]).view("u1")[0],
-        cp.asarray(gs1._column.to_pylibcudf(mode="read").null_mask())
-        .get()
-        .view("u1")[0],
+        cp.asarray(gs1._column.plc_column.null_mask()).get().view("u1")[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -744,9 +735,7 @@ def test_to_from_arrow_nulls(all_supported_types_as_str):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s2.buffers()[0]).view("u1")[0],
-        cp.asarray(gs2._column.to_pylibcudf(mode="read").null_mask())
-        .get()
-        .view("u1")[0],
+        cp.asarray(gs2._column.plc_column.null_mask()).get().view("u1")[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
