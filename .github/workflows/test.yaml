@@ -62,7 +62,6 @@ jobs:
       sha: ${{ inputs.sha }}
       script: "ci/cpp_linters.sh"
       file_to_upload: iwyu_results.txt
-      node_type: cpu32
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-python-cudf-tests:
     secrets: inherit
