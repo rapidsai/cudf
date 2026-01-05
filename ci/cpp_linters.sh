@@ -37,6 +37,7 @@ fi
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON ${iwyu_flag} -DBUILD_TESTS=OFF -DCMAKE_CUDA_ARCHITECTURES=75 -GNinja
 cmake --build cpp/build 2>&1 | python cpp/scripts/parse_iwyu_output.py
 
+rapids-telemetry-record sccache-stats.txt sccache --show-adv-stats
 sccache --stop-server >/dev/null 2>&1 || true
 
 # Remove invalid components of the path for local usage. The path below is
