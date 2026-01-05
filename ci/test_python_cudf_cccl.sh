@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -18,7 +18,7 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "Verify cuda-cccl compatibility"
-pip install cuda-cccl
+rapids-mamba-retry install cuda-cccl
 pip check | grep -q numba-cuda && exit 1
 
 rapids-logger "pytest cudf"
