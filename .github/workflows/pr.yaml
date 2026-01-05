@@ -153,6 +153,7 @@ jobs:
       build_type: pull-request
       script: "ci/cpp_linters.sh"
       node_type: "cpu16"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit
