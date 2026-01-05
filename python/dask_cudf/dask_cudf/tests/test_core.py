@@ -909,6 +909,8 @@ def test_to_backend_simplify():
 
 @pytest.mark.parametrize("numeric_only", [True, False])
 @pytest.mark.parametrize("op", ["corr", "cov"])
+# the implementation might warn about ddof<=0 or divide by zero
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_cov_corr(op, numeric_only):
     rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame.from_dict(

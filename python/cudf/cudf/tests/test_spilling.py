@@ -772,3 +772,101 @@ def test_scatter_by_map():
         result = df.scatter_by_map(data)
     for i, res in zip(data, result, strict=True):
         assert_eq(res, cudf.DataFrame([i], index=[i]))
+
+
+def test_spillable_buffer_access_scope_internal(manager: SpillManager):
+    """Test internal scope creates temporary spill lock."""
+    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+    assert buf.spillable
+
+    with buf.access(mode="read", scope="internal"):
+        # Buffer is spill locked during context
+        assert not buf.spillable
+        assert len(buf.owner._spill_locks) == 1
+        # Ptr access should work
+        assert buf.ptr != 0
+
+    # After context, lock is released
+    assert buf.spillable
+    assert len(buf.owner._spill_locks) == 0
+
+
+def test_spillable_buffer_access_scope_external(manager: SpillManager):
+    """Test external scope marks buffer as exposed."""
+    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+    assert buf.spillable
+    assert not buf.owner.exposed
+
+    with buf.access(mode="read", scope="external"):
+        assert not buf.spillable
+        assert buf.owner.exposed
+        assert buf.ptr != 0
+
+    # After context, buffer remains exposed
+    assert not buf.spillable
+    assert buf.owner.exposed
+
+
+def test_spillable_buffer_access_nesting(manager: SpillManager):
+    """Test nested access contexts work correctly."""
+    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+
+    with buf.access(mode="read", scope="internal"):
+        assert len(buf.owner._spill_locks) == 1
+
+        with buf.access(mode="read", scope="internal"):
+            # Two locks active
+            assert len(buf.owner._spill_locks) == 2
+            assert not buf.spillable
+
+        # One lock released
+        assert len(buf.owner._spill_locks) == 1
+        assert not buf.spillable
+
+    # All locks released
+    assert len(buf.owner._spill_locks) == 0
+    assert buf.spillable
+
+
+def test_spillable_buffer_access_scope_defaults_to_internal(
+    manager: SpillManager,
+):
+    """Test that scope parameter defaults to internal."""
+    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+
+    # Should default to scope="internal" if not provided
+    with buf.access(mode="read"):
+        assert not buf.spillable
+        assert len(buf.owner._spill_locks) == 1
+        buf.ptr  # Should work
+
+    # After context, lock is released
+    assert buf.spillable
+    assert len(buf.owner._spill_locks) == 0
+
+
+def test_spillable_buffer_access_invalid_scope(manager: SpillManager):
+    """Test that invalid scope values are rejected."""
+    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+
+    with pytest.raises(ValueError, match="Invalid scope"):
+        with buf.access(mode="read", scope="invalid"):
+            pass
+
+
+def test_column_access_propagates_scope(manager: SpillManager):
+    """Test Column.access() propagates scope to buffers."""
+    from cudf.core.column import as_column
+
+    col = as_column([1, 2, 3, 4, 5])
+
+    with col.access(mode="read", scope="internal"):
+        # All buffers should be spill locked
+        if col.base_data:
+            assert not col.base_data.spillable
+            assert len(col.base_data.owner._spill_locks) >= 1
+
+    # After context, all buffers spillable
+    if col.base_data:
+        assert col.base_data.spillable
+        assert len(col.base_data.owner._spill_locks) == 0
