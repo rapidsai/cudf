@@ -44,7 +44,7 @@ test = [
     "hypothesis>=6.131.7",
     "mmh3",
     "nanoarrow",
-    "numba-cuda[cu13]>=0.22.1,<0.23.0",
+    "numba-cuda[cu13]>=0.22.2,<0.23.0",
     "numba>=0.60.0,<0.62.0",
     "pandas",
     "pyarrow>=15.0.0,!=17.0.0; platform_machine=='aarch64'",
