@@ -62,7 +62,7 @@ def test_buffer_creation_from_any(arr_len):
     ary = cp.arange(arr_len)
     b = as_buffer(ary, exposed=True)
     assert isinstance(b, Buffer)
-    assert ary.data.ptr == b.get_ptr(mode="read")
+    assert ary.data.ptr == b.ptr
     assert ary.nbytes == b.size
 
 

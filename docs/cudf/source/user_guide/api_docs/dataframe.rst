@@ -258,7 +258,6 @@ Serialization / IO / conversion
    DataFrame.device_serialize
    DataFrame.from_arrow
    DataFrame.from_dict
-   DataFrame.from_pandas
    DataFrame.from_records
    DataFrame.hash_values
    DataFrame.host_deserialize
