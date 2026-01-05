@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -194,8 +194,8 @@ class BufferOwner(Serializable):
 
     @property
     def ptr(self) -> int:
-        """Device pointer (Span protocol)."""
-        return self.get_ptr(mode="read")
+        """Device pointer to the start of the buffer (Span protocol)."""
+        return self._ptr
 
     def mark_exposed(self) -> None:
         """Mark the buffer as "exposed" permanently
@@ -208,30 +208,6 @@ class BufferOwner(Serializable):
         """
         self._exposed = True
 
-    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
-        """Device pointer to the start of the buffer.
-
-        Parameters
-        ----------
-        mode : str
-            Supported values are {"read", "write"}
-            If "write", the data pointed to may be modified
-            by the caller. If "read", the data pointed to
-            must not be modified by the caller.
-            Failure to fulfill this contract will cause
-            incorrect behavior.
-
-        Returns
-        -------
-        int
-            The device pointer as an integer
-
-        See Also
-        --------
-        SpillableBuffer.get_ptr
-        """
-        return self._ptr
-
     def memoryview(
         self, *, offset: int = 0, size: int | None = None
     ) -> memoryview:
@@ -239,7 +215,7 @@ class BufferOwner(Serializable):
         size = self._size if size is None else size
         host_buf = host_memory_allocation(size)
         rmm.pylibrmm.device_buffer.copy_ptr_to_host(
-            self.get_ptr(mode="read") + offset, host_buf
+            self.ptr + offset, host_buf
         )
         return memoryview(host_buf).toreadonly()
 
@@ -248,6 +224,25 @@ class BufferOwner(Serializable):
             f"<{self.__class__.__name__} size={format_bytes(self._size)} "
             f"ptr={hex(self._ptr)} owner={self._owner!r}>"
         )
+
+
+# TODO: Thread-safety
+class _BufferAccessContext:
+    """Context manager for buffer access mode control."""
+
+    __slots__ = ("_buffer", "_mode")
+
+    def __init__(self, buffer: Buffer, mode: Literal["read", "write"]):
+        self._buffer = buffer
+        self._mode = mode
+
+    def __enter__(self):
+        self._buffer._access_mode_stack.append(self._mode)
+        return self._buffer
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._buffer._access_mode_stack.pop()
+        return False
 
 
 class Buffer(Serializable):
@@ -288,6 +283,7 @@ class Buffer(Serializable):
         self._owner = owner
         self._offset = offset
         self._size = size
+        self._access_mode_stack: list[Literal["read", "write"]] = []
         # Track this slice for copy-on-write
         if get_option("copy_on_write"):
             self._owner._slices.add(self)
@@ -310,7 +306,37 @@ class Buffer(Serializable):
     @property
     def ptr(self) -> int:
         """Device pointer (Span protocol)."""
-        return self.get_ptr(mode="read")
+        # TODO: Convert to a try-except once we require all ptr access to be within the
+        # context manager. Then we will also remove the default "read" mode.
+        mode = (
+            self._access_mode_stack[-1] if self._access_mode_stack else "read"
+        )
+        if mode == "write" and get_option("copy_on_write"):
+            self.make_single_owner_inplace()
+        return self._owner.ptr + self._offset
+
+    def access(self, *, mode: Literal["read", "write"], **kwargs):
+        """Context manager for controlled buffer access.
+
+        Within this context, the buffer's ptr property will respect the
+        specified access mode. The **kwargs allows subclasses to extend with additional
+        parameters.
+
+        Parameters
+        ----------
+        mode : {"read", "write"}, default "read"
+            Access mode for the buffer. If copy-on-write is enabled:
+            - "read": ptr access will not trigger copy-on-write
+            - "write": ptr access will trigger copy-on-write if needed
+        **kwargs
+            Additional parameters for subclass implementations.
+
+        Returns
+        -------
+        _BufferAccessContext
+            A context manager that controls the access mode.
+        """
+        return _BufferAccessContext(self, mode)
 
     def __getitem__(self, key: slice) -> Self:
         """Create a new slice of the buffer."""
@@ -325,11 +351,6 @@ class Buffer(Serializable):
         return self.__class__(
             owner=self._owner, offset=self._offset + start, size=stop - start
         )
-
-    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
-        if mode == "write" and get_option("copy_on_write"):
-            self.make_single_owner_inplace()
-        return self._owner.get_ptr(mode=mode) + self._offset
 
     def memoryview(self) -> memoryview:
         return self._owner.memoryview(offset=self._offset, size=self._size)
@@ -374,7 +395,7 @@ class Buffer(Serializable):
         # Otherwise, we create a new copy of the memory
         owner = type(self._owner).from_device_memory(
             rmm.DeviceBuffer(
-                ptr=self._owner.get_ptr(mode="read") + self._offset,
+                ptr=self._owner.ptr + self._offset,
                 size=self.size,
             ),
             exposed=False,
@@ -386,13 +407,14 @@ class Buffer(Serializable):
         """Implementation of the CUDA Array Interface."""
         if get_option("copy_on_write"):
             self.make_single_owner_inplace()
-        return {
-            "data": (self.get_ptr(mode="write"), False),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 3,
-        }
+        with self.access(mode="write"):
+            return {
+                "data": (self.ptr, False),
+                "shape": (self.size,),
+                "strides": None,
+                "typestr": "|u1",
+                "version": 3,
+            }
 
     def make_single_owner_inplace(self) -> None:
         """Make sure this slice is the only one pointing to the owner.
