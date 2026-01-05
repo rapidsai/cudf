@@ -79,22 +79,20 @@ class key_remapping {
   /**
    * @brief Remap build keys to integer IDs.
    *
-   * For each row in the input, returns the integer ID assigned to that key.
+   * Recomputes the remapped build table from the cached build keys. This does not cache
+   * the remapped table; each call will recompute it from the key remapping.
+   *
+   * For each row in the cached build table, returns the integer ID assigned to that key.
    * - Keys that match a build table key: return a non-negative integer
    * - Keys with nulls (when compare_nulls is EQUAL): return the ID assigned to null keys
    * - Keys with nulls (when compare_nulls is UNEQUAL): return KEY_REMAP_BUILD_NULL
    *
-   * @throw std::invalid_argument if keys has different number of columns than build table
-   * @throw cudf::data_type_error if keys has different column types than build table
-   *
-   * @param keys The keys to remap (must have same schema as build table)
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
    *
    * @return A column of INT32 values with the remapped key IDs
    */
   [[nodiscard]] std::unique_ptr<cudf::column> remap_build_keys(
-    cudf::table_view const& keys,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 

@@ -28,7 +28,7 @@ public class KeyRemappingTest extends CudfTestBase {
       assertEquals(2, remap.getMaxDuplicateCount());
 
       // Verify we can remap and get non-negative IDs
-      try (ColumnVector result = remap.remapBuildKeys(buildTable);
+      try (ColumnVector result = remap.remapBuildKeys();
            HostColumnVector hostResult = result.copyToHost()) {
         assertEquals(5, hostResult.getRowCount());
         for (int i = 0; i < hostResult.getRowCount(); i++) {
@@ -50,7 +50,7 @@ public class KeyRemappingTest extends CudfTestBase {
       // "banana" appears twice, null appears twice = max duplicate count 2
       assertEquals(2, remap.getMaxDuplicateCount());
 
-      try (ColumnVector result = remap.remapBuildKeys(buildTable);
+      try (ColumnVector result = remap.remapBuildKeys();
            HostColumnVector hostResult = result.copyToHost()) {
         assertEquals(6, hostResult.getRowCount());
       }
@@ -87,7 +87,7 @@ public class KeyRemappingTest extends CudfTestBase {
       assertEquals(3, remap.getDistinctCount());
       assertEquals(NullEquality.EQUAL, remap.getNullEquality());
 
-      try (ColumnVector result = remap.remapBuildKeys(buildTable);
+      try (ColumnVector result = remap.remapBuildKeys();
            HostColumnVector hostResult = result.copyToHost()) {
         // All IDs should be non-negative (including null row)
         for (int i = 0; i < hostResult.getRowCount(); i++) {
@@ -108,7 +108,7 @@ public class KeyRemappingTest extends CudfTestBase {
       assertEquals(2, remap.getDistinctCount());
       assertEquals(NullEquality.UNEQUAL, remap.getNullEquality());
 
-      try (ColumnVector result = remap.remapBuildKeys(buildTable);
+      try (ColumnVector result = remap.remapBuildKeys();
            HostColumnVector hostResult = result.copyToHost()) {
         // Null row (index 2) should have BUILD_NULL_SENTINEL
         assertEquals(KeyRemapping.BUILD_NULL_SENTINEL, hostResult.getInt(2));

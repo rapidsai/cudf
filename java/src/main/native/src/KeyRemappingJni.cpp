@@ -80,17 +80,14 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_KeyRemapping_getMaxDuplicateCount(JNI
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_KeyRemapping_remapBuildKeys(JNIEnv* env,
                                                                         jclass,
-                                                                        jlong j_handle,
-                                                                        jlong j_keys_table)
+                                                                        jlong j_handle)
 {
   JNI_NULL_CHECK(env, j_handle, "handle is null", 0);
-  JNI_NULL_CHECK(env, j_keys_table, "keys table is null", 0);
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
     auto remap_ptr = reinterpret_cast<cudf::key_remapping*>(j_handle);
-    auto keys_view = reinterpret_cast<cudf::table_view const*>(j_keys_table);
-    auto result    = remap_ptr->remap_build_keys(*keys_view);
+    auto result    = remap_ptr->remap_build_keys();
     return cudf::jni::release_as_jlong(result);
   }
   JNI_CATCH(env, 0);

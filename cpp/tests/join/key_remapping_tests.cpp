@@ -137,7 +137,7 @@ TEST_F(KeyRemappingTest, BasicIntegerKeys)
   EXPECT_EQ(remap.get_max_duplicate_count(), 2);
 
   // Remap build keys
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
 
   // Verify contract: 3 distinct IDs for 3 distinct keys
   verify_remapping_contract(build_table, *build_result, 3);
@@ -194,7 +194,7 @@ TEST_F(KeyRemappingTest, StringKeys)
   EXPECT_EQ(remap.get_distinct_count(), 3);
   EXPECT_EQ(remap.get_max_duplicate_count(), 2);  // "banana" appears twice
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   verify_remapping_contract(build_table, *build_result, 3);
 
   // Verify equal keys get equal IDs
@@ -229,7 +229,7 @@ TEST_F(KeyRemappingTest, MultiColumnKeys)
   EXPECT_EQ(remap.get_distinct_count(), 3);
   EXPECT_EQ(remap.get_max_duplicate_count(), 2);  // (1,"a") appears twice
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   verify_remapping_contract(build_table, *build_result, 3);
 
   // Verify equal keys get equal IDs
@@ -264,7 +264,7 @@ TEST_F(KeyRemappingTest, NullsEqual)
   // Distinct: 1, 2, null = 3
   EXPECT_EQ(remap.get_distinct_count(), 3);
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   verify_remapping_contract(build_table, *build_result, 3);
 
   auto host_ids = to_host<int32_t>(*build_result);
@@ -299,7 +299,7 @@ TEST_F(KeyRemappingTest, NullsUnequal)
   // Distinct: 1, 2 = 2 (null is skipped)
   EXPECT_EQ(remap.get_distinct_count(), 2);
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   auto host_ids     = to_host<int32_t>(*build_result);
 
   // Rows with key=2 should have same ID
@@ -370,7 +370,7 @@ TEST_F(KeyRemappingTest, AllDuplicates)
   EXPECT_EQ(remap.get_distinct_count(), 1);
   EXPECT_EQ(remap.get_max_duplicate_count(), 5);
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   auto host_ids     = to_host<int32_t>(*build_result);
 
   // All should have the same ID (whatever it is)
@@ -391,7 +391,7 @@ TEST_F(KeyRemappingTest, AllUnique)
   EXPECT_EQ(remap.get_distinct_count(), 5);
   EXPECT_EQ(remap.get_max_duplicate_count(), 1);
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   auto host_ids     = to_host<int32_t>(*build_result);
 
   // All IDs should be unique and non-negative
@@ -418,7 +418,7 @@ TEST_F(KeyRemappingTest, LargeTable)
   EXPECT_EQ(remap.get_distinct_count(), 100);
   EXPECT_EQ(remap.get_max_duplicate_count(), 100);
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   verify_remapping_contract(build_table, *build_result, 100);
 
   auto host_ids = to_host<int32_t>(*build_result);
@@ -472,7 +472,7 @@ TEST_F(KeyRemappingTest, StructKeys)
   EXPECT_EQ(remap.get_distinct_count(), 3);
   EXPECT_EQ(remap.get_max_duplicate_count(), 2);
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   verify_remapping_contract(build_table, *build_result, 3);
 
   auto host_ids = to_host<int32_t>(*build_result);
@@ -496,7 +496,7 @@ TEST_F(KeyRemappingTest, FloatKeys)
   EXPECT_EQ(remap.get_distinct_count(), 3);
   EXPECT_EQ(remap.get_max_duplicate_count(), 2);
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   verify_remapping_contract(build_table, *build_result, 3);
 
   auto host_ids = to_host<int32_t>(*build_result);
@@ -535,7 +535,7 @@ TEST_F(KeyRemappingTest, DoubleKeys)
   EXPECT_EQ(remap.get_distinct_count(), 3);
   EXPECT_EQ(remap.get_max_duplicate_count(), 2);
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   verify_remapping_contract(build_table, *build_result, 3);
 
   auto host_ids = to_host<int32_t>(*build_result);
@@ -571,7 +571,7 @@ TEST_F(KeyRemappingTest, FloatWithNulls)
   // Distinct: 1.5, 2.5, null = 3
   EXPECT_EQ(remap.get_distinct_count(), 3);
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   verify_remapping_contract(build_table, *build_result, 3);
 
   auto host_ids = to_host<int32_t>(*build_result);
@@ -588,7 +588,7 @@ TEST_F(KeyRemappingTest, FloatWithNulls)
   // Distinct: 1.5, 2.5 = 2 (null skipped)
   EXPECT_EQ(remap_unequal.get_distinct_count(), 2);
 
-  auto build_result_unequal = remap_unequal.remap_build_keys(build_table);
+  auto build_result_unequal = remap_unequal.remap_build_keys();
   auto host_ids_unequal     = to_host<int32_t>(*build_result_unequal);
 
   // Null row should get BUILD_NULL sentinel
@@ -606,7 +606,7 @@ TEST_F(KeyRemappingTest, DoubleWithNulls)
   // Distinct: 1.0, 2.0, null = 3
   EXPECT_EQ(remap.get_distinct_count(), 3);
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   auto host_ids     = to_host<int32_t>(*build_result);
 
   // Equal keys should have equal IDs
@@ -622,7 +622,7 @@ TEST_F(KeyRemappingTest, DoubleWithNulls)
   // Distinct: 1.0, 2.0 = 2 (null skipped)
   EXPECT_EQ(remap_unequal.get_distinct_count(), 2);
 
-  auto build_result_unequal = remap_unequal.remap_build_keys(build_table);
+  auto build_result_unequal = remap_unequal.remap_build_keys();
   auto host_ids_unequal     = to_host<int32_t>(*build_result_unequal);
 
   // Null row should get BUILD_NULL sentinel
@@ -645,7 +645,7 @@ TEST_F(KeyRemappingTest, ProbeSchemaMismatchColumnCount)
   auto probe_table = cudf::table_view{{probe_col}};
 
   EXPECT_THROW((void)remap.remap_probe_keys(probe_table), std::invalid_argument);
-  EXPECT_THROW((void)remap.remap_build_keys(probe_table), std::invalid_argument);
+  EXPECT_THROW((void)remap.remap_probe_keys(probe_table), std::invalid_argument);
 }
 
 TEST_F(KeyRemappingTest, ProbeSchemaMismatchColumnType)
@@ -661,7 +661,7 @@ TEST_F(KeyRemappingTest, ProbeSchemaMismatchColumnType)
   auto probe_table = cudf::table_view{{probe_col}};
 
   EXPECT_THROW((void)remap.remap_probe_keys(probe_table), cudf::data_type_error);
-  EXPECT_THROW((void)remap.remap_build_keys(probe_table), cudf::data_type_error);
+  EXPECT_THROW((void)remap.remap_probe_keys(probe_table), cudf::data_type_error);
 }
 
 TEST_F(KeyRemappingTest, ProbeSchemaMismatchNestedVsPrimitive)
@@ -679,7 +679,7 @@ TEST_F(KeyRemappingTest, ProbeSchemaMismatchNestedVsPrimitive)
   auto probe_table = cudf::table_view{{probe_col}};
 
   EXPECT_THROW((void)remap.remap_probe_keys(probe_table), cudf::data_type_error);
-  EXPECT_THROW((void)remap.remap_build_keys(probe_table), cudf::data_type_error);
+  EXPECT_THROW((void)remap.remap_probe_keys(probe_table), cudf::data_type_error);
 }
 
 TEST_F(KeyRemappingTest, ProbeSchemaMismatchStructFields)
@@ -699,7 +699,7 @@ TEST_F(KeyRemappingTest, ProbeSchemaMismatchStructFields)
   auto probe_table  = cudf::table_view{{probe_struct}};
 
   EXPECT_THROW((void)remap.remap_probe_keys(probe_table), cudf::data_type_error);
-  EXPECT_THROW((void)remap.remap_build_keys(probe_table), cudf::data_type_error);
+  EXPECT_THROW((void)remap.remap_probe_keys(probe_table), cudf::data_type_error);
 }
 
 TEST_F(KeyRemappingTest, EmptyProbeSchemaMismatchColumnCount)
@@ -716,7 +716,7 @@ TEST_F(KeyRemappingTest, EmptyProbeSchemaMismatchColumnCount)
   auto probe_table = cudf::table_view{{probe_col}};
 
   EXPECT_THROW((void)remap.remap_probe_keys(probe_table), std::invalid_argument);
-  EXPECT_THROW((void)remap.remap_build_keys(probe_table), std::invalid_argument);
+  EXPECT_THROW((void)remap.remap_probe_keys(probe_table), std::invalid_argument);
 }
 
 // Tests for optional metrics computation
@@ -756,7 +756,7 @@ TEST_F(KeyRemappingTest, MetricsDisabledRemapStillWorks)
   cudf::key_remapping remap{build_table, cudf::null_equality::EQUAL, false};
 
   // Remap build keys
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result = remap.remap_build_keys();
   auto build_ids    = to_host<int32_t>(build_result->view());
 
   // Equal keys should have equal IDs

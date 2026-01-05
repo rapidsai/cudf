@@ -549,6 +549,8 @@ std::unique_ptr<key_remap_table_interface> create_key_remap_table(cudf::table_vi
  * @brief Implementation class for key_remapping
  */
 class key_remapping_impl {
+  friend class cudf::key_remapping;
+
  public:
   key_remapping_impl(cudf::table_view const& build,
                      cudf::null_equality compare_nulls,
@@ -607,6 +609,8 @@ class key_remapping_impl {
   cudf::null_equality get_compare_nulls() const { return _compare_nulls; }
 
  private:
+  cudf::table_view const& get_build() const { return _build; }
+
   cudf::table_view _build;
   cudf::null_equality _compare_nulls;
   bool _compute_metrics;
@@ -653,12 +657,12 @@ std::unique_ptr<cudf::column> remap_keys_internal(detail::key_remapping_impl con
 }  // namespace
 
 std::unique_ptr<cudf::column> key_remapping::remap_build_keys(
-  cudf::table_view const& keys,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
   CUDF_FUNC_RANGE();
-  return remap_keys_internal(*_impl, keys, KEY_REMAP_BUILD_NULL, stream, mr);
+  // Use the cached build table from the implementation
+  return remap_keys_internal(*_impl, _impl->get_build(), KEY_REMAP_BUILD_NULL, stream, mr);
 }
 
 std::unique_ptr<cudf::column> key_remapping::remap_probe_keys(

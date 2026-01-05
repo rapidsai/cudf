@@ -39,8 +39,8 @@ import org.slf4j.LoggerFactory;
  * <b>Usage pattern:</b>
  * <pre>{@code
  * try (KeyRemapping remap = new KeyRemapping(buildKeys, true)) {
- *   // Remap build keys
- *   try (ColumnVector remappedBuild = remap.remapBuildKeys(buildKeys)) {
+ *   // Remap build keys (recomputes from cached build table)
+ *   try (ColumnVector remappedBuild = remap.remapBuildKeys()) {
  *     // Remap probe keys
  *     try (ColumnVector remappedProbe = remap.remapProbeKeys(probeKeys)) {
  *       // Use remapped integer keys
@@ -292,9 +292,11 @@ public class KeyRemapping implements AutoCloseable {
   /**
    * Remap build keys to integer IDs.
    * <p>
-   * For each row in the input, returns the integer ID assigned to that key.
-   * The keys table must have the same schema (number and types of columns) as
-   * the build table used to construct this object.
+   * Recomputes the remapped build table from the cached build keys. This does not cache
+   * the remapped table; each call will recompute it from the key remapping.
+   * </p>
+   * <p>
+   * For each row in the cached build table, returns the integer ID assigned to that key.
    * </p>
    * <ul>
    *   <li>Keys that match a build table key: return a non-negative integer</li>
@@ -302,16 +304,13 @@ public class KeyRemapping implements AutoCloseable {
    *   <li>Keys with nulls (when nullEquality is UNEQUAL): return {@link #BUILD_NULL_SENTINEL}</li>
    * </ul>
    *
-   * @param keys The keys to remap (must have same schema as build table)
    * @return A column of INT32 values with the remapped key IDs (caller must close)
-   * @throws IllegalArgumentException if keys has different number of columns than build table
-   * @throws CudfException if keys has different column types than build table
    */
-  public ColumnVector remapBuildKeys(Table keys) {
+  public ColumnVector remapBuildKeys() {
     if (isClosed) {
       throw new IllegalStateException("KeyRemapping is already closed");
     }
-    return new ColumnVector(remapBuildKeys(cleaner.nativeHandle, keys.getNativeView()));
+    return new ColumnVector(remapBuildKeys(cleaner.nativeHandle));
   }
 
   /**
@@ -347,6 +346,6 @@ public class KeyRemapping implements AutoCloseable {
   private static native boolean hasMetrics(long handle);
   private static native int getDistinctCount(long handle);
   private static native int getMaxDuplicateCount(long handle);
-  private static native long remapBuildKeys(long handle, long keysTableView);
+  private static native long remapBuildKeys(long handle);
   private static native long remapProbeKeys(long handle, long keysTableView);
 }
