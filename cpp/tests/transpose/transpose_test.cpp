@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -137,9 +137,13 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   auto result_view = std::get<1>(result);
 
   ASSERT_EQ(result_view.num_columns(), expected_view.num_columns());
-  for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view.column(i), expected_view.column(i));
-    EXPECT_EQ(result_view.column(i).null_count(), expected_nulls[i]);
+
+  // disable checking logic during a racecheck run
+  if (not getenv("LIBCUDF_RACECHECK_ENABLED")) {
+    for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view.column(i), expected_view.column(i));
+      EXPECT_EQ(result_view.column(i).null_count(), expected_nulls[i]);
+    }
   }
 }
 
