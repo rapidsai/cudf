@@ -211,6 +211,33 @@ class StringColumn(ColumnBase, Scannable):
             assert self.base_data is not None
             self._data = self.base_data[self.start_offset : self.end_offset]
 
+    def _recompute_children(self) -> None:
+        if not self.base_children:
+            self._children = ()
+        elif (
+            self.offset == 0
+            and len(self.base_children) > 0
+            and self.size == self.base_children[0].size - 1
+        ):
+            # Optimization: for non-sliced columns, children == base_children
+            self._children = self.base_children  # type: ignore[assignment]
+        else:
+            # String columns have one child: the offsets column
+            # For a string column with size N, the offsets child has size N+1
+
+            # Step 1: Slice the offsets column to get the correct size
+            offsets_child = self.base_children[0]
+            sliced_offsets = offsets_child.slice(
+                self.offset, self.offset + self.size + 1
+            )
+
+            # Step 2: Adjust the offsets to be relative to the sliced data
+            # by subtracting the first offset value (start_offset)
+            chars_offset = self.start_offset
+            adjusted_offsets = sliced_offsets - chars_offset
+
+            self._children = (adjusted_offsets,)  # type: ignore[assignment]
+
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
             return True
@@ -252,27 +279,14 @@ class StringColumn(ColumnBase, Scannable):
         return result
 
     def to_arrow(self) -> pa.Array:
-        """Convert to PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> col = cudf.core.as_column([1, 2, 3, 4])
-        >>> col.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7f886547f830>
-        [
-          1,
-          2,
-          3,
-          4
-        ]
-        """
-        if self.null_count == len(self):
+        # All null string columns fail to convert in libcudf, so we must short-circuit
+        # the call to super().to_arrow().
+        # TODO: Investigate if the above is a bug in libcudf and fix it there.
+        if len(self.base_children) == 0 or self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )
-        else:
-            return super().to_arrow()
+        return super().to_arrow()
 
     def sum(
         self,
@@ -1444,9 +1458,7 @@ class StringColumn(ColumnBase, Scannable):
         step: int | None = None,
     ) -> Self:
         if isinstance(start, ColumnBase) and isinstance(stop, ColumnBase):
-            plc_start: plc.Column | plc.Scalar = start.to_pylibcudf(
-                mode="read"
-            )
+            plc_start: plc.Column | plc.Scalar = start.plc_column
             plc_stop: plc.Column | plc.Scalar = stop.plc_column
             plc_step: plc.Scalar | None = None
         elif all(isinstance(x, int) or x is None for x in (start, stop)):
