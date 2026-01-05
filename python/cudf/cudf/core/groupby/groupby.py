@@ -6,7 +6,6 @@ import copy
 import functools
 import itertools
 import textwrap
-import types
 import warnings
 from collections.abc import Mapping
 from contextlib import ExitStack
@@ -405,6 +404,56 @@ b 2  1.000000  1.0
 )
 
 
+class _GroupByContextManager:
+    """Context manager for safe access to pylibcudf GroupBy object.
+
+    This context manager creates and holds the pylibcudf GroupBy object,
+    entering access contexts for key columns on each entry and exiting
+    them on exit. The same instance can be safely entered multiple times,
+    including nested entries.
+    """
+
+    __slots__ = (
+        "_grouping",
+        "_plc_groupby",
+        "_stack_list",
+    )
+
+    def __init__(self, grouping, dropna):
+        self._grouping = grouping
+        self._stack_list = []
+
+        # Create pylibcudf GroupBy eagerly
+        with ExitStack() as stack:
+            for col in grouping._key_columns:
+                stack.enter_context(col.access(mode="read", scope="internal"))
+
+            self._plc_groupby = plc.groupby.GroupBy(
+                plc.Table([col.plc_column for col in grouping._key_columns]),
+                plc.types.NullPolicy.EXCLUDE
+                if dropna
+                else plc.types.NullPolicy.INCLUDE,
+            )
+
+    def __enter__(self):
+        stack = ExitStack()
+        stack.__enter__()
+
+        for col in self._grouping._key_columns:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+
+        self._stack_list.append(stack)
+
+        # Return the private pylibcudf GroupBy object
+        return self._plc_groupby
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._stack_list:
+            stack = self._stack_list.pop()
+            return stack.__exit__(exc_type, exc_val, exc_tb)
+        return False
+
+
 class GroupBy(Serializable, Reducible, Scannable):
     obj: Series | DataFrame
 
@@ -494,6 +543,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             self.grouping = self._by
         else:
             self.grouping = _Grouping(obj, self._by, level)
+
+        self._groupby_manager = _GroupByContextManager(
+            self.grouping, self._dropna
+        )
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
@@ -756,37 +809,17 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result
 
-    @cached_property
-    def _groupby(self) -> types.SimpleNamespace:
-        # Store the key columns so we can enter access contexts later
-        key_columns = self.grouping._key_columns
-
-        with ExitStack() as stack:
-            for col in key_columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
-            plc_groupby = plc.groupby.GroupBy(
-                plc.Table([col.plc_column for col in key_columns]),
-                plc.types.NullPolicy.EXCLUDE
-                if self._dropna
-                else plc.types.NullPolicy.INCLUDE,
-            )
-            return types.SimpleNamespace(
-                plc_groupby=plc_groupby,
-                key_columns=key_columns,  # Store columns, not locks
-            )
+    @property
+    def _groupby(self):
+        """Returns the cached context manager for safe access to the pylibcudf GroupBy."""
+        return self._groupby_manager
 
     def _groups(
         self, values: Iterable[ColumnBase]
     ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
         with ExitStack() as stack:
-            # Enter access context for key columns
-            for col in self._groupby.key_columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
             # Materialize iterator to avoid consuming it during access context setup
             values_list = list(values)
-            # Enter access context for value columns
             for col in values_list:
                 stack.enter_context(col.access(mode="read", scope="internal"))
 
@@ -795,9 +828,11 @@ class GroupBy(Serializable, Reducible, Scannable):
                 plc_table = None
             else:
                 plc_table = plc.Table(plc_columns)
-            offsets, grouped_keys, grouped_values = (
-                self._groupby.plc_groupby.get_groups(plc_table)
-            )
+
+            with self._groupby as plc_groupby:
+                offsets, grouped_keys, grouped_values = plc_groupby.get_groups(
+                    plc_table
+                )
 
         return (
             offsets,
@@ -869,19 +904,15 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
 
         with ExitStack() as stack:
-            # Enter access context for key columns
-            for col in self._groupby.key_columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
-            # Enter access context for value columns
             for col in values:
                 stack.enter_context(col.access(mode="read", scope="internal"))
 
-            keys, results = (
-                self._groupby.plc_groupby.scan(requests)
-                if _is_all_scan_aggregate(aggregations)
-                else self._groupby.plc_groupby.aggregate(requests)
-            )
+            with self._groupby as plc_groupby:
+                keys, results = (
+                    plc_groupby.scan(requests)
+                    if _is_all_scan_aggregate(aggregations)
+                    else plc_groupby.aggregate(requests)
+                )
 
         for i, result, adjustments_i in zip(
             column_included, results, adjustments, strict=True
@@ -903,51 +934,48 @@ class GroupBy(Serializable, Reducible, Scannable):
         self, values: tuple[ColumnBase, ...], periods: int, fill_values: list
     ) -> Generator[ColumnBase]:
         with ExitStack() as stack:
-            # Enter access context for key columns
-            for col in self._groupby.key_columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
-            # Enter access context for value columns
             for col in values:
                 stack.enter_context(col.access(mode="read", scope="internal"))
 
-            _, shifts = self._groupby.plc_groupby.shift(
-                plc.table.Table([col.plc_column for col in values]),
-                [periods] * len(values),
-                [
-                    pa_scalar_to_plc_scalar(
-                        pa.scalar(val, type=cudf_dtype_to_pa_type(col.dtype))
-                    )
-                    for val, col in zip(fill_values, values, strict=True)
-                ],
-            )
-            return (ColumnBase.from_pylibcudf(col) for col in shifts.columns())
+            with self._groupby as plc_groupby:
+                _, shifts = plc_groupby.shift(
+                    plc.table.Table([col.plc_column for col in values]),
+                    [periods] * len(values),
+                    [
+                        pa_scalar_to_plc_scalar(
+                            pa.scalar(
+                                val, type=cudf_dtype_to_pa_type(col.dtype)
+                            )
+                        )
+                        for val, col in zip(fill_values, values, strict=True)
+                    ],
+                )
+                return (
+                    ColumnBase.from_pylibcudf(col) for col in shifts.columns()
+                )
 
     def _replace_nulls(
         self, values: tuple[ColumnBase, ...], method: str
     ) -> Generator[ColumnBase]:
         with ExitStack() as stack:
-            # Enter access context for key columns
-            for col in self._groupby.key_columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
-            # Enter access context for value columns
             for col in values:
                 stack.enter_context(col.access(mode="read", scope="internal"))
 
-            _, replaced = self._groupby.plc_groupby.replace_nulls(
-                plc.Table([col.plc_column for col in values]),
-                [
-                    plc.replace.ReplacePolicy.PRECEDING
-                    if method == "ffill"
-                    else plc.replace.ReplacePolicy.FOLLOWING
-                ]
-                * len(values),
-            )
+            with self._groupby as plc_groupby:
+                _, replaced = plc_groupby.replace_nulls(
+                    plc.Table([col.plc_column for col in values]),
+                    [
+                        plc.replace.ReplacePolicy.PRECEDING
+                        if method == "ffill"
+                        else plc.replace.ReplacePolicy.FOLLOWING
+                    ]
+                    * len(values),
+                )
 
-            return (
-                ColumnBase.from_pylibcudf(col) for col in replaced.columns()
-            )
+                return (
+                    ColumnBase.from_pylibcudf(col)
+                    for col in replaced.columns()
+                )
 
     @_performance_tracking
     def agg(self, func=None, *args, engine=None, engine_kwargs=None, **kwargs):

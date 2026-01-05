@@ -215,18 +215,25 @@ def test_creations(manager: SpillManager):
 
 
 def test_spillable_df_groupby(manager: SpillManager):
-    # This test verified old behavior where cached groupby objects held
-    # persistent spill locks. With the new access() pattern, spill locks
-    # are only temporary during operations, so this behavior no longer exists.
-    # The test is kept as a placeholder but no longer checks spill lock behavior.
+    """Test that GroupBy context manager enters/exits access contexts properly."""
     df = cudf.DataFrame({"a": [1, 1, 1]})
     gb = df.groupby("a")
+
+    # Before using context manager, no spill locks
     assert len(single_column_df_base_data(df).owner._spill_locks) == 0
-    gb._groupby  # Access cached groupby
-    # With new access pattern, no persistent spill locks are held
+
+    with gb._groupby:
+        assert len(single_column_df_base_data(df).owner._spill_locks) == 1
+        assert not single_column_df_data(df).spillable
+
     assert len(single_column_df_base_data(df).owner._spill_locks) == 0
-    # Data should remain spillable
     assert single_column_df_data(df).spillable
+
+    # Operations should work correctly
+    result = gb.sum()  # noqa: F841
+
+    # After operation completes, no persistent locks
+    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
 
 
 def test_spilling_buffer(manager: SpillManager):
