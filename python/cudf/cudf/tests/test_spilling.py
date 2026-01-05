@@ -862,11 +862,11 @@ def test_column_access_propagates_scope(manager: SpillManager):
 
     with col.access(mode="read", scope="internal"):
         # All buffers should be spill locked
-        if col.base_data:
-            assert not col.base_data.spillable
-            assert len(col.base_data.owner._spill_locks) >= 1
+        if col.data:
+            assert not col.data.spillable
+            assert len(col.data.owner._spill_locks) >= 1
 
     # After context, all buffers spillable
-    if col.base_data:
-        assert col.base_data.spillable
-        assert len(col.base_data.owner._spill_locks) == 0
+    if col.data:
+        assert col.data.spillable
+        assert len(col.data.owner._spill_locks) == 0

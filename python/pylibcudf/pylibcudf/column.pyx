@@ -1513,14 +1513,6 @@ cdef class StructsColumnView:
 
     __hash__ = None
 
-    cpdef child(self):
-        """The data column of the underlying list column."""
-        return self._column.child(1)
-
-    cpdef offsets(self):
-        """The offsets column of the underlying list column."""
-        return self._column.child(0)
-
     cdef structs_column_view view(self) nogil:
         """Generate a libcudf structs_column_view to pass to libcudf algorithms.
 
