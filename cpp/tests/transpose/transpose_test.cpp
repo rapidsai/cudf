@@ -133,7 +133,7 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   auto input_view    = make_table_view(input_cols);
   auto expected_view = make_table_view(expected_cols);
 
-  auto result      = transpose(input_view);
+  auto result      = cudf::transpose(input_view);
   auto result_view = std::get<1>(result);
 
   ASSERT_EQ(result_view.num_columns(), expected_view.num_columns());
@@ -158,7 +158,7 @@ class TransposeTest : public cudf::test::BaseFixture {};
 using StdStringType  = cudf::test::Types<std::string>;
 using TransposeTypes = cudf::test::Concat<cudf::test::FixedWidthTypes, StdStringType>;
 
-TYPED_TEST_SUITE(TransposeTest, TransposeTypes);  // cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(TransposeTest, TransposeTypes);
 
 TYPED_TEST(TransposeTest, SingleValue) { run_test<TypeParam>(1, 1, false); }
 
