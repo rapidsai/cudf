@@ -357,7 +357,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@cuda-13.1.0
     with:
       arch: '["amd64", "arm64"]'
-      cuda: '["13.0"]'
+      cuda: '["13.1"]'
       node_type: "cpu8"
       rapids-aux-secret-1: GIST_REPO_READ_ORG_GITHUB_TOKEN
       env: |
