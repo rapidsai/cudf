@@ -8,9 +8,9 @@
 #include "io/parquet/reader_impl_chunking.hpp"
 #include "io/parquet/reader_impl_chunking_utils.cuh"
 
-#include <cudf/detail/algorithm/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>

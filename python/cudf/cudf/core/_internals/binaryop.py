@@ -50,12 +50,8 @@ def binaryop(
 
     return ColumnBase.from_pylibcudf(
         plc.binaryop.binary_operation(
-            lhs.to_pylibcudf(mode="read")
-            if isinstance(lhs, ColumnBase)
-            else lhs,
-            rhs.to_pylibcudf(mode="read")
-            if isinstance(rhs, ColumnBase)
-            else rhs,
+            lhs.plc_column if isinstance(lhs, ColumnBase) else lhs,
+            rhs.plc_column if isinstance(rhs, ColumnBase) else rhs,
             plc.binaryop.BinaryOperator[op],
             dtype_to_pylibcudf_type(dtype),
         )
