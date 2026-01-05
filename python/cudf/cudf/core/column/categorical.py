@@ -39,7 +39,6 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
-    from cudf.core.buffer import Buffer
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -96,35 +95,11 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        size: int,
-        dtype: CategoricalDtype,
-        offset: int,
-        null_count: int,
-        exposed: bool,
-    ) -> None:
-        if not isinstance(dtype, CategoricalDtype):
-            raise ValueError(
-                f"{dtype=} must be cudf.CategoricalDtype instance."
-            )
-        super().__init__(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-        self._codes = self.children[0].set_mask(self.mask)
-
-    @classmethod
-    def _get_data_buffer_from_pylibcudf_column(
-        cls, plc_column: plc.Column, exposed: bool
-    ) -> None:
+    @property
+    def base_data(self) -> None:
         """
-        This column considers the plc_column (i.e. codes) as children
+        Categorical columns don't have a data buffer - data is stored
+        in the codes child column instead.
         """
         return None
 
@@ -146,10 +121,10 @@ class CategoricalColumn(column.ColumnBase):
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            self._encode(item)
+            encoded = self._encode(item)
         except ValueError:
             return False
-        return self._encode(item) in self.codes
+        return encoded in self.codes
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -157,30 +132,25 @@ class CategoricalColumn(column.ColumnBase):
         # Convert values to categorical dtype like self
         return self, column.as_column(values, dtype=self.dtype)
 
-    def set_base_mask(self, value: Buffer | None) -> None:
-        super().set_base_mask(value)
-        self._codes = self.children[0].set_mask(self.mask)
-
-    def set_base_children(self, value: tuple[NumericalColumn]) -> None:  # type: ignore[override]
-        super().set_base_children(value)
-        self._codes = value[0].set_mask(self.mask)
-
-    @property
-    def children(self) -> tuple[NumericalColumn]:
+    def _recompute_children(self) -> None:
         if self.offset == 0 and self.size == self.base_size:
-            return super().children  # type: ignore[return-value]
-        if self._children is None:
+            # Optimization: for non-sliced columns, children == base_children (just references)
+            self._children = self.base_children  # type: ignore[assignment]
+        else:
             # Pass along size, offset, null_count from __init__
             # which doesn't necessarily match the attributes of plc_column
+            # Use base_children[0]'s plc_column as it has the actual codes data
             child = cudf.core.column.numerical.NumericalColumn(
-                plc_column=self.plc_column,
-                size=self.size,
-                dtype=dtype_from_pylibcudf_column(self.plc_column),
-                offset=self.offset,
-                null_count=self.null_count,
+                plc_column=self.base_children[0].plc_column,
+                dtype=dtype_from_pylibcudf_column(
+                    self.base_children[0].plc_column
+                ),
                 exposed=False,
             )
             self._children = (child,)
+
+    @property
+    def children(self) -> tuple[NumericalColumn]:
         return self._children
 
     @property
@@ -189,11 +159,14 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self) -> NumericalColumn:
-        return self._codes
+        return self.children[0]
 
     @property
     def ordered(self) -> bool | None:
         return self.dtype.ordered
+
+    def to_pylibcudf(self, mode: Literal["read", "write"]) -> plc.Column:
+        return self.base_children[0].to_pylibcudf(mode)
 
     def __setitem__(self, key: Any, value: Any) -> None:
         if is_scalar(value) and _is_null_host_scalar(value):
@@ -223,7 +196,7 @@ class CategoricalColumn(column.ColumnBase):
         codes = self.codes
         codes[key] = value
         out = codes._with_type_metadata(self.dtype)
-        self._mimic_inplace(out, inplace=True)
+        self._mimic_inplace(out, inplace=True)  # type: ignore[arg-type]
 
     def _fill(
         self,
@@ -690,14 +663,6 @@ class CategoricalColumn(column.ColumnBase):
     def memory_usage(self) -> int:
         return self.categories.memory_usage + self.codes.memory_usage
 
-    def _mimic_inplace(
-        self, other_col: ColumnBase, inplace: bool = False
-    ) -> Self | None:
-        out = super()._mimic_inplace(other_col, inplace=inplace)  # type: ignore[arg-type]
-        if inplace and isinstance(other_col, CategoricalColumn):
-            self._codes = other_col.codes
-        return out
-
     @staticmethod
     def _concat(
         objs: MutableSequence[CategoricalColumn],
@@ -733,10 +698,7 @@ class CategoricalColumn(column.ColumnBase):
         if isinstance(dtype, CategoricalDtype):
             return type(self)(
                 plc_column=self.plc_column,
-                size=self.size,
                 dtype=dtype,
-                offset=self.offset,
-                null_count=self.null_count,
                 exposed=False,
             )
 

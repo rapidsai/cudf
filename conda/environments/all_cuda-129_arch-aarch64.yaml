@@ -5,7 +5,7 @@ channels:
 - rapidsai
 - conda-forge
 dependencies:
-- aiobotocore>=2.2.0
+- aiobotocore>=2.2.0,<3
 - boto3>=1.21.21
 - botocore>=1.24.21
 - breathe>=4.35.0
@@ -38,6 +38,7 @@ dependencies:
 - include-what-you-use==0.24.0
 - ipython
 - jupyter_client
+- libcufile-dev
 - libcurand-dev
 - libkvikio==26.2.*,>=0.0.0a0
 - libnvcomp-dev==5.1.0.21
@@ -87,7 +88,7 @@ dependencies:
 - rich
 - rmm==26.2.*,>=0.0.0a0
 - s3fs>=2022.3.0
-- scikit-build-core>=0.10.0
+- scikit-build-core>=0.11.0
 - scipy
 - sphinx-autobuild
 - sphinx-copybutton

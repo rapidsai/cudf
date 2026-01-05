@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -262,12 +263,24 @@ class parquet_metadata {
  *
  * @ingroup io_readers
  *
- * @param src_info Dataset source
+ * @param src_info Dataset source information
  *
  * @return parquet_metadata with parquet schema, number of rows, number of row groups and key-value
  * metadata
  */
 parquet_metadata read_parquet_metadata(source_info const& src_info);
+
+/**
+ * @brief Constructs FileMetaData objects from parquet dataset
+ *
+ * @ingroup io_readers
+ *
+ * @param sources Input `datasource` objects to read the dataset from
+ *
+ * @return List of FileMetaData objects, one per parquet source
+ */
+std::vector<parquet::FileMetaData> read_parquet_footers(
+  cudf::host_span<std::unique_ptr<cudf::io::datasource> const> sources);
 
 /** @} */  // end of group
 }  // namespace io
