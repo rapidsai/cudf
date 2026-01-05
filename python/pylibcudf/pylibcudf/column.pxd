@@ -104,7 +104,6 @@ cdef class Column:
 
 
 cdef class ListsColumnView:
-    """Accessor for methods of a Column that are specific to lists."""
     cdef Column _column
     cpdef child(self)
     cpdef offsets(self)
@@ -114,7 +113,5 @@ cdef class ListsColumnView:
 
 cdef class StructsColumnView:
     cdef Column _column
-    cpdef child(self)
-    cpdef offsets(self)
     cdef structs_column_view view(self) nogil
     cpdef Column get_sliced_child(self, int index, Stream stream=*)
