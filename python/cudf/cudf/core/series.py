@@ -2001,36 +2001,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         res.attrs = self.attrs
         return res
 
-    @property
-    @_performance_tracking
-    def data(self):
-        """The gpu buffer for the data
-
-        Returns
-        -------
-        out : The GPU buffer of the Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2, 3, 4])
-        >>> series
-        0    1
-        1    2
-        2    3
-        3    4
-        dtype: int64
-        >>> np.array(series.data.memoryview())
-        array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
-               0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
-        """
-        warnings.warn(
-            "Series.data is deprecated and will be removed in a future version. "
-            "Use Series.to_pylibcudf()[0].data() instead.",
-            FutureWarning,
-        )
-        return self._column.data
-
     @_performance_tracking
     def astype(
         self,
