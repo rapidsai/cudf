@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 # Dependency list for https://github.com/rapidsai/dependency-file-generator
@@ -586,6 +586,10 @@ dependencies:
               cuda: "13.0"
             packages:
               - cuda-version=13.0
+          - matrix:
+              cuda: "13.1"
+            packages:
+              - cuda-version=13.1
   cuda:
     common:
       - output_types: [conda]
