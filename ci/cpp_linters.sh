@@ -24,6 +24,9 @@ set +u
 conda activate clang_tidy
 set -u
 
+export SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX="cpp-linters-preprocessor-cache"
+export SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE=true
+
 source rapids-configure-sccache
 
 sccache --stop-server 2>/dev/null || true
