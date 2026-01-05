@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 [build-system]
@@ -96,6 +96,7 @@ max_allowed_size_compressed = '75M'
 addopts = "--tb=native --strict-config --strict-markers"
 empty_parameter_set_mark = "fail_at_collect"
 filterwarnings = [
+    "error",
     "error::FutureWarning",
     "error::DeprecationWarning",
     # some third-party dependencies (e.g. 'boto3') still using datetime.datetime.utcnow()
