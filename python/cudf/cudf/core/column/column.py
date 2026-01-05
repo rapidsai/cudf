@@ -12,6 +12,7 @@ from collections.abc import (
     MutableSequence,
     Sequence,
 )
+from contextlib import ExitStack
 from decimal import Decimal
 from functools import cached_property
 from itertools import chain
@@ -95,6 +96,7 @@ from cudf.utils.utils import (
 if TYPE_CHECKING:
     import builtins
     from collections.abc import Generator, Mapping
+    from types import TracebackType
 
     from cudf._typing import ColumnLike, Dtype, DtypeObj, NoDefault, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
@@ -157,40 +159,6 @@ class MaskCAIWrapper:
         return plc.null_mask.bitmask_allocation_size_bytes(
             self._mask.__cuda_array_interface__["shape"][0]
         )
-
-
-class ROCAIWrapper:
-    # A wrapper that exposes the __cuda_array_interface__ of a buffer as read-only to
-    # avoid copy-on-write issues.
-    def __init__(self, buffer: Buffer, mode: Literal["read", "write"]) -> None:
-        self._buffer = buffer
-        self._mode = mode
-
-    @property
-    def owner(self) -> Buffer:
-        # This property is how get_buffer_owner in buffer/utils.py knows to access the
-        # owner transitively, which is needed for correctness with copy-on-write
-        return self._buffer
-
-    @property
-    def __cuda_array_interface__(self) -> Mapping:
-        return {
-            "data": (self._buffer.get_ptr(mode=self._mode), False),
-            "shape": (self._buffer.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 3,
-        }
-
-    @property
-    def ptr(self) -> int:
-        """Device pointer (Span protocol)."""
-        return self._buffer.get_ptr(mode=self._mode)
-
-    @property
-    def size(self) -> int:
-        """Size in bytes (Span protocol)."""
-        return self._buffer.size
 
 
 def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
@@ -275,6 +243,38 @@ def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
     return arrow_array
 
 
+class _ColumnAccessContext:
+    """Context manager for access mode control on underlying buffers."""
+
+    __slots__ = ("_column", "_stack")
+
+    def __init__(self, column: ColumnBase, mode: Literal["read", "write"]):
+        self._column = column
+        self._stack = ExitStack()
+        if (base_data := column.base_data) is not None:
+            self._stack.enter_context(base_data.access(mode=mode))
+            if (data := column.data) is not None and data is not base_data:
+                self._stack.enter_context(data.access(mode=mode))
+        if (base_mask := column.base_mask) is not None:
+            self._stack.enter_context(base_mask.access(mode=mode))
+            if (mask := column.mask) is not None and mask is not base_mask:
+                self._stack.enter_context(mask.access(mode=mode))
+        for child in self._column.children:
+            self._stack.enter_context(child.access(mode=mode))
+
+    def __enter__(self) -> ColumnBase:
+        return self._column
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> Literal[False]:
+        self._stack.__exit__(exc_type, exc_val, exc_tb)
+        return False
+
+
 class ColumnBase(Serializable, BinaryOperand, Reducible):
     """
     A ColumnBase stores columnar data in device memory.
@@ -327,6 +327,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers: set[Buffer] = set()
         self._recompute_data()
+        self._recompute_children()
 
     def _get_children_from_pylibcudf_column(
         self,
@@ -392,11 +393,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @property
     def base_data(self) -> None | Buffer:
         """Get data buffer from pylibcudf column."""
-        data = self.plc_column.data()
-        # Unwrap ROCAIWrapper if present (can occur after to_pylibcudf operations)
-        if isinstance(data, ROCAIWrapper):
-            return data._buffer
-        return data  # type: ignore[return-value]
+        return cast(Buffer | None, self.plc_column.data())
 
     @property
     def data(self) -> None | Buffer:
@@ -412,11 +409,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @property
     def base_mask(self) -> None | Buffer:
         """Get mask buffer from pylibcudf column."""
-        mask = self.plc_column.null_mask()
-        # Unwrap ROCAIWrapper if present (can occur after to_pylibcudf operations)
-        if isinstance(mask, ROCAIWrapper):
-            return mask._buffer
-        return mask  # type: ignore[return-value]
+        return cast(Buffer | None, self.plc_column.null_mask())
 
     @property
     def mask(self) -> None | Buffer:
@@ -429,6 +422,31 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         plc.null_mask.copy_bitmask(self.plc_column)
                     )
         return self._mask
+
+    def access(
+        self, *, mode: Literal["read", "write"], **kwargs: Any
+    ) -> _ColumnAccessContext:
+        """Context manager for controlled buffer access.
+
+        Mediates access to all the underlying buffers of the column. Within this
+        context, all their ptr accesses will respect the specified access mode. The
+        **kwargs allows subclasses to extend with additional parameters.
+
+        Parameters
+        ----------
+        mode : {"read", "write"}, default "read"
+            Access mode for the buffer.
+            - "read": ptr access will not trigger copy-on-write
+            - "write": ptr access will trigger copy-on-write if needed
+        **kwargs
+            Additional parameters for subclass implementations.
+
+        Returns
+        -------
+        _BufferAccessContext
+            A context manager that controls the access mode.
+        """
+        return _ColumnAccessContext(self, mode)
 
     def set_base_mask(self, value: None | Buffer) -> None:
         """
@@ -483,6 +501,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
         self._clear_cache()
+        self._recompute_children()
 
     def _clear_cache(self) -> None:
         self._distinct_count.clear()
@@ -517,9 +536,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 f"Expected a Buffer object or None for mask, got {type(mask).__name__}"
             )
-        new_plc_column = self.to_pylibcudf(mode="read").with_mask(
-            new_mask, new_null_count
-        )
+        new_plc_column = self.plc_column.with_mask(new_mask, new_null_count)
         return (
             type(self)
             .from_pylibcudf(  # type: ignore[return-value]
@@ -542,23 +559,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def children(self) -> tuple[ColumnBase, ...]:
-        if self.offset == 0 and self.size == self.base_size:
-            self._children = self.base_children
-        if self._children is None:
-            if not self.base_children:
-                self._children = ()
-            else:
-                # Compute children from the column view (children factoring self.size)
-                children = ColumnBase.from_pylibcudf(
-                    self.plc_column.copy()
-                ).base_children
-                dtypes = (
-                    base_child.dtype for base_child in self.base_children
-                )
-                self._children = tuple(
-                    child._with_type_metadata(dtype)
-                    for child, dtype in zip(children, dtypes, strict=True)
-                )
+        """Return the offset-aware children columns."""
+        assert self._children is not None
         return self._children
 
     def set_base_children(self, value: tuple[ColumnBase, ...]) -> None:
@@ -569,7 +571,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if any(not isinstance(child, ColumnBase) for child in value):
             raise TypeError("All children must be Columns.")
 
-        self._children = None
         self._base_children = value
 
     def _recompute_data(self) -> None:
@@ -585,6 +586,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             end = start + self.size * self.dtype.itemsize
             self._data = self.base_data[start:end]
 
+    def _recompute_children(self) -> None:
+        """Recompute the offset-aware children columns."""
+        # Check for empty base_children first to avoid accessing properties on empty collections
+        if not self.base_children:
+            self._children = ()
+        elif self.offset == 0 and self.size == self.base_size:
+            # Optimization: for non-sliced columns, children == base_children (just references)
+            self._children = self.base_children
+        else:
+            # Slice each base child using the parent's offset and size
+            self._children = tuple(
+                base_child.slice(self.offset, self.offset + self.size)
+                for base_child in self.base_children
+            )
+
     def _mimic_inplace(
         self, other_col: Self, inplace: bool = False
     ) -> None | Self:
@@ -599,8 +615,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self.plc_column = other_col.plc_column
             self._base_children = other_col._base_children
             self._recompute_data()
+            self._recompute_children()
             self._mask = None
-            self._children = None
             self._clear_cache()
             return None
         else:
@@ -631,32 +647,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        dtype = dtype_to_pylibcudf_type(self.dtype)
-
-        data = None
-        if self.base_data is not None:
-            data = ROCAIWrapper(self.base_data, mode)
-
-        mask = None
-        if self.base_mask is not None:
-            mask = ROCAIWrapper(self.base_mask, mode)
-
-        children = []
-        if self.base_children:
-            children = [
-                child_column.to_pylibcudf(mode=mode)
-                for child_column in self.base_children
-            ]
-
-        return plc.Column(
-            dtype,
-            self.size,
-            data,
-            mask,
-            self.null_count,
-            self.offset,
-            children,
-        )
+        # TODO: Unwrap buffers into raw gpumemoryview objects to remove cudf memory
+        # semantics when converting to pylibcudf
+        return self.plc_column
 
     @classmethod
     def from_pylibcudf(
@@ -692,37 +685,33 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 new_dtype, col.size(), plc.types.MaskState.ALL_NULL
             )
 
-        # Ensure data and mask are cudf Buffers to avoid repeated as_buffer() calls
-        data_needs_wrapping = (
-            data := col.data()
-        ) is not None and not isinstance(data, Buffer)
-        mask_needs_wrapping = (
-            mask := col.null_mask()
-        ) is not None and not isinstance(mask, Buffer)
+        # Typically non-Buffers will be gpumemoryview objects produced as new memory
+        # from pylibcudf. If the underlying data is already a buffer it must be
+        # shallow-copied to track that we are now sharing the same BufferOwner.
+        data = col.data()
+        if data is not None:
+            if isinstance(data, Buffer):
+                data = data.copy(deep=False)
+            else:
+                data = as_buffer(data, exposed=data_ptr_exposed)
 
-        if data_needs_wrapping or mask_needs_wrapping:
-            new_data = (
-                as_buffer(data, exposed=data_ptr_exposed)
-                if data_needs_wrapping
-                else data
-            )
-            new_mask = (
-                as_buffer(mask, exposed=data_ptr_exposed)
-                if mask_needs_wrapping
-                else mask
-            )
+        mask = col.null_mask()
+        if mask is not None:
+            if isinstance(mask, Buffer):
+                mask = mask.copy(deep=False)
+            else:
+                mask = as_buffer(mask, exposed=data_ptr_exposed)
 
-            # Reconstruct column with Buffer objects
-            col = plc.Column(
-                data_type=col.type(),
-                size=col.size(),
-                data=new_data,
-                mask=new_mask,
-                null_count=col.null_count(),
-                offset=col.offset(),
-                children=col.children(),
-                validate=False,
-            )
+        col = plc.Column(
+            data_type=col.type(),
+            size=col.size(),
+            data=data,
+            mask=mask,
+            null_count=col.null_count(),
+            offset=col.offset(),
+            children=col.children(),
+            validate=False,
+        )
 
         dtype = dtype_from_pylibcudf_column(col)
 
@@ -1105,7 +1094,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @acquire_spill_lock()
     def _get_mask_as_column(self) -> ColumnBase:
         plc_column = plc.transform.mask_to_bools(
-            self.base_mask.get_ptr(mode="read"),  # type: ignore[union-attr]
+            self.base_mask.ptr,  # type: ignore[union-attr]
             self.offset,
             self.offset + len(self),
         )
@@ -1154,38 +1143,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self.set_base_mask(mask)
 
         with acquire_spill_lock():
-            # Create a pylibcudf column to modify in-place
-            plc_col = self.to_pylibcudf(mode="write")
-            plc.filling.fill_in_place(
-                plc_col,
-                begin,
-                end,
-                fill_value,
-            )
-            # fill_in_place modifies the buffers but doesn't update metadata
-            # We need to recompute null_count if filling with null values
-            if not fill_value.is_valid(DEFAULT_STREAM):
-                # Recompute null_count from the mask
-                plc_mask = plc_col.null_mask()
-                assert (
-                    plc_mask is not None
-                )  # Must have mask after filling with null
-                new_null_count = plc.null_mask.null_count(
-                    plc_mask,
-                    self.offset,
-                    self.offset + self.size,
+            with self.access(mode="write"):
+                plc.filling.fill_in_place(
+                    self.plc_column,
+                    begin,
+                    end,
+                    fill_value,
                 )
-                # Create a new column with the updated null_count
-                plc_col = plc.Column(
-                    data_type=plc_col.type(),
-                    size=plc_col.size(),
-                    data=plc_col.data(),
-                    mask=plc_col.null_mask(),
-                    null_count=new_null_count,
-                    offset=plc_col.offset(),
-                    children=plc_col.children(),
-                )
-            self.plc_column = plc_col
             self._recompute_data()
             self._mask = None
             self._clear_cache()
@@ -1411,15 +1375,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return self._fill(value, start, stop, inplace=True)
             else:
                 with acquire_spill_lock():
-                    return type(self).from_pylibcudf(
-                        plc.copying.copy_range(
-                            value.plc_column,
-                            self.to_pylibcudf(mode="write"),
-                            0,
-                            num_keys,
-                            start,
+                    with self.access(mode="write"):
+                        return type(self).from_pylibcudf(
+                            plc.copying.copy_range(
+                                value.plc_column,
+                                self.plc_column,
+                                0,
+                                num_keys,
+                                start,
+                            )
                         )
-                    )
 
         # step != 1, create a scatter map with arange
         scatter_map = cast(
@@ -1465,13 +1430,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         if key.dtype.kind == "b":
             with acquire_spill_lock():
-                plc_table = plc.copying.boolean_mask_scatter(
-                    plc.Table([value.plc_column])
-                    if isinstance(value, ColumnBase)
-                    else [value],
-                    plc.Table([self.to_pylibcudf(mode="write")]),
-                    key.plc_column,
-                )
+                with self.access(mode="write"):
+                    plc_table = plc.copying.boolean_mask_scatter(
+                        plc.Table([value.plc_column])
+                        if isinstance(value, ColumnBase)
+                        else [value],
+                        plc.Table([self.plc_column]),
+                        key.plc_column,
+                    )
                 return (
                     type(self)  # type: ignore[return-value]
                     .from_pylibcudf(plc_table.columns()[0])
@@ -2058,8 +2024,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.data is None:
             data_ptr = 0
         else:
-            original_ptr = self.data.get_ptr(mode="read")
-            data_ptr = self.data.get_ptr(mode="write")
+            original_ptr = self.data.ptr
+            with self.access(mode="write"):
+                data_ptr = self.data.ptr
             # Check if a new buffer was created or if the underlying data was modified
             if cudf.get_option("copy_on_write") and (data_ptr != original_ptr):
                 # The offset must be reset to 0 because we have migrated to a new copied
@@ -2094,8 +2061,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             assert mask is not None
             # Handle copy-on-write for mask
             if mask is not None:
-                original_mask_ptr = mask.get_ptr(mode="read")
-                mask_ptr = mask.get_ptr(mode="write")
+                original_mask_ptr = mask.ptr
+                with mask.access(mode="write"):
+                    mask_ptr = mask.ptr
                 # Check if a new buffer was created or if the underlying data was modified
                 if cudf.get_option("copy_on_write") and (
                     mask_ptr != original_mask_ptr
