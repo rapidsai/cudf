@@ -16,6 +16,8 @@ from pandas.api import types as pd_types  # noqa: TID251
 from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
+import pylibcudf as plc
+
 import cudf
 from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
@@ -240,31 +242,6 @@ class CategoricalDtype(_BaseDtype):
         Whether the categories have an ordered relationship.
         """
         return self._ordered
-
-    @classmethod
-    def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
-        """
-        Convert a ``pandas.CategrocialDtype`` to ``cudf.CategoricalDtype``
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> pd_dtype = pd.CategoricalDtype(categories=['b', 'a'], ordered=True)
-        >>> pd_dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
-        >>> cudf_dtype = cudf.CategoricalDtype.from_pandas(pd_dtype)
-        >>> cudf_dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
-        """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Pass the pandas.CategoricalDtype categories and ordered to the CategoricalDtype constructor instead.",
-            FutureWarning,
-        )
-        return CategoricalDtype(
-            categories=dtype.categories, ordered=dtype.ordered
-        )
 
     def to_pandas(self) -> pd.CategoricalDtype:
         """
@@ -1054,18 +1031,6 @@ class IntervalDtype(StructDtype):
             cudf_dtype_to_pa_type(self.subtype), self.closed
         )
 
-    @classmethod
-    def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> Self:
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Pass the pandas.IntervalDtype subtype and closed to the IntervalDtype constructor instead.",
-            FutureWarning,
-        )
-        return cls(
-            subtype=pd_dtype.subtype,
-            closed="right" if pd_dtype.closed is None else pd_dtype.closed,
-        )
-
     def to_pandas(self) -> pd.IntervalDtype:
         if cudf.get_option("mode.pandas_compatible"):
             return pd.IntervalDtype(
@@ -1367,3 +1332,37 @@ def recursively_update_struct_names(
         )
     else:
         return dtype
+
+
+def _dtype_to_metadata(dtype: DtypeObj) -> plc.interop.ColumnMetadata:
+    # Convert a cudf or pandas dtype to pylibcudf ColumnMetadata for arrow conversion
+    cm = plc.interop.ColumnMetadata()
+    if isinstance(dtype, StructDtype):
+        for name, dtype in dtype.fields.items():
+            cm.children_meta.append(_dtype_to_metadata(dtype))
+            cm.children_meta[-1].name = name
+    elif isinstance(dtype, ListDtype):
+        # Offsets column must be added manually
+        cm.children_meta.append(plc.interop.ColumnMetadata())
+        cm.children_meta.append(_dtype_to_metadata(dtype.element_type))
+    elif isinstance(dtype, DecimalDtype):
+        cm.precision = dtype.precision
+    elif isinstance(dtype, pd.ArrowDtype):
+        if pa.types.is_struct(dtype.pyarrow_dtype):
+            for field in dtype.pyarrow_dtype:
+                cm.children_meta.append(
+                    _dtype_to_metadata(pd.ArrowDtype(field.type))
+                )
+                cm.children_meta[-1].name = field.name
+        elif pa.types.is_list(dtype.pyarrow_dtype) or pa.types.is_large_list(
+            dtype.pyarrow_dtype
+        ):
+            # Offsets column must be added manually
+            cm.children_meta.append(plc.interop.ColumnMetadata())
+            cm.children_meta.append(
+                _dtype_to_metadata(
+                    pd.ArrowDtype(dtype.pyarrow_dtype.value_type)
+                )
+            )
+    # TODO: Support timezone metadata
+    return cm

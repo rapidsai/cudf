@@ -18,13 +18,6 @@ function(find_and_configure_kvikio VERSION)
     OPTIONS "KvikIO_BUILD_EXAMPLES OFF" "KvikIO_REMOTE_SUPPORT ${CUDF_KVIKIO_REMOTE_IO}"
   )
 
-  include("${rapids-cmake-dir}/export/find_package_root.cmake")
-  rapids_export_find_package_root(
-    BUILD KvikIO "${KvikIO_BINARY_DIR}"
-    EXPORT_SET cudf-exports
-    CONDITION KvikIO_BINARY_DIR
-  )
-
 endfunction()
 
 set(KVIKIO_MIN_VERSION_cudf "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")

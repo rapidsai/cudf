@@ -6,7 +6,7 @@ from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
-from pylibcudf.gpumemoryview import gpumemoryview
+from pylibcudf.span import Span
 from pylibcudf.types import MaskState
 
 def copy_bitmask(
@@ -32,5 +32,5 @@ def bitmask_or(
     mr: DeviceMemoryResource | None = None,
 ) -> tuple[DeviceBuffer, int]: ...
 def null_count(
-    bitmask: gpumemoryview, start: int, stop: int, stream: Stream | None = None
+    bitmask: Span, start: int, stop: int, stream: Stream | None = None
 ) -> int: ...

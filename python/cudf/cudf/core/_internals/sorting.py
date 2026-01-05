@@ -46,7 +46,7 @@ def is_sorted(
     """
     column_order, null_precedence = ordering(ascending, na_position)
     return plc.sorting.is_sorted(
-        plc.Table([col.to_pylibcudf(mode="read") for col in source_columns]),
+        plc.Table([col.plc_column for col in source_columns]),
         column_order,
         null_precedence,
     )
@@ -123,7 +123,7 @@ def order_by(
     )
     return func(
         plc.Table(
-            [col.to_pylibcudf(mode="read") for col in columns_from_table],
+            [col.plc_column for col in columns_from_table],
         ),
         column_order,
         null_precedence,
@@ -168,8 +168,8 @@ def sort_by_key(
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
     )
     return func(
-        plc.Table([col.to_pylibcudf(mode="read") for col in values]),
-        plc.Table([col.to_pylibcudf(mode="read") for col in keys]),
+        plc.Table([col.plc_column for col in values]),
+        plc.Table([col.plc_column for col in keys]),
         column_order,
         null_precedence,
     ).columns()
@@ -207,8 +207,8 @@ def search_sorted(
         "lower_bound" if side == "left" else "upper_bound",
     )
     return func(
-        plc.Table([col.to_pylibcudf(mode="read") for col in source]),
-        plc.Table([col.to_pylibcudf(mode="read") for col in values]),
+        plc.Table([col.plc_column for col in source]),
+        plc.Table([col.plc_column for col in values]),
         column_order,
         null_precedence,
     )

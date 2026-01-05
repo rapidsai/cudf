@@ -15,7 +15,11 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, Metadata
+from cudf_polars.experimental.rapidsmpf.utils import (
+    ChannelManager,
+    Metadata,
+    empty_table_chunk,
+)
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
@@ -77,7 +81,9 @@ async def concatenate_node(
         # Check if we need global communication.
         need_global_repartition = (
             # Avoid allgather of already-duplicated data
-            not input_metadata.duplicated and output_count == 1
+            context.comm().nranks > 1
+            and not input_metadata.duplicated
+            and output_count == 1
         )
 
         chunks: list[TableChunk]
@@ -96,17 +102,20 @@ async def concatenate_node(
                 allgather.insert(seq_num, TableChunk.from_message(msg))
                 seq_num += 1
             allgather.insert_finished()
-            await ch_out.data.send(
-                context,
-                Message(
-                    0,
-                    TableChunk.from_pylibcudf_table(
-                        await allgather.extract_concatenated(stream),
-                        stream,
-                        exclusive_view=True,
-                    ),
-                ),
-            )
+
+            # Extract concatenated result
+            result_table = await allgather.extract_concatenated(stream)
+
+            # If no chunks were gathered, result_table has 0 columns.
+            # We need to create an empty table with the correct schema.
+            if result_table.num_columns() == 0 and len(ir.schema) > 0:
+                output_chunk = empty_table_chunk(ir, context, stream)
+            else:
+                output_chunk = TableChunk.from_pylibcudf_table(
+                    result_table, stream, exclusive_view=True
+                )
+
+            await ch_out.data.send(context, Message(0, output_chunk))
         else:
             # Send metadata.
             metadata.duplicated = input_metadata.duplicated

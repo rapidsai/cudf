@@ -244,6 +244,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   return visit(col_type, static_cast<aggregation const&>(agg));
 }
 
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, top_k_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
 // aggregation_finalizer ----------------------------------------
 
 void aggregation_finalizer::visit(aggregation const& agg) {}
@@ -428,6 +434,11 @@ void aggregation_finalizer::visit(host_udf_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(bitwise_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(top_k_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -972,6 +983,16 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_bitwise_aggregation<groupby_aggregation>(bitwise_op bit_op);
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
 make_bitwise_aggregation<reduce_aggregation>(bitwise_op bit_op);
+
+template <typename Base>
+std::unique_ptr<Base> make_top_k_aggregation(size_type k, order topk_order)
+{
+  return std::make_unique<detail::top_k_aggregation>(k, topk_order);
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_top_k_aggregation<aggregation>(
+  size_type k, order topk_order);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_top_k_aggregation<groupby_aggregation>(size_type k, order topk_order);
 
 namespace detail {
 namespace {

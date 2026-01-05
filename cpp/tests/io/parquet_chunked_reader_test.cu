@@ -141,6 +141,37 @@ auto chunked_read(std::string const& filepath,
   return chunked_read(vpath, output_limit, input_limit);
 }
 
+auto chunked_read(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                  std::vector<cudf::io::parquet::FileMetaData>&& metadatas,
+                  std::size_t output_limit,
+                  std::size_t input_limit = 0)
+{
+  auto const read_opts = cudf::io::parquet_reader_options::builder().build();
+  auto reader          = cudf::io::chunked_parquet_reader(
+    output_limit, input_limit, std::move(sources), std::move(metadatas), read_opts);
+
+  auto num_chunks = 0;
+  auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
+
+  do {
+    auto chunk = reader.read_chunk();
+    // If the input file is empty, the first call to `read_chunk` will return an empty table.
+    // Thus, we only check for non-empty output table from the second call.
+    if (num_chunks > 0) {
+      CUDF_EXPECTS(chunk.tbl->num_rows() != 0, "Number of rows in the new chunk is zero.");
+    }
+    ++num_chunks;
+    out_tables.emplace_back(std::move(chunk.tbl));
+  } while (reader.has_next());
+
+  auto out_tviews = std::vector<cudf::table_view>{};
+  for (auto const& tbl : out_tables) {
+    out_tviews.emplace_back(tbl->view());
+  }
+
+  return std::pair(cudf::concatenate(out_tviews), num_chunks);
+}
+
 auto const read_table_and_nrows_per_source(cudf::io::chunked_parquet_reader const& reader)
 {
   auto out_tables       = std::vector<std::unique_ptr<cudf::table>>{};
@@ -364,12 +395,18 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
 
   // Test with zero limit: everything will be read in one chunk
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 0);
+    // Separately materialize datasource and metadata and use them to construct the chunked reader
+    auto sources   = cudf::io::make_datasources(cudf::io::source_info{filepath_no_null});
+    auto metadatas = cudf::io::read_parquet_footers(sources);
+    auto const [result, num_chunks] = chunked_read(std::move(sources), std::move(metadatas), 0);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 0);
+    // Separately materialize datasource and metadata and use them to construct the chunked reader
+    auto sources   = cudf::io::make_datasources(cudf::io::source_info{filepath_with_nulls});
+    auto metadatas = cudf::io::read_parquet_footers(sources);
+    auto const [result, num_chunks] = chunked_read(std::move(sources), std::move(metadatas), 0);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
@@ -386,7 +423,11 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
 
   // Test with a very small limit: 1 byte
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1);
+    // Separately materialize datasource and metadata and use them to construct the chunked reader
+    auto sources   = cudf::io::make_datasources(cudf::io::source_info{filepath_no_null});
+    auto metadatas = cudf::io::read_parquet_footers(sources);
+
+    auto const [result, num_chunks] = chunked_read(std::move(sources), std::move(metadatas), 1);
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
@@ -441,7 +482,11 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null_delta, 500'000);
+    // Separately materialize datasource and metadata and use them to construct the chunked reader
+    auto sources   = cudf::io::make_datasources(cudf::io::source_info{filepath_no_null_delta});
+    auto metadatas = cudf::io::read_parquet_footers(sources);
+    auto const [result, num_chunks] =
+      chunked_read(std::move(sources), std::move(metadatas), 500'000);
     // EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null_delta, *result);
   }
@@ -1506,11 +1551,17 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadOutOfBoundChunks)
     auto constexpr num_rows          = 0;
     auto const [expected, filepath]  = generate_input(num_rows, false);
     auto constexpr output_read_limit = 1'000;
-    auto const options =
-      cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath}).build();
-    auto const reader =
-      cudf::io::chunked_parquet_reader(output_read_limit, 0, options, cudf::get_default_stream());
-    auto const [result, num_chunks]     = read_chunks_with_while_loop(reader);
+
+    auto const options              = cudf::io::parquet_reader_options_builder().build();
+    auto sources                    = cudf::io::make_datasources(cudf::io::source_info{filepath});
+    auto metadatas                  = cudf::io::read_parquet_footers(sources);
+    auto const reader               = cudf::io::chunked_parquet_reader(output_read_limit,
+                                                         0,
+                                                         std::move(sources),
+                                                         std::move(metadatas),
+                                                         options,
+                                                         cudf::get_default_stream());
+    auto const [result, num_chunks] = read_chunks_with_while_loop(reader);
     auto const out_of_bound_table_chunk = reader.read_chunk().tbl;
 
     EXPECT_EQ(num_chunks, 1);
@@ -1563,11 +1614,16 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     auto constexpr output_read_limit = 1'500;
     auto constexpr pass_read_limit   = 3'500;
 
-    auto const options = cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath})
-                           .skip_rows(rows_to_skip)
-                           .build();
-    auto const reader = cudf::io::chunked_parquet_reader(
-      output_read_limit, pass_read_limit, options, cudf::get_default_stream());
+    // Separately materialize datasource and metadata and use them to construct the chunked reader
+    auto const options = cudf::io::parquet_reader_options_builder().skip_rows(rows_to_skip).build();
+    auto sources       = cudf::io::make_datasources(cudf::io::source_info{filepath});
+    auto metadatas     = cudf::io::read_parquet_footers(sources);
+    auto const reader  = cudf::io::chunked_parquet_reader(output_read_limit,
+                                                         pass_read_limit,
+                                                         std::move(sources),
+                                                         std::move(metadatas),
+                                                         options,
+                                                         cudf::get_default_stream());
 
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
 
@@ -2072,7 +2128,7 @@ TEST_F(ParquetReaderTest, ManyLargeLists)
     auto const reader = cudf::io::chunked_parquet_reader(0, 0, in_opts);
     auto num_chunks   = 0;
     while (reader.has_next()) {
-      EXPECT_NO_THROW(std::ignore = reader.read_chunk());
+      ASSERT_NO_THROW(std::ignore = reader.read_chunk());
       num_chunks++;
     }
     // We will end up with exactly two chunks as the total number of leaf rows is just above 2B

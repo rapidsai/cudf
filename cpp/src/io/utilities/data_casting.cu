@@ -603,8 +603,9 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
         using ErrorReduce = cub::BlockReduce<bool, BLOCK_SIZE>;
         __shared__ typename ErrorReduce::TempStorage temp_storage_error;
         __shared__ bool error_reduced;
-        error_reduced = ErrorReduce(temp_storage_error).Sum(error);  // TODO use cub::LogicalOR.
+        auto berr = ErrorReduce(temp_storage_error).Sum(error);  // TODO use cub::LogicalOR.
         // only valid in thread0, so shared memory is used for broadcast.
+        if (lane == 0) error_reduced = berr;
         __syncthreads();
         error = error_reduced;
       }

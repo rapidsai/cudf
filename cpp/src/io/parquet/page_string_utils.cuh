@@ -282,7 +282,7 @@ __device__ size_t decode_strings(page_state_s* s,
     }();
 
     // lookup input string pointer & length. store length.
-    bool const in_range                             = (thread_pos < target_pos) && (dst_pos >= 0);
+    bool const in_range                             = (thread_pos < target_pos);
     auto const [thread_input_string, string_length] = [&]() {
       // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
       // before first_row) in the flat hierarchy case.

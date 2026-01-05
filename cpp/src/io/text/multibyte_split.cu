@@ -456,9 +456,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           *thrust::find_if(rmm::exec_policy_nosync(scan_stream),
                            it,
                            it + new_offsets_unclamped,
-                           [row_offsets, byte_range_end] __device__(output_offset i) {
-                             return row_offsets[i] >= byte_range_end;
-                           });
+                           cuda::proclaim_return_type<bool>(
+                             [row_offsets, byte_range_end] __device__(output_offset i) {
+                               return row_offsets[i] >= byte_range_end;
+                             }));
         // if we had no out-of-bounds offset, we copy all offsets
         if (end_loc == new_offsets_unclamped) { return end_loc; }
         // otherwise we copy only up to (including) the first out-of-bounds delimiter

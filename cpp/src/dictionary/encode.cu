@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,9 +34,11 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(is_signed(indices_type) && is_index_type(indices_type),
-               "indices must be type signed integer");
+               "indices must be type signed integer",
+               std::invalid_argument);
   CUDF_EXPECTS(input_column.type().id() != type_id::DICTIONARY32,
-               "cannot encode a dictionary from a dictionary");
+               "cannot encode a dictionary from a dictionary",
+               std::invalid_argument);
 
   auto codified       = cudf::detail::encode(cudf::table_view({input_column}), stream, mr);
   auto keys_table     = std::move(codified.first);
@@ -51,6 +53,10 @@ std::unique_ptr<column> encode(column_view const& input_column,
       stream,
       mr);
     keys_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // remove the null-mask
+  }
+
+  if (indices_column->type() != indices_type) {
+    indices_column = cudf::detail::cast(indices_column->view(), indices_type, stream, mr);
   }
 
   // create column with keys_column and indices_column

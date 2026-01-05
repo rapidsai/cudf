@@ -16,6 +16,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
 #include <thrust/tabulate.h>

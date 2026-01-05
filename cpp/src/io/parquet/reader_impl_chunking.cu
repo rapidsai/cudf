@@ -9,6 +9,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -173,7 +174,8 @@ void reader_impl::setup_next_pass(read_mode mode)
       thrust::make_transform_iterator(pass.chunks.d_begin(), get_chunk_compressed_size{});
     pass.base_mem_size =
       decomp_dict_data_size +
-      thrust::reduce(rmm::exec_policy(_stream), chunk_iter, chunk_iter + pass.chunks.size());
+      cudf::detail::reduce(
+        chunk_iter, chunk_iter + pass.chunks.size(), size_t{0}, cuda::std::plus<size_t>{}, _stream);
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.

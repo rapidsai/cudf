@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from contextlib import ExitStack
 from typing import TYPE_CHECKING, cast
 
 import pylibcudf as plc
@@ -22,8 +23,8 @@ def gather(
     nullify: bool = False,
 ) -> list[plc.Column]:
     plc_tbl = plc.copying.gather(
-        plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
-        gather_map.to_pylibcudf(mode="read"),
+        plc.Table([col.plc_column for col in columns]),
+        gather_map.plc_column,
         plc.copying.OutOfBoundsPolicy.NULLIFY
         if nullify
         else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
@@ -61,18 +62,22 @@ def scatter(
                 f"index out of bounds for column of size {n_rows}"
             )
 
-    plc_tbl = plc.copying.scatter(
-        cast(list[plc.Scalar], sources)
-        if isinstance(sources[0], plc.Scalar)
-        else plc.Table(
-            [
-                col.to_pylibcudf(mode="read")  # type: ignore[union-attr]
-                for col in sources
-            ]
-        ),
-        scatter_map.to_pylibcudf(mode="read"),
-        plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
-    )
+    stack = ExitStack()
+    with stack:
+        for col in target_columns:
+            stack.enter_context(col.access(mode="write"))
+        plc_tbl = plc.copying.scatter(
+            cast(list[plc.Scalar], sources)
+            if isinstance(sources[0], plc.Scalar)
+            else plc.Table(
+                [
+                    col.plc_column  # type: ignore[union-attr]
+                    for col in sources
+                ]
+            ),
+            scatter_map.plc_column,
+            plc.Table([col.plc_column for col in target_columns]),
+        )
 
     return plc_tbl.columns()
 
@@ -84,9 +89,7 @@ def columns_split(
     return [
         plc_tbl.columns()
         for plc_tbl in plc.copying.split(
-            plc.Table(
-                [col.to_pylibcudf(mode="read") for col in input_columns]
-            ),
+            plc.Table([col.plc_column for col in input_columns]),
             splits,
         )
     ]

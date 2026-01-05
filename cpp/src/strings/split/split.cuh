@@ -530,11 +530,11 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   // These may include overlapping or otherwise out-of-bounds delimiters which
   // will be resolved during token processing.
   auto delimiter_positions = rmm::device_uvector<int64_t>(d_count.value(stream), stream);
-  cudf::detail::copy_if_safe(thrust::counting_iterator<int64_t>(0),
-                             thrust::counting_iterator<int64_t>(chars_bytes),
-                             delimiter_positions.begin(),
-                             delimiter_fn,
-                             stream);
+  cudf::detail::copy_if(thrust::counting_iterator<int64_t>(0),
+                        thrust::counting_iterator<int64_t>(chars_bytes),
+                        delimiter_positions.begin(),
+                        delimiter_fn,
+                        stream);
 
   // create a vector of offsets to each string's delimiter set within delimiter_positions
   auto const delimiter_offsets =

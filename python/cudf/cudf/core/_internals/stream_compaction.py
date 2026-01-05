@@ -49,7 +49,7 @@ def drop_nulls(
         keep_threshold = len(keys)
 
     plc_table = plc.stream_compaction.drop_nulls(
-        plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
+        plc.Table([col.plc_column for col in columns]),
         keys,
         keep_threshold,
     )
@@ -73,8 +73,8 @@ def apply_boolean_mask(
     columns obtained from applying mask
     """
     plc_table = plc.stream_compaction.apply_boolean_mask(
-        plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
-        boolean_mask.to_pylibcudf(mode="read"),
+        plc.Table([col.plc_column for col in columns]),
+        boolean_mask.plc_column,
     )
     return plc_table.columns()
 
@@ -110,7 +110,7 @@ def drop_duplicates(
         raise ValueError('keep must be either "first", "last" or False')
 
     plc_table = plc.stream_compaction.stable_distinct(
-        plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
+        plc.Table([col.plc_column for col in columns]),
         keys if keys is not None else list(range(len(columns))),
         keep_option,
         plc.types.NullEquality.EQUAL

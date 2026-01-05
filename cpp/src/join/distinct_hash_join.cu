@@ -19,6 +19,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>

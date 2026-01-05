@@ -4321,9 +4321,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise ValueError("Columns must all have the same dtype")
 
         result_table = plc.transpose.transpose(
-            plc.table.Table(
-                [col.to_pylibcudf(mode="read") for col in source_columns]
-            )
+            plc.table.Table([col.plc_column for col in source_columns])
         )
         result_columns = (
             ColumnBase.from_pylibcudf(
@@ -5605,63 +5603,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         out_df.attrs = deepcopy(self.attrs)
 
         return out_df
-
-    @classmethod
-    @_performance_tracking
-    def from_pandas(cls, dataframe, nan_as_null=no_default):
-        """
-        Convert from a Pandas DataFrame.
-
-        Parameters
-        ----------
-        dataframe : Pandas DataFrame object
-            A Pandas DataFrame object which has to be converted
-            to cuDF DataFrame.
-        nan_as_null : bool, Default True
-            If ``True``, converts ``np.nan`` values to ``null`` values.
-            If ``False``, leaves ``np.nan`` values as is.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> data = [[0,1], [1,2], [3,4]]
-        >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-        >>> cudf.from_pandas(pdf)
-           a  b
-        0  0  1
-        1  1  2
-        2  3  4
-        """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Use the DataFrame constructor instead.",
-            FutureWarning,
-        )
-        if nan_as_null is no_default:
-            nan_as_null = (
-                False if get_option("mode.pandas_compatible") else None
-            )
-
-        if isinstance(dataframe, pd.DataFrame):
-            data = {
-                i: as_column(col_value.array, nan_as_null=nan_as_null)
-                for i, (_, col_value) in enumerate(dataframe.items())
-            }
-            index = from_pandas(dataframe.index, nan_as_null=nan_as_null)
-            df = cls._from_data(data, index)
-            # Checks duplicate columns and sets column metadata
-            df.columns = dataframe.columns
-            df._attrs = deepcopy(dataframe.attrs)
-            return df
-        else:
-            raise TypeError(
-                f"Could not construct DataFrame from {type(dataframe)}"
-            )
 
     @classmethod
     @_performance_tracking

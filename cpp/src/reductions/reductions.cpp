@@ -47,7 +47,7 @@ struct reduction_parameters {
                        std::optional<std::reference_wrapper<scalar const>> init,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr)
-    : agg(agg), col(col), output_dtype(output_dtype), init(init), stream(stream), mr(mr)
+    : agg(agg), col(col), output_dtype(output_dtype), init(init), stream(stream), mr(std::move(mr))
   {
   }
 };

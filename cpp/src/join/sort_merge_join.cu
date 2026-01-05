@@ -30,6 +30,7 @@
 
 #include <cub/device/device_reduce.cuh>
 #include <cub/device/device_select.cuh>
+#include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
@@ -74,10 +75,10 @@ struct mapping_functor {
  * in the output validity mask for nested list columns.
  */
 struct list_nonnull_filter {
-  bitmask_type* const validity_mask;                ///< Output validity mask to update
-  bitmask_type const* const reduced_validity_mask;  ///< Input reduced validity mask
+  bitmask_type* validity_mask;                ///< Output validity mask to update
+  bitmask_type const* reduced_validity_mask;  ///< Input reduced validity mask
   device_span<size_type const> child_positions;     ///< Positions in the child column
-  size_type const subset_offset;                    ///< Offset into child_positions
+  size_type subset_offset;                    ///< Offset into child_positions
 
   __device__ void operator()(size_type idx) const noexcept
   {
@@ -224,7 +225,8 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
   auto match_counts_it  = match_counts.begin();
   auto smaller_it       = thrust::transform_iterator(
     sorted_smaller_order_begin,
-    [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); });
+    cuda::proclaim_return_type<detail::row::lhs_index_type>(
+      [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
   thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       smaller_it,
                       smaller_it + smaller_numrows,
@@ -311,10 +313,12 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
     });
   auto smaller_it = thrust::transform_iterator(
     sorted_smaller_order_begin,
-    [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); });
+    cuda::proclaim_return_type<detail::row::lhs_index_type>(
+      [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
   auto larger_it = thrust::transform_iterator(
     nonzero_matches.begin(),
-    [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); });
+    cuda::proclaim_return_type<detail::row::rhs_index_type>(
+      [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
   thrust::lower_bound(rmm::exec_policy_nosync(stream),
                       smaller_it,
                       smaller_it + smaller_numrows,

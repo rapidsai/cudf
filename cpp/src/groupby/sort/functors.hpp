@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -38,7 +38,7 @@ struct store_result_functor {
       cache(cache),
       values(values),
       stream(stream),
-      mr(mr),
+      mr(std::move(mr)),
       keys_are_sorted(keys_are_sorted)
   {
   }

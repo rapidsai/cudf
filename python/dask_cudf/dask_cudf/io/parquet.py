@@ -516,8 +516,9 @@ class CudfFusedParquetIOHost(CudfFusedParquetIO):
     ):
         import pyarrow as pa
 
-        from dask.base import apply, tokenize
         from dask.threaded import get
+        from dask.tokenize import tokenize
+        from dask.utils import apply
 
         token = tokenize(frag_filters, columns, schema)
         name = f"pq-file-{token}"

@@ -97,9 +97,19 @@ def test_json_reader(index, compression, orient, pdf, tmp_path):
         pytest.skip(skip_reason)
     path_df = tmp_path / "test_df.json"
     path_series = tmp_path / "test_series.json"
-    pdf.to_json(path_df, index=index, compression=compression, orient=orient)
+    pdf.to_json(
+        path_df,
+        index=index,
+        compression=compression,
+        orient=orient,
+        date_format="iso",
+    )
     pdf["col_int32"].to_json(
-        path_series, index=index, compression=compression, orient=orient
+        path_series,
+        index=index,
+        compression=compression,
+        orient=orient,
+        date_format="iso",
     )
     expect_df = pd.read_json(path_df, orient=orient, compression=compression)
     got_df = cudf.read_json(path_df, orient=orient, compression=compression)
@@ -696,9 +706,13 @@ def test_json_to_json_special_characters():
     ],
 )
 def test_json_to_json_compare_contents(gdf, pdf):
-    expected_json = pdf.to_json(lines=True, orient="records")
+    expected_json = pdf.to_json(
+        lines=True, orient="records", date_format="iso"
+    )
     with pytest.warns(UserWarning):
-        actual_json = gdf().to_json(lines=True, orient="records")
+        actual_json = gdf().to_json(
+            lines=True, orient="records", date_format="iso"
+        )
 
     assert expected_json == actual_json
 

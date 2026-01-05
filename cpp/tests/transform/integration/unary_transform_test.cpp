@@ -829,7 +829,7 @@ TEST_F(NullTest, ColumnNulls_And_ScalarNull)
 TEST_F(NullTest, IsNull)
 {
   auto udf = R"***(
-  __device__ inline void is_null(bool * output, cuda::std::optional<float> input)
+  __device__ inline void is_null(cuda::std::optional<bool>* output, cuda::std::optional<float> input)
   {
     *output = !input.has_value();
   }
@@ -846,7 +846,8 @@ TEST_F(NullTest, IsNull)
                                 cudf::data_type(cudf::type_id::BOOL8),
                                 false,
                                 std::nullopt,
-                                cudf::null_aware::YES);
+                                cudf::null_aware::YES,
+                                cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
@@ -855,7 +856,7 @@ TEST_F(NullTest, NullProject)
 {
   auto udf = R"***(
 __device__ inline void null_lerp(
-       float* output,
+       cuda::std::optional<float>* output,
        cuda::std::optional<float> low,
        cuda::std::optional<float> high,
        cuda::std::optional<float> t
@@ -890,7 +891,8 @@ return l - t * l + t * h;
                                      cudf::data_type(cudf::type_id::FLOAT32),
                                      false,
                                      std::nullopt,
-                                     cudf::null_aware::YES);
+                                     cudf::null_aware::YES,
+                                     cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 }

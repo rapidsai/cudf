@@ -23,7 +23,7 @@ namespace CUDF_EXPORT cudf {
  */
 
 namespace ast {
-class expression;
+struct expression;
 }
 
 /**

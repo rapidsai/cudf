@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,7 +17,7 @@
 #include <algorithm>
 #include <memory>
 #include <tuple>
-#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
@@ -92,47 +92,58 @@ class groupby_simple_aggregations_collector final
 
     return aggs;
   }
-
-  std::vector<std::unique_ptr<aggregation>> visit(
-    data_type, cudf::detail::correlation_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
 };
 
 std::tuple<table_view,
            cudf::detail::host_vector<aggregation::Kind>,
            std::vector<std::unique_ptr<aggregation>>,
+           std::vector<int8_t>,
            bool>
 extract_single_pass_aggs(host_span<aggregation_request const> requests,
                          rmm::cuda_stream_view stream)
 {
+  auto agg_kinds = cudf::detail::make_empty_host_vector<aggregation::Kind>(requests.size(), stream);
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<aggregation>> aggs;
-  auto agg_kinds = cudf::detail::make_empty_host_vector<aggregation::Kind>(requests.size(), stream);
+  std::vector<int8_t> is_agg_intermediate;
+  columns.reserve(requests.size());
+  aggs.reserve(requests.size());
+  is_agg_intermediate.reserve(requests.size());
 
   bool has_compound_aggs = false;
   for (auto const& request : requests) {
-    auto const& agg_v = request.aggregations;
+    auto const& input_aggs = request.aggregations;
 
-    std::unordered_set<aggregation::Kind> agg_kinds_set;
+    // Map aggregation kind to:
+    // - INPUT_NOT_EXTRACTED: aggregation requested by the users, not yet extracted
+    // - INPUT_EXTRACTED: aggregation requested by the users and has already been extracted
+    // - INTERMEDIATE: extracted intermediate aggregation
+    enum class aggregation_group : int8_t { INPUT_NOT_EXTRACTED, INPUT_EXTRACTED, INTERMEDIATE };
+    std::unordered_map<aggregation::Kind, aggregation_group> agg_kinds_map;
+    for (auto const& agg : input_aggs) {
+      agg_kinds_map[agg->kind] = aggregation_group::INPUT_NOT_EXTRACTED;
+    }
+
     auto insert_agg = [&](column_view const& request_values, std::unique_ptr<aggregation>&& agg) {
-      if (agg_kinds_set.insert(agg->kind).second) {
-        agg_kinds.push_back(agg->kind);
-        aggs.push_back(std::move(agg));
-        columns.push_back(request_values);
-      }
+      auto const it = agg_kinds_map.find(agg->kind);
+      auto const need_update =
+        it == agg_kinds_map.end() || it->second == aggregation_group::INPUT_NOT_EXTRACTED;
+      if (!need_update) { return; }
+
+      auto const is_intermediate = it == agg_kinds_map.end();
+      agg_kinds_map[agg->kind] =
+        is_intermediate ? aggregation_group::INTERMEDIATE : aggregation_group::INPUT_EXTRACTED;
+      is_agg_intermediate.push_back(static_cast<int8_t>(is_intermediate));
+
+      agg_kinds.push_back(agg->kind);
+      aggs.push_back(std::move(agg));
+      columns.push_back(request_values);
     };
 
-    auto values_type = cudf::is_dictionary(request.values.type())
-                         ? cudf::dictionary_column_view(request.values).keys().type()
-                         : request.values.type();
-    for (auto const& agg : agg_v) {
+    auto const values_type = cudf::is_dictionary(request.values.type())
+                               ? cudf::dictionary_column_view(request.values).keys().type()
+                               : request.values.type();
+    for (auto const& agg : input_aggs) {
       groupby_simple_aggregations_collector collector;
       auto spass_aggs = agg->get_simple_aggregations(values_type, collector);
       if (spass_aggs.size() > 1 || !spass_aggs.front()->is_equal(*agg)) {
@@ -145,7 +156,11 @@ extract_single_pass_aggs(host_span<aggregation_request const> requests,
     }
   }
 
-  return {table_view(columns), std::move(agg_kinds), std::move(aggs), has_compound_aggs};
+  return {table_view(columns),
+          std::move(agg_kinds),
+          std::move(aggs),
+          std::move(is_agg_intermediate),
+          has_compound_aggs};
 }
 
 std::vector<aggregation::Kind> get_simple_aggregations(groupby_aggregation const& agg,

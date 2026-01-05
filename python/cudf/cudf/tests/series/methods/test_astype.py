@@ -104,6 +104,16 @@ def test_astype_pandas_nullable_pandas_compat(dtype, klass, kind):
         assert_eq(actual, expected)
 
 
+def test_cast_float_nan_to_bool_pandas_compat():
+    with cudf.option_context("mode.pandas_compatible", True):
+        data = [1.0, 0.0, np.nan, None]
+        gs = cudf.Series(data, dtype="float64")
+        got = gs.astype("bool")
+        expected = pd.Series([True, False, True, True], dtype="bool")
+        assert got.null_count == 0
+        assert_eq(expected, got)
+
+
 @pytest.mark.parametrize(
     "type1",
     [

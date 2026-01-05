@@ -82,10 +82,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: np.dtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if cudf.get_option("mode.pandas_compatible"):
@@ -95,10 +92,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
             raise ValueError("dtype must be a timedelta numpy dtype.")
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
 

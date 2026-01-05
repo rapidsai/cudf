@@ -17,6 +17,7 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -2426,5 +2427,26 @@ INSTANTIATE_TEST_CASE_P(Host,
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::ZSTD)));
+
+TEST_F(OrcWriterTest, DISABLED_SizeTypeOverflow)
+{
+  constexpr auto num_rows = std::numeric_limits<cudf::size_type>::max();
+
+  auto const val = cudf::numeric_scalar<bool>(true, true);
+  auto const col = cudf::make_column_from_scalar(val, num_rows);
+  ASSERT_EQ(col->size(), num_rows);
+
+  std::vector<char> buffer;
+  buffer.reserve(num_rows);
+  cudf::io::orc_writer_options const options = cudf::io::orc_writer_options::builder(
+    cudf::io::sink_info{&buffer}, cudf::table_view({col->view()}));
+  EXPECT_NO_THROW(cudf::io::write_orc(options));
+
+  cudf::io::orc_reader_options const read_opts = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{cudf::host_span<char const>(buffer.data(), buffer.size())});
+  auto const result = cudf::io::read_orc(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view({col->view()}), result.tbl->view());
+}
 
 CUDF_TEST_PROGRAM_MAIN()

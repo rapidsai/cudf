@@ -2,8 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import http
 import json
 import ssl
+import time
+import urllib.error
 import urllib.request
 
 import certifi
@@ -48,17 +51,50 @@ def get_latest_versions_per_minor(versions):
 
 def get_polars_versions(polars_range, latest_only=False):
     url = "https://pypi.org/pypi/polars/json"
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+
     # Set a timeout for the request to avoid hanging
     timeout = 10  # seconds
+    max_attempts = 3
 
-    try:
-        context = ssl.create_default_context(cafile=certifi.where())
-        with urllib.request.urlopen(
-            url, timeout=timeout, context=context
-        ) as response:
-            data = json.loads(response.read())
-    except Exception as e:
-        raise RuntimeError(f"Failed to fetch polars metadata from PyPI: {e}")
+    # Try to fetch polars versions from PyPI
+
+    for attempt in range(max_attempts):
+        try:
+            with urllib.request.urlopen(
+                url, timeout=timeout, context=ssl_context
+            ) as response:
+                data = json.loads(response.read())
+        except (urllib.error.URLError, urllib.error.HTTPError) as e:
+            if isinstance(e, urllib.error.HTTPError):
+                code = e.code
+            else:
+                code = None
+
+            if attempt == max_attempts - 1:
+                raise e
+            # Just retry retryable errors
+            if (
+                code
+                in {
+                    http.HTTPStatus.REQUEST_TIMEOUT,
+                    http.HTTPStatus.TOO_MANY_REQUESTS,
+                }
+                or e.code >= 500
+            ):
+                print(f"HTTP error. Code={e.code}, attempt={attempt}")
+                time.sleep(2**attempt)
+                continue
+            elif code is not None:
+                print(
+                    f"Non-retryable HTTP error. Code={e.code}, attempt={attempt}"
+                )
+                raise e
+            else:
+                # Assume it's retryable
+                print(f"Retryable error. Code={code}, attempt={attempt}")
+                time.sleep(2**attempt)
+                continue
 
     all_versions = [Version(v) for v in data["releases"]]
     specifier = SpecifierSet(polars_range)

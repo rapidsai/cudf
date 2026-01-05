@@ -28,42 +28,6 @@ typename std::vector<column_view>::const_iterator get_transform_base_column(
   return largest;
 }
 
-jitify2::StringVec build_jit_template_params(
-  bool has_user_data,
-  null_aware is_null_aware,
-  std::vector<std::string> const& span_outputs,
-  std::vector<std::string> const& column_outputs,
-  std::vector<input_column_reflection> const& column_inputs)
-{
-  jitify2::StringVec tparams;
-
-  tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
-  tparams.emplace_back(jitify2::reflection::reflect(is_null_aware == null_aware::YES));
-
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(span_outputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) {
-                   return jitify2::reflection::Template("cudf::jit::span_accessor")
-                     .instantiate(span_outputs[i], i);
-                 });
-
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(column_outputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) {
-                   return jitify2::reflection::Template("cudf::jit::column_accessor")
-                     .instantiate(column_outputs[i], i);
-                 });
-
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(column_inputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) { return column_inputs[i].accessor(i); });
-
-  return tparams;
-}
-
 std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const& output_typenames,
                                                  std::vector<std::string> const& input_typenames,
                                                  bool has_user_data)

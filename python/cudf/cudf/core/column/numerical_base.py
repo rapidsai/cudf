@@ -140,10 +140,10 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
             with acquire_spill_lock():
                 plc_column = plc.quantiles.quantile(
-                    no_nans.to_pylibcudf(mode="read"),
+                    no_nans.plc_column,
                     q,
                     plc.types.Interpolation[interpolation.upper()],
-                    indices.to_pylibcudf(mode="read"),
+                    indices.plc_column,
                     exact,
                 )
                 result = type(self).from_pylibcudf(plc_column)
@@ -254,9 +254,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         plc_how = plc.round.RoundingMethod[how.upper()]
         with acquire_spill_lock():
             return type(self).from_pylibcudf(
-                plc.round.round(
-                    self.to_pylibcudf(mode="read"), decimals, plc_how
-                )
+                plc.round.round(self.plc_column, decimals, plc_how)
             )
 
     def _scan(self, op: str) -> ColumnBase:
@@ -270,7 +268,5 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
         with acquire_spill_lock():
             return type(self).from_pylibcudf(
-                plc.unary.unary_operation(
-                    self.to_pylibcudf(mode="read"), unaryop_enum
-                )
+                plc.unary.unary_operation(self.plc_column, unaryop_enum)
             )
