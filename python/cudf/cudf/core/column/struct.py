@@ -13,10 +13,7 @@ import pylibcudf as plc
 import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import (
-    is_dtype_obj_struct,
-    pyarrow_dtype_to_cudf_dtype,
-)
+from cudf.utils.dtypes import is_dtype_obj_struct
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
@@ -82,6 +79,20 @@ class StructColumn(ColumnBase):
             )
         )
 
+    def _recompute_children(self) -> None:
+        """Recompute the offset-aware children columns with proper type metadata."""
+        if not self.base_children:
+            self._children = ()
+        elif self.offset == 0 and self.size == self.base_size:
+            # Optimization: for non-sliced columns, children == base_children
+            self._children = self.base_children  # type: ignore[assignment]
+        else:
+            # Slice each child using the parent's offset and size
+            self._children = tuple(  # type: ignore[assignment]
+                base_child.slice(self.offset, self.offset + self.size)
+                for base_child in self.base_children
+            )
+
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
@@ -113,30 +124,6 @@ class StructColumn(ColumnBase):
             return len(self.base_children[0])
         else:
             return self.size + self.offset
-
-    def to_arrow(self) -> pa.Array:
-        children = [child.to_arrow() for child in self.children]
-        dtype: StructDtype = (
-            pyarrow_dtype_to_cudf_dtype(self.dtype)  # type: ignore[assignment]
-            if isinstance(self.dtype, pd.ArrowDtype)
-            else self.dtype
-        )
-        pa_type = pa.struct(
-            {
-                field: child.type
-                for field, child in zip(dtype.fields, children, strict=True)
-            }
-        )
-
-        if self.mask is not None:
-            buffers = [pa.py_buffer(self.mask.memoryview())]
-        else:
-            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
-            buffers = [None]  # type: ignore[list-item]
-
-        return pa.StructArray.from_buffers(
-            pa_type, len(self), buffers, children=children
-        )
 
     def to_pandas(
         self,

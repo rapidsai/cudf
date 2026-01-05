@@ -76,6 +76,40 @@ class ListColumn(ColumnBase):
             children[1]._with_type_metadata(dtype.element_type),
         )
 
+    def _recompute_children(self) -> None:
+        """Recompute the offset-aware children columns with proper type metadata."""
+        if not self.base_children:
+            self._children = ()
+        elif self.offset == 0 and self.size == self.base_size:
+            # Optimization: for non-sliced columns, children == base_children
+            self._children = self.base_children  # type: ignore[assignment]
+        else:
+            # List columns have special structure:
+            # - Child 0 (offsets): size = parent.size + 1, slice from [offset, offset+size+1)
+            # - Child 1 (values): slice based on the offset values
+            offsets_child = self.base_children[0]
+            values_child = self.base_children[1]
+
+            # Slice offsets: get size+1 offsets starting from self.offset
+            sliced_offsets = offsets_child.slice(
+                self.offset, self.offset + self.size + 1
+            )
+
+            # Get the range of values to slice: from first offset to last offset
+            # The offsets tell us where in the values array each list starts/ends
+            first_offset = offsets_child.element_indexing(self.offset)
+            last_offset = offsets_child.element_indexing(
+                self.offset + self.size
+            )
+
+            # Slice the values child to only include the values we need
+            sliced_values = values_child.slice(first_offset, last_offset)
+
+            # Adjust offsets to be relative to the sliced values (subtract first_offset)
+            adjusted_offsets = sliced_offsets - first_offset
+
+            self._children = (adjusted_offsets, sliced_values)  # type: ignore[assignment]
+
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
@@ -175,28 +209,6 @@ class ListColumn(ColumnBase):
         """
         return cast(NumericalColumn, self.children[0])
 
-    def to_arrow(self) -> pa.Array:
-        offsets = self.offsets.to_arrow()
-        elements = (
-            pa.nulls(len(self.elements))
-            if len(self.elements) == self.elements.null_count
-            else self.elements.to_arrow()
-        )
-        pa_type = pa.list_(elements.type)
-
-        if self.nullable:
-            nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
-            buffers = [nbuf, offsets.buffers()[1]]
-        else:
-            buffers = list(offsets.buffers())
-        return pa.ListArray.from_buffers(
-            pa_type,
-            len(self),
-            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
-            buffers,  # type: ignore[arg-type]
-            children=[elements],
-        )
-
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
@@ -209,7 +221,7 @@ class ListColumn(ColumnBase):
                 dtype.element_type
             )
             new_children = [
-                self.plc_column.children()[0],
+                self.base_children[0].plc_column,
                 elements.plc_column,
             ]
             new_plc_column = plc.Column(
