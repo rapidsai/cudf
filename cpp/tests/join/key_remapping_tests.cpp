@@ -158,7 +158,7 @@ TEST_F(KeyRemappingTest, ProbeKeys)
 
   cudf::key_remapping remap{build_table};
 
-  auto build_result   = remap.remap_build_keys(build_table);
+  auto build_result   = remap.remap_build_keys();
   auto host_build_ids = to_host<int32_t>(*build_result);
 
   // Probe with some matching and non-matching keys

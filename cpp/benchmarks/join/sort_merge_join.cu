@@ -67,7 +67,7 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
 
   if (use_remap) {
     // Benchmark with key remapping
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
       // Step 1: Build key remapping (with metrics disabled, the metrics need to be calculated
       //  for the join type selection heuristic, either way)
       constexpr bool compute_metrics = false;
@@ -93,7 +93,7 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
     });
   } else {
     // Benchmark without key remapping (direct join)
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
       if constexpr (Algorithm == join_t::HASH) {
         auto result = cudf::inner_join(probe_keys, build_keys, NullEquality);
       } else if constexpr (Algorithm == join_t::SORT_MERGE) {

@@ -18,9 +18,8 @@
  * This benchmark isolates the key_remapping construction time (including metrics)
  * to measure performance across various data types and distributions.
  *
- * Uses controlled cardinality settings for create_random_table to ensure predictable
- * key distributions:
- * - ALL_UNIQUE: cardinality = num_rows (all unique keys)
+ * Cardinality distributions:
+ * - ALL_UNIQUE: cardinality = num_rows (all unique keys, approximate)
  * - HIGH_UNIQUE: cardinality = num_rows / 10 (10% unique)
  * - MED_UNIQUE: cardinality = num_rows / 100 (1% unique)
  * - LOW_UNIQUE: cardinality = num_rows / 1000 (0.1% unique)
@@ -28,7 +27,7 @@
  */
 
 // Cardinality distributions for testing
-enum class Cardinality {
+enum class key_cardinality {
   ALL_UNIQUE,   // 100% unique keys
   HIGH_UNIQUE,  // 10% unique keys
   MED_UNIQUE,   // 1% unique keys
@@ -37,20 +36,20 @@ enum class Cardinality {
 };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  Cardinality,
+  key_cardinality,
   [](auto value) {
     switch (value) {
-      case Cardinality::ALL_UNIQUE: return "ALL_UNIQUE";
-      case Cardinality::HIGH_UNIQUE: return "HIGH_UNIQUE";
-      case Cardinality::MED_UNIQUE: return "MED_UNIQUE";
-      case Cardinality::LOW_UNIQUE: return "LOW_UNIQUE";
-      case Cardinality::SINGLE_KEY: return "SINGLE_KEY";
+      case key_cardinality::ALL_UNIQUE: return "ALL_UNIQUE";
+      case key_cardinality::HIGH_UNIQUE: return "HIGH_UNIQUE";
+      case key_cardinality::MED_UNIQUE: return "MED_UNIQUE";
+      case key_cardinality::LOW_UNIQUE: return "LOW_UNIQUE";
+      case key_cardinality::SINGLE_KEY: return "SINGLE_KEY";
       default: return "Unknown";
     }
   },
   [](auto) { return std::string{}; })
 
-template <bool Nullable, data_type DataType, Cardinality Card>
+template <bool Nullable, data_type DataType, key_cardinality Card>
 void nvbench_key_remap_build(nvbench::state& state,
                              nvbench::type_list<nvbench::enum_type<Nullable>,
                                                 nvbench::enum_type<DataType>,
@@ -62,15 +61,24 @@ void nvbench_key_remap_build(nvbench::state& state,
 
   // Determine cardinality (number of unique keys) based on distribution
   cudf::size_type cardinality = 0;
-  if constexpr (Card == Cardinality::ALL_UNIQUE) {
-    cardinality = num_rows;  // All keys unique
-  } else if constexpr (Card == Cardinality::HIGH_UNIQUE) {
+  if constexpr (Card == key_cardinality::ALL_UNIQUE) {
+    // Request all unique keys. Note: create_random_table cannot guarantee 100% uniqueness
+    // without expensive post-processing (distinct + memory reallocation), so there will be
+    // some duplicates. This is acceptable for key remapping benchmarks because:
+    // 1. Hash table building performance is not catastrophically affected by duplicates
+    // 2. The extra work from duplicates is actually realistic (real data has duplicates)
+    // 3. Avoiding the deduplication overhead keeps benchmark setup time minimal
+    // 
+    // However, this approach would NOT work for join_on_int32.cu where duplicates cause
+    // combinatorial explosion in join output, leading to OOM crashes at large scale.
+    cardinality = num_rows;
+  } else if constexpr (Card == key_cardinality::HIGH_UNIQUE) {
     cardinality = std::max(cudf::size_type{1}, static_cast<cudf::size_type>(num_rows / 10));
-  } else if constexpr (Card == Cardinality::MED_UNIQUE) {
+  } else if constexpr (Card == key_cardinality::MED_UNIQUE) {
     cardinality = std::max(cudf::size_type{1}, static_cast<cudf::size_type>(num_rows / 100));
-  } else if constexpr (Card == Cardinality::LOW_UNIQUE) {
+  } else if constexpr (Card == key_cardinality::LOW_UNIQUE) {
     cardinality = std::max(cudf::size_type{1}, static_cast<cudf::size_type>(num_rows / 1000));
-  } else if constexpr (Card == Cardinality::SINGLE_KEY) {
+  } else if constexpr (Card == key_cardinality::SINGLE_KEY) {
     cardinality = 1;  // All rows have the same key
   }
 
@@ -89,7 +97,7 @@ void nvbench_key_remap_build(nvbench::state& state,
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     cudf::key_remapping remap(keys,
                               cudf::null_equality::EQUAL,
                               true,  // compute_metrics
@@ -107,11 +115,11 @@ using key_remap_datatypes =
   nvbench::enum_type_list<data_type::INT32, data_type::INT64, data_type::STRING, data_type::STRUCT>;
 
 // Cardinality distributions
-using cardinality_list = nvbench::enum_type_list<Cardinality::ALL_UNIQUE,
-                                                 Cardinality::HIGH_UNIQUE,
-                                                 Cardinality::MED_UNIQUE,
-                                                 Cardinality::LOW_UNIQUE,
-                                                 Cardinality::SINGLE_KEY>;
+using cardinality_list = nvbench::enum_type_list<key_cardinality::ALL_UNIQUE,
+                                                 key_cardinality::HIGH_UNIQUE,
+                                                 key_cardinality::MED_UNIQUE,
+                                                 key_cardinality::LOW_UNIQUE,
+                                                 key_cardinality::SINGLE_KEY>;
 
 // Nullable options
 using nullable_list = nvbench::enum_type_list<false>;

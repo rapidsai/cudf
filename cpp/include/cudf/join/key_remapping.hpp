@@ -31,18 +31,29 @@ namespace detail {
 class key_remapping_impl;
 }  // namespace detail
 
-/// Sentinel value for probe-side keys not found in build table
+/**
+ * @brief Sentinel value for probe-side keys not found in build table
+ *
+ * This constant is exposed primarily for testing purposes.
+ * Application code should check for negative values rather than relying on specific sentinel values.
+ */
 constexpr size_type KEY_REMAP_NOT_FOUND = -1;
 
-/// Sentinel value for build-side rows with null keys (when nulls are not equal)
+/**
+ * @brief Sentinel value for build-side rows with null keys (when nulls are not equal)
+ *
+ * This constant is exposed primarily for testing purposes.
+ * Application code should check for negative values rather than relying on specific sentinel values.
+ */
 constexpr size_type KEY_REMAP_BUILD_NULL = -2;
 
 /**
  * @brief Remaps keys to unique integer IDs
  *
  * Each distinct key in the build table is assigned a unique non-negative integer ID.
- * Rows with equal keys will map to the same ID. The specific ID values are stable
- * for the lifetime of this object but are otherwise unspecified.
+ * Rows with equal keys will map to the same ID. Keys that cannot be mapped (e.g., not found
+ * in probe, or null keys when nulls are unequal) receive negative sentinel values.
+ * The specific ID values are stable for the lifetime of this object but are otherwise unspecified.
  *
  * @note The build table must remain valid for the lifetime of this object,
  *       as the hash table references it directly without copying.
@@ -65,7 +76,7 @@ class key_remapping {
    * @param build The build table containing the keys to remap
    * @param compare_nulls Controls whether null key values should match or not.
    *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
-   *        When UNEQUAL, rows with null keys map to KEY_REMAP_BUILD_NULL.
+   *        When UNEQUAL, rows with null keys receive a negative sentinel value.
    * @param compute_metrics If true (default), compute distinct_count and max_duplicate_count.
    *        If false, skip metrics computation for better performance; calling get_distinct_count()
    *        or get_max_duplicate_count() will throw.
@@ -83,9 +94,8 @@ class key_remapping {
    * the remapped table; each call will recompute it from the key remapping.
    *
    * For each row in the cached build table, returns the integer ID assigned to that key.
-   * - Keys that match a build table key: return a non-negative integer
-   * - Keys with nulls (when compare_nulls is EQUAL): return the ID assigned to null keys
-   * - Keys with nulls (when compare_nulls is UNEQUAL): return KEY_REMAP_BUILD_NULL
+   * Non-negative integers represent valid mapped keys, while negative values represent
+   * keys that cannot be mapped (e.g., null keys when nulls are unequal).
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
@@ -100,11 +110,9 @@ class key_remapping {
    * @brief Remap probe keys to integer IDs.
    *
    * For each row in the input, returns the integer ID assigned to that key.
-   * - Keys that match a build table key: return a non-negative integer
-   * - Keys not found in build table: return KEY_REMAP_NOT_FOUND
-   * - Keys with nulls (when compare_nulls is EQUAL): return the ID assigned to null keys,
-   *   or KEY_REMAP_NOT_FOUND if no null keys exist in build table
-   * - Keys with nulls (when compare_nulls is UNEQUAL): return KEY_REMAP_NOT_FOUND
+   * Non-negative integers represent keys found in the build table, while negative values
+   * represent keys that were not found or cannot be matched (e.g., null keys when nulls
+   * are unequal, or keys not present in the build table).
    *
    * @throw std::invalid_argument if keys has different number of columns than build table
    * @throw cudf::data_type_error if keys has different column types than build table

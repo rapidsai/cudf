@@ -24,7 +24,12 @@
  * been converted to simple INT32 IDs. Comparing this with key_remap_build times
  * shows what percentage of total join time is spent on metrics computation.
  *
- * Uses controlled key generation to create predictable cardinality distributions:
+ * Note that we use divisor-based generation instead of create_random_table primarily 
+ * becasue create_random_table cannot guarantee unique keys for ALL_UNIQUE. before
+ * this change we ran into out of memory allocation errors with 100 million rows 
+ * and ALL_UNIQUE. ALL_UNIQUE should never cause these kinds of crashes.
+ *
+ * Cardinality distributions:
  * - ALL_UNIQUE: Sequential keys 0, 1, 2, ... (exactly num_rows unique keys)
  * - HIGH_UNIQUE: Each key repeated ~10 times
  * - MED_UNIQUE: Each key repeated ~100 times
@@ -33,41 +38,57 @@
  */
 
 // Cardinality distributions (same as key_remap_build)
-enum class Cardinality { ALL_UNIQUE, HIGH_UNIQUE, MED_UNIQUE, LOW_UNIQUE, SINGLE_KEY };
+enum class key_cardinality { ALL_UNIQUE, HIGH_UNIQUE, MED_UNIQUE, LOW_UNIQUE, SINGLE_KEY };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  Cardinality,
+  key_cardinality,
   [](auto value) {
     switch (value) {
-      case Cardinality::ALL_UNIQUE: return "ALL_UNIQUE";
-      case Cardinality::HIGH_UNIQUE: return "HIGH_UNIQUE";
-      case Cardinality::MED_UNIQUE: return "MED_UNIQUE";
-      case Cardinality::LOW_UNIQUE: return "LOW_UNIQUE";
-      case Cardinality::SINGLE_KEY: return "SINGLE_KEY";
+      case key_cardinality::ALL_UNIQUE: return "ALL_UNIQUE";
+      case key_cardinality::HIGH_UNIQUE: return "HIGH_UNIQUE";
+      case key_cardinality::MED_UNIQUE: return "MED_UNIQUE";
+      case key_cardinality::LOW_UNIQUE: return "LOW_UNIQUE";
+      case key_cardinality::SINGLE_KEY: return "SINGLE_KEY";
       default: return "Unknown";
     }
   },
   [](auto) { return std::string{}; })
 
-enum class JoinAlgo { HASH, SORT_MERGE };
+enum class join_algo { HASH, SORT_MERGE };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  JoinAlgo,
+  join_algo,
   [](auto value) {
     switch (value) {
-      case JoinAlgo::HASH: return "HASH";
-      case JoinAlgo::SORT_MERGE: return "SORT_MERGE";
+      case join_algo::HASH: return "HASH";
+      case join_algo::SORT_MERGE: return "SORT_MERGE";
       default: return "Unknown";
     }
   },
   [](auto) { return std::string{}; })
 
 /**
- * @brief Generate an INT32 key column with controlled cardinality.
+ * @brief Generate an INT32 key column with controlled cardinality using divisor approach.
  *
  * For a given number of rows and divisor:
  * - keys[i] = i / divisor
- * This creates (num_rows / divisor) unique keys, each appearing ~divisor times.
+ * This creates (num_rows / divisor) unique keys, each appearing exactly divisor times
+ * (except possibly the last key which may have fewer occurrences).
+ *
+ * The generated keys follow a sequential pattern: [0,0,...,1,1,...,2,2,...] for divisor=d.
+ * While this is not as realistic as truly random key distributions, it provides:
+ * - Exact cardinality control - CRITICAL for ALL_UNIQUE to prevent memory allocation errors from
+ *   unexpected duplicates in large datasets (100M+ rows)
+ * - Perfect control over duplicate counts - ensures benchmarks measure what we intend
+ * - Deterministic output for reproducible benchmarks
+ * - Minimal generation overhead
+ *
+ * For a more realistic distribution, one could generate random data with create_random_table,
+ * perform key remapping, and use the remapped INT32 IDs. However:
+ * - This would add complexity and require careful stream synchronization
+ * - For ALL_UNIQUE, would still need deduplication to avoid OOM crashes
+ * - The sequential pattern in divisor-based generation is acceptable since join performance
+ *   depends on cardinality/duplicate counts, not value distribution patterns
  */
 std::unique_ptr<cudf::column> generate_int32_keys(cudf::size_type num_rows, cudf::size_type divisor)
 {
@@ -91,7 +112,7 @@ std::unique_ptr<cudf::column> generate_int32_keys(cudf::size_type num_rows, cudf
                                 cudf::data_type{cudf::type_id::INT32});
 }
 
-template <Cardinality Card, JoinAlgo Algo>
+template <key_cardinality Card, join_algo Algo>
 void nvbench_join_on_int32(nvbench::state& state,
                            nvbench::type_list<nvbench::enum_type<Card>, nvbench::enum_type<Algo>>)
 {
@@ -99,7 +120,7 @@ void nvbench_join_on_int32(nvbench::state& state,
 
   // Skip HASH join with SINGLE_KEY for large row counts - output is num_rows^2 which
   // requires enormous memory. Only run smallest size (10K rows = 100M output rows).
-  if constexpr (Card == Cardinality::SINGLE_KEY && Algo == JoinAlgo::HASH) {
+  if constexpr (Card == key_cardinality::SINGLE_KEY && Algo == join_algo::HASH) {
     if (num_rows > 10'000) {
       state.skip("HASH join with SINGLE_KEY: output size num_rows^2 exceeds memory");
       return;
@@ -108,15 +129,15 @@ void nvbench_join_on_int32(nvbench::state& state,
 
   // Determine divisor based on cardinality (higher divisor = more duplicates)
   cudf::size_type divisor = 1;
-  if constexpr (Card == Cardinality::ALL_UNIQUE) {
+  if constexpr (Card == key_cardinality::ALL_UNIQUE) {
     divisor = 1;  // Each key appears once
-  } else if constexpr (Card == Cardinality::HIGH_UNIQUE) {
+  } else if constexpr (Card == key_cardinality::HIGH_UNIQUE) {
     divisor = 10;  // Each key appears ~10 times
-  } else if constexpr (Card == Cardinality::MED_UNIQUE) {
+  } else if constexpr (Card == key_cardinality::MED_UNIQUE) {
     divisor = 100;  // Each key appears ~100 times
-  } else if constexpr (Card == Cardinality::LOW_UNIQUE) {
+  } else if constexpr (Card == key_cardinality::LOW_UNIQUE) {
     divisor = 1000;  // Each key appears ~1000 times
-  } else if constexpr (Card == Cardinality::SINGLE_KEY) {
+  } else if constexpr (Card == key_cardinality::SINGLE_KEY) {
     divisor = num_rows;  // All rows have key 0
   }
 
@@ -136,27 +157,25 @@ void nvbench_join_on_int32(nvbench::state& state,
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  if constexpr (Algo == JoinAlgo::HASH) {
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    if constexpr (Algo == join_algo::HASH) {
       auto result = cudf::inner_join(left, right, cudf::null_equality::EQUAL);
-    });
-  } else {
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    } else {
       auto smj    = cudf::sort_merge_join(right, cudf::sorted::NO, cudf::null_equality::EQUAL);
       auto result = smj.inner_join(left, cudf::sorted::NO);
-    });
-  }
+    }
+  });
 }
 
 // Cardinality distributions
-using cardinality_list = nvbench::enum_type_list<Cardinality::ALL_UNIQUE,
-                                                 Cardinality::HIGH_UNIQUE,
-                                                 Cardinality::MED_UNIQUE,
-                                                 Cardinality::LOW_UNIQUE,
-                                                 Cardinality::SINGLE_KEY>;
+using cardinality_list = nvbench::enum_type_list<key_cardinality::ALL_UNIQUE,
+                                                 key_cardinality::HIGH_UNIQUE,
+                                                 key_cardinality::MED_UNIQUE,
+                                                 key_cardinality::LOW_UNIQUE,
+                                                 key_cardinality::SINGLE_KEY>;
 
 // Join algorithms
-using join_algo_list = nvbench::enum_type_list<JoinAlgo::HASH, JoinAlgo::SORT_MERGE>;
+using join_algo_list = nvbench::enum_type_list<join_algo::HASH, join_algo::SORT_MERGE>;
 
 NVBENCH_BENCH_TYPES(nvbench_join_on_int32, NVBENCH_TYPE_AXES(cardinality_list, join_algo_list))
   .set_name("join_on_int32")

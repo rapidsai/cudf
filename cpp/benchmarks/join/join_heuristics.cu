@@ -133,15 +133,13 @@ void nvbench_join_heuristics(nvbench::state& state,
   state.add_global_memory_reads<nvbench::int8_t>(input_size);
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  if constexpr (Method == heuristic_method::DISTINCT_COUNT) {
-    // Approach 1: cudf::distinct_count
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    if constexpr (Method == heuristic_method::DISTINCT_COUNT) {
+      // Approach 1: cudf::distinct_count
       auto distinct = cudf::distinct_count(keys, cudf::null_equality::EQUAL);
       // Note: This only gives distinct count, not max duplicate count
-    });
-  } else if constexpr (Method == heuristic_method::GROUPBY_MAX) {
-    // Approach 2: groupby count + max reduction
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    } else if constexpr (Method == heuristic_method::GROUPBY_MAX) {
+      // Approach 2: groupby count + max reduction
       // Group by keys and count occurrences
       cudf::groupby::groupby gb(keys);
       std::vector<cudf::groupby::aggregation_request> requests;
@@ -162,10 +160,8 @@ void nvbench_join_heuristics(nvbench::state& state,
       auto max_count            = cudf::reduce(*counts_column,
                                     *cudf::make_max_aggregation<cudf::reduce_aggregation>(),
                                     counts_column->type());
-    });
-  } else if constexpr (Method == heuristic_method::KEY_REMAPPING) {
-    // Approach 3: key_remapping with metrics
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    } else if constexpr (Method == heuristic_method::KEY_REMAPPING) {
+      // Approach 3: key_remapping with metrics
       constexpr bool compute_metrics = true;
       cudf::key_remapping remap(
         keys, cudf::null_equality::EQUAL, compute_metrics, cudf::get_default_stream());
@@ -173,8 +169,8 @@ void nvbench_join_heuristics(nvbench::state& state,
       // Get both metrics
       auto distinct_count = remap.get_distinct_count();
       auto max_dup_count  = remap.get_max_duplicate_count();
-    });
-  }
+    }
+  });
 
   set_throughputs(state);
 }

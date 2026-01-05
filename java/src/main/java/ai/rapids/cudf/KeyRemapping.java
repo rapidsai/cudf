@@ -12,16 +12,9 @@ import org.slf4j.LoggerFactory;
  * Remaps keys to unique integer IDs.
  * <p>
  * Each distinct key in the build table is assigned a unique non-negative integer ID.
- * Note that sentinel values can be negative.
- * Rows with equal keys will map to the same ID. The specific ID values are stable
- * for the lifetime of this object but are otherwise unspecified.
- * </p>
- * <p>
- * <b>Sentinel Values:</b>
- * <ul>
- *   <li>{@link #NOT_FOUND_SENTINEL}: Returned for probe keys not found in the build table</li>
- *   <li>{@link #BUILD_NULL_SENTINEL}: Returned for build keys with nulls (when nulls are unequal)</li>
- * </ul>
+ * Rows with equal keys will map to the same ID. Keys that cannot be mapped (e.g., not found
+ * in probe, or null keys when nulls are unequal) receive negative sentinel values.
+ * The specific ID values are stable for the lifetime of this object but are otherwise unspecified.
  * </p>
  * <p>
  * <b>Ownership:</b> This class increments the reference counts on the columns from the provided
@@ -130,7 +123,8 @@ public class KeyRemapping implements AutoCloseable {
    * @param buildKeys table containing the keys to build from. The column reference counts
    *        will be incremented; the caller retains ownership of this table.
    * @param nullEquality how null key values should be compared.
-   *        When UNEQUAL, rows with null keys map to {@link #BUILD_NULL_SENTINEL}.
+   *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
+   *        When UNEQUAL, rows with null keys receive a negative sentinel value.
    * @param computeMetrics if true, compute distinct_count and max_duplicate_count.
    *        If false, skip metrics computation for better performance; calling
    *        {@link #getDistinctCount()} or {@link #getMaxDuplicateCount()} will throw.
@@ -297,12 +291,9 @@ public class KeyRemapping implements AutoCloseable {
    * </p>
    * <p>
    * For each row in the cached build table, returns the integer ID assigned to that key.
+   * Non-negative integers represent valid mapped keys, while negative values represent
+   * keys that cannot be mapped (e.g., null keys when nulls are unequal).
    * </p>
-   * <ul>
-   *   <li>Keys that match a build table key: return a non-negative integer</li>
-   *   <li>Keys with nulls (when nullEquality is EQUAL): return the ID assigned to null keys</li>
-   *   <li>Keys with nulls (when nullEquality is UNEQUAL): return {@link #BUILD_NULL_SENTINEL}</li>
-   * </ul>
    *
    * @return A column of INT32 values with the remapped key IDs (caller must close)
    */
@@ -320,13 +311,11 @@ public class KeyRemapping implements AutoCloseable {
    * The keys table must have the same schema (number and types of columns) as
    * the build table used to construct this object.
    * </p>
-   * <ul>
-   *   <li>Keys that match a build table key: return a non-negative integer</li>
-   *   <li>Keys not found in build table: return {@link #NOT_FOUND_SENTINEL}</li>
-   *   <li>Keys with nulls (when nullEquality is EQUAL): return the ID assigned to null keys,
-   *       or {@link #NOT_FOUND_SENTINEL} if no null keys exist in build table</li>
-   *   <li>Keys with nulls (when nullEquality is UNEQUAL): return {@link #NOT_FOUND_SENTINEL}</li>
-   * </ul>
+   * <p>
+   * Non-negative integers represent keys found in the build table, while negative values
+   * represent keys that were not found or cannot be matched (e.g., null keys when nulls
+   * are unequal, or keys not present in the build table).
+   * </p>
    *
    * @param keys The probe keys to remap (must have same schema as build table)
    * @return A column of INT32 values with the remapped key IDs (caller must close)
