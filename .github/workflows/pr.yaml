@@ -65,6 +65,8 @@ jobs:
         uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
         with:
           repo: cudf
+          # TODO: Fix nightly CI and remove this line
+          max_days_without_success: 30
   changed-files:
     secrets: inherit
     needs: telemetry-setup

@@ -32,6 +32,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
@@ -1936,8 +1937,8 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
           // Root column
           if (!col.parent_index.has_value()) {
             size_type const rows_begin = rg_idx * rowgroup_size;
-            auto const rows_end =
-              cuda::std::min<size_type>((rg_idx + 1) * rowgroup_size, col.size());
+            auto const rows_end        = static_cast<size_type>(cuda::std::min(
+              static_cast<int64_t>(rows_begin) + rowgroup_size, static_cast<int64_t>(col.size())));
             return rowgroup_rows{rows_begin, rows_end};
           } else {
             // Child column

@@ -7,7 +7,7 @@ import collections.abc
 import time
 import weakref
 from threading import RLock
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import numpy
 import nvtx
@@ -20,7 +20,6 @@ from cudf.core.buffer.buffer import (
     BufferOwner,
     host_memory_allocation,
 )
-from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
 from cudf.core.buffer.string import format_bytes
 from cudf.utils.performance_tracking import _get_color_for_nvtx
 
@@ -56,7 +55,8 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
     def __getitem__(self, i):
         if i == 0:
-            return self._buf.get_ptr(mode="write")
+            with self._buf.access(mode="write"):
+                return self._buf.ptr
         elif i == 1:
             return False
         raise IndexError("tuple index out of range")
@@ -82,7 +82,7 @@ class SpillableBufferCAIWrapper:
             "shape": (size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }
 
 
@@ -295,8 +295,9 @@ class SpillableBufferOwner(BufferOwner):
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
 
-    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
-        """Get a device pointer to the memory of the buffer.
+    @property
+    def ptr(self) -> int:
+        """Device pointer to the start of the buffer (Span protocol).
 
         If this is called within an `acquire_spill_lock` context,
         a reference to this buffer is added to spill_lock, which
@@ -304,11 +305,6 @@ class SpillableBufferOwner(BufferOwner):
 
         If this is *not* called within a `acquire_spill_lock` context,
         this buffer is marked as unspillable permanently.
-
-        Returns
-        -------
-        int
-            The device pointer as an integer
         """
         from cudf.core.buffer.utils import get_spill_lock
 
@@ -360,7 +356,7 @@ class SpillableBufferOwner(BufferOwner):
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }
 
     def memoryview(
@@ -392,7 +388,7 @@ class SpillableBufferOwner(BufferOwner):
         )
 
 
-class SpillableBuffer(ExposureTrackedBuffer):
+class SpillableBuffer(Buffer):
     """A slice of a spillable buffer"""
 
     _owner: SpillableBufferOwner
@@ -476,5 +472,5 @@ class SpillableBuffer(ExposureTrackedBuffer):
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }

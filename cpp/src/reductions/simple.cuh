@@ -13,6 +13,7 @@
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction/detail/reduction.cuh>
+#include <cudf/reduction/detail/reduction_functions.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -332,12 +333,9 @@ struct same_element_type_dispatcher {
     if (!cudf::is_dictionary(col.type())) {
       return simple_reduction<ElementType, ElementType, Op>(col, init, stream, mr);
     }
-    auto index = simple_reduction<ElementType, ElementType, Op>(
-      dictionary_column_view(col).get_indices_annotated(),
-      init,
-      stream,
-      cudf::get_current_device_resource_ref());
-    return resolve_key<ElementType>(dictionary_column_view(col).keys(), *index, stream, mr);
+    auto mm = cudf::reduction::detail::minmax(col, stream, mr);
+    return std::is_same_v<Op, cudf::reduction::detail::op::min> ? std::move(mm.first)
+                                                                : std::move(mm.second);
   }
 
   template <typename ElementType>
