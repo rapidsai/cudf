@@ -502,8 +502,8 @@ def test_series_setitem_partial_slice_cow_off():
 
         new_slice = actual[2:]
         # Since COW is off, a slice should point to the same memory
-        ptr1 = new_slice._column.base_data.get_ptr(mode="read")
-        ptr2 = actual._column.base_data.get_ptr(mode="read")
+        ptr1 = new_slice._column.base_data.ptr
+        ptr2 = actual._column.base_data.ptr
         assert ptr1 == ptr2
 
         new_slice[0:2] = 10
