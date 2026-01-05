@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
@@ -250,6 +250,8 @@ def test_groupby_split_out(split_out, column):
 @pytest.mark.parametrize(
     "by", ["a", "b", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]]
 )
+# invalid value encountered in cast
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_groupby_dropna_cudf(dropna, by):
     # NOTE: This test is borrowed from upstream dask
     #       (dask/dask/dataframe/tests/test_groupby.py)
