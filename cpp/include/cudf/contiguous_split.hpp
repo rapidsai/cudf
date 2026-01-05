@@ -6,7 +6,7 @@
 #pragma once
 
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
-#include <cudf/table/table.hpp>
+#include <cudf/packed_types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -22,52 +22,6 @@ namespace CUDF_EXPORT cudf {
  * @file
  * @brief Table APIs for contiguous_split, pack, unpack, and metadata
  */
-
-/**
- * @brief Column data in a serialized format
- *
- * Contains data from an array of columns in two contiguous buffers: one on host, which contains
- * table metadata and one on device which contains the table data.
- */
-struct packed_columns {
-  packed_columns()
-    : metadata(std::make_unique<std::vector<uint8_t>>()),
-      gpu_data(std::make_unique<rmm::device_buffer>())
-  {
-  }
-
-  /**
-   * @brief Construct a new packed columns object
-   *
-   * @param md Host-side metadata buffer
-   * @param gd Device-side data buffer
-   */
-  packed_columns(std::unique_ptr<std::vector<uint8_t>>&& md,
-                 std::unique_ptr<rmm::device_buffer>&& gd)
-    : metadata(std::move(md)), gpu_data(std::move(gd))
-  {
-  }
-
-  std::unique_ptr<std::vector<uint8_t>> metadata;  ///< Host-side metadata buffer
-  std::unique_ptr<rmm::device_buffer> gpu_data;    ///< Device-side data buffer
-};
-
-/**
- * @brief The result(s) of a cudf::contiguous_split
- *
- * Each table_view resulting from a split operation performed by contiguous_split,
- * will be returned wrapped in a `packed_table`. The table_view and internal
- * column_views in this struct are not owned by a top level cudf::table or cudf::column.
- * The backing memory and metadata is instead owned by the `data` field and is in one
- * contiguous block.
- *
- * The user is responsible for assuring that the `table` or any derived table_views do
- * not outlive the memory owned by `data`.
- */
-struct packed_table {
-  cudf::table_view table;  ///< Result table_view of a cudf::contiguous_split
-  packed_columns data;     ///< Column data owned
-};
 
 /**
  * @brief Performs a deep-copy split of a `table_view` into a vector of `packed_table` where each
