@@ -122,12 +122,14 @@ outputs:
         - libkvikio =${{ minor_version }}
         - librmm =${{ minor_version }}
         - libnvcomp-dev ${{ nvcomp_version }}
+        - libnvjitlink-dev
         - rapids-logger =0.2
         - zlib ${{ zlib_version }}
         - cuda-cudart-dev
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - cuda-nvrtc
+        - libnvjitlink >=${{ cuda_version }}
         - if: linux and x86_64
           then:
             - libcufile
@@ -152,6 +154,7 @@ outputs:
           - libcufile
           - libcurand
           - libkvikio
+          - libnvjitlink
           - librdkafka
           - libzlib
           - librmm
@@ -160,7 +163,7 @@ outputs:
         - test -f $PREFIX/include/cudf/column/column.hpp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
-      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license }}
       summary: ${{ load_from_file("python/libcudf/pyproject.toml").project.description }}
 
   - package:
@@ -280,7 +283,7 @@ outputs:
           - libnvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
-      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license }}
       summary: libcudf example executables
 
   - package:
@@ -329,5 +332,5 @@ outputs:
           - libnvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
-      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license }}
       summary: libcudf test & benchmark executables
