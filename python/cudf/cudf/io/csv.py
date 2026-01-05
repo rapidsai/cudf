@@ -471,11 +471,13 @@ def _plc_write_csv(
         else table._columns
     )
     with ExitStack() as stack:
+        # Materialize iterator to avoid consuming it during access context setup
+        columns_list = list(iter_columns)
         # Access all columns that will be written
-        for col in iter_columns:
+        for col in columns_list:
             stack.enter_context(col.access(mode="read", scope="internal"))
 
-        columns = [col.plc_column for col in iter_columns]
+        columns = [col.plc_column for col in columns_list]
         col_names = []
         if header:
             table_names = (
