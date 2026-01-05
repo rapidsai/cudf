@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -26,6 +26,8 @@ set -u
 
 source rapids-configure-sccache
 
+sccache --stop-server 2>/dev/null || true
+
 # Run the build via CMake, which will run clang-tidy when CUDF_STATIC_LINTERS is enabled.
 
 iwyu_flag=""
@@ -34,6 +36,8 @@ if [[ "${RAPIDS_BUILD_TYPE:-}" == "nightly" ]]; then
 fi
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON ${iwyu_flag} -DBUILD_TESTS=OFF -DCMAKE_CUDA_ARCHITECTURES=75 -GNinja
 cmake --build cpp/build 2>&1 | python cpp/scripts/parse_iwyu_output.py
+
+sccache --stop-server >/dev/null 2>&1 || true
 
 # Remove invalid components of the path for local usage. The path below is
 # valid in the CI due to where the project is cloned, but presumably the fixes
