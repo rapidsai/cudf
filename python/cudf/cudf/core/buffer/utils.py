@@ -122,7 +122,7 @@ def as_buffer(
             "either be exposed or spill locked."
         )
     ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-    base_ptr = owner.get_ptr(mode="read")
+    base_ptr = owner.ptr
     if size > 0 and base_ptr == 0:
         raise ValueError("Cannot create a non-empty slice of a null buffer")
     return buffer_class(owner=owner, offset=ptr - base_ptr, size=size)
