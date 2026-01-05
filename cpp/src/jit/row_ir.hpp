@@ -10,8 +10,18 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <array>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <variant>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -464,7 +474,7 @@ struct [[nodiscard]] ast_converter {
    * @param mr Device memory resource used to allocate the returned table's device memory
    */
   ast_converter(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-    : stream_(stream), mr_(mr)
+    : stream_(std::move(stream)), mr_(std::move(mr))
   {
   }
 

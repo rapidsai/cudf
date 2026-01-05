@@ -236,6 +236,16 @@ def test_parquet_options(executor: str) -> None:
     assert config.parquet_options.n_output_chunks == 16
 
 
+def test_parquet_options_from_none() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            parquet_options=None,
+        )
+    )
+    assert config.parquet_options.chunked is True
+
+
 def test_validate_streaming_executor_shuffle_method(
     *, rapidsmpf_distributed_available: bool, rapidsmpf_single_available: bool
 ) -> None:

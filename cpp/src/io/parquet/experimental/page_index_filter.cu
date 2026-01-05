@@ -976,6 +976,10 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
 
   auto const total_rows = total_rows_in_row_groups(row_group_indices);
 
+  CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
+               "Mismatch in total rows in input row mask and row groups",
+               std::invalid_argument);
+
   // Return an empty vector if all rows are invalid or all rows are required
   if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
       cudf::detail::all_of(row_mask.template begin<bool>() + row_mask_offset,
@@ -985,17 +989,12 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     return thrust::host_vector<bool>(0, stream);
   }
 
-  CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
-               "Mismatch in total rows in input row mask and row groups",
-               std::invalid_argument);
-
   auto const has_page_index = compute_has_page_index(per_file_metadata, row_group_indices);
 
   // Return early if page index is not present
   if (not has_page_index) {
     CUDF_LOG_WARN("Encountered missing Parquet page index for one or more output columns");
-    return thrust::host_vector<bool>(
-      0);  // An empty data page mask indicates all pages are required
+    return thrust::host_vector<bool>{};
   }
 
   // Collect column schema indices from the input columns.
