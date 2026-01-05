@@ -210,7 +210,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
         if self.has_nulls():
             raise ValueError("cupy does not support NaT.")
-        return cp.asarray(self.data).view(dtype)
+        return cp.asarray(self).view(dtype)
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
