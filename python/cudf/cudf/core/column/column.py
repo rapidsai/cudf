@@ -50,7 +50,6 @@ from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
-    acquire_spill_lock,
     as_buffer,
 )
 from cudf.core.copy_types import GatherMap
@@ -997,25 +996,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         type=array.type.value_type,
                     )
                 )
-            with acquire_spill_lock():
-                if version.parse(pa.__version__) < version.parse(
-                    "16"
-                ) and isinstance(codes, pa.ChunkedArray):
-                    result = cls.from_pylibcudf(
-                        plc.Table.from_arrow(
-                            pa.table({None: codes})
-                        ).columns()[0]
-                    )
-                    categories = cls.from_pylibcudf(
-                        plc.Table.from_arrow(
-                            pa.table({None: dictionary})
-                        ).columns()[0]
-                    )
-                else:
-                    result = cls.from_pylibcudf(plc.Column.from_arrow(codes))
-                    categories = cls.from_pylibcudf(
-                        plc.Column.from_arrow(dictionary)
-                    )
+            if version.parse(pa.__version__) < version.parse(
+                "16"
+            ) and isinstance(codes, pa.ChunkedArray):
+                result = cls.from_pylibcudf(
+                    plc.Table.from_arrow(pa.table({None: codes})).columns()[0]
+                )
+                categories = cls.from_pylibcudf(
+                    plc.Table.from_arrow(
+                        pa.table({None: dictionary})
+                    ).columns()[0]
+                )
+            else:
+                result = cls.from_pylibcudf(plc.Column.from_arrow(codes))
+                categories = cls.from_pylibcudf(
+                    plc.Column.from_arrow(dictionary)
+                )
             return result._with_type_metadata(
                 CategoricalDtype(
                     categories=categories, ordered=array.type.ordered
@@ -2738,18 +2734,17 @@ def as_column(
         dtype = cudf.dtype(dtype)
 
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
-        with acquire_spill_lock():
-            column = ColumnBase.from_pylibcudf(
-                plc.filling.sequence(
-                    len(arbitrary),
-                    pa_scalar_to_plc_scalar(
-                        pa.scalar(arbitrary.start, type=pa.int64())
-                    ),
-                    pa_scalar_to_plc_scalar(
-                        pa.scalar(arbitrary.step, type=pa.int64())
-                    ),
-                )
+        column = ColumnBase.from_pylibcudf(
+            plc.filling.sequence(
+                len(arbitrary),
+                pa_scalar_to_plc_scalar(
+                    pa.scalar(arbitrary.start, type=pa.int64())
+                ),
+                pa_scalar_to_plc_scalar(
+                    pa.scalar(arbitrary.step, type=pa.int64())
+                ),
             )
+        )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
             dtype = np.dtype(
                 f"i{cudf.get_option('default_integer_bitwidth') // 8}"
@@ -3427,7 +3422,11 @@ def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
 
     # Filter out inputs that have 0 length, then concatenate.
     objs_with_len = [o for o in new_objs if len(o)]
-    with acquire_spill_lock():
+    with ExitStack() as stack:
+        # Access all input columns before concatenating
+        for col in objs_with_len:
+            stack.enter_context(col.access(mode="read", scope="internal"))
+
         return ColumnBase.from_pylibcudf(
             plc.concatenate.concatenate(
                 [col.plc_column for col in objs_with_len]
