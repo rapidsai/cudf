@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -112,7 +112,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
 
   device_execute_functor d_execute_fctr{d_column, d_new_offsets, d_chars, width};
 
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      d_execute_fctr);

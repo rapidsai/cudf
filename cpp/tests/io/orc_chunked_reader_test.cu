@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1148,7 +1148,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
 
   auto offset_col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows + 1,
                     offset_col->mutable_view().begin<int>(),
@@ -1157,7 +1157,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
   int constexpr num_ints = num_rows * list_size;
   auto value_col         = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_ints,
                     value_col->mutable_view().begin<int>(),
@@ -1207,7 +1207,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   // list<int>
   auto offset_col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows + 1,
                     offset_col->mutable_view().begin<int>(),
@@ -1216,7 +1216,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   int constexpr num_ints = num_rows * list_size;
   auto value_col         = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_ints,
                     value_col->mutable_view().begin<int>(),
@@ -1229,13 +1229,13 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   int constexpr num_chars = num_rows * str_size;
   auto str_offset_col     = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows + 1,
                     str_offset_col->mutable_view().begin<int>(),
                     offset_gen{str_size});
   rmm::device_buffer str_chars(num_chars, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_chars,
                     static_cast<int8_t*>(str_chars.data()),
@@ -1246,7 +1246,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   // doubles
   auto const double_col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::FLOAT64}, num_rows, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows,
                     double_col->mutable_view().begin<double>(),

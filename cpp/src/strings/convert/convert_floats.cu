@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -63,7 +63,7 @@ struct dispatch_to_floats_fn {
     requires(std::is_floating_point_v<FloatType>)
   {
     auto d_results = output_column.data<FloatType>();
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_column.size()),
                       d_results,
@@ -456,7 +456,7 @@ std::unique_ptr<column> is_float(strings_column_view const& input,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
   // check strings for valid float chars
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(input.size()),
                     d_results,

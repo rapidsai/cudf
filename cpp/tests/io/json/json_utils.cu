@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -57,7 +57,7 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
     // since the batched JSON reader splits the byte_range_size into chunk_sizes
     // smaller than INT_MAX bytes
     auto const first_delimiter_position_it =
-      thrust::find(rmm::exec_policy(stream), readbufspan.begin(), readbufspan.end(), '\n');
+      thrust::find(rmm::exec_policy_nosync(stream), readbufspan.begin(), readbufspan.end(), '\n');
     return first_delimiter_position_it != readbufspan.end()
              ? cuda::std::distance(readbufspan.begin(), first_delimiter_position_it)
              : -1;
@@ -127,6 +127,6 @@ rmm::device_uvector<cudf::size_type> string_offset_to_length(
   auto itr =
     cudf::detail::offsetalator_factory::make_input_iterator(column.offsets(), column.offset());
   thrust::adjacent_difference(
-    rmm::exec_policy(stream), itr + 1, itr + column.size() + 1, svs_length.begin());
+    rmm::exec_policy_nosync(stream), itr + 1, itr + column.size() + 1, svs_length.begin());
   return svs_length;
 }

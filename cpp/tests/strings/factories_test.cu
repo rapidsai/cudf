@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -251,7 +251,7 @@ TEST_F(StringsBatchConstructionTest, AllNullsColumns)
   auto const stream          = cudf::get_default_stream();
 
   auto d_string_pairs = rmm::device_uvector<string_pair>{num_rows, stream};
-  thrust::uninitialized_fill_n(rmm::exec_policy(stream),
+  thrust::uninitialized_fill_n(rmm::exec_policy_nosync(stream),
                                d_string_pairs.data(),
                                d_string_pairs.size(),
                                string_pair{nullptr, 0});

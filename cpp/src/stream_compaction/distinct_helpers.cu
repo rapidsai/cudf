@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -63,7 +63,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
       // Reduction results with `KEEP_NONE` are either group sizes of equal rows, or `0`.
       // Thus, we only output index of the rows in the groups having group size of `1`.
       return thrust::copy_if(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_rows),
         output_indices.begin(),
@@ -77,7 +77,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
     // each group of equal rows (which are the desired output indices), or the value given by
     // `reduction_init_value()`.
     return thrust::copy_if(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       reduction_results.begin(),
       reduction_results.end(),
       output_indices.begin(),

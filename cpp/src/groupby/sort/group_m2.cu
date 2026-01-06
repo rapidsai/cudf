@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -61,9 +61,10 @@ void compute_m2_fn(column_device_view const& values,
   // using the transform-iterator directly in thrust::reduce_by_key
   // improves compile-time significantly.
   auto m2_vals = rmm::device_uvector<ResultType>(values.size(), stream);
-  thrust::transform(rmm::exec_policy(stream), itr, itr + values.size(), m2_vals.begin(), m2_fn);
+  thrust::transform(
+    rmm::exec_policy_nosync(stream), itr, itr + values.size(), m2_vals.begin(), m2_fn);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         group_labels.begin(),
                         group_labels.end(),
                         m2_vals.begin(),

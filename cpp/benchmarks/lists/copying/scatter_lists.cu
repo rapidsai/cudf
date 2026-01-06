@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,10 +44,10 @@ static void bench_scatter_lists(nvbench::state& state, nvbench::type_list<TypePa
                                                  cudf::mask_state::UNALLOCATED,
                                                  stream,
                                                  mr);
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    source_base_col->mutable_view().begin<TypeParam>(),
                    source_base_col->mutable_view().end<TypeParam>());
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    target_base_col->mutable_view().begin<TypeParam>(),
                    target_base_col->mutable_view().end<TypeParam>());
 
@@ -64,12 +64,12 @@ static void bench_scatter_lists(nvbench::state& state, nvbench::type_list<TypePa
                             stream,
                             mr);
 
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    source_offsets->mutable_view().begin<cudf::size_type>(),
                    source_offsets->mutable_view().end<cudf::size_type>(),
                    0,
                    num_elements_per_row);
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    target_offsets->mutable_view().begin<cudf::size_type>(),
                    target_offsets->mutable_view().end<cudf::size_type>(),
                    0,
@@ -96,7 +96,7 @@ static void bench_scatter_lists(nvbench::state& state, nvbench::type_list<TypePa
                                              stream,
                                              mr);
   auto m_scatter_map = scatter_map->mutable_view();
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    m_scatter_map.begin<cudf::size_type>(),
                    m_scatter_map.end<cudf::size_type>(),
                    num_rows - 1,
@@ -104,7 +104,7 @@ static void bench_scatter_lists(nvbench::state& state, nvbench::type_list<TypePa
 
   if (not coalesce) {
     thrust::default_random_engine g;
-    thrust::shuffle(rmm::exec_policy(stream),
+    thrust::shuffle(rmm::exec_policy_nosync(stream),
                     m_scatter_map.begin<cudf::size_type>(),
                     m_scatter_map.end<cudf::size_type>(),
                     g);
