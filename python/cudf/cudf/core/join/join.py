@@ -21,8 +21,6 @@ from cudf.options import get_option
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
 
@@ -510,12 +508,12 @@ class Merge:
         if by:
             keep_index = self._using_left_index or self._using_right_index
             if keep_index:
-                to_sort: Iterable[ColumnBase] = itertools.chain(
-                    result.index._columns, result._columns
+                to_sort = list(
+                    itertools.chain(result.index._columns, result._columns)
                 )
                 index_names = result.index.names
             else:
-                to_sort = result._columns
+                to_sort = list(result._columns)
                 index_names = None
             result_columns = sorting.sort_by_key(
                 to_sort,

@@ -2975,13 +2975,16 @@ class IndexedFrame(Frame):
         """
         if not gather_map.nullify and len(self) != gather_map.nrows:
             raise IndexError("Gather map is out of bounds")
+        columns_to_gather = (
+            list(itertools.chain(self.index._columns, self._columns))
+            if keep_index
+            else self._columns
+        )
         return self._from_columns_like_self(
             [
                 ColumnBase.from_pylibcudf(col)
                 for col in copying.gather(
-                    itertools.chain(self.index._columns, self._columns)
-                    if keep_index
-                    else self._columns,
+                    columns_to_gather,
                     gather_map.column,
                     nullify=gather_map.nullify,
                 )

@@ -9,13 +9,13 @@ import pylibcudf as plc
 from cudf.core.column.utils import access_columns
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from cudf.core.column import ColumnBase
 
 
 def is_sorted(
-    source_columns: Iterable[ColumnBase],
+    source_columns: Sequence[ColumnBase],
     ascending: Iterable[bool],
     na_position: Iterable[Literal["first", "last"]],
 ) -> bool:
@@ -44,11 +44,10 @@ def is_sorted(
         ``null_position``, False otherwise.
     """
     column_order, null_precedence = ordering(ascending, na_position)
-    cols_list = list(source_columns)
 
-    with access_columns(*cols_list, mode="read", scope="internal"):
+    with access_columns(*source_columns, mode="read", scope="internal"):
         return plc.sorting.is_sorted(
-            plc.Table([col.plc_column for col in cols_list]),
+            plc.Table([col.plc_column for col in source_columns]),
             column_order,
             null_precedence,
         )
@@ -91,7 +90,7 @@ def ordering(
 
 
 def order_by(
-    columns_from_table: Iterable[ColumnBase],
+    columns_from_table: Sequence[ColumnBase],
     ascending: Iterable[bool],
     na_position: Iterable[Literal["first", "last"]],
     *,
@@ -102,7 +101,7 @@ def order_by(
 
     Parameters
     ----------
-    columns_from_table : Iterable[Column]
+    columns_from_table : Sequence[Column]
         Columns from the table which will be sorted
     ascending : sequence[bool]
          Sequence of boolean values which correspond to each column
@@ -122,12 +121,11 @@ def order_by(
     func = (
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
-    cols_list = list(columns_from_table)
 
-    with access_columns(*cols_list, mode="read", scope="internal"):
+    with access_columns(*columns_from_table, mode="read", scope="internal"):
         return func(
             plc.Table(
-                [col.plc_column for col in cols_list],
+                [col.plc_column for col in columns_from_table],
             ),
             column_order,
             null_precedence,
@@ -135,8 +133,8 @@ def order_by(
 
 
 def sort_by_key(
-    values: Iterable[ColumnBase],
-    keys: Iterable[ColumnBase],
+    values: Sequence[ColumnBase],
+    keys: Sequence[ColumnBase],
     ascending: Iterable[bool],
     na_position: Iterable[Literal["first", "last"]],
     *,
@@ -147,9 +145,9 @@ def sort_by_key(
 
     Parameters
     ----------
-    values : Iterable[Column]
+    values : Sequence[Column]
         Columns of the table which will be sorted
-    keys : Iterable[Column]
+    keys : Sequence[Column]
         Columns making up the sort key
     ascending : Iterable[bool]
         Sequence of boolean values which correspond to each column
@@ -170,23 +168,19 @@ def sort_by_key(
     func = (
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
     )
-    values_list = list(values)
-    keys_list = list(keys)
 
-    with access_columns(
-        *values_list, *keys_list, mode="read", scope="internal"
-    ):
+    with access_columns(*values, *keys, mode="read", scope="internal"):
         return func(
-            plc.Table([col.plc_column for col in values_list]),
-            plc.Table([col.plc_column for col in keys_list]),
+            plc.Table([col.plc_column for col in values]),
+            plc.Table([col.plc_column for col in keys]),
             column_order,
             null_precedence,
         ).columns()
 
 
 def search_sorted(
-    source: Iterable[ColumnBase],
-    values: Iterable[ColumnBase],
+    source: Sequence[ColumnBase],
+    values: Sequence[ColumnBase],
     side: Literal["left", "right"],
     ascending: Iterable[bool],
     na_position: Iterable[Literal["first", "last"]],
@@ -195,10 +189,10 @@ def search_sorted(
 
     Parameters
     ----------
-    source : Iterable of columns
-        Iterable of columns to search in
-    values : Iterable of columns
-        Iterable of value columns to search for
+    source : Sequence of columns
+        Sequence of columns to search in
+    values : Sequence of columns
+        Sequence of value columns to search for
     side : str {'left', 'right'} optional
         If 'left', the index of the first suitable location is given.
         If 'right', return the last such index
@@ -214,15 +208,11 @@ def search_sorted(
         plc.search,
         "lower_bound" if side == "left" else "upper_bound",
     )
-    source_list = list(source)
-    values_list = list(values)
 
-    with access_columns(
-        *source_list, *values_list, mode="read", scope="internal"
-    ):
+    with access_columns(*source, *values, mode="read", scope="internal"):
         return func(
-            plc.Table([col.plc_column for col in source_list]),
-            plc.Table([col.plc_column for col in values_list]),
+            plc.Table([col.plc_column for col in source]),
+            plc.Table([col.plc_column for col in values]),
             column_order,
             null_precedence,
         )

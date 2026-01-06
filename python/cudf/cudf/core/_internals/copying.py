@@ -9,23 +9,20 @@ import pylibcudf as plc
 from cudf.core.column.utils import access_columns
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Sequence
 
     from cudf.core.column import ColumnBase
     from cudf.core.column.numerical import NumericalColumn
 
 
 def gather(
-    columns: Iterable[ColumnBase],
+    columns: Sequence[ColumnBase],
     gather_map: NumericalColumn,
     nullify: bool = False,
 ) -> list[plc.Column]:
-    # Materialize iterator to avoid consuming it during access context setup
-    cols_list = list(columns)
-
-    with access_columns(*cols_list, gather_map, mode="read", scope="internal"):
+    with access_columns(*columns, gather_map, mode="read", scope="internal"):
         plc_tbl = plc.copying.gather(
-            plc.Table([col.plc_column for col in cols_list]),
+            plc.Table([col.plc_column for col in columns]),
             gather_map.plc_column,
             plc.copying.OutOfBoundsPolicy.NULLIFY
             if nullify
@@ -81,15 +78,13 @@ def scatter(
 
 
 def columns_split(
-    input_columns: Iterable[ColumnBase], splits: list[int]
+    input_columns: Sequence[ColumnBase], splits: list[int]
 ) -> list[list[plc.Column]]:
-    cols_list = list(input_columns)
-
-    with access_columns(*cols_list, mode="read", scope="internal"):
+    with access_columns(*input_columns, mode="read", scope="internal"):
         return [
             plc_tbl.columns()
             for plc_tbl in plc.copying.split(
-                plc.Table([col.plc_column for col in cols_list]),
+                plc.Table([col.plc_column for col in input_columns]),
                 splits,
             )
         ]
