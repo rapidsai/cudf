@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -255,15 +255,13 @@ def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
     def get_ptr(x) -> int:
         return x.ptr if x else 0
 
-    assert get_ptr(lhs.base_data) == get_ptr(rhs.base_data)
-    assert get_ptr(lhs.base_mask) == get_ptr(rhs.base_mask)
-    assert lhs.base_size == rhs.base_size
+    assert get_ptr(lhs.data) == get_ptr(rhs.data)
+    assert get_ptr(lhs.mask) == get_ptr(rhs.mask)
+    assert lhs.size == rhs.size
     assert lhs.offset == rhs.offset
     assert lhs.size == rhs.size
-    assert len(lhs.base_children) == len(rhs.base_children)
-    for lhs_child, rhs_child in zip(
-        lhs.base_children, rhs.base_children, strict=True
-    ):
+    assert len(lhs.children) == len(rhs.children)
+    for lhs_child, rhs_child in zip(lhs.children, rhs.children, strict=True):
         assert_column_memory_eq(lhs_child, rhs_child)
     if isinstance(lhs, cudf.core.column.CategoricalColumn) and isinstance(
         rhs, cudf.core.column.CategoricalColumn

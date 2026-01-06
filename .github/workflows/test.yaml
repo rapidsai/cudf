@@ -62,7 +62,7 @@ jobs:
       sha: ${{ inputs.sha }}
       script: "ci/cpp_linters.sh"
       file_to_upload: iwyu_results.txt
-      node_type: cpu16
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-python-cudf-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@cuda-13.1.0

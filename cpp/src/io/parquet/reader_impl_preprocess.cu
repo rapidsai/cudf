@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -381,11 +381,11 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                     compute_page_offset_count{subpass.pages, pass.chunks, skip_rows, num_rows});
 
   // Compute prefix sum (exclusive scan) to get indices for each page
-  _page_string_offset_indices = rmm::device_uvector<size_t>(num_pages, _stream);
+  subpass.page_string_offset_indices = rmm::device_uvector<size_t>(num_pages, _stream);
   thrust::exclusive_scan(rmm::exec_policy_nosync(_stream),
                          d_page_offset_counts.begin(),
                          d_page_offset_counts.end(),
-                         _page_string_offset_indices.begin());
+                         subpass.page_string_offset_indices.begin());
 
   // Compute the total number of offsets needed
   auto const total_num_offsets = cudf::detail::reduce(d_page_offset_counts.begin(),
@@ -395,14 +395,14 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                                                       _stream);
 
   // Allocate the string offset buffer
-  _string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
+  subpass.string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
 
   // Set the string offset buffer for non-dictionary, non-FLBA string columns
   for (size_t col_idx = 0; col_idx < pass.chunks.size(); ++col_idx) {
     auto& chunk = pass.chunks[col_idx];
     // Check if this is a string column without dictionary & not a fixed length byte array
     if (preprocess_offsets(chunk)) {
-      chunk.column_string_offset_base = _string_offset_buffer.data();
+      chunk.column_string_offset_base = subpass.string_offset_buffer.data();
     }
   }
 
@@ -413,7 +413,7 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
   // Pre-process string offsets for non-dictionary string columns
   detail::preprocess_string_offsets(subpass.pages,
                                     pass.chunks,
-                                    _page_string_offset_indices,
+                                    subpass.page_string_offset_indices,
                                     _subpass_page_mask,
                                     skip_rows,
                                     num_rows,
@@ -736,6 +736,16 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                      update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
   }
 
+  // For string columns, preprocess offsets early so we can reuse them for size computation.
+  // This applies to both chunked and non-chunked reads to avoid redundant scanning.
+  if (subpass.kernel_mask & STRINGS_MASK) {
+    // For plain-encoded strings, preprocess offsets early so we can reuse them.
+    // Allocate for the full subpass range (will be extra memory for boundary pages in chunked
+    // reads). The compute_page_string_offset_indices function will filter to only plain-encoded
+    // string pages, and the allocation will be empty if there are none.
+    compute_page_string_offset_indices(pass.skip_rows, pass.num_rows);
+  }
+
   // compute string sizes if necessary. if we are doing chunking, we need to know
   // the sizes of all strings so we can properly compute chunk boundaries.
   if ((chunk_read_limit > 0) && (subpass.kernel_mask & STRINGS_MASK)) {
@@ -744,11 +754,13 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
         return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
                is_treat_fixed_length_as_string(chunk.logical_type);
       });
+
     if (!_has_page_index || has_flba) {
       constexpr bool compute_all_string_sizes = true;
       compute_page_string_sizes_pass1(subpass.pages,
                                       pass.chunks,
                                       _subpass_page_mask,
+                                      subpass.page_string_offset_indices,
                                       pass.skip_rows,
                                       pass.num_rows,
                                       subpass.kernel_mask,
