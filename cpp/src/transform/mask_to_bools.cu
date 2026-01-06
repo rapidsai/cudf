@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,7 +37,7 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
   if (length > 0) {
     auto mutable_view = out_col->mutable_view();
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<cudf::size_type>(begin_bit),
                       thrust::make_counting_iterator<cudf::size_type>(end_bit),
                       mutable_view.begin<bool>(),
