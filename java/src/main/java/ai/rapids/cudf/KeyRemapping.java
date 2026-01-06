@@ -204,10 +204,7 @@ public class KeyRemapping implements AutoCloseable {
    * @return true if metrics are available, false if computeMetrics was false during construction
    */
   public boolean hasMetrics() {
-    if (isClosed) {
-      throw new IllegalStateException("KeyRemapping is already closed");
-    }
-    return hasMetrics(cleaner.nativeHandle);
+    return computeMetrics;
   }
 
   /**
@@ -332,7 +329,6 @@ public class KeyRemapping implements AutoCloseable {
   // Native methods
   private static native long create(long tableView, boolean compareNulls, boolean computeMetrics);
   private static native void destroy(long handle);
-  private static native boolean hasMetrics(long handle);
   private static native int getDistinctCount(long handle);
   private static native int getMaxDuplicateCount(long handle);
   private static native long remapBuildKeys(long handle);

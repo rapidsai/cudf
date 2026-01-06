@@ -36,20 +36,6 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_KeyRemapping_destroy(JNIEnv* env, jcl
   JNI_CATCH(env, );
 }
 
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_KeyRemapping_hasMetrics(JNIEnv* env,
-                                                                       jclass,
-                                                                       jlong j_handle)
-{
-  JNI_NULL_CHECK(env, j_handle, "handle is null", JNI_FALSE);
-  JNI_TRY
-  {
-    cudf::jni::auto_set_device(env);
-    auto remap_ptr = reinterpret_cast<cudf::key_remapping*>(j_handle);
-    return static_cast<jboolean>(remap_ptr->has_metrics());
-  }
-  JNI_CATCH(env, JNI_FALSE);
-}
-
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_KeyRemapping_getDistinctCount(JNIEnv* env,
                                                                          jclass,
                                                                          jlong j_handle)
