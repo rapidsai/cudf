@@ -3,11 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Enable 64-bit thrust offsets to support large join outputs (> INT32_MAX rows)
-// This is mostly a compile time change as thrust will switch between 32-bit
-// and 64-bit offsets as needed.
-#undef THRUST_FORCE_32_BIT_OFFSET_TYPE
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -15,6 +10,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -180,12 +176,14 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
 
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
-  thrust::copy_if(rmm::exec_policy_nosync(stream),
-                  thrust::counting_iterator(0),
-                  thrust::counting_iterator(0) + larger_numrows,
-                  match_counts->begin(),
-                  nonzero_matches.begin(),
-                  cuda::std::identity{});
+  // Use cudf::detail::copy_if to handle potentially large arrays (> INT32_MAX)
+  cudf::detail::copy_if(thrust::counting_iterator(0),
+                        thrust::counting_iterator(0) + larger_numrows,
+                        nonzero_matches.begin(),
+                        [match_counts = match_counts->begin()] __device__(auto idx) {
+                          return match_counts[idx] != 0;
+                        },
+                        stream);
 
   // Use 64-bit prefix sums to handle large output sizes (> INT32_MAX rows)
   // The prefix sums can exceed INT32_MAX even though individual match counts are small
@@ -206,31 +204,67 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   auto larger_indices =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
 
-  thrust::scatter(rmm::exec_policy_nosync(stream),
-                  nonzero_matches.begin(),
-                  nonzero_matches.end(),
-                  thrust::permutation_iterator(match_offsets.begin(), nonzero_matches.begin()),
-                  larger_indices.begin());
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                         larger_indices.begin(),
-                         larger_indices.end(),
-                         larger_indices.begin(),
-                         thrust::maximum<size_type>{});
+  // Scatter in chunks to handle large arrays (> INT32_MAX)
+  {
+    constexpr auto chunk_size = static_cast<std::size_t>(std::numeric_limits<int>::max());
+    auto const num_matches    = nonzero_matches.size();
+    for (std::size_t offset = 0; offset < num_matches; offset += chunk_size) {
+      auto const chunk_end = std::min(offset + chunk_size, num_matches);
+      thrust::scatter(
+        rmm::exec_policy_nosync(stream),
+        nonzero_matches.begin() + offset,
+        nonzero_matches.begin() + chunk_end,
+        thrust::permutation_iterator(match_offsets.begin(), nonzero_matches.begin() + offset),
+        larger_indices.begin());
+    }
+  }
+  // Inclusive scan with maximum in chunks to handle large arrays (> INT32_MAX)
+  {
+    constexpr auto chunk_size = static_cast<std::size_t>(std::numeric_limits<int>::max());
+    size_type carry           = 0;
+    for (std::size_t offset = 0; offset < total_matches; offset += chunk_size) {
+      auto const chunk_end = std::min(offset + chunk_size, total_matches);
+      thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+                             larger_indices.begin() + offset,
+                             larger_indices.begin() + chunk_end,
+                             larger_indices.begin() + offset,
+                             thrust::maximum<size_type>{});
+      // Propagate carry value (maximum from previous chunk) to current chunk
+      if (carry > 0) {
+        thrust::transform(rmm::exec_policy_nosync(stream),
+                          larger_indices.begin() + offset,
+                          larger_indices.begin() + chunk_end,
+                          thrust::constant_iterator<size_type>(carry),
+                          larger_indices.begin() + offset,
+                          thrust::maximum<size_type>{});
+      }
+      // Get the carry for the next chunk
+      if (chunk_end < total_matches) {
+        auto last_elem_vec = rmm::device_uvector<size_type>(1, stream, temp_mr);
+        thrust::copy_n(rmm::exec_policy_nosync(stream),
+                       larger_indices.begin() + chunk_end - 1,
+                       1,
+                       last_elem_vec.begin());
+        carry = last_elem_vec.element(0, stream);
+      }
+    }
+  }
 
   // populate smaller indices
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
-  thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), smaller_indices.begin(), smaller_indices.end(), 1);
+  // Fill in chunks to handle large arrays (> INT32_MAX)
+  {
+    constexpr auto chunk_size = static_cast<std::size_t>(std::numeric_limits<int>::max());
+    for (std::size_t offset = 0; offset < total_matches; offset += chunk_size) {
+      auto const chunk_end = std::min(offset + chunk_size, total_matches);
+      thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                                 smaller_indices.begin() + offset,
+                                 smaller_indices.begin() + chunk_end,
+                                 1);
+    }
+  }
   auto const comparator = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
 
-  auto smaller_tabulate_it = thrust::tabulate_output_iterator(
-    [nonzero_matches = nonzero_matches.begin(),
-     match_offsets   = match_offsets.begin(),
-     smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
-      auto const lhs_idx   = nonzero_matches[idx];
-      auto const pos       = match_offsets[lhs_idx];
-      smaller_indices[pos] = lb;
-    });
   auto smaller_it = thrust::transform_iterator(
     sorted_smaller_order_begin,
     cuda::proclaim_return_type<detail::row::lhs_index_type>(
@@ -239,23 +273,92 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     nonzero_matches.begin(),
     cuda::proclaim_return_type<detail::row::rhs_index_type>(
       [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
-  thrust::lower_bound(rmm::exec_policy_nosync(stream),
-                      smaller_it,
-                      smaller_it + smaller_numrows,
-                      larger_it,
-                      larger_it + nonzero_matches.size(),
-                      smaller_tabulate_it,
-                      comparator);
-  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                larger_indices.begin(),
-                                larger_indices.end(),
-                                smaller_indices.begin(),
-                                smaller_indices.begin());
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    smaller_indices.begin(),
-                    smaller_indices.end(),
-                    smaller_indices.begin(),
-                    mapping_functor<SmallerIterator>{sorted_smaller_order_begin});
+  // Lower bound in chunks to handle large arrays (> INT32_MAX)
+  {
+    constexpr auto chunk_size = static_cast<std::size_t>(std::numeric_limits<int>::max());
+    auto const num_matches    = nonzero_matches.size();
+    for (std::size_t offset = 0; offset < num_matches; offset += chunk_size) {
+      auto const chunk_end = std::min(offset + chunk_size, num_matches);
+      // Create tabulate iterator starting at the correct offset
+      auto chunk_tabulate_it = thrust::tabulate_output_iterator(
+        [nonzero_matches = nonzero_matches.begin(),
+         match_offsets   = match_offsets.begin(),
+         smaller_indices = smaller_indices.begin(),
+         offset] __device__(auto local_idx, auto lb) {
+          auto const idx       = local_idx + offset;
+          auto const lhs_idx   = nonzero_matches[idx];
+          auto const pos       = match_offsets[lhs_idx];
+          smaller_indices[pos] = lb;
+        });
+      thrust::lower_bound(rmm::exec_policy_nosync(stream),
+                          smaller_it,
+                          smaller_it + smaller_numrows,
+                          larger_it + offset,
+                          larger_it + chunk_end,
+                          chunk_tabulate_it,
+                          comparator);
+    }
+  }
+  // Inclusive scan by key in chunks to handle large arrays (> INT32_MAX)
+  {
+    constexpr auto chunk_size = static_cast<std::size_t>(std::numeric_limits<int>::max());
+    size_type carry_value     = 0;
+    size_type carry_key       = -1;
+    for (std::size_t offset = 0; offset < total_matches; offset += chunk_size) {
+      auto const chunk_end = std::min(offset + chunk_size, total_matches);
+      thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
+                                    larger_indices.begin() + offset,
+                                    larger_indices.begin() + chunk_end,
+                                    smaller_indices.begin() + offset,
+                                    smaller_indices.begin() + offset);
+      // Propagate carry value if the first key of this chunk matches the last key of previous chunk
+      if (offset > 0) {
+        auto first_key_vec = rmm::device_uvector<size_type>(1, stream, temp_mr);
+        thrust::copy_n(rmm::exec_policy_nosync(stream),
+                       larger_indices.begin() + offset,
+                       1,
+                       first_key_vec.begin());
+        auto first_key = first_key_vec.element(0, stream);
+        if (first_key == carry_key) {
+          // Add carry to all elements with the same key at the beginning of this chunk
+          thrust::transform_if(
+            rmm::exec_policy_nosync(stream),
+            smaller_indices.begin() + offset,
+            smaller_indices.begin() + chunk_end,
+            larger_indices.begin() + offset,
+            smaller_indices.begin() + offset,
+            [carry_value, first_key] __device__(auto val) { return val + carry_value; },
+            [first_key] __device__(auto key) { return key == first_key; });
+        }
+      }
+      // Get the carry for the next chunk (last value and key)
+      if (chunk_end < total_matches) {
+        auto last_elem_vec = rmm::device_uvector<size_type>(2, stream, temp_mr);
+        thrust::copy_n(rmm::exec_policy_nosync(stream),
+                       smaller_indices.begin() + chunk_end - 1,
+                       1,
+                       last_elem_vec.begin());
+        thrust::copy_n(rmm::exec_policy_nosync(stream),
+                       larger_indices.begin() + chunk_end - 1,
+                       1,
+                       last_elem_vec.begin() + 1);
+        carry_value = last_elem_vec.element(0, stream);
+        carry_key   = last_elem_vec.element(1, stream);
+      }
+    }
+  }
+  // Transform in chunks to handle large arrays (> INT32_MAX)
+  {
+    constexpr auto chunk_size = static_cast<std::size_t>(std::numeric_limits<int>::max());
+    for (std::size_t offset = 0; offset < total_matches; offset += chunk_size) {
+      auto const chunk_end = std::min(offset + chunk_size, total_matches);
+      thrust::transform(rmm::exec_policy_nosync(stream),
+                        smaller_indices.begin() + offset,
+                        smaller_indices.begin() + chunk_end,
+                        smaller_indices.begin() + offset,
+                        mapping_functor<SmallerIterator>{sorted_smaller_order_begin});
+    }
+  }
 
   stream.synchronize();
 
