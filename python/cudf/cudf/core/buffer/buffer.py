@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -230,13 +230,14 @@ class BufferOwner(Serializable):
 class _BufferAccessContext:
     """Context manager for buffer access mode control."""
 
-    __slots__ = ("_buffer",)
+    __slots__ = ("_buffer", "_mode")
 
     def __init__(self, buffer: Buffer, mode: Literal["read", "write"]):
         self._buffer = buffer
-        buffer._access_mode_stack.append(mode)
+        self._mode = mode
 
     def __enter__(self):
+        self._buffer._access_mode_stack.append(self._mode)
         return self._buffer
 
     def __exit__(self, exc_type, exc_val, exc_tb):

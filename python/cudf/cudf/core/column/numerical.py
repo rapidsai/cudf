@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -154,7 +154,7 @@ class NumericalColumn(NumericalBaseColumn):
                 col = col.astype(dtype)  # type: ignore[assignment]
             col = col.fillna(np.nan)
 
-        return cp.asarray(col.data).view(dtype)
+        return cp.asarray(col).view(dtype)
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
         if isinstance(value, (bool, np.bool_)) and self.dtype.kind != "b":
@@ -533,8 +533,8 @@ class NumericalColumn(NumericalBaseColumn):
         return plc.Column(
             data_type=dtype_to_pylibcudf_type(dtype),
             size=self.size,
-            data=self.astype(np.dtype(np.int64)).base_data,
-            mask=self.base_mask,
+            data=self.astype(np.dtype(np.int64)).data,
+            mask=self.mask,
             null_count=self.null_count,
             offset=self.offset,
             children=[],
