@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/std/type_traits>
 #include <thrust/detail/use_default.h>
