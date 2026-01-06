@@ -202,7 +202,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   auto d_new_offsets =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
   // offsets are at the beginning byte of each character
-  cudf::detail::copy_if_safe(
+  cudf::detail::copy_if(
     thrust::counting_iterator<int64_t>(0),
     thrust::counting_iterator<int64_t>(chars_bytes + 1),
     d_new_offsets,

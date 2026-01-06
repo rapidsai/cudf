@@ -12,14 +12,12 @@ from cudf.core.buffer.buffer import (
     BufferOwner,
     get_ptr_and_size,
 )
-from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.buffer.spillable_buffer import (
     SpillableBuffer,
     SpillableBufferOwner,
     SpillLock,
 )
-from cudf.options import get_option
 
 
 def get_buffer_owner(data: Any) -> BufferOwner | None:
@@ -62,8 +60,6 @@ def as_buffer(
 
     Raises ValueError if `data` isn't C-contiguous.
 
-    If copy-on-write is enabled, an ExposureTrackedBuffer is returned.
-
     If spilling is enabled, a SpillableBuffer that refers to a
     SpillableBufferOwner is returned. If `data` is owned by a spillable buffer,
     it must either be "exposed" or spill locked (called within an
@@ -78,7 +74,7 @@ def as_buffer(
         A buffer-like or array-like object.
     exposed : bool, optional
         Mark the buffer as permanently exposed. This is used by
-        ExposureTrackedBuffer to determine when a deep copy is required and
+        copy-on-write to determine when a deep copy is required and
         by SpillableBuffer to mark the buffer unspillable.
 
     Return
@@ -96,9 +92,6 @@ def as_buffer(
     if get_global_manager() is not None:
         owner_class = SpillableBufferOwner
         buffer_class = SpillableBuffer
-    elif get_option("copy_on_write"):
-        owner_class = BufferOwner
-        buffer_class = ExposureTrackedBuffer
     else:
         owner_class = BufferOwner
         buffer_class = Buffer
@@ -129,7 +122,7 @@ def as_buffer(
             "either be exposed or spill locked."
         )
     ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-    base_ptr = owner.get_ptr(mode="read")
+    base_ptr = owner.ptr
     if size > 0 and base_ptr == 0:
         raise ValueError("Cannot create a non-empty slice of a null buffer")
     return buffer_class(owner=owner, offset=ptr - base_ptr, size=size)

@@ -1,8 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -13,10 +12,7 @@ import pylibcudf as plc
 import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import (
-    is_dtype_obj_struct,
-    pyarrow_dtype_to_cudf_dtype,
-)
+from cudf.utils.dtypes import is_dtype_obj_struct
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
@@ -55,19 +51,13 @@ class StructColumn(ColumnBase):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: StructDtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ):
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -87,6 +77,16 @@ class StructColumn(ColumnBase):
                 strict=True,
             )
         )
+
+    def _get_sliced_child(self, idx: int) -> ColumnBase:
+        """Get a child column properly sliced to match the parent's view."""
+        if idx < 0 or idx >= len(self._children):
+            raise IndexError(
+                f"Index {idx} out of range for {len(self._children)} children"
+            )
+
+        sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
+        return type(self._children[idx]).from_pylibcudf(sliced_plc_col)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
@@ -113,37 +113,6 @@ class StructColumn(ColumnBase):
             )
         return dtype
 
-    @property
-    def base_size(self) -> int:
-        if self.base_children:
-            return len(self.base_children[0])
-        else:
-            return self.size + self.offset
-
-    def to_arrow(self) -> pa.Array:
-        children = [child.to_arrow() for child in self.children]
-        dtype: StructDtype = (
-            pyarrow_dtype_to_cudf_dtype(self.dtype)  # type: ignore[assignment]
-            if isinstance(self.dtype, pd.ArrowDtype)
-            else self.dtype
-        )
-        pa_type = pa.struct(
-            {
-                field: child.type
-                for field, child in zip(dtype.fields, children, strict=True)
-            }
-        )
-
-        if self.mask is not None:
-            buffers = [pa.py_buffer(self.mask.memoryview())]
-        else:
-            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
-            buffers = [None]  # type: ignore[list-item]
-
-        return pa.StructArray.from_buffers(
-            pa_type, len(self), buffers, children=children
-        )
-
     def to_pandas(
         self,
         *,
@@ -163,14 +132,6 @@ class StructColumn(ColumnBase):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
-
-    @cached_property
-    def memory_usage(self) -> int:
-        n = super().memory_usage
-        for child in self.children:
-            n += child.memory_usage
-
-        return n
 
     def element_indexing(self, index: int) -> dict[Any, Any] | None:
         result = super().element_indexing(index)
@@ -218,7 +179,7 @@ class StructColumn(ColumnBase):
         if isinstance(dtype, IntervalDtype):
             new_children = [
                 child.astype(dtype.subtype).plc_column
-                for child in self.base_children
+                for child in self.children
             ]
             new_plc_column = plc.Column(
                 plc.DataType(plc.TypeId.STRUCT),
@@ -231,15 +192,12 @@ class StructColumn(ColumnBase):
             )
             return IntervalColumn(
                 plc_column=new_plc_column,
-                size=self.size,
                 dtype=dtype,
-                offset=self.offset,
-                null_count=self.null_count,
                 exposed=False,
             )
         elif isinstance(dtype, StructDtype):
             new_children = [
-                self.base_children[i]
+                self.children[i]
                 ._with_type_metadata(dtype.fields[f])
                 .plc_column
                 for i, f in enumerate(dtype.fields.keys())
@@ -255,10 +213,7 @@ class StructColumn(ColumnBase):
             )
             return StructColumn(
                 plc_column=new_plc_column,
-                size=self.size,
                 dtype=dtype,
-                offset=self.offset,
-                null_count=self.null_count,
                 exposed=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property

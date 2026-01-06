@@ -29,7 +29,7 @@ requirements:
     - python >=3.10
     - pip
     - rapids-build-backend >=0.4.0,<0.5.0
-    - setuptools
+    - setuptools>=77.0.0
     - python-confluent-kafka >=2.8.0,<2.9.0
     - cudf_kafka =${{ version }}
     - cuda-version =${{ cuda_version }}
@@ -50,5 +50,5 @@ tests:
 
 about:
   homepage: ${{ load_from_file("python/custreamz/pyproject.toml").project.urls.Homepage }}
-  license: ${{ load_from_file("python/custreamz/pyproject.toml").project.license.text }}
+  license: ${{ load_from_file("python/custreamz/pyproject.toml").project.license }}
   summary: ${{ load_from_file("python/custreamz/pyproject.toml").project.description }}
