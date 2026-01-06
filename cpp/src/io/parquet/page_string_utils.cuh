@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -293,11 +293,11 @@ __device__ size_t decode_strings(page_state_s* s,
         int input_thread_string_offset;
         int string_length;
         if (s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
-          input_thread_string_offset = (thread_pos + skipped_leaf_values) * s->dtype_len_in;
+          input_thread_string_offset = src_pos * s->dtype_len_in;
           string_length              = s->dtype_len_in;
         } else {
-          input_thread_string_offset = str_offsets[thread_pos];
-          int const next_offset      = str_offsets[thread_pos + 1];
+          input_thread_string_offset = str_offsets[src_pos];
+          int const next_offset      = str_offsets[src_pos + 1];
           // The memory is laid out as: 4-byte length, string, 4-byte length, string, ...
           // String length = subtract the offsets and the stored length of the next string
           // Except at the end of the dictionary, where the last string offset is repeated.
