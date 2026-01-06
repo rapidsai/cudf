@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cudf/detail/device_scalar.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -57,6 +58,69 @@ OutputIterator copy_if_safe(InputIterator first,
     itr = copy_end;
   }
   return result;
+}
+
+/**
+ * @brief Helper to copy elements satisfying a predicate using CUB with pinned memory
+ *
+ * @deprecated in 26.02 and to be removed in a future release. Use `cudf::detail::copy_if` instead.
+ *
+ * This is a proxy for `thrust::copy_if` which is a workaround for its bug
+ * (https://github.com/NVIDIA/thrust/issues/1302) where it cannot iterate over int-max values
+ * `distance(first,last) > int-max` This calls thrust::copy_if in 2B chunks instead.
+ *
+ * @tparam Predicate **[inferred]** Type of the unary predicate
+ * @tparam InputIterator **[inferred]** Type of device-accessible input iterator
+ * @tparam OutputIterator **[inferred]** Type of device-accessible output iterator
+ *
+ * @param begin Device-accessible iterator to start of input values
+ * @param end Device-accessible iterator to end of input values
+ * @param output Device-accessible iterator to start of output values
+ * @param predicate Unary predicate that returns true for elements to copy
+ * @param stream CUDA stream to use
+ * @return Iterator pointing to the end of the output range
+ */
+template <typename InputIterator, typename OutputIterator, typename Predicate>
+[[deprecated("Use cudf::detail::copy_if instead")]] OutputIterator copy_if_safe(
+  InputIterator first,
+  InputIterator last,
+  OutputIterator result,
+  Predicate pred,
+  rmm::cuda_stream_view stream)
+{
+  auto const num_items = cuda::std::distance(begin, end);
+
+  // Device scalar to store the number of selected elements
+  auto num_selected =
+    cudf::detail::device_scalar<cuda::std::size_t>(stream, cudf::get_current_device_resource_ref());
+
+  // First call to get temporary storage size
+  size_t temp_storage_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceSelect::If(nullptr,
+                                      temp_storage_bytes,
+                                      begin,
+                                      output,
+                                      num_selected.data(),
+                                      num_items,
+                                      predicate,
+                                      stream.value()));
+
+  // Allocate temporary storage
+  rmm::device_buffer d_temp_storage(
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+
+  // Run copy_if
+  CUDF_CUDA_TRY(cub::DeviceSelect::If(d_temp_storage.data(),
+                                      temp_storage_bytes,
+                                      begin,
+                                      output,
+                                      num_selected.data(),
+                                      num_items,
+                                      predicate,
+                                      stream.value()));
+
+  // Copy number of selected elements back to host via pinned memory
+  return output + num_selected.value(stream);
 }
 
 /**

@@ -1,12 +1,12 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from contextlib import ExitStack
 from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase
 from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from cudf._typing import DtypeObj
 
 
-@acquire_spill_lock()
 def binaryop(
     lhs: ColumnBase | plc.Scalar,
     rhs: ColumnBase | plc.Scalar,
@@ -48,15 +47,18 @@ def binaryop(
     op = op.upper()
     op = _op_map.get(op, op)
 
-    return ColumnBase.from_pylibcudf(
-        plc.binaryop.binary_operation(
-            lhs.to_pylibcudf(mode="read")
-            if isinstance(lhs, ColumnBase)
-            else lhs,
-            rhs.to_pylibcudf(mode="read")
-            if isinstance(rhs, ColumnBase)
-            else rhs,
-            plc.binaryop.BinaryOperator[op],
-            dtype_to_pylibcudf_type(dtype),
-        )
-    )._with_type_metadata(dtype)
+    # Access context for column buffers
+    with ExitStack() as stack:
+        if isinstance(lhs, ColumnBase):
+            stack.enter_context(lhs.access(mode="read", scope="internal"))
+        if isinstance(rhs, ColumnBase):
+            stack.enter_context(rhs.access(mode="read", scope="internal"))
+
+        return ColumnBase.from_pylibcudf(
+            plc.binaryop.binary_operation(
+                lhs.plc_column if isinstance(lhs, ColumnBase) else lhs,
+                rhs.plc_column if isinstance(rhs, ColumnBase) else rhs,
+                plc.binaryop.BinaryOperator[op],
+                dtype_to_pylibcudf_type(dtype),
+            )
+        )._with_type_metadata(dtype)
