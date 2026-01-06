@@ -1,9 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
+
+#include <cudf/utilities/error.hpp>
 
 #include <stdexcept>
 #include <type_traits>
@@ -15,7 +17,6 @@
  */
 namespace cudf {
 namespace detail {
-namespace {
 
 /**
  * @brief Helper to dispatch a single enum value for a function with a non-void return type.
@@ -45,7 +46,6 @@ bool try_dispatch_enum(auto runtime_value, Func&& func, auto& result)
 // Helper to extract first value from parameter pack
 template <auto First, auto...>
 inline constexpr auto first_value = First;
-}  // namespace
 
 /**
  * @addtogroup utility_dispatcher
@@ -104,14 +104,14 @@ auto dispatch_enum(auto runtime_value, Func&& func)
      ...);
 
     // Reaching this point indicates developer error
-    if (!found) { throw std::logic_error("Invalid enum value for dispatch_enum"); }
+    CUDF_EXPECTS(found, "Invalid enum value for dispatch_enum");
   } else {
     // Handle non-void return type
     RetType result{};
     bool found = (try_dispatch_enum<Values>(runtime_value, func, result) || ...);
 
     // Reaching this point indicates developer error
-    if (!found) { throw std::logic_error("Invalid enum value for dispatch_enum"); }
+    CUDF_EXPECTS(found, "Invalid enum value for dispatch_enum");
     return result;
   }
 }

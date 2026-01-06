@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,11 +9,11 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/label_bins.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/dispatchers.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/dispatchers.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
