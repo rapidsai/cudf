@@ -25,7 +25,7 @@
  * shows what percentage of total join time is spent on metrics computation.
  *
  * Note that we use divisor-based generation instead of create_random_table primarily
- * becasue create_random_table cannot guarantee unique keys for ALL_UNIQUE. before
+ * because create_random_table cannot guarantee unique keys for ALL_UNIQUE. before
  * this change we ran into out of memory allocation errors with 100 million rows
  * and ALL_UNIQUE. ALL_UNIQUE should never cause these kinds of crashes.
  *
