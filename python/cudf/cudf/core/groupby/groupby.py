@@ -26,6 +26,7 @@ from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
 from cudf.core.column.column import (
     ColumnBase,
+    access_columns,
     as_column,
     column_empty,
     deserialize_columns,
@@ -424,10 +425,7 @@ class _GroupByContextManager:
         self._stack_list = []
 
         # Create pylibcudf GroupBy eagerly
-        with ExitStack() as stack:
-            for col in grouping._key_columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
+        with access_columns(*grouping._key_columns):
             self._plc_groupby = plc.groupby.GroupBy(
                 plc.Table([col.plc_column for col in grouping._key_columns]),
                 plc.types.NullPolicy.EXCLUDE
@@ -817,12 +815,9 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _groups(
         self, values: Iterable[ColumnBase]
     ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
-        with ExitStack() as stack:
-            # Materialize iterator to avoid consuming it during access context setup
-            values_list = list(values)
-            for col in values_list:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
+        # Materialize iterator to avoid consuming it during access context setup
+        values_list = list(values)
+        with access_columns(*values_list):
             plc_columns = [col.plc_column for col in values_list]
             if not plc_columns:
                 plc_table = None
@@ -903,10 +898,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "All requested aggregations are unsupported."
             )
 
-        with ExitStack() as stack:
-            for col in values:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
+        with access_columns(*values):
             with self._groupby as plc_groupby:
                 keys, results = (
                     plc_groupby.scan(requests)
@@ -933,10 +925,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _shift(
         self, values: tuple[ColumnBase, ...], periods: int, fill_values: list
     ) -> Generator[ColumnBase]:
-        with ExitStack() as stack:
-            for col in values:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
+        with access_columns(*values):
             with self._groupby as plc_groupby:
                 _, shifts = plc_groupby.shift(
                     plc.table.Table([col.plc_column for col in values]),
@@ -957,10 +946,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _replace_nulls(
         self, values: tuple[ColumnBase, ...], method: str
     ) -> Generator[ColumnBase]:
-        with ExitStack() as stack:
-            for col in values:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
+        with access_columns(*values):
             with self._groupby as plc_groupby:
                 _, replaced = plc_groupby.replace_nulls(
                     plc.Table([col.plc_column for col in values]),
@@ -1177,14 +1163,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 join_keys = map(list, zip(*join_keys, strict=True))
                 # By construction, left and right keys are related by
                 # a permutation, so we can use an inner join.
-                with ExitStack() as stack:
-                    join_keys_list = list(join_keys)
-                    for cols in join_keys_list:
-                        for col in cols:
-                            stack.enter_context(
-                                col.access(mode="read", scope="internal")
-                            )
-
+                join_keys_list = list(join_keys)
+                # Flatten nested list of columns for access_columns
+                all_cols = [col for cols in join_keys_list for col in cols]
+                with access_columns(*all_cols):
                     plc_tables = [
                         plc.Table([col.plc_column for col in cols])
                         for cols in join_keys_list
@@ -1670,20 +1652,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 keys = cp.random.default_rng(seed=random_state).random(
                     size=nrows
                 )
-                with ExitStack() as stack:
-                    indices_col = as_column(indices)
-                    keys_col = as_column(keys)
-                    group_offsets_col = as_column(group_offsets)
-                    stack.enter_context(
-                        indices_col.access(mode="read", scope="internal")
-                    )
-                    stack.enter_context(
-                        keys_col.access(mode="read", scope="internal")
-                    )
-                    stack.enter_context(
-                        group_offsets_col.access(mode="read", scope="internal")
-                    )
-
+                indices_col = as_column(indices)
+                keys_col = as_column(keys)
+                group_offsets_col = as_column(group_offsets)
+                with access_columns(indices_col, keys_col, group_offsets_col):
                     plc_table = plc.sorting.stable_segmented_sort_by_key(
                         plc.Table([indices_col.plc_column]),
                         plc.Table([keys_col.plc_column]),
@@ -2537,12 +2509,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # column-pair into a single column
 
         def interleave_columns(source_columns):
-            with ExitStack() as stack:
-                for col in source_columns:
-                    stack.enter_context(
-                        col.access(mode="read", scope="internal")
-                    )
-
+            with access_columns(*source_columns):
                 return ColumnBase.from_pylibcudf(
                     plc.reshape.interleave_columns(
                         plc.Table([c.plc_column for c in source_columns])

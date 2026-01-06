@@ -7,7 +7,6 @@ import itertools
 import operator
 import warnings
 from collections.abc import Mapping
-from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
@@ -29,6 +28,7 @@ from cudf.core._internals import copying, sorting
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     ColumnBase,
+    access_columns,
     as_column,
     deserialize_columns,
     serialize_columns,
@@ -1739,18 +1739,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
         # dispatch those (or any other) functions that we could implement
         # without cupy.
 
-        with ExitStack() as stack:
-            # Access all columns used in operands
-            for left, right, _, _ in operands.values():
-                if isinstance(left, ColumnBase):
-                    stack.enter_context(
-                        left.access(mode="read", scope="internal")
-                    )
-                if isinstance(right, ColumnBase):
-                    stack.enter_context(
-                        right.access(mode="read", scope="internal")
-                    )
-
+        with access_columns(
+            *(
+                col
+                for left, right, _, _ in operands.values()
+                for col in (left, right)
+                if isinstance(col, ColumnBase)
+            )
+        ):
             mask = None
             data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
             for name, (left, right, _, _) in operands.items():
@@ -2069,14 +2065,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if not is_scalar(repeats):
             repeats = as_column(repeats)
 
-        with ExitStack() as stack:
-            for col in columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-            if isinstance(repeats, ColumnBase):
-                stack.enter_context(
-                    repeats.access(mode="read", scope="internal")
-                )
-
+        with access_columns(*columns, repeats):
             plc_table = plc.Table([col.plc_column for col in columns])
             if isinstance(repeats, ColumnBase):
                 repeats_plc = repeats.plc_column

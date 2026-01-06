@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from contextlib import ExitStack
 from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
@@ -46,10 +45,9 @@ def drop_nulls(
     else:
         keep_threshold = len(keys)
 
-    with ExitStack() as stack:
-        for col in columns:
-            stack.enter_context(col.access(mode="read", scope="internal"))
+    from cudf.core.column import access_columns
 
+    with access_columns(*columns):
         plc_table = plc.stream_compaction.drop_nulls(
             plc.Table([col.plc_column for col in columns]),
             keys,
@@ -73,11 +71,9 @@ def apply_boolean_mask(
     -------
     columns obtained from applying mask
     """
-    with ExitStack() as stack:
-        for col in columns:
-            stack.enter_context(col.access(mode="read", scope="internal"))
-        stack.enter_context(boolean_mask.access(mode="read", scope="internal"))
+    from cudf.core.column import access_columns
 
+    with access_columns(*columns, boolean_mask):
         plc_table = plc.stream_compaction.apply_boolean_mask(
             plc.Table([col.plc_column for col in columns]),
             boolean_mask.plc_column,
@@ -114,10 +110,9 @@ def drop_duplicates(
     if (keep_option := _keep_options.get(keep)) is None:
         raise ValueError('keep must be either "first", "last" or False')
 
-    with ExitStack() as stack:
-        for col in columns:
-            stack.enter_context(col.access(mode="read", scope="internal"))
+    from cudf.core.column import access_columns
 
+    with access_columns(*columns):
         plc_table = plc.stream_compaction.stable_distinct(
             plc.Table([col.plc_column for col in columns]),
             keys if keys is not None else list(range(len(columns))),

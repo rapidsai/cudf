@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 import re
 import warnings
-from contextlib import ExitStack
 from functools import lru_cache
 from typing import TYPE_CHECKING, Literal
 
@@ -18,7 +17,7 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 from cudf.api.types import is_integer, is_scalar
-from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.column import ColumnBase, access_columns, as_column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import DatetimeIndex, Index, ensure_index
 from cudf.core.series import Series
@@ -686,10 +685,7 @@ class DateOffset:
             for unit, value in self._scalars.items():
                 value = -value if op == "__sub__" else value
                 if unit == "months":
-                    with ExitStack() as stack:
-                        stack.enter_context(
-                            datetime_col.access(mode="read", scope="internal")
-                        )
+                    with access_columns(datetime_col):
                         datetime_col = type(datetime_col).from_pylibcudf(
                             plc.datetime.add_calendrical_months(
                                 datetime_col.plc_column,

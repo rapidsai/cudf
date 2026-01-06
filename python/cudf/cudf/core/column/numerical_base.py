@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack
 from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
@@ -12,7 +11,7 @@ import numpy as np
 import pylibcudf as plc
 
 import cudf
-from cudf.core.column.column import ColumnBase, column_empty
+from cudf.core.column.column import ColumnBase, access_columns, column_empty
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
 from cudf.utils.dtypes import _get_nan_for_dtype
@@ -138,14 +137,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 .slice(no_nans.null_count, len(no_nans))
                 .astype(np.dtype(np.int32))
             )
-            with ExitStack() as stack:
-                stack.enter_context(
-                    no_nans.access(mode="read", scope="internal")
-                )
-                stack.enter_context(
-                    indices.access(mode="read", scope="internal")
-                )
-
+            with access_columns(no_nans, indices):
                 plc_column = plc.quantiles.quantile(
                     no_nans.plc_column,
                     q,
@@ -259,8 +251,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if how not in {"half_even", "half_up"}:
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
+        with access_columns(self):
             return type(self).from_pylibcudf(
                 plc.round.round(self.plc_column, decimals, plc_how)
             )
@@ -274,8 +265,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         unaryop_str = unaryop.upper()
         unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
+        with access_columns(self):
             return type(self).from_pylibcudf(
                 plc.unary.unary_operation(self.plc_column, unaryop_enum)
             )

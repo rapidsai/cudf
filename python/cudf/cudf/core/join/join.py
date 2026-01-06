@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import itertools
-from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
 from cudf.core._internals import sorting
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase, access_columns, as_column
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.join._join_helpers import (
@@ -40,12 +39,7 @@ class Merge:
         if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        with ExitStack() as stack:
-            for col in lhs:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-            for col in rhs:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
+        with access_columns(*lhs, *rhs):
             left_rows, right_rows = join_func(
                 plc.Table([col.plc_column for col in lhs]),
                 plc.Table([col.plc_column for col in rhs]),
@@ -681,12 +675,7 @@ class MergeSemi(Merge):
         ) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        with ExitStack() as stack:
-            for col in lhs:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-            for col in rhs:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
+        with access_columns(*lhs, *rhs):
             return ColumnBase.from_pylibcudf(
                 join_func(
                     plc.Table([col.plc_column for col in lhs]),

@@ -23,7 +23,6 @@ from collections.abc import (
     MutableMapping,
     Sequence,
 )
-from contextlib import ExitStack
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -57,6 +56,7 @@ from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
+    access_columns,
     as_column,
     column_empty,
     concat_columns,
@@ -1970,20 +1970,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         ignore = ignore_index or are_all_range_index
         index_names = None if ignore else tables[0]._index_names
         column_names = tables[0]._column_names
-        with ExitStack() as stack:
-            for table in tables:
-                if ignore:
-                    for col in table._columns:
-                        stack.enter_context(
-                            col.access(mode="read", scope="internal")
-                        )
-                else:
-                    for col in itertools.chain(
-                        table.index._columns, table._columns
-                    ):
-                        stack.enter_context(
-                            col.access(mode="read", scope="internal")
-                        )
+        with access_columns(
+            *(
+                col
+                for table in tables
+                for col in (
+                    table._columns
+                    if ignore
+                    else itertools.chain(table.index._columns, table._columns)
+                )
+            )
+        ):
             plc_tables = [
                 plc.Table(
                     [
@@ -2722,14 +2719,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if lo < 0 or hi >= map_size:
                 raise ValueError("Partition map has invalid values")
 
-        with ExitStack() as stack:
-            # Materialize iterator to avoid consuming it during access context setup
-            source_columns_list = list(source_columns)
-            for col in source_columns_list:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-            stack.enter_context(
-                map_index.access(mode="read", scope="internal")
-            )
+        # Materialize iterator to avoid consuming it during access context setup
+        source_columns_list = list(source_columns)
+        with access_columns(*source_columns_list, map_index):
             plc_table, offsets = plc.partitioning.partition(
                 plc.Table([col.plc_column for col in source_columns_list]),
                 map_index.plc_column,
@@ -5129,11 +5121,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         else:
             cols = self._columns
 
-        with ExitStack() as stack:
-            # Materialize iterator to avoid consuming it during access context setup
-            cols_list = list(cols)
-            for col in cols_list:
-                stack.enter_context(col.access(mode="read", scope="internal"))
+        # Materialize iterator to avoid consuming it during access context setup
+        cols_list = list(cols)
+        with access_columns(*cols_list):
             plc_table, offsets = plc.partitioning.hash_partition(
                 plc.Table([col.plc_column for col in cols_list]),
                 key_indices,
@@ -6189,11 +6179,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise TypeError(msg)
 
         if method == "table":
-            with ExitStack() as stack:
-                for col in self._columns:
-                    stack.enter_context(
-                        col.access(mode="read", scope="internal")
-                    )
+            with access_columns(*self._columns):
                 plc_table = plc.quantiles.quantiles(
                     plc.Table([c.plc_column for c in self._columns]),
                     qs,
@@ -7488,13 +7474,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(len(unique_named_levels))
 
         # Each column name should tile itself by len(df) times
-        with ExitStack() as stack:
-            cols = [
-                as_column(unique_named_levels.get_level_values(i))
-                for i in range(unique_named_levels.nlevels)
-            ]
-            for col in cols:
-                stack.enter_context(col.access(mode="read", scope="internal"))
+        cols = [
+            as_column(unique_named_levels.get_level_values(i))
+            for i in range(unique_named_levels.nlevels)
+        ]
+        with access_columns(*cols):
             plc_table = plc.reshape.tile(
                 plc.Table([col.plc_column for col in cols]),
                 self.shape[0],
@@ -7581,18 +7565,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 cudf.get_option("mode.pandas_compatible")
                 and common_type == "object"
             ):
-                for col, hcol in zip(columns, homogenized, strict=True):  # type: ignore[assignment]
+                for col, hcol in zip(columns, homogenized, strict=True):
                     if is_mixed_with_object_dtype(col, hcol):
                         raise TypeError(
                             "Stacking a DataFrame with mixed object and "
                             "non-object dtypes is not supported. "
                         )
 
-            with ExitStack() as stack:
-                for col in homogenized:
-                    stack.enter_context(
-                        col.access(mode="read", scope="internal")
-                    )
+            with access_columns(*homogenized):
                 interleaved_col = ColumnBase.from_pylibcudf(
                     plc.reshape.interleave_columns(
                         plc.Table([col.plc_column for col in homogenized])
@@ -8128,9 +8108,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise ValueError(
                 "interleave_columns does not support 'category' dtype."
             )
-        with ExitStack() as stack:
-            for col in self._columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
+        with access_columns(*self._columns):
             result_col = ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table([col.plc_column for col in self._columns])
@@ -8140,9 +8118,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     def _compute_column(self, expr: str) -> ColumnBase:
         """Helper function for eval"""
-        with ExitStack() as stack:
-            for col in self._columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
+        with access_columns(*self._columns):
             plc_column = plc.transform.compute_column(
                 plc.Table([col.plc_column for col in self._columns]),
                 plc.expressions.to_expression(expr, self._column_names),

@@ -11,7 +11,6 @@ import textwrap
 import warnings
 from collections import Counter
 from collections.abc import Mapping
-from contextlib import ExitStack
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -45,6 +44,7 @@ from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
     NumericalColumn,
+    access_columns,
     as_column,
     column_empty,
 )
@@ -2932,9 +2932,7 @@ class IndexedFrame(Frame):
                 "Provided seed value has no effect for the hash method "
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
-        with ExitStack() as stack:
-            for col in self._columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
+        with access_columns(*self._columns):
             plc_table = plc.Table([c.plc_column for c in self._columns])
             if method == "murmur3":
                 plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
@@ -3071,11 +3069,9 @@ class IndexedFrame(Frame):
             if keep_index and not has_range_index
             else self._columns
         )
-        with ExitStack() as stack:
-            # Materialize iterator to avoid consuming it during access context setup
-            cols_list = list(columns_to_slice)
-            for col in cols_list:
-                stack.enter_context(col.access(mode="read", scope="internal"))
+        # Materialize iterator to avoid consuming it during access context setup
+        cols_list = list(columns_to_slice)
+        with access_columns(*cols_list):
             plc_tables = plc.copying.slice(
                 plc.Table([col.plc_column for col in cols_list]),
                 [start, stop],
@@ -3274,9 +3270,7 @@ class IndexedFrame(Frame):
         if (keep_option := _keep_options.get(keep)) is None:
             raise ValueError('keep must be either "first", "last" or False')
 
-        with ExitStack() as stack:
-            for col in columns:
-                stack.enter_context(col.access(mode="read", scope="internal"))
+        with access_columns(*columns):
             plc_column = plc.stream_compaction.distinct_indices(
                 plc.Table([col.plc_column for col in columns]),
                 keep_option,
@@ -3297,14 +3291,13 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def _empty_like(self, keep_index: bool = True) -> Self:
-        with ExitStack() as stack:
-            cols = (
+        with access_columns(
+            *(
                 itertools.chain(self.index._columns, self._columns)
                 if keep_index
                 else self._columns
             )
-            for col in cols:
-                stack.enter_context(col.access(mode="read", scope="internal"))
+        ):
             plc_table = plc.copying.empty_like(
                 plc.Table(
                     [
@@ -3333,18 +3326,13 @@ class IndexedFrame(Frame):
         if self._num_rows == 0:
             return []
 
-        with ExitStack() as stack:
-            # Enter access context for all source columns
-            source_columns = (
-                itertools.chain(self.index._columns, self._columns)
-                if keep_index
-                else self._columns
-            )
-            # Materialize the iterator and enter contexts
-            source_columns_list = list(source_columns)
-            for col in source_columns_list:
-                stack.enter_context(col.access(mode="read", scope="internal"))
-
+        # Materialize the iterator and enter contexts
+        source_columns_list = list(
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index
+            else self._columns
+        )
+        with access_columns(*source_columns_list):
             columns_split = copying.columns_split(
                 source_columns_list,
                 splits,
@@ -5470,9 +5458,7 @@ class IndexedFrame(Frame):
         else:
             idx_cols = ()
 
-        with ExitStack() as stack:
-            for col in itertools.chain(idx_cols, self._columns):
-                stack.enter_context(col.access(mode="read", scope="internal"))
+        with access_columns(*itertools.chain(idx_cols, self._columns)):
             plc_table = plc.lists.explode_outer(
                 plc.Table(
                     [
@@ -5564,9 +5550,9 @@ class IndexedFrame(Frame):
         -------
         The indexed frame containing the tiled "rows".
         """
-        with ExitStack() as stack:
-            for col in itertools.chain(self.index._columns, self._columns):
-                stack.enter_context(col.access(mode="read", scope="internal"))
+        with access_columns(
+            *itertools.chain(self.index._columns, self._columns)
+        ):
             plc_table = plc.reshape.tile(
                 plc.Table(
                     [

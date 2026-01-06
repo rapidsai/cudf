@@ -7,7 +7,6 @@ import itertools
 import numbers
 import operator
 import warnings
-from contextlib import ExitStack
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
@@ -23,7 +22,7 @@ from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core import column
 from cudf.core._internals import sorting
 from cudf.core.algorithms import factorize
-from cudf.core.column.column import ColumnBase
+from cudf.core.column.column import ColumnBase, access_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import (
@@ -1982,14 +1981,7 @@ class MultiIndex(Index):
             for lcol, rcol in zip(target._columns, self._columns, strict=True)
         ]
         join_keys = list(map(list, zip(*join_keys, strict=True)))
-        with ExitStack() as stack:
-            # Access all columns involved in the join
-            for cols in join_keys:
-                for col in cols:
-                    stack.enter_context(
-                        col.access(mode="read", scope="internal")
-                    )
-
+        with access_columns(*join_keys):
             plc_tables = [
                 plc.Table([col.plc_column for col in cols])
                 for cols in join_keys

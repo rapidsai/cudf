@@ -19,13 +19,11 @@ def gather(
     gather_map: NumericalColumn,
     nullify: bool = False,
 ) -> list[plc.Column]:
-    with ExitStack() as stack:
-        # Materialize iterator to avoid consuming it during access context setup
-        cols_list = list(columns)
-        for col in cols_list:
-            stack.enter_context(col.access(mode="read", scope="internal"))
-        stack.enter_context(gather_map.access(mode="read", scope="internal"))
+    # Materialize iterator to avoid consuming it during access context setup
+    cols_list = list(columns)
+    from cudf.core.column import access_columns
 
+    with access_columns(*cols_list, gather_map):
         plc_tbl = plc.copying.gather(
             plc.Table([col.plc_column for col in cols_list]),
             gather_map.plc_column,
@@ -88,11 +86,10 @@ def scatter(
 def columns_split(
     input_columns: Iterable[ColumnBase], splits: list[int]
 ) -> list[list[plc.Column]]:
-    with ExitStack() as stack:
-        cols_list = list(input_columns)
-        for col in cols_list:
-            stack.enter_context(col.access(mode="read", scope="internal"))
+    cols_list = list(input_columns)
+    from cudf.core.column import access_columns
 
+    with access_columns(*cols_list):
         return [
             plc_tbl.columns()
             for plc_tbl in plc.copying.split(

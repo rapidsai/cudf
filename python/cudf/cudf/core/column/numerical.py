@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import functools
-from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
@@ -20,7 +19,12 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import as_buffer
 from cudf.core.column.categorical import CategoricalColumn
-from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.column.column import (
+    ColumnBase,
+    access_columns,
+    as_column,
+    column_empty,
+)
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
@@ -397,9 +401,7 @@ class NumericalColumn(NumericalBaseColumn):
         # Only floats can contain nan.
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
-
+        with access_columns(self):
             # When computing a null mask to set back to the column, since the column may
             # have been sliced and have an offset, we need to compute the mask of the
             # equivalent unsliced column so that the mask bits will be appropriately
@@ -480,9 +482,7 @@ class NumericalColumn(NumericalBaseColumn):
     def int2ip(self) -> StringColumn:
         if self.dtype != np.dtype(np.uint32):
             raise TypeError("Only uint32 type can be converted to ip")
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
-
+        with access_columns(self):
             plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
                 self.plc_column
             )
@@ -524,9 +524,7 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             raise ValueError(f"No string conversion from type {self.dtype}")
 
-        with ExitStack() as stack:
-            stack.enter_context(col.access(mode="read", scope="internal"))
-
+        with access_columns(col):
             return (
                 type(self)
                 .from_pylibcudf(  # type: ignore[return-value]
@@ -994,10 +992,7 @@ class NumericalColumn(NumericalBaseColumn):
         if bin_col.nullable:
             raise ValueError("`bins` cannot contain null entries.")
 
-        with ExitStack() as stack:
-            stack.enter_context(bin_col.access(mode="read", scope="internal"))
-            stack.enter_context(self.access(mode="read", scope="internal"))
-
+        with access_columns(bin_col, self):
             return type(self).from_pylibcudf(
                 getattr(plc.search, "lower_bound" if right else "upper_bound")(
                     plc.Table([bin_col.plc_column]),

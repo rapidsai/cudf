@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from contextlib import ExitStack
 from typing import TYPE_CHECKING
 
 import pylibcudf as plc
@@ -48,12 +47,9 @@ def binaryop(
     op = _op_map.get(op, op)
 
     # Access context for column buffers
-    with ExitStack() as stack:
-        if isinstance(lhs, ColumnBase):
-            stack.enter_context(lhs.access(mode="read", scope="internal"))
-        if isinstance(rhs, ColumnBase):
-            stack.enter_context(rhs.access(mode="read", scope="internal"))
+    from cudf.core.column import access_columns
 
+    with access_columns(lhs, rhs):
         return ColumnBase.from_pylibcudf(
             plc.binaryop.binary_operation(
                 lhs.plc_column if isinstance(lhs, ColumnBase) else lhs,

@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from contextlib import ExitStack
 from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
@@ -43,11 +42,10 @@ def is_sorted(
         ``null_position``, False otherwise.
     """
     column_order, null_precedence = ordering(ascending, na_position)
-    with ExitStack() as stack:
-        cols_list = list(source_columns)
-        for col in cols_list:
-            stack.enter_context(col.access(mode="read", scope="internal"))
+    cols_list = list(source_columns)
+    from cudf.core.column import access_columns
 
+    with access_columns(*cols_list):
         return plc.sorting.is_sorted(
             plc.Table([col.plc_column for col in cols_list]),
             column_order,
@@ -123,11 +121,10 @@ def order_by(
     func = (
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
-    with ExitStack() as stack:
-        cols_list = list(columns_from_table)
-        for col in cols_list:
-            stack.enter_context(col.access(mode="read", scope="internal"))
+    cols_list = list(columns_from_table)
+    from cudf.core.column import access_columns
 
+    with access_columns(*cols_list):
         return func(
             plc.Table(
                 [col.plc_column for col in cols_list],
@@ -173,14 +170,11 @@ def sort_by_key(
     func = (
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
     )
-    with ExitStack() as stack:
-        values_list = list(values)
-        keys_list = list(keys)
-        for col in values_list:
-            stack.enter_context(col.access(mode="read", scope="internal"))
-        for col in keys_list:
-            stack.enter_context(col.access(mode="read", scope="internal"))
+    values_list = list(values)
+    keys_list = list(keys)
+    from cudf.core.column import access_columns
 
+    with access_columns(*values_list, *keys_list):
         return func(
             plc.Table([col.plc_column for col in values_list]),
             plc.Table([col.plc_column for col in keys_list]),
@@ -219,14 +213,11 @@ def search_sorted(
         plc.search,
         "lower_bound" if side == "left" else "upper_bound",
     )
-    with ExitStack() as stack:
-        source_list = list(source)
-        values_list = list(values)
-        for col in source_list:
-            stack.enter_context(col.access(mode="read", scope="internal"))
-        for col in values_list:
-            stack.enter_context(col.access(mode="read", scope="internal"))
+    source_list = list(source)
+    values_list = list(values)
+    from cudf.core.column import access_columns
 
+    with access_columns(*source_list, *values_list):
         return func(
             plc.Table([col.plc_column for col in source_list]),
             plc.Table([col.plc_column for col in values_list]),

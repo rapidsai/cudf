@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
+    access_columns,
     as_column,
     column_empty,
     concat_columns,
@@ -42,6 +43,7 @@ __all__ = [
     "StringColumn",
     "StructColumn",
     "TimeDeltaColumn",
+    "access_columns",
     "as_column",
     "column_empty",
     "column_empty_like",

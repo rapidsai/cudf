@@ -8,7 +8,6 @@ import functools
 import locale
 import re
 import warnings
-from contextlib import ExitStack
 from locale import nl_langinfo
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -25,7 +24,7 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
     get_tz_data,
 )
-from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.column import ColumnBase, access_columns, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
     _get_base_dtype,
@@ -189,8 +188,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def quarter(self) -> ColumnBase:
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
+        with access_columns(self):
             return type(self).from_pylibcudf(
                 plc.datetime.extract_quarter(self.plc_column)
             )
@@ -240,8 +238,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def day_of_year(self) -> ColumnBase:
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
+        with access_columns(self):
             return type(self).from_pylibcudf(
                 plc.datetime.day_of_year(self.plc_column)
             )
@@ -252,8 +249,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
+        with access_columns(self):
             last_day_col = type(self).from_pylibcudf(
                 plc.datetime.last_day_of_month(self.plc_column)
             )
@@ -280,8 +276,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def is_leap_year(self) -> ColumnBase:
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
+        with access_columns(self):
             return type(self).from_pylibcudf(
                 plc.datetime.is_leap_year(self.plc_column)
             )
@@ -292,8 +287,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def days_in_month(self) -> ColumnBase:
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
+        with access_columns(self):
             return type(self).from_pylibcudf(
                 plc.datetime.days_in_month(self.plc_column)
             )
@@ -353,8 +347,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def _get_dt_field(
         self, field: plc.datetime.DatetimeComponent
     ) -> ColumnBase:
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
+        with access_columns(self):
             return type(self).from_pylibcudf(
                 plc.datetime.extract_datetime_component(
                     self.plc_column,
@@ -426,8 +419,7 @@ class DatetimeColumn(TemporalBaseColumn):
         if (plc_freq := rounding_fequency_map.get(freq)) is None:
             raise ValueError(f"Invalid resolution: '{freq}'")
 
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
+        with access_columns(self):
             return type(self).from_pylibcudf(
                 round_func(
                     self.plc_column,
@@ -527,8 +519,7 @@ class DatetimeColumn(TemporalBaseColumn):
             names = plc.Column.from_scalar(
                 plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)), 0
             )
-        with ExitStack() as stack:
-            stack.enter_context(self.access(mode="read", scope="internal"))
+        with access_columns(self):
             return type(self).from_pylibcudf(  # type: ignore[return-value]
                 plc.strings.convert.convert_datetime.from_timestamps(
                     self.plc_column,
@@ -895,10 +886,7 @@ class DatetimeTZColumn(DatetimeColumn):
     def _get_dt_field(
         self, field: plc.datetime.DatetimeComponent
     ) -> ColumnBase:
-        with ExitStack() as stack:
-            stack.enter_context(
-                self._local_time.access(mode="read", scope="internal")
-            )
+        with access_columns(self._local_time):
             return type(self).from_pylibcudf(
                 plc.datetime.extract_datetime_component(
                     self._local_time.plc_column,

@@ -8,7 +8,6 @@ import itertools
 import operator
 import warnings
 from collections.abc import Hashable, MutableMapping
-from contextlib import ExitStack
 from functools import cache, cached_property
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -40,6 +39,7 @@ from cudf.core.column import (
     StringColumn,
     StructColumn,
     TimeDeltaColumn,
+    access_columns,
 )
 from cudf.core.column.column import as_column, column_empty, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
@@ -1975,9 +1975,7 @@ class Index(SingleColumnFrame):
         except ValueError:
             return self._return_get_indexer_result(result.values)
 
-        with ExitStack() as stack:
-            stack.enter_context(lcol.access(mode="read", scope="internal"))
-            stack.enter_context(rcol.access(mode="read", scope="internal"))
+        with access_columns(lcol, rcol):
             left_plc, right_plc = plc.join.inner_join(
                 plc.Table([lcol.plc_column]),
                 plc.Table([rcol.plc_column]),
