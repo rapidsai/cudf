@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import itertools
 import re
-from functools import cached_property, lru_cache
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -153,12 +153,9 @@ class StringColumn(ColumnBase, Scannable):
     @property
     def start_offset(self) -> int:
         if self._start_offset is None:
-            if (
-                len(self.base_children) == 1
-                and self.offset < self.base_children[0].size
-            ):
+            if len(self.children) == 1 and self.offset < self.children[0].size:
                 self._start_offset = int(
-                    self.base_children[0].element_indexing(self.offset)
+                    self.children[0].element_indexing(self.offset)
                 )
             else:
                 self._start_offset = 0
@@ -169,47 +166,16 @@ class StringColumn(ColumnBase, Scannable):
     def end_offset(self) -> int:
         if self._end_offset is None:
             if (
-                len(self.base_children) == 1
-                and (self.offset + self.size) < self.base_children[0].size
+                len(self.children) == 1
+                and (self.offset + self.size) < self.children[0].size
             ):
                 self._end_offset = int(
-                    self.base_children[0].element_indexing(
-                        self.offset + self.size
-                    )
+                    self.children[0].element_indexing(self.offset + self.size)
                 )
             else:
                 self._end_offset = 0
 
         return self._end_offset
-
-    @cached_property
-    def memory_usage(self) -> int:
-        n = super().memory_usage
-        if len(self.base_children) == 1:
-            child0_size = (self.size + 1) * self.base_children[
-                0
-            ].dtype.itemsize
-
-            n += child0_size
-        return n
-
-    @property
-    def base_size(self) -> int:
-        if len(self.base_children) == 0:
-            return 0
-        else:
-            return self.base_children[0].size - 1
-
-    def _recompute_data(self) -> None:
-        if (
-            self.offset == 0
-            and len(self.base_children) > 0
-            and self.size == self.base_children[0].size - 1
-        ):
-            self._data = self.base_data
-        else:
-            assert self.base_data is not None
-            self._data = self.base_data[self.start_offset : self.end_offset]
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
@@ -252,27 +218,14 @@ class StringColumn(ColumnBase, Scannable):
         return result
 
     def to_arrow(self) -> pa.Array:
-        """Convert to PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> col = cudf.core.as_column([1, 2, 3, 4])
-        >>> col.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7f886547f830>
-        [
-          1,
-          2,
-          3,
-          4
-        ]
-        """
-        if self.null_count == len(self):
+        # All null string columns fail to convert in libcudf, so we must short-circuit
+        # the call to super().to_arrow().
+        # TODO: Investigate if the above is a bug in libcudf and fix it there.
+        if len(self.children) == 0 or self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )
-        else:
-            return super().to_arrow()
+        return super().to_arrow()
 
     def sum(
         self,
@@ -1444,9 +1397,7 @@ class StringColumn(ColumnBase, Scannable):
         step: int | None = None,
     ) -> Self:
         if isinstance(start, ColumnBase) and isinstance(stop, ColumnBase):
-            plc_start: plc.Column | plc.Scalar = start.to_pylibcudf(
-                mode="read"
-            )
+            plc_start: plc.Column | plc.Scalar = start.plc_column
             plc_stop: plc.Column | plc.Scalar = stop.plc_column
             plc_step: plc.Scalar | None = None
         elif all(isinstance(x, int) or x is None for x in (start, stop)):
