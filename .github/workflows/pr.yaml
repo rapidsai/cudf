@@ -416,6 +416,10 @@ jobs:
       package-name: pylibcudf
       package-type: python
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
+      # Build a wheel for each CUDA x ARCH x PY_VER (3.10 and 3.11)
+      # When we drop Python 3.10, this can be simplified to:
+      # matrix_filter: map(select(.PY_VER == "3.11")) | unique_by({CUDA_VER, ARCH})
+      matrix_filter: map(select(.PY_VER == "3.11" or .PY_VER == "3.10")) | unique_by({CUDA_VER, ARCH, PY_VER})
   wheel-build-cudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
@@ -427,6 +431,10 @@ jobs:
       package-name: cudf
       package-type: python
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
+      # Build a wheel for each CUDA x ARCH x PY_VER (3.10 and 3.11)
+      # When we drop Python 3.10, this can be simplified to:
+      # matrix_filter: map(select(.PY_VER == "3.11")) | unique_by({CUDA_VER, ARCH})
+      matrix_filter: map(select(.PY_VER == "3.11" or .PY_VER == "3.10")) | unique_by({CUDA_VER, ARCH, PY_VER})
   wheel-tests-cudf:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
