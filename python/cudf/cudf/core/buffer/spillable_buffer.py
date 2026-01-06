@@ -379,29 +379,18 @@ class SpillableBufferOwner(BufferOwner):
     def ptr(self) -> int:
         """Device pointer to the start of the buffer (Span protocol).
 
-        If this is called within an `acquire_spill_lock` context or
-        an `access(scope="internal")` context, a reference to this
-        buffer is added to spill_lock, which disables spilling of
-        this buffer while in the context.
+        If this is called within an `access(scope="internal")` context,
+        the buffer is unspilled if needed and spilling is disabled
+        while in the context.
 
-        If this is *not* called within any spill lock context, this
+        If this is *not* called within any access context, this
         buffer is marked as unspillable permanently.
         """
-        from cudf.core.buffer.utils import get_spill_lock
-
-        # Check for thread-local spill lock (old mechanism)
-        spill_lock = get_spill_lock()
-
-        # If no thread-local lock but we have spill locks active
-        # (from access context), don't mark as exposed
-        if spill_lock is None and len(self._spill_locks) == 0:
+        # If no context-based spill locks, mark as exposed
+        if len(self._spill_locks) == 0:
             self.mark_exposed()
-        elif spill_lock is not None:
-            # Only add thread-local lock if it exists
-            self.spill_lock(spill_lock)
-            self._last_accessed = time.monotonic()
-        # If we have context-based spill locks, unspill if needed
-        elif len(self._spill_locks) > 0:
+        else:
+            # If we have context-based spill locks, unspill if needed
             with self.lock:
                 if self.is_spilled:
                     self.spill(target="gpu")
