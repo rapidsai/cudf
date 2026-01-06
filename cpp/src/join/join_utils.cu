@@ -1,14 +1,18 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "join_common_utils.cuh"
 
 #include <cudf/join/join.hpp>
-#include <cudf/utilities/memory_resource.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/std/functional>
 #include <thrust/copy.h>
@@ -18,40 +22,14 @@
 #include <thrust/sequence.h>
 #include <thrust/uninitialized_fill.h>
 
+#include <memory>
+
 namespace cudf {
 namespace detail {
 
-bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
-{
-  // If there is nothing to join, then send empty table with all columns
-  if (left.is_empty() || right.is_empty()) { return true; }
-
-  // If left join and the left table is empty, return immediately
-  if ((join_kind::LEFT_JOIN == join_type) && (0 == left.num_rows())) { return true; }
-
-  // If Inner Join and either table is empty, return immediately
-  if ((join_kind::INNER_JOIN == join_type) && ((0 == left.num_rows()) || (0 == right.num_rows()))) {
-    return true;
-  }
-
-  // If left semi join (contains) and right table is empty,
-  // return immediately
-  if ((join_kind::LEFT_SEMI_JOIN == join_type) && (0 == right.num_rows())) { return true; }
-
-  // If left semi- or anti- join, and the left table is empty, return immediately
-  if ((join_kind::LEFT_SEMI_JOIN == join_type || join_kind::LEFT_ANTI_JOIN == join_type) &&
-      (0 == left.num_rows())) {
-    return true;
-  }
-
-  return false;
-}
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-get_trivial_left_join_indices(table_view const& left,
-                              rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+VectorPair get_trivial_left_join_indices(table_view const& left,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr)
 {
   auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
   thrust::sequence(rmm::exec_policy(stream), left_indices->begin(), left_indices->end(), 0);
@@ -85,13 +63,12 @@ VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stre
   return std::move(a);
 }
 
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
-                                 size_type left_table_row_count,
-                                 size_type right_table_row_count,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+VectorPair get_left_join_indices_complement(
+  std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
+  size_type left_table_row_count,
+  size_type right_table_row_count,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   // Get array of indices that do not appear in right_indices
 
