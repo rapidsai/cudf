@@ -68,7 +68,7 @@ void nvbench_key_remap_build(nvbench::state& state,
     // 1. Hash table building performance is not catastrophically affected by duplicates
     // 2. The extra work from duplicates is actually realistic (real data has duplicates)
     // 3. Avoiding the deduplication overhead keeps benchmark setup time minimal
-    // 
+    //
     // However, this approach would NOT work for join_on_int32.cu where duplicates cause
     // combinatorial explosion in join output, leading to OOM crashes at large scale.
     cardinality = num_rows;
@@ -98,10 +98,8 @@ void nvbench_key_remap_build(nvbench::state& state,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    cudf::key_remapping remap(keys,
-                              cudf::null_equality::EQUAL,
-                              cudf::compute_metrics::YES,
-                              cudf::get_default_stream());
+    cudf::key_remapping remap(
+      keys, cudf::null_equality::EQUAL, cudf::compute_metrics::YES, cudf::get_default_stream());
     // Access metrics to ensure they're computed
     auto dc = remap.get_distinct_count();
     auto mc = remap.get_max_duplicate_count();

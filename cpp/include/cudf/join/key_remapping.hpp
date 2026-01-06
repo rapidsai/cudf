@@ -40,7 +40,8 @@ class key_remapping_impl;
  * @brief Sentinel value for probe-side keys not found in build table
  *
  * This constant is exposed primarily for testing purposes.
- * Application code should check for negative values rather than relying on specific sentinel values.
+ * Application code should check for negative values rather than relying on specific sentinel
+ * values.
  */
 constexpr size_type KEY_REMAP_NOT_FOUND = -1;
 
@@ -48,7 +49,8 @@ constexpr size_type KEY_REMAP_NOT_FOUND = -1;
  * @brief Sentinel value for build-side rows with null keys (when nulls are not equal)
  *
  * This constant is exposed primarily for testing purposes.
- * Application code should check for negative values rather than relying on specific sentinel values.
+ * Application code should check for negative values rather than relying on specific sentinel
+ * values.
  */
 constexpr size_type KEY_REMAP_BUILD_NULL = -2;
 
@@ -89,9 +91,9 @@ class key_remapping {
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   key_remapping(cudf::table_view const& build,
-                null_equality compare_nulls           = null_equality::EQUAL,
-                cudf::compute_metrics metrics         = cudf::compute_metrics::YES,
-                rmm::cuda_stream_view stream          = cudf::get_default_stream());
+                null_equality compare_nulls   = null_equality::EQUAL,
+                cudf::compute_metrics metrics = cudf::compute_metrics::YES,
+                rmm::cuda_stream_view stream  = cudf::get_default_stream());
 
   /**
    * @brief Remap build keys to integer IDs.

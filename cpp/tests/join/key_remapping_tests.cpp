@@ -79,7 +79,8 @@ struct KeyRemappingTest : public cudf::test::BaseFixture {
       // Check if current row has same keys as previous row
       bool keys_equal = true;
       for (int col = 0; col < keys.num_columns(); ++col) {
-        // Handle null values - they should be treated as equal to each other or according to null_equality
+        // Handle null values - they should be treated as equal to each other or according to
+        // null_equality
         if (sorted_key_cols[col][i] != sorted_key_cols[col][i - 1]) {
           keys_equal = false;
           break;
@@ -89,8 +90,8 @@ struct KeyRemappingTest : public cudf::test::BaseFixture {
       // If keys are equal, IDs must be equal (both non-negative or both sentinel)
       if (keys_equal) {
         EXPECT_EQ(sorted_ids[i], sorted_ids[i - 1])
-          << "Equal keys at rows " << (i - 1) << " and " << i << " have different IDs: "
-          << sorted_ids[i - 1] << " vs " << sorted_ids[i];
+          << "Equal keys at rows " << (i - 1) << " and " << i
+          << " have different IDs: " << sorted_ids[i - 1] << " vs " << sorted_ids[i];
       }
     }
   }

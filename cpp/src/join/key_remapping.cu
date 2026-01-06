@@ -659,8 +659,7 @@ std::unique_ptr<cudf::column> remap_keys_internal(detail::key_remapping_impl con
 }  // namespace
 
 std::unique_ptr<cudf::column> key_remapping::remap_build_keys(
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
 {
   CUDF_FUNC_RANGE();
   // Use the cached build table from the implementation
