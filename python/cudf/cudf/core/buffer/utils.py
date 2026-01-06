@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -116,6 +116,7 @@ def as_buffer(
         isinstance(owner, SpillableBufferOwner)
         and not owner.exposed
         and get_spill_lock() is None
+        and not owner._spill_locks
     ):
         raise ValueError(
             "An owning spillable buffer must "
