@@ -233,11 +233,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
 
   // Use cub API to handle large arrays (> INT32_MAX).
-  cub::DeviceFor::ForEachN(
-    smaller_indices.begin(),
-    smaller_indices.size(),
-    [] __device__(size_type & idx) -> void { idx = 1; },
-    stream.value());
+  cub::DeviceTransform::Fill(smaller_indices.begin(), smaller_indices.size(), 1, stream.value());
 
   auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
   auto smaller_tabulate_it = thrust::tabulate_output_iterator(
