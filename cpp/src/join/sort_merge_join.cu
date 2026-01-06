@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -177,13 +177,12 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
   // Use cudf::detail::copy_if to handle potentially large arrays (> INT32_MAX)
-  cudf::detail::copy_if(thrust::counting_iterator(0),
-                        thrust::counting_iterator(0) + larger_numrows,
-                        nonzero_matches.begin(),
-                        [match_counts = match_counts->begin()] __device__(auto idx) {
-                          return match_counts[idx] != 0;
-                        },
-                        stream);
+  cudf::detail::copy_if(
+    thrust::counting_iterator(0),
+    thrust::counting_iterator(0) + larger_numrows,
+    nonzero_matches.begin(),
+    [match_counts = match_counts->begin()] __device__(auto idx) { return match_counts[idx] != 0; },
+    stream);
 
   // Use 64-bit prefix sums to handle large output sizes (> INT32_MAX rows)
   // The prefix sums can exceed INT32_MAX even though individual match counts are small
@@ -280,11 +279,11 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     for (std::size_t offset = 0; offset < num_matches; offset += chunk_size) {
       auto const chunk_end = std::min(offset + chunk_size, num_matches);
       // Create tabulate iterator starting at the correct offset
-      auto chunk_tabulate_it = thrust::tabulate_output_iterator(
-        [nonzero_matches = nonzero_matches.begin(),
-         match_offsets   = match_offsets.begin(),
-         smaller_indices = smaller_indices.begin(),
-         offset] __device__(auto local_idx, auto lb) {
+      auto chunk_tabulate_it =
+        thrust::tabulate_output_iterator([nonzero_matches = nonzero_matches.begin(),
+                                          match_offsets   = match_offsets.begin(),
+                                          smaller_indices = smaller_indices.begin(),
+                                          offset] __device__(auto local_idx, auto lb) {
           auto const idx       = local_idx + offset;
           auto const lhs_idx   = nonzero_matches[idx];
           auto const pos       = match_offsets[lhs_idx];
