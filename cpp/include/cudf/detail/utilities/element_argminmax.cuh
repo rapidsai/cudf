@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,7 +34,8 @@ struct element_argminmax_fn {
     return idx < 0 || idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(idx));
   }
 
-  __device__ inline size_type operator()(size_type lhs_idx, size_type rhs_idx) const
+  __attribute__((noinline)) __device__ size_type operator()(size_type lhs_idx,
+                                                            size_type rhs_idx) const
   {
     if (out_of_bounds_or_null(lhs_idx)) { return rhs_idx; }
     if (out_of_bounds_or_null(rhs_idx)) { return lhs_idx; }
