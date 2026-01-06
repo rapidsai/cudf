@@ -18,7 +18,6 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import as_buffer
-from cudf.core.column import access_columns
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
@@ -26,6 +25,7 @@ from cudf.core.column.column import (
     column_empty,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
+from cudf.core.column.utils import access_columns
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (

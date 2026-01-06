@@ -24,9 +24,10 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
     get_tz_data,
 )
-from cudf.core.column import access_columns, as_column
+from cudf.core.column import as_column
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.temporal_base import TemporalBaseColumn
+from cudf.core.column.utils import access_columns
 from cudf.utils.dtypes import (
     _get_base_dtype,
     cudf_dtype_from_pa_type,
