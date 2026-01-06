@@ -1,8 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -79,19 +78,15 @@ class StructColumn(ColumnBase):
             )
         )
 
-    def _recompute_children(self) -> None:
-        """Recompute the offset-aware children columns with proper type metadata."""
-        if not self.base_children:
-            self._children = ()
-        elif self.offset == 0 and self.size == self.base_size:
-            # Optimization: for non-sliced columns, children == base_children
-            self._children = self.base_children  # type: ignore[assignment]
-        else:
-            # Slice each child using the parent's offset and size
-            self._children = tuple(  # type: ignore[assignment]
-                base_child.slice(self.offset, self.offset + self.size)
-                for base_child in self.base_children
+    def _get_sliced_child(self, idx: int) -> ColumnBase:
+        """Get a child column properly sliced to match the parent's view."""
+        if idx < 0 or idx >= len(self._children):
+            raise IndexError(
+                f"Index {idx} out of range for {len(self._children)} children"
             )
+
+        sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
+        return type(self._children[idx]).from_pylibcudf(sliced_plc_col)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
@@ -118,13 +113,6 @@ class StructColumn(ColumnBase):
             )
         return dtype
 
-    @property
-    def base_size(self) -> int:
-        if self.base_children:
-            return len(self.base_children[0])
-        else:
-            return self.size + self.offset
-
     def to_pandas(
         self,
         *,
@@ -144,14 +132,6 @@ class StructColumn(ColumnBase):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
-
-    @cached_property
-    def memory_usage(self) -> int:
-        n = super().memory_usage
-        for child in self.children:
-            n += child.memory_usage
-
-        return n
 
     def element_indexing(self, index: int) -> dict[Any, Any] | None:
         result = super().element_indexing(index)
@@ -199,7 +179,7 @@ class StructColumn(ColumnBase):
         if isinstance(dtype, IntervalDtype):
             new_children = [
                 child.astype(dtype.subtype).plc_column
-                for child in self.base_children
+                for child in self.children
             ]
             new_plc_column = plc.Column(
                 plc.DataType(plc.TypeId.STRUCT),
@@ -217,7 +197,7 @@ class StructColumn(ColumnBase):
             )
         elif isinstance(dtype, StructDtype):
             new_children = [
-                self.base_children[i]
+                self.children[i]
                 ._with_type_metadata(dtype.fields[f])
                 .plc_column
                 for i, f in enumerate(dtype.fields.keys())
