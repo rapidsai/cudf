@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -72,10 +72,10 @@ struct index_mapping {
  * in the output validity mask for nested list columns.
  */
 struct list_nonnull_filter {
-  bitmask_type* validity_mask;                ///< Output validity mask to update
-  bitmask_type const* reduced_validity_mask;  ///< Input reduced validity mask
-  device_span<size_type const> child_positions;     ///< Positions in the child column
-  size_type subset_offset;                    ///< Offset into child_positions
+  bitmask_type* validity_mask;                   ///< Output validity mask to update
+  bitmask_type const* reduced_validity_mask;     ///< Input reduced validity mask
+  device_span<size_type const> child_positions;  ///< Positions in the child column
+  size_type subset_offset;                       ///< Offset into child_positions
 
   __device__ void operator()(size_type idx) const noexcept
   {
@@ -219,10 +219,12 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
 
   auto const comparator = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
   auto match_counts_it  = match_counts.begin();
-  auto smaller_it       = cuda::transform_iterator(
-    sorted_smaller_order_begin,
-    cuda::proclaim_return_type<detail::row::lhs_index_type>(
-      [] __device__(size_type idx) -> detail::row::lhs_index_type { return static_cast<detail::row::lhs_index_type>(idx); }));
+  auto smaller_it =
+    cuda::transform_iterator(sorted_smaller_order_begin,
+                             cuda::proclaim_return_type<detail::row::lhs_index_type>(
+                               [] __device__(size_type idx) -> detail::row::lhs_index_type {
+                                 return static_cast<detail::row::lhs_index_type>(idx);
+                               }));
   thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       smaller_it,
                       smaller_it + smaller_numrows,
@@ -307,14 +309,18 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
       auto const pos       = match_counts[lhs_idx];
       smaller_indices[pos] = lb;
     });
-  auto smaller_it = thrust::transform_iterator(
-    sorted_smaller_order_begin,
-    cuda::proclaim_return_type<detail::row::lhs_index_type>(
-      [] __device__(size_type idx) -> detail::row::lhs_index_type { return static_cast<detail::row::lhs_index_type>(idx); }));
-  auto larger_it = thrust::transform_iterator(
-    nonzero_matches.begin(),
-    cuda::proclaim_return_type<detail::row::rhs_index_type>(
-      [] __device__(size_type idx) -> detail::row::rhs_index_type { return static_cast<detail::row::rhs_index_type>(idx); }));
+  auto smaller_it =
+    thrust::transform_iterator(sorted_smaller_order_begin,
+                               cuda::proclaim_return_type<detail::row::lhs_index_type>(
+                                 [] __device__(size_type idx) -> detail::row::lhs_index_type {
+                                   return static_cast<detail::row::lhs_index_type>(idx);
+                                 }));
+  auto larger_it =
+    thrust::transform_iterator(nonzero_matches.begin(),
+                               cuda::proclaim_return_type<detail::row::rhs_index_type>(
+                                 [] __device__(size_type idx) -> detail::row::rhs_index_type {
+                                   return static_cast<detail::row::rhs_index_type>(idx);
+                                 }));
   thrust::lower_bound(rmm::exec_policy_nosync(stream),
                       smaller_it,
                       smaller_it + smaller_numrows,
@@ -437,14 +443,18 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
       auto const pos       = match_counts[lhs_idx];
       smaller_indices[pos] = lb;
     });
-  auto smaller_it = thrust::transform_iterator(
-    sorted_smaller_order_begin,
-    cuda::proclaim_return_type<detail::row::lhs_index_type>(
-    [] __device__(size_type idx) -> detail::row::lhs_index_type { return static_cast<detail::row::lhs_index_type>(idx); }));
-  auto larger_it = thrust::transform_iterator(
-    nonzero_matches.begin(),
-    cuda::proclaim_return_type<detail::row::rhs_index_type>(
-    [] __device__(size_type idx) -> detail::row::rhs_index_type { return static_cast<detail::row::rhs_index_type>(idx); }));
+  auto smaller_it =
+    thrust::transform_iterator(sorted_smaller_order_begin,
+                               cuda::proclaim_return_type<detail::row::lhs_index_type>(
+                                 [] __device__(size_type idx) -> detail::row::lhs_index_type {
+                                   return static_cast<detail::row::lhs_index_type>(idx);
+                                 }));
+  auto larger_it =
+    thrust::transform_iterator(nonzero_matches.begin(),
+                               cuda::proclaim_return_type<detail::row::rhs_index_type>(
+                                 [] __device__(size_type idx) -> detail::row::rhs_index_type {
+                                   return static_cast<detail::row::rhs_index_type>(idx);
+                                 }));
   thrust::lower_bound(rmm::exec_policy_nosync(stream),
                       smaller_it,
                       smaller_it + smaller_numrows,
@@ -640,14 +650,13 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
   auto const table_mapping_size = _table_view.num_rows() - _num_nulls.value();
   rmm::device_uvector<size_type> table_mapping(table_mapping_size, stream, temp_mr);
   cudf::detail::device_scalar<size_type> d_table_mapping_size(table_mapping_size, stream, temp_mr);
-  flagged_if(
-    cuda::counting_iterator(0),
-    cuda::counting_iterator(0),
-    table_mapping.begin(),
-    std::move(d_table_mapping_size),
-    _table_view.num_rows(),
-    is_row_valid{static_cast<bitmask_type const*>(_validity_mask.value().data())},
-    stream);
+  flagged_if(cuda::counting_iterator(0),
+             cuda::counting_iterator(0),
+             table_mapping.begin(),
+             std::move(d_table_mapping_size),
+             _table_view.num_rows(),
+             is_row_valid{static_cast<bitmask_type const*>(_validity_mask.value().data())},
+             stream);
   return table_mapping;
 }
 
