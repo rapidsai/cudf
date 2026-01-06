@@ -1,10 +1,15 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
 source rapids-init-pip
+
+# Only use stable ABI package for Python >= 3.11
+if [[ "${RAPIDS_PY_VERSION}" != "3.10" ]]; then
+  source ./ci/use_upstream_sabi_wheels.sh
+fi
 
 package_name="libcudf"
 package_dir="python/libcudf"
