@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf.core.column import ColumnBase
+from cudf.core.column.utils import access_columns
 from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
 if TYPE_CHECKING:
@@ -45,9 +46,6 @@ def binaryop(
     }
     op = op.upper()
     op = _op_map.get(op, op)
-
-    # Access context for column buffers
-    from cudf.core.column.utils import access_columns
 
     with access_columns(lhs, rhs):
         return ColumnBase.from_pylibcudf(

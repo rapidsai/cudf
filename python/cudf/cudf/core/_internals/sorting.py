@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
 
+from cudf.core.column.utils import access_columns
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -43,7 +45,6 @@ def is_sorted(
     """
     column_order, null_precedence = ordering(ascending, na_position)
     cols_list = list(source_columns)
-    from cudf.core.column.utils import access_columns
 
     with access_columns(*cols_list):
         return plc.sorting.is_sorted(
@@ -122,7 +123,6 @@ def order_by(
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
     cols_list = list(columns_from_table)
-    from cudf.core.column.utils import access_columns
 
     with access_columns(*cols_list):
         return func(
@@ -172,7 +172,6 @@ def sort_by_key(
     )
     values_list = list(values)
     keys_list = list(keys)
-    from cudf.core.column.utils import access_columns
 
     with access_columns(*values_list, *keys_list):
         return func(
@@ -215,7 +214,6 @@ def search_sorted(
     )
     source_list = list(source)
     values_list = list(values)
-    from cudf.core.column.utils import access_columns
 
     with access_columns(*source_list, *values_list):
         return func(
