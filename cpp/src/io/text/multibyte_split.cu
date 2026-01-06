@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -526,7 +526,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   };
   if (insert_begin) { set_offset_value(0, 0); }
   if (insert_end) { set_offset_value(offsets->size() - 1, chars_bytes); }
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     global_offsets.begin(),
                     global_offsets.end(),
                     offsets_itr + insert_begin,

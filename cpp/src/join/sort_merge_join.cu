@@ -10,7 +10,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -23,7 +23,7 @@
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
@@ -172,17 +172,15 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   auto count_matches_it = thrust::transform_iterator(
     match_counts->begin(),
     cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
-  auto const count_matches =
-    thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
-
+  auto const count_matches = thrust::reduce(
+    rmm::exec_policy_nosync(stream), count_matches_it, count_matches_it + larger_numrows);
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
-  // Use cudf::detail::copy_if to handle potentially large arrays (> INT32_MAX)
-  cudf::detail::copy_if(
-    thrust::counting_iterator(0),
-    thrust::counting_iterator(0) + larger_numrows,
-    nonzero_matches.begin(),
-    [match_counts = match_counts->begin()] __device__(auto idx) { return match_counts[idx] != 0; },
-    stream);
+  thrust::copy_if(rmm::exec_policy_nosync(stream),
+                  thrust::counting_iterator(0),
+                  thrust::counting_iterator(0) + larger_numrows,
+                  match_counts->begin(),
+                  nonzero_matches.begin(),
+                  cuda::std::identity{});
 
   // Use 64-bit prefix sums to handle large output sizes (> INT32_MAX rows)
   // The prefix sums can exceed INT32_MAX even though individual match counts are small
@@ -392,7 +390,7 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
       rmm::device_uvector<int32_t> offsets_subset(offsets.size(), stream, temp_mr);
       rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, temp_mr);
       auto unique_end = thrust::unique_by_key_copy(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         thrust::reverse_iterator(lcv.offsets_end()),
         thrust::reverse_iterator(lcv.offsets_end()) + offsets.size(),
         thrust::reverse_iterator(thrust::counting_iterator(offsets.size())),
@@ -745,13 +743,13 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
     auto left_mapping = preprocessed_left.map_table_to_unprocessed(stream);
     null_processed_table_start_idx =
       cuda::std::distance(left_mapping.begin(),
-                          thrust::lower_bound(rmm::exec_policy(stream),
+                          thrust::lower_bound(rmm::exec_policy_nosync(stream),
                                               left_mapping.begin(),
                                               left_mapping.end(),
                                               left_partition_start_idx));
     null_processed_table_end_idx =
       cuda::std::distance(left_mapping.begin(),
-                          thrust::upper_bound(rmm::exec_policy(stream),
+                          thrust::upper_bound(rmm::exec_policy_nosync(stream),
                                               left_mapping.begin(),
                                               left_mapping.end(),
                                               left_partition_end_idx - 1));
