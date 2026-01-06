@@ -4,7 +4,6 @@
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
-    access_columns,
     as_column,
     column_empty,
     concat_columns,
@@ -27,6 +26,7 @@ from cudf.core.column.numerical import NumericalColumn
 from cudf.core.column.string import StringColumn
 from cudf.core.column.struct import StructColumn
 from cudf.core.column.timedelta import TimeDeltaColumn
+from cudf.core.column.utils import access_columns
 
 __all__ = [
     "CategoricalColumn",

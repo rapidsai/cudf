@@ -11,7 +11,8 @@ import numpy as np
 import pylibcudf as plc
 
 import cudf
-from cudf.core.column.column import ColumnBase, access_columns, column_empty
+from cudf.core.column import access_columns, column_empty
+from cudf.core.column.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
 from cudf.utils.dtypes import _get_nan_for_dtype

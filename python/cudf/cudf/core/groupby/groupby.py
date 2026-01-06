@@ -24,9 +24,9 @@ from cudf.api.types import is_list_like, is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
+from cudf.core.column import access_columns
 from cudf.core.column.column import (
     ColumnBase,
-    access_columns,
     as_column,
     column_empty,
     deserialize_columns,

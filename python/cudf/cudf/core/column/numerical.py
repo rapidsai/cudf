@@ -18,10 +18,10 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import as_buffer
+from cudf.core.column import access_columns
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
-    access_columns,
     as_column,
     column_empty,
 )

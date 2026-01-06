@@ -21,7 +21,7 @@ def gather(
 ) -> list[plc.Column]:
     # Materialize iterator to avoid consuming it during access context setup
     cols_list = list(columns)
-    from cudf.core.column import access_columns
+    from cudf.core.column.utils import access_columns
 
     with access_columns(*cols_list, gather_map):
         plc_tbl = plc.copying.gather(
@@ -87,7 +87,7 @@ def columns_split(
     input_columns: Iterable[ColumnBase], splits: list[int]
 ) -> list[list[plc.Column]]:
     cols_list = list(input_columns)
-    from cudf.core.column import access_columns
+    from cudf.core.column.utils import access_columns
 
     with access_columns(*cols_list):
         return [

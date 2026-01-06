@@ -47,7 +47,7 @@ def binaryop(
     op = _op_map.get(op, op)
 
     # Access context for column buffers
-    from cudf.core.column import access_columns
+    from cudf.core.column.utils import access_columns
 
     with access_columns(lhs, rhs):
         return ColumnBase.from_pylibcudf(

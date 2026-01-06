@@ -45,7 +45,7 @@ def drop_nulls(
     else:
         keep_threshold = len(keys)
 
-    from cudf.core.column import access_columns
+    from cudf.core.column.utils import access_columns
 
     with access_columns(*columns):
         plc_table = plc.stream_compaction.drop_nulls(
@@ -71,7 +71,7 @@ def apply_boolean_mask(
     -------
     columns obtained from applying mask
     """
-    from cudf.core.column import access_columns
+    from cudf.core.column.utils import access_columns
 
     with access_columns(*columns, boolean_mask):
         plc_table = plc.stream_compaction.apply_boolean_mask(
@@ -110,7 +110,7 @@ def drop_duplicates(
     if (keep_option := _keep_options.get(keep)) is None:
         raise ValueError('keep must be either "first", "last" or False')
 
-    from cudf.core.column import access_columns
+    from cudf.core.column.utils import access_columns
 
     with access_columns(*columns):
         plc_table = plc.stream_compaction.stable_distinct(

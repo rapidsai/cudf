@@ -22,7 +22,8 @@ from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core import column
 from cudf.core._internals import sorting
 from cudf.core.algorithms import factorize
-from cudf.core.column.column import ColumnBase, access_columns
+from cudf.core.column import access_columns
+from cudf.core.column.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import (
