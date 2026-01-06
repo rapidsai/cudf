@@ -41,7 +41,7 @@ index df898ccf47bfa..3239621468c5a 100644
 @@ -499,9 +504,16 @@ def __new__(
          if not copy and isinstance(data, (ABCSeries, Index)):
              refs = data._references
- 
+
 +        if isinstance(data, (ExtensionArray, np.ndarray)):
 +            # GH 63306
 +            if copy is not False:
@@ -58,7 +58,7 @@ index df898ccf47bfa..3239621468c5a 100644
              # error: Incompatible return value type (got "MultiIndex",
 @@ -569,7 +581,7 @@ def __new__(
                  data = com.asarray_tuplesafe(data, dtype=_dtype_obj)
- 
+
          try:
 -            arr = sanitize_array(data, None, dtype=dtype, copy=copy)
 +            arr = sanitize_array(data, None, dtype=dtype, copy=bool(copy))

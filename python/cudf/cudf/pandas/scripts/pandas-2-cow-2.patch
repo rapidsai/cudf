@@ -19,7 +19,7 @@ index f73fe77defc26..dc37f3bfa6a4c 100644
 @@ -505,12 +505,8 @@ def __new__(
          if not copy and isinstance(data, (ABCSeries, Index)):
              refs = data._references
- 
+
 -        if isinstance(data, (ExtensionArray, np.ndarray)):
 -            # GH 63306
 -            if copy is not False:
@@ -28,13 +28,13 @@ index f73fe77defc26..dc37f3bfa6a4c 100644
 -                    copy = False
 +        # GH 63306, GH 63388
 +        data, copy = cls._maybe_copy_array_input(data, copy, dtype)
- 
+
          # range
          if isinstance(data, (range, RangeIndex)):
 @@ -5197,6 +5193,21 @@ def _raise_scalar_data_error(cls, data):
              "was passed"
          )
- 
+
 +    @classmethod
 +    def _maybe_copy_array_input(
 +        cls, data, copy: bool | None, dtype
@@ -72,7 +72,7 @@ index a07e18b1892fd..72b009a344193 100644
 +        Set to True to force copying Series/Index up front.
      name : label, default None
          Name to be stored in the index.
- 
+
 @@ -669,7 +674,7 @@ def __new__(
          dayfirst: bool = False,
          yearfirst: bool = False,
@@ -83,9 +83,9 @@ index a07e18b1892fd..72b009a344193 100644
      ) -> Self:
          if is_scalar(data):
 @@ -679,6 +684,9 @@ def __new__(
- 
+
          name = maybe_extract_name(name, data, cls)
- 
+
 +        # GH#63388
 +        data, copy = cls._maybe_copy_array_input(data, copy, dtype)
 +
@@ -122,7 +122,7 @@ index 7bb64503a469e..1def317bc1a88 100644
          verify_integrity: bool = True,
      ) -> Self:
          name = maybe_extract_name(name, data, cls)
- 
+
 +        # GH#63388
 +        data, copy = cls._maybe_copy_array_input(data, copy, dtype)
 +
@@ -148,7 +148,7 @@ index c3ad466a114a9..b8a25ab0da693 100644
 +        Set to True to force copying Series/Index input up front.
      name : str, default None
          Name of the resulting PeriodIndex.
- 
+
 @@ -220,7 +225,7 @@ def __new__(
          data=None,
          freq=None,
@@ -159,15 +159,15 @@ index c3ad466a114a9..b8a25ab0da693 100644
      ) -> Self:
          refs = None
 @@ -231,6 +236,9 @@ def __new__(
- 
+
          freq = validate_dtype_freq(dtype, freq)
- 
+
 +        # GH#63388
 +        data, copy = cls._maybe_copy_array_input(data, copy, dtype)
 +
          # PeriodIndex allow PeriodIndex(period_index, freq=different)
          # Let's not encourage that kind of behavior in PeriodArray.
- 
+
 diff --git a/pandas/core/indexes/timedeltas.py b/pandas/core/indexes/timedeltas.py
 index 2a3d5137242d0..725ef8cae7120 100644
 --- a/pandas/core/indexes/timedeltas.py
@@ -187,7 +187,7 @@ index 2a3d5137242d0..725ef8cae7120 100644
 +        Set to True to force copying Series/Index input up front.
      name : object
          Name to be stored in the index.
- 
+
 @@ -158,11 +163,14 @@ def __new__(
          data=None,
          freq=lib.no_default,
@@ -197,7 +197,7 @@ index 2a3d5137242d0..725ef8cae7120 100644
          name=None,
      ):
          name = maybe_extract_name(name, data, cls)
- 
+
 +        # GH#63388
 +        data, copy = cls._maybe_copy_array_input(data, copy, dtype)
 +
