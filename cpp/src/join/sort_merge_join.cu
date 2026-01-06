@@ -14,6 +14,7 @@
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -22,9 +23,11 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
@@ -188,13 +191,16 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   // The prefix sums can exceed INT32_MAX even though individual match counts are small
   auto match_offsets =
     cudf::detail::make_zeroed_device_uvector_async<int64_t>(match_counts->size(), stream, temp_mr);
+  // Use pinned memory as bounce buffer for efficient device-to-host transfer of the last element
+  auto last_element = cudf::detail::device_scalar<int64_t>(0, stream);
+  auto output_itr   = cudf::detail::make_sizes_to_offsets_iterator(
+    match_offsets.begin(), match_offsets.end(), last_element.data());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          match_counts->begin(),
                          match_counts->end(),
-                         match_offsets.begin(),
-                         int64_t{0},
-                         cuda::std::plus<int64_t>{});
-  auto const total_matches = static_cast<std::size_t>(match_offsets.back_element(stream));
+                         output_itr,
+                         int64_t{0});
+  auto const total_matches = static_cast<std::size_t>(last_element.value(stream));
 
   // populate larger indices
   auto larger_indices =
