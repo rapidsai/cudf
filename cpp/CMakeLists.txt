@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -304,6 +304,9 @@ endif()
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 
+# JIT Embedding helper functions
+include(cmake/Modules/JitEmbed.cmake)
+
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
 
@@ -333,9 +336,6 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
-# We can't precompile the LTO-IR as we need to generate fatbins for the specific target machine
-# LTO-IR is not compatible across
-
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CUDF_JIT_CUDA_FLAGS "-G")
 else()
@@ -354,28 +354,20 @@ endif()
 
 set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
-set(CUDF_JIT_ARCHITECTURES "75;80;86;90;100;120")
-set(CUDF_JIT_DEFINITIONS "-DCUDF_RUNTIME_JIT;-D__CUDACC_RTC__")
-set(CUDF_JIT_COMPILE_FLAGS
-    "-O3;-std=c++${CUDF_CUDA_STANDARD};-Xcompiler=-fPIC;-Xcompiler=-DPIC;-fvisibility=hidden;-Xfatbin=--compress-all;--compress-mode=size;--device-int128"
+
+list(APPEND CUDF_JIT_ARCHITECTURES 75 80 86 90 100 120)
+list(APPEND CUDF_JIT_DEFINITIONS -DCUDF_RUNTIME_JIT -D__CUDACC_RTC__)
+list(
+  APPEND CUDF_JIT_COMPILE_FLAGS -O3 -std=c++${CUDF_CUDA_STANDARD} -Xcompiler=-fPIC -Xcompiler=-DPIC
+  -fvisibility=hidden -Xfatbin=--compress-all --compress-mode=size --device-int128
 )
 
-function(embed_jit_sources_var)
+get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
 
-endfunction()
-
-function(embed_jit_options_var)
-
-endfunction()
-
-function(embed_jit_blob)
-
-endfunction()
-
-embed_jit_sources(
-  identifier_name
-  SOURCE_DIRECTORY
-  cudf/include/
+add_jit_includes(
+  cudf_jit
+  DIRECTORY
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
   FILES
   cudf/table/table_device_view.cuh
   cudf/jit/lto/types.cuh
@@ -399,17 +391,18 @@ embed_jit_sources(
   cudf/jit/filter_params.cuh
 )
 
-embed_jit_sources(identifier_name SOURCE_DIRECTORY src FILES src/jit/accessors.cuh src/jit/span.cuh)
+# TODO: add library.cu LTO type checks need to be compiled as part of the AOT workflow to ensure
+# type consistency between AOT and JIT
 
-get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+add_jit_includes(
+  cudf_jit DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} FILES src/jit/accessors.cuh src/jit/span.cuh
+)
 
-# CUDA/STD headers needs to recursively bundle the actually used headers; not everything should we
-# just use the install include dir? provided cudacxx will also be exported? can we get the installed
-# include dir path? after installing, should be configure a file that points to the installed
-# cudacxx include dir?
-embed_jit_sources_directory(identifier_name SOURCE_DIRECTORY ${LIBCUDACXX_RAW_INCLUDE_DIRS})
+add_jit_includes(cudf_jit INCLUDE_DIRECTORY ${LIBCUDACXX_RAW_INCLUDE_DIRS})
 
-embed_jit_options(identifier_name OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
+add_jit_options(cudf_jit OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
+
+generate_jit_source_map(TARGET cudf_jit)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -924,6 +917,8 @@ add_library(
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
 )
+add_dependencies(cudf cudf_jit)
+target_include_directories(cudf PRIVATE ${cudf_jit_INCLUDE_DIR})
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
 # in how conda builds glibc
