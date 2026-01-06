@@ -298,12 +298,14 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
                                        parquet_files.begin() + initial_size);
                 });
 
-  // Cycle append parquet files from the existing ones if less than the thread_count
-  std::cout << "Warning: Number of input sources < thread count. Cycling from\n"
-               "and appending to current input sources such that the number of\n"
-               "input source == thread count\n";
-  for (size_t idx = 0; thread_count > static_cast<int>(parquet_files.size()); idx++) {
-    parquet_files.emplace_back(parquet_files[idx % initial_size]);
+  if (parquet_files.size() < thread_count) {
+    // Cycle append parquet files from the existing ones if less than the thread_count
+    std::cout << "Warning: Number of input sources < thread count. Cycling from\n"
+                 "and appending to current input sources such that the number of\n"
+                 "input source == thread count\n";
+    for (size_t idx = 0; thread_count > static_cast<int>(parquet_files.size()); idx++) {
+      parquet_files.emplace_back(parquet_files[idx % initial_size]);
+    }
   }
 
   // Vector of io sources
@@ -355,7 +357,7 @@ int32_t main(int argc, char const** argv)
   bool constexpr is_pool_used = true;
   auto resource               = create_memory_resource(is_pool_used);
   auto default_stream         = cudf::get_default_stream();
-  auto stream_pool            = rmm::cuda_stream_pool(thread_count);
+  auto stream_pool = rmm::cuda_stream_pool(thread_count, rmm::cuda_stream::flags::non_blocking);
   auto stats_mr =
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
   rmm::mr::set_current_device_resource(&stats_mr);
