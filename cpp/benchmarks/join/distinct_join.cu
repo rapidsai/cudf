@@ -7,7 +7,7 @@
 
 #include <cudf/join/distinct_hash_join.hpp>
 
-double constexpr load_factor = 0.5;
+double constexpr LOAD_FACTOR = 0.5;
 auto const num_keys          = 1;
 
 template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
@@ -21,7 +21,7 @@ void nvbench_distinct_inner_join(nvbench::state& state,
   auto join = [](cudf::table_view const& probe_input,
                  cudf::table_view const& build_input,
                  cudf::null_equality compare_nulls) {
-    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls, load_factor};
+    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls, LOAD_FACTOR};
     return hj_obj.inner_join(probe_input);
   };
 
@@ -39,7 +39,7 @@ void nvbench_distinct_left_join(nvbench::state& state,
   auto join = [](cudf::table_view const& probe_input,
                  cudf::table_view const& build_input,
                  cudf::null_equality compare_nulls) {
-    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls, load_factor};
+    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls, LOAD_FACTOR};
     return hj_obj.left_join(probe_input);
   };
 

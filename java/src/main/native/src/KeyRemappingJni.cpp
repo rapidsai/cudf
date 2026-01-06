@@ -16,10 +16,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_KeyRemapping_create(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto tview  = reinterpret_cast<cudf::table_view const*>(j_table);
-    auto nulleq = j_compare_nulls ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    auto compute_metrics = static_cast<bool>(j_compute_metrics);
-    auto remap_ptr       = new cudf::key_remapping(*tview, nulleq, compute_metrics);
+    auto tview   = reinterpret_cast<cudf::table_view const*>(j_table);
+    auto nulleq  = j_compare_nulls ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto metrics = j_compute_metrics ? cudf::compute_metrics::YES : cudf::compute_metrics::NO;
+    auto remap_ptr = new cudf::key_remapping(*tview, nulleq, metrics);
     return reinterpret_cast<jlong>(remap_ptr);
   }
   JNI_CATCH(env, 0);

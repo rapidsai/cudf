@@ -47,9 +47,9 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
 
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto constexpr num_payload_cols = 2;
+  auto constexpr NUM_PAYLOAD_COLS = 2;
   auto [build_table, probe_table] = generate_input_tables<Nullable>(
-    dtypes, right_size, left_size, num_payload_cols, multiplicity, selectivity);
+    dtypes, right_size, left_size, NUM_PAYLOAD_COLS, multiplicity, selectivity);
 
   auto const build_view = build_table->view();
   auto const probe_view = probe_table->view();
@@ -70,10 +70,10 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
       // Step 1: Build key remapping (with metrics disabled, the metrics need to be calculated
       //  for the join type selection heuristic, either way)
-      constexpr bool compute_metrics = false;
-
-      cudf::key_remapping remap(
-        build_keys, NullEquality, compute_metrics, cudf::get_default_stream());
+      cudf::key_remapping remap(build_keys,
+                                NullEquality,
+                                cudf::compute_metrics::NO,
+                                cudf::get_default_stream());
 
       // Step 2: Remap build and probe keys to integers
       auto remapped_build = remap.remap_build_keys();

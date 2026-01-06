@@ -7,12 +7,14 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/join/key_remapping.hpp>
@@ -22,13 +24,13 @@
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cooperative_groups.h>
 #include <cuco/static_set.cuh>
+#include <cuda/functional>
 #include <cuda/std/atomic>
 #include <thrust/count.h>
 #include <thrust/fill.h>
@@ -39,7 +41,6 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/replace.h>
-#include <thrust/sort.h>
 
 #include <cstddef>
 #include <limits>
@@ -57,7 +58,7 @@ using cudf::detail::row::lhs_index_type;
 using cudf::detail::row::rhs_index_type;
 
 // Always assume having nulls as the probe table is not known when building the hash table.
-bool constexpr has_nulls = true;
+bool constexpr HAS_NULLS = true;
 
 /// Load factor for hash table sizing
 double constexpr LOAD_FACTOR = 0.5;
@@ -186,10 +187,8 @@ CUDF_KERNEL void insert_and_count_kernel(cudf::size_type num_rows,
   if (block.thread_rank() == 0) { block_insert_count = 0; }
   block.sync();
 
-  auto const stride = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
-  for (auto idx = static_cast<cudf::size_type>(blockIdx.x * blockDim.x + threadIdx.x);
-       idx < num_rows;
-       idx += stride) {
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  for (auto idx = cudf::detail::grid_1d::global_thread_id(); idx < num_rows; idx += stride) {
     bool const is_valid = (bitmask_ptr == nullptr) || cudf::bit_is_set(bitmask_ptr, idx);
 
     if (is_valid) {
@@ -197,7 +196,9 @@ CUDF_KERNEL void insert_and_count_kernel(cudf::size_type num_rows,
       auto const [iter, inserted] = set_ref.insert_and_find(key);
       auto const stored_idx       = static_cast<cudf::size_type>(iter->second);
 
-      atomicAdd(&counts_ptr[stored_idx], 1);
+      cuda::atomic_ref<cudf::size_type, cuda::thread_scope_device> count_ref{
+        counts_ptr[stored_idx]};
+      count_ref.fetch_add(1, cuda::std::memory_order_relaxed);
 
       if (inserted) {
         cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> ref{block_insert_count};
@@ -209,7 +210,9 @@ CUDF_KERNEL void insert_and_count_kernel(cudf::size_type num_rows,
   block.sync();
 
   if (block.thread_rank() == 0 && block_insert_count > 0) {
-    atomicAdd(global_distinct_count, block_insert_count);
+    cuda::atomic_ref<cudf::size_type, cuda::thread_scope_device> global_count_ref{
+      *global_distinct_count};
+    global_count_ref.fetch_add(block_insert_count, cuda::std::memory_order_relaxed);
   }
 }
 
@@ -343,14 +346,13 @@ class key_remap_table : public key_remap_table_interface {
     rmm::device_uvector<cudf::size_type> counts(build_num_rows, stream);
     thrust::fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
 
-    rmm::device_scalar<cudf::size_type> d_distinct_count(0, stream);
+    cudf::detail::device_scalar<cudf::size_type> d_distinct_count{0, stream};
 
     auto set_ref = _hash_table.ref(cuco::op::insert_and_find);
 
-    auto const grid_size = cudf::util::div_rounding_up_safe(
-      build_num_rows, static_cast<cudf::size_type>(KEY_REMAP_BLOCK_SIZE));
+    cudf::detail::grid_1d grid{build_num_rows, KEY_REMAP_BLOCK_SIZE};
 
-    insert_and_count_kernel<<<grid_size, KEY_REMAP_BLOCK_SIZE, 0, stream.value()>>>(
+    insert_and_count_kernel<<<grid.num_blocks, KEY_REMAP_BLOCK_SIZE, 0, stream.value()>>>(
       build_num_rows, set_ref, key_iter, counts.data(), d_distinct_count.data(), bitmask_ptr);
 
     _distinct_count = d_distinct_count.value(stream);
@@ -359,7 +361,7 @@ class key_remap_table : public key_remap_table_interface {
                                           counts.begin(),
                                           counts.end(),
                                           cudf::size_type{0},
-                                          thrust::maximum<cudf::size_type>{});
+                                          cuda::maximum<cudf::size_type>{});
   }
 
  public:
@@ -394,9 +396,9 @@ class key_remap_table : public key_remap_table_interface {
 
     if (cudf::detail::is_primitive_row_op_compatible(_build)) {
       auto const d_hasher = cudf::detail::row::primitive::row_hasher{
-        cudf::nullate::DYNAMIC{has_nulls}, preprocessed_probe};
+        cudf::nullate::DYNAMIC{HAS_NULLS}, preprocessed_probe};
       auto const d_equal = cudf::detail::row::primitive::row_equality_comparator{
-        cudf::nullate::DYNAMIC{has_nulls}, preprocessed_probe, _preprocessed_build, _compare_nulls};
+        cudf::nullate::DYNAMIC{HAS_NULLS}, preprocessed_probe, _preprocessed_build, _compare_nulls};
 
       auto const iter = cudf::detail::make_counting_transform_iterator(
         0, make_key_pair<lhs_index_type, decltype(d_hasher)>{d_hasher});
@@ -408,17 +410,17 @@ class key_remap_table : public key_remap_table_interface {
         cudf::detail::row::equality::two_table_comparator(preprocessed_probe, _preprocessed_build);
 
       auto const probe_row_hasher = cudf::detail::row::hash::row_hasher{preprocessed_probe};
-      auto const d_probe_hasher = probe_row_hasher.device_hasher(cudf::nullate::DYNAMIC{has_nulls});
+      auto const d_probe_hasher = probe_row_hasher.device_hasher(cudf::nullate::DYNAMIC{HAS_NULLS});
       auto const iter           = cudf::detail::make_counting_transform_iterator(
         0, make_key_pair<lhs_index_type, decltype(d_probe_hasher)>{d_probe_hasher});
 
       if (_build_has_nested_columns) {
         auto const device_comparator =
-          two_table_equal.equal_to<true>(cudf::nullate::DYNAMIC{has_nulls}, _compare_nulls);
+          two_table_equal.equal_to<true>(cudf::nullate::DYNAMIC{HAS_NULLS}, _compare_nulls);
         find_matches(iter, probe_comparator{device_comparator}, probe_keys, output_begin, stream);
       } else {
         auto const device_comparator =
-          two_table_equal.equal_to<false>(cudf::nullate::DYNAMIC{has_nulls}, _compare_nulls);
+          two_table_equal.equal_to<false>(cudf::nullate::DYNAMIC{HAS_NULLS}, _compare_nulls);
         find_matches(iter, probe_comparator{device_comparator}, probe_keys, output_begin, stream);
       }
     }
@@ -497,9 +499,9 @@ std::unique_ptr<key_remap_table_interface> create_key_remap_table(cudf::table_vi
 
   if (cudf::detail::is_primitive_row_op_compatible(build)) {
     auto const d_hasher = cudf::detail::row::primitive::row_hasher{
-      cudf::nullate::DYNAMIC{has_nulls}, preprocessed_build};
+      cudf::nullate::DYNAMIC{HAS_NULLS}, preprocessed_build};
     auto const d_equal = cudf::detail::row::primitive::row_equality_comparator{
-      cudf::nullate::DYNAMIC{has_nulls}, preprocessed_build, preprocessed_build, compare_nulls};
+      cudf::nullate::DYNAMIC{HAS_NULLS}, preprocessed_build, preprocessed_build, compare_nulls};
 
     using comparator_type = build_comparator<decltype(d_equal)>;
     return std::make_unique<key_remap_table<comparator_type>>(build,
@@ -514,11 +516,11 @@ std::unique_ptr<key_remap_table_interface> create_key_remap_table(cudf::table_vi
   auto const has_nested = cudf::has_nested_columns(build);
   auto const self_equal = cudf::detail::row::equality::self_comparator(preprocessed_build);
   auto const row_hasher = cudf::detail::row::hash::row_hasher{preprocessed_build};
-  auto const d_hasher   = row_hasher.device_hasher(cudf::nullate::DYNAMIC{has_nulls});
+  auto const d_hasher   = row_hasher.device_hasher(cudf::nullate::DYNAMIC{HAS_NULLS});
 
   if (has_nested) {
     auto const d_equal =
-      self_equal.equal_to<true>(cudf::nullate::DYNAMIC{has_nulls}, compare_nulls);
+      self_equal.equal_to<true>(cudf::nullate::DYNAMIC{HAS_NULLS}, compare_nulls);
 
     using comparator_type = build_comparator<decltype(d_equal)>;
     return std::make_unique<key_remap_table<comparator_type>>(build,
@@ -530,7 +532,7 @@ std::unique_ptr<key_remap_table_interface> create_key_remap_table(cudf::table_vi
                                                               stream);
   } else {
     auto const d_equal =
-      self_equal.equal_to<false>(cudf::nullate::DYNAMIC{has_nulls}, compare_nulls);
+      self_equal.equal_to<false>(cudf::nullate::DYNAMIC{HAS_NULLS}, compare_nulls);
 
     using comparator_type = build_comparator<decltype(d_equal)>;
     return std::make_unique<key_remap_table<comparator_type>>(build,
@@ -623,10 +625,10 @@ class key_remapping_impl {
 
 key_remapping::key_remapping(cudf::table_view const& build,
                              null_equality compare_nulls,
-                             bool compute_metrics,
+                             cudf::compute_metrics metrics,
                              rmm::cuda_stream_view stream)
-  : _impl{
-      std::make_unique<detail::key_remapping_impl>(build, compare_nulls, compute_metrics, stream)}
+  : _impl{std::make_unique<detail::key_remapping_impl>(
+      build, compare_nulls, static_cast<bool>(metrics), stream)}
 {
   CUDF_EXPECTS(build.num_columns() > 0, "Build table must have at least one column");
 }

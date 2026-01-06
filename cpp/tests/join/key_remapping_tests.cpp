@@ -43,9 +43,6 @@ struct KeyRemappingTest : public cudf::test::BaseFixture {
   void verify_equal_keys_have_equal_ids(cudf::table_view const& keys, cudf::column_view const& ids)
   {
     // Sort the keys+ids together by keys, then verify adjacent equal keys have equal ids
-    auto keys_with_ids_cols = keys.column(0).size() > 0 ? std::vector<cudf::column_view>{}
-                                                        : std::vector<cudf::column_view>{};
-
     // Build a table with keys + id column for sorting
     std::vector<cudf::column_view> all_cols;
     for (int i = 0; i < keys.num_columns(); ++i) {
@@ -63,17 +60,39 @@ struct KeyRemappingTest : public cudf::test::BaseFixture {
     // Bring sorted ids to host and verify adjacent equal keys have equal ids
     auto sorted_ids = to_host<int32_t>(sorted_table->get_column(keys.num_columns()).view());
 
-    // Also need to check keys - bring them to host too for comparison
-    // For simplicity, use the distinct count: if we have N distinct keys,
-    // we should have exactly N distinct IDs among non-sentinel values
-    auto non_sentinel_ids = std::vector<int32_t>{};
-    for (auto id : sorted_ids) {
-      if (id >= 0) { non_sentinel_ids.push_back(id); }
+    // Extract just the key columns from the sorted table
+    std::vector<cudf::column_view> sorted_key_cols_view;
+    for (int i = 0; i < keys.num_columns(); ++i) {
+      sorted_key_cols_view.push_back(sorted_table->get_column(i).view());
+    }
+    cudf::table_view sorted_keys{sorted_key_cols_view};
+
+    // Bring all sorted key columns to host for comparison
+    // Assuming int32_t keys (as used in all current tests)
+    std::vector<std::vector<int32_t>> sorted_key_cols;
+    for (int i = 0; i < keys.num_columns(); ++i) {
+      sorted_key_cols.push_back(to_host<int32_t>(sorted_keys.column(i)));
     }
 
-    // Group consecutive rows with same key and verify they have same ID
-    // This requires comparing keys which is complex for multi-column
-    // Instead, let's use a different approach: verify distinct_count matches unique IDs
+    // Verify: if row[i] and row[i+1] have equal keys, they must have equal IDs
+    for (size_t i = 1; i < sorted_ids.size(); ++i) {
+      // Check if current row has same keys as previous row
+      bool keys_equal = true;
+      for (int col = 0; col < keys.num_columns(); ++col) {
+        // Handle null values - they should be treated as equal to each other or according to null_equality
+        if (sorted_key_cols[col][i] != sorted_key_cols[col][i - 1]) {
+          keys_equal = false;
+          break;
+        }
+      }
+
+      // If keys are equal, IDs must be equal (both non-negative or both sentinel)
+      if (keys_equal) {
+        EXPECT_EQ(sorted_ids[i], sorted_ids[i - 1])
+          << "Equal keys at rows " << (i - 1) << " and " << i << " have different IDs: "
+          << sorted_ids[i - 1] << " vs " << sorted_ids[i];
+      }
+    }
   }
 
   // Verify remapping contract: distinct keys get distinct IDs, equal keys get equal IDs
@@ -740,7 +759,7 @@ TEST_F(KeyRemappingTest, MetricsDisabled)
   auto build_table = cudf::table_view{{build_col}};
 
   // Explicitly disable metrics
-  cudf::key_remapping remap{build_table, cudf::null_equality::EQUAL, false};
+  cudf::key_remapping remap{build_table, cudf::null_equality::EQUAL, cudf::compute_metrics::NO};
 
   EXPECT_FALSE(remap.has_metrics());
   EXPECT_THROW((void)remap.get_distinct_count(), cudf::logic_error);
@@ -753,7 +772,7 @@ TEST_F(KeyRemappingTest, MetricsDisabledRemapStillWorks)
   auto build_table = cudf::table_view{{build_col}};
 
   // Disable metrics but remapping should still work
-  cudf::key_remapping remap{build_table, cudf::null_equality::EQUAL, false};
+  cudf::key_remapping remap{build_table, cudf::null_equality::EQUAL, cudf::compute_metrics::NO};
 
   // Remap build keys
   auto build_result = remap.remap_build_keys();

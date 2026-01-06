@@ -100,7 +100,7 @@ void nvbench_key_remap_build(nvbench::state& state,
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     cudf::key_remapping remap(keys,
                               cudf::null_equality::EQUAL,
-                              true,  // compute_metrics
+                              cudf::compute_metrics::YES,
                               cudf::get_default_stream());
     // Access metrics to ensure they're computed
     auto dc = remap.get_distinct_count();

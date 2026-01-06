@@ -162,9 +162,10 @@ void nvbench_join_heuristics(nvbench::state& state,
                                     counts_column->type());
     } else if constexpr (Method == heuristic_method::KEY_REMAPPING) {
       // Approach 3: key_remapping with metrics
-      constexpr bool compute_metrics = true;
-      cudf::key_remapping remap(
-        keys, cudf::null_equality::EQUAL, compute_metrics, cudf::get_default_stream());
+      cudf::key_remapping remap(keys,
+                                cudf::null_equality::EQUAL,
+                                cudf::compute_metrics::YES,
+                                cudf::get_default_stream());
 
       // Get both metrics
       auto distinct_count = remap.get_distinct_count();

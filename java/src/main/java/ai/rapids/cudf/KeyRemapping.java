@@ -125,7 +125,7 @@ public class KeyRemapping implements AutoCloseable {
    * @param nullEquality how null key values should be compared.
    *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
    *        When UNEQUAL, rows with null keys receive a negative sentinel value.
-   * @param computeMetrics if true, compute distinct_count and max_duplicate_count.
+   * @param computeMetrics if true, compute distinctCount and maxDuplicateCount.
    *        If false, skip metrics computation for better performance; calling
    *        {@link #getDistinctCount()} or {@link #getMaxDuplicateCount()} will throw.
    */
@@ -199,7 +199,7 @@ public class KeyRemapping implements AutoCloseable {
   }
 
   /**
-   * Check if metrics (distinct_count, max_duplicate_count) were computed.
+   * Check if metrics (distinctCount, maxDuplicateCount) were computed.
    *
    * @return true if metrics are available, false if computeMetrics was false during construction
    */
