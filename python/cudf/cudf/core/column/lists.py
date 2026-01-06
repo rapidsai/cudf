@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -76,6 +76,19 @@ class ListColumn(ColumnBase):
             children[1]._with_type_metadata(dtype.element_type),
         )
 
+    def _get_sliced_child(self, idx: int) -> ColumnBase:
+        """Get a child column properly sliced to match the parent's view."""
+        if idx < 0 or idx >= len(self._children):
+            raise IndexError(
+                f"Index {idx} out of range for {len(self._children)} children"
+            )
+
+        if idx == 1:
+            sliced_plc_col = self.plc_column.list_view().get_sliced_child()
+            return type(self._children[idx]).from_pylibcudf(sliced_plc_col)
+
+        return self._children[idx]
+
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
@@ -85,38 +98,6 @@ class ListColumn(ColumnBase):
         """
         # TODO: handle if self.has_nulls(): case
         return self
-
-    @cached_property
-    def memory_usage(self) -> int:
-        n = super().memory_usage
-        child0_size = (self.size + 1) * self.base_children[0].dtype.itemsize
-        current_base_child = self.base_children[1]
-        current_offset = self.offset
-        n += child0_size
-        while type(current_base_child) is ListColumn:
-            child0_size = (
-                current_base_child.size + 1 - current_offset
-            ) * current_base_child.base_children[0].dtype.itemsize
-            n += child0_size
-            current_offset_col = current_base_child.base_children[0]
-            if not len(current_offset_col):
-                # See https://github.com/rapidsai/cudf/issues/16164 why
-                # offset column can be uninitialized
-                break
-            current_offset = current_offset_col.element_indexing(
-                current_offset
-            )
-            current_base_child = current_base_child.base_children[1]
-
-        n += (
-            current_base_child.size - current_offset
-        ) * current_base_child.dtype.itemsize
-
-        if current_base_child.nullable:
-            n += plc.null_mask.bitmask_allocation_size_bytes(
-                current_base_child.size
-            )
-        return n
 
     def element_indexing(self, index: int) -> list:
         result = super().element_indexing(index)
@@ -136,13 +117,6 @@ class ListColumn(ColumnBase):
             )
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
-
-    @property
-    def base_size(self) -> int:
-        # in some cases, libcudf will return an empty ListColumn with no
-        # indices; in these cases, we must manually set the base_size to 0 to
-        # avoid it being negative
-        return max(0, len(self.base_children[0]) - 1)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         # Lists only support __add__, which concatenates lists.
@@ -166,7 +140,7 @@ class ListColumn(ColumnBase):
         Column containing the elements of each list (may itself be a
         ListColumn)
         """
-        return self.children[1]
+        return self._get_sliced_child(1)
 
     @property
     def offsets(self) -> NumericalColumn:
@@ -174,28 +148,6 @@ class ListColumn(ColumnBase):
         Integer offsets to elements specifying each row of the ListColumn
         """
         return cast(NumericalColumn, self.children[0])
-
-    def to_arrow(self) -> pa.Array:
-        offsets = self.offsets.to_arrow()
-        elements = (
-            pa.nulls(len(self.elements))
-            if len(self.elements) == self.elements.null_count
-            else self.elements.to_arrow()
-        )
-        pa_type = pa.list_(elements.type)
-
-        if self.nullable:
-            nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
-            buffers = [nbuf, offsets.buffers()[1]]
-        else:
-            buffers = list(offsets.buffers())
-        return pa.ListArray.from_buffers(
-            pa_type,
-            len(self),
-            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
-            buffers,  # type: ignore[arg-type]
-            children=[elements],
-        )
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -205,11 +157,9 @@ class ListColumn(ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, ListDtype):
-            elements = self.base_children[1]._with_type_metadata(
-                dtype.element_type
-            )
+            elements = self.children[1]._with_type_metadata(dtype.element_type)
             new_children = [
-                self.plc_column.children()[0],
+                self.children[0].plc_column,
                 elements.plc_column,
             ]
             new_plc_column = plc.Column(
@@ -331,11 +281,12 @@ class ListColumn(ColumnBase):
         while leaf_queue:
             col = leaf_queue.pop()
             offsets = col.children[0].plc_column
+            # col.mask is a Buffer which is Span-compliant
             plc_leaf_col = plc.Column(
                 plc.DataType(plc.TypeId.LIST),
                 col.size,
                 None,
-                plc.gpumemoryview(col.mask) if col.mask is not None else None,
+                col.mask,
                 col.null_count,
                 col.offset,
                 [offsets, plc_leaf_col],

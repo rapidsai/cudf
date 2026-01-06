@@ -65,6 +65,8 @@ jobs:
         uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
         with:
           repo: cudf
+          # TODO: Fix nightly CI and remove this line
+          max_days_without_success: 30
   changed-files:
     secrets: inherit
     needs: telemetry-setup
@@ -150,7 +152,7 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/cpp_linters.sh"
-      node_type: "cpu16"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit
