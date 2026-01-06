@@ -5,7 +5,6 @@ from __future__ import annotations
 import itertools
 import warnings
 from collections.abc import Collection, Mapping
-from contextlib import ExitStack
 from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, cast
 
@@ -15,6 +14,7 @@ import pandas as pd
 import pylibcudf as plc
 
 from cudf.api.types import is_scalar
+from cudf.core.column import access_columns
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -470,13 +470,10 @@ def _plc_write_csv(
         if index
         else table._columns
     )
-    with ExitStack() as stack:
-        # Materialize iterator to avoid consuming it during access context setup
-        columns_list = list(iter_columns)
-        # Access all columns that will be written
-        for col in columns_list:
-            stack.enter_context(col.access(mode="read", scope="internal"))
+    # Materialize iterator to avoid consuming it during access context setup
+    columns_list = list(iter_columns)
 
+    with access_columns(*columns_list, mode="read", scope="internal"):
         columns = [col.plc_column for col in columns_list]
         col_names = []
         if header:

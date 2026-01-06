@@ -5,7 +5,6 @@ from __future__ import annotations
 import itertools
 import json
 import warnings
-from contextlib import ExitStack
 from typing import TYPE_CHECKING, Literal
 
 import pyarrow as pa
@@ -13,7 +12,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf.api.types import is_list_like
-from cudf.core.column import column_empty
+from cudf.core.column import access_columns, column_empty
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -456,11 +455,7 @@ def _plc_write_orc(
     else:
         iter_columns = table._columns
 
-    with ExitStack() as stack:
-        # Access all columns that will be written
-        for col in iter_columns:
-            stack.enter_context(col.access(mode="read", scope="internal"))
-
+    with access_columns(*iter_columns, mode="read", scope="internal"):
         if index is True or (
             index is None and not isinstance(table.index, RangeIndex)
         ):

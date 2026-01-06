@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from contextlib import ExitStack
 from typing import TYPE_CHECKING, cast
 
 import pylibcudf as plc
@@ -64,10 +63,7 @@ def scatter(
                 f"index out of bounds for column of size {n_rows}"
             )
 
-    stack = ExitStack()
-    with stack:
-        for col in target_columns:
-            stack.enter_context(col.access(mode="write"))
+    with access_columns(*target_columns, mode="write", scope="internal"):
         plc_tbl = plc.copying.scatter(
             cast(list[plc.Scalar], sources)
             if isinstance(sources[0], plc.Scalar)

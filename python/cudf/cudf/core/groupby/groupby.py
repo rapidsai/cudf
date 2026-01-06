@@ -8,7 +8,6 @@ import itertools
 import textwrap
 import warnings
 from collections.abc import Mapping
-from contextlib import ExitStack
 from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -436,12 +435,10 @@ class _GroupByContextManager:
             )
 
     def __enter__(self):
-        stack = ExitStack()
+        stack = access_columns(
+            *self._grouping._key_columns, mode="read", scope="internal"
+        )
         stack.__enter__()
-
-        for col in self._grouping._key_columns:
-            stack.enter_context(col.access(mode="read", scope="internal"))
-
         self._stack_list.append(stack)
 
         # Return the private pylibcudf GroupBy object

@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import warnings
 from collections.abc import Collection, Mapping
-from contextlib import ExitStack
 from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -14,7 +13,7 @@ import pandas as pd
 
 import pylibcudf as plc
 
-from cudf.core.column import ColumnBase
+from cudf.core.column import ColumnBase, access_columns
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -337,11 +336,7 @@ def _plc_write_json(
     lines: bool = False,
     rows_per_chunk: int = 1024 * 64,  # 64K rows
 ) -> None:
-    with ExitStack() as stack:
-        # Access all columns that will be written
-        for col in table._columns:
-            stack.enter_context(col.access(mode="read", scope="internal"))
-
+    with access_columns(*table._columns, mode="read", scope="internal"):
         try:
             # TODO: TableWithMetadata expects list[ColumnNameSpec] but receives list[tuple[Hashable, Any]]
             tbl_w_meta = plc.io.TableWithMetadata(
