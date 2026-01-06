@@ -28,6 +28,7 @@
 
 #include <cub/device/device_for.cuh>
 #include <cub/device/device_scan.cuh>
+#include <cub/device/device_transform.cuh>
 #include <cuda/functional>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
@@ -203,10 +204,10 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   cub::DeviceFor::ForEachN(
     nonzero_matches.begin(),
     count_matches,
-    [match_counts   = match_counts->begin(),
-     larger_indices = larger_indices.begin()] __device__(size_type pos) {
-      auto const count      = match_counts[pos];
-      larger_indices[count] = pos;
+    [match_offsets  = match_offsets.begin(),
+     larger_indices = larger_indices.begin()] __device__(size_type match) {
+      auto const pos      = match_offsets[match];
+      larger_indices[pos] = match;
     },
     stream.value());
 
@@ -241,10 +242,10 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
   auto smaller_tabulate_it = thrust::tabulate_output_iterator(
     [nonzero_matches = nonzero_matches.begin(),
-     match_counts    = match_counts->begin(),
+     match_offsets   = match_offsets.begin(),
      smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
       auto const lhs_idx   = nonzero_matches[idx];
-      auto const pos       = match_counts[lhs_idx];
+      auto const pos       = match_offsets[lhs_idx];
       smaller_indices[pos] = lb;
     });
   auto smaller_it = thrust::transform_iterator(
@@ -286,10 +287,11 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   }
 
   // Use cub API to handle large arrays (> INT32_MAX)
-  cub::DeviceFor::ForEachN(smaller_indices.begin(),
-                           smaller_indices.size(),
-                           mapping_functor<SmallerIterator>{sorted_smaller_order_begin},
-                           stream.value());
+  cub::DeviceTransform::Transform(smaller_indices.begin(),
+                                  smaller_indices.begin(),
+                                  smaller_indices.size(),
+                                  mapping_functor<SmallerIterator>{sorted_smaller_order_begin},
+                                  stream.value());
   stream.synchronize();
 
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
