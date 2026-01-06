@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -6,11 +6,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cudf.core.accessors.base_accessor import BaseAccessor
+from cudf.core.column.struct import StructColumn
 from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import get_dtype_of_same_kind, is_dtype_obj_struct
 
 if TYPE_CHECKING:
-    from cudf.core.column.struct import StructColumn
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
     from cudf.core.series import Series
@@ -63,8 +63,9 @@ class StructMethods(BaseAccessor):
         field_keys = list(struct_dtype_fields.keys())
         if key in struct_dtype_fields:
             pos = field_keys.index(key)
+            assert isinstance(self._column, StructColumn)
             return self._return_or_inplace(
-                self._column.children[pos]._with_type_metadata(
+                self._column._get_sliced_child(pos)._with_type_metadata(
                     get_dtype_of_same_kind(
                         self._column.dtype, struct_dtype_fields[key]
                     )
@@ -72,7 +73,10 @@ class StructMethods(BaseAccessor):
             )
         elif isinstance(key, int):
             try:
-                return self._return_or_inplace(self._column.children[key])
+                assert isinstance(self._column, StructColumn)
+                return self._return_or_inplace(
+                    self._column._get_sliced_child(key)
+                )
             except IndexError as err:
                 raise IndexError(f"Index {key} out of range") from err
         else:
@@ -107,13 +111,10 @@ class StructMethods(BaseAccessor):
         from cudf.core.column_accessor import ColumnAccessor
         from cudf.core.dataframe import DataFrame
 
+        assert isinstance(self._column, StructColumn)
         data = {
-            name: col.copy(deep=True)
-            for name, col in zip(
-                self._column.dtype.fields,  # type: ignore[arg-type]
-                self._column.children,
-                strict=True,
-            )
+            name: self._column._get_sliced_child(i).copy(deep=True)
+            for i, name in enumerate(self._column.dtype.fields)  # type: ignore[arg-type]
         }
         rangeindex = len(data) == 0
         return DataFrame._from_data(
