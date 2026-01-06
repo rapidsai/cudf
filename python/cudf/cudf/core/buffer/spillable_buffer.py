@@ -594,8 +594,6 @@ class SpillableBuffer(Buffer):
             return header, frames
 
     def copy(self, deep: bool = True) -> Self:
-        from cudf.core.buffer.utils import acquire_spill_lock
-
         if not deep:
             return super().copy(deep=False)
 
@@ -606,7 +604,7 @@ class SpillableBuffer(Buffer):
             owner = self._owner.from_host_memory(self.memoryview())
             return self.__class__(owner=owner, offset=0, size=owner.size)
 
-        with acquire_spill_lock():
+        with self.access(mode="read", scope="internal"):
             return super().copy(deep=deep)
 
     @property
