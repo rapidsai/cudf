@@ -139,7 +139,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 .slice(no_nans.null_count, len(no_nans))
                 .astype(np.dtype(np.int32))
             )
-            with access_columns(no_nans, indices):
+            with access_columns(
+                no_nans, indices, mode="read", scope="internal"
+            ):
                 plc_column = plc.quantiles.quantile(
                     no_nans.plc_column,
                     q,
@@ -253,7 +255,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if how not in {"half_even", "half_up"}:
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
-        with access_columns(self):
+        with access_columns(self, mode="read", scope="internal"):
             return type(self).from_pylibcudf(
                 plc.round.round(self.plc_column, decimals, plc_how)
             )
@@ -267,7 +269,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         unaryop_str = unaryop.upper()
         unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
-        with access_columns(self):
+        with access_columns(self, mode="read", scope="internal"):
             return type(self).from_pylibcudf(
                 plc.unary.unary_operation(self.plc_column, unaryop_enum)
             )

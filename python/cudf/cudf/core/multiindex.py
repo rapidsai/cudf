@@ -1982,7 +1982,7 @@ class MultiIndex(Index):
             for lcol, rcol in zip(target._columns, self._columns, strict=True)
         ]
         join_keys = list(map(list, zip(*join_keys, strict=True)))
-        with access_columns(*join_keys):
+        with access_columns(*join_keys, mode="read", scope="internal"):
             plc_tables = [
                 plc.Table([col.plc_column for col in cols])
                 for cols in join_keys

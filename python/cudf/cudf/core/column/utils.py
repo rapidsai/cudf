@@ -11,8 +11,8 @@ from typing import Any
 
 def access_columns(
     *objs: Any,
-    mode: str = "read",
-    scope: str = "internal",
+    mode: str,
+    scope: str,
 ) -> ExitStack:
     """
     Context manager to access multiple columns simultaneously.
@@ -25,14 +25,14 @@ def access_columns(
     ----------
     *objs : ColumnBase | Iterable[ColumnBase] | Any
         Column objects or sequences of columns to access. Can be:
-        - Individual columns: access_columns(col1, col2, col3)
-        - Sequences: access_columns(*column_list)
-        - Mixed: access_columns(col1, *more_cols, col2)
+        - Individual columns: access_columns(col1, col2, col3, mode="read", scope="internal")
+        - Sequences: access_columns(*column_list, mode="read", scope="internal")
+        - Mixed: access_columns(col1, *more_cols, col2, mode="read", scope="internal")
         Non-column objects are silently skipped.
-    mode : str, default "read"
-        Access mode for copy-on-write behavior.
-    scope : str, default "internal"
-        Spill scope for SpillableBuffer.
+    mode : str
+        Access mode for copy-on-write behavior (required).
+    scope : str
+        Spill scope for SpillableBuffer (required).
 
     Returns
     -------
@@ -42,16 +42,16 @@ def access_columns(
     Examples
     --------
     >>> # Fixed columns
-    >>> with access_columns(self, other):
+    >>> with access_columns(self, other, mode="read", scope="internal"):
     ...     result = plc.operation(self.plc_column, other.plc_column)
 
     >>> # Variable columns
-    >>> with access_columns(*column_list):
+    >>> with access_columns(*column_list, mode="read", scope="internal"):
     ...     plc_cols = [c.plc_column for c in column_list]
     ...     result = plc.concatenate.concatenate(plc_cols)
 
     >>> # Automatically skips non-columns
-    >>> with access_columns(self, other, boolean_mask):
+    >>> with access_columns(self, other, boolean_mask, mode="read", scope="internal"):
     ...     # Works even if other is plc.Scalar
     ...     other_col = other if isinstance(other, plc.Scalar) else other.plc_column
     ...     result = plc.copying.copy_if_else(

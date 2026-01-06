@@ -1745,7 +1745,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 for left, right, _, _ in operands.values()
                 for col in (left, right)
                 if isinstance(col, ColumnBase)
-            )
+            ),
+            mode="read",
+            scope="internal",
         ):
             mask = None
             data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
@@ -2065,7 +2067,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if not is_scalar(repeats):
             repeats = as_column(repeats)
 
-        with access_columns(*columns, repeats):
+        with access_columns(*columns, repeats, mode="read", scope="internal"):
             plc_table = plc.Table([col.plc_column for col in columns])
             if isinstance(repeats, ColumnBase):
                 repeats_plc = repeats.plc_column

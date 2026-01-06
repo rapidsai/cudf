@@ -24,7 +24,7 @@ def gather(
     # Materialize iterator to avoid consuming it during access context setup
     cols_list = list(columns)
 
-    with access_columns(*cols_list, gather_map):
+    with access_columns(*cols_list, gather_map, mode="read", scope="internal"):
         plc_tbl = plc.copying.gather(
             plc.Table([col.plc_column for col in cols_list]),
             gather_map.plc_column,
@@ -89,7 +89,7 @@ def columns_split(
 ) -> list[list[plc.Column]]:
     cols_list = list(input_columns)
 
-    with access_columns(*cols_list):
+    with access_columns(*cols_list, mode="read", scope="internal"):
         return [
             plc_tbl.columns()
             for plc_tbl in plc.copying.split(

@@ -686,7 +686,9 @@ class DateOffset:
             for unit, value in self._scalars.items():
                 value = -value if op == "__sub__" else value
                 if unit == "months":
-                    with access_columns(datetime_col):
+                    with access_columns(
+                        datetime_col, mode="read", scope="internal"
+                    ):
                         datetime_col = type(datetime_col).from_pylibcudf(
                             plc.datetime.add_calendrical_months(
                                 datetime_col.plc_column,

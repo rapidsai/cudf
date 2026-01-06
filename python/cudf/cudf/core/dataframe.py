@@ -1979,7 +1979,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     if ignore
                     else itertools.chain(table.index._columns, table._columns)
                 )
-            )
+            ),
+            mode="read",
+            scope="internal",
         ):
             plc_tables = [
                 plc.Table(
@@ -2721,7 +2723,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         # Materialize iterator to avoid consuming it during access context setup
         source_columns_list = list(source_columns)
-        with access_columns(*source_columns_list, map_index):
+        with access_columns(
+            *source_columns_list, map_index, mode="read", scope="internal"
+        ):
             plc_table, offsets = plc.partitioning.partition(
                 plc.Table([col.plc_column for col in source_columns_list]),
                 map_index.plc_column,
@@ -5123,7 +5127,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         # Materialize iterator to avoid consuming it during access context setup
         cols_list = list(cols)
-        with access_columns(*cols_list):
+        with access_columns(*cols_list, mode="read", scope="internal"):
             plc_table, offsets = plc.partitioning.hash_partition(
                 plc.Table([col.plc_column for col in cols_list]),
                 key_indices,
@@ -6179,7 +6183,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise TypeError(msg)
 
         if method == "table":
-            with access_columns(*self._columns):
+            with access_columns(*self._columns, mode="read", scope="internal"):
                 plc_table = plc.quantiles.quantiles(
                     plc.Table([c.plc_column for c in self._columns]),
                     qs,
@@ -7478,7 +7482,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             as_column(unique_named_levels.get_level_values(i))
             for i in range(unique_named_levels.nlevels)
         ]
-        with access_columns(*cols):
+        with access_columns(*cols, mode="read", scope="internal"):
             plc_table = plc.reshape.tile(
                 plc.Table([col.plc_column for col in cols]),
                 self.shape[0],
@@ -7572,7 +7576,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                             "non-object dtypes is not supported. "
                         )
 
-            with access_columns(*homogenized):
+            with access_columns(*homogenized, mode="read", scope="internal"):
                 interleaved_col = ColumnBase.from_pylibcudf(
                     plc.reshape.interleave_columns(
                         plc.Table([col.plc_column for col in homogenized])
@@ -8108,7 +8112,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise ValueError(
                 "interleave_columns does not support 'category' dtype."
             )
-        with access_columns(*self._columns):
+        with access_columns(*self._columns, mode="read", scope="internal"):
             result_col = ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table([col.plc_column for col in self._columns])
@@ -8118,7 +8122,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     def _compute_column(self, expr: str) -> ColumnBase:
         """Helper function for eval"""
-        with access_columns(*self._columns):
+        with access_columns(*self._columns, mode="read", scope="internal"):
             plc_column = plc.transform.compute_column(
                 plc.Table([col.plc_column for col in self._columns]),
                 plc.expressions.to_expression(expr, self._column_names),

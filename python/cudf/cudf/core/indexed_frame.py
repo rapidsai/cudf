@@ -2932,7 +2932,7 @@ class IndexedFrame(Frame):
                 "Provided seed value has no effect for the hash method "
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
-        with access_columns(*self._columns):
+        with access_columns(*self._columns, mode="read", scope="internal"):
             plc_table = plc.Table([c.plc_column for c in self._columns])
             if method == "murmur3":
                 plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
@@ -3071,7 +3071,7 @@ class IndexedFrame(Frame):
         )
         # Materialize iterator to avoid consuming it during access context setup
         cols_list = list(columns_to_slice)
-        with access_columns(*cols_list):
+        with access_columns(*cols_list, mode="read", scope="internal"):
             plc_tables = plc.copying.slice(
                 plc.Table([col.plc_column for col in cols_list]),
                 [start, stop],
@@ -3270,7 +3270,7 @@ class IndexedFrame(Frame):
         if (keep_option := _keep_options.get(keep)) is None:
             raise ValueError('keep must be either "first", "last" or False')
 
-        with access_columns(*columns):
+        with access_columns(*columns, mode="read", scope="internal"):
             plc_column = plc.stream_compaction.distinct_indices(
                 plc.Table([col.plc_column for col in columns]),
                 keep_option,
@@ -3296,7 +3296,9 @@ class IndexedFrame(Frame):
                 itertools.chain(self.index._columns, self._columns)
                 if keep_index
                 else self._columns
-            )
+            ),
+            mode="read",
+            scope="internal",
         ):
             plc_table = plc.copying.empty_like(
                 plc.Table(
@@ -3332,7 +3334,9 @@ class IndexedFrame(Frame):
             if keep_index
             else self._columns
         )
-        with access_columns(*source_columns_list):
+        with access_columns(
+            *source_columns_list, mode="read", scope="internal"
+        ):
             columns_split = copying.columns_split(
                 source_columns_list,
                 splits,
@@ -5458,7 +5462,11 @@ class IndexedFrame(Frame):
         else:
             idx_cols = ()
 
-        with access_columns(*itertools.chain(idx_cols, self._columns)):
+        with access_columns(
+            *itertools.chain(idx_cols, self._columns),
+            mode="read",
+            scope="internal",
+        ):
             plc_table = plc.lists.explode_outer(
                 plc.Table(
                     [
@@ -5551,7 +5559,9 @@ class IndexedFrame(Frame):
         The indexed frame containing the tiled "rows".
         """
         with access_columns(
-            *itertools.chain(self.index._columns, self._columns)
+            *itertools.chain(self.index._columns, self._columns),
+            mode="read",
+            scope="internal",
         ):
             plc_table = plc.reshape.tile(
                 plc.Table(

@@ -46,7 +46,7 @@ def is_sorted(
     column_order, null_precedence = ordering(ascending, na_position)
     cols_list = list(source_columns)
 
-    with access_columns(*cols_list):
+    with access_columns(*cols_list, mode="read", scope="internal"):
         return plc.sorting.is_sorted(
             plc.Table([col.plc_column for col in cols_list]),
             column_order,
@@ -124,7 +124,7 @@ def order_by(
     )
     cols_list = list(columns_from_table)
 
-    with access_columns(*cols_list):
+    with access_columns(*cols_list, mode="read", scope="internal"):
         return func(
             plc.Table(
                 [col.plc_column for col in cols_list],
@@ -173,7 +173,9 @@ def sort_by_key(
     values_list = list(values)
     keys_list = list(keys)
 
-    with access_columns(*values_list, *keys_list):
+    with access_columns(
+        *values_list, *keys_list, mode="read", scope="internal"
+    ):
         return func(
             plc.Table([col.plc_column for col in values_list]),
             plc.Table([col.plc_column for col in keys_list]),
@@ -215,7 +217,9 @@ def search_sorted(
     source_list = list(source)
     values_list = list(values)
 
-    with access_columns(*source_list, *values_list):
+    with access_columns(
+        *source_list, *values_list, mode="read", scope="internal"
+    ):
         return func(
             plc.Table([col.plc_column for col in source_list]),
             plc.Table([col.plc_column for col in values_list]),

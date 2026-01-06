@@ -1774,7 +1774,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         other : Column
             A column of values to search for
         """
-        with access_columns(self, other):
+        with access_columns(self, other, mode="read", scope="internal"):
             return ColumnBase.from_pylibcudf(
                 plc.search.contains(
                     self.plc_column,
@@ -2338,7 +2338,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def copy_if_else(
         self, other: Self | plc.Scalar, boolean_mask: NumericalColumn
     ) -> Self:
-        with access_columns(self, other, boolean_mask):
+        with access_columns(
+            self, other, boolean_mask, mode="read", scope="internal"
+        ):
             return (
                 type(self)
                 .from_pylibcudf(  # type: ignore[return-value]
@@ -2365,7 +2367,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
 
     def one_hot_encode(self, categories: ColumnBase) -> Generator[ColumnBase]:
-        with access_columns(self, categories):
+        with access_columns(self, categories, mode="read", scope="internal"):
             plc_table = plc.transform.one_hot_encode(
                 self.plc_column,
                 categories.plc_column,
@@ -3409,7 +3411,7 @@ def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
 
     # Filter out inputs that have 0 length, then concatenate.
     objs_with_len = [o for o in new_objs if len(o)]
-    with access_columns(*objs_with_len):
+    with access_columns(*objs_with_len, mode="read", scope="internal"):
         return ColumnBase.from_pylibcudf(
             plc.concatenate.concatenate(
                 [col.plc_column for col in objs_with_len]

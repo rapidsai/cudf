@@ -47,7 +47,7 @@ def drop_nulls(
     else:
         keep_threshold = len(keys)
 
-    with access_columns(*columns):
+    with access_columns(*columns, mode="read", scope="internal"):
         plc_table = plc.stream_compaction.drop_nulls(
             plc.Table([col.plc_column for col in columns]),
             keys,
@@ -71,7 +71,7 @@ def apply_boolean_mask(
     -------
     columns obtained from applying mask
     """
-    with access_columns(*columns, boolean_mask):
+    with access_columns(*columns, boolean_mask, mode="read", scope="internal"):
         plc_table = plc.stream_compaction.apply_boolean_mask(
             plc.Table([col.plc_column for col in columns]),
             boolean_mask.plc_column,
@@ -108,7 +108,7 @@ def drop_duplicates(
     if (keep_option := _keep_options.get(keep)) is None:
         raise ValueError('keep must be either "first", "last" or False')
 
-    with access_columns(*columns):
+    with access_columns(*columns, mode="read", scope="internal"):
         plc_table = plc.stream_compaction.stable_distinct(
             plc.Table([col.plc_column for col in columns]),
             keys if keys is not None else list(range(len(columns))),
