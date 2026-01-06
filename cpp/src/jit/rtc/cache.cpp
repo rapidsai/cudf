@@ -43,6 +43,9 @@ cache_t::cache_t(bool enabled, std::string cache_dir, cache_limits const& limits
     libraries_cache_{limits.num_libraries},
     tick_{0}
 {
+  CUDF_EXPECTS(limits.num_blobs >= 2, "Blob cache limit must be at least 2");
+  CUDF_EXPECTS(limits.num_fragments >= 2, "Fragment cache limit must be at least 2");
+  CUDF_EXPECTS(limits.num_libraries >= 2, "Library cache limit must be at least 2");
   // Create cache directory if it doesn't exist
   if (mkdir(cache_dir_.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
     if (errno != EEXIST) { throw_posix("Failed to create RTC cache directory", "mkdir"); }
@@ -342,7 +345,7 @@ void cache_t::clear_disk_store()
 
   errno = 0;  // reset errno before reading
 
-  struct dirent* entry_iter;
+  struct dirent* entry_iter = nullptr;
 
   while (true) {
     entry_iter = readdir(dir);
@@ -355,14 +358,14 @@ void cache_t::clear_disk_store()
       }
     }
 
-    struct stat st;
+    struct stat entry_stat;
     char path[PATH_MAX + 1];
 
-    if (lstat(path, &st) == -1) {
+    if (lstat(path, &entry_stat) == -1) {
       throw_posix("Failed to get file status for RTC cache clearing", "lstat");
     }
 
-    if (S_ISREG(st.st_mode)) {
+    if (S_ISREG(entry_stat.st_mode)) {
       if (unlink(path) == -1) {
         throw_posix("Failed to unlink RTC cache file during clearing", "unlink");
       }

@@ -6,7 +6,7 @@ from typing import Any, NamedTuple, Self
 import yaml
 
 BYTE_TYPE = "unsigned char"
-SIZE_TYPE = "unsigned long long"
+SIZE_TYPE = "unsigned long"
 STORAGE_SPEC = "static constexpr"
 LIST_LINE_WIDTH = 32
 NAMESPACE_PREFIX = "jit_"

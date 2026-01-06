@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/getenv_or.hpp"
 #include "jit/cache.hpp"
+#include "jit/rtc/cache.hpp"
 
 #include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
@@ -16,7 +17,7 @@
 
 namespace cudf {
 
-context::context(init_flags flags) : _program_cache{nullptr}
+context::context(init_flags flags) : _program_cache{nullptr}, _rtc_cache{}
 {
   auto dump_codegen_flag = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
   _dump_codegen          = (dump_codegen_flag == "ON" || dump_codegen_flag == "1");
@@ -33,6 +34,12 @@ jit::program_cache& context::program_cache()
   return *_program_cache;
 }
 
+rtc::cache_t& context::rtc_cache()
+{
+  CUDF_EXPECTS(_rtc_cache != nullptr, "RTC cache not initialized", std::runtime_error);
+  return *_rtc_cache;
+}
+
 bool context::dump_codegen() const { return _dump_codegen; }
 
 void context::initialize_components(init_flags flags)
@@ -42,6 +49,8 @@ void context::initialize_components(init_flags flags)
 
   if (has_flag(new_flags, init_flags::INIT_JIT_CACHE)) {
     _program_cache = std::make_unique<jit::program_cache>();
+    // TODO: Make cache directory configurable
+    _rtc_cache = std::make_unique<rtc::cache_t>(true, "/tmp/cudf_rtc_cache", rtc::cache_limits{});
   }
 
   if (has_flag(new_flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }

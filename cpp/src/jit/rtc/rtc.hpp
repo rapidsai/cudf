@@ -158,12 +158,12 @@ struct library_t {
   };
 
   struct link_params {
-    char const* name                          = nullptr;
-    binary_type output_type                   = binary_type::CUBIN;
-    std::span<blob_view const> fragments      = {};
-    std::span<binary_type const> binary_types = {};
-    std::span<char const* const> names        = {};
-    std::span<char const* const> link_options = {};
+    char const* name                                   = nullptr;
+    binary_type output_type                            = binary_type::CUBIN;
+    std::span<blob_view const> fragments               = {};
+    std::span<binary_type const> fragment_binary_types = {};
+    std::span<char const* const> fragment_names        = {};
+    std::span<char const* const> link_options          = {};
   };
 
   [[nodiscard]] static library load(load_params const& params);

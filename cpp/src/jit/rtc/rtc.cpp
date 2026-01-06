@@ -140,12 +140,12 @@ void log_nvrtc_compile_result(fragment_t::compile_params const& params,
 
   std::string headers_str;
   for (auto const& header : params.headers.include_names) {
-    headers_str += std::format("\t{}\n", header);
+    headers_str = std::format("{}\t{}\n", headers_str, header);
   }
 
   std::string options_str;
   for (auto const& option : params.options) {
-    options_str += std::format("\t{}\n", option);
+    options_str = std::format("{}\t{}\n", options_str, option);
   }
 
   auto str = std::format("NCRTC Compilation for {} {} ({}): {}.\nHeaders: {}\nOptions: {}\n\n{}",
@@ -183,13 +183,13 @@ void log_nvJitLink_link_result(library_t::link_params const& params,
   CUDFRTC_CHECK_NVJITLINK(nvJitLinkGetErrorLog(handle, error_log.data()));
 
   std::string fragments_str;
-  for (auto const& fragment : params.names) {
-    fragments_str += std::format("\t{}\n", fragment);
+  for (auto const& fragment_name : params.fragment_names) {
+    fragments_str = std::format("{}\t{}\n", fragments_str, fragment_name);
   }
 
   std::string link_options_str;
   for (auto const& option : params.link_options) {
-    link_options_str += std::format("\t{}\n", option);
+    link_options_str = std::format("{}\t{}\n", link_options_str, option);
   }
 
   char const* binary_type_str = binary_type_string(params.output_type);
@@ -356,9 +356,9 @@ blob library_t::link_as_blob(link_params const& params)
   CUDF_DEFER([&] { nvJitLinkDestroy(&handle); });
 
   for (size_t i = 0; i < params.fragments.size(); i++) {
-    auto name     = params.names[i];
+    auto name     = params.fragment_names[i];
     auto fragment = params.fragments[i];
-    auto bin_type = params.binary_types[i];
+    auto bin_type = params.fragment_binary_types[i];
 
     nvJitLinkInputType nv_type;
 

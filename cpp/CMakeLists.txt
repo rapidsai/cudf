@@ -139,8 +139,6 @@ if(NOT CUDF_GENERATED_INCLUDE_DIR)
   set(CUDF_GENERATED_INCLUDE_DIR ${CUDF_BINARY_DIR})
 endif()
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/cudf)
-
 # ##################################################################################################
 # * linter configuration ---------------------------------------------------------------------------
 if(CUDF_CLANG_TIDY)
@@ -243,8 +241,6 @@ rapids_find_package(
   INSTALL_EXPORT_SET cudf-exports
 )
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
-
-find_program(BIN2C_EXE bin2c REQUIRED)
 
 # ##################################################################################################
 # * dependencies ----------------------------------------------------------------------------------
@@ -364,7 +360,7 @@ list(
 get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
 
 add_jit_includes(
-  cudf_jit
+  cudf_jit_embed
   DIRECTORY
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   FILES
@@ -394,14 +390,15 @@ add_jit_includes(
 # type consistency between AOT and JIT
 
 add_jit_includes(
-  cudf_jit DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} FILES src/jit/accessors.cuh src/jit/span.cuh
+  cudf_jit_embed DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} FILES src/jit/lto/library.inl.cuh
+  src/jit/lto/operators.inl.cuh src/jit/lto/types.inl.cuh src/jit/accessors.cuh src/jit/span.cuh
 )
 
-add_jit_includes(cudf_jit INCLUDE_DIRECTORY ${LIBCUDACXX_RAW_INCLUDE_DIRS})
+add_jit_includes(cudf_jit_embed INCLUDE_DIRECTORY ${LIBCUDACXX_RAW_INCLUDE_DIRS})
 
-add_jit_options(cudf_jit OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
+add_jit_options(cudf_jit_embed OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
 
-generate_jit_source_map(TARGET cudf_jit)
+generate_jit_source_map(TARGET cudf_jit_embed)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -918,8 +915,8 @@ add_library(
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
 )
-add_dependencies(cudf cudf_jit)
-target_include_directories(cudf PRIVATE ${cudf_jit_INCLUDE_DIR})
+add_dependencies(cudf cudf_jit_embed)
+target_include_directories(cudf PRIVATE ${cudf_jit_embed_INCLUDE_DIR})
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
 # in how conda builds glibc

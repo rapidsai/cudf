@@ -111,7 +111,7 @@ function(generate_jit_source_map)
   # write CONFIG to temp file and pass file path to script
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET}.yaml" "${TARGET_YAML}")
 
-  set(INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/jit_embed")
+  set(INCLUDE_DIR "${CUDF_GENERATED_INCLUDE_DIR}/include/jit_embed")
   set(HEADER "${INCLUDE_DIR}/${ARG_TARGET}.h")
 
   add_custom_command(

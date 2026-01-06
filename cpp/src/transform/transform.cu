@@ -17,7 +17,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cudf_lto_library_fatbin_bytes.h>
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
 #include <jit/parser.hpp>
