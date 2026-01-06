@@ -1,0 +1,205 @@
+From 9b8598a33381915afa9a5c9afddc9cbbf2ec5c8c Mon Sep 17 00:00:00 2001
+From: Zachary Collins <colz5081@gmail.com>
+Date: Thu, 18 Dec 2025 13:57:04 -0600
+Subject: [PATCH] API: Copy inputs in Index subclass constructors by default
+ (GH#63388) (#63398)
+
+---
+ pandas/core/indexes/base.py                   | 23 ++++++++++----
+ pandas/core/indexes/datetimes.py              | 14 +++++++--
+ pandas/core/indexes/interval.py               | 14 +++++++--
+ pandas/core/indexes/period.py                 | 14 +++++++--
+ pandas/core/indexes/timedeltas.py             | 14 +++++++--
+ 12 files changed, 177 insertions(+), 20 deletions(-)
+
+diff --git a/pandas/core/indexes/base.py b/pandas/core/indexes/base.py
+index f73fe77defc26..dc37f3bfa6a4c 100644
+--- a/pandas/core/indexes/base.py
++++ b/pandas/core/indexes/base.py
+@@ -505,12 +505,8 @@ def __new__(
+         if not copy and isinstance(data, (ABCSeries, Index)):
+             refs = data._references
+ 
+-        if isinstance(data, (ExtensionArray, np.ndarray)):
+-            # GH 63306
+-            if copy is not False:
+-                if dtype is None or astype_is_view(data.dtype, dtype):
+-                    data = data.copy()
+-                    copy = False
++        # GH 63306, GH 63388
++        data, copy = cls._maybe_copy_array_input(data, copy, dtype)
+ 
+         # range
+         if isinstance(data, (range, RangeIndex)):
+@@ -5197,6 +5193,21 @@ def _raise_scalar_data_error(cls, data):
+             "was passed"
+         )
+ 
++    @classmethod
++    def _maybe_copy_array_input(
++        cls, data, copy: bool | None, dtype
++    ) -> tuple[Any, bool]:
++        """
++        Ensure that the input data is copied if necessary.
++        GH#63388
++        """
++        if isinstance(data, (ExtensionArray, np.ndarray)):
++            if copy is not False:
++                if dtype is None or astype_is_view(data.dtype, pandas_dtype(dtype)):
++                    data = data.copy()
++                    copy = False
++        return data, bool(copy)
++
+     def _validate_fill_value(self, value):
+         """
+         Check if the value can be inserted into our array without casting,
+diff --git a/pandas/core/indexes/datetimes.py b/pandas/core/indexes/datetimes.py
+index a07e18b1892fd..72b009a344193 100644
+--- a/pandas/core/indexes/datetimes.py
++++ b/pandas/core/indexes/datetimes.py
+@@ -181,8 +181,13 @@ class DatetimeIndex(DatetimeTimedeltaMixin):
+         If True parse dates in `data` with the year first order.
+     dtype : numpy.dtype or DatetimeTZDtype or str, default None
+         Note that the only NumPy dtype allowed is `datetime64[ns]`.
+-    copy : bool, default False
+-        Make a copy of input ndarray.
++    copy : bool, default None
++        Whether to copy input data, only relevant for array, Series, and Index
++        inputs (for other input, e.g. a list, a new array is created anyway).
++        Defaults to True for array input and False for Index/Series.
++        Set to False to avoid copying array input at your own risk (if you
++        know the input data won't be modified elsewhere).
++        Set to True to force copying Series/Index up front.
+     name : label, default None
+         Name to be stored in the index.
+ 
+@@ -669,7 +674,7 @@ def __new__(
+         dayfirst: bool = False,
+         yearfirst: bool = False,
+         dtype: Dtype | None = None,
+-        copy: bool = False,
++        copy: bool | None = None,
+         name: Hashable | None = None,
+     ) -> Self:
+         if is_scalar(data):
+@@ -679,6 +684,9 @@ def __new__(
+ 
+         name = maybe_extract_name(name, data, cls)
+ 
++        # GH#63388
++        data, copy = cls._maybe_copy_array_input(data, copy, dtype)
++
+         if (
+             isinstance(data, DatetimeArray)
+             and freq is lib.no_default
+diff --git a/pandas/core/indexes/interval.py b/pandas/core/indexes/interval.py
+index 7bb64503a469e..1def317bc1a88 100644
+--- a/pandas/core/indexes/interval.py
++++ b/pandas/core/indexes/interval.py
+@@ -169,8 +169,13 @@ class IntervalIndex(ExtensionIndex):
+         neither.
+     dtype : dtype or None, default None
+         If None, dtype will be inferred.
+-    copy : bool, default False
+-        Copy the input data.
++    copy : bool, default None
++        Whether to copy input data, only relevant for array, Series, and Index
++        inputs (for other input, e.g. a list, a new array is created anyway).
++        Defaults to True for array input and False for Index/Series.
++        Set to False to avoid copying array input at your own risk (if you
++        know the input data won't be modified elsewhere).
++        Set to True to force copying Series/Index input up front.
+     name : object, optional
+          Name to be stored in the index.
+     verify_integrity : bool, default True
+@@ -252,12 +257,15 @@ def __new__(
+         data,
+         closed: IntervalClosedType | None = None,
+         dtype: Dtype | None = None,
+-        copy: bool = False,
++        copy: bool | None = None,
+         name: Hashable | None = None,
+         verify_integrity: bool = True,
+     ) -> Self:
+         name = maybe_extract_name(name, data, cls)
+ 
++        # GH#63388
++        data, copy = cls._maybe_copy_array_input(data, copy, dtype)
++
+         with rewrite_exception("IntervalArray", cls.__name__):
+             array = IntervalArray(
+                 data,
+diff --git a/pandas/core/indexes/period.py b/pandas/core/indexes/period.py
+index c3ad466a114a9..b8a25ab0da693 100644
+--- a/pandas/core/indexes/period.py
++++ b/pandas/core/indexes/period.py
+@@ -101,8 +101,13 @@ class PeriodIndex(DatetimeIndexOpsMixin):
+         One of pandas period strings or corresponding objects.
+     dtype : str or PeriodDtype, default None
+         A dtype from which to extract a freq.
+-    copy : bool
+-        Make a copy of input ndarray.
++    copy : bool, default None
++        Whether to copy input data, only relevant for array, Series, and Index
++        inputs (for other input, e.g. a list, a new array is created anyway).
++        Defaults to True for array input and False for Index/Series.
++        Set to False to avoid copying array input at your own risk (if you
++        know the input data won't be modified elsewhere).
++        Set to True to force copying Series/Index input up front.
+     name : str, default None
+         Name of the resulting PeriodIndex.
+ 
+@@ -220,7 +225,7 @@ def __new__(
+         data=None,
+         freq=None,
+         dtype: Dtype | None = None,
+-        copy: bool = False,
++        copy: bool | None = None,
+         name: Hashable | None = None,
+     ) -> Self:
+         refs = None
+@@ -231,6 +236,9 @@ def __new__(
+ 
+         freq = validate_dtype_freq(dtype, freq)
+ 
++        # GH#63388
++        data, copy = cls._maybe_copy_array_input(data, copy, dtype)
++
+         # PeriodIndex allow PeriodIndex(period_index, freq=different)
+         # Let's not encourage that kind of behavior in PeriodArray.
+ 
+diff --git a/pandas/core/indexes/timedeltas.py b/pandas/core/indexes/timedeltas.py
+index 2a3d5137242d0..725ef8cae7120 100644
+--- a/pandas/core/indexes/timedeltas.py
++++ b/pandas/core/indexes/timedeltas.py
+@@ -81,8 +81,13 @@ class TimedeltaIndex(DatetimeTimedeltaMixin):
+     dtype : numpy.dtype or str, default None
+         Valid ``numpy`` dtypes are ``timedelta64[ns]``, ``timedelta64[us]``,
+         ``timedelta64[ms]``, and ``timedelta64[s]``.
+-    copy : bool
+-        Make a copy of input array.
++    copy : bool, default None
++        Whether to copy input data, only relevant for array, Series, and Index
++        inputs (for other input, e.g. a list, a new array is created anyway).
++        Defaults to True for array input and False for Index/Series.
++        Set to False to avoid copying array input at your own risk (if you
++        know the input data won't be modified elsewhere).
++        Set to True to force copying Series/Index input up front.
+     name : object
+         Name to be stored in the index.
+ 
+@@ -158,11 +163,14 @@ def __new__(
+         data=None,
+         freq=lib.no_default,
+         dtype=None,
+-        copy: bool = False,
++        copy: bool | None = None,
+         name=None,
+     ):
+         name = maybe_extract_name(name, data, cls)
+ 
++        # GH#63388
++        data, copy = cls._maybe_copy_array_input(data, copy, dtype)
++
+         if is_scalar(data):
+             cls._raise_scalar_data_error(data)

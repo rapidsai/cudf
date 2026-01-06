@@ -82,6 +82,13 @@ fi
 # append the contents of patch-confest.py to conftest.py
 cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
+# apply copy-on-write patches that won't be fixed until pandas 3
+PATCH_FILE_1=$(realpath pandas-2-cow-1.patch)
+PATCH_FILE_1=$(realpath pandas-2-cow-2.patch)
+PANDAS_PATH=$(python -c "import pandas, os; print(os.path.dirname(pandas.__file__))")
+patch -d "$PANDAS_PATH" -p2 < "$PATCH_FILE_1"
+patch -d "$PANDAS_PATH" -p2 < "$PATCH_FILE_2"
+
 # Run the tests
 cd pandas-tests/
 
