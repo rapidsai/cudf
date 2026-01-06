@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -76,39 +76,18 @@ class ListColumn(ColumnBase):
             children[1]._with_type_metadata(dtype.element_type),
         )
 
-    def _recompute_children(self) -> None:
-        """Recompute the offset-aware children columns with proper type metadata."""
-        if not self.base_children:
-            self._children = ()
-        elif self.offset == 0 and self.size == self.base_size:
-            # Optimization: for non-sliced columns, children == base_children
-            self._children = self.base_children  # type: ignore[assignment]
-        else:
-            # List columns have special structure:
-            # - Child 0 (offsets): size = parent.size + 1, slice from [offset, offset+size+1)
-            # - Child 1 (values): slice based on the offset values
-            offsets_child = self.base_children[0]
-            values_child = self.base_children[1]
-
-            # Slice offsets: get size+1 offsets starting from self.offset
-            sliced_offsets = offsets_child.slice(
-                self.offset, self.offset + self.size + 1
+    def _get_sliced_child(self, idx: int) -> ColumnBase:
+        """Get a child column properly sliced to match the parent's view."""
+        if idx < 0 or idx >= len(self._children):
+            raise IndexError(
+                f"Index {idx} out of range for {len(self._children)} children"
             )
 
-            # Get the range of values to slice: from first offset to last offset
-            # The offsets tell us where in the values array each list starts/ends
-            first_offset = offsets_child.element_indexing(self.offset)
-            last_offset = offsets_child.element_indexing(
-                self.offset + self.size
-            )
+        if idx == 1:
+            sliced_plc_col = self.plc_column.list_view().get_sliced_child()
+            return type(self._children[idx]).from_pylibcudf(sliced_plc_col)
 
-            # Slice the values child to only include the values we need
-            sliced_values = values_child.slice(first_offset, last_offset)
-
-            # Adjust offsets to be relative to the sliced values (subtract first_offset)
-            adjusted_offsets = sliced_offsets - first_offset
-
-            self._children = (adjusted_offsets, sliced_values)  # type: ignore[assignment]
+        return self._children[idx]
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
@@ -119,38 +98,6 @@ class ListColumn(ColumnBase):
         """
         # TODO: handle if self.has_nulls(): case
         return self
-
-    @cached_property
-    def memory_usage(self) -> int:
-        n = super().memory_usage
-        child0_size = (self.size + 1) * self.base_children[0].dtype.itemsize
-        current_base_child = self.base_children[1]
-        current_offset = self.offset
-        n += child0_size
-        while type(current_base_child) is ListColumn:
-            child0_size = (
-                current_base_child.size + 1 - current_offset
-            ) * current_base_child.base_children[0].dtype.itemsize
-            n += child0_size
-            current_offset_col = current_base_child.base_children[0]
-            if not len(current_offset_col):
-                # See https://github.com/rapidsai/cudf/issues/16164 why
-                # offset column can be uninitialized
-                break
-            current_offset = current_offset_col.element_indexing(
-                current_offset
-            )
-            current_base_child = current_base_child.base_children[1]
-
-        n += (
-            current_base_child.size - current_offset
-        ) * current_base_child.dtype.itemsize
-
-        if current_base_child.nullable:
-            n += plc.null_mask.bitmask_allocation_size_bytes(
-                current_base_child.size
-            )
-        return n
 
     def element_indexing(self, index: int) -> list:
         result = super().element_indexing(index)
@@ -170,13 +117,6 @@ class ListColumn(ColumnBase):
             )
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
-
-    @property
-    def base_size(self) -> int:
-        # in some cases, libcudf will return an empty ListColumn with no
-        # indices; in these cases, we must manually set the base_size to 0 to
-        # avoid it being negative
-        return max(0, len(self.base_children[0]) - 1)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         # Lists only support __add__, which concatenates lists.
@@ -200,7 +140,7 @@ class ListColumn(ColumnBase):
         Column containing the elements of each list (may itself be a
         ListColumn)
         """
-        return self.children[1]
+        return self._get_sliced_child(1)
 
     @property
     def offsets(self) -> NumericalColumn:
@@ -217,11 +157,9 @@ class ListColumn(ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, ListDtype):
-            elements = self.base_children[1]._with_type_metadata(
-                dtype.element_type
-            )
+            elements = self.children[1]._with_type_metadata(dtype.element_type)
             new_children = [
-                self.base_children[0].plc_column,
+                self.children[0].plc_column,
                 elements.plc_column,
             ]
             new_plc_column = plc.Column(

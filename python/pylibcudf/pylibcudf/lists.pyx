@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -51,7 +51,7 @@ from pylibcudf.libcudf.lists.contains import duplicate_find_option as DuplicateF
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
-from .column cimport Column, ListColumnView
+from .column cimport Column, ListsColumnView
 from .scalar cimport Scalar
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
@@ -216,7 +216,7 @@ cpdef Column contains(
         found in the list column.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -260,7 +260,7 @@ cpdef Column contains_nulls(
         contains a null value.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -305,7 +305,7 @@ cpdef Column index_of(
         of -1 indicates that the search_key was not found.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -345,7 +345,7 @@ cpdef Column reverse(
         A new Column with reversed lists.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -391,8 +391,8 @@ cpdef Column segmented_gather(
     """
 
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view1 = input.list_view()
-    cdef ListColumnView list_view2 = gather_map_list.list_view()
+    cdef ListsColumnView list_view1 = input.list_view()
+    cdef ListsColumnView list_view2 = gather_map_list.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -431,7 +431,7 @@ cpdef Column extract_list_element(
         A new Column with elements extracted.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -469,7 +469,7 @@ cpdef Column count_elements(
     Column
         A new Column of the lengths of each list element
     """
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
     cdef unique_ptr[column] c_result
 
     stream = _get_stream(stream)
@@ -559,7 +559,7 @@ cpdef Column sort_lists(
         A new Column with elements in each list sorted.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -614,8 +614,8 @@ cpdef Column difference_distinct(
         A lists column containing the difference results.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView lhs_view = lhs.list_view()
-    cdef ListColumnView rhs_view = rhs.list_view()
+    cdef ListsColumnView lhs_view = lhs.list_view()
+    cdef ListsColumnView rhs_view = rhs.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -661,8 +661,8 @@ cpdef Column have_overlap(
         A column containing the check results.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView lhs_view = lhs.list_view()
-    cdef ListColumnView rhs_view = rhs.list_view()
+    cdef ListsColumnView lhs_view = lhs.list_view()
+    cdef ListsColumnView rhs_view = rhs.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -708,8 +708,8 @@ cpdef Column intersect_distinct(
         A lists column containing the intersection results.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView lhs_view = lhs.list_view()
-    cdef ListColumnView rhs_view = rhs.list_view()
+    cdef ListsColumnView lhs_view = lhs.list_view()
+    cdef ListsColumnView rhs_view = rhs.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -756,8 +756,8 @@ cpdef Column union_distinct(
         A lists column containing the union results.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView lhs_view = lhs.list_view()
-    cdef ListColumnView rhs_view = rhs.list_view()
+    cdef ListsColumnView lhs_view = lhs.list_view()
+    cdef ListsColumnView rhs_view = rhs.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -799,8 +799,8 @@ cpdef Column apply_boolean_mask(
         A Column of filtered elements based upon the boolean mask.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
-    cdef ListColumnView mask_view = boolean_mask.list_view()
+    cdef ListsColumnView list_view = input.list_view()
+    cdef ListsColumnView mask_view = boolean_mask.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -841,7 +841,7 @@ cpdef Column distinct(
         A new list column without duplicate elements in each list.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)

@@ -1,14 +1,14 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 unmasked_input_initializer_template = """\
         d_{idx} = input_col_{idx}
-        masked_{idx} = Masked(d_{idx}[i], True)
+        masked_{idx} = Masked(d_{idx}[i + offset_{idx}], True)
 """
 
 masked_input_initializer_template = """\
         d_{idx}, m_{idx} = input_col_{idx}
-        masked_{idx} = Masked(d_{idx}[i], _mask_get(m_{idx}, i + offset_{idx}))
+        masked_{idx} = Masked(d_{idx}[i + offset_{idx}], _mask_get(m_{idx}, i + offset_{idx}))
 """
 
 row_initializer_template = """\

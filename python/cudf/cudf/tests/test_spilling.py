@@ -101,8 +101,8 @@ def single_column_df_data(df: cudf.DataFrame) -> SpillableBuffer:
 
 
 def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
-    """Access `.base_data` of the column of a standard dataframe"""
-    ret = df._data._data["a"].base_data
+    """Access `.data` of the column of a standard dataframe"""
+    ret = df._data._data["a"].data
     assert isinstance(ret, SpillableBuffer)
     return ret
 
@@ -862,11 +862,11 @@ def test_column_access_propagates_scope(manager: SpillManager):
 
     with col.access(mode="read", scope="internal"):
         # All buffers should be spill locked
-        if col.base_data:
-            assert not col.base_data.spillable
-            assert len(col.base_data.owner._spill_locks) >= 1
+        if col.data:
+            assert not col.data.spillable
+            assert len(col.data.owner._spill_locks) >= 1
 
     # After context, all buffers spillable
-    if col.base_data:
-        assert col.base_data.spillable
-        assert len(col.base_data.owner._spill_locks) == 0
+    if col.data:
+        assert col.data.spillable
+        assert len(col.data.owner._spill_locks) == 0

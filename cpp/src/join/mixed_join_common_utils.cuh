@@ -1,24 +1,84 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
-#include "join_common_utils.cuh"
-#include "join_common_utils.hpp"
-
 #include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/join/join.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
-#include <cub/cub.cuh>
-#include <cuco/static_set.cuh>
+#include <cuco/static_multiset.cuh>
 
 namespace cudf::detail {
+
+using pair_type = cuco::pair<hash_value_type, size_type>;
+
+using hash_type = cuco::murmurhash3_32<hash_value_type>;
+
+/**
+ * @brief A custom comparator used for the mixed join multiset insertion
+ */
+struct mixed_join_always_not_equal {
+  __device__ constexpr bool operator()(pair_type const&, pair_type const&) const noexcept
+  {
+    return false;
+  }
+};
+
+/**
+ * @brief Hash functions for double hashing in mixed joins.
+ *
+ * These hashers implement a double hashing scheme for the mixed join multiset:
+ *
+ * - mixed_join_hasher1: Determines the initial probe slot for a given key. We simply use
+ *   the precomputed row hash value, which is the first element of our (row_hash, row_index) pair.
+ *
+ * - mixed_join_hasher2: Determines the step size for the probing sequence. This allows keys
+ *   with the same hash value to have different step sizes, helping to avoid secondary clustering.
+ *
+ * Note: Strictly speaking, this setup does not truly avoid secondary clustering because rows with
+ * the same hash value still receive the same step size. A true secondary clustering avoidance
+ * method would compute a different hash value for each row. However, based on performance testing,
+ * this current approach actually delivers better performance than computing row hashes with a
+ * different hasher.
+ */
+struct mixed_join_hasher1 {
+  __device__ constexpr hash_value_type operator()(pair_type const& key) const noexcept
+  {
+    return key.first;
+  }
+};
+
+struct mixed_join_hasher2 {
+  mixed_join_hasher2(hash_value_type seed) : _hash{seed} {}
+
+  __device__ constexpr hash_value_type operator()(pair_type const& key) const noexcept
+  {
+    return _hash(key.first);
+  }
+
+ private:
+  hash_type _hash;
+};
+
+using mixed_multiset_type =
+  cuco::static_multiset<pair_type,
+                        cuco::extent<std::size_t>,
+                        cuda::thread_scope_device,
+                        mixed_join_always_not_equal,
+                        cuco::double_hashing<1, mixed_join_hasher1, mixed_join_hasher2>,
+                        rmm::mr::polymorphic_allocator<char>,
+                        cuco::storage<2>>;
 
 using row_hash = cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                             cudf::nullate::DYNAMIC>;
@@ -57,44 +117,6 @@ struct expression_equality {
 };
 
 /**
- * @brief Equality comparator for cuco::static_set queries.
- *
- * This equality comparator is designed for use with cuco::static_set's APIs. A
- * probe hit indicates that the hashes of the keys are equal, at which point
- * this comparator checks whether the keys themselves are equal (using the
- * provided equality_probe) and then evaluates the conditional expression
- */
-template <bool has_nulls>
-struct single_expression_equality : expression_equality<has_nulls> {
-  using expression_equality<has_nulls>::expression_equality;
-
-  __device__ __forceinline__ bool operator()(size_type const left_index,
-                                             size_type const right_index) const noexcept
-  {
-    using cudf::detail::row::lhs_index_type;
-    using cudf::detail::row::rhs_index_type;
-
-    auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-    // Two levels of checks:
-    // 1. The contents of the columns involved in the equality condition are equal.
-    // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
-    // evaluates to true.
-    if (this->equality_probe(lhs_index_type{left_index}, rhs_index_type{right_index})) {
-      // For the AST evaluator, we need to map back to left/right table semantics
-      auto const left_table_idx  = this->swap_tables ? right_index : left_index;
-      auto const right_table_idx = this->swap_tables ? left_index : right_index;
-      this->evaluator.evaluate(output_dest,
-                               static_cast<size_type>(left_table_idx),
-                               static_cast<size_type>(right_table_idx),
-                               0,
-                               this->thread_intermediate_storage);
-      return (output_dest.is_valid() && output_dest.value());
-    }
-    return false;
-  }
-};
-
-/**
  * @brief Equality comparator for cuco::static_multiset queries.
  *
  * This equality comparator is designed for use with cuco::static_multiset's APIs.
@@ -129,39 +151,6 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
     return false;
   }
 };
-
-/**
- * @brief Equality comparator that composes two row_equality comparators.
- */
-struct double_row_equality_comparator {
-  row_equality const equality_comparator;
-  row_equality const conditional_comparator;
-
-  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
-  {
-    using detail::row::lhs_index_type;
-    using detail::row::rhs_index_type;
-
-    return equality_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index}) &&
-           conditional_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index});
-  }
-};
-
-// A CUDA Cooperative Group of 1 thread for the hash set for mixed semi.
-auto constexpr DEFAULT_MIXED_SEMI_JOIN_CG_SIZE = 1;
-
-// The hash set type used by mixed_semi_join with the build_table.
-using hash_set_type =
-  cuco::static_set<size_type,
-                   cuco::extent<size_t>,
-                   cuda::thread_scope_device,
-                   double_row_equality_comparator,
-                   cuco::linear_probing<DEFAULT_MIXED_SEMI_JOIN_CG_SIZE, row_hash>,
-                   rmm::mr::polymorphic_allocator<char>,
-                   cuco::storage<1>>;
-
-// The hash_set_ref_type used by mixed_semi_join kernels for probing.
-using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;
 
 /**
  * @brief Common utility for probing a hash table bucket and checking slot equality

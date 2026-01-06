@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -28,6 +28,7 @@ namespace CUDF_EXPORT cudf {
  */
 class structs_column_view : public column_view {
  public:
+  structs_column_view() = default;
   // Foundation members:
   structs_column_view(structs_column_view const&) = default;  ///< Copy constructor
   structs_column_view(structs_column_view&&)      = default;  ///< Move constructor
