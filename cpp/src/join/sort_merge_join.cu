@@ -237,30 +237,32 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   // Use cub API to handle large arrays (> INT32_MAX).
   cub::DeviceTransform::Fill(smaller_indices.begin(), smaller_indices.size(), 1, stream.value());
 
-  auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
-  auto smaller_tabulate_it = thrust::tabulate_output_iterator(
-    [nonzero_matches = nonzero_matches.begin(),
-     match_offsets   = match_offsets.begin(),
-     smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
-      auto const lhs_idx   = nonzero_matches[idx];
-      auto const pos       = match_offsets[lhs_idx];
-      smaller_indices[pos] = lb;
-    });
-  auto smaller_it = thrust::transform_iterator(
-    sorted_smaller_order_begin,
-    cuda::proclaim_return_type<detail::row::lhs_index_type>(
-      [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
-  auto larger_it = thrust::transform_iterator(
-    nonzero_matches.begin(),
-    cuda::proclaim_return_type<detail::row::rhs_index_type>(
-      [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
-  thrust::lower_bound(rmm::exec_policy_nosync(stream),
-                      smaller_it,
-                      smaller_it + smaller_numrows,
-                      larger_it,
-                      larger_it + nonzero_matches.size(),
-                      smaller_tabulate_it,
-                      comparator);
+  {
+    auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
+    auto smaller_tabulate_it = thrust::tabulate_output_iterator(
+      [nonzero_matches = nonzero_matches.begin(),
+       match_offsets   = match_offsets.begin(),
+       smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
+        auto const lhs_idx   = nonzero_matches[idx];
+        auto const pos       = match_offsets[lhs_idx];
+        smaller_indices[pos] = lb;
+      });
+    auto smaller_it = thrust::transform_iterator(
+      sorted_smaller_order_begin,
+      cuda::proclaim_return_type<detail::row::lhs_index_type>(
+        [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
+    auto larger_it = thrust::transform_iterator(
+      nonzero_matches.begin(),
+      cuda::proclaim_return_type<detail::row::rhs_index_type>(
+        [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
+    thrust::lower_bound(rmm::exec_policy_nosync(stream),
+                        smaller_it,
+                        smaller_it + smaller_numrows,
+                        larger_it,
+                        larger_it + nonzero_matches.size(),
+                        smaller_tabulate_it,
+                        comparator);
+  }
 
   // Use cub API to handle large arrays (> INT32_MAX)
   {
