@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -164,7 +164,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   rmm::device_uvector<position_pair> token_positions(total_tokens, stream);
   auto d_token_positions = token_positions.data();
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     strings_count,
     string_tokens_positions_fn{d_strings, d_delimiter, d_token_offsets, d_token_positions});
@@ -209,7 +209,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   // Generate the ngrams into the chars column data buffer.
   // The ngram_builder_fn functor also fills the ngram_sizes vector with the
   // size of each ngram.
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      ngram_builder_fn{d_strings,
