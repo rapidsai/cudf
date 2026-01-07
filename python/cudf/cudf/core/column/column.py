@@ -2029,7 +2029,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 "__cuda_array_interface__ not supported for columns with no data buffer"
             )
         self._exposed_buffers.add(data_buf)
-        with data_buf.access(mode="read"):
+        with data_buf.access(mode="read", scope="external"):
             output = {
                 "shape": (len(self),),
                 "strides": (self.dtype.itemsize,),
@@ -2049,7 +2049,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # Handle copy-on-write for mask
             if mask is not None:
                 original_mask_ptr = mask.ptr
-                with mask.access(mode="write"):
+                with mask.access(mode="write", scope="external"):
                     mask_ptr = mask.ptr
                 # Check if a new buffer was created or if the underlying data was modified
                 if cudf.get_option("copy_on_write") and (

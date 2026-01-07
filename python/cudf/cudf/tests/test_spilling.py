@@ -420,7 +420,7 @@ def test_get_ptr(manager: SpillManager, target):
         mem = rmm.DeviceBuffer(size=10)
     elif target == "cpu":
         mem = np.empty(10, dtype="u1")
-    buf = as_buffer(data=mem, exposed=False)
+    buf = as_buffer(data=mem)
     assert buf.spillable
     assert len(buf.owner._spill_locks) == 0
     with buf.access(mode="read", scope="internal"):
@@ -538,10 +538,14 @@ def test_get_rmm_memory_resource_stack():
 def test_df_transpose(manager: SpillManager):
     df1 = cudf.DataFrame({"a": [1, 2]})
     df2 = df1.transpose()
-    # For now, all buffers are marked as exposed
-    assert df1._data._data["a"].data.owner.exposed
-    assert df2._data._data[0].data.owner.exposed
-    assert df2._data._data[1].data.owner.exposed
+    # Buffers should not be exposed unless explicitly accessed
+    assert not df1._data._data["a"].data.owner.exposed
+    assert not df2._data._data[0].data.owner.exposed
+    assert not df2._data._data[1].data.owner.exposed
+    # Verify they are spillable
+    assert df1._data._data["a"].data.spillable
+    assert df2._data._data[0].data.spillable
+    assert df2._data._data[1].data.spillable
 
 
 def test_as_buffer_of_spillable_buffer(manager: SpillManager):

@@ -4348,13 +4348,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif any(col.dtype != source_dtype for col in source_columns):
             raise ValueError("Columns must all have the same dtype")
 
-        result_table = plc.transpose.transpose(
-            plc.table.Table([col.plc_column for col in source_columns])
-        )
-        result_columns = (
-            ColumnBase.from_pylibcudf(col)._with_type_metadata(source_dtype)
-            for col in result_table.columns()
-        )
+        with access_columns(
+            *source_columns, mode="read", scope="internal"
+        ) as source_columns:
+            result_table = plc.transpose.transpose(
+                plc.table.Table([col.plc_column for col in source_columns])
+            )
+            result_columns = (
+                ColumnBase.from_pylibcudf(col)._with_type_metadata(
+                    source_dtype
+                )
+                for col in result_table.columns()
+            )
 
         # Set the old column names as the new index
         result = type(self)._from_data(
