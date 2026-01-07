@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -13,8 +13,7 @@ import pandas as pd
 
 import pylibcudf as plc
 
-from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
+from cudf.core.column import ColumnBase, access_columns
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -322,7 +321,6 @@ def _dtype_to_names_list(col: ColumnBase) -> list[tuple[Hashable, Any]]:
     return []
 
 
-@acquire_spill_lock()
 def _plc_write_json(
     table: Series | DataFrame,
     colnames: list[tuple[Hashable, Any]],
@@ -338,31 +336,32 @@ def _plc_write_json(
     lines: bool = False,
     rows_per_chunk: int = 1024 * 64,  # 64K rows
 ) -> None:
-    try:
-        # TODO: TableWithMetadata expects list[ColumnNameSpec] but receives list[tuple[Hashable, Any]]
-        tbl_w_meta = plc.io.TableWithMetadata(
-            plc.Table([col.plc_column for col in table._columns]),
-            colnames,  # type: ignore[arg-type]
-        )
-        options = (
-            plc.io.json.JsonWriterOptions.builder(
-                plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl
+    with access_columns(*table._columns, mode="read", scope="internal"):
+        try:
+            # TODO: TableWithMetadata expects list[ColumnNameSpec] but receives list[tuple[Hashable, Any]]
+            tbl_w_meta = plc.io.TableWithMetadata(
+                plc.Table([col.plc_column for col in table._columns]),
+                colnames,  # type: ignore[arg-type]
             )
-            .metadata(tbl_w_meta)
-            .na_rep(na_rep)
-            .include_nulls(include_nulls)
-            .lines(lines)
-            .compression(_to_plc_compression(compression))
-            .build()
-        )
-        if rows_per_chunk != np.iinfo(np.int32).max:
-            options.set_rows_per_chunk(rows_per_chunk)
-        plc.io.json.write_json(options)
-    except OverflowError as err:
-        raise OverflowError(
-            f"Writing JSON file with rows_per_chunk={rows_per_chunk} failed. "
-            "Consider providing a smaller rows_per_chunk argument."
-        ) from err
+            options = (
+                plc.io.json.JsonWriterOptions.builder(
+                    plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl
+                )
+                .metadata(tbl_w_meta)
+                .na_rep(na_rep)
+                .include_nulls(include_nulls)
+                .lines(lines)
+                .compression(_to_plc_compression(compression))
+                .build()
+            )
+            if rows_per_chunk != np.iinfo(np.int32).max:
+                options.set_rows_per_chunk(rows_per_chunk)
+            plc.io.json.write_json(options)
+        except OverflowError as err:
+            raise OverflowError(
+                f"Writing JSON file with rows_per_chunk={rows_per_chunk} failed. "
+                "Consider providing a smaller rows_per_chunk argument."
+            ) from err
 
 
 @ioutils.doc_to_json()

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.errors import MixedTypeError
@@ -243,7 +242,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         if len(self) == 0:
             return super().strftime(format)
         else:
-            with acquire_spill_lock():
+            with self.access(mode="read", scope="internal"):
                 return type(self).from_pylibcudf(  # type: ignore[return-value]
                     plc.strings.convert.convert_durations.from_durations(
                         self.plc_column, format

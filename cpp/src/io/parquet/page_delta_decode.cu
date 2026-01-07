@@ -156,6 +156,7 @@ struct delta_byte_array_decoder {
 
       // copy prefixes into string data.
       string_scan(out, last_string, idx, end, string_off, lane_id);
+      __syncwarp();
 
       // save the position of the last computed string. this will be used in
       // the next iteration to reconstruct the string in lane 0.
