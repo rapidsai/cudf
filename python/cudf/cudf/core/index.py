@@ -348,7 +348,7 @@ class Index(SingleColumnFrame):
         if copy:
             raise NotImplementedError("copy=True is not supported")
         metadata = {"name": self.name}
-        return self._column.to_pylibcudf(mode="write"), metadata
+        return self._column.to_pylibcudf(), metadata
 
     @classmethod
     @_performance_tracking

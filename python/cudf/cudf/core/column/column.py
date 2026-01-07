@@ -588,18 +588,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return other_col
 
-    def to_pylibcudf(self, mode: Literal["read", "write"]) -> plc.Column:
+    def to_pylibcudf(self) -> plc.Column:
         """Convert this Column to a pylibcudf.Column.
 
         This function will generate a pylibcudf Column with unwrapped buffers,
-
-        Parameters
-        ----------
-        mode : str
-            Supported values are {"read", "write"}. If "write", the data pointed
-            to may be modified by the caller. If "read", the data pointed to
-            must not be modified by the caller. Failure to fulfill this
-            contract will cause incorrect behavior.
         removing cudf memory semantics. The result is a view of the existing data.
         It is always a zero-copy operation, so changes to the pylibcudf data will
         be reflected back to the cudf object and vice versa. Users are responsible
@@ -613,7 +605,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             A new pylibcudf.Column with unwrapped buffers.
         """
         # Use access() to ensure all buffers are on device and spill-locked
-        with self.access(mode=mode, scope="internal"):
+        with self.access(mode="read", scope="internal"):
             # Unwrap data and mask buffers
             unwrapped_data = _unwrap_buffer(
                 cast(Buffer, self.plc_column.data())
@@ -624,7 +616,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
             # Recursively unwrap children
             unwrapped_children = [
-                child.to_pylibcudf(mode=mode) for child in self.children
+                child.to_pylibcudf() for child in self.children
             ]
 
             # Construct new pylibcudf Column with unwrapped buffers

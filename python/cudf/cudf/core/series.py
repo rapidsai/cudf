@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -3813,7 +3813,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if copy:
             raise NotImplementedError("copy=True is not supported")
         metadata = {"name": self.name, "index": self.index}
-        return self._column.to_pylibcudf(mode="write"), metadata
+        return self._column.to_pylibcudf(), metadata
 
     @classmethod
     @_performance_tracking

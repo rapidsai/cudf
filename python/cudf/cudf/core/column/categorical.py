@@ -137,8 +137,8 @@ class CategoricalColumn(column.ColumnBase):
     def ordered(self) -> bool | None:
         return self.dtype.ordered
 
-    def to_pylibcudf(self, mode: Literal["read", "write"]) -> plc.Column:
-        return self.children[0].to_pylibcudf(mode)
+    def to_pylibcudf(self) -> plc.Column:
+        return self.children[0].to_pylibcudf()
 
     def __setitem__(self, key: Any, value: Any) -> None:
         if is_scalar(value) and _is_null_host_scalar(value):
