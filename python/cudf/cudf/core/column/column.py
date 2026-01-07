@@ -243,6 +243,29 @@ def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
     return arrow_array
 
 
+def _unwrap_buffer(buffer: Buffer | None) -> Any:
+    """
+    Unwrap a cudf Buffer to extract the underlying memory object.
+
+    Must be called within an access() context to ensure the buffer
+    is on device (for SpillableBuffers).
+
+    Parameters
+    ----------
+    buffer : Buffer | None
+        The buffer to unwrap. If None, returns None.
+
+    Returns
+    -------
+    Any
+        The underlying memory object (rmm.DeviceBuffer, cupy.ndarray, etc.)
+        or None if buffer is None.
+    """
+    if buffer is None:
+        return None
+    return buffer.owner.owner
+
+
 class _ColumnAccessContext:
     """Context manager for access mode control on underlying buffers."""
 
@@ -565,34 +588,56 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return other_col
 
-    # TODO: Consider whether this function should support some sort of `copy`
-    # parameter. Not urgent until this functionality is moved up to the Frame
-    # layer and made public. This function will also need to mark the
-    # underlying buffers as exposed before this function can itself be exposed
-    # publicly.  User requests to convert to pylibcudf must assume that the
-    # data may be modified afterwards.
     def to_pylibcudf(self, mode: Literal["read", "write"]) -> plc.Column:
         """Convert this Column to a pylibcudf.Column.
 
-        This function will generate a pylibcudf Column pointing to the same
-        data, mask, and children as this one.
+        This function will generate a pylibcudf Column with unwrapped buffers,
 
         Parameters
         ----------
         mode : str
-            Supported values are {"read", "write"} If "write", the data pointed
+            Supported values are {"read", "write"}. If "write", the data pointed
             to may be modified by the caller. If "read", the data pointed to
-            must not be modified by the caller.  Failure to fulfill this
+            must not be modified by the caller. Failure to fulfill this
             contract will cause incorrect behavior.
+        removing cudf memory semantics. The result is a view of the existing data.
+        It is always a zero-copy operation, so changes to the pylibcudf data will
+        be reflected back to the cudf object and vice versa. Users are responsible
+        for making a copy if they wish to avoid this behavior. Note that due to
+        copy-on-write semantics in cudf modifying the pylibcudf object may affect
+        multiple preexisting cudf objects viewing the same buffer.
 
         Returns
         -------
         pylibcudf.Column
-            A new pylibcudf.Column referencing the same data.
+            A new pylibcudf.Column with unwrapped buffers.
         """
-        # TODO: Unwrap buffers into raw gpumemoryview objects to remove cudf memory
-        # semantics when converting to pylibcudf
-        return self.plc_column
+        # Use access() to ensure all buffers are on device and spill-locked
+        with self.access(mode=mode, scope="internal"):
+            # Unwrap data and mask buffers
+            unwrapped_data = _unwrap_buffer(
+                cast(Buffer, self.plc_column.data())
+            )
+            unwrapped_mask = _unwrap_buffer(
+                cast(Buffer, self.plc_column.null_mask())
+            )
+
+            # Recursively unwrap children
+            unwrapped_children = [
+                child.to_pylibcudf(mode=mode) for child in self.children
+            ]
+
+            # Construct new pylibcudf Column with unwrapped buffers
+            return plc.Column(
+                data_type=self.plc_column.type(),
+                size=self.plc_column.size(),
+                data=unwrapped_data,
+                mask=unwrapped_mask,
+                null_count=self.plc_column.null_count(),
+                offset=self.plc_column.offset(),
+                children=unwrapped_children,
+                validate=False,
+            )
 
     @classmethod
     def from_pylibcudf(
