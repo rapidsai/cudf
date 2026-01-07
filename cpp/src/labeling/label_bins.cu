@@ -148,7 +148,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
   using RandomAccessIterator = decltype(left_edges_device_view->begin<T>());
 
   dispatch_bool(input.has_nulls(), [&](auto has_nulls) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       input_device_view->pair_begin<T, has_nulls>(),
                       input_device_view->pair_end<T, has_nulls>(),
                       output_begin,

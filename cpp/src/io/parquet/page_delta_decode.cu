@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -79,11 +79,12 @@ struct delta_byte_array_decoder {
     uint64_t prefix_len     = ln_idx < end_idx ? prefixes.value_at(ln_idx) : 0;
     uint8_t* const lane_out = ln_idx < end_idx ? strings_out + offset : nullptr;
 
-    prefix_lens[lane_id] = prefix_len;
-    offsets[lane_id]     = lane_out;
-
     // if all prefix_len's are zero, then there's nothing to do
     if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
+
+    prefix_lens[lane_id] = prefix_len;
+    offsets[lane_id]     = lane_out;
+    __syncwarp();
 
     // find a neighbor to the left that has a prefix length less than this lane. once that
     // neighbor is complete, this lane can be completed.
