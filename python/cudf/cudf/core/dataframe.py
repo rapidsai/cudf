@@ -8372,14 +8372,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return result
 
     @_performance_tracking
-    def to_pylibcudf(self, copy: bool = False) -> tuple[plc.Table, dict]:
+    def to_pylibcudf(self) -> tuple[plc.Table, dict]:
         """
         Convert this DataFrame to a pylibcudf.Table.
-
-        Parameters
-        ----------
-        copy : bool
-            Whether or not to generate a new copy of the underlying device data
 
         Returns
         -------
@@ -8390,11 +8385,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         Notes
         -----
-        User requests to convert to pylibcudf must assume that the
-        data may be modified afterwards.
+        This is always a zero-copy operation. The result is a view of the
+        existing data. Changes to the pylibcudf data will be reflected back
+        to the cudf object and vice versa.
         """
-        if copy:
-            raise NotImplementedError("copy=True is not supported")
         metadata = {"index": self.index, "columns": self._data.to_pandas_index}
         return plc.Table(
             [col.to_pylibcudf() for col in self._columns]

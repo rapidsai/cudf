@@ -3789,29 +3789,23 @@ class Series(SingleColumnFrame, IndexedFrame):
         )
 
     @_performance_tracking
-    def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
+    def to_pylibcudf(self) -> tuple[plc.Column, dict]:
         """
         Convert this Series to a pylibcudf.Column.
-
-        Parameters
-        ----------
-        copy : bool
-            Whether or not to generate a new copy of the underlying device data
 
         Returns
         -------
         pylibcudf.Column
-            A new pylibcudf.Column referencing the same data.
+            A pylibcudf.Column referencing the same data.
         dict
             Dict of metadata (includes name and series indices)
 
         Notes
         -----
-        User requests to convert to pylibcudf must assume that the
-        data may be modified afterwards.
+        This is always a zero-copy operation. The result is a view of the
+        existing data. Changes to the pylibcudf data will be reflected back
+        to the cudf object and vice versa.
         """
-        if copy:
-            raise NotImplementedError("copy=True is not supported")
         metadata = {"name": self.name, "index": self.index}
         return self._column.to_pylibcudf(), metadata
 
