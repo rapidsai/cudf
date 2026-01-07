@@ -17,10 +17,10 @@ struct RTCTest : public ::testing::Test {};
 
 TEST_F(RTCTest, CreateFragment)
 {
-  rtc::compile_and_link_udf("test_fragment",
-                            "test_kernel_name",
-                            "test_kernel_key",
-                            R"***(
+  auto kern = rtc::compile_and_link_udf("test_fragment",
+                                        "transform_kernel",
+                                        "test_kernel_key",
+                                        R"***(
 
     #include "cudf/jit/transform_params.cuh"
     #include "cudf/jit/lto/operators.inl.cuh"
@@ -30,7 +30,9 @@ TEST_F(RTCTest, CreateFragment)
     }
 
     )***",
-                            "test_udf_key");
+                                        "test_udf_key");
+
+  (void)kern;
 }
 
 CUDF_TEST_PROGRAM_MAIN()

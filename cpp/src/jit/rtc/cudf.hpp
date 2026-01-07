@@ -6,9 +6,11 @@
  */
 
 #pragma once
+#include <cudf/utilities/export.hpp>
+
 #include <jit/rtc/rtc.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace rtc {
 
 kernel_ref compile_and_link_udf(char const* name,
@@ -18,4 +20,4 @@ kernel_ref compile_and_link_udf(char const* name,
                                 char const* udf_key);
 
 }  // namespace rtc
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

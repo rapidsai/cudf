@@ -76,18 +76,18 @@ struct fragment_t;
 using fragment = std::shared_ptr<fragment_t>;
 
 /// @brief Represents a partially compiled RTC kernel (i.e. fragment) in LTO-IR or PTX
-struct fragment_t {
+struct [[nodiscard]] fragment_t {
  private:
   blob blob_;
   binary_type type_;
 
  public:
-  struct load_params {
+  struct [[nodiscard]] load_params {
     blob binary      = {};
     binary_type type = binary_type::LTO_IR;
   };
 
-  struct compile_params {
+  struct [[nodiscard]] compile_params {
     char const* name                     = nullptr;
     char const* source                   = nullptr;
     header_map headers                   = {};
@@ -117,7 +117,7 @@ struct library_t;
 
 using library = std::shared_ptr<library_t>;
 
-struct kernel_ref {
+struct [[nodiscard]] kernel_ref {
  private:
   CUkernel handle_;
 
@@ -140,7 +140,7 @@ struct kernel_ref {
 /// @brief Represents a loaded RTC library containing compiled kernels
 /// Input: CUBIN or PTX binary
 /// Output: loaded library with launchable kernels
-struct library_t {
+struct [[nodiscard]] library_t {
  private:
   CUlibrary handle_;
 
@@ -152,12 +152,12 @@ struct library_t {
   library_t& operator=(library_t&&)      = delete;
   ~library_t();
 
-  struct load_params {
+  struct [[nodiscard]] load_params {
     blob_view binary = {};
     binary_type type = binary_type::CUBIN;
   };
 
-  struct link_params {
+  struct [[nodiscard]] link_params {
     char const* name                                   = nullptr;
     binary_type output_type                            = binary_type::CUBIN;
     std::span<blob_view const> fragments               = {};
@@ -177,7 +177,7 @@ struct library_t {
   [[nodiscard]] std::vector<kernel_ref> enumerate_kernels() const;
 };
 
-std::string demangle_cuda_symbol(char const* mangled_name);
+[[nodiscard]] std::string demangle_cuda_symbol(char const* mangled_name);
 
 }  // namespace rtc
 }  // namespace cudf

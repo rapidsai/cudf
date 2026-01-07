@@ -48,6 +48,11 @@ int32_t get_current_device_physical_model()
   return props.major * 10 + props.minor;
 }
 
+void max_occupancy_config()
+{
+  // [ ] Same as configure_1d_max_occupancy
+}
+
 sha256_hash hash_string(std::span<char const> input)
 {
   sha256_context ctx;
@@ -57,7 +62,7 @@ sha256_hash hash_string(std::span<char const> input)
 
 cache_t& get_rtc_cache() { return cudf::get_context().rtc_cache(); }
 
-fragment_t& compile_fragment(char const* name, char const* source_code_cstr, char const* key)
+fragment_t const& compile_fragment(char const* name, char const* source_code_cstr, char const* key)
 {
   auto sm              = get_current_device_physical_model();
   auto const cache_key = std::format(R"***(
@@ -123,7 +128,7 @@ fragment_t& compile_fragment(char const* name, char const* source_code_cstr, cha
   return *fut.get();
 }
 
-fragment_t& compile_library_fragment()
+fragment_t const& compile_library_fragment()
 {
   return compile_fragment("cudf_lto_library",
                           R"***(
@@ -132,7 +137,7 @@ fragment_t& compile_library_fragment()
                           "cudf_lto_library");
 }
 
-fragment_t& compile_udf_fragment(char const* source_code_cstr, char const* key)
+fragment_t const& compile_udf_fragment(char const* source_code_cstr, char const* key)
 {
   return compile_fragment("cudf_udf_fragment", source_code_cstr, key);
 }
@@ -178,8 +183,8 @@ kernel_ref compile_and_link_udf(char const* name,
     return fut.get()->get_kernel(kernel_name);
   }
 
-  auto& library_frag = compile_library_fragment();
-  auto& udf_frag     = compile_udf_fragment(udf_code, udf_key);
+  auto const& library_frag = compile_library_fragment();
+  auto const& udf_frag     = compile_udf_fragment(udf_code, udf_key);
 
   std::promise<library> prom;
   cache.store_library(library_key_sha256, prom.get_future());
