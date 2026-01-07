@@ -54,7 +54,7 @@ def test_assert_column_memory_slice(arrow_arrays):
 
 def test_assert_column_memory_basic_same(arrow_arrays):
     data = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
-    plc_col = data.to_pylibcudf(mode="read")
+    plc_col = data.plc_column
 
     # Create two references to same underlying data
     left = cudf.core.column.ColumnBase.from_pylibcudf(plc_col)

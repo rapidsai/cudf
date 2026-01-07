@@ -45,7 +45,7 @@ def test_dataframe_reindex(copy, args, gd_kwargs):
     )
     pdf, gdf = reindex_data.to_pandas(), reindex_data
     assert_eq(
-        pdf.reindex(*args, **gd_kwargs, copy=True),
+        pdf.reindex(*args, **gd_kwargs),
         gdf.reindex(*args, **gd_kwargs, copy=copy),
     )
 

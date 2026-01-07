@@ -358,9 +358,10 @@ TEST_F(RowOperatorTest, TestRowHasher64BitHash)
                     cudf::mutable_column_view{results}.begin<std::uint64_t>(),
                     hasher);
 
-  // Expected values are hash_combine(seed=0, xxhash_64(element))
+  // Expected values match cuCollections xxhash_64 reference implementation
+  // https://github.com/NVIDIA/cuCollections/blob/4f03dcccb3a944594c693aa8cebc89302bbd8e20/tests/utility/hash_test.cu#L134-L137
   auto const expected = cudf::test::fixed_width_column_wrapper<std::uint64_t>{
-    {15647511400073222857ul, 8470797489250732038ul, 2416304890555758815ul}};
+    {4246796580750024372ul, 15516826743637085169ul, 9462334144942111946ul}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results, expected);
 }
 
@@ -383,6 +384,8 @@ TEST_F(RowOperatorTest, TestPrimitiveRowHasher64BitHash)
                     cudf::mutable_column_view{results}.begin<std::uint64_t>(),
                     hasher);
 
+  // Expected values match cuCollections xxhash_64 reference implementation
+  // https://github.com/NVIDIA/cuCollections/blob/4f03dcccb3a944594c693aa8cebc89302bbd8e20/tests/utility/hash_test.cu#L134-L137
   auto const expected = cudf::test::fixed_width_column_wrapper<std::uint64_t>{
     {4246796580750024372ul, 15516826743637085169ul, 9462334144942111946ul}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results, expected);
