@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -159,8 +159,17 @@ struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_vi
     for (size_type j = start_index; j < end_index; j++) {
       if (!has_nulls || input.is_valid(j)) {
         InputType element = input.element<InputType>(j);
-        val               = agg_op(element, val);
-        if (val == element) { val_index = j; }
+        if constexpr (op == aggregation::ARGMIN) {
+          if (element < val) {
+            val_index = j;
+            val       = element;
+          }
+        } else {
+          if (element > val) {
+            val_index = j;
+            val       = element;
+          }
+        }
         count++;
       }
     }
@@ -170,8 +179,7 @@ struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_vi
     // gathering for Min and Max.
     output.element<OutputType>(current_index) = output_is_valid ? val_index : default_output;
 
-    // The gather mask shouldn't contain null values, so
-    // always return zero
+    // The gather mask shouldn't contain null values, so always return true
     return true;
   }
 };
