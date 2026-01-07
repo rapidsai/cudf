@@ -37,7 +37,13 @@ class Merge:
         if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        with access_columns(*lhs, *rhs, mode="read", scope="internal"):
+        with access_columns(
+            *lhs, *rhs, mode="read", scope="internal"
+        ) as accessed:
+            # Split accessed tuple back into lhs and rhs
+            n_lhs = len(lhs)
+            lhs = accessed[:n_lhs]  # type: ignore[assignment]
+            rhs = accessed[n_lhs:]  # type: ignore[assignment]
             left_rows, right_rows = join_func(
                 plc.Table([col.plc_column for col in lhs]),
                 plc.Table([col.plc_column for col in rhs]),
@@ -673,7 +679,13 @@ class MergeSemi(Merge):
         ) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        with access_columns(*lhs, *rhs, mode="read", scope="internal"):
+        with access_columns(
+            *lhs, *rhs, mode="read", scope="internal"
+        ) as accessed:
+            # Split accessed tuple back into lhs and rhs
+            n_lhs = len(lhs)
+            lhs = accessed[:n_lhs]  # type: ignore[assignment]
+            rhs = accessed[n_lhs:]  # type: ignore[assignment]
             return ColumnBase.from_pylibcudf(
                 join_func(
                     plc.Table([col.plc_column for col in lhs]),

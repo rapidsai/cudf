@@ -426,9 +426,9 @@ class _GroupByContextManager:
         # Create pylibcudf GroupBy eagerly
         with access_columns(
             *grouping._key_columns, mode="read", scope="internal"
-        ):
+        ) as key_columns:
             self._plc_groupby = plc.groupby.GroupBy(
-                plc.Table([col.plc_column for col in grouping._key_columns]),
+                plc.Table([col.plc_column for col in key_columns]),
                 plc.types.NullPolicy.EXCLUDE
                 if dropna
                 else plc.types.NullPolicy.INCLUDE,
@@ -816,7 +816,9 @@ class GroupBy(Serializable, Reducible, Scannable):
     ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
         # Materialize iterator to avoid consuming it during access context setup
         values_list = list(values)
-        with access_columns(*values_list, mode="read", scope="internal"):
+        with access_columns(  # type: ignore[assignment]
+            *values_list, mode="read", scope="internal"
+        ) as values_list:
             plc_columns = [col.plc_column for col in values_list]
             if not plc_columns:
                 plc_table = None
@@ -897,7 +899,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "All requested aggregations are unsupported."
             )
 
-        with access_columns(*values, mode="read", scope="internal"):
+        with access_columns(*values, mode="read", scope="internal") as values:
             with self._groupby as plc_groupby:
                 keys, results = (
                     plc_groupby.scan(requests)
@@ -924,7 +926,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _shift(
         self, values: tuple[ColumnBase, ...], periods: int, fill_values: list
     ) -> Generator[ColumnBase]:
-        with access_columns(*values, mode="read", scope="internal"):
+        with access_columns(*values, mode="read", scope="internal") as values:
             with self._groupby as plc_groupby:
                 _, shifts = plc_groupby.shift(
                     plc.table.Table([col.plc_column for col in values]),
@@ -945,7 +947,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _replace_nulls(
         self, values: tuple[ColumnBase, ...], method: str
     ) -> Generator[ColumnBase]:
-        with access_columns(*values, mode="read", scope="internal"):
+        with access_columns(*values, mode="read", scope="internal") as values:
             with self._groupby as plc_groupby:
                 _, replaced = plc_groupby.replace_nulls(
                     plc.Table([col.plc_column for col in values]),
@@ -1165,11 +1167,23 @@ class GroupBy(Serializable, Reducible, Scannable):
                 join_keys_list = list(join_keys)
                 # Flatten nested list of columns for access_columns
                 all_cols = [col for cols in join_keys_list for col in cols]
-                with access_columns(*all_cols, mode="read", scope="internal"):
-                    plc_tables = [
-                        plc.Table([col.plc_column for col in cols])
-                        for cols in join_keys_list
-                    ]
+                with access_columns(
+                    *all_cols, mode="read", scope="internal"
+                ) as all_cols:
+                    # Reconstruct join_keys_list structure from flattened all_cols
+                    idx = 0
+                    plc_tables = []
+                    for cols in join_keys_list:
+                        cols_len = len(cols)
+                        plc_tables.append(
+                            plc.Table(
+                                [
+                                    col.plc_column
+                                    for col in all_cols[idx : idx + cols_len]
+                                ]
+                            )
+                        )
+                        idx += cols_len
                     left_plc, right_plc = plc.join.inner_join(
                         plc_tables[0],
                         plc_tables[1],
@@ -1660,7 +1674,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     group_offsets_col,
                     mode="read",
                     scope="internal",
-                ):
+                ) as (indices_col, keys_col, group_offsets_col):
                     plc_table = plc.sorting.stable_segmented_sort_by_key(
                         plc.Table([indices_col.plc_column]),
                         plc.Table([keys_col.plc_column]),
@@ -2516,7 +2530,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         def interleave_columns(source_columns):
             with access_columns(
                 *source_columns, mode="read", scope="internal"
-            ):
+            ) as source_columns:
                 return ColumnBase.from_pylibcudf(
                     plc.reshape.interleave_columns(
                         plc.Table([c.plc_column for c in source_columns])

@@ -9,35 +9,77 @@ from contextlib import ExitStack
 from typing import Any
 
 
-def _flatten_to_columns(objs: tuple[Any, ...]) -> Iterator[Any]:
-    """Recursively flatten varargs to column objects."""
+def _flatten_and_access(
+    objs: tuple[Any, ...], stack: ExitStack, kwargs: dict[str, Any]
+) -> Iterator[Any]:
+    """Recursively flatten varargs and enter access contexts for columns.
+
+    Yields all objects in order. For objects with .access() method, enters
+    their access context and yields the accessed object. For other objects,
+    yields them unchanged.
+    """
     for obj in objs:
         # Check if object has .access() method (duck typing)
         if (access := getattr(obj, "access", None)) is not None and callable(
             access
         ):
-            yield obj
+            # Enter access context and yield the accessed object
+            accessed_obj = stack.enter_context(obj.access(**kwargs))
+            yield accessed_obj
         elif isinstance(obj, Iterable) and not isinstance(obj, (str, bytes)):
             # Recursively flatten sequences (but not strings)
-            yield from _flatten_to_columns(tuple(obj))
-        # Silently skip other objects
+            yield from _flatten_and_access(tuple(obj), stack, kwargs)
+        else:
+            # Yield non-column objects unchanged (scalars, None, primitives, etc.)
+            yield obj
+
+
+class _AccessColumnsStack(ExitStack):
+    """ExitStack subclass that returns all input objects on __enter__."""
+
+    __slots__ = ("_objects",)
+
+    def __init__(self, objects: tuple[Any, ...]):
+        super().__init__()
+        self._objects = objects
+
+    def __enter__(self) -> tuple[Any, ...]:  # type: ignore[override]
+        super().__enter__()
+        return self._objects
 
 
 def access_columns(
     *objs: Any,
     **kwargs: Any,
-) -> ExitStack:
+) -> _AccessColumnsStack:
     """Context manager to access multiple columns simultaneously.
 
     Simplifies the common pattern of using ExitStack to manage column access
-    contexts. Automatically filters out non-column objects (e.g., plc.Scalar,
-    None, primitives) and flattens nested sequences. Forwards kwargs to the called
-    contexts.
-    """
-    stack = ExitStack()
+    contexts. Automatically enters access contexts for column objects while
+    passing through non-column objects (e.g., plc.Scalar, None, primitives)
+    unchanged. Flattens nested sequences. Forwards kwargs to the access contexts.
 
-    # Enter all column access contexts
-    for col in _flatten_to_columns(objs):
-        stack.enter_context(col.access(**kwargs))
+    Returns
+    -------
+    Context manager that yields a tuple of all input objects in order. Column
+    objects are replaced with their accessed versions, while non-column objects
+    are returned unchanged.
+
+    Examples
+    --------
+    >>> with access_columns(col1, col2, mode="read", scope="internal") as (c1, c2):
+    ...     result = plc.operation(c1.plc_column, c2.plc_column)
+
+    >>> # Works with mixed column and scalar inputs
+    >>> with access_columns(col, scalar, mode="read", scope="internal") as (c, s):
+    ...     result = plc.operation(c.plc_column, s)
+    """
+    stack = _AccessColumnsStack(tuple())
+
+    # Flatten and access all objects, collecting them in order
+    all_objects = tuple(_flatten_and_access(objs, stack, kwargs))
+
+    # Store the tuple of all objects (accessed columns + unchanged non-columns)
+    stack._objects = all_objects
 
     return stack

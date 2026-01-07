@@ -1982,11 +1982,25 @@ class MultiIndex(Index):
             for lcol, rcol in zip(target._columns, self._columns, strict=True)
         ]
         join_keys = list(map(list, zip(*join_keys, strict=True)))
-        with access_columns(*join_keys, mode="read", scope="internal"):
-            plc_tables = [
-                plc.Table([col.plc_column for col in cols])
-                for cols in join_keys
-            ]
+        # Flatten for access_columns
+        flattened = [col for cols in join_keys for col in cols]
+        with access_columns(
+            *flattened, mode="read", scope="internal"
+        ) as flattened:
+            # Reconstruct structure
+            idx = 0
+            plc_tables = []
+            for cols in join_keys:
+                cols_len = len(cols)
+                plc_tables.append(
+                    plc.Table(
+                        [
+                            col.plc_column
+                            for col in flattened[idx : idx + cols_len]
+                        ]
+                    )
+                )
+                idx += cols_len
             left_plc, right_plc = plc.join.inner_join(
                 plc_tables[0],
                 plc_tables[1],

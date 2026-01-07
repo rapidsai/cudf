@@ -1748,10 +1748,23 @@ class Frame(BinaryOperand, Scannable, Serializable):
             ),
             mode="read",
             scope="internal",
-        ):
+        ) as accessed_cols:
             mask = None
             data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
+            # Build mapping from original columns to accessed columns
+            col_map = {}
+            accessed_idx = 0
+            for left, right, _, _ in operands.values():
+                for col in (left, right):
+                    if isinstance(col, ColumnBase):
+                        col_map[id(col)] = accessed_cols[accessed_idx]
+                        accessed_idx += 1
             for name, (left, right, _, _) in operands.items():
+                # Use mapped columns if they're ColumnBase
+                if isinstance(left, ColumnBase):
+                    left = col_map[id(left)]
+                if isinstance(right, ColumnBase):
+                    right = col_map[id(right)]
                 cupy_inputs = []
                 for inp in (left, right) if ufunc.nin == 2 else (left,):
                     if isinstance(inp, ColumnBase) and inp.has_nulls():
@@ -2067,7 +2080,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if not is_scalar(repeats):
             repeats = as_column(repeats)
 
-        with access_columns(*columns, repeats, mode="read", scope="internal"):
+        with access_columns(
+            *columns, repeats, mode="read", scope="internal"
+        ) as (*columns, repeats):
             plc_table = plc.Table([col.plc_column for col in columns])
             if isinstance(repeats, ColumnBase):
                 repeats_plc = repeats.plc_column

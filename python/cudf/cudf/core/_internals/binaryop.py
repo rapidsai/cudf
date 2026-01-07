@@ -47,7 +47,7 @@ def binaryop(
     op = op.upper()
     op = _op_map.get(op, op)
 
-    with access_columns(lhs, rhs, mode="read", scope="internal"):
+    with access_columns(lhs, rhs, mode="read", scope="internal") as (lhs, rhs):
         return ColumnBase.from_pylibcudf(
             plc.binaryop.binary_operation(
                 lhs.plc_column if isinstance(lhs, ColumnBase) else lhs,

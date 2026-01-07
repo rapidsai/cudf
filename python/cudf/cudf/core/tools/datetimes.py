@@ -17,7 +17,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 from cudf.api.types import is_integer, is_scalar
-from cudf.core.column import access_columns
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import DatetimeIndex, Index, ensure_index
@@ -686,9 +685,7 @@ class DateOffset:
             for unit, value in self._scalars.items():
                 value = -value if op == "__sub__" else value
                 if unit == "months":
-                    with access_columns(
-                        datetime_col, mode="read", scope="internal"
-                    ):
+                    with datetime_col.access(mode="read", scope="internal"):
                         datetime_col = type(datetime_col).from_pylibcudf(
                             plc.datetime.add_calendrical_months(
                                 datetime_col.plc_column,

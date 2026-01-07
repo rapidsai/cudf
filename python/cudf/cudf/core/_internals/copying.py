@@ -20,7 +20,9 @@ def gather(
     gather_map: NumericalColumn,
     nullify: bool = False,
 ) -> list[plc.Column]:
-    with access_columns(*columns, gather_map, mode="read", scope="internal"):
+    with access_columns(
+        *columns, gather_map, mode="read", scope="internal"
+    ) as (*columns, gather_map):
         plc_tbl = plc.copying.gather(
             plc.Table([col.plc_column for col in columns]),
             gather_map.plc_column,
@@ -60,7 +62,9 @@ def scatter(
                 f"index out of bounds for column of size {n_rows}"
             )
 
-    with access_columns(*target_columns, mode="write", scope="internal"):
+    with access_columns(  # type: ignore[assignment]
+        *target_columns, mode="write", scope="internal"
+    ) as target_columns:
         plc_tbl = plc.copying.scatter(
             cast(list[plc.Scalar], sources)
             if isinstance(sources[0], plc.Scalar)
@@ -80,7 +84,9 @@ def scatter(
 def columns_split(
     input_columns: Sequence[ColumnBase], splits: list[int]
 ) -> list[list[plc.Column]]:
-    with access_columns(*input_columns, mode="read", scope="internal"):
+    with access_columns(
+        *input_columns, mode="read", scope="internal"
+    ) as input_columns:
         return [
             plc_tbl.columns()
             for plc_tbl in plc.copying.split(

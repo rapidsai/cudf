@@ -1975,7 +1975,10 @@ class Index(SingleColumnFrame):
         except ValueError:
             return self._return_get_indexer_result(result.values)
 
-        with access_columns(lcol, rcol, mode="read", scope="internal"):
+        with access_columns(lcol, rcol, mode="read", scope="internal") as (
+            lcol,
+            rcol,
+        ):
             left_plc, right_plc = plc.join.inner_join(
                 plc.Table([lcol.plc_column]),
                 plc.Table([rcol.plc_column]),

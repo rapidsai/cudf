@@ -45,7 +45,9 @@ def is_sorted(
     """
     column_order, null_precedence = ordering(ascending, na_position)
 
-    with access_columns(*source_columns, mode="read", scope="internal"):
+    with access_columns(
+        *source_columns, mode="read", scope="internal"
+    ) as source_columns:
         return plc.sorting.is_sorted(
             plc.Table([col.plc_column for col in source_columns]),
             column_order,
@@ -122,7 +124,9 @@ def order_by(
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
 
-    with access_columns(*columns_from_table, mode="read", scope="internal"):
+    with access_columns(
+        *columns_from_table, mode="read", scope="internal"
+    ) as columns_from_table:
         return func(
             plc.Table(
                 [col.plc_column for col in columns_from_table],
@@ -169,7 +173,13 @@ def sort_by_key(
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
     )
 
-    with access_columns(*values, *keys, mode="read", scope="internal"):
+    with access_columns(
+        *values, *keys, mode="read", scope="internal"
+    ) as accessed:
+        # Split accessed tuple back into values and keys
+        n_values = len(values)
+        values = accessed[:n_values]
+        keys = accessed[n_values:]
         return func(
             plc.Table([col.plc_column for col in values]),
             plc.Table([col.plc_column for col in keys]),
@@ -209,7 +219,13 @@ def search_sorted(
         "lower_bound" if side == "left" else "upper_bound",
     )
 
-    with access_columns(*source, *values, mode="read", scope="internal"):
+    with access_columns(
+        *source, *values, mode="read", scope="internal"
+    ) as accessed:
+        # Split accessed tuple back into source and values
+        n_source = len(source)
+        source = accessed[:n_source]
+        values = accessed[n_source:]
         return func(
             plc.Table([col.plc_column for col in source]),
             plc.Table([col.plc_column for col in values]),
