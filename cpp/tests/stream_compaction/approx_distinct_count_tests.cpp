@@ -102,7 +102,7 @@ TEST_F(ApproxDistinctCount, TableBasic)
 TEST_F(ApproxDistinctCount, WithNull)
 {
   auto data     = generate_data<int32_t>(2000, 100);
-  auto validity = generate_validity<int32_t>(2000, 20);
+  auto validity = generate_validity(2000, 20);
   cudf::test::fixed_width_column_wrapper<int32_t> input_col(
     data.begin(), data.end(), validity.begin());
   cudf::table_view input_table({input_col});
@@ -120,7 +120,7 @@ TEST_F(ApproxDistinctCount, WithNull)
 TEST_F(ApproxDistinctCount, IgnoreNull)
 {
   auto data     = generate_data<int32_t>(2000, 100);
-  auto validity = generate_validity<int32_t>(2000, 20);
+  auto validity = generate_validity(2000, 20);
   cudf::test::fixed_width_column_wrapper<int32_t> input_col(
     data.begin(), data.end(), validity.begin());
   cudf::table_view input_table({input_col});
@@ -305,7 +305,7 @@ TEST_F(ApproxDistinctCount, AddToExistingSketch)
 TEST_F(ApproxDistinctCount, NullInclude_NaNValid)
 {
   auto data     = generate_float_with_nans(2000, 100, 15);
-  auto validity = generate_validity<float>(2000, 20);
+  auto validity = generate_validity(2000, 20);
   cudf::test::fixed_width_column_wrapper<float> input_col(
     data.begin(), data.end(), validity.begin());
   cudf::table_view input_table({input_col});
@@ -323,7 +323,7 @@ TEST_F(ApproxDistinctCount, NullInclude_NaNValid)
 TEST_F(ApproxDistinctCount, NullInclude_NaNNull)
 {
   auto data     = generate_float_with_nans(2000, 100, 15);
-  auto validity = generate_validity<float>(2000, 20);
+  auto validity = generate_validity(2000, 20);
   cudf::test::fixed_width_column_wrapper<float> input_col(
     data.begin(), data.end(), validity.begin());
   cudf::table_view input_table({input_col});
@@ -341,7 +341,7 @@ TEST_F(ApproxDistinctCount, NullInclude_NaNNull)
 TEST_F(ApproxDistinctCount, NullExclude_NaNValid)
 {
   auto data     = generate_float_with_nans(2000, 100, 15);
-  auto validity = generate_validity<float>(2000, 20);
+  auto validity = generate_validity(2000, 20);
   cudf::test::fixed_width_column_wrapper<float> input_col(
     data.begin(), data.end(), validity.begin());
   cudf::table_view input_table({input_col});
@@ -359,7 +359,7 @@ TEST_F(ApproxDistinctCount, NullExclude_NaNValid)
 TEST_F(ApproxDistinctCount, NullExclude_NaNNull)
 {
   auto data     = generate_float_with_nans(2000, 100, 15);
-  auto validity = generate_validity<float>(2000, 20);
+  auto validity = generate_validity(2000, 20);
   cudf::test::fixed_width_column_wrapper<float> input_col(
     data.begin(), data.end(), validity.begin());
   cudf::table_view input_table({input_col});
@@ -410,9 +410,9 @@ TEST_F(ApproxDistinctCount, FloatColumnWithNoNaNs_NaNNullPolicy)
 TEST_F(ApproxDistinctCount, MixedTypes_NullAndNaNHandling)
 {
   auto int_data       = generate_data<int32_t>(1000, 50);
-  auto int_validity   = generate_validity<int32_t>(1000, 20);
+  auto int_validity   = generate_validity(1000, 20);
   auto float_data     = generate_float_with_nans(1000, 50, 15);
-  auto float_validity = generate_validity<float>(1000, 25);
+  auto float_validity = generate_validity(1000, 25);
 
   cudf::test::fixed_width_column_wrapper<int32_t> int_col(
     int_data.begin(), int_data.end(), int_validity.begin());
@@ -504,9 +504,9 @@ TEST_F(ApproxDistinctCount, MergeSpan)
 TEST_F(ApproxDistinctCount, MergeWithNullHandling)
 {
   auto data1     = generate_data<int32_t>(1000, 80);
-  auto validity1 = generate_validity<int32_t>(1000, 20);
+  auto validity1 = generate_validity(1000, 20);
   auto data2     = generate_data<int32_t>(1000, 120);
-  auto validity2 = generate_validity<int32_t>(1000, 25);
+  auto validity2 = generate_validity(1000, 25);
 
   cudf::test::fixed_width_column_wrapper<int32_t> col1(
     data1.begin(), data1.end(), validity1.begin());
