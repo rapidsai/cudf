@@ -52,26 +52,23 @@ class StructColumn(ColumnBase):
         self,
         plc_column: plc.Column,
         dtype: StructDtype,
-        exposed: bool,
     ):
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            exposed=exposed,
         )
 
     def _get_children_from_pylibcudf_column(
         self,
         plc_column: plc.Column,
         dtype: StructDtype,  # type: ignore[override]
-        exposed: bool,
     ) -> tuple[ColumnBase, ...]:
         return tuple(
             child._with_type_metadata(field_dtype)
             for child, field_dtype in zip(
                 super()._get_children_from_pylibcudf_column(
-                    plc_column, dtype=dtype, exposed=exposed
+                    plc_column, dtype=dtype
                 ),
                 dtype.fields.values(),
                 strict=True,
@@ -193,7 +190,6 @@ class StructColumn(ColumnBase):
             return IntervalColumn(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                exposed=False,
             )
         elif isinstance(dtype, StructDtype):
             new_children = [
@@ -214,7 +210,6 @@ class StructColumn(ColumnBase):
             return StructColumn(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                exposed=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(

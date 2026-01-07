@@ -103,14 +103,12 @@ class CategoricalColumn(column.ColumnBase):
         return None
 
     def _get_children_from_pylibcudf_column(
-        self, plc_column: plc.Column, dtype: DtypeObj, exposed: bool
+        self, plc_column: plc.Column, dtype: DtypeObj
     ) -> tuple[ColumnBase]:
         """
         This column considers the plc_column (i.e. codes) as children
         """
-        return (
-            type(self).from_pylibcudf(plc_column, data_ptr_exposed=exposed),
-        )
+        return (type(self).from_pylibcudf(plc_column),)
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -680,7 +678,6 @@ class CategoricalColumn(column.ColumnBase):
             return type(self)(
                 plc_column=self.plc_column,
                 dtype=dtype,
-                exposed=False,
             )
 
         return self

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -27,7 +27,6 @@ class IntervalColumn(StructColumn):
         self,
         plc_column: plc.Column,
         dtype: IntervalDtype,
-        exposed: bool,
     ) -> None:
         if plc_column.num_children() != 2:
             raise ValueError(
@@ -36,7 +35,6 @@ class IntervalColumn(StructColumn):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            exposed=exposed,
         )
 
     @staticmethod

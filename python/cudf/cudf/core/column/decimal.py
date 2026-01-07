@@ -76,7 +76,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
         self,
         plc_column: plc.Column,
         dtype: DecimalDtype,
-        exposed: bool,
     ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
@@ -89,7 +88,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            exposed=exposed,
         )
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
@@ -132,7 +130,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     -data.type.scale,
                 ),
             )
-            result = cls.from_pylibcudf(plc_column, False)
+            result = cls.from_pylibcudf(plc_column)
             result._dtype = dtype
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result

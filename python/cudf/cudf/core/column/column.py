@@ -32,7 +32,6 @@ import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 import cudf
-from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_categorical_dtype,
     infer_dtype,
@@ -98,7 +97,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Mapping
     from types import TracebackType
 
-    from cudf._typing import ColumnLike, Dtype, DtypeObj, NoDefault, ScalarLike
+    from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.decimal import DecimalBaseColumn
@@ -335,7 +334,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self,
         plc_column: plc.Column,
         dtype: DtypeObj,
-        exposed: bool,
     ) -> None:
         if not (
             isinstance(plc_column, plc.Column)
@@ -350,7 +348,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         children = self._get_children_from_pylibcudf_column(
             self.plc_column,
             dtype,
-            exposed,
         )
         self.set_children(children)
         # The set of exposed buffers associated with this column. These buffers must be
@@ -364,7 +361,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self,
         plc_column: plc.Column,
         dtype: DtypeObj,
-        exposed: bool,
     ) -> tuple[ColumnBase, ...]:
         """
         Extract the children columns from a pylibcudf.Column.
@@ -375,8 +371,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ----------
         plc_column : plc.Column
             The pylibcudf.Column to extract the children columns from.
-        exposed : bool
-            Whether the children columns are exposed.
 
         Returns
         -------
@@ -384,8 +378,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             The children columns.
         """
         return tuple(
-            type(self).from_pylibcudf(child, data_ptr_exposed=exposed)
-            for child in plc_column.children()
+            type(self).from_pylibcudf(child) for child in plc_column.children()
         )
 
     @property
@@ -632,9 +625,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
 
     @classmethod
-    def from_pylibcudf(
-        cls, col: plc.Column, data_ptr_exposed: bool = False
-    ) -> Self:
+    def from_pylibcudf(cls, col: plc.Column) -> Self:
         """Create a Column from a pylibcudf.Column.
 
         This function will generate a Column pointing to the provided pylibcudf
@@ -646,8 +637,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ----------
         col : pylibcudf.Column
             The object to copy.
-        data_ptr_exposed : bool
-            Whether the data buffer is exposed.
 
         Returns
         -------
@@ -673,14 +662,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if isinstance(data, Buffer):
                 data = data.copy(deep=False)
             else:
-                data = as_buffer(data, exposed=data_ptr_exposed)
+                data = as_buffer(data)
 
         mask = col.null_mask()
         if mask is not None:
             if isinstance(mask, Buffer):
                 mask = mask.copy(deep=False)
             else:
-                mask = as_buffer(mask, exposed=data_ptr_exposed)
+                mask = as_buffer(mask)
 
         col = plc.Column(
             data_type=col.type(),
@@ -732,13 +721,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return column_cls(  # type: ignore[return-value]
             plc_column=col,
             dtype=dtype,
-            exposed=data_ptr_exposed,
         )
 
     @classmethod
-    def from_cuda_array_interface(
-        cls, arbitrary: Any, data_ptr_exposed: NoDefault | bool = no_default
-    ) -> ColumnBase:
+    def from_cuda_array_interface(cls, arbitrary: Any) -> ColumnBase:
         """
         Create a Column from an object implementing the CUDA array interface.
 
@@ -777,11 +763,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             mask = None
 
-        if data_ptr_exposed is no_default:
-            data_ptr_exposed = cudf.get_option("copy_on_write")
         column = ColumnBase.from_pylibcudf(
             plc.Column.from_cuda_array_interface(arbitrary),
-            data_ptr_exposed=data_ptr_exposed,
         )
         if mask is not None:
             cai_mask = mask.__cuda_array_interface__
@@ -1168,7 +1151,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             col = type(self)(
                 plc_column=self.plc_column,
                 dtype=self.dtype,
-                exposed=False,
             )
             # copy-on-write and spilling logic tracked on the Buffers
             # so copy over the Buffers from self
@@ -2415,8 +2397,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 categories.plc_column,
             )
             return (
-                type(self).from_pylibcudf(col, data_ptr_exposed=True)
-                for col in plc_table.columns()
+                type(self).from_pylibcudf(col) for col in plc_table.columns()
             )
 
     def scan(self, scan_op: str, inclusive: bool, **kwargs: Any) -> Self:
@@ -2924,11 +2905,7 @@ def as_column(
                 arbitrary = np.asarray(arbitrary)
             else:
                 arbitrary = cp.asarray(arbitrary)
-                # Explicitly passing `data_ptr_exposed` to
-                # reuse existing memory created by cupy here
-                column = ColumnBase.from_cuda_array_interface(
-                    arbitrary, data_ptr_exposed=False
-                )
+                column = ColumnBase.from_cuda_array_interface(arbitrary)
                 if nan_as_null is not False:
                     column = column.nans_to_nulls()
                 if dtype is not None:

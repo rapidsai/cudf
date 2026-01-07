@@ -45,7 +45,6 @@ class ListColumn(ColumnBase):
         self,
         plc_column: plc.Column,
         dtype: ListDtype,
-        exposed: bool,
     ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
@@ -58,17 +57,15 @@ class ListColumn(ColumnBase):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            exposed=exposed,
         )
 
     def _get_children_from_pylibcudf_column(
         self,
         plc_column: plc.Column,
         dtype: ListDtype,  # type: ignore[override]
-        exposed: bool,
     ) -> tuple[ColumnBase, ColumnBase]:
         children = super()._get_children_from_pylibcudf_column(
-            plc_column, dtype, exposed
+            plc_column, dtype
         )
         return (
             children[0],
@@ -173,7 +170,6 @@ class ListColumn(ColumnBase):
             return type(self)(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                exposed=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(

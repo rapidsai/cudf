@@ -82,7 +82,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
         self,
         plc_column: plc.Column,
         dtype: np.dtype,
-        exposed: bool,
     ) -> None:
         if cudf.get_option("mode.pandas_compatible"):
             if not dtype.kind == "m":
@@ -92,7 +91,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            exposed=exposed,
         )
 
     def _clear_cache(self) -> None:

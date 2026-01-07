@@ -123,7 +123,6 @@ class StringColumn(ColumnBase, Scannable):
         self,
         plc_column: plc.Column,
         dtype: np.dtype,
-        exposed: bool,
     ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
@@ -146,7 +145,6 @@ class StringColumn(ColumnBase, Scannable):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            exposed=exposed,
         )
 
     @property

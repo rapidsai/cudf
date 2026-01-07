@@ -90,7 +90,6 @@ class NumericalColumn(NumericalBaseColumn):
         self,
         plc_column: plc.Column,
         dtype: np.dtype,
-        exposed: bool,
     ) -> None:
         if (
             cudf.get_option("mode.pandas_compatible")
@@ -105,7 +104,6 @@ class NumericalColumn(NumericalBaseColumn):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            exposed=exposed,
         )
 
     def _clear_cache(self) -> None:
@@ -607,7 +605,7 @@ class NumericalColumn(NumericalBaseColumn):
                     # If the dtype is a pandas nullable extension type, we need to
                     # float column doesn't have any NaNs.
                     res = self.nans_to_nulls()
-                    res._dtype = dtype  # type: ignore[has-type]
+                    res._dtype = dtype
                     return res
                 else:
                     self._dtype = dtype
@@ -933,7 +931,6 @@ class NumericalColumn(NumericalBaseColumn):
             return CategoricalColumn(
                 plc_column=codes.plc_column,
                 dtype=dtype,
-                exposed=False,
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)
