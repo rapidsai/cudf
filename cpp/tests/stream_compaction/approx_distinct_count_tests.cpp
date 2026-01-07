@@ -9,6 +9,8 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <thrust/host_vector.h>
+
 using cudf::nan_policy;
 using cudf::null_policy;
 
@@ -41,13 +43,11 @@ std::vector<T> generate_data(int size, int num_distinct)
   return data;
 }
 
-template <typename T>
-std::vector<bool> generate_validity(int size, int null_frequency = 10)
+thrust::host_vector<bool> generate_validity(int size, int null_frequency = 10)
 {
-  std::vector<bool> validity;
-  validity.reserve(size);
+  thrust::host_vector<bool> validity(size);
   for (int i = 0; i < size; ++i) {
-    validity.push_back(i % null_frequency != 0);
+    validity[i] = (i % null_frequency != 0);
   }
   return validity;
 }
@@ -135,24 +135,6 @@ TEST_F(ApproxDistinctCount, IgnoreNull)
     << "Exact: " << exact_count << ", Approx: " << approx_count;
 }
 
-TEST_F(ApproxDistinctCount, BothAPIs)
-{
-  auto data     = generate_data<int32_t>(2000, 100);
-  auto validity = generate_validity<int32_t>(2000, 20);
-  cudf::test::fixed_width_column_wrapper<int32_t> input_col(
-    data.begin(), data.end(), validity.begin());
-  cudf::table_view input_table({input_col});
-
-  auto adc =
-    cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
-  auto approx_count = adc.estimate();
-  auto const exact_count =
-    cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
-
-  EXPECT_TRUE(is_reasonable_approximation(approx_count, exact_count))
-    << "Exact: " << exact_count << ", Approx: " << approx_count;
-}
-
 TEST_F(ApproxDistinctCount, EmptyColumn)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> input_col{};
@@ -204,22 +186,7 @@ TEST_F(ApproxDistinctCount, DifferentPrecisions)
   EXPECT_TRUE(is_reasonable_approximation(result_high, exact_count, 14));
 }
 
-TEST_F(ApproxDistinctCount, NullEqualityUnequal)
-{
-  cudf::test::fixed_width_column_wrapper<int32_t> input_col{{1, XXX, 3, XXX, 1}, {1, 0, 1, 0, 1}};
-  cudf::table_view input_table({input_col});
-
-  auto adc =
-    cudf::approx_distinct_count(input_table, 12, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
-  auto approx_count = adc.estimate();
-  auto const exact_count =
-    cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID);
-
-  EXPECT_TRUE(is_reasonable_approximation(approx_count, exact_count))
-    << "Exact: " << exact_count << ", Approx: " << approx_count;
-}
-
-TEST_F(ApproxDistinctCount, NullEqualityEqual)
+TEST_F(ApproxDistinctCount, NullEquality)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> input_col{{1, XXX, 3, XXX, 1}, {1, 0, 1, 0, 1}};
   cudf::table_view input_table({input_col});
