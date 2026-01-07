@@ -40,7 +40,7 @@ class approx_distinct_count {
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   approx_distinct_count(table_view const& input,
-                        cudf::size_type precision,
+                        std::int32_t precision,
                         null_policy null_handling,
                         nan_policy nan_handling,
                         rmm::cuda_stream_view stream);
@@ -53,7 +53,7 @@ class approx_distinct_count {
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
-                        cudf::size_type precision,
+                        std::int32_t precision,
                         rmm::cuda_stream_view stream);
 
   approx_distinct_count() = delete;

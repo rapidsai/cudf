@@ -97,7 +97,7 @@ struct check_nans_predicate {
 approx_distinct_count::~approx_distinct_count() = default;
 
 approx_distinct_count::approx_distinct_count(table_view const& input,
-                                             cudf::size_type precision,
+                                             std::int32_t precision,
                                              null_policy null_handling,
                                              nan_policy nan_handling,
                                              rmm::cuda_stream_view stream)
@@ -113,7 +113,7 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
 }
 
 approx_distinct_count::approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
-                                             cudf::size_type precision,
+                                             std::int32_t precision,
                                              rmm::cuda_stream_view stream)
   : _impl{cuco::precision{precision},
           cuda::std::identity{},
@@ -203,7 +203,7 @@ cudf::size_type approx_distinct_count::estimate(rmm::cuda_stream_view stream) co
 approx_distinct_count::~approx_distinct_count() = default;
 
 approx_distinct_count::approx_distinct_count(table_view const& input,
-                                             cudf::size_type precision,
+                                             std::int32_t precision,
                                              null_policy null_handling,
                                              nan_policy nan_handling,
                                              rmm::cuda_stream_view stream)
@@ -212,7 +212,7 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
 }
 
 approx_distinct_count::approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
-                                             cudf::size_type precision,
+                                             std::int32_t precision,
                                              rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl_type>(sketch_span, precision, stream))
 {
