@@ -119,11 +119,11 @@ class StringColumn(ColumnBase, Scannable):
         "cummax",
     }
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: np.dtype,
-    ) -> None:
+    @classmethod
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: np.dtype
+    ) -> tuple[plc.Column, np.dtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
         if (
             not cudf.get_option("mode.pandas_compatible")
             and dtype != CUDF_STRING_DTYPE
@@ -139,13 +139,17 @@ class StringColumn(ColumnBase, Scannable):
             and dtype.kind == "U"
         ):
             dtype = CUDF_STRING_DTYPE
+        return plc_column, dtype
 
+    def __init__(
+        self,
+        plc_column: plc.Column,
+        dtype: np.dtype,
+    ) -> None:
+        super().__init__(plc_column=plc_column, dtype=dtype)
+        # Lazily-computed cache for string offset values
         self._start_offset = None
         self._end_offset = None
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-        )
 
     @property
     def start_offset(self) -> int:

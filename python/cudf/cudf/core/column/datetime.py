@@ -109,16 +109,19 @@ class DatetimeColumn(TemporalBaseColumn):
         plc.TypeId.TIMESTAMP_NANOSECONDS,
     }
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: np.dtype | pd.DatetimeTZDtype,
-    ) -> None:
-        dtype = self._validate_dtype_instance(dtype)
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-        )
+    @classmethod
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: np.dtype
+    ) -> tuple[plc.Column, np.dtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
+        if (
+            cudf.get_option("mode.pandas_compatible") and not dtype.kind == "M"
+        ) or (
+            not cudf.get_option("mode.pandas_compatible")
+            and not (isinstance(dtype, np.dtype) and dtype.kind == "M")
+        ):
+            raise ValueError(f"dtype must be a datetime, got {dtype}")
+        return plc_column, dtype
 
     def _clear_cache(self) -> None:
         super()._clear_cache()
@@ -160,17 +163,6 @@ class DatetimeColumn(TemporalBaseColumn):
         return self.scan(op.replace("cum", ""), True)._with_type_metadata(
             self.dtype
         )
-
-    @staticmethod
-    def _validate_dtype_instance(dtype: np.dtype) -> np.dtype:
-        if (
-            cudf.get_option("mode.pandas_compatible") and not dtype.kind == "M"
-        ) or (
-            not cudf.get_option("mode.pandas_compatible")
-            and not (isinstance(dtype, np.dtype) and dtype.kind == "M")
-        ):
-            raise ValueError(f"dtype must be a datetime, got {dtype}")
-        return dtype
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -804,13 +796,21 @@ class DatetimeTZColumn(DatetimeColumn):
         except AttributeError:
             pass
 
-    @staticmethod
-    def _validate_dtype_instance(
-        dtype: pd.DatetimeTZDtype,
-    ) -> pd.DatetimeTZDtype:
+    @classmethod
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: pd.DatetimeTZDtype
+    ) -> tuple[plc.Column, pd.DatetimeTZDtype]:
+        # Manually validate TypeId since we can't call parent (different dtype type)
+        if not (
+            isinstance(plc_column, plc.Column)
+            and plc_column.type().id() in DatetimeColumn._VALID_PLC_TYPES
+        ):
+            raise ValueError(
+                f"plc_column must be a pylibcudf.Column with a TypeId in {DatetimeColumn._VALID_PLC_TYPES}"
+            )
         if not isinstance(dtype, pd.DatetimeTZDtype):
             raise ValueError("dtype must be a pandas.DatetimeTZDtype")
-        return get_compatible_timezone(dtype)
+        return plc_column, get_compatible_timezone(dtype)
 
     def to_pandas(
         self,

@@ -330,18 +330,48 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     }
     _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
 
+    @classmethod
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: DtypeObj
+    ) -> tuple[plc.Column, DtypeObj]:
+        """
+        Validate plc_column and dtype arguments for column construction.
+
+        This method can be overridden by subclasses to perform type-specific
+        validation and normalization of the arguments.
+
+        Parameters
+        ----------
+        plc_column : plc.Column
+            The pylibcudf.Column to validate.
+        dtype : DtypeObj
+            The dtype to validate.
+
+        Returns
+        -------
+        tuple[plc.Column, DtypeObj]
+            The validated (and potentially modified) plc_column and dtype.
+
+        Raises
+        ------
+        ValueError
+            If the arguments are invalid for this column type.
+        """
+        if not (
+            isinstance(plc_column, plc.Column)
+            and plc_column.type().id() in cls._VALID_PLC_TYPES
+        ):
+            raise ValueError(
+                f"plc_column must be a pylibcudf.Column with a TypeId in {cls._VALID_PLC_TYPES}"
+            )
+        return plc_column, dtype
+
     def __init__(
         self,
         plc_column: plc.Column,
         dtype: DtypeObj,
     ) -> None:
-        if not (
-            isinstance(plc_column, plc.Column)
-            and plc_column.type().id() in self._VALID_PLC_TYPES
-        ):
-            raise ValueError(
-                f"plc_column must be a pylibcudf.Column with a TypeId in {self._VALID_PLC_TYPES}"
-            )
+        plc_column, dtype = self._validate_args(plc_column, dtype)
         self.plc_column = plc_column
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype

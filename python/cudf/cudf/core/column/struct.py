@@ -48,16 +48,23 @@ class StructColumn(ColumnBase):
 
     _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: StructDtype,
-    ):
-        dtype = self._validate_dtype_instance(dtype)
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-        )
+    @classmethod
+    def _validate_args(  # type: ignore[override]
+        cls, plc_column: plc.Column, dtype: StructDtype
+    ) -> tuple[plc.Column, StructDtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
+        # IntervalDtype is a subclass of StructDtype, so compare types exactly
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and type(dtype) is not StructDtype
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_dtype_obj_struct(dtype)
+        ):
+            raise ValueError(
+                f"{type(dtype).__name__} must be a StructDtype exactly."
+            )
+        return plc_column, dtype
 
     def _get_children_from_pylibcudf_column(
         self,
@@ -94,21 +101,6 @@ class StructColumn(ColumnBase):
         """
         # TODO: handle if self.has_nulls(): case
         return self
-
-    @staticmethod
-    def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
-        # IntervalDtype is a subclass of StructDtype, so compare types exactly
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and type(dtype) is not StructDtype
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_struct(dtype)
-        ):
-            raise ValueError(
-                f"{type(dtype).__name__} must be a StructDtype exactly."
-            )
-        return dtype
 
     def to_pandas(
         self,

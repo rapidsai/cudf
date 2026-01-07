@@ -41,11 +41,11 @@ class ListColumn(ColumnBase):
     _VALID_BINARY_OPERATIONS = {"__add__", "__radd__", "__eq__", "__ne__"}
     _VALID_PLC_TYPES = {plc.TypeId.LIST}
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: ListDtype,
-    ) -> None:
+    @classmethod
+    def _validate_args(  # type: ignore[override]
+        cls, plc_column: plc.Column, dtype: ListDtype
+    ) -> tuple[plc.Column, ListDtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, ListDtype)
@@ -54,10 +54,7 @@ class ListColumn(ColumnBase):
             and not is_dtype_obj_list(dtype)
         ):
             raise ValueError("dtype must be a cudf.ListDtype")
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-        )
+        return plc_column, dtype
 
     def _get_children_from_pylibcudf_column(
         self,

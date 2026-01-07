@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 from cudf.core.column.column import _handle_nulls, as_column
 from cudf.core.column.struct import StructColumn
@@ -17,28 +19,26 @@ from cudf.utils.dtypes import is_dtype_obj_interval
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    import pylibcudf as plc
-
     from cudf.core.column import ColumnBase
 
 
 class IntervalColumn(StructColumn):
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: IntervalDtype,
-    ) -> None:
+    @classmethod
+    def _validate_args(  # type: ignore[override]
+        cls, plc_column: plc.Column, dtype: IntervalDtype
+    ) -> tuple[plc.Column, IntervalDtype]:
+        # Validate plc_column TypeId - IntervalColumn uses STRUCT type
+        if not (
+            isinstance(plc_column, plc.Column)
+            and plc_column.type().id() == plc.TypeId.STRUCT
+        ):
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with TypeId STRUCT"
+            )
         if plc_column.num_children() != 2:
             raise ValueError(
                 "plc_column must have two children (left edges, right edges)."
             )
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-        )
-
-    @staticmethod
-    def _validate_dtype_instance(dtype: IntervalDtype) -> IntervalDtype:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, IntervalDtype)
@@ -47,7 +47,7 @@ class IntervalColumn(StructColumn):
             and not is_dtype_obj_interval(dtype)
         ):
             raise ValueError("dtype must be a IntervalDtype.")
-        return dtype
+        return plc_column, dtype
 
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
