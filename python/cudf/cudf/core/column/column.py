@@ -242,29 +242,6 @@ def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
     return arrow_array
 
 
-def _unwrap_buffer(buffer: Buffer | None) -> Any:
-    """
-    Unwrap a cudf Buffer to extract the underlying memory object.
-
-    Must be called within an access() context to ensure the buffer
-    is on device (for SpillableBuffers).
-
-    Parameters
-    ----------
-    buffer : Buffer | None
-        The buffer to unwrap. If None, returns None.
-
-    Returns
-    -------
-    Any
-        The underlying memory object (rmm.DeviceBuffer, cupy.ndarray, etc.)
-        or None if buffer is None.
-    """
-    if buffer is None:
-        return None
-    return buffer.owner.owner
-
-
 class _ColumnAccessContext:
     """Context manager for access mode control on underlying buffers."""
 
@@ -334,29 +311,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _validate_args(
         cls, plc_column: plc.Column, dtype: DtypeObj
     ) -> tuple[plc.Column, DtypeObj]:
-        """
-        Validate plc_column and dtype arguments for column construction.
-
-        This method can be overridden by subclasses to perform type-specific
-        validation and normalization of the arguments.
-
-        Parameters
-        ----------
-        plc_column : plc.Column
-            The pylibcudf.Column to validate.
-        dtype : DtypeObj
-            The dtype to validate.
-
-        Returns
-        -------
-        tuple[plc.Column, DtypeObj]
-            The validated (and potentially modified) plc_column and dtype.
-
-        Raises
-        ------
-        ValueError
-            If the arguments are invalid for this column type.
-        """
+        """Validate and return plc_column and dtype arguments for column construction."""
         if not (
             isinstance(plc_column, plc.Column)
             and plc_column.type().id() in cls._VALID_PLC_TYPES
@@ -627,30 +582,26 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column with unwrapped buffers.
         """
-        # Use access() to ensure all buffers are on device and spill-locked
         with self.access(mode="read", scope="internal"):
-            # Unwrap data and mask buffers
-            unwrapped_data = _unwrap_buffer(
-                cast(Buffer, self.plc_column.data())
-            )
-            unwrapped_mask = _unwrap_buffer(
-                cast(Buffer, self.plc_column.null_mask())
-            )
+            data = self.plc_column.data()
+            if data is not None:
+                data = data.owner.owner  # type: ignore[attr-defined]
+            mask = self.plc_column.null_mask()
+            if mask is not None:
+                mask = mask.owner.owner  # type: ignore[attr-defined]
 
             # Recursively unwrap children
-            unwrapped_children = [
-                child.to_pylibcudf() for child in self.children
-            ]
+            children = [child.to_pylibcudf() for child in self.children]
 
             # Construct new pylibcudf Column with unwrapped buffers
             return plc.Column(
                 data_type=self.plc_column.type(),
                 size=self.plc_column.size(),
-                data=unwrapped_data,
-                mask=unwrapped_mask,
+                data=data,
+                mask=mask,
                 null_count=self.plc_column.null_count(),
                 offset=self.plc_column.offset(),
-                children=unwrapped_children,
+                children=children,
                 validate=False,
             )
 
