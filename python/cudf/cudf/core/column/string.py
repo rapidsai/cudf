@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import itertools
 import re
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -91,9 +91,6 @@ class StringColumn(ColumnBase, Scannable):
         Columns containing the offsets
     """
 
-    _start_offset: int | None
-    _end_offset: int | None
-
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
         "__ne__",
@@ -141,42 +138,24 @@ class StringColumn(ColumnBase, Scannable):
             dtype = CUDF_STRING_DTYPE
         return plc_column, dtype
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: np.dtype,
-    ) -> None:
-        super().__init__(plc_column=plc_column, dtype=dtype)
-        # Lazily-computed cache for string offset values
-        self._start_offset = None
-        self._end_offset = None
-
-    @property
+    @cached_property
     def start_offset(self) -> int:
-        if self._start_offset is None:
-            if len(self.children) == 1 and self.offset < self.children[0].size:
-                self._start_offset = int(
-                    self.children[0].element_indexing(self.offset)
-                )
-            else:
-                self._start_offset = 0
+        if len(self.children) == 1 and self.offset < self.children[0].size:
+            return int(self.children[0].element_indexing(self.offset))
+        else:
+            return 0
 
-        return self._start_offset
-
-    @property
+    @cached_property
     def end_offset(self) -> int:
-        if self._end_offset is None:
-            if (
-                len(self.children) == 1
-                and (self.offset + self.size) < self.children[0].size
-            ):
-                self._end_offset = int(
-                    self.children[0].element_indexing(self.offset + self.size)
-                )
-            else:
-                self._end_offset = 0
-
-        return self._end_offset
+        if (
+            len(self.children) == 1
+            and (self.offset + self.size) < self.children[0].size
+        ):
+            return int(
+                self.children[0].element_indexing(self.offset + self.size)
+            )
+        else:
+            return 0
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
