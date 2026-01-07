@@ -112,6 +112,18 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
   add(input, null_handling, nan_handling, stream);
 }
 
+approx_distinct_count::approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
+                                             cudf::size_type precision,
+                                             rmm::cuda_stream_view stream)
+  : _impl{cuco::precision{precision},
+          cuda::std::identity{},
+          rmm::mr::polymorphic_allocator<cuda::std::byte>{},
+          cuda::stream_ref{stream.value()}}
+{
+  auto sketch_ref = hll_type::ref_type<>{sketch_span, cuda::std::identity{}};
+  _impl.merge_async(sketch_ref, cuda::stream_ref{stream.value()});
+}
+
 void approx_distinct_count::add(table_view const& input,
                                 null_policy null_handling,
                                 nan_policy nan_handling,
@@ -199,6 +211,13 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
                                              nan_policy nan_handling,
                                              rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl_type>(input, precision, null_handling, nan_handling, stream))
+{
+}
+
+approx_distinct_count::approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
+                                             cudf::size_type precision,
+                                             rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl_type>(sketch_span, precision, stream))
 {
 }
 

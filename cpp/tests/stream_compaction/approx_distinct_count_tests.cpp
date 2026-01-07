@@ -622,3 +622,79 @@ TEST_F(ApproxDistinctCount, SketchRoundtrip)
 
   EXPECT_EQ(count1, count2);
 }
+
+TEST_F(ApproxDistinctCount, SpanConstructor)
+{
+  auto data = generate_data<int32_t>(2000, 100);
+  cudf::test::fixed_width_column_wrapper<int32_t> col(data.begin(), data.end());
+  cudf::table_view table({col});
+
+  auto adc       = cudf::approx_distinct_count(table);
+  auto from_span = cudf::approx_distinct_count(adc.sketch(), 12);
+
+  EXPECT_EQ(adc.estimate(), from_span.estimate());
+}
+
+TEST_F(ApproxDistinctCount, SpanConstructorMergeTwoSpans)
+{
+  auto data1 = generate_data<int32_t>(1000, 80);
+  auto data2 = generate_data<int32_t>(1000, 120);
+  cudf::test::fixed_width_column_wrapper<int32_t> col1(data1.begin(), data1.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> col2(data2.begin(), data2.end());
+
+  auto adc1 = cudf::approx_distinct_count(cudf::table_view({col1}));
+  auto adc2 = cudf::approx_distinct_count(cudf::table_view({col2}));
+
+  auto merger = cudf::approx_distinct_count(adc1.sketch(), 12);
+  merger.merge(adc2.sketch());
+
+  std::vector<int32_t> combined;
+  combined.insert(combined.end(), data1.begin(), data1.end());
+  combined.insert(combined.end(), data2.begin(), data2.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> combined_col(combined.begin(), combined.end());
+  auto const exact =
+    cudf::distinct_count(combined_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID);
+
+  EXPECT_TRUE(is_reasonable_approximation(merger.estimate(), exact));
+}
+
+TEST_F(ApproxDistinctCount, SpanConstructorMergeMultiple)
+{
+  auto data1 = generate_data<int32_t>(1000, 60);
+  auto data2 = generate_data<int32_t>(1000, 80);
+  auto data3 = generate_data<int32_t>(1000, 100);
+  cudf::test::fixed_width_column_wrapper<int32_t> col1(data1.begin(), data1.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> col2(data2.begin(), data2.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> col3(data3.begin(), data3.end());
+
+  auto adc1 = cudf::approx_distinct_count(cudf::table_view({col1}));
+  auto adc2 = cudf::approx_distinct_count(cudf::table_view({col2}));
+  auto adc3 = cudf::approx_distinct_count(cudf::table_view({col3}));
+
+  auto merger = cudf::approx_distinct_count(adc1.sketch(), 12);
+  merger.merge(adc2.sketch());
+  merger.merge(adc3.sketch());
+
+  std::vector<int32_t> combined;
+  combined.insert(combined.end(), data1.begin(), data1.end());
+  combined.insert(combined.end(), data2.begin(), data2.end());
+  combined.insert(combined.end(), data3.begin(), data3.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> combined_col(combined.begin(), combined.end());
+  auto const exact =
+    cudf::distinct_count(combined_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID);
+
+  EXPECT_TRUE(is_reasonable_approximation(merger.estimate(), exact));
+}
+
+TEST_F(ApproxDistinctCount, SpanConstructorPrecisions)
+{
+  auto data = generate_data<int32_t>(2000, 150);
+  cudf::test::fixed_width_column_wrapper<int32_t> col(data.begin(), data.end());
+  cudf::table_view table({col});
+
+  for (auto precision : {10, 12, 14}) {
+    auto adc       = cudf::approx_distinct_count(table, precision);
+    auto from_span = cudf::approx_distinct_count(adc.sketch(), precision);
+    EXPECT_EQ(adc.estimate(), from_span.estimate());
+  }
+}

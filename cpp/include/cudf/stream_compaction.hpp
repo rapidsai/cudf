@@ -472,6 +472,25 @@ class approx_distinct_count {
                         nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
+  /**
+   * @brief Construct an approximate distinct count sketch from serialized sketch bytes.
+   *
+   * This constructor enables distributed distinct counting by allowing sketches to be
+   * constructed from serialized data. The sketch data is copied into the newly created
+   * object, which then owns its own independent storage.
+   *
+   * @warning The precision parameter must match the precision used to create the original
+   * sketch. The size of the sketch span must be exactly 2^precision bytes. Providing
+   * an incompatible sketch will produce incorrect results or errors.
+   *
+   * @param sketch_span The serialized sketch bytes to reconstruct from
+   * @param precision The precision parameter that was used to create the sketch (4-18)
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
+                        cudf::size_type precision,
+                        rmm::cuda_stream_view stream = cudf::get_default_stream());
+
   ~approx_distinct_count();
 
   approx_distinct_count(approx_distinct_count const&)            = delete;
