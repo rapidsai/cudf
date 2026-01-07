@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_factories.hpp>
@@ -38,7 +38,7 @@ std::unique_ptr<column> xxhash_64(table_view const& input,
   auto output_view      = output->mutable_view();
 
   // Compute the hash value for each row
-  thrust::tabulate(rmm::exec_policy(stream),
+  thrust::tabulate(rmm::exec_policy_nosync(stream),
                    output_view.begin<hash_value_type>(),
                    output_view.end<hash_value_type>(),
                    row_hasher.device_hasher<XXHash_64>(nullable, seed));
