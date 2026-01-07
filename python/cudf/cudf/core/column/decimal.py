@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import (
@@ -165,7 +164,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     f"Cannot cast a decimal from {self.dtype} to {dtype}"
                 )
         if len(self) > 0:
-            with acquire_spill_lock():
+            with self.access(mode="read", scope="internal"):
                 plc_column = (
                     plc.strings.convert.convert_fixed_point.from_fixed_point(
                         self.plc_column,
