@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -176,8 +176,8 @@ class device_row_comparator {
     }
 
     template <typename KeyType>
-    __device__ bool operator()(size_type const lhs_element_index,
-                               size_type const rhs_element_index) const noexcept
+    __device__ bool operator()(size_type lhs_element_index,
+                               size_type rhs_element_index) const noexcept
       requires(cudf::is_equality_comparable<KeyType, KeyType>())
     {
       auto const lidx = lhs.element<cudf::dictionary32>(lhs_element_index).value();
@@ -197,9 +197,9 @@ class device_row_comparator {
     }
 
    private:
-    column_device_view const lhs;
-    column_device_view const rhs;
-    PhysicalEqualityComparator const comparator;
+    column_device_view lhs;
+    column_device_view rhs;
+    PhysicalEqualityComparator comparator;
   };
 
   /**
