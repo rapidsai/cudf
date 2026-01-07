@@ -68,7 +68,7 @@ struct unprocessed_table_mapper {
   bitmask_type const* const _validity_mask;
   __device__ auto operator()(size_type idx) const noexcept
   {
-    return bit_is_set(_validity_mask, idx);  //
+    return bit_is_set(_validity_mask, idx);
   }
 };
 
