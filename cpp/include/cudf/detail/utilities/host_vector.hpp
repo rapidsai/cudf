@@ -100,8 +100,8 @@ class rmm_host_allocator {
 #endif
   template <typename ResourceType>
   rmm_host_allocator(ResourceType _mr, rmm::cuda_stream_view _stream)
-    : mr(_mr),
-      stream(_stream),
+    : mr(std::move(_mr)),
+      stream(std::move(_stream)),
       _is_device_accessible{
         cuda::mr::synchronous_resource_with<ResourceType, cuda::mr::device_accessible>}
   {
