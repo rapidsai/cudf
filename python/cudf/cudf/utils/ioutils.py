@@ -1768,7 +1768,6 @@ def _maybe_expand_directories(paths, glob_pattern, fs):
     if fs is None or glob_pattern is None:
         return paths
     expanded_paths = []
-
     for path in paths:
         if fs.isdir(path):
             dir_paths = fs.glob(fs.sep.join([path, glob_pattern]))
@@ -1819,7 +1818,6 @@ def get_reader_filepath_or_buffer(
 
     filepaths_or_buffers = []
     string_paths = [isinstance(source, str) for source in input_sources]
-
     if any(string_paths):
         # Sources are all strings. The strings are typically
         # file paths, but they may also be raw text strings.
