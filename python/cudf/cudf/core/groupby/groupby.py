@@ -816,9 +816,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
         # Materialize iterator to avoid consuming it during access context setup
         values_list = list(values)
-        with access_columns(  # type: ignore[assignment]
-            *values_list, mode="read", scope="internal"
-        ) as values_list:
+        with access_columns(*values_list, mode="read", scope="internal"):
             plc_columns = [col.plc_column for col in values_list]
             if not plc_columns:
                 plc_table = None
@@ -899,7 +897,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "All requested aggregations are unsupported."
             )
 
-        with access_columns(*values, mode="read", scope="internal") as values:
+        with access_columns(*values, mode="read", scope="internal"):
             with self._groupby as plc_groupby:
                 keys, results = (
                     plc_groupby.scan(requests)
@@ -926,7 +924,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _shift(
         self, values: tuple[ColumnBase, ...], periods: int, fill_values: list
     ) -> Generator[ColumnBase]:
-        with access_columns(*values, mode="read", scope="internal") as values:
+        with access_columns(*values, mode="read", scope="internal"):
             with self._groupby as plc_groupby:
                 _, shifts = plc_groupby.shift(
                     plc.table.Table([col.plc_column for col in values]),
@@ -947,7 +945,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _replace_nulls(
         self, values: tuple[ColumnBase, ...], method: str
     ) -> Generator[ColumnBase]:
-        with access_columns(*values, mode="read", scope="internal") as values:
+        with access_columns(*values, mode="read", scope="internal"):
             with self._groupby as plc_groupby:
                 _, replaced = plc_groupby.replace_nulls(
                     plc.Table([col.plc_column for col in values]),

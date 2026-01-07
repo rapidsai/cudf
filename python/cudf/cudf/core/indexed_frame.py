@@ -2932,10 +2932,8 @@ class IndexedFrame(Frame):
                 "Provided seed value has no effect for the hash method "
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
-        with access_columns(
-            *self._columns, mode="read", scope="internal"
-        ) as columns:
-            plc_table = plc.Table([c.plc_column for c in columns])
+        with access_columns(*self._columns, mode="read", scope="internal"):
+            plc_table = plc.Table([c.plc_column for c in self._columns])
             if method == "murmur3":
                 plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
             elif method == "xxhash32":
@@ -3277,9 +3275,7 @@ class IndexedFrame(Frame):
         if (keep_option := _keep_options.get(keep)) is None:
             raise ValueError('keep must be either "first", "last" or False')
 
-        with access_columns(  # type: ignore[assignment]
-            *columns, mode="read", scope="internal"
-        ) as columns:
+        with access_columns(*columns, mode="read", scope="internal"):
             plc_column = plc.stream_compaction.distinct_indices(
                 plc.Table([col.plc_column for col in columns]),
                 keep_option,
@@ -3300,17 +3296,23 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def _empty_like(self, keep_index: bool = True) -> Self:
-        with access_columns(
-            *(
-                itertools.chain(self.index._columns, self._columns)
-                if keep_index
-                else self._columns
-            ),
-            mode="read",
-            scope="internal",
-        ) as accessed_cols:
+        columns_to_access = (
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index
+            else self._columns
+        )
+        with access_columns(*columns_to_access, mode="read", scope="internal"):
             plc_table = plc.copying.empty_like(
-                plc.Table([col.plc_column for col in accessed_cols])
+                plc.Table(
+                    [
+                        col.plc_column
+                        for col in (
+                            itertools.chain(self.index._columns, self._columns)
+                            if keep_index
+                            else self._columns
+                        )
+                    ]
+                )
             )
             columns = [
                 ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
@@ -3334,9 +3336,9 @@ class IndexedFrame(Frame):
             if keep_index
             else self._columns
         )
-        with access_columns(  # type: ignore[assignment]
+        with access_columns(
             *source_columns_list, mode="read", scope="internal"
-        ) as source_columns_list:
+        ):
             columns_split = copying.columns_split(
                 source_columns_list,
                 splits,
@@ -5466,9 +5468,14 @@ class IndexedFrame(Frame):
             *itertools.chain(idx_cols, self._columns),
             mode="read",
             scope="internal",
-        ) as accessed_cols:
+        ):
             plc_table = plc.lists.explode_outer(
-                plc.Table([col.plc_column for col in accessed_cols]),
+                plc.Table(
+                    [
+                        col.plc_column
+                        for col in itertools.chain(idx_cols, self._columns)
+                    ]
+                ),
                 column_index + len(idx_cols),
             )
             exploded = [
@@ -5557,9 +5564,16 @@ class IndexedFrame(Frame):
             *itertools.chain(self.index._columns, self._columns),
             mode="read",
             scope="internal",
-        ) as accessed_cols:
+        ):
             plc_table = plc.reshape.tile(
-                plc.Table([col.plc_column for col in accessed_cols]),
+                plc.Table(
+                    [
+                        col.plc_column
+                        for col in itertools.chain(
+                            self.index._columns, self._columns
+                        )
+                    ]
+                ),
                 count,
             )
             tiled = [
