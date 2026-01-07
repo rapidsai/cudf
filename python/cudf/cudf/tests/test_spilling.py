@@ -1,14 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import contextlib
 import importlib
-import random
-import time
 import warnings
 import weakref
-from concurrent.futures import ThreadPoolExecutor
 
 import cupy
 import numpy as np
@@ -22,12 +19,7 @@ import cudf
 import cudf.core.buffer.spill_manager
 import cudf.options
 from cudf.core.abc import Serializable
-from cudf.core.buffer import (
-    Buffer,
-    acquire_spill_lock,
-    as_buffer,
-    get_spill_lock,
-)
+from cudf.core.buffer import Buffer, as_buffer
 from cudf.core.buffer.spill_manager import (
     SpillManager,
     get_global_manager,
@@ -38,7 +30,6 @@ from cudf.core.buffer.spill_manager import (
 from cudf.core.buffer.spillable_buffer import (
     SpillableBuffer,
     SpillableBufferOwner,
-    SpillLock,
 )
 from cudf.testing import assert_eq
 
@@ -101,8 +92,8 @@ def single_column_df_data(df: cudf.DataFrame) -> SpillableBuffer:
 
 
 def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
-    """Access `.base_data` of the column of a standard dataframe"""
-    ret = df._data._data["a"].base_data
+    """Access `.data` of the column of a standard dataframe"""
+    ret = df._data._data["a"].data
     assert isinstance(ret, SpillableBuffer)
     return ret
 
@@ -159,7 +150,7 @@ def test_spillable_buffer(manager: SpillManager):
 @pytest.mark.parametrize(
     "attribute",
     [
-        "get_ptr",
+        "ptr",
         "memoryview",
         "is_spilled",
         "spillable",
@@ -215,15 +206,25 @@ def test_creations(manager: SpillManager):
 
 
 def test_spillable_df_groupby(manager: SpillManager):
+    """Test that GroupBy context manager enters/exits access contexts properly."""
     df = cudf.DataFrame({"a": [1, 1, 1]})
     gb = df.groupby("a")
+
+    # Before using context manager, no spill locks
     assert len(single_column_df_base_data(df).owner._spill_locks) == 0
-    gb._groupby
-    # `gb._groupby`, which is cached on `gb`, holds a spill lock
-    assert len(single_column_df_base_data(df).owner._spill_locks) == 1
-    assert not single_column_df_data(df).spillable
-    del gb
+
+    with gb._groupby:
+        assert len(single_column_df_base_data(df).owner._spill_locks) == 1
+        assert not single_column_df_data(df).spillable
+
+    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
     assert single_column_df_data(df).spillable
+
+    # Operations should work correctly
+    result = gb.sum()  # noqa: F841
+
+    # After operation completes, no persistent locks
+    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
 
 
 def test_spilling_buffer(manager: SpillManager):
@@ -422,56 +423,14 @@ def test_get_ptr(manager: SpillManager, target):
     buf = as_buffer(data=mem, exposed=False)
     assert buf.spillable
     assert len(buf.owner._spill_locks) == 0
-    with acquire_spill_lock():
-        buf.get_ptr(mode="read")
+    with buf.access(mode="read", scope="internal"):
+        buf.ptr
         assert not buf.spillable
-        with acquire_spill_lock():
-            buf.get_ptr(mode="read")
+        with buf.access(mode="read", scope="internal"):
+            buf.ptr
             assert not buf.spillable
         assert not buf.spillable
     assert buf.spillable
-
-
-def test_get_spill_lock(manager: SpillManager):
-    @acquire_spill_lock()
-    def f(sleep=False, nest=0):
-        if sleep:
-            time.sleep(random.random() / 100)
-        if nest:
-            return f(nest=nest - 1)
-        return get_spill_lock()
-
-    assert get_spill_lock() is None
-    slock = f()
-    assert isinstance(slock, SpillLock)
-    assert get_spill_lock() is None
-    slock = f(nest=2)
-    assert isinstance(slock, SpillLock)
-    assert get_spill_lock() is None
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures_with_spill_lock = []
-        futures_without_spill_lock = []
-        for _ in range(100):
-            futures_with_spill_lock.append(
-                executor.submit(f, sleep=True, nest=1)
-            )
-            futures_without_spill_lock.append(
-                executor.submit(f, sleep=True, nest=1)
-            )
-        all(isinstance(f.result(), SpillLock) for f in futures_with_spill_lock)
-        all(f is None for f in futures_without_spill_lock)
-
-
-def test_get_spill_lock_no_manager():
-    """When spilling is disabled, get_spill_lock() should return None always"""
-
-    @acquire_spill_lock()
-    def f():
-        return get_spill_lock()
-
-    assert get_spill_lock() is None
-    assert f() is None
 
 
 @pytest.mark.parametrize("target", ["gpu", "cpu"])
@@ -546,7 +505,7 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     assert len(buf.owner._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], Buffer)
-    assert frames[0].get_ptr(mode="read") == buf.get_ptr(mode="read")
+    assert frames[0].ptr == buf.ptr
 
     frames[0] = cupy.array(frames[0], copy=True)
     df2 = protocol.deserialize(header, frames)
@@ -711,8 +670,8 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
 
         # Write access trigger copy of `a` into `b` but since `a` is spilled
         # the copy is done in host memory and `a` remains spilled.
-        with acquire_spill_lock():
-            b.get_ptr(mode="write")
+        with b.access(mode="write"):
+            b.ptr
         assert a.is_spilled
         assert not b.is_spilled
 
@@ -734,8 +693,8 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
         b = a.copy(deep=False)
         assert a.owner == b.owner
         # Write access trigger copy of `a` into `b` in device memory
-        with acquire_spill_lock():
-            b.get_ptr(mode="write")
+        with b.access(mode="write"):
+            b.ptr
         assert a.owner != b.owner
         assert not a.is_spilled
         assert not b.is_spilled
@@ -748,14 +707,14 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
         assert b.is_spilled
 
         # Read access with a spill lock unspill `a` and allows copy-on-write
-        with acquire_spill_lock():
-            a.get_ptr(mode="read")
+        with a.access(mode="read", scope="internal"):
+            a.ptr
         b = a.copy(deep=False)
         assert a.owner == b.owner
         assert not a.is_spilled
 
         # Read access without a spill lock exposes `a` and forces a deep copy
-        a.get_ptr(mode="read")
+        a.ptr
         b = a.copy(deep=False)
         assert a.owner != b.owner
         assert not a.is_spilled
@@ -770,3 +729,101 @@ def test_scatter_by_map():
         result = df.scatter_by_map(data)
     for i, res in zip(data, result, strict=True):
         assert_eq(res, cudf.DataFrame([i], index=[i]))
+
+
+def test_spillable_buffer_access_scope_internal(manager: SpillManager):
+    """Test internal scope creates temporary spill lock."""
+    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+    assert buf.spillable
+
+    with buf.access(mode="read", scope="internal"):
+        # Buffer is spill locked during context
+        assert not buf.spillable
+        assert len(buf.owner._spill_locks) == 1
+        # Ptr access should work
+        assert buf.ptr != 0
+
+    # After context, lock is released
+    assert buf.spillable
+    assert len(buf.owner._spill_locks) == 0
+
+
+def test_spillable_buffer_access_scope_external(manager: SpillManager):
+    """Test external scope marks buffer as exposed."""
+    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+    assert buf.spillable
+    assert not buf.owner.exposed
+
+    with buf.access(mode="read", scope="external"):
+        assert not buf.spillable
+        assert buf.owner.exposed
+        assert buf.ptr != 0
+
+    # After context, buffer remains exposed
+    assert not buf.spillable
+    assert buf.owner.exposed
+
+
+def test_spillable_buffer_access_nesting(manager: SpillManager):
+    """Test nested access contexts work correctly."""
+    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+
+    with buf.access(mode="read", scope="internal"):
+        assert len(buf.owner._spill_locks) == 1
+
+        with buf.access(mode="read", scope="internal"):
+            # Two locks active
+            assert len(buf.owner._spill_locks) == 2
+            assert not buf.spillable
+
+        # One lock released
+        assert len(buf.owner._spill_locks) == 1
+        assert not buf.spillable
+
+    # All locks released
+    assert len(buf.owner._spill_locks) == 0
+    assert buf.spillable
+
+
+def test_spillable_buffer_access_scope_defaults_to_internal(
+    manager: SpillManager,
+):
+    """Test that scope parameter defaults to internal."""
+    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+
+    # Should default to scope="internal" if not provided
+    with buf.access(mode="read"):
+        assert not buf.spillable
+        assert len(buf.owner._spill_locks) == 1
+        buf.ptr  # Should work
+
+    # After context, lock is released
+    assert buf.spillable
+    assert len(buf.owner._spill_locks) == 0
+
+
+def test_spillable_buffer_access_invalid_scope(manager: SpillManager):
+    """Test that invalid scope values are rejected."""
+    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+
+    with pytest.raises(ValueError, match="Invalid scope"):
+        with buf.access(mode="read", scope="invalid"):
+            pass
+
+
+def test_column_access_propagates_scope(manager: SpillManager):
+    """Test Column.access() propagates scope to buffers."""
+    from cudf.core.column import as_column
+
+    col = as_column([1, 2, 3, 4, 5])
+
+    with col.access(mode="read", scope="internal"):
+        # All buffers should be spill locked
+        if col.data:
+            assert not col.data.spillable
+            assert len(col.data.owner._spill_locks) >= 1
+
+    # After context, all buffers spillable
+    if col.data:
+        assert col.data.spillable
+        assert len(col.data.owner._spill_locks) == 0

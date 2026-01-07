@@ -1,8 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import glob
 import os
+from contextlib import nullcontext
 from datetime import datetime, timezone
 
 import pytest
@@ -50,11 +51,21 @@ def test_filelist_read_orc_defaults():
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 @pytest.mark.parametrize("columns", [["time", "date"], ["time"]])
 def test_read_orc_cols(engine, columns):
-    df1 = cudf.read_orc(sample_orc, engine=engine, columns=columns)
+    if engine == "pyarrow":
+        ctx = pytest.warns(
+            UserWarning, match="Using CPU via PyArrow to read ORC dataset."
+        )
+    else:
+        ctx = nullcontext()
 
-    df2 = dask_cudf.read_orc(sample_orc, engine=engine, columns=columns)
+    with ctx:
+        df1 = cudf.read_orc(sample_orc, engine=engine, columns=columns)
 
-    dd.assert_eq(df1, df2, check_index=False)
+    with ctx:
+        df2 = dask_cudf.read_orc(sample_orc, engine=engine, columns=columns)
+
+    with ctx:
+        dd.assert_eq(df1, df2, check_index=False)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
@@ -80,9 +91,18 @@ def test_read_orc_cols(engine, columns):
     ],
 )
 def test_read_orc_filtered(tmpdir, engine, predicate, expected_len):
-    df = dask_cudf.read_orc(sample_orc, engine=engine, filters=predicate)
+    if engine == "pyarrow":
+        ctx = pytest.warns(
+            UserWarning, match="Using CPU via PyArrow to read ORC dataset."
+        )
+    else:
+        ctx = nullcontext()
 
-    dd.assert_eq(len(df), expected_len)
+    with ctx:
+        df = dask_cudf.read_orc(sample_orc, engine=engine, filters=predicate)
+
+    with ctx:
+        dd.assert_eq(len(df), expected_len)
 
 
 def test_read_orc_first_file_empty(tmpdir):
