@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -53,10 +53,10 @@ from cudf.api.types import (
 )
 from cudf.core import indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
+    access_columns,
     as_column,
     column_empty,
     concat_columns,
@@ -1970,11 +1970,35 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         ignore = ignore_index or are_all_range_index
         index_names = None if ignore else tables[0]._index_names
         column_names = tables[0]._column_names
-        with acquire_spill_lock():
+        with access_columns(
+            *(
+                col
+                for table in tables
+                for col in (
+                    table._columns
+                    if ignore
+                    else itertools.chain(table.index._columns, table._columns)
+                )
+            ),
+            mode="read",
+            scope="internal",
+        ) as accessed_cols:
+            # Build mapping from original columns to accessed columns
+            col_map = {}
+            accessed_idx = 0
+            for table in tables:
+                for col in (
+                    table._columns
+                    if ignore
+                    else itertools.chain(table.index._columns, table._columns)
+                ):
+                    col_map[id(col)] = accessed_cols[accessed_idx]
+                    accessed_idx += 1
+
             plc_tables = [
                 plc.Table(
                     [
-                        c.plc_column
+                        col_map[id(c)].plc_column
                         for c in (
                             table._columns
                             if ignore
@@ -2709,9 +2733,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if lo < 0 or hi >= map_size:
                 raise ValueError("Partition map has invalid values")
 
-        with acquire_spill_lock():
+        # Materialize iterator to avoid consuming it during access context setup
+        source_columns_list = list(source_columns)
+        with access_columns(
+            *source_columns_list, map_index, mode="read", scope="internal"
+        ) as (*source_columns_list, map_index):
             plc_table, offsets = plc.partitioning.partition(
-                plc.Table([col.plc_column for col in source_columns]),
+                plc.Table([col.plc_column for col in source_columns_list]),
                 map_index.plc_column,
                 map_size,
             )
@@ -5109,9 +5137,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         else:
             cols = self._columns
 
-        with acquire_spill_lock():
+        # Materialize iterator to avoid consuming it during access context setup
+        cols_list = list(cols)
+        with access_columns(*cols_list, mode="read", scope="internal"):
             plc_table, offsets = plc.partitioning.hash_partition(
-                plc.Table([col.plc_column for col in cols]),
+                plc.Table([col.plc_column for col in cols_list]),
                 key_indices,
                 nparts,
             )
@@ -6165,9 +6195,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise TypeError(msg)
 
         if method == "table":
-            with acquire_spill_lock():
+            with access_columns(
+                *self._columns, mode="read", scope="internal"
+            ) as columns:
                 plc_table = plc.quantiles.quantiles(
-                    plc.Table([c.plc_column for c in self._columns]),
+                    plc.Table([c.plc_column for c in columns]),
                     qs,
                     plc.types.Interpolation[
                         (interpolation or "nearest").upper()
@@ -7460,16 +7492,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(len(unique_named_levels))
 
         # Each column name should tile itself by len(df) times
-        with acquire_spill_lock():
+        cols = [
+            as_column(unique_named_levels.get_level_values(i))
+            for i in range(unique_named_levels.nlevels)
+        ]
+        with access_columns(*cols, mode="read", scope="internal"):
             plc_table = plc.reshape.tile(
-                plc.Table(
-                    [
-                        as_column(
-                            unique_named_levels.get_level_values(i)
-                        ).plc_column
-                        for i in range(unique_named_levels.nlevels)
-                    ]
-                ),
+                plc.Table([col.plc_column for col in cols]),
                 self.shape[0],
             )
             tiled_index = [
@@ -7546,10 +7575,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
             # homogenize the dtypes of the columns
-            homogenized = (
+            homogenized = [
                 col.astype(common_type) if col is not None else all_nulls()
                 for col in columns
-            )
+            ]
             if (
                 cudf.get_option("mode.pandas_compatible")
                 and common_type == "object"
@@ -7561,7 +7590,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                             "non-object dtypes is not supported. "
                         )
 
-            with acquire_spill_lock():
+            with access_columns(  # type: ignore[assignment]
+                *homogenized, mode="read", scope="internal"
+            ) as homogenized:
                 interleaved_col = ColumnBase.from_pylibcudf(
                     plc.reshape.interleave_columns(
                         plc.Table([col.plc_column for col in homogenized])
@@ -8097,7 +8128,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise ValueError(
                 "interleave_columns does not support 'category' dtype."
             )
-        with acquire_spill_lock():
+        with access_columns(*self._columns, mode="read", scope="internal"):
             result_col = ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table([col.plc_column for col in self._columns])
@@ -8105,14 +8136,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         return self._constructor_sliced._from_column(result_col)
 
-    @acquire_spill_lock()
     def _compute_column(self, expr: str) -> ColumnBase:
         """Helper function for eval"""
-        plc_column = plc.transform.compute_column(
-            plc.Table([col.plc_column for col in self._columns]),
-            plc.expressions.to_expression(expr, self._column_names),
-        )
-        return ColumnBase.from_pylibcudf(plc_column)
+        with access_columns(*self._columns, mode="read", scope="internal"):
+            plc_column = plc.transform.compute_column(
+                plc.Table([col.plc_column for col in self._columns]),
+                plc.expressions.to_expression(expr, self._column_names),
+            )
+            return ColumnBase.from_pylibcudf(plc_column)
 
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
