@@ -661,60 +661,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         """
         return _SeriesAtIndexer(self)
 
-    @classmethod
-    @_performance_tracking
-    def from_pandas(cls, s: pd.Series, nan_as_null=no_default) -> Series:
-        """
-        Convert from a Pandas Series.
-
-        Parameters
-        ----------
-        s : Pandas Series object
-            A Pandas Series object which has to be converted
-            to cuDF Series.
-        nan_as_null : bool, Default None
-            If ``None``/``True``, converts ``np.nan`` values to
-            ``null`` values.
-            If ``False``, leaves ``np.nan`` values as is.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> import numpy as np
-        >>> data = [10, 20, 30, np.nan]
-        >>> pds = pd.Series(data, dtype='float64')
-        >>> cudf.Series.from_pandas(pds)
-        0    10.0
-        1    20.0
-        2    30.0
-        3    <NA>
-        dtype: float64
-        >>> cudf.Series.from_pandas(pds, nan_as_null=False)
-        0    10.0
-        1    20.0
-        2    30.0
-        3     NaN
-        dtype: float64
-        """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Use the Series constructor instead.",
-            FutureWarning,
-        )
-        if nan_as_null is no_default:
-            nan_as_null = (
-                False if cudf.get_option("mode.pandas_compatible") else None
-            )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            result = cls(s, nan_as_null=nan_as_null)
-        return result
-
     @property
     @_performance_tracking
     def is_unique(self) -> bool:
@@ -2055,36 +2001,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         res.attrs = self.attrs
         return res
 
-    @property
-    @_performance_tracking
-    def data(self):
-        """The gpu buffer for the data
-
-        Returns
-        -------
-        out : The GPU buffer of the Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2, 3, 4])
-        >>> series
-        0    1
-        1    2
-        2    3
-        3    4
-        dtype: int64
-        >>> np.array(series.data.memoryview())
-        array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
-               0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
-        """
-        warnings.warn(
-            "Series.data is deprecated and will be removed in a future version. "
-            "Use Series.to_pylibcudf()[0].data() instead.",
-            FutureWarning,
-        )
-        return self._column.data
-
     @_performance_tracking
     def astype(
         self,
@@ -3227,17 +3143,17 @@ class Series(SingleColumnFrame, IndexedFrame):
         6     3.0
         7    <NA>
         dtype: float64
-        >>> sr.value_counts(dropna=False)
-        3.0     3
-        2.0     2
-        <NA>    2
+        >>> sr.value_counts(dropna=False).sort_index()
         1.0     1
+        2.0     2
+        3.0     3
+        <NA>    2
         Name: count, dtype: int64
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])
-        >>> s.value_counts(bins=3)
-        (2.0, 3.0]      2
+        >>> s.value_counts(bins=3).sort_index()
         (0.996, 2.0]    2
+        (2.0, 3.0]      2
         (3.0, 4.0]      1
         Name: count, dtype: int64
         """

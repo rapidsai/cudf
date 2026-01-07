@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import pandas as pd
 import pylibcudf as plc
 
 from cudf.api.types import is_scalar
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import access_columns
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -455,7 +455,6 @@ def to_csv(
         return path_or_buf.read()
 
 
-@acquire_spill_lock()
 def _plc_write_csv(
     table: DataFrame,
     path_or_buf=None,
@@ -471,47 +470,51 @@ def _plc_write_csv(
         if index
         else table._columns
     )
-    columns = [col.plc_column for col in iter_columns]
-    col_names = []
-    if header:
-        table_names = (
-            na_rep if name is None or pd.isnull(name) else name
-            for name in table._column_names
-        )
-        iter_names = (
-            itertools.chain(table.index.names, table_names)
-            if index
-            else table_names
-        )
-        all_names = list(iter_names)
-        col_names = [
-            '""'
-            if (name in (None, "") and len(all_names) == 1)
-            else (str(name) if name not in (None, "") else "")
-            for name in all_names
-        ]
-    try:
-        plc.io.csv.write_csv(
-            (
-                plc.io.csv.CsvWriterOptions.builder(
-                    plc.io.SinkInfo([path_or_buf]), plc.Table(columns)
-                )
-                .names(col_names)
-                .na_rep(na_rep)
-                .include_header(header)
-                .rows_per_chunk(rows_per_chunk)
-                .line_terminator(str(lineterminator))
-                .inter_column_delimiter(str(sep))
-                .true_value("True")
-                .false_value("False")
-                .build()
+    # Materialize iterator to avoid consuming it during access context setup
+    columns_list = list(iter_columns)
+
+    with access_columns(*columns_list, mode="read", scope="internal"):
+        columns = [col.plc_column for col in columns_list]
+        col_names = []
+        if header:
+            table_names = (
+                na_rep if name is None or pd.isnull(name) else name
+                for name in table._column_names
             )
-        )
-    except OverflowError as err:
-        raise OverflowError(
-            f"Writing CSV file with chunksize={rows_per_chunk} failed. "
-            "Consider providing a smaller chunksize argument."
-        ) from err
+            iter_names = (
+                itertools.chain(table.index.names, table_names)
+                if index
+                else table_names
+            )
+            all_names = list(iter_names)
+            col_names = [
+                '""'
+                if (name in (None, "") and len(all_names) == 1)
+                else (str(name) if name not in (None, "") else "")
+                for name in all_names
+            ]
+        try:
+            plc.io.csv.write_csv(
+                (
+                    plc.io.csv.CsvWriterOptions.builder(
+                        plc.io.SinkInfo([path_or_buf]), plc.Table(columns)
+                    )
+                    .names(col_names)
+                    .na_rep(na_rep)
+                    .include_header(header)
+                    .rows_per_chunk(rows_per_chunk)
+                    .line_terminator(str(lineterminator))
+                    .inter_column_delimiter(str(sep))
+                    .true_value("True")
+                    .false_value("False")
+                    .build()
+                )
+            )
+        except OverflowError as err:
+            raise OverflowError(
+                f"Writing CSV file with chunksize={rows_per_chunk} failed. "
+                "Consider providing a smaller chunksize argument."
+            ) from err
 
 
 def _validate_args(

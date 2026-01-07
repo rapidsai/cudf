@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -112,6 +112,15 @@ struct subpass_intermediate_data {
   // skip_rows and num_rows values for this particular subpass. in absolute row indices.
   size_t skip_rows;
   size_t num_rows;
+
+  // String offset buffer for non-dictionary, non-FLBA string columns
+  // Contains pre-computed offsets into the string data. Allocated once per subpass
+  // in preprocess_subpass_pages() and reused across all output chunks in the subpass.
+  rmm::device_uvector<uint32_t> string_offset_buffer{0, cudf::get_default_stream()};
+
+  // For each page, the index into the column's string offset buffer
+  // Used for non-dictionary, non-FLBA string columns
+  rmm::device_uvector<size_t> page_string_offset_indices{0, cudf::get_default_stream()};
 };
 
 /**

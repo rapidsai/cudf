@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -21,7 +22,6 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -62,8 +62,12 @@ void reader_impl::build_string_dict_indices()
                    pass.pages.d_end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
 
-  size_t const total_str_dict_indexes = thrust::reduce(
-    rmm::exec_policy(_stream), str_dict_index_count.begin(), str_dict_index_count.end());
+  auto const total_str_dict_indexes = cudf::detail::reduce(str_dict_index_count.begin(),
+                                                           str_dict_index_count.end(),
+                                                           size_t{0},
+                                                           cuda::std::plus<size_t>{},
+                                                           _stream);
+
   if (total_str_dict_indexes == 0) { return; }
 
   // convert to offsets
@@ -377,27 +381,28 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                     compute_page_offset_count{subpass.pages, pass.chunks, skip_rows, num_rows});
 
   // Compute prefix sum (exclusive scan) to get indices for each page
-  _page_string_offset_indices = rmm::device_uvector<size_t>(num_pages, _stream);
+  subpass.page_string_offset_indices = rmm::device_uvector<size_t>(num_pages, _stream);
   thrust::exclusive_scan(rmm::exec_policy_nosync(_stream),
                          d_page_offset_counts.begin(),
                          d_page_offset_counts.end(),
-                         _page_string_offset_indices.begin());
+                         subpass.page_string_offset_indices.begin());
 
   // Compute the total number of offsets needed
-  size_t total_num_offsets = thrust::reduce(
-    rmm::exec_policy_nosync(_stream), d_page_offset_counts.begin(), d_page_offset_counts.end());
-
-  _stream.synchronize();
+  auto const total_num_offsets = cudf::detail::reduce(d_page_offset_counts.begin(),
+                                                      d_page_offset_counts.end(),
+                                                      size_t{0},
+                                                      cuda::std::plus<size_t>{},
+                                                      _stream);
 
   // Allocate the string offset buffer
-  _string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
+  subpass.string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
 
   // Set the string offset buffer for non-dictionary, non-FLBA string columns
   for (size_t col_idx = 0; col_idx < pass.chunks.size(); ++col_idx) {
     auto& chunk = pass.chunks[col_idx];
     // Check if this is a string column without dictionary & not a fixed length byte array
     if (preprocess_offsets(chunk)) {
-      chunk.column_string_offset_base = _string_offset_buffer.data();
+      chunk.column_string_offset_base = subpass.string_offset_buffer.data();
     }
   }
 
@@ -408,7 +413,7 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
   // Pre-process string offsets for non-dictionary string columns
   detail::preprocess_string_offsets(subpass.pages,
                                     pass.chunks,
-                                    _page_string_offset_indices,
+                                    subpass.page_string_offset_indices,
                                     _subpass_page_mask,
                                     skip_rows,
                                     num_rows,
@@ -608,7 +613,7 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
   // absolute row index for the whole file. chunk_row in PageInfo is relative to the beginning of
   // the chunk. so in the kernels, chunk.start_row + page.chunk_row gives us the absolute row index
   if (is_estimate_row_counts == is_estimate_row_counts::YES) {
-    thrust::for_each(rmm::exec_policy(_stream),
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
                      pass.pages.d_begin(),
                      pass.pages.d_end(),
                      set_list_row_count_estimate{pass.chunks});
@@ -731,6 +736,16 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                      update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
   }
 
+  // For string columns, preprocess offsets early so we can reuse them for size computation.
+  // This applies to both chunked and non-chunked reads to avoid redundant scanning.
+  if (subpass.kernel_mask & STRINGS_MASK) {
+    // For plain-encoded strings, preprocess offsets early so we can reuse them.
+    // Allocate for the full subpass range (will be extra memory for boundary pages in chunked
+    // reads). The compute_page_string_offset_indices function will filter to only plain-encoded
+    // string pages, and the allocation will be empty if there are none.
+    compute_page_string_offset_indices(pass.skip_rows, pass.num_rows);
+  }
+
   // compute string sizes if necessary. if we are doing chunking, we need to know
   // the sizes of all strings so we can properly compute chunk boundaries.
   if ((chunk_read_limit > 0) && (subpass.kernel_mask & STRINGS_MASK)) {
@@ -739,11 +754,13 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
         return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
                is_treat_fixed_length_as_string(chunk.logical_type);
       });
+
     if (!_has_page_index || has_flba) {
       constexpr bool compute_all_string_sizes = true;
       compute_page_string_sizes_pass1(subpass.pages,
                                       pass.chunks,
                                       _subpass_page_mask,
+                                      subpass.page_string_offset_indices,
                                       pass.skip_rows,
                                       pass.num_rows,
                                       subpass.kernel_mask,
@@ -809,9 +826,13 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   max_row             = std::min<size_t>(max_row, pass_end);
   CUDF_EXPECTS(max_row > subpass.skip_rows, "Unexpected short subpass", std::underflow_error);
   // Limit the number of rows to read in this subpass to the cudf's column size limit - 1 (for
-  // lists)
-  subpass.num_rows =
-    std::min<size_t>(std::numeric_limits<size_type>::max() - 1, max_row - subpass.skip_rows);
+  // lists). Only apply this limit when chunking is enabled.
+  auto const max_num_rows = max_row - subpass.skip_rows;
+  if (_output_chunk_read_limit > 0) {
+    subpass.num_rows = std::min<size_t>(std::numeric_limits<size_type>::max() - 1, max_num_rows);
+  } else {
+    subpass.num_rows = max_num_rows;
+  }
 
   // now split up the output into chunks as necessary
   compute_output_chunks_for_subpass();
@@ -928,12 +949,13 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
                                         get_reduction_key{subpass.pages.size()});
 
       // Find the size of each column
-      thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
-                            reduction_keys,
-                            reduction_keys + num_keys_this_iter,
-                            size_input.cbegin(),
-                            thrust::make_discard_iterator(),
-                            sizes.d_begin() + (key_start / subpass.pages.size()));
+      cudf::detail::reduce_by_key(reduction_keys,
+                                  reduction_keys + num_keys_this_iter,
+                                  size_input.cbegin(),
+                                  thrust::make_discard_iterator(),
+                                  sizes.d_begin() + (key_start / subpass.pages.size()),
+                                  cuda::std::plus<>{},
+                                  _stream);
 
       // For nested hierarchies, compute per-page start offset
       thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
@@ -1012,12 +1034,13 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
 
   // now sum up page sizes
   rmm::device_uvector<int> reduce_keys(d_col_sizes.size(), _stream);
-  thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
-                        page_keys,
-                        page_keys + subpass.pages.size(),
-                        val_iter,
-                        reduce_keys.begin(),
-                        d_col_sizes.begin());
+  cudf::detail::reduce_by_key(page_keys,
+                              page_keys + subpass.pages.size(),
+                              val_iter,
+                              reduce_keys.begin(),
+                              d_col_sizes.begin(),
+                              cuda::std::plus<>{},
+                              _stream);
 
   return cudf::detail::make_host_vector(d_col_sizes, _stream);
 }
