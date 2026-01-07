@@ -391,9 +391,8 @@ class SpillableBufferOwner(BufferOwner):
             self.mark_exposed()
         else:
             # If we have context-based spill locks, unspill if needed
-            with self.lock:
-                if self.is_spilled:
-                    self.spill(target="gpu")
+            if self.is_spilled:
+                self.spill(target="gpu")
             self._last_accessed = time.monotonic()
         return self._ptr
 
