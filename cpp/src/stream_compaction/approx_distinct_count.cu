@@ -104,7 +104,7 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
   : _impl{cuco::precision{precision},
           cuda::std::identity{},
           rmm::mr::polymorphic_allocator<cuda::std::byte>{},
-          cuda::stream_ref{stream.value()}}
+          stream}
 {
   auto const num_rows = input.num_rows();
   if (num_rows == 0) { return; }
@@ -118,10 +118,10 @@ approx_distinct_count::approx_distinct_count(cuda::std::span<cuda::std::byte> sk
   : _impl{cuco::precision{precision},
           cuda::std::identity{},
           rmm::mr::polymorphic_allocator<cuda::std::byte>{},
-          cuda::stream_ref{stream.value()}}
+          stream}
 {
   auto sketch_ref = hll_type::ref_type<>{sketch_span, cuda::std::identity{}};
-  _impl.merge_async(sketch_ref, cuda::stream_ref{stream.value()});
+  _impl.merge_async(sketch_ref, stream);
 }
 
 void approx_distinct_count::add(table_view const& input,
@@ -144,10 +144,10 @@ void approx_distinct_count::add(table_view const& input,
       auto const d_table    = table_device_view::create(input, stream);
       auto const nan_hasher = nan_to_null_hasher{hash_key, *d_table};
       auto const hash_iter  = cudf::detail::make_counting_transform_iterator(0, nan_hasher);
-      _impl.add_async(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
+      _impl.add_async(hash_iter, hash_iter + num_rows, stream);
     } else {
       auto const hash_iter = cudf::detail::make_counting_transform_iterator(0, hash_key);
-      _impl.add_async(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
+      _impl.add_async(hash_iter, hash_iter + num_rows, stream);
     }
   } else {
     // Exclude nulls
@@ -156,27 +156,24 @@ void approx_distinct_count::add(table_view const& input,
 
     if (nan_handling == nan_policy::NAN_IS_VALID) {
       if (!has_nulls) {
-        _impl.add_async(hash_iter, hash_iter + num_rows, cuda::stream_ref{stream.value()});
+        _impl.add_async(hash_iter, hash_iter + num_rows, stream);
       } else {
         auto const row_bitmask =
           cudf::detail::bitmask_and(input, stream, cudf::get_current_device_resource_ref()).first;
         auto const pred = row_is_valid{static_cast<bitmask_type const*>(row_bitmask.data())};
-        _impl.add_if_async(
-          hash_iter, hash_iter + num_rows, stencil, pred, cuda::stream_ref{stream.value()});
+        _impl.add_if_async(hash_iter, hash_iter + num_rows, stencil, pred, stream);
       }
     } else {
       auto const d_table = table_device_view::create(input, stream);
       if (!has_nulls) {
         auto const pred = check_nans_predicate{*d_table, nullptr};
-        _impl.add_if_async(
-          hash_iter, hash_iter + num_rows, stencil, pred, cuda::stream_ref{stream.value()});
+        _impl.add_if_async(hash_iter, hash_iter + num_rows, stencil, pred, stream);
       } else {
         auto const row_bitmask =
           cudf::detail::bitmask_and(input, stream, cudf::get_current_device_resource_ref()).first;
         auto const bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
         auto const pred        = check_nans_predicate{*d_table, bitmask_ptr};
-        _impl.add_if_async(
-          hash_iter, hash_iter + num_rows, stencil, pred, cuda::stream_ref{stream.value()});
+        _impl.add_if_async(hash_iter, hash_iter + num_rows, stencil, pred, stream);
       }
     }
   }
@@ -184,21 +181,21 @@ void approx_distinct_count::add(table_view const& input,
 
 void approx_distinct_count::merge(approx_distinct_count const& other, rmm::cuda_stream_view stream)
 {
-  _impl.merge_async(other._impl, cuda::stream_ref{stream.value()});
+  _impl.merge_async(other._impl, stream);
 }
 
 void approx_distinct_count::merge(cuda::std::span<cuda::std::byte> sketch_span,
                                   rmm::cuda_stream_view stream)
 {
   auto other_ref = hll_type::ref_type<>{sketch_span, cuda::std::identity{}};
-  _impl.merge_async(other_ref, cuda::stream_ref{stream.value()});
+  _impl.merge_async(other_ref, stream);
 }
 
 cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept { return _impl.sketch(); }
 
 cudf::size_type approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
 {
-  return static_cast<cudf::size_type>(_impl.estimate(cuda::stream_ref{stream.value()}));
+  return static_cast<cudf::size_type>(_impl.estimate(stream));
 }
 
 }  // namespace detail
