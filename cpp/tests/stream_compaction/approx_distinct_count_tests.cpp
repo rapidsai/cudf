@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -664,4 +665,64 @@ TEST_F(ApproxDistinctCount, SpanConstructorPrecisions)
     auto from_span = cudf::approx_distinct_count(adc.sketch(), precision);
     EXPECT_EQ(adc.estimate(), from_span.estimate());
   }
+}
+
+TEST_F(ApproxDistinctCount, ListColumn)
+{
+  // Generate 2000 lists with 100 distinct patterns (i % 100)
+  // Use offsets and flat values to build the list column
+  constexpr int num_rows     = 2000;
+  constexpr int num_distinct = 100;
+
+  // Build flat values: each list [val, val+1] where val = i % num_distinct
+  std::vector<int32_t> values;
+  std::vector<int32_t> offsets;
+  values.reserve(num_rows * 2);
+  offsets.reserve(num_rows + 1);
+  offsets.push_back(0);
+  for (int i = 0; i < num_rows; ++i) {
+    int const val = i % num_distinct;
+    values.push_back(val);
+    values.push_back(val + 1);
+    offsets.push_back(static_cast<int32_t>(values.size()));
+  }
+
+  cudf::test::fixed_width_column_wrapper<int32_t> values_col(values.begin(), values.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> offsets_col(offsets.begin(), offsets.end());
+  auto input_col = cudf::make_lists_column(
+    num_rows, offsets_col.release(), values_col.release(), 0, rmm::device_buffer{});
+  cudf::table_view input_table({*input_col});
+
+  auto adc          = cudf::approx_distinct_count(input_table);
+  auto approx_count = adc.estimate();
+
+  EXPECT_TRUE(is_reasonable_approximation(approx_count, num_distinct))
+    << "Exact: " << num_distinct << ", Approx: " << approx_count;
+}
+
+TEST_F(ApproxDistinctCount, StructColumn)
+{
+  // Generate 2000 structs with 100 distinct patterns
+  // Each struct has fields {i % 100, "str_" + (i % 100)}
+  constexpr int num_rows     = 2000;
+  constexpr int num_distinct = 100;
+
+  auto int_data = generate_data<int32_t>(num_rows, num_distinct);
+  cudf::test::fixed_width_column_wrapper<int32_t> field1(int_data.begin(), int_data.end());
+
+  std::vector<std::string> str_data;
+  str_data.reserve(num_rows);
+  for (int i = 0; i < num_rows; ++i) {
+    str_data.push_back("str_" + std::to_string(i % num_distinct));
+  }
+  cudf::test::strings_column_wrapper field2(str_data.begin(), str_data.end());
+
+  cudf::test::structs_column_wrapper input_col({field1, field2});
+  cudf::table_view input_table({input_col});
+
+  auto adc          = cudf::approx_distinct_count(input_table);
+  auto approx_count = adc.estimate();
+
+  EXPECT_TRUE(is_reasonable_approximation(approx_count, num_distinct))
+    << "Exact: " << num_distinct << ", Approx: " << approx_count;
 }
