@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._internals import aggregation
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.copy_types import GatherMap
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible
@@ -367,7 +366,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             else agg_kwargs,
         ).plc_obj
 
-        with acquire_spill_lock():
+        with source_column.access(mode="read", scope="internal"):
             col = ColumnBase.from_pylibcudf(
                 plc.rolling.rolling_window(
                     source_column.plc_column,

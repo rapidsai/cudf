@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -30,7 +30,6 @@ from cudf.api.types import (
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting, stream_compaction
 from cudf.core.accessors import StringMethods
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -40,6 +39,7 @@ from cudf.core.column import (
     StringColumn,
     StructColumn,
     TimeDeltaColumn,
+    access_columns,
 )
 from cudf.core.column.column import as_column, column_empty, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
@@ -1975,7 +1975,10 @@ class Index(SingleColumnFrame):
         except ValueError:
             return self._return_get_indexer_result(result.values)
 
-        with acquire_spill_lock():
+        with access_columns(lcol, rcol, mode="read", scope="internal") as (
+            lcol,
+            rcol,
+        ):
             left_plc, right_plc = plc.join.inner_join(
                 plc.Table([lcol.plc_column]),
                 plc.Table([rcol.plc_column]),
@@ -5255,14 +5258,14 @@ def interval_range(
     pa_start = pa_start.cast(cudf_dtype_to_pa_type(common_dtype))
     pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
-    with acquire_spill_lock():
-        bin_edges = ColumnBase.from_pylibcudf(
-            plc.filling.sequence(
-                size=periods + 1,
-                init=pa_scalar_to_plc_scalar(pa_start),
-                step=pa_scalar_to_plc_scalar(pa_freq),
-            )
+    # No columns to access here - sequence creates new data
+    bin_edges = ColumnBase.from_pylibcudf(
+        plc.filling.sequence(
+            size=periods + 1,
+            init=pa_scalar_to_plc_scalar(pa_start),
+            step=pa_scalar_to_plc_scalar(pa_freq),
         )
+    )
     return IntervalIndex.from_breaks(
         bin_edges.astype(common_dtype), closed=closed, name=name
     )
