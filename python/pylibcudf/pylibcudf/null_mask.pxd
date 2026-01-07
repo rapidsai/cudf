@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.libcudf.types cimport mask_state, size_type
@@ -11,6 +11,14 @@ from .column cimport Column
 
 
 cpdef DeviceBuffer copy_bitmask(Column col, Stream stream=*, DeviceMemoryResource mr=*)
+
+cpdef DeviceBuffer copy_bitmask_from_bitmask(
+    object bitmask,
+    size_type begin_bit,
+    size_type end_bit,
+    Stream stream=*,
+    DeviceMemoryResource mr=*
+)
 
 cpdef size_t bitmask_allocation_size_bytes(size_type number_of_bits)
 
