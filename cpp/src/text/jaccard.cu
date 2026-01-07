@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -358,9 +358,9 @@ std::pair<rmm::device_uvector<uint32_t>, rmm::device_uvector<int64_t>> hash_subs
       // build a set of indices that point to offsets subsections
       auto sub_offsets = rmm::device_uvector<int64_t>(sort_sections + 1, stream);
       thrust::sequence(
-        rmm::exec_policy(stream), sub_offsets.begin(), sub_offsets.end(), 0L, section_size);
+        rmm::exec_policy_nosync(stream), sub_offsets.begin(), sub_offsets.end(), 0L, section_size);
       auto indices = rmm::device_uvector<int64_t>(sub_offsets.size(), stream);
-      thrust::lower_bound(rmm::exec_policy(stream),
+      thrust::lower_bound(rmm::exec_policy_nosync(stream),
                           offsets.begin(),
                           offsets.end(),
                           sub_offsets.begin(),
@@ -383,7 +383,7 @@ std::pair<rmm::device_uvector<uint32_t>, rmm::device_uvector<int64_t>> hash_subs
       // shift the offset values so the first offset is 0.
       // This transform can be removed once the bug is fixed.
       auto sort_offsets = rmm::device_uvector<int64_t>(num_segments + 1, stream);
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         offsets.begin() + index1,
                         offsets.begin() + index2 + 1,
                         sort_offsets.begin(),
@@ -463,7 +463,7 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
   auto d_results = results->mutable_view().data<float>();
 
   // compute the jaccard using the unique counts and the intersect counts
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(results->size()),
                     d_results,
