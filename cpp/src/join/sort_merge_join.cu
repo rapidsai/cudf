@@ -26,7 +26,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cub/device/device_for.cuh>
+#include <cub/device/device_copy.cuh>
 #include <cub/device/device_scan.cuh>
 #include <cub/device/device_transform.cuh>
 #include <cuda/functional>
@@ -200,33 +200,35 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   auto larger_indices =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
 
-  // Use cub API to handle large arrays (> INT32_MAX).
-  cub::DeviceFor::ForEachN(
-    nonzero_matches.begin(),
-    count_matches,
-    [match_offsets  = match_offsets.begin(),
-     larger_indices = larger_indices.begin()] __device__(size_type match) {
-      auto const pos      = match_offsets[match];
-      larger_indices[pos] = match;
-    },
-    stream.value());
-
-  // Use cub API to handle large arrays (> INT32_MAX).
   {
-    std::size_t temp_storage_bytes = 0;
-    cub::DeviceScan::InclusiveScan(nullptr,
-                                   temp_storage_bytes,
-                                   larger_indices.begin(),
-                                   cuda::maximum<>{},
-                                   total_matches,
-                                   stream.value());
-    rmm::device_buffer tmp_storage(temp_storage_bytes, stream);
-    cub::DeviceScan::InclusiveScan(tmp_storage.data(),
-                                   temp_storage_bytes,
-                                   larger_indices.begin(),
-                                   cuda::maximum<>{},
-                                   total_matches,
-                                   stream.value());
+    auto const input_iterators = cuda::transform_iterator{
+      nonzero_matches.begin(),
+      cuda::proclaim_return_type<cuda::constant_iterator<size_type>>(
+        [] __device__(auto val) { return cuda::constant_iterator<size_type>(val); })};
+    auto const output_iterators = cuda::transform_iterator{
+      cuda::permutation_iterator{match_offsets.begin(), nonzero_matches.begin()},
+      cuda::proclaim_return_type<rmm::device_uvector<size_type>::iterator>(
+        [larger_indices = larger_indices.begin()] __device__(auto val) {
+          return larger_indices + val;
+        })};
+    auto const sizes = cuda::permutation_iterator{match_counts->begin(), nonzero_matches.begin()};
+
+    size_t temp_storage_bytes = 0;
+    cub::DeviceCopy::Batched(nullptr,
+                             temp_storage_bytes,
+                             input_iterators,
+                             output_iterators,
+                             sizes,
+                             count_matches,
+                             stream.value());
+    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+    cub::DeviceCopy::Batched(temp_storage.data(),
+                             temp_storage_bytes,
+                             input_iterators,
+                             output_iterators,
+                             sizes,
+                             count_matches,
+                             stream.value());
   }
 
   // populate smaller indices
