@@ -485,19 +485,21 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
     auto is_right_nullable = has_nested_nulls(preprocessed_right._table_view);
     if (is_left_nullable) {
       auto left_mapping = preprocessed_left.map_table_to_unprocessed(stream);
-      thrust::transform(rmm::exec_policy_nosync(stream),
-                        larger_indices.begin(),
-                        larger_indices.end(),
-                        larger_indices.begin(),
-                        mapping_functor<device_span<size_type>>{left_mapping});
+      // Use cub API to handle large arrays (> INT32_MAX)
+      cub::DeviceTransform::Transform(larger_indices.begin(),
+                                      larger_indices.begin(),
+                                      larger_indices.size(),
+                                      mapping_functor<device_span<size_type>>{left_mapping},
+                                      stream.value());
     }
     if (is_right_nullable) {
       auto right_mapping = preprocessed_right.map_table_to_unprocessed(stream);
-      thrust::transform(rmm::exec_policy_nosync(stream),
-                        smaller_indices.begin(),
-                        smaller_indices.end(),
-                        smaller_indices.begin(),
-                        mapping_functor<device_span<size_type>>{right_mapping});
+      // Use cub API to handle large arrays (> INT32_MAX)
+      cub::DeviceTransform::Transform(smaller_indices.begin(),
+                                      smaller_indices.begin(),
+                                      smaller_indices.size(),
+                                      mapping_functor<device_span<size_type>>{right_mapping},
+                                      stream.value());
     }
   }
 }
@@ -696,12 +698,13 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
     [this, left_partition_start_idx, stream, mr](auto& obj) { return obj(stream, mr); },
     stream);
   // Map from slice to total null processed table
-  thrust::transform(
-    rmm::exec_policy_nosync(stream),
+  // Use cub API to handle large arrays (> INT32_MAX)
+  cub::DeviceTransform::Transform(
     preprocessed_left_indices->begin(),
-    preprocessed_left_indices->end(),
     preprocessed_left_indices->begin(),
-    [left_partition_start_idx] __device__(auto idx) { return left_partition_start_idx + idx; });
+    preprocessed_left_indices->size(),
+    [left_partition_start_idx] __device__(auto idx) { return left_partition_start_idx + idx; },
+    stream.value());
   // Map from total null processed table to unprocessed table
   postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
   stream.synchronize();
