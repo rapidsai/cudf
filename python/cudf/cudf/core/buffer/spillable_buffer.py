@@ -605,3 +605,11 @@ class SpillableBuffer(Buffer):
             "typestr": "|u1",
             "version": 3,
         }
+
+    def make_single_owner_inplace(self) -> None:
+        # Override the parent method to also transfer spill locks
+        if len(self._owner._slices) > 1:
+            old_owner = self._owner
+            super().make_single_owner_inplace()
+            # Transfer spill locks to the new owner
+            self._owner._spill_locks |= old_owner._spill_locks

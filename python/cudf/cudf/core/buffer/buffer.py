@@ -425,22 +425,12 @@ class Buffer(Serializable):
         if len(self._owner._slices) > 1:
             # If this is not the only slice pointing to `self._owner`, we
             # point to a new copy of our slice of `self._owner`.
-            old_owner = self._owner
             self._owner._slices.remove(self)
             t = self.copy(deep=True)
             self._owner = t._owner
             self._offset = t._offset
             self._size = t._size
             self._owner._slices.add(self)
-
-            # Transfer any active spill locks from old owner to new owner.
-            # This prevents the new owner from being marked as exposed when
-            # accessed within the current access context.
-            if hasattr(old_owner, "_spill_locks") and hasattr(
-                self._owner, "_spill_locks"
-            ):
-                for lock in list(old_owner._spill_locks):
-                    self._owner._spill_locks.add(lock)
 
     def serialize(self) -> tuple[dict, list]:
         """Serialize the buffer into header and frames.
