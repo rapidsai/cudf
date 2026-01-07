@@ -176,7 +176,7 @@ async def shuffle_node(
 
         # Process input chunks
         while (msg := await ch_in.data.recv(context)) is not None:
-            # Extract TableChunk from message and insert into the shuffler
+            # Extract TableChunk from message and insert into shuffler
             shuffle.insert_chunk(
                 TableChunk.from_message(msg).make_available_and_spill(
                     context.br(), allow_overbooking=True
