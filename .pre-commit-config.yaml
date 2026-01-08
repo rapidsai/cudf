@@ -98,6 +98,12 @@ repos:
         entry: 'pytest\.xfail'
         language: pygrep
         types: [python]
+      - id: use-exec-policy-nosync
+        name: use-exec-policy-nosync
+        description: 'Enforce that rmm::exec_policy_nosync is used instead of rmm::exec_policy (see developer guide)'
+        entry: 'rmm::exec_policy\('
+        language: pygrep
+        types_or: [c, c++, cuda]
       - id: no-unseeded-default-rng
         name: no-unseeded-default-rng
         description: 'Enforce that no non-seeded default_rng is used and default_rng is used instead of np.random.seed'
