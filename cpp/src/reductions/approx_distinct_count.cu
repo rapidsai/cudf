@@ -6,9 +6,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/row_operator/hashing.cuh>
-#include <cudf/detail/stream_compaction.cuh>
 #include <cudf/hashing/detail/xxhash_64.cuh>
-#include <cudf/stream_compaction.hpp>
+#include <cudf/reduction/approx_distinct_count.hpp>
+#include <cudf/reduction/detail/approx_distinct_count.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>

@@ -7,6 +7,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/reduction/approx_distinct_count.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 

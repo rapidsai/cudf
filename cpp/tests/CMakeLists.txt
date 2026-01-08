@@ -218,6 +218,7 @@ ConfigureTest(
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
   REDUCTIONS_TEST
+  reductions/approx_distinct_count_tests.cpp
   reductions/bitwise_tests.cpp
   reductions/collect_ops_tests.cpp
   reductions/ewm_tests.cpp
@@ -509,7 +510,6 @@ ConfigureTest(
 ConfigureTest(
   STREAM_COMPACTION_TEST
   stream_compaction/apply_boolean_mask_tests.cpp
-  stream_compaction/approx_distinct_count_tests.cpp
   stream_compaction/distinct_count_tests.cpp
   stream_compaction/distinct_tests.cpp
   stream_compaction/drop_nans_tests.cpp

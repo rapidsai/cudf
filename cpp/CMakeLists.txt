@@ -628,6 +628,7 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/approx_distinct_count.cu
   src/reductions/argmax.cu
   src/reductions/argmin.cu
   src/reductions/bitwise.cu
@@ -710,7 +711,6 @@ add_library(
   src/sort/stable_sort.cu
   src/sort/top_k.cu
   src/stream_compaction/apply_boolean_mask.cu
-  src/stream_compaction/approx_distinct_count.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
   src/stream_compaction/distinct_helpers.cu

@@ -8,13 +8,16 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/hyperloglog.cuh>
 #include <cuda/functional>
+#include <cuda/std/span>
 
+#include <cstdint>
 #include <memory>
 
 namespace CUDF_EXPORT cudf {
