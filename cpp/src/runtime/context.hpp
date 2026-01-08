@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,12 +16,17 @@ namespace jit {
 class program_cache;
 }
 
+namespace rtc {
+class cache_t;
+}
+
 /// @brief The context object contains global state internal to CUDF.
 /// It helps to ensure structured and well-defined construction and destruction of global
 /// objects/state across translation units.
 class context {
  private:
   std::unique_ptr<jit::program_cache> _program_cache;
+  std::unique_ptr<rtc::cache_t> _rtc_cache;
   init_flags _initialized_flags = init_flags::NONE;
   bool _dump_codegen            = false;
   bool _use_jit                 = false;
@@ -35,6 +40,8 @@ class context {
   ~context()                         = default;
 
   jit::program_cache& program_cache();
+
+  rtc::cache_t& rtc_cache();
 
   [[nodiscard]] bool dump_codegen() const;
 

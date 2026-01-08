@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,7 +17,10 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+
+#if (!defined(__CUDACC_RTC__)) && !defined(CUDF_RUNTIME_JIT)
 #include <string>
+#endif
 
 /// `fixed_point` and supporting types
 namespace CUDF_EXPORT numeric {
@@ -570,6 +573,8 @@ class fixed_point {
     return fixed_point<Rep, Rad>{scaled_integer<Rep>{value, scale}};
   }
 
+#if (!defined(__CUDACC_RTC__)) && !defined(CUDF_RUNTIME_JIT)
+
   /**
    * @brief Returns a string representation of the fixed_point value.
    */
@@ -589,6 +594,8 @@ class fixed_point {
     auto const zeros = std::string(_scale, '0');
     return detail::to_string(_value) + zeros;
   }
+
+#endif
 };
 
 /**

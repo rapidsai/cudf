@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -60,6 +60,26 @@ std::unique_ptr<column> transform(
   std::optional<void*> user_data    = std::nullopt,
   null_aware is_null_aware          = null_aware::NO,
   output_nullability null_policy    = output_nullability::PRESERVE,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+std::unique_ptr<column> transform_lto_cuda_udf(
+  std::vector<column_view> const& inputs,
+  std::string_view source_code,
+  std::string_view transform_function,
+  data_type output_type,
+  std::optional<void*> user_data    = std::nullopt,
+  null_aware is_null_aware          = null_aware::NO,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+std::unique_ptr<column> transform_lto_binary_udf(
+  std::vector<column_view> const& inputs,
+  std::span<unsigned char const> source_code,
+  std::string_view transform_function,
+  data_type output_type,
+  std::optional<void*> user_data    = std::nullopt,
+  null_aware is_null_aware          = null_aware::NO,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

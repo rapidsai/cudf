@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -59,6 +59,8 @@ jit_preprocess_files(
   SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu rolling/jit/kernel.cu
   stream_compaction/filter/jit/kernel.cu transform/jit/kernel.cu
 )
+
+jit_preprocess_files(SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf FILES jit/lto/library.cuh)
 
 add_custom_target(
   jitify_preprocess_run

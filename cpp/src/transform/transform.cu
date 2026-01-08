@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,7 +23,7 @@
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
 #include <jit/util.hpp>
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
+#include <jit_preprocessed_files/jit/lto/library.cuh.jit.hpp>
 
 namespace cudf {
 namespace transformation {
