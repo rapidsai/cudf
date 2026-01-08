@@ -86,12 +86,11 @@ class NumericalColumn(NumericalBaseColumn):
         plc.TypeId.BOOL8,
     }
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: np.dtype,
-        exposed: bool,
-    ) -> None:
+    @classmethod
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: np.dtype
+    ) -> tuple[plc.Column, np.dtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
         if (
             cudf.get_option("mode.pandas_compatible")
             and dtype.kind not in "iufb"
@@ -102,11 +101,7 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError(
                 f"dtype must be a floating, integer or boolean dtype. Got: {dtype}"
             )
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
+        return plc_column, dtype
 
     def _clear_cache(self) -> None:
         super()._clear_cache()
@@ -607,7 +602,7 @@ class NumericalColumn(NumericalBaseColumn):
                     # If the dtype is a pandas nullable extension type, we need to
                     # float column doesn't have any NaNs.
                     res = self.nans_to_nulls()
-                    res._dtype = dtype  # type: ignore[has-type]
+                    res._dtype = dtype
                     return res
                 else:
                     self._dtype = dtype
@@ -933,7 +928,6 @@ class NumericalColumn(NumericalBaseColumn):
             return CategoricalColumn(
                 plc_column=codes.plc_column,
                 dtype=dtype,
-                exposed=False,
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)

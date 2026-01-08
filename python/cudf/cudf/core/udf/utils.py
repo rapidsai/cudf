@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -345,9 +345,7 @@ def set_malloc_heap_size(size=None):
 
 def column_to_string_view_array_init_heap(col: plc.Column) -> Buffer:
     # lazily allocate heap only when a string needs to be returned
-    return as_buffer(
-        strings_udf.column_to_string_view_array(col), exposed=True
-    )
+    return as_buffer(strings_udf.column_to_string_view_array(col))
 
 
 class UDFError(RuntimeError):

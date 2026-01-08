@@ -129,13 +129,13 @@ def manager(request):
 
 
 def test_spillable_buffer(manager: SpillManager):
-    buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
+    buf = as_buffer(data=rmm.DeviceBuffer(size=10))
     assert isinstance(buf, SpillableBuffer)
     assert buf.spillable
     buf.owner.mark_exposed()
     assert buf.owner.exposed
     assert not buf.spillable
-    buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
+    buf = as_buffer(data=rmm.DeviceBuffer(size=10))
     # Notice, accessing `__cuda_array_interface__` itself doesn't
     # expose the pointer, only accessing the "data" field exposes
     # the pointer.
@@ -160,7 +160,7 @@ def test_spillable_buffer(manager: SpillManager):
     ],
 )
 def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
-    base = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
+    base = as_buffer(data=rmm.DeviceBuffer(size=10))
     view = base[:]
     attr_base = getattr(base, attribute)
     attr_view = getattr(view, attribute)
@@ -178,7 +178,7 @@ def test_memory_info(manager: SpillManager, target):
     elif target == "cpu":
         mem = np.empty(10, dtype="u1")
         ptr = mem.__array_interface__["data"][0]
-    b = as_buffer(data=mem, exposed=False)
+    b = as_buffer(data=mem)
     assert b.memory_info() == (ptr, mem.size, target)
     assert b[:].memory_info() == (ptr, mem.size, target)
     assert b[:-1].memory_info() == (ptr, mem.size - 1, target)
@@ -228,7 +228,7 @@ def test_spillable_df_groupby(manager: SpillManager):
 
 
 def test_spilling_buffer(manager: SpillManager):
-    buf = as_buffer(rmm.DeviceBuffer(size=10), exposed=False)
+    buf = as_buffer(rmm.DeviceBuffer(size=10))
     buf.spill(target="cpu")
     assert buf.is_spilled
     buf.owner.mark_exposed()  # Expose pointer and trigger unspill
@@ -420,7 +420,7 @@ def test_get_ptr(manager: SpillManager, target):
         mem = rmm.DeviceBuffer(size=10)
     elif target == "cpu":
         mem = np.empty(10, dtype="u1")
-    buf = as_buffer(data=mem, exposed=False)
+    buf = as_buffer(data=mem)
     assert buf.spillable
     assert len(buf.owner._spill_locks) == 0
     with buf.access(mode="read", scope="internal"):
@@ -538,15 +538,19 @@ def test_get_rmm_memory_resource_stack():
 def test_df_transpose(manager: SpillManager):
     df1 = cudf.DataFrame({"a": [1, 2]})
     df2 = df1.transpose()
-    # For now, all buffers are marked as exposed
-    assert df1._data._data["a"].data.owner.exposed
-    assert df2._data._data[0].data.owner.exposed
-    assert df2._data._data[1].data.owner.exposed
+    # Buffers should not be exposed unless explicitly accessed
+    assert not df1._data._data["a"].data.owner.exposed
+    assert not df2._data._data[0].data.owner.exposed
+    assert not df2._data._data[1].data.owner.exposed
+    # Verify they are spillable
+    assert df1._data._data["a"].data.spillable
+    assert df2._data._data[0].data.spillable
+    assert df2._data._data[1].data.spillable
 
 
 def test_as_buffer_of_spillable_buffer(manager: SpillManager):
     data = cupy.arange(10, dtype="u1")
-    b1 = as_buffer(data, exposed=False)
+    b1 = as_buffer(data)
     assert isinstance(b1, SpillableBuffer)
     assert isinstance(b1.owner, SpillableBufferOwner)
     assert b1.owner.owner is data
@@ -572,9 +576,7 @@ def test_memoryview_slice(manager: SpillManager, dtype):
 def test_statistics(manager: SpillManager):
     assert len(manager.statistics.spill_totals) == 0
 
-    buf: SpillableBuffer = as_buffer(
-        data=rmm.DeviceBuffer(size=10), exposed=False
-    )
+    buf: SpillableBuffer = as_buffer(data=rmm.DeviceBuffer(size=10))
     buf.spill(target="cpu")
 
     if manager.statistics.level == 0:
@@ -598,8 +600,7 @@ def test_statistics_expose(manager: SpillManager):
     assert len(manager.statistics.spill_totals) == 0
 
     buffers: list[SpillableBuffer] = [
-        as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
-        for _ in range(10)
+        as_buffer(data=rmm.DeviceBuffer(size=10)) for _ in range(10)
     ]
 
     # Expose the first buffer
@@ -624,8 +625,7 @@ def test_statistics_expose(manager: SpillManager):
 
     # Create and spill 10 new buffers
     buffers: list[SpillableBuffer] = [
-        as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
-        for _ in range(10)
+        as_buffer(data=rmm.DeviceBuffer(size=10)) for _ in range(10)
     ]
 
     manager.spill_to_device_limit(0)
@@ -733,7 +733,7 @@ def test_scatter_by_map():
 
 def test_spillable_buffer_access_scope_internal(manager: SpillManager):
     """Test internal scope creates temporary spill lock."""
-    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+    buf = as_buffer(rmm.DeviceBuffer(size=100))
     assert buf.spillable
 
     with buf.access(mode="read", scope="internal"):
@@ -750,7 +750,7 @@ def test_spillable_buffer_access_scope_internal(manager: SpillManager):
 
 def test_spillable_buffer_access_scope_external(manager: SpillManager):
     """Test external scope marks buffer as exposed."""
-    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+    buf = as_buffer(rmm.DeviceBuffer(size=100))
     assert buf.spillable
     assert not buf.owner.exposed
 
@@ -766,7 +766,7 @@ def test_spillable_buffer_access_scope_external(manager: SpillManager):
 
 def test_spillable_buffer_access_nesting(manager: SpillManager):
     """Test nested access contexts work correctly."""
-    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+    buf = as_buffer(rmm.DeviceBuffer(size=100))
 
     with buf.access(mode="read", scope="internal"):
         assert len(buf.owner._spill_locks) == 1
@@ -789,7 +789,7 @@ def test_spillable_buffer_access_scope_defaults_to_internal(
     manager: SpillManager,
 ):
     """Test that scope parameter defaults to internal."""
-    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+    buf = as_buffer(rmm.DeviceBuffer(size=100))
 
     # Should default to scope="internal" if not provided
     with buf.access(mode="read"):
@@ -804,7 +804,7 @@ def test_spillable_buffer_access_scope_defaults_to_internal(
 
 def test_spillable_buffer_access_invalid_scope(manager: SpillManager):
     """Test that invalid scope values are rejected."""
-    buf = as_buffer(rmm.DeviceBuffer(size=100), exposed=False)
+    buf = as_buffer(rmm.DeviceBuffer(size=100))
 
     with pytest.raises(ValueError, match="Invalid scope"):
         with buf.access(mode="read", scope="invalid"):

@@ -4348,15 +4348,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif any(col.dtype != source_dtype for col in source_columns):
             raise ValueError("Columns must all have the same dtype")
 
-        result_table = plc.transpose.transpose(
-            plc.table.Table([col.plc_column for col in source_columns])
-        )
-        result_columns = (
-            ColumnBase.from_pylibcudf(
-                col, data_ptr_exposed=True
-            )._with_type_metadata(source_dtype)
-            for col in result_table.columns()
-        )
+        with access_columns(
+            *source_columns, mode="read", scope="internal"
+        ) as source_columns:
+            result_table = plc.transpose.transpose(
+                plc.table.Table([col.plc_column for col in source_columns])
+            )
+            result_columns = (
+                ColumnBase.from_pylibcudf(col)._with_type_metadata(
+                    source_dtype
+                )
+                for col in result_table.columns()
+            )
 
         # Set the old column names as the new index
         result = type(self)._from_data(
@@ -8372,14 +8375,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return result
 
     @_performance_tracking
-    def to_pylibcudf(self, copy: bool = False) -> tuple[plc.Table, dict]:
+    def to_pylibcudf(self) -> tuple[plc.Table, dict]:
         """
         Convert this DataFrame to a pylibcudf.Table.
-
-        Parameters
-        ----------
-        copy : bool
-            Whether or not to generate a new copy of the underlying device data
 
         Returns
         -------
@@ -8390,14 +8388,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         Notes
         -----
-        User requests to convert to pylibcudf must assume that the
-        data may be modified afterwards.
+        This is always a zero-copy operation. The result is a view of the
+        existing data. Changes to the pylibcudf data will be reflected back
+        to the cudf object and vice versa.
         """
-        if copy:
-            raise NotImplementedError("copy=True is not supported")
         metadata = {"index": self.index, "columns": self._data.to_pandas_index}
         return plc.Table(
-            [col.to_pylibcudf(mode="write") for col in self._columns]
+            [col.to_pylibcudf() for col in self._columns]
         ), metadata
 
     @classmethod
@@ -8464,8 +8461,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         plc_columns = tbl.columns()
         cudf_cols = (
-            ColumnBase.from_pylibcudf(plc_col, data_ptr_exposed=True)
-            for plc_col in plc_columns
+            ColumnBase.from_pylibcudf(plc_col) for plc_col in plc_columns
         )
         # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:

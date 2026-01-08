@@ -43,8 +43,6 @@ def get_buffer_owner(data: Any) -> BufferOwner | None:
 
 def as_buffer(
     data: Any,
-    *,
-    exposed: bool = False,
 ) -> Buffer:
     """Factory function to wrap `data` in a Buffer object.
 
@@ -68,10 +66,6 @@ def as_buffer(
     ----------
     data : buffer-like or array-like
         A buffer-like or array-like object.
-    exposed : bool, optional
-        Mark the buffer as permanently exposed. This is used by
-        copy-on-write to determine when a deep copy is required and
-        by SpillableBuffer to mark the buffer unspillable.
 
     Return
     ------
@@ -94,16 +88,12 @@ def as_buffer(
 
     # Handle host memory,
     if not hasattr(data, "__cuda_array_interface__"):
-        if exposed:
-            raise ValueError("cannot created exposed host memory")
         return buffer_class(owner=owner_class.from_host_memory(data))
 
     # Check if `data` is owned by a known class
     owner = get_buffer_owner(data)
     if owner is None:  # `data` is new device memory
-        return buffer_class(
-            owner=owner_class.from_device_memory(data, exposed=exposed)
-        )
+        return buffer_class(owner=owner_class.from_device_memory(data))
 
     # At this point, we know that `data` is owned by a known class, which
     # should be the same class as specified by the current config (see above)

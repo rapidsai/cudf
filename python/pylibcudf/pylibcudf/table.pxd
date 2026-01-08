@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -35,3 +35,4 @@ cdef class Table:
     )
 
     cpdef list columns(self)
+    cpdef Table copy(self, Stream stream=*, DeviceMemoryResource mr=*)
