@@ -20,6 +20,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/csv.hpp>
@@ -950,55 +952,72 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       stream,
       mr);
 
+    out_columns.resize(column_types.size());
+
     auto& out_buffers  = decode_result.buffers;
     auto& quoted_flags = decode_result.quoted_flags;
 
-    cudf::string_scalar quotechar_scalar(std::string(1, parse_opts.quotechar), true, stream);
-    cudf::string_scalar dblquotechar_scalar(std::string(2, parse_opts.quotechar), true, stream);
-    size_t quoted_flags_idx = 0;
-    for (size_t i = 0; i < column_types.size(); ++i) {
-      metadata.schema_info.emplace_back(out_buffers[i].name);
-      if (column_types[i].id() == type_id::STRING && parse_opts.quotechar != '\0' &&
-          parse_opts.doublequote) {
-        // Only replace "" with " for fields that were actually quoted.
-        // Unquoted fields may contain "" as literal content that should be preserved.
+    bool const doublequote_enabled = (parse_opts.quotechar != '\0' && parse_opts.doublequote);
 
-        // Get the quoted flags for this column
-        auto const& flags      = quoted_flags[quoted_flags_idx++];
+    // Identify string columns that need doublequote processing
+    std::vector<size_t> string_col_indices;
+    std::vector<size_t> quoted_flags_indices;
+    if (doublequote_enabled) {
+      size_t qf_idx = 0;
+      for (size_t i = 0; i < column_types.size(); ++i) {
+        if (column_types[i].id() == type_id::STRING) {
+          string_col_indices.push_back(i);
+          quoted_flags_indices.push_back(qf_idx);
+          ++qf_idx;
+        }
+      }
+    }
+
+    // Process string columns with doublequote handling in parallel using thread pool
+    auto const num_string_cols = string_col_indices.size();
+    if (num_string_cols > 0) {
+      auto const quotechar = parse_opts.quotechar;
+      cudf::string_scalar quotechar_scalar(std::string(1, quotechar), true, stream);
+      cudf::string_scalar dblquotechar_scalar(std::string(2, quotechar), true, stream);
+      constexpr size_t max_tasks = 4;
+      auto const cols_per_task   = cudf::util::div_rounding_up_safe(num_string_cols, max_tasks);
+      auto const num_tasks       = cudf::util::div_rounding_up_safe(num_string_cols, cols_per_task);
+      auto streams               = cudf::detail::fork_streams(stream, num_tasks);
+
+      auto process_string_column = [&](size_t str_col_idx, rmm::cuda_stream_view col_stream) {
+        auto const col_idx     = string_col_indices[str_col_idx];
+        auto const qf_idx      = quoted_flags_indices[str_col_idx];
+        auto const& flags      = quoted_flags[qf_idx];
+        auto* buffer           = &out_buffers[col_idx];
         auto const* flags_data = flags.data();
 
         // Count how many rows were quoted to determine the fast path
         auto const num_quoted =
-          thrust::count(rmm::exec_policy_nosync(stream), flags.begin(), flags.end(), true);
-
+          thrust::count(rmm::exec_policy_nosync(col_stream), flags.begin(), flags.end(), true);
         if (num_quoted == 0) {
-          // Fast path: no rows were quoted, skip replacement entirely
-          out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
+          // No rows were quoted, skip replacement entirely
+          out_columns[col_idx] = make_column(*buffer, nullptr, std::nullopt, col_stream);
         } else if (num_quoted == static_cast<decltype(num_quoted)>(num_records)) {
-          // Fast path: all rows were quoted, apply replacement to all
-          std::unique_ptr<column> col = cudf::make_strings_column(*out_buffers[i]._strings, stream);
-          out_columns.emplace_back(cudf::strings::detail::replace(
-            col->view(), dblquotechar_scalar, quotechar_scalar, -1, stream, mr));
+          // All rows were quoted, apply replacement to all
+          std::unique_ptr<column> col = cudf::make_strings_column(*buffer->_strings, col_stream);
+          out_columns[col_idx]        = cudf::strings::detail::replace(
+            col->view(), dblquotechar_scalar, quotechar_scalar, -1, col_stream, mr);
         } else {
-          // Mixed case: need to selectively apply replacement only to quoted rows
-
           // Create the replaced column (with "" -> " applied to all rows)
           std::unique_ptr<column> replaced_col = cudf::strings::detail::replace(
-            cudf::make_strings_column(*out_buffers[i]._strings, stream)->view(),
+            cudf::make_strings_column(*buffer->_strings, col_stream)->view(),
             dblquotechar_scalar,
             quotechar_scalar,
             -1,
-            stream,
+            col_stream,
             mr);
 
-          // Create device view for the replaced column to iterate over
-          auto const replaced_view = cudf::column_device_view::create(replaced_col->view(), stream);
+          auto const replaced_view =
+            cudf::column_device_view::create(replaced_col->view(), col_stream);
           auto const replaced_iter = cudf::detail::make_optional_iterator<cudf::string_view>(
             *replaced_view, cudf::nullate::DYNAMIC{replaced_col->nullable()});
 
-          // Create iterator over original strings directly from the _strings buffer
-          // This avoids allocating a separate column for the original strings
-          auto const* original_pairs = out_buffers[i]._strings->data();
+          auto const* original_pairs = buffer->_strings->data();
           auto const original_iter   = thrust::make_transform_iterator(
             thrust::make_counting_iterator<size_type>(0),
             cuda::proclaim_return_type<cuda::std::optional<cudf::string_view>>(
@@ -1010,22 +1029,47 @@ table_with_metadata read_csv(cudf::io::datasource* source,
                            : cuda::std::nullopt;
               }));
 
-          // Use iterator-based copy_if_else: take from replaced where quoted, original otherwise
-          out_columns.emplace_back(cudf::strings::detail::copy_if_else(
+          out_columns[col_idx] = cudf::strings::detail::copy_if_else(
             replaced_iter,
             replaced_iter + num_records,
             original_iter,
             [flags_data] __device__(size_type idx) { return flags_data[idx]; },
-            stream,
-            mr));
+            col_stream,
+            mr);
         }
-      } else {
-        if (column_types[i].id() == type_id::STRING) {
-          // Skip the quoted_flags entry for non-doublequote string columns
-          ++quoted_flags_idx;
-        }
-        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
+      };
+
+      std::vector<std::future<void>> tasks;
+      tasks.reserve(num_tasks);
+
+      for (size_t task_id = 0; task_id < num_tasks; ++task_id) {
+        auto const start_col  = task_id * cols_per_task;
+        auto const end_col    = std::min(start_col + cols_per_task, num_string_cols);
+        auto const col_stream = streams[task_id];
+        tasks.emplace_back(
+          cudf::detail::host_worker_pool().submit_task([&, start_col, end_col, col_stream]() {
+            for (size_t str_col_idx = start_col; str_col_idx < end_col; ++str_col_idx) {
+              process_string_column(str_col_idx, col_stream);
+            }
+          }));
       }
+
+      for (auto& task : tasks) {
+        task.get();
+      }
+
+      cudf::detail::join_streams(streams, stream);
+    }
+
+    // TBD
+    for (size_t i = 0; i < column_types.size(); ++i) {
+      if (!out_columns[i]) {
+        out_columns[i] = make_column(out_buffers[i], nullptr, std::nullopt, stream);
+      }
+    }
+
+    for (size_t i = 0; i < column_types.size(); ++i) {
+      metadata.schema_info.emplace_back(out_buffers[i].name);
     }
   } else {
     // Create empty columns
