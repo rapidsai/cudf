@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,6 +24,14 @@
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <memory>
+#include <span>
+#include <utility>
+#include <vector>
+
 namespace cudf::groupby::detail::hash {
 namespace {
 
@@ -47,12 +55,14 @@ struct result_column_creator {
   {
   }
 
-  std::unique_ptr<column> operator()(column_view const& col, aggregation::Kind const& agg) const
+  std::unique_ptr<column> operator()(column_view const& col,
+                                     aggregation::Kind const& agg,
+                                     bool is_agg_intermediate) const
   {
     auto const col_type =
       is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
-    auto const nullable =
-      agg != aggregation::COUNT_VALID && agg != aggregation::COUNT_ALL && col.has_nulls();
+    auto const nullable = !is_agg_intermediate && agg != aggregation::COUNT_VALID &&
+                          agg != aggregation::COUNT_ALL && col.has_nulls();
     // TODO: Remove adjusted buffer size workaround once https://github.com/NVIDIA/cccl/issues/6430
     // is fixed. Use adjusted buffer size for small data types to ensure atomic operation safety.
     auto const make_uninitialized_column = [&](data_type d_type, size_type size, mask_state state) {
@@ -98,15 +108,22 @@ struct result_column_creator {
 std::unique_ptr<table> create_results_table(size_type output_size,
                                             table_view const& values,
                                             host_span<aggregation::Kind const> agg_kinds,
+                                            std::span<int8_t const> is_agg_intermediate,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(agg_kinds.size()),
+               "The number of values columns and size of agg_kinds vector must be the same.");
+  CUDF_EXPECTS(
+    values.num_columns() == static_cast<size_type>(is_agg_intermediate.size()),
+    "The number of values columns and size of is_agg_intermediate vector must be the same.");
+
+  auto const column_creator = result_column_creator{output_size, stream, mr};
   std::vector<std::unique_ptr<column>> output_cols;
-  std::transform(values.begin(),
-                 values.end(),
-                 agg_kinds.begin(),
-                 std::back_inserter(output_cols),
-                 result_column_creator{output_size, stream, mr});
+  for (size_t i = 0; i < agg_kinds.size(); i++) {
+    output_cols.emplace_back(
+      column_creator(values.column(i), agg_kinds[i], static_cast<bool>(is_agg_intermediate[i])));
+  }
   auto result_table = std::make_unique<table>(std::move(output_cols));
   cudf::detail::initialize_with_identity(result_table->mutable_view(), agg_kinds, stream);
   return result_table;
