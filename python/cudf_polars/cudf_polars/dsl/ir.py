@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """
 DSL nodes for the LogicalPlan of polars.
@@ -2384,8 +2384,14 @@ class Join(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        # Save the original streams before any reassignments, since we need
+        # them for the final join_cuda_streams call to ensure proper stream
+        # ordering for deallocations.
+        original_left_stream = left.stream
+        original_right_stream = right.stream
         stream = get_joined_cuda_stream(
-            context.get_cuda_stream, upstreams=(left.stream, right.stream)
+            context.get_cuda_stream,
+            upstreams=(original_left_stream, original_right_stream),
         )
         how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
         if how == "Cross":
@@ -2536,9 +2542,10 @@ class Join(IR):
             result = result.slice(zlice)
 
         # Join the original streams back into the result stream to ensure that the
-        # deallocations (on the original streams) happen after the result is ready
+        # deallocations (on the original streams) happen after the result is ready.
         join_cuda_streams(
-            downstreams=(left.stream, right.stream), upstreams=(result.stream,)
+            downstreams=(original_left_stream, original_right_stream),
+            upstreams=(result.stream,),
         )
 
         return result
