@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,7 +33,7 @@ std::unique_ptr<cudf::column> two_table_equality(cudf::table_view lhs,
     auto const equal_comparator =
       table_comparator.equal_to<true>(cudf::nullate::NO{}, cudf::null_equality::EQUAL, comparator);
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       lhs_it,
                       lhs_it + lhs.num_rows(),
                       rhs_it,
@@ -43,7 +43,7 @@ std::unique_ptr<cudf::column> two_table_equality(cudf::table_view lhs,
     auto const equal_comparator =
       table_comparator.equal_to<false>(cudf::nullate::NO{}, cudf::null_equality::EQUAL, comparator);
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       lhs_it,
                       lhs_it + lhs.num_rows(),
                       rhs_it,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,7 +20,7 @@ writer_compression_statistics collect_compression_statistics(
 {
   // bytes_written on success
   auto const output_size_successful = thrust::transform_reduce(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     results.begin(),
     results.end(),
     cuda::proclaim_return_type<size_t>([] __device__(codec_exec_result const& res) {
@@ -35,7 +35,7 @@ writer_compression_statistics collect_compression_statistics(
     auto const zipped_end = zipped_begin + inputs.size();
 
     return thrust::transform_reduce(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       zipped_begin,
       zipped_end,
       cuda::proclaim_return_type<size_t>([status] __device__(auto tup) {

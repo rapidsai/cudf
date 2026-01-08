@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,10 +49,10 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
   auto per_row_mapping = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, num_child_rows, mask_state::UNALLOCATED, stream);
   auto per_row_mapping_begin = per_row_mapping->mutable_view().template begin<size_type>();
-  thrust::fill_n(rmm::exec_policy(stream), per_row_mapping_begin, num_child_rows, 0);
+  thrust::fill_n(rmm::exec_policy_nosync(stream), per_row_mapping_begin, num_child_rows, 0);
 
   auto const begin = thrust::make_counting_iterator<size_type>(0);
-  thrust::scatter_if(rmm::exec_policy(stream),
+  thrust::scatter_if(rmm::exec_policy_nosync(stream),
                      begin,
                      begin + offsets.size() - 1,
                      offsets.begin<size_type>(),
@@ -70,7 +70,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
   // For the case with an empty list at index 2:
   //   scatter result == [0, 0, 1, 0, 0, 3, 0, 0, 4, 0, 0, 5, 0]
   //   inclusive_scan == [0, 0, 1, 1, 1, 3, 3, 3, 4, 4, 4, 5, 5]
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          per_row_mapping_begin,
                          per_row_mapping_begin + num_child_rows,
                          per_row_mapping_begin,
@@ -91,7 +91,7 @@ size_type count_child_nulls(column_view const& input,
     return d_input.is_null_nocheck(i);
   };
 
-  return thrust::count_if(rmm::exec_policy(stream),
+  return thrust::count_if(rmm::exec_policy_nosync(stream),
                           gather_map->view().begin<size_type>(),
                           gather_map->view().end<size_type>(),
                           input_row_is_null);
@@ -119,7 +119,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
                                                 gather_map.size() - num_child_nulls,
                                                 mask_state::UNALLOCATED,
                                                 stream);
-  thrust::copy_if(rmm::exec_policy(stream),
+  thrust::copy_if(rmm::exec_policy_nosync(stream),
                   gather_map.template begin<size_type>(),
                   gather_map.template end<size_type>(),
                   new_gather_map->mutable_view().template begin<size_type>(),
@@ -129,7 +129,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   auto new_sizes = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, input.size(), mask_state::UNALLOCATED, stream);
 
-  thrust::tabulate(rmm::exec_policy(stream),
+  thrust::tabulate(rmm::exec_policy_nosync(stream),
                    new_sizes->mutable_view().template begin<size_type>(),
                    new_sizes->mutable_view().template end<size_type>(),
                    [d_gather_map  = gather_map.template begin<size_type>(),

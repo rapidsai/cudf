@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -57,7 +57,7 @@ generate_list_offsets_and_validities(table_view const& input,
 
   // Compute list sizes and validities.
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_output_lists),
     d_offsets,
@@ -77,7 +77,7 @@ generate_list_offsets_and_validities(table_view const& input,
 
   // Compute offsets from sizes.
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + num_output_lists + 1, d_offsets);
+    rmm::exec_policy_nosync(stream), d_offsets, d_offsets + num_output_lists + 1, d_offsets);
 
   return {std::move(list_offsets), std::move(validities)};
 }
@@ -229,7 +229,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
       rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream);
 
     thrust::for_each_n(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<size_type>(0),
       num_output_lists,
       [num_cols,

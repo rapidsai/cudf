@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -230,8 +230,11 @@ std::unique_ptr<column> round_with(column_view const& input,
   auto out_view = result->mutable_view();
   T const n     = std::pow(10, std::abs(decimal_places));
 
-  thrust::transform(
-    rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), out_view.begin<T>(), Functor{n});
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    input.begin<T>(),
+                    input.end<T>(),
+                    out_view.begin<T>(),
+                    Functor{n});
 
   result->set_null_count(input.null_count());
 
@@ -273,7 +276,7 @@ std::unique_ptr<column> round_with(column_view const& input,
   // overflow. Under this circumstance, we can simply output a zero column because no digits can
   // survive such a large scale movement.
   if (scale_movement > cuda::std::numeric_limits<Type>::digits10) {
-    thrust::uninitialized_fill(rmm::exec_policy(stream),
+    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
                                out_view.template begin<Type>(),
                                out_view.template end<Type>(),
                                static_cast<Type>(0));
@@ -282,7 +285,7 @@ std::unique_ptr<column> round_with(column_view const& input,
     for (int i = 1; i < scale_movement; ++i) {
       n *= 10;
     }
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       input.begin<Type>(),
                       input.end<Type>(),
                       out_view.begin<Type>(),

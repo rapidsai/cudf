@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -67,12 +67,12 @@ std::unique_ptr<table> unique(table_view const& input,
       auto d_results = rmm::device_uvector<bool>(num_rows, stream);
       auto itr       = thrust::make_counting_iterator<size_type>(0);
       thrust::transform(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         itr,
         itr + num_rows,
         d_results.begin(),
         unique_copy_fn<decltype(itr), decltype(row_equal)>{itr, keep, row_equal, num_rows - 1});
-      auto result_end = thrust::copy_if(rmm::exec_policy(stream),
+      auto result_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
                                         itr,
                                         itr + num_rows,
                                         d_results.begin(),

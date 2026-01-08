@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -94,7 +94,7 @@ std::unique_ptr<cudf::column> generate_random_string_column(cudf::size_type lowe
 
   // We generate the strings in parallel into the `chars` vector using the
   // offsets vector generated above.
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_zip_iterator(cuda::std::make_tuple(offset_itr, offset_itr + 1)),
                      num_rows,
                      random_string_generator(chars.data()));
@@ -115,7 +115,7 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(T lower,
     cudf::data_type{cudf::type_to_id<T>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
   cudf::size_type begin = 0;
   cudf::size_type end   = num_rows;
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator(begin),
                     thrust::make_counting_iterator(end),
                     col->mutable_view().begin<T>(),

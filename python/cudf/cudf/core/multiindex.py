@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core import column
 from cudf.core._internals import sorting
 from cudf.core.algorithms import factorize
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import access_columns
 from cudf.core.column.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -1981,12 +1981,13 @@ class MultiIndex(Index):
             _match_join_keys(lcol, rcol, "inner")
             for lcol, rcol in zip(target._columns, self._columns, strict=True)
         ]
-        join_keys = map(list, zip(*join_keys, strict=True))
-        with acquire_spill_lock():
-            plc_tables = [
-                plc.Table([col.plc_column for col in cols])
-                for cols in join_keys
-            ]
+        join_keys = list(map(list, zip(*join_keys, strict=True)))
+        # Flatten for access_columns
+        flattened = [col for cols in join_keys for col in cols]
+        with access_columns(*flattened, mode="read", scope="internal"):
+            plc_tables = []
+            for cols in join_keys:
+                plc_tables.append(plc.Table([col.plc_column for col in cols]))
             left_plc, right_plc = plc.join.inner_join(
                 plc_tables[0],
                 plc_tables[1],

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -78,7 +78,7 @@ void apply_struct_binary_op(mutable_column_view& out,
 
   auto tabulate_device_operator = [&](auto device_comparator) {
     thrust::tabulate(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       out.begin<bool>(),
       out.end<bool>(),
       device_comparison_functor{optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator});
@@ -151,7 +151,7 @@ void apply_struct_equality_op(mutable_column_view& out,
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
 
   auto const comparator_helper = [&](auto const device_comparator) {
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      out.begin<bool>(),
                      out.end<bool>(),
                      struct_equality_functor<decltype(optional_iter), decltype(device_comparator)>(

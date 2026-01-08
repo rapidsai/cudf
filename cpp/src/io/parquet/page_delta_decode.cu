@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -79,11 +79,12 @@ struct delta_byte_array_decoder {
     uint64_t prefix_len     = ln_idx < end_idx ? prefixes.value_at(ln_idx) : 0;
     uint8_t* const lane_out = ln_idx < end_idx ? strings_out + offset : nullptr;
 
-    prefix_lens[lane_id] = prefix_len;
-    offsets[lane_id]     = lane_out;
-
     // if all prefix_len's are zero, then there's nothing to do
     if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
+
+    prefix_lens[lane_id] = prefix_len;
+    offsets[lane_id]     = lane_out;
+    __syncwarp();
 
     // find a neighbor to the left that has a prefix length less than this lane. once that
     // neighbor is complete, this lane can be completed.
@@ -155,6 +156,7 @@ struct delta_byte_array_decoder {
 
       // copy prefixes into string data.
       string_scan(out, last_string, idx, end, string_off, lane_id);
+      __syncwarp();
 
       // save the position of the last computed string. this will be used in
       // the next iteration to reconstruct the string in lane 0.

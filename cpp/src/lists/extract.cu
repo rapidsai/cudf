@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -55,7 +55,7 @@ std::unique_ptr<cudf::column> make_index_child(column_view const& indices,
     cudf::detail::make_null_replacement_iterator(*d_indices, std::numeric_limits<size_type>::max());
   auto index_child =
     make_numeric_column(data_type{type_id::INT32}, indices.size(), mask_state::UNALLOCATED, stream);
-  thrust::copy_n(rmm::exec_policy(stream),
+  thrust::copy_n(rmm::exec_policy_nosync(stream),
                  null_replaced_iter_begin,
                  indices.size(),
                  index_child->mutable_view().begin<size_type>());
@@ -77,8 +77,10 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
 {
   auto index_child =  // [index, index, index, ..., index]
     make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream);
-  thrust::fill_n(
-    rmm::exec_policy(stream), index_child->mutable_view().begin<size_type>(), num_rows, index);
+  thrust::fill_n(rmm::exec_policy_nosync(stream),
+                 index_child->mutable_view().begin<size_type>(),
+                 num_rows,
+                 index);
   return index_child;
 }
 

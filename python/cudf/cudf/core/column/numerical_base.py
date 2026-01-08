@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 """Define an interface for columns that can perform numerical operations."""
 
@@ -11,8 +11,9 @@ import numpy as np
 import pylibcudf as plc
 
 import cudf
-from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column.column import ColumnBase, column_empty
+from cudf.core.column import column_empty
+from cudf.core.column.column import ColumnBase
+from cudf.core.column.utils import access_columns
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
 from cudf.utils.dtypes import _get_nan_for_dtype
@@ -138,7 +139,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 .slice(no_nans.null_count, len(no_nans))
                 .astype(np.dtype(np.int32))
             )
-            with acquire_spill_lock():
+            with access_columns(
+                no_nans, indices, mode="read", scope="internal"
+            ) as (no_nans, indices):
                 plc_column = plc.quantiles.quantile(
                     no_nans.plc_column,
                     q,
@@ -252,7 +255,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if how not in {"half_even", "half_up"}:
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
-        with acquire_spill_lock():
+        with self.access(mode="read", scope="internal"):
             return type(self).from_pylibcudf(
                 plc.round.round(self.plc_column, decimals, plc_how)
             )
@@ -266,7 +269,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         unaryop_str = unaryop.upper()
         unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
-        with acquire_spill_lock():
+        with self.access(mode="read", scope="internal"):
             return type(self).from_pylibcudf(
                 plc.unary.unary_operation(self.plc_column, unaryop_enum)
             )
