@@ -480,7 +480,7 @@ This policy applies only to fixed-width types. It does **not** apply to variable
 (strings) or nested types (lists, structs), which have their own requirements as described in the
 sections above.
 
-## Treat libcudf APIs as if they were asynchronous
+## Treat libcudf APIs as if they were asynchronous {#async-apis}
 
 libcudf APIs called on the host do not guarantee that the stream is synchronized before returning.
 Work in libcudf occurs on `cudf::get_default_stream().value`, which defaults to the CUDA default
@@ -586,10 +586,9 @@ Using `nosync` provides significant performance improvements, particularly for s
 where synchronization overhead is proportionally larger. Benchmarks have shown speedups of 10-40%
 for many operations on small inputs.
 
-This policy aligns with libcudf's existing stream semantics: [libcudf APIs called on the host do not
-guarantee that the stream is synchronized before
-returning](#treat-libcudf-apis-as-if-they-were-asynchronous). Callers must explicitly synchronize
-if they need to access results on the host.
+This policy aligns with libcudf's existing stream semantics: libcudf APIs called on the host
+[do not guarantee that the stream is synchronized before returning](#async-apis).
+Callers must explicitly synchronize if they need to access results on the host.
 
 Notes on `nosync`:
 
