@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -314,6 +314,25 @@ cdef class Table:
     cpdef tuple shape(self):
         """The shape of this table"""
         return (self.num_rows(), self.num_columns())
+
+    cpdef Table copy(self, Stream stream=None, DeviceMemoryResource mr=None):
+        """Create a deep copy of the table.
+
+        Parameters
+        ----------
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
+        mr : DeviceMemoryResource | None
+            Device memory resource for allocations.
+
+        Returns
+        -------
+        Table
+            A new Table with deep copies of all columns.
+        """
+        stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
+        return Table([col.copy(stream, mr) for col in self._columns])
 
     def _to_schema(self, metadata=None):
         """Create an Arrow schema from this table."""

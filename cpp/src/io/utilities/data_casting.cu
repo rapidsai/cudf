@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -800,7 +800,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   //  CUDF_FUNC_RANGE();
 
   auto const max_length = thrust::transform_reduce(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     str_tuples,
     str_tuples + col_size,
     cuda::proclaim_return_type<std::size_t>([] __device__(auto t) { return t.second; }),
@@ -813,7 +813,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 
   auto single_thread_fn = string_parse<decltype(str_tuples)>{
     str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options, d_sizes};
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      col_size,
                      single_thread_fn);
@@ -865,7 +865,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   single_thread_fn.d_chars   = d_chars;
   single_thread_fn.d_offsets = d_offsets;
 
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      col_size,
                      single_thread_fn);
@@ -942,7 +942,7 @@ std::unique_ptr<column> parse_data(
 
   // use `ConvertFunctor` to convert non-string values
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     col_size,
     [str_tuples, col = *output_dv_ptr, options, col_type, null_count_data] __device__(

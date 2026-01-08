@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -186,7 +186,7 @@ struct dispatch_from_durations_fn {
     auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
     auto d_chars    = chars_data.data();
 
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
                        duration_to_string_fn<T>{d_column, d_new_offsets, d_chars});
