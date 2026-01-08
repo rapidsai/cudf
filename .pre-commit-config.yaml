@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 ci:
@@ -27,7 +27,7 @@ repos:
             ^python/cudf/cudf/tests/data/vocab.txt
           )
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.17.0
+    rev: v0.18.1
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -156,7 +156,7 @@ repos:
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v1.2.0
+    rev: v1.2.1
     hooks:
       - id: verify-copyright
         name: verify-copyright-cudf
@@ -233,7 +233,7 @@ repos:
       - id: verify-codeowners
         args: [--fix, --project-prefix=cudf]
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.20.0
+    rev: v1.20.2
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean", "--warn-all", "--strict"]
