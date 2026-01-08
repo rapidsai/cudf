@@ -193,9 +193,9 @@ void approx_distinct_count::merge(cuda::std::span<cuda::std::byte> sketch_span,
 
 cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept { return _impl.sketch(); }
 
-cudf::size_type approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
+std::size_t approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
 {
-  return static_cast<cudf::size_type>(_impl.estimate(stream));
+  return _impl.estimate(stream);
 }
 
 }  // namespace detail
@@ -242,7 +242,7 @@ cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept
   return _impl->sketch();
 }
 
-cudf::size_type approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
+std::size_t approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
 {
   return _impl->estimate(stream);
 }

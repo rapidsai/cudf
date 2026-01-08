@@ -14,6 +14,7 @@
 
 #include <cuda/std/span>
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 
@@ -174,7 +175,7 @@ class approx_distinct_count {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Approximate number of distinct rows
    */
-  [[nodiscard]] cudf::size_type estimate(
+  [[nodiscard]] std::size_t estimate(
     rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
  private:

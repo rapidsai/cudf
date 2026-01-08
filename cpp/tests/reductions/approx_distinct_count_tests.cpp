@@ -13,18 +13,20 @@
 
 #include <thrust/host_vector.h>
 
+#include <cstddef>
+
 using cudf::nan_policy;
 using cudf::null_policy;
 
 constexpr int32_t XXX{70};
 
-bool is_reasonable_approximation(cudf::size_type approx_count,
-                                 cudf::size_type exact_count,
+bool is_reasonable_approximation(std::size_t approx_count,
+                                 std::size_t exact_count,
                                  int precision           = 12,
                                  double tolerance_factor = 2.0)
 {
-  if (exact_count == 0) return approx_count == 0;
-  if (exact_count == 1) return approx_count <= 2;
+  if (exact_count == 0) { return approx_count == 0; }
+  if (exact_count == 1) { return approx_count <= 2; }
 
   double const relative_standard_deviation = 1.04 / std::sqrt(1ull << precision);
   double const tolerance                   = tolerance_factor * relative_standard_deviation;
