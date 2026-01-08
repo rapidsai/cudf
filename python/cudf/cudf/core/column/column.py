@@ -643,9 +643,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         dtype = dtype_from_pylibcudf_column(col)
 
         cls: type[ColumnBase]
-        if isinstance(dtype, CategoricalDtype):
-            cls = cudf.core.column.CategoricalColumn
-        elif isinstance(dtype, pd.DatetimeTZDtype):
+        if isinstance(dtype, pd.DatetimeTZDtype):
             cls = cudf.core.column.datetime.DatetimeTZColumn
         elif dtype.kind == "M":
             cls = cudf.core.column.DatetimeColumn
@@ -675,11 +673,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             raise TypeError(f"Unrecognized dtype: {dtype}")
 
-        children = (
-            (col,) if isinstance(dtype, CategoricalDtype) else col.children()
-        )
         wrapped_children: tuple[ColumnBase, ...] = tuple(
-            cls.from_pylibcudf(child) for child in children
+            cls.from_pylibcudf(child) for child in col.children()
         )
         wrapped_children = cls._apply_child_metadata(wrapped_children, dtype)
 
