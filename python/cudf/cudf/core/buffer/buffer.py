@@ -91,7 +91,6 @@ class BufferOwner(Serializable):
         ptr: int,
         size: int,
         owner: object,
-        exposed: bool,
     ):
         if size < 0:
             raise ValueError("size cannot be negative")
@@ -99,11 +98,11 @@ class BufferOwner(Serializable):
         self._ptr = ptr
         self._size = size
         self._owner = owner
-        self._exposed = exposed
+        self._exposed = False
         self._slices = weakref.WeakSet()
 
     @classmethod
-    def from_device_memory(cls, data: Any, exposed: bool) -> Self:
+    def from_device_memory(cls, data: Any) -> Self:
         """Create from an object providing a `__cuda_array_interface__`.
 
         No data is being copied.
@@ -112,10 +111,6 @@ class BufferOwner(Serializable):
         ----------
         data : device-buffer-like
             An object implementing the CUDA Array Interface.
-        exposed : bool
-            Mark the buffer as permanently exposed. This is used by
-            copy-on-write to determine when a deep copy is required
-            and by SpillableBuffer to mark the buffer unspillable.
 
         Returns
         -------
@@ -135,7 +130,7 @@ class BufferOwner(Serializable):
             size = data.size
         else:
             ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-        return cls(ptr=ptr, size=size, owner=data, exposed=exposed)
+        return cls(ptr=ptr, size=size, owner=data)
 
     @classmethod
     def from_host_memory(cls, data: Any) -> Self:
@@ -166,7 +161,7 @@ class BufferOwner(Serializable):
         # Copy to device memory
         buf = rmm.DeviceBuffer(ptr=ptr, size=size)
         # Create from device memory
-        return cls.from_device_memory(buf, exposed=False)
+        return cls.from_device_memory(buf)
 
     @property
     def size(self) -> int:
@@ -398,7 +393,6 @@ class Buffer(Serializable):
                 ptr=self._owner.ptr + self._offset,
                 size=self.size,
             ),
-            exposed=False,
         )
         return self.__class__(owner=owner, offset=0, size=owner.size)
 
@@ -477,7 +471,7 @@ class Buffer(Serializable):
             header["owner-type-serialized-name"]
         ]
         if hasattr(frame, "__cuda_array_interface__"):
-            owner = owner_type.from_device_memory(frame, exposed=False)
+            owner = owner_type.from_device_memory(frame)
         else:
             owner = owner_type.from_host_memory(frame)
         return cls(
