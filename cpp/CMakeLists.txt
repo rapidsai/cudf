@@ -368,28 +368,33 @@ jit_add_include_directory(
 
 jit_add_include_directory(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src DEST_DIRECTORY cudf/src
-  INCLUDE_DIRECTORIES cudf/src
+  INCLUDE_DIRECTORIES cudf/src cudf/src/jit/rtc/includes/system
 )
 
 # TODO: add library.cu LTO type checks need to be compiled as part of the AOT workflow to ensure
-# type consistency between AOT and JIT Must be in test suite
+# type consistency between AOT and JIT.
+#
+# Must be in test suite
 
 get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
 
-foreach(CUDACXX_INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
+foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
+  cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
+
   jit_add_include_directory(
-    cudf_jit_embed COPY_DIRECTORY ${CUDACXX_INC_DIR} DEST_DIRECTORY libcudacxx INCLUDE_DIRECTORIES
-    libcudacxx
+    cudf_jit_embed COPY_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
+    INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
   )
 
 endforeach()
 
-foreach(CTK_INC_DIR IN LISTS CUDAToolkit_INCLUDE_DIRS)
-  jit_add_include_directory(
-    cudf_jit_embed COPY_DIRECTORY ${CTK_INC_DIR} DEST_DIRECTORY CUDAToolKit INCLUDE_DIRECTORIES
-    CUDAToolKit CUDAToolKit/cuda/std
-  )
-endforeach()
+# TODO: remove foreach(INC_DIR IN LISTS CUDAToolkit_INCLUDE_DIRS) message("CTKKK dir: ${INC_DIR}")
+# cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
+
+# jit_add_include_directory( cudf_jit_embed COPY_DIRECTORY ${INC_DIR} DEST_DIRECTORY
+# CUDAToolKit/${INC_DIR_NAME} INCLUDE_DIRECTORIES CUDAToolKit/${INC_DIR_NAME} )
+
+# endforeach()
 
 jit_add_options(cudf_jit_embed OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
 

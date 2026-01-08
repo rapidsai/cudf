@@ -146,7 +146,7 @@ void copy_includes_to_dir(char const* dir)
 void create_new_include_dir(std::string const& include_path)
 {
   // directory does not exist, so create it
-  char tmp_dir_data[] = "/tmp/jit_includes_XXXXXX";
+  char tmp_dir_data[] = "/tmp/jit-includes_XXXXXX";
   char* tmp_dir       = mkdtemp(tmp_dir_data);
   if (tmp_dir == nullptr) {
     throw_posix(
@@ -233,7 +233,7 @@ fragment_t const& compile_fragment(char const* name, char const* source_code_cst
   cache.store_fragment(cache_key_sha256, fut);
 
   auto cache_dir   = cache.get_cache_dir();
-  auto include_dir = std::format("{}/jit_includes", cache_dir);
+  auto include_dir = std::format("{}/jit-includes", cache_dir);
 
   create_include_dir(include_dir);
 

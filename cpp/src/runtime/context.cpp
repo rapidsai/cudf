@@ -50,7 +50,7 @@ void context::initialize_components(init_flags flags)
   if (has_flag(new_flags, init_flags::INIT_JIT_CACHE)) {
     _program_cache = std::make_unique<jit::program_cache>();
     // TODO: Make cache directory configurable
-    _rtc_cache = std::make_unique<rtc::cache_t>(true, "/tmp/cudf_rtc_cache", rtc::cache_limits{});
+    _rtc_cache = std::make_unique<rtc::cache_t>(true, "/tmp/cudf-rtc-cache", rtc::cache_limits{});
   }
 
   if (has_flag(new_flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }

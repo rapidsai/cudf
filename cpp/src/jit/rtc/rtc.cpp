@@ -151,7 +151,7 @@ std::string get_nvrtc_log(fragment_t::compile_params const& params,
     options_str = std::format("{}\t{}\n", options_str, option);
   }
 
-  return std::format("NCRTC Compilation for {} {} ({}): {}.\nHeaders: {}\nOptions:\t{}\n\n{}",
+  return std::format("NCRTC Compilation for {} {} ({}): {}.\nHeaders:\n{}\n\nOptions:\n{}\n\n{}",
                      params.name == nullptr ? "<unnamed>" : params.name,
                      status_str,
                      static_cast<int64_t>(compile_result),
@@ -195,8 +195,8 @@ void log_nvJitLink_link_result(library_t::link_params const& params,
     (link_result == NVJITLINK_SUCCESS) ? "completed successfully" : "failed with error";
 
   auto str = std::format(
-    "nvJitLink Linking for {} ({}) {} ({}): {}.\nFragments: {}\n"
-    "Link Options: {}\n\nInfo Log:\n{}\n\nError Log:\n{}",
+    "nvJitLink Linking for {} ({}) {} ({}): {}.\nFragments: \n{}\n"
+    "Link Options: \n{}\n\nInfo Log:\n{}\n\nError Log:\n{}\n\n",
     params.name == nullptr ? "<unnamed>" : params.name,
     binary_type_str,
     status_str,

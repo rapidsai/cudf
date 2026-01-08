@@ -21,7 +21,6 @@ TEST_F(RTCTest, CreateFragment)
                                         "transform_kernel",
                                         "test_kernel_key",
                                         R"***(
-
     #include "cudf/jit/transform_params.cuh"
     #include "cudf/jit/lto/operators.inl.cuh"
     #include "cudf/jit/lto/types.inl.cuh"
