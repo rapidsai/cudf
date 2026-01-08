@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import re
 
@@ -229,12 +229,7 @@ def test_series_empty(ps):
     "data",
     [
         [1, 2, 3],
-        pytest.param(
-            [np.nan, 10, 15, 16],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/49818"
-            ),
-        ),
+        [np.nan, 10, 15, 16],
         [np.nan, None, 10, 20],
         ["ab", "zx", "pq"],
         ["ab", "zx", None, "pq"],
