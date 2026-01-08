@@ -5,6 +5,8 @@
 
 #include "compute_global_memory_aggs.cuh"
 
+#include <span>
+
 namespace cudf::groupby::detail::hash {
 
 template std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>>
