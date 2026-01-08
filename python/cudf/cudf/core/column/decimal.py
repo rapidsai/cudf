@@ -72,25 +72,20 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: DecimalDtype,
-        exposed: bool,
-    ) -> None:
+    @classmethod
+    def _validate_args(  # type: ignore[override]
+        cls, plc_column: plc.Column, dtype: DecimalDtype
+    ) -> tuple[plc.Column, DecimalDtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
         if (
             not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, type(self)._decimal_cls)  # type: ignore[attr-defined]
+            and not isinstance(dtype, cls._decimal_cls)  # type: ignore[attr-defined]
         ) or (
             cudf.get_option("mode.pandas_compatible")
-            and not type(self)._decimal_check(dtype)  # type: ignore[attr-defined]
+            and not cls._decimal_check(dtype)  # type: ignore[attr-defined]
         ):
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
+        return plc_column, dtype
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, type(self)._decimal_cls):  # type: ignore[attr-defined]
@@ -132,7 +127,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     -data.type.scale,
                 ),
             )
-            result = cls.from_pylibcudf(plc_column, False)
+            result = cls.from_pylibcudf(plc_column)
             result._dtype = dtype
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
