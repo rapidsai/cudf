@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,10 @@
 #include "io/utilities/hostdevice_vector.hpp"
 #include "io/utilities/parsing_utils.cuh"
 
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -24,6 +28,7 @@
 #include <cudf/io/detail/csv.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/logger.hpp>
+#include <cudf/strings/detail/copy_if_else.cuh>
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -31,7 +36,9 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -614,17 +621,25 @@ void infer_column_types(parse_options const& parse_opts,
   }
 }
 
-std::vector<column_buffer> decode_data(parse_options const& parse_opts,
-                                       host_span<column_parse::flags const> column_flags,
-                                       std::vector<std::string> const& column_names,
-                                       device_span<char const> data,
-                                       device_span<uint64_t const> row_offsets,
-                                       host_span<data_type const> column_types,
-                                       int32_t num_records,
-                                       int32_t num_actual_columns,
-                                       int32_t num_active_columns,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+/**
+ * @brief Result of decode_data containing column buffers and quoted field tracking
+ */
+struct decode_result {
+  std::vector<column_buffer> buffers;
+  std::vector<rmm::device_uvector<bool>> quoted_flags;
+};
+
+decode_result decode_data(parse_options const& parse_opts,
+                          host_span<column_parse::flags const> column_flags,
+                          std::vector<std::string> const& column_names,
+                          device_span<char const> data,
+                          device_span<uint64_t const> row_offsets,
+                          host_span<data_type const> column_types,
+                          int32_t num_records,
+                          int32_t num_actual_columns,
+                          int32_t num_active_columns,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr)
 {
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;
@@ -648,6 +663,18 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     h_valid[i] = out_buffers[i].null_mask();
   }
 
+  // Allocate quoted_flags arrays for string columns (to track which fields were quoted)
+  std::vector<rmm::device_uvector<bool>> quoted_flags_storage;
+  auto h_quoted_flags = cudf::detail::make_host_vector<bool*>(num_active_columns, stream);
+  for (int i = 0; i < num_active_columns; ++i) {
+    if (column_types[i].id() == type_id::STRING) {
+      quoted_flags_storage.emplace_back(num_records, stream);
+      h_quoted_flags[i] = quoted_flags_storage.back().data();
+    } else {
+      h_quoted_flags[i] = nullptr;
+    }
+  }
+
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
     num_active_columns, stream, cudf::get_current_device_resource_ref());
 
@@ -660,6 +687,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref()),
     make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
     d_valid_counts,
+    make_device_uvector_async(h_quoted_flags, stream, cudf::get_current_device_resource_ref()),
     stream);
 
   auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);
@@ -667,7 +695,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
   }
 
-  return out_buffers;
+  return {std::move(out_buffers), std::move(quoted_flags_storage)};
 }
 
 cudf::detail::host_vector<data_type> determine_column_types(
@@ -909,7 +937,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
   out_columns.reserve(column_types.size());
   if (num_records != 0) {
-    auto out_buffers = decode_data(  //
+    auto decode_result = decode_data(  //
       parse_opts,
       column_flags,
       column_names,
@@ -922,20 +950,80 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       stream,
       mr);
 
+    auto& out_buffers  = decode_result.buffers;
+    auto& quoted_flags = decode_result.quoted_flags;
+
     cudf::string_scalar quotechar_scalar(std::string(1, parse_opts.quotechar), true, stream);
     cudf::string_scalar dblquotechar_scalar(std::string(2, parse_opts.quotechar), true, stream);
+    size_t quoted_flags_idx = 0;
     for (size_t i = 0; i < column_types.size(); ++i) {
       metadata.schema_info.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && parse_opts.quotechar != '\0' &&
           parse_opts.doublequote) {
-        // PANDAS' default behavior of enabling doublequote for two consecutive
-        // quotechars in quoted fields results in reduction to a single quotechar
-        // TODO: Would be much more efficient to perform this operation in-place
-        // during the conversion stage
-        std::unique_ptr<column> col = cudf::make_strings_column(*out_buffers[i]._strings, stream);
-        out_columns.emplace_back(cudf::strings::detail::replace(
-          col->view(), dblquotechar_scalar, quotechar_scalar, -1, stream, mr));
+        // Only replace "" with " for fields that were actually quoted.
+        // Unquoted fields may contain "" as literal content that should be preserved.
+
+        // Get the quoted flags for this column
+        auto const& flags      = quoted_flags[quoted_flags_idx++];
+        auto const* flags_data = flags.data();
+
+        // Count how many rows were quoted to determine the fast path
+        auto const num_quoted =
+          thrust::count(rmm::exec_policy_nosync(stream), flags.begin(), flags.end(), true);
+
+        if (num_quoted == 0) {
+          // Fast path: no rows were quoted, skip replacement entirely
+          out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
+        } else if (num_quoted == static_cast<decltype(num_quoted)>(num_records)) {
+          // Fast path: all rows were quoted, apply replacement to all
+          std::unique_ptr<column> col = cudf::make_strings_column(*out_buffers[i]._strings, stream);
+          out_columns.emplace_back(cudf::strings::detail::replace(
+            col->view(), dblquotechar_scalar, quotechar_scalar, -1, stream, mr));
+        } else {
+          // Mixed case: need to selectively apply replacement only to quoted rows
+
+          // Create the replaced column (with "" -> " applied to all rows)
+          std::unique_ptr<column> replaced_col = cudf::strings::detail::replace(
+            cudf::make_strings_column(*out_buffers[i]._strings, stream)->view(),
+            dblquotechar_scalar,
+            quotechar_scalar,
+            -1,
+            stream,
+            mr);
+
+          // Create device view for the replaced column to iterate over
+          auto const replaced_view = cudf::column_device_view::create(replaced_col->view(), stream);
+          auto const replaced_iter = cudf::detail::make_optional_iterator<cudf::string_view>(
+            *replaced_view, cudf::nullate::DYNAMIC{replaced_col->nullable()});
+
+          // Create iterator over original strings directly from the _strings buffer
+          // This avoids allocating a separate column for the original strings
+          auto const* original_pairs = out_buffers[i]._strings->data();
+          auto const original_iter   = thrust::make_transform_iterator(
+            thrust::make_counting_iterator<size_type>(0),
+            cuda::proclaim_return_type<cuda::std::optional<cudf::string_view>>(
+              [original_pairs] __device__(size_type idx) -> cuda::std::optional<cudf::string_view> {
+                auto const& p = original_pairs[idx];
+                return p.first != nullptr
+                           ? cuda::std::optional<cudf::string_view>{cudf::string_view{p.first,
+                                                                                    p.second}}
+                           : cuda::std::nullopt;
+              }));
+
+          // Use iterator-based copy_if_else: take from replaced where quoted, original otherwise
+          out_columns.emplace_back(cudf::strings::detail::copy_if_else(
+            replaced_iter,
+            replaced_iter + num_records,
+            original_iter,
+            [flags_data] __device__(size_type idx) { return flags_data[idx]; },
+            stream,
+            mr));
+        }
       } else {
+        if (column_types[i].id() == type_id::STRING) {
+          // Skip the quoted_flags entry for non-doublequote string columns
+          ++quoted_flags_idx;
+        }
         out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
       }
     }
