@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Sorting Logic."""
 
@@ -23,7 +23,11 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import _simple_shuffle_graph
 from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 from cudf_polars.utils.config import ShuffleMethod
-from cudf_polars.utils.cuda_stream import get_dask_cuda_stream, get_joined_cuda_stream
+from cudf_polars.utils.cuda_stream import (
+    deferred_dealloc_stream,
+    get_dask_cuda_stream,
+    get_joined_cuda_stream,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
@@ -321,27 +325,24 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
 
         by = options["by"]
 
-        stream = get_joined_cuda_stream(
-            get_dask_cuda_stream, upstreams=(df.stream, sort_boundaries.stream)
-        )
-
-        splits = find_sort_splits(
-            df.select(by).table,
-            sort_boundaries.table,
-            partition_id,
-            options["order"],
-            options["null_order"],
-            stream=stream,
-        )
-        packed_inputs = split_and_pack(
-            df.table,
-            splits=splits,
-            br=context.br,
-            stream=stream,
-        )
-        # TODO: figure out handoff with rapidsmpf
-        # https://github.com/rapidsai/cudf/issues/20337
-        shuffler.insert_chunks(packed_inputs)
+        with deferred_dealloc_stream(context, [df, sort_boundaries]) as stream:
+            splits = find_sort_splits(
+                df.select(by).table,
+                sort_boundaries.table,
+                partition_id,
+                options["order"],
+                options["null_order"],
+                stream=stream,
+            )
+            packed_inputs = split_and_pack(
+                df.table,
+                splits=splits,
+                br=context.br,
+                stream=stream,
+            )
+            # TODO: figure out handoff with rapidsmpf
+            # https://github.com/rapidsai/cudf/issues/20337
+            shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
     def extract_partition(
