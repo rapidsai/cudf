@@ -85,8 +85,8 @@ units inside libcudf should be placed according to their namespace:
 - For APIs in a sub-namespace's detail (e.g., `cudf::hashing::detail` or `cudf::strings::detail`),
   place headers in `include/cudf/<sub-namespace>/detail/` (e.g., `include/cudf/hashing/detail/`).
 
-Just like the public C++ API headers, any internal C++ API header requires `CUDF_EXPORT` markup on
-the `cudf` namespace so that the functions can be tested.
+Internal C++ headers may need `CUDF_EXPORT` if that internal functionality is tested directly (as
+opposed to tested via only public APIs).
 
 All headers in cudf should use `#pragma once` for include guards.
 
