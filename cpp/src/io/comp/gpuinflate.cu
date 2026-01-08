@@ -44,6 +44,7 @@ Mark Adler    madler@alumni.caltech.edu
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/gather.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
@@ -1065,6 +1066,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   __syncthreads();
   // Main loop decoding blocks
   while (!state->err) {
+    __syncthreads();
     if (!t) {
       // Thread0: read last flag, block type and custom huffman tables if any
       if (state->cur + (state->bitpos >> 3) >= state->end)
@@ -1119,7 +1121,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       copy_stored(state, t);
     }
     if (state->blast) break;
-    __syncthreads();
   }
   __syncthreads();
   // Output decompression status and length
@@ -1268,8 +1269,8 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                     thrust::make_zip_iterator(inputs.end(), outputs.end()),
                     costs.begin(),
                     [task_type] __device__(auto const& input_output_pair) {
-                      auto const& input  = thrust::get<0>(input_output_pair);
-                      auto const& output = thrust::get<1>(input_output_pair);
+                      auto const& input  = cuda::std::get<0>(input_output_pair);
+                      auto const& output = cuda::std::get<1>(input_output_pair);
                       return cost_model::task_device_cost(input.size(), output.size(), task_type);
                     });
 

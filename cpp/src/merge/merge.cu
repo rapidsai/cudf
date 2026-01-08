@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,14 +33,13 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/merge.h>
-#include <thrust/pair.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <limits>
 #include <numeric>
@@ -98,8 +97,8 @@ using index_type = detail::index_type;
  *
  * Merges the bits from two column_device_views into the destination validity buffer
  * according to `merged_indices` map such that bit `i` in `out_validity`
- * will be equal to bit `thrust::get<1>(merged_indices[i])` from `left_dcol`
- * if `thrust::get<0>(merged_indices[i])` equals `side::LEFT`; otherwise,
+ * will be equal to bit `cuda::std::get<1>(merged_indices[i])` from `left_dcol`
+ * if `cuda::std::get<0>(merged_indices[i])` equals `side::LEFT`; otherwise,
  * from `right_dcol`.
  *
  * `left_dcol` and `right_dcol` must not overlap.
@@ -255,7 +254,7 @@ index_vector generate_merged_indices(table_view const& left_table,
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view, *rhs_device_view, d_column_order, d_null_precedence);
-    thrust::merge(rmm::exec_policy(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -265,7 +264,7 @@ index_vector generate_merged_indices(table_view const& left_table,
   } else {
     auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
       *lhs_device_view, *rhs_device_view, d_column_order, {});
-    thrust::merge(rmm::exec_policy(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -319,10 +318,10 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
         // would fall
         auto const r_bound      = thrust::upper_bound(thrust::seq, left, left + left_size, idx);
         auto const r_segment    = cuda::std::distance(left, r_bound);
-        merged[r_segment + idx] = thrust::make_pair(side::RIGHT, idx);
+        merged[r_segment + idx] = cuda::std::make_pair(side::RIGHT, idx);
       } else {
         auto const left_idx               = idx - right_size;
-        merged[left[left_idx] + left_idx] = thrust::make_pair(side::LEFT, left_idx);
+        merged[left[left_idx] + left_idx] = cuda::std::make_pair(side::LEFT, left_idx);
       }
     });
 
@@ -391,7 +390,7 @@ struct column_merger {
     // and "gather" into merged_view.data()[indx_merged]
     // from lcol or rcol, depending on side;
     //
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       row_order_.begin(),
                       row_order_.end(),
                       merged_view.begin<Element>(),

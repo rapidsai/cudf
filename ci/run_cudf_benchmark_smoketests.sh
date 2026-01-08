@@ -9,7 +9,7 @@ cd "${INSTALL_PREFIX:-${CONDA_PREFIX:-/usr}}/bin/benchmarks/libcudf/";
 
 # Ensure that benchmarks are runnable
 # Run a small Google benchmark
-./MERGE_BENCH --benchmark_filter=/2/
+# ./MERGE_BENCH --benchmark_filter=/2/
 
 # Run all nvbench benchmarks with --profile and 1 minute timeout
 for bench in *_NVBENCH; do

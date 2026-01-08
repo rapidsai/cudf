@@ -6,13 +6,13 @@
 #include "page_data.cuh"
 #include "page_decode.cuh"
 
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/iterator>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
 
@@ -213,12 +213,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   // Zero-fill null positions after decoding valid values
-  int const leaf_level_index = s->col.max_nesting_depth - 1;
-  auto const& ni             = s->nesting_info[leaf_level_index];
-  if (ni.valid_map != nullptr) {
-    int const num_values = ni.valid_map_offset - init_valid_map_offset;
-    zero_fill_null_positions_shared<decode_block_size>(
-      s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+  if (has_repetition) {
+    int const leaf_level_index = s->col.max_nesting_depth - 1;
+    auto const& ni             = s->nesting_info[leaf_level_index];
+    if (ni.valid_map != nullptr) {
+      int const num_values = ni.valid_map_offset - init_valid_map_offset;
+      zero_fill_null_positions_shared<decode_block_size>(
+        s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+    }
   }
 
   if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
@@ -335,6 +337,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   __shared__ level_t rep[rolling_buf_size];  // circular buffer of repetition level values
   __shared__ level_t def[rolling_buf_size];  // circular buffer of definition level values
 
+  auto const is_decimal =
+    s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+  Type const dtype = s->col.physical_type;
+
   auto const first_out_thread_id = out_warp_id * warp.size();
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
@@ -380,7 +386,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       if (warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
-      Type const dtype = s->col.physical_type;
       src_pos += block.thread_rank() - first_out_thread_id;
 
       // the position in the output column/buffer
@@ -414,8 +419,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         uint32_t const dtype_len = s->dtype_len;
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
-        auto const is_decimal =
-          s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+
         if (dtype == Type::BYTE_ARRAY) {
           if (is_decimal) {
             auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
@@ -482,11 +486,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   // Zero-fill null positions after decoding valid values
-  auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
-  if (ni.valid_map != nullptr) {
-    int const num_values = ni.valid_map_offset - init_valid_map_offset;
-    zero_fill_null_positions_shared<decode_block_size>(
-      s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+  auto const is_string =
+    ((dtype == Type::BYTE_ARRAY) && !is_decimal) || (dtype == Type::FIXED_LEN_BYTE_ARRAY);
+  if (is_string || has_repetition) {
+    auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+    if (ni.valid_map != nullptr) {
+      int const num_values = ni.valid_map_offset - init_valid_map_offset;
+      zero_fill_null_positions_shared<decode_block_size>(
+        s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+    }
   }
 
   if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
@@ -502,12 +510,12 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
                                            rmm::cuda_stream_view stream)
 {
   // determine which kernels to invoke
-  auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
-  return thrust::reduce(rmm::exec_policy(stream),
-                        mask_iter,
-                        mask_iter + pages.size(),
-                        0U,
-                        cuda::std::bit_or<uint32_t>{});
+  return cudf::detail::transform_reduce(pages.device_begin(),
+                                        pages.device_end(),
+                                        mask_tform{},
+                                        uint32_t{0},
+                                        cuda::std::bit_or<uint32_t>{},
+                                        stream);
 }
 
 /**

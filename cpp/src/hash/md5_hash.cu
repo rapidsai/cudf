@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -20,6 +20,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -86,7 +87,7 @@ template <typename Element>
 auto __device__ inline get_element_pointer_and_size(Element const& element)
 {
   if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
-    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
+    return cuda::std::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
   } else {
     CUDF_UNREACHABLE("Unsupported type.");
   }
@@ -95,7 +96,8 @@ auto __device__ inline get_element_pointer_and_size(Element const& element)
 template <>
 auto __device__ inline get_element_pointer_and_size(string_view const& element)
 {
-  return thrust::make_pair(reinterpret_cast<uint8_t const*>(element.data()), element.size_bytes());
+  return cuda::std::make_pair(reinterpret_cast<uint8_t const*>(element.data()),
+                              element.size_bytes());
 }
 
 // The MD5 algorithm and its hash/shift constants are officially specified in
@@ -308,7 +310,7 @@ std::unique_ptr<column> md5(table_view const& input,
 
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(input.num_rows()),
     [d_chars, device_input = *device_input] __device__(auto row_index) {

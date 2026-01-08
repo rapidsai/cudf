@@ -6,9 +6,6 @@ ignore_missing_imports = true
 ignore_errors = false
 enable_error_code = "ignore-without-code"
 warn_unused_ignores = true
-# If we don't specify this, then mypy will check excluded files if
-# they are imported by a checked file.
-follow_imports = "skip"
 exclude = [
     "cudf/_lib/",
     "cudf/cudf/tests/",
@@ -17,8 +14,14 @@ exclude = [
  ]
 
 [[tool.mypy.overrides]]
+module = ["cudf.core.column.*"]
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
 module = ["cudf_polars.*"]
 disallow_untyped_defs = true
+follow_imports = "normal"
+ignore_missing_imports = false
 
 [[tool.mypy.overrides]]
 module = ["polars.*"]

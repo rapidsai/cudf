@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -30,7 +30,6 @@ from cudf.api.types import (
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting, stream_compaction
 from cudf.core.accessors import StringMethods
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -40,6 +39,7 @@ from cudf.core.column import (
     StringColumn,
     StructColumn,
     TimeDeltaColumn,
+    access_columns,
 )
 from cudf.core.column.column import as_column, column_empty, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
@@ -73,7 +73,7 @@ if TYPE_CHECKING:
     from cudf.core.frame import Frame
     from cudf.core.multiindex import MultiIndex
     from cudf.core.series import Series
-    from cudf.core.tools.datetimes import DateOffset
+    from cudf.core.tools.datetimes import DateOffset, MonthEnd, YearEnd
 
 
 def ensure_index(index_like: Any, nan_as_null=no_default) -> Index:
@@ -138,7 +138,6 @@ def _lexsorted_equal_range(
 
 def _index_from_data(data: MutableMapping, name: Any = no_default):
     """Construct an index of the appropriate type from some data."""
-
     if len(data) == 0:
         raise ValueError("Cannot construct Index from any empty Table")
     if len(data) == 1:
@@ -325,31 +324,25 @@ class Index(SingleColumnFrame):
         return _index_from_data(data, self.name)
 
     @_performance_tracking
-    def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
+    def to_pylibcudf(self) -> tuple[plc.Column, dict]:
         """
         Convert this Index to a pylibcudf.Column.
-
-        Parameters
-        ----------
-        copy : bool
-            Whether or not to generate a new copy of the underlying device data
 
         Returns
         -------
         pylibcudf.Column
-            A new pylibcudf.Column referencing the same data.
+            A pylibcudf.Column referencing the same data.
         dict
             Dict of metadata (includes name)
 
         Notes
         -----
-        User requests to convert to pylibcudf must assume that the
-        data may be modified afterwards.
+        This is always a zero-copy operation. The result is a view of the
+        existing data. Changes to the pylibcudf data will be reflected back
+        to the cudf object and vice versa.
         """
-        if copy:
-            raise NotImplementedError("copy=True is not supported")
         metadata = {"name": self.name}
-        return self._column.to_pylibcudf(mode="write"), metadata
+        return self._column.to_pylibcudf(), metadata
 
     @classmethod
     @_performance_tracking
@@ -388,7 +381,7 @@ class Index(SingleColumnFrame):
                 raise ValueError("Metadata dict must only contain a name")
             name = metadata.get("name")
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True),
+            ColumnBase.from_pylibcudf(col),
             name=name,
         )
 
@@ -422,62 +415,6 @@ class Index(SingleColumnFrame):
         except TypeError:
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
-
-    @classmethod
-    def from_pandas(cls, index: pd.Index, nan_as_null=no_default) -> Index:
-        """
-        Convert from a Pandas Index.
-
-        Parameters
-        ----------
-        index : Pandas Index object
-            A Pandas Index object which has to be converted
-            to cuDF Index.
-        nan_as_null : bool, Default None
-            If ``None``/``True``, converts ``np.nan`` values
-            to ``null`` values.
-            If ``False``, leaves ``np.nan`` values as is.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> import numpy as np
-        >>> data = [10, 20, 30, np.nan]
-        >>> pdi = pd.Index(data)
-        >>> cudf.Index.from_pandas(pdi)
-        Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
-        >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
-        Index([10.0, 20.0, 30.0, nan], dtype='float64')
-        """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Use the Index constructor instead.",
-            FutureWarning,
-        )
-        if nan_as_null is no_default:
-            nan_as_null = (
-                False if cudf.get_option("mode.pandas_compatible") else None
-            )
-
-        if not isinstance(index, pd.Index):
-            raise TypeError("Expected a pandas.Index, got {type(index)}")
-        if isinstance(index, pd.RangeIndex):
-            return cudf.RangeIndex(
-                start=index.start,
-                stop=index.stop,
-                step=index.step,
-                name=index.name,
-            )
-        else:
-            return cudf.Index._from_column(
-                as_column(index, nan_as_null=nan_as_null),
-                name=index.name,
-            )
 
     @cached_property
     def is_monotonic_increasing(self) -> bool:
@@ -769,7 +706,7 @@ class Index(SingleColumnFrame):
 
         MultiIndex case
 
-        >>> idx1 = cudf.MultiIndex.from_pandas(
+        >>> idx1 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
         ...    )
@@ -780,7 +717,7 @@ class Index(SingleColumnFrame):
                     (2,  'Red'),
                     (2, 'Blue')],
                    )
-        >>> idx2 = cudf.MultiIndex.from_pandas(
+        >>> idx2 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[3, 3, 2, 2], ["Red", "Green", "Red", "Green"]]
         ...    )
@@ -897,12 +834,12 @@ class Index(SingleColumnFrame):
 
         MultiIndex case
 
-        >>> idx1 = cudf.MultiIndex.from_pandas(
+        >>> idx1 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[1, 1, 3, 4], ["Red", "Blue", "Red", "Blue"]]
         ...    )
         ... )
-        >>> idx2 = cudf.MultiIndex.from_pandas(
+        >>> idx2 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
         ...    )
@@ -1909,6 +1846,11 @@ class Index(SingleColumnFrame):
     def memory_usage(self, deep: bool = False) -> int:
         return self._column.memory_usage
 
+    def __sizeof__(self):
+        if cudf.get_option("mode.pandas_compatible"):
+            return self.memory_usage(deep=True)
+        return object.__sizeof__(self)
+
     @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
     def is_unique(self) -> bool:
@@ -1938,7 +1880,12 @@ class Index(SingleColumnFrame):
             # Can compare Index to CategoricalIndex or RangeIndex
             # Other comparisons are invalid
             return False
-
+        if self_is_categorical and other_is_categorical:
+            if self.dtype != other.dtype:
+                return False
+            return self._column._get_decategorized_column().equals(
+                other._column._get_decategorized_column()
+            )
         try:
             return self._column.equals(
                 other._column, check_dtypes=check_dtypes
@@ -1964,7 +1911,7 @@ class Index(SingleColumnFrame):
         New index instance.
         """
         name = self.name if name is None else name
-        col = self._column.copy(deep=True) if deep else self._column
+        col = self._column.copy(deep=deep)
         return type(self)._from_column(col, name=name)
 
     @_performance_tracking
@@ -2022,10 +1969,13 @@ class Index(SingleColumnFrame):
         except ValueError:
             return self._return_get_indexer_result(result.values)
 
-        with acquire_spill_lock():
+        with access_columns(lcol, rcol, mode="read", scope="internal") as (
+            lcol,
+            rcol,
+        ):
             left_plc, right_plc = plc.join.inner_join(
-                plc.Table([lcol.to_pylibcudf(mode="read")]),
-                plc.Table([rcol.to_pylibcudf(mode="read")]),
+                plc.Table([lcol.plc_column]),
+                plc.Table([rcol.plc_column]),
                 plc.types.NullEquality.EQUAL,
             )
             scatter_map = ColumnBase.from_pylibcudf(left_plc)
@@ -2923,7 +2873,7 @@ class RangeIndex(Index):
     @cached_property
     @_performance_tracking
     def values_host(self) -> np.ndarray:
-        return np.arange(start=self.start, stop=self.stop, step=self.step)
+        return np.arange(self.start, self.stop, self.step)
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
@@ -3496,6 +3446,42 @@ class DatetimeIndex(Index):
                   dtype='datetime64[ns]', name='a')
     """
 
+    timestamp_to_timedelta = {
+        plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS): plc.DataType(
+            plc.TypeId.DURATION_NANOSECONDS
+        ),
+        plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS): plc.DataType(
+            plc.TypeId.DURATION_MICROSECONDS
+        ),
+        plc.DataType(plc.TypeId.TIMESTAMP_SECONDS): plc.DataType(
+            plc.TypeId.DURATION_SECONDS
+        ),
+        plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS): plc.DataType(
+            plc.TypeId.DURATION_MILLISECONDS
+        ),
+    }
+
+    _allowed = (
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "milliseconds",
+        "microseconds",
+        "nanoseconds",
+    )
+
+    MONTHLY_PERIODS = {
+        pd.Timedelta("28 days"),
+        pd.Timedelta("29 days"),
+        pd.Timedelta("30 days"),
+        pd.Timedelta("31 days"),
+    }
+    YEARLY_PERIODS = {
+        pd.Timedelta("365 days"),
+        pd.Timedelta("366 days"),
+    }
+
     @_performance_tracking
     def __init__(
         self,
@@ -3512,11 +3498,14 @@ class DatetimeIndex(Index):
         name=None,
         nan_as_null=no_default,
     ):
+        self._freq = None
         # we should be more strict on what we accept here but
         # we'd have to go and figure out all the semantics around
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
+        was_pd_index = isinstance(data, pd.DatetimeIndex)
+
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
         if normalize is not False:
@@ -3540,10 +3529,14 @@ class DatetimeIndex(Index):
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
-        if freq is None and isinstance(data, type(self)):
-            freq = data.freq
+        if freq is None:
+            if isinstance(data, type(self)):
+                freq = data.freq
+            if was_pd_index and data.freq is not None:
+                freq = data.freq.freqstr
 
         name = _getdefault_name(data, name=name)
+
         data = as_column(data)
         if data.dtype.kind == "b":
             raise ValueError(
@@ -3566,13 +3559,47 @@ class DatetimeIndex(Index):
             self, ColumnAccessor({name: data}, verify=False)
         )
         self._freq = _validate_freq(freq)
-        if self._freq is not None:
+        # existing pandas index needs no additional validation
+        if self._freq is not None and not was_pd_index:
             unique_vals = self.to_series().diff().unique()
-            if len(unique_vals) > 2 or (
-                len(unique_vals) == 2
-                and unique_vals[1] != self._freq._maybe_as_fast_pandas_offset()
-            ):
-                raise ValueError("No unique frequency found")
+            if self._freq == cudf.DateOffset(months=1):
+                possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
+                if unique_vals.isin(possible).sum() != len(unique_vals):
+                    raise ValueError("No unique frequency found")
+            elif self._freq == cudf.DateOffset(years=1):
+                possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
+                if unique_vals.isin(possible).sum() != len(unique_vals):
+                    raise ValueError("No unique frequency found")
+            else:
+                if len(unique_vals) > 2 or (
+                    len(unique_vals) == 2
+                    and unique_vals[1]
+                    != self._freq._maybe_as_fast_pandas_offset()
+                ):
+                    raise ValueError("No unique frequency found")
+
+    @_performance_tracking
+    def serialize(self):
+        header, frames = super().serialize()
+        if self.freq is not None:
+            header["freq"] = {
+                "kwds": self.freq.kwds,
+            }
+        else:
+            header["freq"] = None
+        return header, frames
+
+    @classmethod
+    @_performance_tracking
+    def deserialize(cls, header, frames):
+        obj = super().deserialize(header, frames)
+        if (header_payload := header.get("freq")) is not None:
+            freq = cudf.DateOffset(**header_payload["kwds"])
+        else:
+            freq = None
+
+        obj._freq = _validate_freq(freq)
+        return obj
 
     @_performance_tracking
     def _copy_type_metadata(self: Self, other: Self) -> Self:
@@ -3677,8 +3704,100 @@ class DatetimeIndex(Index):
         return self._column.astype(np.dtype(np.int64)).values
 
     @property
-    def inferred_freq(self) -> DateOffset | None:
-        raise NotImplementedError("inferred_freq is currently not implemented")
+    def inferred_freq(self) -> DateOffset | MonthEnd | YearEnd | None:
+        if self._freq:
+            return self._freq
+
+        plc_col = self._column.plc_column
+        shifted = plc.copying.shift(
+            plc_col, 1, plc.Scalar.from_py(None, dtype=plc_col.type())
+        )
+        diff = plc.binaryop.binary_operation(
+            plc_col,
+            shifted,
+            plc.binaryop.BinaryOperator.SUB,
+            self.timestamp_to_timedelta[plc_col.type()],
+        )
+        offset = plc.Column(
+            diff.type(),
+            diff.size() - 1,
+            diff.data(),
+            diff.null_mask(),
+            diff.null_count(),
+            1,
+            diff.children(),
+        )
+
+        uniques = plc.stream_compaction.stable_distinct(
+            plc.Table([offset]),
+            [0],
+            plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            plc.types.NullEquality.EQUAL,
+            plc.types.NanEquality.ALL_EQUAL,
+        ).columns()[0]
+        if uniques.size() <= 4:
+            # inspect a small host copy for special cases
+            uniques_host = uniques.to_arrow().to_pylist()
+        if uniques.size() == 1:
+            # base case of a fixed frequency
+            freq = uniques_host[0]
+
+            # special case of YS-JAN, YS-FEB, etc
+            # 365 days is allowable, but if it's the first of the month, pandas
+            # has a special freq for it, which would take more work to determine
+            # same with specifically 7 day intervals, where pandas has a unique
+            # frequency depending on the day of the week corresponding to the days
+            if freq == pd.Timedelta("365 days") and not self.is_year_end.all():
+                raise NotImplementedError("Can't infer anchored year start")
+            elif freq == pd.Timedelta("7 days"):
+                raise NotImplementedError("Can't infer anchored week")
+
+            assert isinstance(freq, pd.Timedelta)  # pacify mypy
+            cmps = freq.components
+
+            kwds = {}
+            for component in self._allowed:
+                if (c := getattr(cmps, component)) != 0:
+                    kwds[component] = c
+
+            return cudf.DateOffset(**kwds)
+
+        # maximum unique count supported is months with 4 unique lengths
+        # bail above that for now
+        elif 1 < uniques.size() <= 4:
+            # length between 1 and 4, small host copy
+            if all(x in self.YEARLY_PERIODS for x in uniques_host):
+                # Could be year end or could be an anchored year end
+                if self.is_year_end.all():
+                    return cudf.DateOffset._from_freqstr("YE-DEC")
+                else:
+                    raise NotImplementedError()
+            elif all(x in self.MONTHLY_PERIODS for x in uniques_host):
+                if self.is_month_end.all():
+                    return cudf.DateOffset._from_freqstr("ME")
+            else:
+                raise NotImplementedError
+        else:
+            return None
+        return None
+
+    def _get_slice_frequency(self, slc=None):
+        if slc.step in (1, None):
+            # no change in freq
+            return self._freq
+        if slc == slice(None, None, None):
+            return self._freq
+        else:
+            if slc:
+                # fastpath: dont introspect
+                new_freq = slc.step * pd.Timedelta(
+                    self._freq._maybe_as_fast_pandas_offset()
+                )
+                return cudf.DateOffset._from_freqstr(
+                    pd.tseries.frequencies.to_offset(new_freq).freqstr
+                )
+            else:
+                return self.inferred_freq
 
     @property
     def freq(self) -> DateOffset | None:
@@ -3866,7 +3985,7 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="Y"))
         >>> datetime_index
-        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]')
+        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]', freq='YE-DEC')
         >>> datetime_index.year
         Index([2000, 2001, 2002], dtype='int16')
         """
@@ -3886,7 +4005,7 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="M"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]')
+        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]', freq='ME')
         >>> datetime_index.month
         Index([1, 2, 3], dtype='int16')
         """
@@ -3906,7 +4025,7 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="D"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]')
+        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day
         Index([1, 2, 3], dtype='int16')
         """
@@ -3928,7 +4047,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 01:00:00',
                     '2000-01-01 02:00:00'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='h')
         >>> datetime_index.hour
         Index([0, 1, 2], dtype='int16')
         """
@@ -3950,7 +4069,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:01:00',
                     '2000-01-01 00:02:00'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='min')
         >>> datetime_index.minute
         Index([0, 1, 2], dtype='int16')
         """
@@ -3972,7 +4091,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:00:01',
                     '2000-01-01 00:00:02'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='s')
         >>> datetime_index.second
         Index([0, 1, 2], dtype='int16')
         """
@@ -3994,7 +4113,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex([       '2000-01-01 00:00:00', '2000-01-01 00:00:00.000001',
                '2000-01-01 00:00:00.000002'],
-              dtype='datetime64[ns]')
+              dtype='datetime64[ns]', freq='us')
         >>> datetime_index.microsecond
         Index([0, 1, 2], dtype='int16')
         """
@@ -4017,7 +4136,7 @@ class DatetimeIndex(Index):
         DatetimeIndex([          '2000-01-01 00:00:00',
                        '2000-01-01 00:00:00.000000001',
                        '2000-01-01 00:00:00.000000002'],
-                      dtype='datetime64[ns]')
+                      dtype='datetime64[ns]', freq='ns')
         >>> datetime_index.nanosecond
         Index([0, 1, 2], dtype='int16')
         """
@@ -4040,7 +4159,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='D')
         >>> datetime_index.weekday
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
@@ -4063,7 +4182,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='D')
         >>> datetime_index.dayofweek
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
@@ -4087,7 +4206,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='D')
         >>> datetime_index.dayofyear
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
@@ -4111,7 +4230,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day_of_year
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
@@ -5133,14 +5252,14 @@ def interval_range(
     pa_start = pa_start.cast(cudf_dtype_to_pa_type(common_dtype))
     pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
-    with acquire_spill_lock():
-        bin_edges = ColumnBase.from_pylibcudf(
-            plc.filling.sequence(
-                size=periods + 1,
-                init=pa_scalar_to_plc_scalar(pa_start),
-                step=pa_scalar_to_plc_scalar(pa_freq),
-            )
+    # No columns to access here - sequence creates new data
+    bin_edges = ColumnBase.from_pylibcudf(
+        plc.filling.sequence(
+            size=periods + 1,
+            init=pa_scalar_to_plc_scalar(pa_start),
+            step=pa_scalar_to_plc_scalar(pa_freq),
         )
+    )
     return IntervalIndex.from_breaks(
         bin_edges.astype(common_dtype), closed=closed, name=name
     )
@@ -5317,10 +5436,8 @@ class IntervalIndex(Index):
             breaks = breaks.astype(np.dtype(np.int64))
         if copy:
             breaks = breaks.copy()
-        left_col = breaks.slice(0, len(breaks) - 1).to_pylibcudf(mode="read")
-        right_col = (
-            breaks.slice(1, len(breaks)).copy().to_pylibcudf(mode="read")
-        )
+        left_col = breaks.slice(0, len(breaks) - 1).plc_column
+        right_col = breaks.slice(1, len(breaks)).copy().plc_column
         # For indexing, children should both have 0 offset
         right_col = plc.Column(
             right_col.type(),
@@ -5575,7 +5692,13 @@ def _as_index(
             )
         return data.copy(deep=copy)
     elif isinstance(data, Index):
-        idx = data.copy(deep=copy).rename(name)
+        if not isinstance(data, cudf.RangeIndex):
+            idx = type(data)._from_column(
+                data._column.copy(deep=copy) if copy else data._column,
+                name=name,
+            )
+        else:
+            idx = data.copy(deep=copy).rename(name)
     elif isinstance(data, ColumnBase):
         raise ValueError("Use cudf.Index._from_column instead.")
     elif isinstance(data, (pd.RangeIndex, range)):
@@ -5584,6 +5707,12 @@ def _as_index(
             stop=data.stop,
             step=data.step,
             name=name,
+        )
+    elif isinstance(data, pd.DatetimeIndex):
+        return cudf.DatetimeIndex._from_data(
+            {None: as_column(data, nan_as_null=nan_as_null)},
+            name=data.name,
+            freq=data.freq.freqstr if data.freq else None,
         )
     elif isinstance(data, pd.MultiIndex):
         if dtype is not None:
@@ -5748,7 +5877,7 @@ def _get_nearest_indexer(
     return indexer
 
 
-def _validate_freq(freq: Any) -> DateOffset | None:
+def _validate_freq(freq: Any) -> DateOffset | MonthEnd | YearEnd | None:
     if isinstance(freq, str):
         return cudf.DateOffset._from_freqstr(freq)
     elif freq is None:

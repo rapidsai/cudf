@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import contextlib
+from decimal import Decimal
 
 import pytest
 
@@ -15,7 +16,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130, POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_130,
+    POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_134,
+)
 
 
 @pytest.fixture(scope="module")
@@ -160,3 +165,35 @@ def test_select_literal(engine):
     ldf = pl.LazyFrame({"a": list(range(10))})
     q = ldf.select(pl.lit(2).pow(pl.lit(-3, dtype=pl.Float32)))
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_select_with_empty_partitions(df, engine):
+    df = pl.concat(
+        [
+            pl.LazyFrame({"b": pl.Series([], dtype=pl.Decimal(15, 2))}),
+            pl.LazyFrame({"b": pl.Series([], dtype=pl.Decimal(15, 2))}),
+        ]
+    )
+    q = df.select(pl.col("b").sum() / Decimal("7.00"))
+    # Polars pre their decimal overhaul: https://github.com/pola-rs/polars/issues/19784
+    # returned a different precision and scale, so we skip dtype check
+    assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_134)
+
+
+def test_select_mean_with_decimals(df, engine):
+    df = pl.LazyFrame({"d": [Decimal("1.23")] * 4})
+    q = df.select(pl.mean("d"))
+    assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_134)
+
+
+def test_select_with_len(engine):
+    # https://github.com/pola-rs/polars/issues/25592
+    df1 = pl.LazyFrame({"c0": [1] * 4})
+    df2 = pl.LazyFrame({"c0": [2] * 4})
+    q = pl.concat([df1.join(df2, how="cross"), df1.with_columns(pl.lit(None))]).select(
+        pl.len()
+    )
+    with pytest.warns(
+        UserWarning, match="Cross join not support for multiple partitions"
+    ):
+        assert_gpu_result_equal(q, engine=engine)

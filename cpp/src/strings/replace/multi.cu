@@ -29,6 +29,7 @@
 #include <cuda/atomic>
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -56,7 +57,7 @@ constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 256;
  * @brief Type used for holding the target position (first) and the
  * target index (second).
  */
-using target_pair = thrust::tuple<int64_t, size_type>;
+using target_pair = cuda::std::tuple<int64_t, size_type>;
 
 /**
  * @brief Helper functions for performing character-parallel replace
@@ -289,14 +290,14 @@ CUDF_KERNEL void count_targets(replace_multi_parallel_fn fn, int64_t chars_bytes
 struct pair_generator {
   __device__ target_pair operator()(int64_t idx) const
   {
-    return thrust::make_tuple(idx, fn.target_index(idx, chars_bytes));
+    return cuda::std::make_tuple(idx, fn.target_index(idx, chars_bytes));
   }
   replace_multi_parallel_fn fn;
   int64_t chars_bytes;
 };
 
 struct copy_if_fn {
-  __device__ bool operator()(target_pair pos) { return thrust::get<1>(pos) >= 0; }
+  __device__ bool operator()(target_pair pos) { return cuda::std::get<1>(pos) >= 0; }
 };
 
 std::unique_ptr<column> replace_character_parallel(strings_column_view const& input,
@@ -340,9 +341,9 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto const copy_itr = thrust::make_transform_iterator(thrust::counting_iterator<int64_t>(0),
                                                         pair_generator{fn, chars_bytes});
   auto const out_itr  = thrust::make_zip_iterator(
-    thrust::make_tuple(targets_positions.begin(), targets_indices.begin()));
+    cuda::std::make_tuple(targets_positions.begin(), targets_indices.begin()));
   auto const copy_end =
-    cudf::detail::copy_if_safe(copy_itr, copy_itr + chars_bytes, out_itr, copy_if_fn{}, stream);
+    cudf::detail::copy_if(copy_itr, copy_itr + chars_bytes, out_itr, copy_if_fn{}, stream);
 
   // adjust target count since the copy-if may have eliminated some invalid targets
   target_count = std::min(static_cast<int64_t>(std::distance(out_itr, copy_end)), target_count);

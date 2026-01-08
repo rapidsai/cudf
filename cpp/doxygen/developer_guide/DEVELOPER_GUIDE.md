@@ -465,6 +465,21 @@ libcudf APIs _should_ promise to never return "dirty" columns, i.e. columns cont
 data. Therefore, the only problem is if users construct input columns that are not correctly
 sanitized and then pass those into libcudf APIs.
 
+## Null values of fixed-width columns are undefined
+
+For columns of fixed-width types (such as integers, floats, timestamps, and durations), the values
+corresponding to null elements (where the validity mask bit is set to null) are **undefined** and
+may contain arbitrary data. libcudf makes no guarantees about the initialization or content of these
+values.
+
+Code should not assume that null rows in fixed-width columns contain any particular value, including
+zero. Algorithms must rely solely on the validity mask to determine nullness and should not inspect
+the underlying data values for null elements.
+
+This policy applies only to fixed-width types. It does **not** apply to variable-width types
+(strings) or nested types (lists, structs), which have their own requirements as described in the
+sections above.
+
 ## Treat libcudf APIs as if they were asynchronous
 
 libcudf APIs called on the host do not guarantee that the stream is synchronized before returning.
@@ -532,7 +547,7 @@ void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_reso
   rmm::device_buffer buff(..., stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
   kernel<<<..., stream>>>(...);
-  thrust::algorithm(rmm::exec_policy(stream), ...);
+  thrust::algorithm(rmm::exec_policy_nosync(stream), ...);
 }
 } // namespace detail
 
@@ -889,7 +904,7 @@ Example output iterator usage:
 
 ```c++
 auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
-thrust::lower_bound(rmm::exec_policy(stream),
+thrust::lower_bound(rmm::exec_policy_nosync(stream),
                     input->begin<Element>(),
                     input->end<Element>(),
                     values->begin<Element>(),

@@ -8,7 +8,7 @@
 
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <iostream>
 
@@ -71,7 +71,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   void* do_allocate(std::size_t bytes, rmm::cuda_stream_view stream) override
   {
     verify_stream(stream);
-    return upstream_.allocate_async(bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, stream);
+    return upstream_.allocate(stream, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT);
   }
 
   /**
@@ -86,7 +86,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) noexcept override
   {
     verify_stream(stream);
-    upstream_.deallocate_async(ptr, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, stream);
+    upstream_.deallocate(stream, ptr, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT);
   }
 
   /**

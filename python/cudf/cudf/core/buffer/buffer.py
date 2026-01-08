@@ -1,11 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import math
 import weakref
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy
@@ -16,6 +15,7 @@ import rmm
 
 from cudf.core.abc import Serializable
 from cudf.core.buffer.string import format_bytes
+from cudf.options import get_option
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -40,58 +40,6 @@ def host_memory_allocation(nbytes: int) -> memoryview:
         The new host allocation.
     """
     return numpy.empty((nbytes,), dtype="u1").data
-
-
-def cuda_array_interface_wrapper(
-    ptr: int,
-    size: int,
-    owner: object | None = None,
-    readonly=False,
-    typestr="|u1",
-    version=0,
-):
-    """Wrap device pointer in an object that exposes `__cuda_array_interface__`
-
-    See <https://numba.readthedocs.io/en/stable/cuda/cuda_array_interface.html>
-
-    Parameters
-    ----------
-    ptr : int
-        An integer representing a pointer to device memory.
-    size : int, optional
-        Size of device memory in bytes.
-    owner : object, optional
-        Python object to which the lifetime of the memory allocation is tied.
-        A reference to this object is kept in the returned wrapper object.
-    readonly: bool, optional
-        Mark the interface read-only.
-    typestr: str, optional
-        The type string of the interface. By default this is "|u1", which
-        means "an unsigned integer with a not relevant byteorder". See:
-        <https://numpy.org/doc/stable/reference/arrays.interface.html>
-    version : bool, optional
-        The version of the interface.
-
-    Return
-    ------
-    SimpleNamespace
-        An object that exposes `__cuda_array_interface__` and keeps a reference
-        to `owner`.
-    """
-
-    if size < 0:
-        raise ValueError("size cannot be negative")
-
-    return SimpleNamespace(
-        __cuda_array_interface__={
-            "data": (ptr, readonly),
-            "shape": (size,),
-            "strides": None,
-            "typestr": typestr,
-            "version": version,
-        },
-        owner=owner,
-    )
 
 
 class BufferOwner(Serializable):
@@ -143,7 +91,6 @@ class BufferOwner(Serializable):
         ptr: int,
         size: int,
         owner: object,
-        exposed: bool,
     ):
         if size < 0:
             raise ValueError("size cannot be negative")
@@ -151,11 +98,11 @@ class BufferOwner(Serializable):
         self._ptr = ptr
         self._size = size
         self._owner = owner
-        self._exposed = exposed
+        self._exposed = False
         self._slices = weakref.WeakSet()
 
     @classmethod
-    def from_device_memory(cls, data: Any, exposed: bool) -> Self:
+    def from_device_memory(cls, data: Any) -> Self:
         """Create from an object providing a `__cuda_array_interface__`.
 
         No data is being copied.
@@ -164,10 +111,6 @@ class BufferOwner(Serializable):
         ----------
         data : device-buffer-like
             An object implementing the CUDA Array Interface.
-        exposed : bool
-            Mark the buffer as permanently exposed. This is used by
-            ExposureTrackedBuffer to determine when a deep copy is required
-            and by SpillableBuffer to mark the buffer unspillable.
 
         Returns
         -------
@@ -187,7 +130,7 @@ class BufferOwner(Serializable):
             size = data.size
         else:
             ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-        return cls(ptr=ptr, size=size, owner=data, exposed=exposed)
+        return cls(ptr=ptr, size=size, owner=data)
 
     @classmethod
     def from_host_memory(cls, data: Any) -> Self:
@@ -218,7 +161,7 @@ class BufferOwner(Serializable):
         # Copy to device memory
         buf = rmm.DeviceBuffer(ptr=ptr, size=size)
         # Create from device memory
-        return cls.from_device_memory(buf, exposed=False)
+        return cls.from_device_memory(buf)
 
     @property
     def size(self) -> int:
@@ -239,46 +182,26 @@ class BufferOwner(Serializable):
     def exposed(self) -> bool:
         """The current exposure status of the buffer
 
-        This is used by ExposureTrackedBuffer to determine when a deep copy
+        This is used by copy-on-write to determine when a deep copy
         is required and by SpillableBuffer to mark the buffer unspillable.
         """
         return self._exposed
 
+    @property
+    def ptr(self) -> int:
+        """Device pointer to the start of the buffer (Span protocol)."""
+        return self._ptr
+
     def mark_exposed(self) -> None:
         """Mark the buffer as "exposed" permanently
 
-        This is used by ExposureTrackedBuffer to determine when a deep copy
+        This is used by copy-on-write to determine when a deep copy
         is required and by SpillableBuffer to mark the buffer unspillable.
 
         Notice, once the exposure status becomes True, it will never change
         back.
         """
         self._exposed = True
-
-    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
-        """Device pointer to the start of the buffer.
-
-        Parameters
-        ----------
-        mode : str
-            Supported values are {"read", "write"}
-            If "write", the data pointed to may be modified
-            by the caller. If "read", the data pointed to
-            must not be modified by the caller.
-            Failure to fulfill this contract will cause
-            incorrect behavior.
-
-        Returns
-        -------
-        int
-            The device pointer as an integer
-
-        See Also
-        --------
-        SpillableBuffer.get_ptr
-        ExposureTrackedBuffer.get_ptr
-        """
-        return self._ptr
 
     def memoryview(
         self, *, offset: int = 0, size: int | None = None
@@ -287,7 +210,7 @@ class BufferOwner(Serializable):
         size = self._size if size is None else size
         host_buf = host_memory_allocation(size)
         rmm.pylibrmm.device_buffer.copy_ptr_to_host(
-            self.get_ptr(mode="read") + offset, host_buf
+            self.ptr + offset, host_buf
         )
         return memoryview(host_buf).toreadonly()
 
@@ -296,6 +219,25 @@ class BufferOwner(Serializable):
             f"<{self.__class__.__name__} size={format_bytes(self._size)} "
             f"ptr={hex(self._ptr)} owner={self._owner!r}>"
         )
+
+
+# TODO: Thread-safety
+class _BufferAccessContext:
+    """Context manager for buffer access mode control."""
+
+    __slots__ = ("_buffer", "_mode")
+
+    def __init__(self, buffer: Buffer, mode: Literal["read", "write"]):
+        self._buffer = buffer
+        self._mode = mode
+
+    def __enter__(self):
+        self._buffer._access_mode_stack.append(self._mode)
+        return self._buffer
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._buffer._access_mode_stack.pop()
+        return False
 
 
 class Buffer(Serializable):
@@ -336,6 +278,10 @@ class Buffer(Serializable):
         self._owner = owner
         self._offset = offset
         self._size = size
+        self._access_mode_stack: list[Literal["read", "write"]] = []
+        # Track this slice for copy-on-write
+        if get_option("copy_on_write"):
+            self._owner._slices.add(self)
 
     @property
     def size(self) -> int:
@@ -352,6 +298,41 @@ class Buffer(Serializable):
         """Object owning the memory of the buffer."""
         return self._owner
 
+    @property
+    def ptr(self) -> int:
+        """Device pointer (Span protocol)."""
+        # TODO: Convert to a try-except once we require all ptr access to be within the
+        # context manager. Then we will also remove the default "read" mode.
+        mode = (
+            self._access_mode_stack[-1] if self._access_mode_stack else "read"
+        )
+        if mode == "write" and get_option("copy_on_write"):
+            self.make_single_owner_inplace()
+        return self._owner.ptr + self._offset
+
+    def access(self, *, mode: Literal["read", "write"], **kwargs):
+        """Context manager for controlled buffer access.
+
+        Within this context, the buffer's ptr property will respect the
+        specified access mode. The **kwargs allows subclasses to extend with additional
+        parameters.
+
+        Parameters
+        ----------
+        mode : {"read", "write"}, default "read"
+            Access mode for the buffer. If copy-on-write is enabled:
+            - "read": ptr access will not trigger copy-on-write
+            - "write": ptr access will trigger copy-on-write if needed
+        **kwargs
+            Additional parameters for subclass implementations.
+
+        Returns
+        -------
+        _BufferAccessContext
+            A context manager that controls the access mode.
+        """
+        return _BufferAccessContext(self, mode)
+
     def __getitem__(self, key: slice) -> Self:
         """Create a new slice of the buffer."""
         if not isinstance(key, slice):
@@ -366,29 +347,39 @@ class Buffer(Serializable):
             owner=self._owner, offset=self._offset + start, size=stop - start
         )
 
-    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
-        return self._owner.get_ptr(mode=mode) + self._offset
-
     def memoryview(self) -> memoryview:
         return self._owner.memoryview(offset=self._offset, size=self._size)
 
     def copy(self, deep: bool = True) -> Self:
         """Return a copy of Buffer.
 
+        What actually happens when `deep == False` depends on the
+        "copy_on_write" option. When copy-on-write is enabled, a shallow copy
+        becomes a deep copy if the buffer has been exposed. This is because we
+        have no control over knowing if the data is being modified when the
+        buffer has been exposed to third-party.
+
         Parameters
         ----------
         deep : bool, default True
-            - If deep=True, returns a deep copy of the underlying data.
-            - If deep=False, returns a new `Buffer` instance that refers
-              to the same `BufferOwner` as this one. Thus, no device
-              data are being copied.
+            The semantics when copy-on-write is disabled:
+                - If deep=True, returns a deep copy of the underlying data.
+                - If deep=False, returns a shallow copy of the Buffer pointing
+                  to the same underlying data.
+            The semantics when copy-on-write is enabled:
+                - From the users perspective, always a deep copy of the
+                  underlying data. However, the data isn't actually copied
+                  until someone writes to the returned buffer.
 
         Returns
         -------
         Buffer
             A new buffer that either refers to either a new or an existing
-            `BufferOwner` depending on the `deep` argument (see above).
+            `BufferOwner` depending on the expose status of the owner and the
+            copy-on-write option (see above).
         """
+        if get_option("copy_on_write"):
+            deep = deep or self._owner.exposed
 
         # When doing a shallow copy, we just return a new slice
         if not deep:
@@ -399,23 +390,41 @@ class Buffer(Serializable):
         # Otherwise, we create a new copy of the memory
         owner = type(self._owner).from_device_memory(
             rmm.DeviceBuffer(
-                ptr=self._owner.get_ptr(mode="read") + self._offset,
+                ptr=self._owner.ptr + self._offset,
                 size=self.size,
             ),
-            exposed=False,
         )
         return self.__class__(owner=owner, offset=0, size=owner.size)
 
     @property
     def __cuda_array_interface__(self) -> Mapping:
         """Implementation of the CUDA Array Interface."""
-        return {
-            "data": (self.get_ptr(mode="write"), False),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 0,
-        }
+        if get_option("copy_on_write"):
+            self.make_single_owner_inplace()
+        with self.access(mode="write"):
+            return {
+                "data": (self.ptr, False),
+                "shape": (self.size,),
+                "strides": None,
+                "typestr": "|u1",
+                "version": 3,
+            }
+
+    def make_single_owner_inplace(self) -> None:
+        """Make sure this slice is the only one pointing to the owner.
+
+        This is used by copy-on-write to trigger a deep copy when write
+        access is detected.
+        """
+        if len(self._owner._slices) > 1:
+            # If this is not the only slice pointing to `self._owner`, we
+            # point to a new copy of our slice of `self._owner`.
+            self._owner._slices.remove(self)
+            t = self.copy(deep=True)
+            self._owner = t._owner
+            self._offset = t._offset
+            self._size = t._size
+            self._owner._slices.add(self)
 
     def serialize(self) -> tuple[dict, list]:
         """Serialize the buffer into header and frames.
@@ -462,7 +471,7 @@ class Buffer(Serializable):
             header["owner-type-serialized-name"]
         ]
         if hasattr(frame, "__cuda_array_interface__"):
-            owner = owner_type.from_device_memory(frame, exposed=False)
+            owner = owner_type.from_device_memory(frame)
         else:
             owner = owner_type.from_host_memory(frame)
         return cls(

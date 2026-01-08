@@ -12,11 +12,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/roaring_bitmap.cuh>
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scatter.h>
@@ -282,8 +283,8 @@ chunked_parquet_reader::chunked_parquet_reader(
 
   auto iter = thrust::make_zip_iterator(row_group_offsets.begin(), row_group_num_rows.begin());
   std::for_each(iter, iter + row_group_offsets.size(), [&](auto const& elem) {
-    _row_group_row_offsets.push(thrust::get<0>(elem));
-    _row_group_row_counts.push(thrust::get<1>(elem));
+    _row_group_row_offsets.push(cuda::std::get<0>(elem));
+    _row_group_row_counts.push(cuda::std::get<1>(elem));
   });
 
   if (not serialized_roaring64.empty()) {

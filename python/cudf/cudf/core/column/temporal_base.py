@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core.buffer.buffer import Buffer
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.mixins import Scannable
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
@@ -56,30 +56,6 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         "cummax",
     }
 
-    def __init__(
-        self,
-        data: Buffer,
-        size: int,
-        dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple,
-    ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer.")
-        if len(children) != 0:
-            raise ValueError(f"{type(self).__name__} must have no children.")
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
-
     def __contains__(self, item: np.datetime64 | np.timedelta64) -> bool:
         """
         Check if the column contains a given value.
@@ -96,11 +72,26 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             isinstance(fill_value, self._NP_SCALAR)
             and self.time_unit != np.datetime_data(fill_value)[0]
         ):
+            if isinstance(fill_value, self._NP_SCALAR):
+                unit = np.datetime_data(fill_value)[0]
+                if unit not in {"s", "ms", "us", "ns"}:
+                    fill_value = fill_value.astype(
+                        np.dtype(f"{fill_value.dtype.kind}8[ns]")
+                    )
             fill_value = fill_value.astype(self.dtype)
         elif isinstance(fill_value, str) and fill_value.lower() == "nat":
             # call-overload must be ignored because numpy stubs only accept literal
             # time unit strings, but we're passing self.time_unit which is valid at runtime
             fill_value = self._NP_SCALAR(fill_value, self.time_unit)  # type: ignore[call-overload]
+        elif (
+            cudf.get_option("mode.pandas_compatible")
+            and is_scalar(fill_value)
+            and not isinstance(fill_value, (self._NP_SCALAR, self._PD_SCALAR))
+        ):
+            raise MixedTypeError(
+                f"Cannot use fill_value of type {type(fill_value)} with "
+                f"TemporalBaseColumn of dtype {self.dtype}."
+            )
         return super()._validate_fillna_value(fill_value)
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
@@ -219,7 +210,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
         if self.has_nulls():
             raise ValueError("cupy does not support NaT.")
-        return cp.asarray(self.data).view(dtype)
+        return cp.asarray(self).view(dtype)
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
@@ -264,10 +255,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         new_plc_column = plc.Column(
             data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
             size=self.size,
-            data=plc.gpumemoryview(self.base_data),
-            mask=plc.gpumemoryview(self.base_mask)
-            if self.base_mask is not None
-            else None,
+            data=self.data,
+            mask=self.mask,
             null_count=self.null_count,
             offset=self.offset,
             children=[],

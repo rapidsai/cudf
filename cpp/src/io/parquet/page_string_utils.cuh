@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -234,12 +234,18 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
  * @param string_output_offset Starting offset into the output column data for writing
  */
 template <int block_size,
+          bool has_dict_t,
           bool has_lists_t,
           bool split_decode_t,
           copy_mode copy_mode_t,
           typename state_buf>
-__device__ size_t decode_strings(
-  page_state_s* s, state_buf* const sb, int start, int end, int t, size_t string_output_offset)
+__device__ size_t decode_strings(page_state_s* s,
+                                 state_buf* const sb,
+                                 int start,
+                                 int end,
+                                 int t,
+                                 uint32_t* str_offsets,
+                                 size_t string_output_offset)
 {
   // nesting level that is storing actual leaf values
   int const leaf_level_index    = s->col.max_nesting_depth - 1;
@@ -276,18 +282,43 @@ __device__ size_t decode_strings(
     }();
 
     // lookup input string pointer & length. store length.
-    bool const in_range                       = (thread_pos < target_pos) && (dst_pos >= 0);
-    auto [thread_input_string, string_length] = [&]() {
+    bool const in_range                             = (thread_pos < target_pos);
+    auto const [thread_input_string, string_length] = [&]() {
       // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
       // before first_row) in the flat hierarchy case.
       if (!in_range) { return string_index_pair{nullptr, 0}; }
-      string_index_pair string_pair = gpuGetStringData(s, sb, src_pos);
-      int32_t* str_len_ptr          = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
-      *str_len_ptr                  = string_pair.second;
-      return string_pair;
+      if constexpr (has_dict_t) {
+        return gpuGetStringData(s, sb, src_pos);
+      } else {
+        int input_thread_string_offset;
+        int string_length;
+        if (s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
+          input_thread_string_offset = src_pos * s->dtype_len_in;
+          string_length              = s->dtype_len_in;
+        } else {
+          input_thread_string_offset = str_offsets[src_pos];
+          int const next_offset      = str_offsets[src_pos + 1];
+          // The memory is laid out as: 4-byte length, string, 4-byte length, string, ...
+          // String length = subtract the offsets and the stored length of the next string
+          // Except at the end of the dictionary, where the last string offset is repeated.
+          string_length = (next_offset == input_thread_string_offset)
+                            ? 0
+                            : next_offset - input_thread_string_offset - sizeof(int32_t);
+        }
+        if (input_thread_string_offset >= static_cast<uint32_t>(s->dict_size)) {
+          return string_index_pair{nullptr, 0};
+        }
+        auto const thread_input_string =
+          reinterpret_cast<char const*>(s->data_start + input_thread_string_offset);
+        return string_index_pair{thread_input_string, string_length};
+      }
     }();
+    if (in_range) {
+      int32_t* str_len_ptr = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
+      *str_len_ptr         = string_length;
+    }
 
-    // compute string offsets
+    // compute output string offsets
     size_t thread_string_offset, block_total_string_length;
     {
       using scanner = cub::BlockScan<size_t, block_size>;

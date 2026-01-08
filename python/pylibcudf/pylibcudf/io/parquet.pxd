@@ -48,6 +48,7 @@ cdef class ParquetReaderOptions:
     cpdef void set_columns(self, list col_names)
     cpdef void set_filter(self, Expression filter)
     cpdef void set_source(self, SourceInfo src)
+    cpdef bool is_enabled_use_jit_filter(self)
 
 
 cdef class ParquetReaderOptionsBuilder:
@@ -56,9 +57,11 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val)
     cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val)
     cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val)
+    cpdef ParquetReaderOptionsBuilder ignore_missing_columns(self, bool val)
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val)
     cpdef ParquetReaderOptionsBuilder filter(self, Expression filter)
     cpdef ParquetReaderOptionsBuilder columns(self, list col_names)
+    cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter)
     cpdef build(self)
 
 

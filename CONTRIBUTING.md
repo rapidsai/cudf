@@ -121,7 +121,7 @@ Instructions for a minimal build environment without conda are included below.
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`;
 # use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/all_cuda-130_arch-$(uname -m).yaml
+conda env create --name cudf_dev --file conda/environments/all_cuda-131_arch-$(uname -m).yaml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -174,7 +174,7 @@ To build C++ tests, you can also request that build.sh build the `tests` target.
 To build all libraries and tests, with Python packages in development mode, simply run
 
 ```bash
-./build.sh --pydevelop libcudf libcudf_kafka pylibcudf cudf dask_cudf cudf_kafka custreamz
+./build.sh --pydevelop libcudf libcudf_kafka pylibcudf cudf cudf_polars dask_cudf cudf_kafka custreamz
 ```
 
 - **Note**: if Cython files (`*.pyx` or `*.pxd`) have changed, the Python build must be rerun.

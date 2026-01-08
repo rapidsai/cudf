@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -23,12 +23,12 @@
 #include <cub/block/block_reduce.cuh>
 #include <cub/device/device_segmented_reduce.cuh>
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <iterator>
@@ -43,14 +43,11 @@ __device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restri
                                                     size_type source_begin_bit,
                                                     size_type source_end_bit)
 {
-  size_type source_word_index = destination_word_index + word_index(source_begin_bit);
-  bitmask_type curr_word      = source[source_word_index];
-  bitmask_type next_word      = 0;
-  if (word_index(source_end_bit - 1) >
-      word_index(source_begin_bit +
-                 destination_word_index * detail::size_in_bits<bitmask_type>())) {
-    next_word = source[source_word_index + 1];
-  }
+  auto const source_word_index = destination_word_index + word_index(source_begin_bit);
+  auto const end_word_index    = word_index(source_end_bit - 1);
+  auto const curr_word         = source[source_word_index];
+  auto const next_word =
+    end_word_index > source_word_index ? source[source_word_index + 1] : bitmask_type{0};
   return __funnelshift_r(curr_word, next_word, source_begin_bit);
 }
 
@@ -562,11 +559,11 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
       thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
     auto segment_length_iterator = thrust::transform_iterator(
       segments_begin, cuda::proclaim_return_type<size_type>([] __device__(auto const& segment) {
-        auto const begin = thrust::get<0>(segment);
-        auto const end   = thrust::get<1>(segment);
+        auto const begin = cuda::std::get<0>(segment);
+        auto const end   = cuda::std::get<1>(segment);
         return end - begin;
       }));
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       segment_length_iterator,
                       segment_length_iterator + num_ranges,
                       d_bit_counts.data(),
@@ -779,8 +776,8 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
     thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
   auto const segment_length_iterator = thrust::make_transform_iterator(
     segments_begin, cuda::proclaim_return_type<size_type>([] __device__(auto const& segment) {
-      auto const begin = thrust::get<0>(segment);
-      auto const end   = thrust::get<1>(segment);
+      auto const begin = cuda::std::get<0>(segment);
+      auto const end   = cuda::std::get<1>(segment);
       return end - begin;
     }));
 
@@ -812,8 +809,8 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
     length_and_valid_count,
     length_and_valid_count + num_segments,
     [null_handling, valid_initial_value] __device__(auto const& length_and_valid_count) {
-      auto const length      = thrust::get<0>(length_and_valid_count);
-      auto const valid_count = thrust::get<1>(length_and_valid_count);
+      auto const length      = cuda::std::get<0>(length_and_valid_count);
+      auto const valid_count = cuda::std::get<1>(length_and_valid_count);
       return (null_handling == null_policy::EXCLUDE)
                ? (valid_initial_value.value_or(false) || valid_count > 0)
                : (valid_initial_value.value_or(length > 0) && valid_count == length);

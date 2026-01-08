@@ -16,6 +16,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    Metadata,
     process_children,
 )
 
@@ -51,8 +52,24 @@ async def union_node(
     chs_in
         The input ChannelPairs.
     """
-    # TODO: Use multiple streams
-    async with shutdown_on_error(context, *[ch.data for ch in chs_in], ch_out.data):
+    async with shutdown_on_error(
+        context,
+        *[ch.metadata for ch in chs_in],
+        *[ch.data for ch in chs_in],
+        ch_out.metadata,
+        ch_out.data,
+    ):
+        # Merge and forward metadata.
+        total_count = 0
+        duplicated = True
+        for ch_in in chs_in:
+            metadata = await ch_in.recv_metadata(context)
+            total_count += metadata.count
+            duplicated = duplicated and metadata.duplicated
+        await ch_out.send_metadata(
+            context, Metadata(total_count, duplicated=duplicated)
+        )
+
         seq_num_offset = 0
         for ch_in in chs_in:
             num_ch_chunks = 0
@@ -62,7 +79,9 @@ async def union_node(
                     context,
                     Message(
                         msg.sequence_number + seq_num_offset,
-                        TableChunk.from_message(msg),
+                        TableChunk.from_message(msg).make_available_and_spill(
+                            context.br(), allow_overbooking=True
+                        ),
                     ),
                 )
             seq_num_offset += num_ch_chunks
@@ -71,7 +90,9 @@ async def union_node(
 
 
 @generate_ir_sub_network.register(Union)
-def _(ir: Union, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
+def _(
+    ir: Union, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     # Union operation.
     # Pass-through all child chunks in channel order.
 
@@ -82,7 +103,7 @@ def _(ir: Union, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManag
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Add simple python node
-    nodes.append(
+    nodes[ir] = [
         union_node(
             rec.state["context"],
             ir,
@@ -90,5 +111,5 @@ def _(ir: Union, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManag
             channels[ir].reserve_input_slot(),
             *[channels[c].reserve_output_slot() for c in ir.children],
         )
-    )
+    ]
     return nodes, channels

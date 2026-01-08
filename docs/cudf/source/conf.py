@@ -394,6 +394,7 @@ _all_namespaces = _generate_namespaces(
         "cudf": {
             "io",
             "io::datasource",
+            "io::experimental",
             "strings",
             "ast",
             "ast::expression",
@@ -455,9 +456,6 @@ _names_to_skip_in_cpp = {
     "deprecated",
     # TODO: This is currently in a src file but perhaps should be public
     "orc::column_statistics",
-    # Sphinx doesn't know how to distinguish between the ORC and Parquet
-    # definitions because Breathe doesn't to preserve namespaces for enums.
-    "TypeKind",
     # Span subclasses access base class members
     "base::",
 }
@@ -537,9 +535,15 @@ def on_missing_reference(app, env, node, contnode):
     if node["refdomain"] == "py" and reftarget is not None:
         # These replacements are needed because of
         # https://github.com/sphinx-doc/sphinx/issues/10151
-        for module, alias in _external_intersphinx_aliases.items():
-            if f"{alias}." in node["reftarget"]:
-                node["reftarget"] = node["reftarget"].replace(alias, module)
+        for module, module_alias in _external_intersphinx_aliases.items():
+            if f"{module_alias}." in node["reftarget"]:
+                node["reftarget"] = node["reftarget"].replace(
+                    module_alias, module
+                )
+                # The numpy inventory has bool_ as an attribute and bool as a class, so
+                # we need to manually remap this one.
+                if node["reftarget"] == "numpy.bool_":
+                    node["reftarget"] = "numpy.bool"
                 if (
                     ref := _cached_intersphinx_lookup(env, node, contnode)
                 ) is not None:

@@ -30,6 +30,9 @@ import os
 import warnings
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
+from rmm.pylibrmm.cuda_stream import CudaStreamFlags
+from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -48,6 +51,7 @@ __all__ = [
     "Runtime",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
+    "ShufflerInsertionMethod",
     "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
@@ -205,6 +209,20 @@ class ShuffleMethod(str, enum.Enum):
     _RAPIDSMPF_SINGLE = "rapidsmpf-single"
 
 
+class ShufflerInsertionMethod(str, enum.Enum):
+    """
+    The method to use for inserting chunks into the rapidsmpf shuffler.
+
+    * ``ShufflerInsertionMethod.INSERT_CHUNKS`` : Use insert_chunks for inserting data.
+    * ``ShufflerInsertionMethod.CONCAT_INSERT`` : Use concat_insert for inserting data.
+
+    Only applicable with the "rapidsmpf" shuffle method and the "tasks" runtime.
+    """
+
+    INSERT_CHUNKS = "insert_chunks"
+    CONCAT_INSERT = "concat_insert"
+
+
 T = TypeVar("T")
 
 
@@ -264,6 +282,10 @@ class ParquetOptions:
 
         Set to 0 to avoid row-group sampling. Note that row-group sampling
         will also be skipped if ``max_footer_samples`` is 0.
+    use_rapidsmpf_native
+        Whether to use the native rapidsmpf node for parquet reading.
+        This option is only used when the rapidsmpf runtime is enabled.
+        Default is True.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -298,6 +320,13 @@ class ParquetOptions:
             f"{_env_prefix}__MAX_ROW_GROUP_SAMPLES", int, default=1
         )
     )
+    use_rapidsmpf_native: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_RAPIDSMPF_NATIVE",
+            _bool_converter,
+            default=True,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -312,6 +341,8 @@ class ParquetOptions:
             raise TypeError("max_footer_samples must be an int")
         if not isinstance(self.max_row_group_samples, int):
             raise TypeError("max_row_group_samples must be an int")
+        if not isinstance(self.use_rapidsmpf_native, bool):
+            raise TypeError("use_rapidsmpf_native must be a bool")
 
 
 def default_blocksize(cluster: str) -> int:
@@ -595,6 +626,11 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
         and 'tasks' for single-GPU cluster.
+    shuffler_insertion_method
+        The method to use for inserting chunks with the rapidsmpf shuffler.
+        Can be 'insert_chunks' (default) or 'concat_insert'.
+
+        Only applicable with ``shuffle_method="rapidsmpf"`` and ``runtime="tasks"``.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
@@ -610,6 +646,9 @@ class StreamingExecutor:
     stats_planning
         Options controlling statistics-based query planning. See
         :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
+    max_io_threads
+        Maximum number of IO threads for the rapidsmpf runtime. Default is 2.
+        This controls the parallelism of IO operations when reading data.
 
     Notes
     -----
@@ -682,6 +721,13 @@ class StreamingExecutor:
             default=ShuffleMethod.TASKS,
         )
     )
+    shuffler_insertion_method: ShufflerInsertionMethod = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SHUFFLER_INSERTION_METHOD",
+            ShufflerInsertionMethod.__call__,
+            default=ShufflerInsertionMethod.INSERT_CHUNKS,
+        )
+    )
     rapidsmpf_spill: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=False
@@ -699,6 +745,11 @@ class StreamingExecutor:
     )
     stats_planning: StatsPlanningOptions = dataclasses.field(
         default_factory=StatsPlanningOptions
+    )
+    max_io_threads: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_IO_THREADS", int, default=2
+        )
     )
 
     def __post_init__(self) -> None:  # noqa: D105
@@ -738,6 +789,16 @@ class StreamingExecutor:
         elif self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
+
+        # Warn loudly that multi-GPU execution is under construction
+        # for the rapidsmpf runtime
+        if self.cluster == "distributed" and self.runtime == "rapidsmpf":
+            warnings.warn(
+                "UNDER CONSTRUCTION!!!"
+                "The rapidsmpf runtime does NOT support distributed execution yet. "
+                "Use at your own risk!!!",
+                stacklevel=2,
+            )
 
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
@@ -784,6 +845,11 @@ class StreamingExecutor:
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
+        object.__setattr__(
+            self,
+            "shuffler_insertion_method",
+            ShufflerInsertionMethod(self.shuffler_insertion_method),
+        )
 
         # Make sure stats_planning is a dataclass
         if isinstance(self.stats_planning, dict):
@@ -819,6 +885,8 @@ class StreamingExecutor:
             raise TypeError("sink_to_directory must be bool")
         if not isinstance(self.client_device_threshold, float):
             raise TypeError("client_device_threshold must be a float")
+        if not isinstance(self.max_io_threads, int):
+            raise TypeError("max_io_threads must be an int")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
@@ -848,19 +916,77 @@ class InMemoryExecutor:
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
 
 
+@dataclasses.dataclass(frozen=True, eq=True)
+class CUDAStreamPoolConfig:
+    """
+    Configuration for the CUDA stream pool.
+
+    Parameters
+    ----------
+    pool_size
+        The size of the CUDA stream pool.
+    flags
+        The flags to use for the CUDA stream pool.
+    """
+
+    pool_size: int = 16
+    flags: CudaStreamFlags = CudaStreamFlags.NON_BLOCKING
+
+    def build(self) -> CudaStreamPool:
+        return CudaStreamPool(
+            pool_size=self.pool_size,
+            flags=self.flags,
+        )
+
+
 class CUDAStreamPolicy(str, enum.Enum):
     """
     The policy to use for acquiring new CUDA streams.
 
     * ``CUDAStreamPolicy.DEFAULT`` : Use the default CUDA stream.
     * ``CUDAStreamPolicy.NEW`` : Create a new CUDA stream.
-    * ``CUDAStreamPolicy.POOL`` : Use the CUDA stream pool. This is currently
-      only supported by the RapidsMPF runtime.
     """
 
     DEFAULT = "default"
     NEW = "new"
-    POOL = "pool"
+
+
+def _convert_cuda_stream_policy(
+    user_cuda_stream_policy: dict | str,
+) -> CUDAStreamPolicy | CUDAStreamPoolConfig:
+    match user_cuda_stream_policy:
+        case "default" | "new":
+            return CUDAStreamPolicy(user_cuda_stream_policy)
+        case "pool":
+            return CUDAStreamPoolConfig()
+        case dict():
+            return CUDAStreamPoolConfig(**user_cuda_stream_policy)
+        case str():
+            # assume it's a JSON encoded CUDAStreamPoolConfig
+            try:
+                d = json.loads(user_cuda_stream_policy)
+            except json.JSONDecodeError:
+                raise ValueError(
+                    f"Invalid CUDA stream policy: '{user_cuda_stream_policy}'"
+                ) from None
+            match d:
+                case {"pool_size": int(), "flags": int()}:
+                    return CUDAStreamPoolConfig(
+                        pool_size=d["pool_size"], flags=CudaStreamFlags(d["flags"])
+                    )
+                case {"pool_size": int(), "flags": str()}:
+                    # convert the string names to enums
+                    return CUDAStreamPoolConfig(
+                        pool_size=d["pool_size"],
+                        flags=CudaStreamFlags(CudaStreamFlags.__members__[d["flags"]]),
+                    )
+                case _:
+                    try:
+                        return CUDAStreamPoolConfig(**d)
+                    except TypeError:
+                        raise ValueError(
+                            f"Invalid CUDA stream policy: {user_cuda_stream_policy}"
+                        ) from None
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -893,7 +1019,7 @@ class ConfigOptions:
     )
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
-    cuda_stream_policy: CUDAStreamPolicy = dataclasses.field(
+    cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig = dataclasses.field(
         default_factory=_make_default_factory(
             "CUDF_POLARS__CUDA_STREAM_POLICY",
             CUDAStreamPolicy.__call__,
@@ -927,6 +1053,8 @@ class ConfigOptions:
             user_executor = os.environ.get(f"{env_prefix}__EXECUTOR", "streaming")
         user_executor_options = engine.config.get("executor_options", {})
         user_parquet_options = engine.config.get("parquet_options", {})
+        if user_parquet_options is None:
+            user_parquet_options = {}
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
         user_memory_resource_config = engine.config.get("memory_resource_config", None)
@@ -999,16 +1127,23 @@ class ConfigOptions:
         user_cuda_stream_policy = engine.config.get(
             "cuda_stream_policy", None
         ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
+
+        cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig
+
         if user_cuda_stream_policy is None:
-            # TODO: Use pool by default for rapidsmpf runtime
-            # once stream-ordering bugs are fixed.
-            # See: https://github.com/rapidsai/cudf/issues/20484
-            cuda_stream_policy = CUDAStreamPolicy.DEFAULT
+            if (
+                executor.name == "streaming" and executor.runtime == Runtime.RAPIDSMPF
+            ):  # pragma: no cover; requires rapidsmpf runtime
+                # the rapidsmpf runtime defaults to using a stream pool
+                cuda_stream_policy = CUDAStreamPoolConfig()
+            else:
+                # everything else defaults to the default stream
+                cuda_stream_policy = CUDAStreamPolicy.DEFAULT
         else:
-            cuda_stream_policy = CUDAStreamPolicy(user_cuda_stream_policy)
+            cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
 
         # Pool policy is only supported by the rapidsmpf runtime.
-        if cuda_stream_policy == CUDAStreamPolicy.POOL and (
+        if isinstance(cuda_stream_policy, CUDAStreamPoolConfig) and (
             (executor.name != "streaming")
             or (executor.name == "streaming" and executor.runtime != Runtime.RAPIDSMPF)
         ):

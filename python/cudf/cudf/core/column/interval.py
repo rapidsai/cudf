@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -8,46 +8,37 @@ from typing import TYPE_CHECKING, Any, Literal
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
-from cudf.core.column.column import as_column
+from cudf.core.column.column import _handle_nulls, as_column
 from cudf.core.column.struct import StructColumn
-from cudf.core.dtypes import IntervalDtype
+from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf.core.buffer import Buffer
     from cudf.core.column import ColumnBase
 
 
 class IntervalColumn(StructColumn):
-    def __init__(
-        self,
-        data: None,
-        size: int,
-        dtype: IntervalDtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple[ColumnBase, ColumnBase],
-    ):
-        if len(children) != 2:
+    @classmethod
+    def _validate_args(  # type: ignore[override]
+        cls, plc_column: plc.Column, dtype: IntervalDtype
+    ) -> tuple[plc.Column, IntervalDtype]:
+        # Validate plc_column TypeId - IntervalColumn uses STRUCT type
+        if not (
+            isinstance(plc_column, plc.Column)
+            and plc_column.type().id() == plc.TypeId.STRUCT
+        ):
             raise ValueError(
-                "children must be a tuple of two columns (left edges, right edges)."
+                "plc_column must be a pylibcudf.Column with TypeId STRUCT"
             )
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
-
-    @staticmethod
-    def _validate_dtype_instance(dtype: IntervalDtype) -> IntervalDtype:
+        if plc_column.num_children() != 2:
+            raise ValueError(
+                "plc_column must have two children (left edges, right edges)."
+            )
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, IntervalDtype)
@@ -56,7 +47,7 @@ class IntervalColumn(StructColumn):
             and not is_dtype_obj_interval(dtype)
         ):
             raise ValueError("dtype must be a IntervalDtype.")
-        return dtype
+        return plc_column, dtype
 
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
@@ -69,7 +60,17 @@ class IntervalColumn(StructColumn):
 
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()  # type: ignore[union-attr]
-        struct_arrow = super().to_arrow()
+        struct_arrow = self.plc_column.to_arrow(
+            metadata=_dtype_to_metadata(self.dtype)  # type: ignore[arg-type]
+        )
+        possibly_null_struct_arrow = _handle_nulls(struct_arrow)
+
+        # Disable null handling for all null arrays because those cannot be
+        # passed to from_storage below, in that case we leave the struct
+        # structure in place.
+        if not isinstance(possibly_null_struct_arrow, pa.lib.NullArray):
+            struct_arrow = possibly_null_struct_arrow
+
         if len(struct_arrow) == 0:
             # struct arrow is pa.struct array with null children types
             # we need to make sure its children have non-null type

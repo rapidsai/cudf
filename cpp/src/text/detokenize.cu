@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -96,14 +96,14 @@ rmm::device_uvector<cudf::size_type> create_token_row_offsets(
                       sorted_indices.data<cudf::size_type>()};
 
   auto const output_count =
-    thrust::count_if(rmm::exec_policy(stream),
+    thrust::count_if(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
                      fn);
 
   auto tokens_offsets = rmm::device_uvector<cudf::size_type>(output_count + 1, stream);
 
-  thrust::copy_if(rmm::exec_policy(stream),
+  thrust::copy_if(rmm::exec_policy_nosync(stream),
                   thrust::make_counting_iterator<cudf::size_type>(0),
                   thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
                   tokens_offsets.begin(),

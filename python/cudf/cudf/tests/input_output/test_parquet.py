@@ -631,6 +631,38 @@ def test_parquet_reader_select_columns(datadir):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("ignore_missing_columns", [True, False])
+def test_parquet_reader_select_nonexistent_columns(ignore_missing_columns):
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "c": ["a", "b", "c", "d", "e", "f"],
+        }
+    )
+    buf = BytesIO()
+    df.to_parquet(buf)
+
+    if ignore_missing_columns:
+        expect = cudf.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
+        got = cudf.read_parquet(
+            buf,
+            columns=["a", "d"],
+            ignore_missing_columns=ignore_missing_columns,
+        )
+        assert_eq(expect, got)
+    else:
+        with pytest.raises(
+            ValueError,
+            match="Encountered non-existent column in selected path",
+        ):
+            cudf.read_parquet(
+                buf,
+                columns=["a", "d"],
+                ignore_missing_columns=ignore_missing_columns,
+            )
+
+
 def test_parquet_reader_invalids(tmp_path):
     test_pdf = cudf.DataFrame(
         {"a": np.array([1, np.nan, np.nan, 2])}, index=cudf.Index([0, 1, 2, 3])
@@ -828,7 +860,7 @@ def test_parquet_reader_list_table(tmp_path):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert pa.Table.from_pandas(expect).equals(got.to_arrow())
+    assert_arrow_table_equal(pa.Table.from_pandas(expect), got.to_arrow())
 
 
 def int_gen(first_val, i):
@@ -986,7 +1018,7 @@ def test_parquet_reader_list_large_mixed(tmp_path):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert pa.Table.from_pandas(expect).equals(got.to_arrow())
+    assert_arrow_table_equal(pa.Table.from_pandas(expect), got.to_arrow())
 
 
 def test_parquet_reader_list_large_multi_rowgroup(tmp_path):
@@ -1203,6 +1235,63 @@ def test_parquet_reader_struct_select_columns(data, columns):
     expect = pq.ParquetFile(buff).read(columns=columns)
     got = cudf.read_parquet(buff, columns=columns)
     assert_arrow_table_equal(expect, got.to_arrow())
+
+
+def nonexistent_select_columns_params():
+    dfs = [
+        # columns that don't exist
+        (
+            [
+                {"a": 1, "b": 2},
+                {"a": 10, "b": 20},
+                {"a": None, "b": 22},
+                {"a": None, "b": None},
+                {"a": 15, "b": None},
+            ],
+            [["c"]],  # top-level missing
+        ),
+        (
+            [
+                {"a": 1, "b": 2, "c": [1, 2, 3]},
+                {"a": 10, "b": 20, "c": [4, 5]},
+                {"a": None, "b": 22, "c": [6]},
+                {"a": None, "b": None, "c": None},
+                {"a": 15, "b": None, "c": [-1, -2]},
+                None,
+                {"a": 100, "b": 200, "c": [-10, None, -20]},
+            ],
+            [
+                ["struct.b", "struct.d", "struct.c"],  # 'struct.d' missing
+            ],
+        ),
+        (
+            [
+                [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+                None,
+                [{"a": 10, "b": 20}],
+                [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+            ],
+            [
+                ["struct.list.element.c"],  # subfield 'c' missing
+            ],
+        ),
+    ]
+
+    for df_col_pair in dfs:
+        for cols in df_col_pair[1]:
+            yield df_col_pair[0], cols
+
+
+@pytest.mark.parametrize("data, columns", nonexistent_select_columns_params())
+def test_parquet_reader_struct_select_columns_nonexistent_error(data, columns):
+    table = pa.Table.from_pydict({"struct": data})
+    buff = BytesIO()
+    pa.parquet.write_table(table, buff)
+
+    with pytest.raises(
+        ValueError, match="Encountered non-existent column in selected path"
+    ):
+        cudf.read_parquet(buff, columns=columns, ignore_missing_columns=False)
 
 
 def test_parquet_reader_struct_los_large(tmp_path):
@@ -2361,7 +2450,7 @@ def test_parquet_writer_list_large(tmp_path):
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
-    assert gdf.to_arrow().equals(pa.Table.from_pandas(got))
+    assert_arrow_table_equal(gdf.to_arrow(), pa.Table.from_pandas(got))
 
 
 def test_parquet_writer_list_large_mixed(tmp_path):
@@ -4647,7 +4736,7 @@ def test_parquet_long_list(tmp_path):
     # Make sure that the cudf reader matches the pandas reader for this data
     actual = cudf.read_parquet(file_name)
     expected = pd.read_parquet(file_name)
-    assert actual.to_arrow().equals(pa.Table.from_pandas(expected))
+    assert_arrow_table_equal(pa.Table.from_pandas(expected), actual.to_arrow())
 
 
 @pytest.mark.parametrize(

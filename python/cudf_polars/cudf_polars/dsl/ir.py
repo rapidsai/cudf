@@ -50,7 +50,7 @@ from cudf_polars.utils.cuda_stream import (
     get_new_cuda_stream,
     join_cuda_streams,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_134
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -58,7 +58,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from polars.polars import _expr_nodes as pl_expr
+    from polars import polars  # type: ignore[attr-defined]
 
     from rmm.pylibrmm.stream import Stream
 
@@ -308,6 +308,26 @@ def _parquet_physical_types(
     return dict(zip(schema.keys(), [c.type() for c in df.tbl.columns()], strict=True))
 
 
+def _cast_literal_to_decimal(
+    side: expr.Expr, lit: expr.Literal, phys_type_map: dict[str, plc.DataType]
+) -> expr.Expr:
+    if isinstance(side, expr.Cast):
+        col = side.children[0]
+        assert isinstance(col, expr.Col)
+        name = col.name
+    else:
+        assert isinstance(side, expr.Col)
+        name = side.name
+    if (type_ := phys_type_map[name]).id() in _DECIMAL_IDS:
+        scale = abs(type_.scale())
+        return expr.Cast(
+            side.dtype,
+            True,  # noqa: FBT003
+            expr.Cast(DataType(pl.Decimal(38, scale)), True, lit),  # noqa: FBT003
+        )
+    return lit
+
+
 def _cast_literals_to_physical_types(
     node: expr.Expr, phys_type_map: dict[str, plc.DataType]
 ) -> expr.Expr:
@@ -316,32 +336,14 @@ def _cast_literals_to_physical_types(
         left = _cast_literals_to_physical_types(left, phys_type_map)
         right = _cast_literals_to_physical_types(right, phys_type_map)
         if node.op in _COMPARISON_BINOPS:
-            if (
-                isinstance(left, expr.Col)
-                and isinstance(right, expr.Literal)
-                and phys_type_map[left.name].id() in _DECIMAL_IDS
+            if isinstance(left, (expr.Col, expr.Cast)) and isinstance(
+                right, expr.Literal
             ):
-                right = expr.Cast(
-                    left.dtype,
-                    expr.Cast(
-                        DataType(pl.Decimal(38, abs(phys_type_map[left.name].scale()))),
-                        right,
-                    ),
-                )
-            elif (
-                isinstance(right, expr.Col)
-                and isinstance(left, expr.Literal)
-                and phys_type_map[right.name].id() in _DECIMAL_IDS
+                right = _cast_literal_to_decimal(left, right, phys_type_map)
+            elif isinstance(right, (expr.Col, expr.Cast)) and isinstance(
+                left, expr.Literal
             ):
-                left = expr.Cast(
-                    right.dtype,
-                    expr.Cast(
-                        DataType(
-                            pl.Decimal(38, abs(phys_type_map[right.name].scale()))
-                        ),
-                        left,
-                    ),
-                )
+                left = _cast_literal_to_decimal(right, left, phys_type_map)
 
         return node.reconstruct([left, right])
     return node
@@ -598,7 +600,8 @@ class Scan(IR):
             plc.Table(
                 [
                     plc.Column.from_arrow(
-                        pl.Series(values=map(str, paths)), stream=df.stream
+                        pl.Series(values=map(str, paths)),
+                        stream=df.stream,
                     )
                 ]
             ),
@@ -1292,6 +1295,42 @@ class DataFrameScan(IR):
         self.children = ()
         self._id_for_hash = random.randint(0, 2**64 - 1)
 
+    @staticmethod
+    def _reconstruct(
+        schema: Schema,
+        pl_df: pl.DataFrame,
+        projection: Sequence[str] | None,
+        id_for_hash: int,
+    ) -> DataFrameScan:  # pragma: no cover
+        """
+        Reconstruct a DataFrameScan from pickled data.
+
+        Parameters
+        ----------
+        schema: Schema
+            The schema of the DataFrameScan.
+        pl_df: pl.DataFrame
+            The underlying polars DataFrame.
+        projection: Sequence[str] | None
+            The projection of the DataFrameScan.
+        id_for_hash: int
+            The id for hash of the DataFrameScan.
+
+        Returns
+        -------
+        The reconstructed DataFrameScan.
+        """
+        node = DataFrameScan(schema, pl_df._df, projection)
+        node._id_for_hash = id_for_hash
+        return node
+
+    def __reduce__(self) -> tuple[Any, ...]:  # pragma: no cover
+        """Pickle a DataFrameScan object."""
+        return (
+            self._reconstruct,
+            (*self._non_child_args, self._id_for_hash),
+        )
+
     def get_hashable(self) -> Hashable:
         """
         Hashable representation of the node.
@@ -1306,6 +1345,17 @@ class DataFrameScan(IR):
             schema_hash,
             self._id_for_hash,
             self.projection,
+        )
+
+    def is_equal(self, other: Self) -> bool:
+        """Equality of DataFrameScan nodes."""
+        return self is other or (
+            self._id_for_hash == other._id_for_hash
+            and self.schema == other.schema
+            and self.projection == other.projection
+            and pl.DataFrame._from_pydf(self.df).equals(
+                pl.DataFrame._from_pydf(other.df)
+            )
         )
 
     @classmethod
@@ -1762,7 +1812,12 @@ class GroupBy(IR):
                 col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
             else:
                 # Anything else, we pre-evaluate
-                col = value.evaluate(df, context=ExecutionContext.GROUPBY).obj
+                column = value.evaluate(df, context=ExecutionContext.GROUPBY)
+                if column.size != keys[0].size:
+                    column = broadcast(
+                        column, target_length=keys[0].size, stream=df.stream
+                    )[0]
+                col = column.obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
@@ -1837,6 +1892,23 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
 
         if plc.traits.is_fixed_point(src.plc_type) or plc.traits.is_fixed_point(
             dst.plc_type
+        ):
+            return child
+
+        if (
+            not POLARS_VERSION_LT_134
+            and isinstance(child, expr.ColRef)
+            and (
+                (
+                    plc.traits.is_floating_point(src.plc_type)
+                    and plc.traits.is_floating_point(dst.plc_type)
+                )
+                or (
+                    plc.traits.is_integral(src.plc_type)
+                    and plc.traits.is_integral(dst.plc_type)
+                    and src.plc_type.id() == dst.plc_type.id()
+                )
+            )
         ):
             return child
 
@@ -1960,7 +2032,7 @@ class ConditionalJoin(IR):
     options: tuple[
         tuple[
             str,
-            pl_expr.Operator | Iterable[pl_expr.Operator],
+            polars._expr_nodes.Operator | Iterable[polars._expr_nodes.Operator],
         ]
         | None,
         bool,

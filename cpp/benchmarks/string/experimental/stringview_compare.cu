@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -258,7 +258,7 @@ std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> create_sv_ar
 
   // Make sure only one buffer is needed.
   // Using a single data buffer makes the two formats more similar focusing on the layout.
-  constexpr int64_t max_size = std::numeric_limits<int32_t>::max() / 2;
+  constexpr int64_t max_size = std::numeric_limits<cudf::size_type>::max() / 2;
   auto const num_buffers     = cudf::util::div_rounding_up_safe(longer_chars_size, max_size);
   CUDF_EXPECTS(num_buffers <= 1, "num_buffers must be <= 1");
 
@@ -277,6 +277,69 @@ std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> create_sv_ar
 
   return std::pair{std::move(d_items), std::move(data_buffer)};
 }
+
+template <typename MapIterator>
+std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> gather_sv_array(
+  rmm::device_uvector<ArrowBinaryView> const& d_items,
+  rmm::device_buffer const& data,
+  MapIterator begin,
+  cudf::size_type map_size,
+  rmm::cuda_stream_view stream)
+{
+  auto output   = rmm::device_uvector<ArrowBinaryView>(map_size, stream);
+  auto d_output = output.data();
+  thrust::gather(
+    rmm::exec_policy_nosync(stream), begin, begin + map_size, d_items.data(), d_output);
+  // Although the above should be enough, in reality it is impractical to share a data buffer
+  // between two columns in libcudf. Sharing data in column_views is expected but a libcudf
+  // gather (all other libcudf APIs) would return a new column with newly owned (non-shared)
+  // data. At best, the data-buffer could be simply copied but it seems impractical in general
+  // to not compact the buffer and remove any unused data characters from it.
+  // Also, the compaction could help coalesce accessing adjacent row data in down stream calls.
+  //
+  // The rest of the code compacts the data buffer appropriately.
+
+  // record sizes of the long buffers (only single data buffer is supported in this benchmark)
+  auto offsets   = rmm::device_uvector<int32_t>(map_size + 1, stream);
+  auto d_offsets = offsets.data();
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::counting_iterator<cudf::size_type>(0),
+                     map_size,
+                     [d_offsets, d_output] __device__(cudf::size_type idx) {
+                       auto& item      = d_output[idx];
+                       auto const size = static_cast<int32_t>(item.inlined.size);
+                       d_offsets[idx]  = size > NANOARROW_BINARY_VIEW_INLINE_SIZE ? size : 0;
+                     });
+  // convert the sizes to offsets (offsets are only for compacting the data)
+  thrust::exclusive_scan(
+    rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end(), offsets.begin());
+  auto total_size  = offsets.element(map_size, stream);
+  auto output_data = rmm::device_buffer(total_size, stream);
+  if (total_size > 0) {
+    auto d_output_data = static_cast<char*>(output_data.data());
+    auto d_input_data  = static_cast<char const*>(data.data());
+
+    // rebuild the data buffer with only the data from the gather
+    // and reset each binary-view offset appropriately
+    thrust::for_each_n(
+      rmm::exec_policy_nosync(stream),
+      thrust::counting_iterator<cudf::size_type>(0),
+      map_size,
+      [d_offsets, d_input_data, d_output, d_output_data] __device__(cudf::size_type idx) {
+        auto& item      = d_output[idx];
+        auto const size = item.inlined.size;
+        if (size <= NANOARROW_BINARY_VIEW_INLINE_SIZE) { return; }
+        auto const offset = d_offsets[idx];
+        auto const d_out  = d_output_data + offset;
+        auto const d_in   = d_input_data + item.ref.offset;
+        memcpy(d_out, d_in, size);
+        item.ref.offset = offset;
+      });
+  }
+
+  return std::pair{std::move(output), std::move(output_data)};
+}
+
 }  // namespace
 
 static void BM_sv_hash(nvbench::state& state)
@@ -303,7 +366,7 @@ static void BM_sv_hash(nvbench::state& state)
     auto const d_chars          = reinterpret_cast<char const*>(data_buffer.data());
     state.add_global_memory_reads(num_rows * sizeof(ArrowBinaryView) + data_buffer.size());
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         begin,
                         end,
                         output.begin(),
@@ -314,7 +377,8 @@ static void BM_sv_hash(nvbench::state& state)
     auto col_size  = column->alloc_size();
     state.add_global_memory_reads(col_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      thrust::transform(rmm::exec_policy(stream), begin, end, output.begin(), hash_sv{*d_strings});
+      thrust::transform(
+        rmm::exec_policy_nosync(stream), begin, end, output.begin(), hash_sv{*d_strings});
     });
   }
 }
@@ -344,7 +408,7 @@ static void BM_sv_starts(nvbench::state& state)
     auto const d_chars          = reinterpret_cast<char const*>(data_buffer.data());
     state.add_global_memory_reads(num_rows * sizeof(ArrowBinaryView) + data_buffer.size());
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         begin,
                         end,
                         output.begin(),
@@ -355,8 +419,11 @@ static void BM_sv_starts(nvbench::state& state)
     auto col_size  = column->alloc_size();
     state.add_global_memory_reads(col_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      thrust::transform(
-        rmm::exec_policy(stream), begin, end, output.begin(), starts_sv{*d_strings, tgt_size});
+      thrust::transform(rmm::exec_policy_nosync(stream),
+                        begin,
+                        end,
+                        output.begin(),
+                        starts_sv{*d_strings, tgt_size});
     });
   }
 }
@@ -445,17 +512,22 @@ static void BM_sv_gather(nvbench::state& state)
   if (std::getenv(BM_ARROWSTRINGVIEW)) {
     auto [d_items, data_buffer] = create_sv_array(col_view, stream);
 
-    auto begin  = map_view.begin<int32_t>();
-    auto end    = map_view.end<int32_t>();
-    auto input  = d_items.data();
-    auto output = rmm::device_uvector<ArrowBinaryView>(map_view.size(), stream);
+    auto const begin  = map_view.begin<cudf::size_type>();
+    auto const result = gather_sv_array(d_items, data_buffer, begin, map_rows, stream);
+    auto gather_size  = result.first.size() * sizeof(ArrowBinaryView) + result.second.size();
+    state.add_global_memory_reads(gather_size);
+    state.add_global_memory_writes(gather_size);
 
-    state.add_global_memory_writes(map_rows * sizeof(ArrowBinaryView));
-    state.add_global_memory_reads(map_rows * sizeof(ArrowBinaryView));
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      thrust::gather(rmm::exec_policy(stream), begin, end, input, output.begin());
+      gather_sv_array(d_items, data_buffer, begin, map_rows, stream);
     });
   } else {
+    auto const result = cudf::gather(
+      cudf::table_view({col_view}), map_view, cudf::out_of_bounds_policy::DONT_CHECK, stream);
+
+    state.add_global_memory_reads(result->alloc_size());
+    state.add_global_memory_writes(result->alloc_size());
+
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::gather(
         cudf::table_view({col_view}), map_view, cudf::out_of_bounds_policy::DONT_CHECK, stream);
@@ -485,5 +557,5 @@ NVBENCH_BENCH(BM_sv_sort)
 NVBENCH_BENCH(BM_sv_gather)
   .set_name("sv_gather")
   .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000})
-  .add_int64_axis("width", {6, 12, 24, 48})
+  .add_int64_axis("width", {6, 12, 24, 48, 64})
   .add_int64_axis("map_rows", {10'000, 100'000});

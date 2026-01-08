@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/transform_reduce.h>
 
 namespace cudf::io::detail {
@@ -19,7 +20,7 @@ writer_compression_statistics collect_compression_statistics(
 {
   // bytes_written on success
   auto const output_size_successful = thrust::transform_reduce(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     results.begin(),
     results.end(),
     cuda::proclaim_return_type<size_t>([] __device__(codec_exec_result const& res) {
@@ -30,15 +31,15 @@ writer_compression_statistics collect_compression_statistics(
 
   auto input_size_with_status = [inputs, results, stream](codec_status status) {
     auto const zipped_begin =
-      thrust::make_zip_iterator(thrust::make_tuple(inputs.begin(), results.begin()));
+      thrust::make_zip_iterator(cuda::std::make_tuple(inputs.begin(), results.begin()));
     auto const zipped_end = zipped_begin + inputs.size();
 
     return thrust::transform_reduce(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       zipped_begin,
       zipped_end,
       cuda::proclaim_return_type<size_t>([status] __device__(auto tup) {
-        return thrust::get<1>(tup).status == status ? thrust::get<0>(tup).size() : 0;
+        return cuda::std::get<1>(tup).status == status ? cuda::std::get<0>(tup).size() : 0;
       }),
       0ul,
       cuda::std::plus<size_t>());

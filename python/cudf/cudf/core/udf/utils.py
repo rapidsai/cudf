@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -14,8 +14,9 @@ import llvmlite.binding as ll
 import numpy as np
 from cuda.bindings import runtime
 from numba import cuda, typeof
-from numba.core.datamodel import default_manager, models
+from numba.core.datamodel import models
 from numba.core.extending import register_model
+from numba.cuda.descriptor import cuda_target
 from numba.np import numpy_support
 from numba.types import CPointer, Record, Tuple, int64, void
 
@@ -242,9 +243,7 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
         if col.dtype == CUDF_STRING_DTYPE:
-            data = column_to_string_view_array_init_heap(
-                col.to_pylibcudf(mode="read")
-            )
+            data = column_to_string_view_array_init_heap(col.plc_column)
         else:
             data = col.data
         if col.mask is not None:
@@ -305,7 +304,7 @@ def _get_extensionty_size(ty):
     Return the size of an extension type in bytes
     """
     target_data = ll.create_target_data(_nvvm_data_layout)
-    llty = default_manager[ty].get_value_type()
+    llty = cuda_target.target_context.data_model_manager[ty].get_value_type()
     return llty.get_abi_size(target_data)
 
 
@@ -346,9 +345,7 @@ def set_malloc_heap_size(size=None):
 
 def column_to_string_view_array_init_heap(col: plc.Column) -> Buffer:
     # lazily allocate heap only when a string needs to be returned
-    return as_buffer(
-        strings_udf.column_to_string_view_array(col), exposed=True
-    )
+    return as_buffer(strings_udf.column_to_string_view_array(col))
 
 
 class UDFError(RuntimeError):

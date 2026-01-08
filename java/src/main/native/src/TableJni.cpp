@@ -27,6 +27,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/join/conditional_join.hpp>
 #include <cudf/join/distinct_hash_join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
@@ -44,7 +45,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
@@ -2105,6 +2106,8 @@ Java_ai_rapids_cudf_Table_readParquetFromDataSource(JNIEnv* env,
     cudf::io::parquet_reader_options opts =
       builder.convert_strings_to_categories(false)
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+        // Ignore any missing projected column(s) by default
+        .ignore_missing_columns(true)
         .build();
     return convert_table_for_return(env, cudf::io::read_parquet(opts).tbl);
   }
@@ -2160,6 +2163,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv* env,
     cudf::io::parquet_reader_options opts =
       builder.convert_strings_to_categories(false)
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+        // Ignore any missing projected column(s) by default
+        .ignore_missing_columns(true)
         .build();
     auto tbl = cudf::io::read_parquet(opts).tbl;
     n_col_binary_read.cancel();
@@ -3507,13 +3512,16 @@ Java_ai_rapids_cudf_Table_mixedFullJoinGatherMaps(JNIEnv* env,
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(
   JNIEnv* env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal)
 {
+  double constexpr load_factor = 0.5;
   return cudf::jni::join_gather_single_map(
     env,
     j_left_keys,
     j_right_keys,
     compare_nulls_equal,
-    [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      return cudf::left_semi_join(left, right, nulleq);
+    [load_factor](
+      cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
+      cudf::filtered_join obj(right, nulleq, cudf::set_as_build_table::RIGHT, load_factor);
+      return obj.semi_join(left);
     });
 }
 
@@ -3604,13 +3612,16 @@ Java_ai_rapids_cudf_Table_mixedLeftSemiJoinGatherMap(JNIEnv* env,
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(
   JNIEnv* env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal)
 {
+  double constexpr load_factor = 0.5;
   return cudf::jni::join_gather_single_map(
     env,
     j_left_keys,
     j_right_keys,
     compare_nulls_equal,
-    [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      return cudf::left_anti_join(left, right, nulleq);
+    [load_factor](
+      cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
+      cudf::filtered_join obj(right, nulleq, cudf::set_as_build_table::RIGHT, load_factor);
+      return obj.anti_join(left);
     });
 }
 
@@ -4606,6 +4617,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
                                                 jclass,
                                                 jlong jinput_table,
                                                 jintArray jkey_indices,
+                                                jintArray jprojection_column_indices,
                                                 jboolean jignore_null_keys,
                                                 jboolean jkey_sorted,
                                                 jbooleanArray jkeys_sort_desc,
@@ -4627,8 +4639,18 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
 
     // Prepares arguments for the groupby:
     //   (keys, null_handling, keys_are_sorted, column_order, null_precedence)
-    std::vector<cudf::size_type> key_indices(n_key_indices.data(),
-                                             n_key_indices.data() + n_key_indices.size());
+    std::vector<cudf::size_type> key_indices = n_key_indices.to_vector();
+
+    // check number of key columns vs number of input columns
+    size_t num_cols_input = static_cast<size_t>(input_table->num_columns());
+    if (key_indices.size() > num_cols_input) {
+      JNI_THROW_NEW(
+        env,
+        cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+        "The number of key columns is greater than the number of columns in the input table",
+        0);
+    }
+
     auto keys = input_table->select(key_indices);
     auto null_handling =
       jignore_null_keys ? cudf::null_policy::EXCLUDE : cudf::null_policy::INCLUDE;
@@ -4643,42 +4665,70 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
 
     // 1) Gets the groups(keys, offsets, values) from groupby.
     //
-    // Uses only the non-key columns as the input values instead of the whole table,
-    // to avoid duplicated key columns in output of `get_groups`.
-    // The code looks like a little more complicated, but it can reduce the peak memory.
-    auto num_value_cols = input_table->num_columns() - key_indices.size();
-    std::vector<cudf::size_type> value_indices;
-    value_indices.reserve(num_value_cols);
-    // column indices start with 0.
-    cudf::size_type index = 0;
-    while (value_indices.size() < num_value_cols) {
-      if (std::find(key_indices.begin(), key_indices.end(), index) == key_indices.end()) {
-        // not key column, so adds it as value column.
-        value_indices.emplace_back(index);
+    // If the `jprojection_column_indices` is null, uses all_columns as projection columns;
+    // If the `jprojection_column_indices` is not null, use the `jprojection_column_indices` columns
+    // as projection columns.
+    std::vector<cudf::size_type> projection_indices;
+    auto num_project_cols = [&]() -> size_t {
+      if (jprojection_column_indices == NULL) {
+        // if a column is not in key columns, then it's a projection column
+        auto num_non_key_cols = num_cols_input - key_indices.size();
+        projection_indices.reserve(num_non_key_cols);
+        cudf::size_type index = 0;
+        while (projection_indices.size() < num_non_key_cols) {
+          if (std::find(key_indices.begin(), key_indices.end(), index) == key_indices.end()) {
+            // not key column, so adds it as projection column.
+            projection_indices.emplace_back(index);
+          }
+          index++;
+        }
+        return num_non_key_cols;
+      } else {
+        // use the specified projection columns as output columns
+        cudf::jni::native_jintArray n_project_indices(env, jprojection_column_indices);
+        projection_indices = n_project_indices.to_vector();
+        return static_cast<size_t>(n_project_indices.size());
       }
-      index++;
-    }
-    cudf::table_view values_view = input_table->select(value_indices);
-    // execute grouping
-    cudf::groupby::groupby::groups groups = grouper.get_groups(values_view);
+    }();
 
-    // When builds the table view from keys and values of 'groups', restores the
-    // original order of columns (same order with that in input table).
-    std::vector<cudf::column_view> grouped_cols(key_indices.size() + num_value_cols);
-    // key columns
-    auto key_view    = groups.keys->view();
-    auto key_view_it = key_view.begin();
-    for (auto key_id : key_indices) {
-      grouped_cols.at(key_id) = std::move(*key_view_it);
-      key_view_it++;
+    cudf::table_view projection_view = input_table->select(projection_indices);
+    // execute grouping
+    cudf::groupby::groupby::groups groups = grouper.get_groups(projection_view);
+
+    // if jprojection_column_indices is null, output both key columns and projection columns;
+    // otherwise, only output projection columns.
+    auto num_grouped_cols =
+      num_project_cols + ((jprojection_column_indices == NULL) ? key_indices.size() : 0);
+
+    std::vector<cudf::column_view> grouped_cols(num_grouped_cols);
+
+    if (jprojection_column_indices == NULL) {
+      // When builds the table view from keys and non-keys of 'groups', restores the
+      // original order of columns (same order with that in input table).
+      // key columns
+      auto key_view    = groups.keys->view();
+      auto key_view_it = key_view.begin();
+      for (auto key_id : key_indices) {
+        grouped_cols[key_id] = *key_view_it;
+        key_view_it++;
+      }
+      // non-key columns
+      auto projection_view = groups.values->view();
+      auto project_view_it = projection_view.begin();
+      for (auto value_id : projection_indices) {
+        grouped_cols[value_id] = *project_view_it;
+        project_view_it++;
+      }
+    } else {
+      // specified projection_indices, do not output keys columns by default
+      auto projection_view = groups.values->view();
+      auto project_view_it = projection_view.begin();
+      for (size_t i = 0; i < num_project_cols; ++i) {
+        grouped_cols[i] = *project_view_it;
+        project_view_it++;
+      }
     }
-    // value columns
-    auto value_view    = groups.values->view();
-    auto value_view_it = value_view.begin();
-    for (auto value_id : value_indices) {
-      grouped_cols.at(value_id) = std::move(*value_view_it);
-      value_view_it++;
-    }
+
     cudf::table_view grouped_table(grouped_cols);
     // When no key columns, uses the input table instead, because the output
     // of 'get_groups' is empty.
