@@ -70,7 +70,7 @@ async def concatenate_node(
     ch_in
         The input ChannelPair.
     output_count
-        The expected GLOBAL number of output chunks.
+        The expected global number of output chunks.
     collective_id
         Pre-allocated collective ID for this operation.
     """

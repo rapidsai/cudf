@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair, HashPartitioned
 
 
 @define_py_node()
@@ -91,8 +91,7 @@ async def broadcast_join_node(
             ch_right.recv_metadata(context),
         )
 
-        local_partitioned_on: tuple[str, ...] = ()
-        global_partitioned_on: tuple[str, ...] = ()
+        partitioning: HashPartitioned | None = None
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
@@ -101,8 +100,7 @@ async def broadcast_join_node(
             large_child = ir.children[0]
             local_count = left_metadata.local_count
             global_count = left_metadata.global_count
-            local_partitioned_on = left_metadata.local_partitioned_on
-            global_partitioned_on = left_metadata.global_partitioned_on
+            partitioning = left_metadata.partitioning
             small_duplicated = right_metadata.duplicated
         else:
             # Broadcast left, stream right
@@ -114,15 +112,13 @@ async def broadcast_join_node(
             global_count = right_metadata.global_count
             small_duplicated = left_metadata.duplicated
             if ir.options[0] == "Right":
-                local_partitioned_on = right_metadata.local_partitioned_on
-                global_partitioned_on = right_metadata.global_partitioned_on
+                partitioning = right_metadata.partitioning
 
         # Send metadata.
         output_metadata = Metadata(
             local_count=local_count,
             global_count=global_count,
-            local_partitioned_on=local_partitioned_on,
-            global_partitioned_on=global_partitioned_on,
+            partitioning=partitioning,
             duplicated=left_metadata.duplicated and right_metadata.duplicated,
         )
         await ch_out.send_metadata(context, output_metadata)

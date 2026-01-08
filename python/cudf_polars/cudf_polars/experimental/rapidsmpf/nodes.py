@@ -76,12 +76,7 @@ async def default_node_single(
         metadata_out = Metadata(
             local_count=metadata_in.local_count,
             global_count=metadata_in.global_count,
-            local_partitioned_on=(
-                metadata_in.local_partitioned_on if preserve_partitioning else ()
-            ),
-            global_partitioned_on=(
-                metadata_in.global_partitioned_on if preserve_partitioning else ()
-            ),
+            partitioning=metadata_in.partitioning if preserve_partitioning else None,
             duplicated=metadata_in.duplicated,
         )
         await ch_out.send_metadata(context, metadata_out)
@@ -183,8 +178,7 @@ async def default_node_multi(
                 )
             metadata.duplicated = metadata.duplicated and md_child.duplicated
             if idx == partitioning_index:
-                metadata.local_partitioned_on = md_child.local_partitioned_on
-                metadata.global_partitioned_on = md_child.global_partitioned_on
+                metadata.partitioning = md_child.partitioning
         await ch_out.send_metadata(context, metadata)
 
         seq_num = 0

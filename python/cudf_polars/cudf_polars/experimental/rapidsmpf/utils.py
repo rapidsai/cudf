@@ -9,7 +9,7 @@ import operator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from functools import reduce
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
 from rapidsmpf.streaming.core.message import Message
@@ -55,15 +55,46 @@ async def shutdown_on_error(
         raise
 
 
+class HashPartitioned:
+    """
+    Hash-partitioned metadata.
+
+    Attributes
+    ----------
+    columns
+        Columns the data is hash-partitioned on.
+    scope
+        Whether data is partitioned locally (within a rank) or
+        globally (across all ranks).
+    count
+        The modulus used for hash partitioning (number of partitions).
+    """
+
+    __slots__ = ("columns", "count", "scope")
+
+    columns: tuple[str, ...]
+    scope: Literal["local", "global"]
+    count: int
+
+    def __init__(
+        self,
+        columns: tuple[str, ...],
+        scope: Literal["local", "global"],
+        count: int,
+    ):
+        self.columns = columns
+        self.scope = scope
+        self.count = count
+
+
 class Metadata:
     """Metadata payload for an individual ChannelPair."""
 
     __slots__ = (
         "duplicated",
         "global_count",
-        "global_partitioned_on",
         "local_count",
-        "local_partitioned_on",
+        "partitioning",
     )
 
     # Chunk counts
@@ -72,11 +103,9 @@ class Metadata:
     global_count: int | None
     """Global chunk-count estimate across all ranks."""
 
-    # Partitioning (columns data is hash-partitioned on)
-    local_partitioned_on: tuple[str, ...]
-    """Columns the data is partitioned on locally (within this rank)."""
-    global_partitioned_on: tuple[str, ...]
-    """Columns the data is partitioned on globally (across all ranks)."""
+    # Partitioning
+    partitioning: HashPartitioned | None
+    """How the data is hash-partitioned, or None if not partitioned."""
 
     # Duplication
     duplicated: bool
@@ -87,14 +116,12 @@ class Metadata:
         local_count: int,
         *,
         global_count: int | None = None,
-        local_partitioned_on: tuple[str, ...] = (),
-        global_partitioned_on: tuple[str, ...] = (),
+        partitioning: HashPartitioned | None = None,
         duplicated: bool = False,
     ):
         self.local_count = local_count
         self.global_count = global_count
-        self.local_partitioned_on = local_partitioned_on
-        self.global_partitioned_on = global_partitioned_on
+        self.partitioning = partitioning
         self.duplicated = duplicated
 
 

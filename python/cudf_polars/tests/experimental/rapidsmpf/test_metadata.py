@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for RapidsMPF metadata functionality."""
@@ -79,6 +79,8 @@ def test_rapidsmpf_join_metadata(
     assert metadata.local_count == left_count
     assert metadata.duplicated is False
     if right_count > broadcast_join_limit:
-        assert metadata.global_partitioned_on == ("y",)
+        assert metadata.partitioning is not None
+        assert metadata.partitioning.columns == ("y",)
+        assert metadata.partitioning.scope == "global"
     else:
-        assert metadata.global_partitioned_on == ()
+        assert metadata.partitioning is None
