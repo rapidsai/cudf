@@ -678,6 +678,7 @@ class DatetimeColumn(TemporalBaseColumn):
             return DatetimeTZColumn(
                 plc_column=self.plc_column,
                 dtype=dtype,
+                children=self.children,
             )
         if cudf.get_option("mode.pandas_compatible"):
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
@@ -849,6 +850,7 @@ class DatetimeTZColumn(DatetimeColumn):
         return DatetimeColumn(
             plc_column=self.plc_column,
             dtype=_get_base_dtype(self.dtype),
+            children=self.children,
         )
 
     @functools.cached_property

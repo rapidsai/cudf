@@ -928,6 +928,7 @@ class NumericalColumn(NumericalBaseColumn):
             return CategoricalColumn(
                 plc_column=codes.plc_column,
                 dtype=dtype,
+                children=(codes,),
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)

@@ -351,18 +351,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self,
         plc_column: plc.Column,
         dtype: DtypeObj,
-        children: tuple[ColumnBase, ...] | None = None,
+        children: tuple[ColumnBase, ...],
     ) -> None:
         plc_column, dtype = self._validate_args(plc_column, dtype)
         self.plc_column = plc_column
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        # Use provided children or extract from plc_column (for backward compatibility)
-        if children is None:
-            children = self._get_children_from_pylibcudf_column(
-                self.plc_column,
-                dtype,
-            )
         self.set_children(children)
         # The set of exposed buffers associated with this column. These buffers must be
         # kept alive for the lifetime of this column since anything that accessed the
@@ -370,30 +364,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # are destroyed, all references to this column will be removed as well,
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers: set[Buffer] = set()
-
-    def _get_children_from_pylibcudf_column(
-        self,
-        plc_column: plc.Column,
-        dtype: DtypeObj,
-    ) -> tuple[ColumnBase, ...]:
-        """
-        Extract the children columns from a pylibcudf.Column.
-
-        ColumnBase currently assumes children are also ColumnBase objects.
-
-        Parameters
-        ----------
-        plc_column : plc.Column
-            The pylibcudf.Column to extract the children columns from.
-
-        Returns
-        -------
-        tuple[ColumnBase, ...]
-            The children columns.
-        """
-        return tuple(
-            ColumnBase.from_pylibcudf(child) for child in plc_column.children()
-        )
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
@@ -715,8 +685,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             raise TypeError(f"Unrecognized dtype: {dtype}")
 
+        children = (
+            (col,) if isinstance(dtype, CategoricalDtype) else col.children()
+        )
         wrapped_children: tuple[ColumnBase, ...] = tuple(
-            cls.from_pylibcudf(child) for child in col.children()
+            cls.from_pylibcudf(child) for child in children
         )
         wrapped_children = cls._apply_child_metadata(wrapped_children, dtype)
 
@@ -733,19 +706,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             validate=False,
         )
 
-        # Only pass children if non-empty; otherwise let __init__ call
-        # _get_children_from_pylibcudf_column (needed for CategoricalColumn)
-        if wrapped_children:
-            return cls(  # type: ignore[return-value]
-                plc_column=col,
-                dtype=dtype,
-                children=wrapped_children,
-            )
-        else:
-            return cls(  # type: ignore[return-value]
-                plc_column=col,
-                dtype=dtype,
-            )
+        return cls(  # type: ignore[return-value]
+            plc_column=col,
+            dtype=dtype,
+            children=wrapped_children,
+        )
 
     @classmethod
     def from_cuda_array_interface(cls, arbitrary: Any) -> ColumnBase:
@@ -1175,6 +1140,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             col = type(self)(
                 plc_column=self.plc_column,
                 dtype=self.dtype,
+                children=tuple(s.copy(deep=False) for s in self.children),
             )
             # copy-on-write and spilling logic tracked on the Buffers
             # so copy over the Buffers from self
