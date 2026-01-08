@@ -136,7 +136,7 @@ void nvbench_join_heuristics(nvbench::state& state,
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     if constexpr (Method == heuristic_method::DISTINCT_COUNT) {
       // Approach 1: cudf::distinct_count
-      auto distinct = cudf::distinct_count(keys, cudf::null_equality::EQUAL);
+      [[maybe_unused]] auto distinct = cudf::distinct_count(keys, cudf::null_equality::EQUAL);
       // Note: This only gives distinct count, not max duplicate count
     } else if constexpr (Method == heuristic_method::GROUPBY_MAX) {
       // Approach 2: groupby count + max reduction
@@ -153,21 +153,21 @@ void nvbench_join_heuristics(nvbench::state& state,
       auto [group_keys, results] = gb.aggregate(requests);
 
       // Get distinct count from number of groups
-      auto distinct_count = group_keys->num_rows();
+      [[maybe_unused]] auto distinct_count = group_keys->num_rows();
 
       // Get max duplicate count via max reduction on count column
       auto const& counts_column = results[0].results[0];
-      auto max_count            = cudf::reduce(*counts_column,
-                                    *cudf::make_max_aggregation<cudf::reduce_aggregation>(),
-                                    counts_column->type());
+      [[maybe_unused]] auto max_count = cudf::reduce(*counts_column,
+                                          *cudf::make_max_aggregation<cudf::reduce_aggregation>(),
+                                          counts_column->type());
     } else if constexpr (Method == heuristic_method::KEY_REMAPPING) {
       // Approach 3: key_remapping with metrics
       cudf::key_remapping remap(
         keys, cudf::null_equality::EQUAL, cudf::compute_metrics::YES, cudf::get_default_stream());
 
       // Get both metrics
-      auto distinct_count = remap.get_distinct_count();
-      auto max_dup_count  = remap.get_max_duplicate_count();
+      [[maybe_unused]] auto distinct_count = remap.get_distinct_count();
+      [[maybe_unused]] auto max_dup_count  = remap.get_max_duplicate_count();
     }
   });
 

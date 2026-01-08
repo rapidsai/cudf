@@ -15,6 +15,11 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/random.h>
+#include <thrust/shuffle.h>
+
 #include <nvbench/nvbench.cuh>
 
 /**
@@ -71,24 +76,26 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
  * @brief Generate an INT32 key column with controlled cardinality using divisor approach.
  *
  * For a given number of rows and divisor:
- * - keys[i] = i / divisor
+ * - keys[i] = i / divisor (before shuffling)
  * This creates (num_rows / divisor) unique keys, each appearing exactly divisor times
  * (except possibly the last key which may have fewer occurrences).
  *
- * The generated keys follow a sequential pattern: [0,0,...,1,1,...,2,2,...] for divisor=d.
- * While this is not as realistic as truly random key distributions, it provides:
+ * The keys are generated sequentially and then shuffled to reduce data locality bias,
+ * which could affect join performance. The shuffle uses a fixed seed (12345) for
+ * reproducibility across benchmark runs.
+ *
+ * This approach provides:
  * - Exact cardinality control - CRITICAL for ALL_UNIQUE to prevent memory allocation errors from
  *   unexpected duplicates in large datasets (100M+ rows)
  * - Perfect control over duplicate counts - ensures benchmarks measure what we intend
- * - Deterministic output for reproducible benchmarks
+ * - Deterministic output for reproducible benchmarks (fixed seed)
  * - Minimal generation overhead
+ * - Reduced data locality bias from shuffling
  *
  * For a more realistic distribution, one could generate random data with create_random_table,
  * perform key remapping, and use the remapped INT32 IDs. However:
  * - This would add complexity and require careful stream synchronization
  * - For ALL_UNIQUE, would still need deduplication to avoid OOM crashes
- * - The sequential pattern in divisor-based generation is acceptable since join performance
- *   depends on cardinality/duplicate counts, not value distribution patterns
  */
 std::unique_ptr<cudf::column> generate_int32_keys(cudf::size_type num_rows, cudf::size_type divisor)
 {
@@ -99,17 +106,27 @@ std::unique_ptr<cudf::column> generate_int32_keys(cudf::size_type num_rows, cudf
   auto step = cudf::make_fixed_width_scalar<cudf::size_type>(1, stream);
   auto seq  = cudf::sequence(num_rows, *init, *step, stream);
 
+  std::unique_ptr<cudf::column> result;
   if (divisor == 1) {
-    // ALL_UNIQUE: return sequence directly
-    return seq;
+    // ALL_UNIQUE: use sequence directly
+    result = std::move(seq);
+  } else {
+    // Divide each element by divisor to create duplicates
+    auto divisor_scalar = cudf::make_fixed_width_scalar<cudf::size_type>(divisor, stream);
+    result = cudf::binary_operation(seq->view(),
+                                    *divisor_scalar,
+                                    cudf::binary_operator::DIV,
+                                    cudf::data_type{cudf::type_id::INT32});
   }
 
-  // Divide each element by divisor to create duplicates
-  auto divisor_scalar = cudf::make_fixed_width_scalar<cudf::size_type>(divisor, stream);
-  return cudf::binary_operation(seq->view(),
-                                *divisor_scalar,
-                                cudf::binary_operator::DIV,
-                                cudf::data_type{cudf::type_id::INT32});
+  // Shuffle the generated data to reduce bias from data locality.
+  // Use a fixed seed for reproducibility across benchmark runs.
+  thrust::shuffle(rmm::exec_policy_nosync(stream),
+                  result->mutable_view().begin<int32_t>(),
+                  result->mutable_view().end<int32_t>(),
+                  thrust::default_random_engine{12345});
+
+  return result;
 }
 
 template <key_cardinality Card, join_algo Algo>

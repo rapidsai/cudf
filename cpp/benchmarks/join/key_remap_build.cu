@@ -101,10 +101,8 @@ void nvbench_key_remap_build(nvbench::state& state,
     cudf::key_remapping remap(
       keys, cudf::null_equality::EQUAL, cudf::compute_metrics::YES, cudf::get_default_stream());
     // Access metrics to ensure they're computed
-    auto dc = remap.get_distinct_count();
-    auto mc = remap.get_max_duplicate_count();
-    (void)dc;
-    (void)mc;
+    [[maybe_unused]] auto dc = remap.get_distinct_count();
+    [[maybe_unused]] auto mc = remap.get_max_duplicate_count();
   });
 }
 

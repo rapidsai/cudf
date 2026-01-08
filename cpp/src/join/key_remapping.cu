@@ -6,7 +6,6 @@
 #include "join_common_utils.cuh"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -32,11 +31,8 @@
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
 #include <cuda/std/atomic>
-#include <thrust/count.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/reduce.h>
@@ -45,7 +41,6 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
-#include <type_traits>
 #include <utility>
 
 namespace cudf {
@@ -449,6 +444,7 @@ class key_remap_table : public key_remap_table_interface {
                     FoundIterator found_begin,
                     rmm::cuda_stream_view stream) const
   {
+    CUDF_FUNC_RANGE();
     auto const probe_num_rows = probe_keys.num_rows();
 
     if (_compare_nulls == cudf::null_equality::EQUAL or (not cudf::nullable(probe_keys))) {

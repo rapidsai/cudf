@@ -83,20 +83,21 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
 
       // Step 4: Perform the join on remapped integer keys
       if constexpr (Algorithm == join_t::HASH) {
-        auto result = cudf::inner_join(remapped_probe_view, remapped_build_view, NullEquality);
+        [[maybe_unused]] auto result =
+          cudf::inner_join(remapped_probe_view, remapped_build_view, NullEquality);
       } else if constexpr (Algorithm == join_t::SORT_MERGE) {
-        auto smj    = cudf::sort_merge_join(remapped_build_view, cudf::sorted::NO, NullEquality);
-        auto result = smj.inner_join(remapped_probe_view, cudf::sorted::NO);
+        auto smj = cudf::sort_merge_join(remapped_build_view, cudf::sorted::NO, NullEquality);
+        [[maybe_unused]] auto result = smj.inner_join(remapped_probe_view, cudf::sorted::NO);
       }
     });
   } else {
     // Benchmark without key remapping (direct join)
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
       if constexpr (Algorithm == join_t::HASH) {
-        auto result = cudf::inner_join(probe_keys, build_keys, NullEquality);
+        [[maybe_unused]] auto result = cudf::inner_join(probe_keys, build_keys, NullEquality);
       } else if constexpr (Algorithm == join_t::SORT_MERGE) {
-        auto smj    = cudf::sort_merge_join(build_keys, cudf::sorted::NO, NullEquality);
-        auto result = smj.inner_join(probe_keys, cudf::sorted::NO);
+        auto smj = cudf::sort_merge_join(build_keys, cudf::sorted::NO, NullEquality);
+        [[maybe_unused]] auto result = smj.inner_join(probe_keys, cudf::sorted::NO);
       }
     });
   }
