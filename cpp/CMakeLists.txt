@@ -350,55 +350,50 @@ endif()
 set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
 
-list(APPEND CUDF_JIT_ARCHITECTURES 75 80 86 90 100 120)
 list(APPEND CUDF_JIT_DEFINITIONS -DCUDF_RUNTIME_JIT -D__CUDACC_RTC__)
 list(
-  APPEND CUDF_JIT_COMPILE_FLAGS -O3 -std=c++${CUDF_CUDA_STANDARD} -Xcompiler=-fPIC -Xcompiler=-DPIC
-  -fvisibility=hidden -Xfatbin=--compress-all --compress-mode=size --device-int128
+  APPEND
+  CUDF_JIT_COMPILE_FLAGS
+  -std=c++${CUDF_CUDA_STANDARD}
+  # -Xcompiler=-fPIC -Xcompiler=-DPIC -fvisibility=hidden -Xfatbin=--compress-all
+  # --compress-mode=size
+  --device-int128
+  ${CUDF_JIT_DEFINITIONS}
 )
 
-get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+jit_add_include_directory(
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DEST_DIRECTORY cudf/include
+  INCLUDE_DIRECTORIES cudf/include
+)
 
-add_jit_includes(
-  cudf_jit_embed
-  DIRECTORY
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-  FILES
-  cudf/table/table_device_view.cuh
-  cudf/jit/lto/types.cuh
-  cudf/jit/lto/operators.cuh
-  cudf/jit/lto/library.cuh
-  cudf/jit/lto/thunk.cuh
-  cudf/jit/transform_params.cuh
-  cudf/jit/filter_params.cuh
-  cudf/utilities/traits.cuh
-  cudf/strings/string_view.cuh
-  cudf/column/column_device_view_base.cuh
-  cudf/detail/null_mask.cuh
-  cudf/detail/utilities/grid_1d.cuh
-  cudf/detail/offsets_iterator.cuh
-  cudf/detail/indexalator.cuh
-  cudf/ast/detail/operator_functor.cuh
-  cudf/ast/detail/operators.cuh
-  cudf/jit/lto/types.cuh
-  cudf/jit/lto/operators.cuh
-  cudf/jit/transform_params.cuh
-  cudf/jit/filter_params.cuh
+jit_add_include_directory(
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src DEST_DIRECTORY cudf/src
+  INCLUDE_DIRECTORIES cudf/src
 )
 
 # TODO: add library.cu LTO type checks need to be compiled as part of the AOT workflow to ensure
-# type consistency between AOT and JIT
+# type consistency between AOT and JIT Must be in test suite
 
-add_jit_includes(
-  cudf_jit_embed DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} FILES src/jit/lto/library.inl.cuh
-  src/jit/lto/operators.inl.cuh src/jit/lto/types.inl.cuh src/jit/accessors.cuh src/jit/span.cuh
-)
+get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
 
-add_jit_includes(cudf_jit_embed INCLUDE_DIRECTORY ${LIBCUDACXX_RAW_INCLUDE_DIRS})
+foreach(CUDACXX_INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
+  jit_add_include_directory(
+    cudf_jit_embed COPY_DIRECTORY ${CUDACXX_INC_DIR} DEST_DIRECTORY libcudacxx INCLUDE_DIRECTORIES
+    libcudacxx
+  )
 
-add_jit_options(cudf_jit_embed OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
+endforeach()
 
-generate_jit_source_map(TARGET cudf_jit_embed)
+foreach(CTK_INC_DIR IN LISTS CUDAToolkit_INCLUDE_DIRS)
+  jit_add_include_directory(
+    cudf_jit_embed COPY_DIRECTORY ${CTK_INC_DIR} DEST_DIRECTORY CUDAToolKit INCLUDE_DIRECTORIES
+    CUDAToolKit CUDAToolKit/cuda/std
+  )
+endforeach()
+
+jit_add_options(cudf_jit_embed OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
+
+jit_embed(cudf_jit_embed)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -1055,12 +1050,12 @@ target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_A
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
-# Specify the target module library dependencies
+# Specify the target module library dependencies TODO: use runtime nvrtc and nvjitlink and driver
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow::nanoarrow zstd CUDA::nvJitLink
+          kvikio::kvikio nanoarrow::nanoarrow zstd CUDA::nvJitLink CUDA::nvrtc CUDA::cuda_driver
 )
 
 # Add Conda library, and include paths if specified

@@ -296,6 +296,8 @@ struct cache_t {
 
   void disable();
 
+  [[nodiscard]] std::string const& get_cache_dir();
+
   void store_blob_to_memory(sha256_hash const& sha, std::shared_future<blob> binary);
 
   void store_blob_to_disk(sha256_hash const& sha, blob_view binary);

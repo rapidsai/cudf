@@ -7,133 +7,198 @@
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-function(add_jit_includes)
-  set(IDENTIFIER ${ARGV0})
+function(jit_add_include_directory)
+  set(TARGET ${ARGV0})
   set(OPTIONS "")
-  set(ONE_VALUE_ARGS DIRECTORY INCLUDE_DIRECTORY)
-  set(MULTI_VALUE_ARGS FILES)
+  set(ONE_VALUE_ARGS COPY_DIRECTORY # Source directory where files will be copied from
+                     DEST_DIRECTORY # Destination directory where files will be copied to
+  )
+  set(MULTI_VALUE_ARGS
+      FILES # Source files relative to COPY_DIRECTORY (optional, if not provided, all files under
+            # COPY_DIRECTORY will be used)
+      INCLUDE_DIRECTORIES # Include directories to be used when compiling with these files
+  )
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  if(NOT ARG_DIRECTORY AND NOT ARG_INCLUDE_DIRECTORY)
-    message(FATAL_ERROR "Either DIRECTORY or INCLUDE_DIRECTORY must be specified")
+  if(NOT DEFINED TARGET)
+    message(FATAL_ERROR "TARGET argument is required")
   endif()
 
-  if(ARG_DIRECTORY AND ARG_INCLUDE_DIRECTORY)
-    message(FATAL_ERROR "Only one of DIRECTORY or INCLUDE_DIRECTORY can be specified")
+  if(NOT ARG_COPY_DIRECTORY)
+    message(FATAL_ERROR "COPY_DIRECTORY argument is required")
   endif()
 
-  if(ARG_INCLUDE_DIRECTORY AND ARG_FILES)
-    message(FATAL_ERROR "FILES cannot be specified with INCLUDE_DIRECTORY")
+  if(NOT ARG_DEST_DIRECTORY)
+    message(FATAL_ERROR "DEST_DIRECTORY argument is required")
   endif()
 
-  # recursively gather all include files under the specified directory and get their paths relative
-  # to the base include directory
-  if(ARG_INCLUDE_DIRECTORY)
-    file(GLOB_RECURSE INCLUDE_FILES "${ARG_INCLUDE_DIRECTORY}/*")
+  if(NOT ARG_INCLUDE_DIRECTORIES)
+    message(FATAL_ERROR "INCLUDE_DIRECTORIES argument is required")
+  endif()
+
+  if(NOT ARG_FILES)
+    # gather all include files under the specified directory
+    file(GLOB_RECURSE INCLUDE_FILES "${ARG_COPY_DIRECTORY}/*")
+
+    # get their paths relative to the base include directory
     set(INCLUDE_FILES_RELATIVE_PATHS "")
     foreach(INCLUDE_FILE IN LISTS INCLUDE_FILES)
-      file(RELATIVE_PATH REL_PATH "${ARG_INCLUDE_DIRECTORY}" "${INCLUDE_FILE}")
-      list(APPEND INCLUDE_FILES_RELATIVE_PATHS "${REL_PATH}")
+      file(RELATIVE_PATH INCLUDE_FILE_REL_PATH "${ARG_COPY_DIRECTORY}" "${INCLUDE_FILE}")
+      list(APPEND INCLUDE_FILES_RELATIVE_PATHS "${INCLUDE_FILE_REL_PATH}")
     endforeach()
-    set(ARG_DIRECTORY ${ARG_INCLUDE_DIRECTORY})
+
     set(ARG_FILES ${INCLUDE_FILES_RELATIVE_PATHS})
   endif()
 
   # check that each source file exists
   foreach(SOURCE_FILE IN LISTS ARG_FILES)
-    if(NOT EXISTS "${ARG_DIRECTORY}/${SOURCE_FILE}")
-      message(FATAL_ERROR "Source file '${ARG_DIRECTORY}/${SOURCE_FILE}' does not exist")
+    if(NOT EXISTS "${ARG_COPY_DIRECTORY}/${SOURCE_FILE}")
+      message(FATAL_ERROR "Source file '${ARG_COPY_DIRECTORY}/${SOURCE_FILE}' does not exist")
     endif()
   endforeach(SOURCE_FILE)
 
-  set(SOURCE_FILES ${${IDENTIFIER}_sources_file_paths})
-  set(INCLUDE_NAMES ${${IDENTIFIER}_sources_include_names})
+  # Set scope variables to accumulate results
+
+  set(SOURCE_FILES ${jitembed_${TARGET}_incdir__source_files})
+  set(SOURCE_FILE_DESTS ${jitembed_${TARGET}_incdir__source_file_dests})
+  set(INCLUDE_DIRECTORIES ${jitembed_${TARGET}_incdir__include_directories})
 
   foreach(SOURCE_FILE IN LISTS ARG_FILES)
-    list(APPEND SOURCE_FILES "${ARG_DIRECTORY}/${SOURCE_FILE}")
-    list(APPEND INCLUDE_NAMES "${SOURCE_FILE}")
+    list(APPEND SOURCE_FILES "${ARG_COPY_DIRECTORY}/${SOURCE_FILE}")
+    list(APPEND SOURCE_FILE_DESTS "${ARG_DEST_DIRECTORY}/${SOURCE_FILE}")
   endforeach()
 
-  set(${IDENTIFIER}_sources_file_paths
+  list(APPEND INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES})
+
+  set(jitembed_${TARGET}_incdir__source_files
       ${SOURCE_FILES}
       PARENT_SCOPE
   )
-  set(${IDENTIFIER}_sources_include_names
-      ${INCLUDE_NAMES}
+  set(jitembed_${TARGET}_incdir__source_file_dests
+      ${SOURCE_FILE_DESTS}
+      PARENT_SCOPE
+  )
+  set(jitembed_${TARGET}_incdir__include_directories
+      ${INCLUDE_DIRECTORIES}
       PARENT_SCOPE
   )
 
 endfunction()
 
-function(add_jit_options)
-  set(IDENTIFIER ${ARGV0})
+function(jit_add_options)
+  set(TARGET ${ARGV0})
   set(OPTIONS "")
   set(ONE_VALUE_ARGS "")
   set(MULTI_VALUE_ARGS "OPTIONS")
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  set(${IDENTIFIER}_options
-      "${ARG_OPTIONS}"
+  if(NOT DEFINED TARGET)
+    message(FATAL_ERROR "TARGET argument is required")
+  endif()
+
+  if(NOT ARG_OPTIONS)
+    message(FATAL_ERROR "OPTIONS argument is required")
+  endif()
+
+  set(options ${jitembed_options_${TARGET}_options})
+  foreach(OPTION IN LISTS ARG_OPTIONS)
+    list(APPEND options "${OPTION}")
+  endforeach()
+
+  set(jitembed_options_${TARGET}_options
+      ${options}
       PARENT_SCOPE
   )
 
 endfunction()
 
 # pass the encoded args to the jit_embed.py script to generate the source and options maps
-function(generate_jit_source_map)
-  set(ONE_VALUE_ARGS "TARGET")
+function(jit_embed)
+  set(TARGET ${ARGV0})
   cmake_parse_arguments(ARG "" "${ONE_VALUE_ARGS}" "" ${ARGN})
 
-  list(LENGTH ${ARG_TARGET}_sources_include_names NUM_SOURCES)
-  list(LENGTH ${ARG_TARGET}_options NUM_OPTIONS)
+  if(NOT DEFINED TARGET)
+    message(FATAL_ERROR "TARGET argument is required")
+  endif()
 
-  set(TARGET_YAML " - id: \"${ARG_TARGET}_sources\"\n   type: \"sources\"\n   sources:\n")
+  string(APPEND TARGET_YAML "\"${TARGET}_sources\":\n")
+  string(APPEND TARGET_YAML " type: \"sources\"\n")
 
-  math(EXPR LAST_SOURCE_INDEX "${NUM_SOURCES} - 1")
-  foreach(i RANGE 0 ${LAST_SOURCE_INDEX})
-    list(GET ${ARG_TARGET}_sources_include_names ${i} INCLUDE_NAME)
-    list(GET ${ARG_TARGET}_sources_file_paths ${i} SOURCE_FILE_PATH)
-    set(TARGET_YAML "${TARGET_YAML}    - include_name: \"${INCLUDE_NAME}\"\n")
-    set(TARGET_YAML "${TARGET_YAML}      file_path: \"${SOURCE_FILE_PATH}\"\n")
-  endforeach()
+  if(DEFINED jitembed_${TARGET}_incdir__source_files)
 
-  set(TARGET_YAML "${TARGET_YAML}\n\n")
-  set(TARGET_YAML
-      "${TARGET_YAML} - id: \"${ARG_TARGET}_options\"\n   type: \"options\"\n   options:\n"
-  )
+    # gather source files
+    string(APPEND TARGET_YAML " sources:\n")
+    list(LENGTH jitembed_${TARGET}_incdir__source_files NUM_SOURCES)
 
-  math(EXPR LAST_OPTION_INDEX "${NUM_OPTIONS} - 1")
-  foreach(i RANGE 0 ${LAST_OPTION_INDEX})
-    list(GET ${ARG_TARGET}_options ${i} OPTION)
-    set(TARGET_YAML "${TARGET_YAML}    - \"${OPTION}\"\n")
-  endforeach()
+    math(EXPR LAST_SOURCE_INDEX "${NUM_SOURCES} - 1")
+    foreach(i RANGE 0 ${LAST_SOURCE_INDEX})
+      list(GET jitembed_${TARGET}_incdir__source_files ${i} SOURCE_FILE)
+      list(GET jitembed_${TARGET}_incdir__source_file_dests ${i} SOURCE_FILE_DEST)
+      string(APPEND TARGET_YAML "  - file: \"${SOURCE_FILE}\"\n")
+      string(APPEND TARGET_YAML "    dest: \"${SOURCE_FILE_DEST}\"\n")
+    endforeach()
+
+    # gather include directories
+
+    string(APPEND TARGET_YAML " include_directories:\n")
+    list(LENGTH jitembed_${TARGET}_incdir__include_directories NUM_INCLUDE_DIRS)
+    math(EXPR LAST_INCLUDE_DIR_INDEX "${NUM_INCLUDE_DIRS} - 1")
+    foreach(i RANGE 0 ${LAST_INCLUDE_DIR_INDEX})
+      list(GET jitembed_${TARGET}_incdir__include_directories ${i} INCLUDE_DIR)
+      string(APPEND TARGET_YAML "  - \"${INCLUDE_DIR}\"\n")
+    endforeach()
+
+  endif()
+
+  string(APPEND TARGET_YAML "\n\n")
+
+  if(DEFINED jitembed_options_${TARGET}_options)
+
+    string(APPEND TARGET_YAML "\"${TARGET}_options\":\n")
+    string(APPEND TARGET_YAML " type: \"strings\"\n")
+
+    # gather options
+    string(APPEND TARGET_YAML " strings:\n")
+
+    list(LENGTH jitembed_options_${TARGET}_options NUM_OPTIONS)
+    math(EXPR LAST_OPTION_INDEX "${NUM_OPTIONS} - 1")
+    foreach(i RANGE 0 ${LAST_OPTION_INDEX})
+      list(GET jitembed_options_${TARGET}_options ${i} OPTION)
+      string(APPEND TARGET_YAML "  - \"${OPTION}\"\n")
+    endforeach()
+
+  endif()
+
+  set(YAML_FILE_PATH "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}.yaml")
+  set(INCLUDE_DIR "${CUDF_GENERATED_INCLUDE_DIR}/include/jit_embed")
+  set(HEADER "${INCLUDE_DIR}/${TARGET}.h")
 
   # write CONFIG to temp file and pass file path to script
-  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET}.yaml" "${TARGET_YAML}")
-
-  set(INCLUDE_DIR "${CUDF_GENERATED_INCLUDE_DIR}/include/jit_embed")
-  set(HEADER "${INCLUDE_DIR}/${ARG_TARGET}.h")
+  file(WRITE "${YAML_FILE_PATH}" "${TARGET_YAML}")
 
   add_custom_command(
     OUTPUT ${HEADER}
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/jit_embed.py" --output
-            "${HEADER}" --input-file "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET}.yaml"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/jit_embed.py"
-            ${${ARG_TARGET}_sources_file_paths}
+            "${HEADER}" --input "${YAML_FILE_PATH}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/jit_embed.py" "${YAML_FILE_PATH}"
+            ${jitembed_${TARGET}_incdir__source_files}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    COMMENT "Generating JIT source map for ${ARG_TARGET} into ${HEADER}"
+    COMMENT "Generating JIT embed for ${TARGET} (YAML: ${YAML_FILE_PATH}) into ${HEADER}"
     VERBATIM
   )
 
-  add_custom_target(${ARG_TARGET} ALL DEPENDS "${HEADER}")
+  add_custom_target(${TARGET} ALL DEPENDS "${HEADER}")
 
-  message("Generated into: ${HEADER}")
+  message(
+    STATUS
+      "JIT embed for target ${TARGET} (YAML: ${YAML_FILE_PATH}) will be generated into: ${HEADER}"
+  )
 
-  set(${ARG_TARGET}_INCLUDE_DIR
+  set(${TARGET}_INCLUDE_DIR
       ${INCLUDE_DIR}
       PARENT_SCOPE
   )
-  set(${ARG_TARGET}_HEADER
+  set(${TARGET}_HEADER
       ${HEADER}
       PARENT_SCOPE
   )

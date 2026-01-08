@@ -70,6 +70,8 @@ void cache_t::disable()
   c.store(false, std::memory_order_relaxed);
 }
 
+std::string const& cache_t::get_cache_dir() { return cache_dir_; }
+
 void cache_t::store_blob_to_memory(sha256_hash const& sha, std::shared_future<blob> binary)
 {
   CUDF_FUNC_RANGE();

@@ -45,10 +45,30 @@ struct [[nodiscard]] blob_t {
 
  public:
   blob_t() : data_(nullptr), size_(0), user_data_(nullptr), deallocator_(noop_deallocator) {}
+
   blob_t(blob_t const&)            = delete;
   blob_t& operator=(blob_t const&) = delete;
-  blob_t(blob_t&& other) noexcept;
-  blob_t& operator=(blob_t&& other) noexcept;
+
+  blob_t(blob_t&& other) noexcept
+    : data_(other.data_),
+      size_(other.size_),
+      user_data_(other.user_data_),
+      deallocator_(other.deallocator_)
+  {
+    other.data_        = nullptr;
+    other.size_        = 0;
+    other.user_data_   = nullptr;
+    other.deallocator_ = noop_deallocator;
+  }
+
+  blob_t& operator=(blob_t&& other) noexcept
+  {
+    if (this == &other) [[unlikely]] { return *this; }
+    this->~blob_t();
+    new (this) blob_t(std::move(other));
+    return *this;
+  }
+
   ~blob_t() { deallocator_(user_data_, data_, size_); }
 
   [[nodiscard]] blob_view view() const { return blob_view{data_, size_}; }
@@ -56,7 +76,10 @@ struct [[nodiscard]] blob_t {
   static blob_t from_parts(uint8_t const* data,
                            size_t size,
                            void* user_data,
-                           dealloctor_fn deallocator);
+                           dealloctor_fn deallocator)
+  {
+    return blob_t{data, size, user_data, deallocator};
+  }
 
   static blob_t from_vector(std::vector<uint8_t>&& data);
 

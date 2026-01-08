@@ -37,28 +37,6 @@ jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cu
     .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
 
-// [ ] load the cudf transformation LTO library; return Culibrary object representing it
-// void get_transform_library();
-
-// [ ] take CUDA/PTX code as input
-// [ ] support different function signature styles
-// [ ] handle include directories
-// [ ] C++/C-ABI symbol name for locating function to link against
-// [ ] take input and output data types as parameters
-// [ ] take function_info struct as input; describe: input/output types, null-awareness, user-data
-// requirement, etc.
-// [ ] return Culibrary object representing compiled operator
-// void compile_library();
-// void compile_transform_operator_thunk();
-
-// [ ] take LTO-IR compiled binary of operator as input
-// [ ] link it into the lto library; return
-// void link_transform_thunk();
-
-// [ ] if we can, we should not depend on jitify for LTO-IR compilation, linking, and caching; use
-// nvJITLink directly
-// void cache_transform_thunk();
-
 jitify2::StringVec build_jit_template_params(
   null_aware is_null_aware,
   bool may_evaluate_null,

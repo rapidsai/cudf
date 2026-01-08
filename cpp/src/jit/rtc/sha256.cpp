@@ -37,7 +37,7 @@ sha256_hash sha256_context::finalize()
   sha256_hash hash;
   unsigned int length = 0;
   CUDF_EXPECTS(EVP_DigestFinal_ex(ectx_, hash.data_, &length) == 1, "EVP_DigestFinal_ex failed");
-  CUDF_EXPECTS(length == 64, "Unexpected SHA256 length");
+  CUDF_EXPECTS(length == sizeof(sha256_hash::data_), "Unexpected SHA256 length");
   EVP_MD const* type = EVP_sha256();
   CUDF_EXPECTS(EVP_DigestInit_ex(ectx_, type, nullptr) == 1, "EVP_DigestInit_ex failed");
   return hash;
