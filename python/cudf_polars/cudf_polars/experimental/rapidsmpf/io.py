@@ -683,7 +683,10 @@ def _(
             rec.state["context"],
             ch_pair,
             Metadata(
-                local_count=partition_info.count, global_count=partition_info.count
+                local_count=math.ceil(
+                    partition_info.count / rec.state["context"].comm().nranks
+                ),
+                global_count=partition_info.count,
             ),
         )
         nodes[ir] = [metadata_node, native_node]
