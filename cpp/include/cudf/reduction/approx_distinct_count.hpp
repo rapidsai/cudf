@@ -36,14 +36,14 @@ struct approx_distinct_count;
  * @par HyperLogLog Precision Parameter
  * The precision parameter (p) is the number of bits used to index into the register array.
  * It determines the number of registers (m = 2^p) in the HLL sketch:
- * - Memory usage: 2^p bytes (m registers of 1 byte each)
+ * - Memory usage: 2^p * 4 bytes (m registers of 4 bytes each for GPU atomics)
  * - Standard error: 1.04 / sqrt(m) = 1.04 / sqrt(2^p)
  *
  * Common precision values:
- * - p = 10: m = 1,024 registers, ~3.2% standard error, 1KB memory
- * - p = 12 (default): m = 4,096 registers, ~1.6% standard error, 4KB memory
- * - p = 14: m = 16,384 registers, ~0.8% standard error, 16KB memory
- * - p = 16: m = 65,536 registers, ~0.4% standard error, 64KB memory
+ * - p = 10: m = 1,024 registers, ~3.2% standard error, 4KB memory
+ * - p = 12 (default): m = 4,096 registers, ~1.6% standard error, 16KB memory
+ * - p = 14: m = 16,384 registers, ~0.8% standard error, 64KB memory
+ * - p = 16: m = 65,536 registers, ~0.4% standard error, 256KB memory
  *
  * Valid range: p ∈ [4, 18]. This is not a hard theoretical limit but an empirically
  * recommended range:
