@@ -321,19 +321,48 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         return plc_column, dtype
 
+    @classmethod
+    def _apply_child_metadata(
+        cls,
+        children: tuple[ColumnBase, ...],
+        dtype: DtypeObj,
+    ) -> tuple[ColumnBase, ...]:
+        """
+        Apply type metadata to children based on parent dtype.
+
+        This method is a hook for subclasses to apply type-specific metadata
+        to their children. The base implementation returns children unchanged.
+
+        Parameters
+        ----------
+        children : tuple of ColumnBase
+            The wrapped child columns
+        dtype : DtypeObj
+            The parent column's dtype
+
+        Returns
+        -------
+        tuple of ColumnBase
+            The children with metadata applied (may be the same as input)
+        """
+        return children
+
     def __init__(
         self,
         plc_column: plc.Column,
         dtype: DtypeObj,
+        children: tuple[ColumnBase, ...] | None = None,
     ) -> None:
         plc_column, dtype = self._validate_args(plc_column, dtype)
         self.plc_column = plc_column
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        children = self._get_children_from_pylibcudf_column(
-            self.plc_column,
-            dtype,
-        )
+        # Use provided children or extract from plc_column (for backward compatibility)
+        if children is None:
+            children = self._get_children_from_pylibcudf_column(
+                self.plc_column,
+                dtype,
+            )
         self.set_children(children)
         # The set of exposed buffers associated with this column. These buffers must be
         # kept alive for the lifetime of this column since anything that accessed the
@@ -363,7 +392,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             The children columns.
         """
         return tuple(
-            type(self).from_pylibcudf(child) for child in plc_column.children()
+            ColumnBase.from_pylibcudf(child) for child in plc_column.children()
         )
 
     @property
@@ -605,8 +634,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 validate=False,
             )
 
-    @classmethod
-    def from_pylibcudf(cls, col: plc.Column) -> Self:
+    @staticmethod
+    def from_pylibcudf(col: plc.Column) -> Self:
         """Create a Column from a pylibcudf.Column.
 
         This function will generate a Column pointing to the provided pylibcudf
@@ -630,7 +659,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         elif col.type().id() == plc.TypeId.EMPTY:
             new_dtype = plc.DataType(plc.TypeId.INT8)
-
             col = plc.column_factories.make_numeric_column(
                 new_dtype, col.size(), plc.types.MaskState.ALL_NULL
             )
@@ -652,6 +680,48 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             else:
                 mask = as_buffer(mask)
 
+        dtype = dtype_from_pylibcudf_column(col)
+
+        cls: type[ColumnBase]
+        if isinstance(dtype, CategoricalDtype):
+            cls = cudf.core.column.CategoricalColumn
+        elif isinstance(dtype, pd.DatetimeTZDtype):
+            cls = cudf.core.column.datetime.DatetimeTZColumn
+        elif dtype.kind == "M":
+            cls = cudf.core.column.DatetimeColumn
+        elif dtype.kind == "m":
+            cls = cudf.core.column.TimeDeltaColumn
+        elif (
+            dtype == CUDF_STRING_DTYPE
+            or dtype.kind == "U"
+            or isinstance(dtype, pd.StringDtype)
+            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
+        ):
+            cls = cudf.core.column.StringColumn
+        elif isinstance(dtype, ListDtype):
+            cls = cudf.core.column.ListColumn
+        elif isinstance(dtype, IntervalDtype):
+            cls = cudf.core.column.IntervalColumn
+        elif isinstance(dtype, StructDtype):
+            cls = cudf.core.column.StructColumn
+        elif isinstance(dtype, cudf.Decimal64Dtype):
+            cls = cudf.core.column.Decimal64Column
+        elif isinstance(dtype, cudf.Decimal32Dtype):
+            cls = cudf.core.column.Decimal32Column
+        elif isinstance(dtype, cudf.Decimal128Dtype):
+            cls = cudf.core.column.Decimal128Column
+        elif dtype.kind in "iufb":
+            cls = cudf.core.column.NumericalColumn
+        else:
+            raise TypeError(f"Unrecognized dtype: {dtype}")
+
+        wrapped_children: tuple[ColumnBase, ...] = tuple(
+            cls.from_pylibcudf(child) for child in col.children()
+        )
+        wrapped_children = cls._apply_child_metadata(wrapped_children, dtype)
+
+        child_plc_columns = [child.plc_column for child in wrapped_children]
+
         col = plc.Column(
             data_type=col.type(),
             size=col.size(),
@@ -659,50 +729,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             mask=mask,
             null_count=col.null_count(),
             offset=col.offset(),
-            children=col.children(),
+            children=child_plc_columns,
             validate=False,
         )
 
-        dtype = dtype_from_pylibcudf_column(col)
-
-        # Select the appropriate Column subclass based on dtype
-        column_cls: type[ColumnBase]
-        if isinstance(dtype, CategoricalDtype):
-            column_cls = cudf.core.column.CategoricalColumn
-        elif isinstance(dtype, pd.DatetimeTZDtype):
-            column_cls = cudf.core.column.datetime.DatetimeTZColumn
-        elif dtype.kind == "M":
-            column_cls = cudf.core.column.DatetimeColumn
-        elif dtype.kind == "m":
-            column_cls = cudf.core.column.TimeDeltaColumn
-        elif (
-            dtype == CUDF_STRING_DTYPE
-            or dtype.kind == "U"
-            or isinstance(dtype, pd.StringDtype)
-            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
-        ):
-            column_cls = cudf.core.column.StringColumn
-        elif isinstance(dtype, ListDtype):
-            column_cls = cudf.core.column.ListColumn
-        elif isinstance(dtype, IntervalDtype):
-            column_cls = cudf.core.column.IntervalColumn
-        elif isinstance(dtype, StructDtype):
-            column_cls = cudf.core.column.StructColumn
-        elif isinstance(dtype, cudf.Decimal64Dtype):
-            column_cls = cudf.core.column.Decimal64Column
-        elif isinstance(dtype, cudf.Decimal32Dtype):
-            column_cls = cudf.core.column.Decimal32Column
-        elif isinstance(dtype, cudf.Decimal128Dtype):
-            column_cls = cudf.core.column.Decimal128Column
-        elif dtype.kind in "iufb":
-            column_cls = cudf.core.column.NumericalColumn
+        # Only pass children if non-empty; otherwise let __init__ call
+        # _get_children_from_pylibcudf_column (needed for CategoricalColumn)
+        if wrapped_children:
+            return cls(  # type: ignore[return-value]
+                plc_column=col,
+                dtype=dtype,
+                children=wrapped_children,
+            )
         else:
-            raise TypeError(f"Unrecognized dtype: {dtype}")
-
-        return column_cls(  # type: ignore[return-value]
-            plc_column=col,
-            dtype=dtype,
-        )
+            return cls(  # type: ignore[return-value]
+                plc_column=col,
+                dtype=dtype,
+            )
 
     @classmethod
     def from_cuda_array_interface(cls, arbitrary: Any) -> ColumnBase:

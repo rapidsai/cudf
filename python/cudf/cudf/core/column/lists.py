@@ -56,17 +56,18 @@ class ListColumn(ColumnBase):
             raise ValueError("dtype must be a cudf.ListDtype")
         return plc_column, dtype
 
-    def _get_children_from_pylibcudf_column(
-        self,
-        plc_column: plc.Column,
+    @classmethod
+    def _apply_child_metadata(
+        cls,
+        children: tuple[ColumnBase, ...],
         dtype: ListDtype,  # type: ignore[override]
-    ) -> tuple[ColumnBase, ColumnBase]:
-        children = super()._get_children_from_pylibcudf_column(
-            plc_column, dtype
-        )
+    ) -> tuple[ColumnBase, ...]:
+        """Apply list element type metadata to elements child (child[1])."""
         return (
-            children[0],
-            children[1]._with_type_metadata(dtype.element_type),
+            children[0],  # Offsets column unchanged
+            children[1]._with_type_metadata(
+                dtype.element_type
+            ),  # Elements with metadata
         )
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
@@ -78,7 +79,7 @@ class ListColumn(ColumnBase):
 
         if idx == 1:
             sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-            return type(self._children[idx]).from_pylibcudf(sliced_plc_col)
+            return ColumnBase.from_pylibcudf(sliced_plc_col)
 
         return self._children[idx]
 
@@ -151,10 +152,10 @@ class ListColumn(ColumnBase):
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, ListDtype):
             elements = self.children[1]._with_type_metadata(dtype.element_type)
-            new_children = [
-                self.children[0].plc_column,
-                elements.plc_column,
-            ]
+            new_children = (
+                self.children[0],  # Offsets unchanged
+                elements,  # Elements with metadata
+            )
             new_plc_column = plc.Column(
                 plc.DataType(plc.TypeId.LIST),
                 self.plc_column.size(),
@@ -162,11 +163,12 @@ class ListColumn(ColumnBase):
                 self.plc_column.null_mask(),
                 self.plc_column.null_count(),
                 self.plc_column.offset(),
-                new_children,
+                [child.plc_column for child in new_children],
             )
             return type(self)(
                 plc_column=new_plc_column,
                 dtype=dtype,
+                children=new_children,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
@@ -359,7 +361,7 @@ class ListColumn(ColumnBase):
 
     def extract_element_scalar(self, index: int) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.from_pylibcudf(
                 plc.lists.extract_list_element(
                     self.plc_column,
                     index,
@@ -368,7 +370,7 @@ class ListColumn(ColumnBase):
 
     def extract_element_column(self, index: ColumnBase) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.from_pylibcudf(
                 plc.lists.extract_list_element(
                     self.plc_column,
                     index.plc_column,
