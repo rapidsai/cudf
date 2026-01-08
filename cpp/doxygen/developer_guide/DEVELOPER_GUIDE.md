@@ -78,9 +78,15 @@ the source files that implement the API. For example, the implementation of the 
 `cudf/cpp/include/cudf/copying.hpp` are located in `cudf/src/copying`. Likewise, the unit tests for
 the APIs reside in `cudf/tests/copying/`.
 
-Internal API headers containing `detail` namespace definitions that are either used across translation
-units inside libcudf should be placed in `include/cudf/detail`. Just like the public C++ API headers, any
-internal C++ API header requires `CUDF_EXPORT` markup on the `cudf` namespace so that the functions can be tested.
+Internal API headers containing `detail` namespace definitions that are used across translation
+units inside libcudf should be placed according to their namespace:
+
+- For APIs in `cudf::detail`, place headers in `include/cudf/detail/`.
+- For APIs in a sub-namespace's detail (e.g., `cudf::hashing::detail` or `cudf::strings::detail`),
+  place headers in `include/cudf/<sub-namespace>/detail/` (e.g., `include/cudf/hashing/detail/`).
+
+Just like the public C++ API headers, any internal C++ API header requires `CUDF_EXPORT` markup on
+the `cudf` namespace so that the functions can be tested.
 
 All headers in cudf should use `#pragma once` for include guards.
 
