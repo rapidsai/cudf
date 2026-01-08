@@ -40,12 +40,22 @@ struct approx_distinct_count;
  * - Standard error: 1.04 / sqrt(m) = 1.04 / sqrt(2^p)
  *
  * Common precision values:
- * - p=10: m=1,024 registers, ~3.2% standard error, 1KB memory
- * - p=12 (default): m=4,096 registers, ~1.6% standard error, 4KB memory
- * - p=14: m=16,384 registers, ~0.8% standard error, 16KB memory
- * - p=16: m=65,536 registers, ~0.4% standard error, 64KB memory
+ * - p = 10: m = 1,024 registers, ~3.2% standard error, 1KB memory
+ * - p = 12 (default): m = 4,096 registers, ~1.6% standard error, 4KB memory
+ * - p = 14: m = 16,384 registers, ~0.8% standard error, 16KB memory
+ * - p = 16: m = 65,536 registers, ~0.4% standard error, 64KB memory
  *
- * Valid range: p ∈ [4, 18]. Higher precision provides better accuracy but uses more memory.
+ * Valid range: p ∈ [4, 18]. This is not a hard theoretical limit but an empirically
+ * recommended range:
+ * - Below 4: Too few registers for HLL's statistical assumptions, resulting in high
+ *   variance and unstable estimates.
+ * - Above 18: Rapidly diminishing accuracy gains while incurring significant memory
+ *   growth, making the structure no longer space-efficient for approximate counting.
+ *
+ * This range represents a practical engineering compromise from HLL++ and is widely
+ * adopted by systems such as Apache Spark. The default of 12 aligns with Spark's
+ * configuration and is the largest precision that fits efficiently in GPU shared memory,
+ * enabling optimal performance for our implementation.
  *
  * Example usage:
  * @code{.cpp}
