@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Shuffle logic for the RapidsMPF streaming runtime."""
 
@@ -176,13 +176,13 @@ async def shuffle_node(
 
         # Process input chunks
         while (msg := await ch_in.data.recv(context)) is not None:
-            # Extract TableChunk from message
-            chunk = TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
+            # Extract TableChunk from message and insert into shuffler
+            shuffle.insert_chunk(
+                TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
             )
-
-            # Get the table view and insert into shuffler
-            shuffle.insert_chunk(chunk)
+            del msg
 
         # Insert finished
         await shuffle.insert_finished()
@@ -195,15 +195,18 @@ async def shuffle_node(
             num_partitions,
             context.comm().nranks,
         ):
-            # Create a new TableChunk with the result
-            output_chunk = TableChunk.from_pylibcudf_table(
-                table=await shuffle.extract_chunk(partition_id, stream),
-                stream=stream,
-                exclusive_view=True,
+            # Extract and send the output chunk
+            await ch_out.data.send(
+                context,
+                Message(
+                    partition_id,
+                    TableChunk.from_pylibcudf_table(
+                        table=await shuffle.extract_chunk(partition_id, stream),
+                        stream=stream,
+                        exclusive_view=True,
+                    ),
+                ),
             )
-
-            # Send the output chunk
-            await ch_out.data.send(context, Message(partition_id, output_chunk))
 
         await ch_out.data.drain(context)
 

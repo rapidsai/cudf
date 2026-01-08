@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import os
 import warnings
 from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
@@ -160,14 +159,6 @@ def read_json(
             expand_dir_pattern="*.json",
         )
 
-        # If input data is a JSON string (or StringIO), hold a reference to
-        # the encoded memoryview externally to ensure the encoded buffer
-        # isn't destroyed before calling pylibcudf `read_json()`
-
-        for idx, source in enumerate(filepaths_or_buffers):
-            if isinstance(source, str) and not os.path.isfile(source):
-                filepaths_or_buffers[idx] = source.encode()
-
         c_compression = _to_plc_compression(compression)
 
         if on_bad_lines.lower() == "error":
@@ -259,6 +250,10 @@ def read_json(
         filepath_or_buffer = ioutils._select_single_source(
             filepath_or_buffer, "read_json (via pandas)"
         )
+        if isinstance(filepath_or_buffer, bytes):
+            # TODO: Remove once pandas 3.0 is minimum version
+            # get_reader_filepath_or_buffer may have encoded raw data to bytes for libcudf
+            filepath_or_buffer = filepath_or_buffer.decode()
 
         pd_value = pd.read_json(
             filepath_or_buffer,
