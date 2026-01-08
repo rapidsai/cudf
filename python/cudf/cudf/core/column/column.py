@@ -357,7 +357,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.plc_column = plc_column
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        self.set_children(children)
+        self._children = children
         # The set of exposed buffers associated with this column. These buffers must be
         # kept alive for the lifetime of this column since anything that accessed the
         # CAI of this column will still be pointing to those buffers. As such objects
@@ -536,16 +536,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @property
     def children(self) -> tuple[ColumnBase, ...]:
         return self._children
-
-    def set_children(self, value: tuple[ColumnBase, ...]) -> None:
-        if not isinstance(value, tuple):
-            raise TypeError(
-                f"Expected a tuple of Columns for children, got {type(value).__name__}"
-            )
-        if any(not isinstance(child, ColumnBase) for child in value):
-            raise TypeError("All children must be Columns.")
-
-        self._children = value
 
     def _mimic_inplace(
         self, other_col: Self, inplace: bool = False
@@ -1144,8 +1134,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             # copy-on-write and spilling logic tracked on the Buffers
             # so copy over the Buffers from self
-            col.set_children(
-                tuple(child.copy(deep=False) for child in self.children)
+            col._children = tuple(
+                child.copy(deep=False) for child in self.children
             )
 
             value = (
