@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -1761,6 +1761,9 @@ def _maybe_expand_directories(paths, glob_pattern, fs):
     expanded_paths = []
     for path in paths:
         if fs.isdir(path):
+            dir_paths = fs.glob(fs.sep.join([path, glob_pattern]))
+            if len(dir_paths) == 0:
+                raise FileNotFoundError(f"No files found in directory: {path}")
             expanded_paths.extend(fs.glob(fs.sep.join([path, glob_pattern])))
         else:
             expanded_paths.append(path)
