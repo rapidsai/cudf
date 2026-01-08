@@ -78,22 +78,17 @@ class TimeDeltaColumn(TemporalBaseColumn):
         plc.TypeId.DURATION_NANOSECONDS,
     }
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: np.dtype,
-        exposed: bool,
-    ) -> None:
+    @classmethod
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: np.dtype
+    ) -> tuple[plc.Column, np.dtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
         if cudf.get_option("mode.pandas_compatible"):
             if not dtype.kind == "m":
                 raise ValueError("dtype must be a timedelta numpy dtype.")
         elif not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
             raise ValueError("dtype must be a timedelta numpy dtype.")
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
+        return plc_column, dtype
 
     def _clear_cache(self) -> None:
         super()._clear_cache()
