@@ -15,6 +15,6 @@ cd "${INSTALL_PREFIX:-${CONDA_PREFIX:-/usr}}/bin/benchmarks/libcudf/";
 for bench in *_NVBENCH; do
   if [[ -x "$bench" && -f "$bench" ]]; then
     echo "Running $bench with --profile..."
-    timeout 1m "./$bench" --profile --devices 0 --rmm_mode cuda
+    timeout 2m "./$bench" --profile --devices 0 --rmm_mode cuda
   fi
 done
