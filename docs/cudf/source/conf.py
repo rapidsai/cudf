@@ -394,6 +394,7 @@ _all_namespaces = _generate_namespaces(
         "cudf": {
             "io",
             "io::datasource",
+            "io::experimental",
             "strings",
             "ast",
             "ast::expression",
