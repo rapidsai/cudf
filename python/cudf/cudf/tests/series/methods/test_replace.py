@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import re
@@ -231,19 +231,15 @@ def test_numeric_series_replace_dtype(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            condition=(
-                (
-                    numeric_types_as_str == "int8"
-                    and replacement in {128, 128.0, 32769, 32769.0}
-                )
-                or (
-                    numeric_types_as_str == "int16"
-                    and replacement in {32769, 32769.0}
-                ),
+            (
+                numeric_types_as_str == "int8"
+                and replacement in {128, 128.0, 32769, 32769.0}
+            )
+            or (
+                numeric_types_as_str == "int16"
+                and replacement in {32769, 32769.0}
             ),
-            reason="Pandas throws an AssertionError for these "
-            "cases and asks us to log a bug, they are trying to "
-            "avoid a RecursionError which cudf will not run into",
+            reason="Something has gone wrong, please report a bug at https://github.com/pandas-dev/pandas/issues",
         )
     )
     psr = pd.Series([0, 1, 2, 3, 4, 5], dtype=numeric_types_as_str)
