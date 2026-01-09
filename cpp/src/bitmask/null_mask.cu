@@ -389,68 +389,12 @@ rmm::device_buffer copy_bitmask(column_view const& view,
 }
 
 namespace {
+
 /**
- * @brief Counts the number of non-zero bits in a bitmask in the range
+ * @brief Counts the number of non-zero bits for a list of bitmasks in the range
  * `[first_bit_index, last_bit_index]`.
  *
  * Expects `0 <= first_bit_index <= last_bit_index`.
- *
- * @param[in] bitmask The bitmask whose non-zero bits will be counted.
- * @param[in] first_bit_index The index (inclusive) of the first bit to count
- * @param[in] last_bit_index The index (inclusive) of the last bit to count
- * @param[out] global_count The number of non-zero bits in the specified range
- */
-template <size_type block_size>
-CUDF_KERNEL void count_set_bits_kernel(bitmask_type const* bitmask,
-                                       size_type first_bit_index,
-                                       size_type last_bit_index,
-                                       size_type* global_count)
-{
-  constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
-
-  auto const first_word_index{word_index(first_bit_index)};
-  auto const last_word_index{word_index(last_bit_index)};
-  thread_index_type const tid         = grid_1d::global_thread_id<block_size>();
-  thread_index_type const stride      = grid_1d::grid_stride<block_size>();
-  thread_index_type thread_word_index = tid + first_word_index;
-  size_type thread_count{0};
-
-  // First, just count the bits in all words
-  while (thread_word_index <= last_word_index) {
-    thread_count += cuda::std::popcount(bitmask[thread_word_index]);
-    thread_word_index += stride;
-  }
-
-  // Subtract any slack bits counted from the first and last word
-  // Two threads handle this -- one for first word, one for last
-  if (tid < 2) {
-    bool const first{tid == 0};
-    bool const last{not first};
-
-    size_type bit_index  = (first) ? first_bit_index : last_bit_index;
-    size_type word_index = (first) ? first_word_index : last_word_index;
-
-    size_type num_slack_bits = bit_index % word_size;
-    if (last) { num_slack_bits = word_size - num_slack_bits - 1; }
-
-    if (num_slack_bits > 0) {
-      bitmask_type word = bitmask[word_index];
-      auto slack_mask   = (first) ? set_least_significant_bits(num_slack_bits)
-                                  : set_most_significant_bits(num_slack_bits);
-
-      thread_count -= cuda::std::popcount(word & slack_mask);
-    }
-  }
-
-  using BlockReduce = cub::BlockReduce<size_type, block_size>;
-  __shared__ typename BlockReduce::TempStorage temp_storage;
-  size_type block_count{BlockReduce(temp_storage).Sum(thread_count)};
-
-  if (threadIdx.x == 0) { atomicAdd(global_count, block_count); }
-}
-
-/**
- * @brief Batch version of `count_set_bits_kernel` that counts set bits for multiple bitmasks.
  *
  * @tparam block_size Number of threads in each thread block
  *
@@ -460,10 +404,10 @@ CUDF_KERNEL void count_set_bits_kernel(bitmask_type const* bitmask,
  * @param global_count Output array of set bit counts for each bitmask
  */
 template <size_type block_size>
-CUDF_KERNEL void batch_count_set_bit_kernel(device_span<bitmask_type const* const> bitmasks,
-                                            size_type first_bit_index,
-                                            size_type last_bit_index,
-                                            size_type* global_count)
+CUDF_KERNEL void count_set_bit_kernel(device_span<bitmask_type const* const> bitmasks,
+                                      size_type first_bit_index,
+                                      size_type last_bit_index,
+                                      size_type* global_count)
 {
   auto const bitmask_idx = blockIdx.y;
   if (bitmask_idx >= bitmasks.size()) { return; }
@@ -510,7 +454,7 @@ CUDF_KERNEL void batch_count_set_bit_kernel(device_span<bitmask_type const* cons
 
   using BlockReduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
-  size_type block_count{BlockReduce(temp_storage).Sum(thread_count)};
+  auto const block_count = BlockReduce(temp_storage).Sum(thread_count);
 
   if (threadIdx.x == 0) {
     cuda::atomic_ref<size_type, cuda::thread_scope_device>{global_count[bitmask_idx]}.fetch_add(
@@ -548,7 +492,7 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
   auto const grid = grid_1d{num_words, block_size};
   auto const kernel_grid =
     dim3{static_cast<unsigned int>(grid.num_blocks), static_cast<unsigned int>(num_bitmasks), 1};
-  batch_count_set_bit_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
+  count_set_bit_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
     d_bitmasks, start, stop - 1, d_non_zero_count.data());
 
   auto h_non_zero_count = cudf::detail::make_pinned_vector<size_type>(num_bitmasks, stream);
@@ -575,19 +519,20 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask,
   auto const num_bits_to_count = stop - start;
   if (num_bits_to_count == 0) { return 0; }
 
-  auto const num_words = num_bitmask_words(num_bits_to_count);
+  auto const num_words  = num_bitmask_words(num_bits_to_count);
+  auto const d_bitmask  = cudf::detail::device_scalar<bitmask_type const*>{bitmask, stream};
+  auto d_non_zero_count = cudf::detail::device_scalar<size_type>{0, stream};
 
   constexpr size_type block_size{256};
+  auto const grid        = grid_1d{num_words, block_size};
+  auto const kernel_grid = dim3{static_cast<unsigned int>(grid.num_blocks), 1, 1};
+  count_set_bit_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
+    device_span<bitmask_type const* const>{d_bitmask.data(), 1},
+    start,
+    stop - 1,
+    d_non_zero_count.data());
 
-  cudf::detail::grid_1d grid(num_words, block_size);
-
-  cudf::detail::device_scalar<size_type> non_zero_count(0, stream);
-
-  count_set_bits_kernel<block_size>
-    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      bitmask, start, stop - 1, non_zero_count.data());
-
-  return non_zero_count.value(stream);
+  return d_non_zero_count.value(stream);
 }
 
 // Count zero bits in the specified range
