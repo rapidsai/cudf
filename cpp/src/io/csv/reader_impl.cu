@@ -1051,7 +1051,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       cudf::detail::join_streams(streams, stream);
     }
 
-    // TBD
+    // Create output columns for the columns that were not processed in the parallel loop
     for (size_t i = 0; i < column_types.size(); ++i) {
       if (!out_columns[i]) {
         out_columns[i] = make_column(out_buffers[i], nullptr, std::nullopt, stream);
