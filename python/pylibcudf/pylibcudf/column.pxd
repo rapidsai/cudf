@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -15,6 +15,7 @@ from pylibcudf.libcudf.column.column_view cimport (
 )
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 from pylibcudf.libcudf.types cimport bitmask_type, size_type
+from pylibcudf.libcudf.structs.structs_column_view cimport structs_column_view
 
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
@@ -98,12 +99,19 @@ cdef class Column:
     cpdef uint64_t device_buffer_size(self)
     cpdef Column with_mask(self, object, size_type, bint validate=*)
 
-    cpdef ListColumnView list_view(self)
+    cpdef ListsColumnView list_view(self)
+    cpdef StructsColumnView struct_view(self)
 
 
-cdef class ListColumnView:
-    """Accessor for methods of a Column that are specific to lists."""
+cdef class ListsColumnView:
     cdef Column _column
     cpdef child(self)
     cpdef offsets(self)
     cdef lists_column_view view(self) nogil
+    cpdef Column get_sliced_child(self, Stream stream=*)
+
+
+cdef class StructsColumnView:
+    cdef Column _column
+    cdef structs_column_view view(self) nogil
+    cpdef Column get_sliced_child(self, int index, Stream stream=*)

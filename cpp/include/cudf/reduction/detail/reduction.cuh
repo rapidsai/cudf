@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -203,7 +203,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   // compute the result value from intermediate value in device
   using ScalarType = cudf::scalar_type_t<OutputType>;
   auto result      = std::make_unique<ScalarType>(OutputType{0}, true, stream, mr);
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      intermediate_result.data(),
                      1,
                      [dres = result->data(), op, valid_count, ddof] __device__(auto i) {
