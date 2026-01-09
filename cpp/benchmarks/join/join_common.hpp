@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -93,7 +93,7 @@ void BM_join(state_type& state,
   if constexpr (join_type == join_t::HASH || join_type == join_t::SORT_MERGE) {
     state.add_element_count(join_input_size, "join_input_size");  // number of bytes
     state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
       auto result = JoinFunc(
         probe_view.select(columns_to_join), build_view.select(columns_to_join), compare_nulls);
     });
@@ -106,7 +106,7 @@ void BM_join(state_type& state,
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
     state.add_element_count(join_input_size, "join_input_size");  // number of bytes
     state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
       auto result = JoinFunc(probe_view, build_view, left_zero_eq_right_zero, compare_nulls);
       ;
     });
@@ -119,7 +119,7 @@ void BM_join(state_type& state,
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
     state.add_element_count(join_input_size, "join_input_size");  // number of bytes
     state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
       auto result = JoinFunc(probe_view.select(std::vector<cudf::size_type>(
                                columns_to_join.begin(), columns_to_join.begin() + num_keys / 2)),
                              build_view.select(std::vector<cudf::size_type>(
