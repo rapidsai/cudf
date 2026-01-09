@@ -302,13 +302,20 @@ def test_dataframe_construction_from_cp_arrays():
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=0, drop=False)
     assert isinstance(gdf, cudf.DataFrame)
-
+    assert gdf.index.dtype == np.dtype("int32")
+    # pandas retuns a RangeIndex
+    assert not isinstance(gdf.index, cudf.RangeIndex)
+    gdf.index = gdf.index.astype(np.int64)
     assert_eq(df, gdf)
 
     gdf = cudf.DataFrame(d_ary)
     gdf = gdf.set_index(keys=1, drop=False)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=1, drop=False)
+    assert gdf.index.dtype == np.dtype("int32")
+    # pandas retuns a RangeIndex
+    assert not isinstance(gdf.index, cudf.RangeIndex)
+    gdf.index = gdf.index.astype(np.int64)
     assert isinstance(gdf, cudf.DataFrame)
 
     assert_eq(df, gdf)
