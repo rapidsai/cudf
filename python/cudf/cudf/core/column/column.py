@@ -489,7 +489,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         new_plc_column = self.plc_column.with_mask(new_mask, new_null_count)
         return (
             type(self)
-            .from_pylibcudf(  # type: ignore[return-value]
+            .from_pylibcudf(
                 new_plc_column,
             )
             ._with_type_metadata(self.dtype)
@@ -544,10 +544,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         with self.access(mode="read", scope="internal"):
             data = self.plc_column.data()
             if data is not None:
-                data = data.owner.owner  # type: ignore[attr-defined]
+                data = data.owner.owner
             mask = self.plc_column.null_mask()
             if mask is not None:
-                mask = mask.owner.owner  # type: ignore[attr-defined]
+                mask = mask.owner.owner
 
             # Recursively unwrap children
             children = [child.to_pylibcudf() for child in self.children]
@@ -565,7 +565,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
 
     @staticmethod
-    def from_pylibcudf(col: plc.Column) -> Self:
+    def from_pylibcudf(col: plc.Column) -> ColumnBase:
         """Create a Column from a pylibcudf.Column.
 
         This function will generate a Column pointing to the provided pylibcudf
@@ -913,7 +913,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             return ColumnBase.from_pylibcudf(
                 stream_compaction.drop_nulls([self])[0]
-            )._with_type_metadata(self.dtype)  # type: ignore[return-value]
+            )._with_type_metadata(self.dtype)
         else:
             return self.copy()
 
@@ -921,7 +921,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         with self.access(mode="read", scope="internal"):
             return _handle_nulls(
                 self.plc_column.to_arrow(
-                    metadata=_dtype_to_metadata(self.dtype)  # type: ignore[arg-type]
+                    metadata=_dtype_to_metadata(self.dtype)
                 )
             )
 
@@ -1168,7 +1168,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         [start, stop],
                     )
                 ]
-            return result[0]._with_type_metadata(self.dtype)  # type: ignore[return-value]
+            return result[0]._with_type_metadata(self.dtype)
         else:
             # Need to create a gather map for given slice with stride
             gather_map = as_column(
@@ -1336,12 +1336,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         key.plc_column,
                     )
                 return (
-                    type(self)  # type: ignore[return-value]
+                    type(self)
                     .from_pylibcudf(plc_table.columns()[0])
                     ._with_type_metadata(self.dtype)
                 )
         else:
-            return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
+            return ColumnBase.from_pylibcudf(
                 copying.scatter(
                     cast(list[plc.Scalar], [value])
                     if isinstance(value, plc.Scalar)
@@ -1443,7 +1443,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 plc_replace,
             )
             result = type(self).from_pylibcudf(plc_column)
-        return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
+        return result._with_type_metadata(self.dtype)
 
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
@@ -1643,7 +1643,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         gathered = ColumnBase.from_pylibcudf(
             copying.gather([self], indices, nullify=nullify)[0]  # type: ignore[arg-type]
         )
-        return gathered._with_type_metadata(self.dtype)  # type: ignore[return-value]
+        return gathered._with_type_metadata(self.dtype)
 
     def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.
@@ -1765,7 +1765,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 order[1],
             )
             return (
-                type(self)  # type: ignore[return-value]
+                type(self)
                 .from_pylibcudf(plc_table.columns()[0])
                 ._with_type_metadata(self.dtype)
             )
@@ -1914,7 +1914,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 as_column(range(len(self) - 1, -1, -1)),
             )
         else:
-            return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
+            return ColumnBase.from_pylibcudf(
                 sorting.order_by(
                     [self], [ascending], [na_position], stable=True
                 )
@@ -2004,7 +2004,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 "with NAs present."
             )
         return ColumnBase.from_pylibcudf(
-            sorting.search_sorted(  # type: ignore[return-value]
+            sorting.search_sorted(
                 [self],
                 [value],
                 side=side,
@@ -2021,7 +2021,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return self.copy()
         else:
             return ColumnBase.from_pylibcudf(
-                stream_compaction.drop_duplicates([self], keep="first")[  # type: ignore[return-value]
+                stream_compaction.drop_duplicates([self], keep="first")[
                     0
                 ]
             )._with_type_metadata(self.dtype)
@@ -2299,7 +2299,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         plc_codes = sorting.sort_by_key(
             [codes], [left_gather_map], [True], ["last"], stable=True
         )[0]
-        return ColumnBase.from_pylibcudf(plc_codes).fillna(na_sentinel)  # type: ignore[return-value]
+        return ColumnBase.from_pylibcudf(plc_codes).fillna(na_sentinel)
 
     def copy_if_else(
         self, other: Self | plc.Scalar, boolean_mask: NumericalColumn
@@ -2309,7 +2309,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ) as (self, other, boolean_mask):
             return (
                 type(self)
-                .from_pylibcudf(  # type: ignore[return-value]
+                .from_pylibcudf(
                     plc.copying.copy_if_else(
                         self.plc_column,
                         other
@@ -2326,7 +2326,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> Generator[Self, None, None]:
         for cols in copying.columns_split([self], offsets):
             for col in cols:
-                yield (  # type: ignore[misc]
+                yield (
                     type(self)
                     .from_pylibcudf(col)
                     ._with_type_metadata(self.dtype)
@@ -2451,7 +2451,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         right_inclusive: bool,
     ) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
+            return type(self).from_pylibcudf(
                 plc.labeling.label_bins(
                     self.plc_column,
                     left_edge.plc_column,

@@ -261,7 +261,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             offset=self.offset,
             children=[],
         )
-        return type(self).from_pylibcudf(new_plc_column).astype(dtype)  # type:ignore[return-value]
+        return type(self).from_pylibcudf(new_plc_column).astype(dtype)
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")

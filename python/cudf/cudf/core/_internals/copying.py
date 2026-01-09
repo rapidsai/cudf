@@ -70,7 +70,7 @@ def scatter(
             if isinstance(sources[0], plc.Scalar)
             else plc.Table(
                 [
-                    col.plc_column  # type: ignore[union-attr]
+                    col.plc_column
                     for col in sources
                 ]
             ),

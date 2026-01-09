@@ -165,7 +165,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                         self.plc_column,
                     )
                 )
-                return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+                return type(self).from_pylibcudf(plc_column)
         else:
             return cast(
                 cudf.core.column.StringColumn,

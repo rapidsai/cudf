@@ -481,7 +481,7 @@ class NumericalColumn(NumericalBaseColumn):
             plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
                 self.plc_column
             )
-            return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+            return type(self).from_pylibcudf(plc_column)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         col = self
@@ -522,7 +522,7 @@ class NumericalColumn(NumericalBaseColumn):
         with col.access(mode="read", scope="internal"):
             return (
                 type(self)
-                .from_pylibcudf(  # type: ignore[return-value]
+                .from_pylibcudf(
                     conv_func(col.plc_column)
                 )
                 ._with_type_metadata(dtype)
@@ -542,14 +542,14 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return (
-            type(self)  # type: ignore[return-value]
+            type(self)
             .from_pylibcudf(self._as_temporal_column(dtype))
             ._with_type_metadata(dtype)
         )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         return (
-            type(self)  # type: ignore[return-value]
+            type(self)
             .from_pylibcudf(self._as_temporal_column(dtype))
             ._with_type_metadata(dtype)
         )

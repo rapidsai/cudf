@@ -511,7 +511,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)), 0
             )
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
+            return type(self).from_pylibcudf(
                 plc.strings.convert.convert_datetime.from_timestamps(
                     self.plc_column,
                     format,

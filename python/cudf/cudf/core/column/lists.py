@@ -254,7 +254,7 @@ class ListColumn(ColumnBase):
                 pa_scalar_to_plc_scalar(pa.scalar("None")),
                 self._string_separators,
             )
-            return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+            return type(self).from_pylibcudf(plc_column)
 
     def _transform_leaves(
         self, func: Callable[[ColumnBase, DtypeObj], ColumnBase], *args: Any
@@ -460,7 +460,7 @@ class ListColumn(ColumnBase):
                 plc.strings.combine.SeparatorOnNulls.YES,
                 plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
             )
-            return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+            return type(self).from_pylibcudf(plc_column)
 
     def minhash_ngrams(
         self,
