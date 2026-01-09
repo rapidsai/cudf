@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,7 @@
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -31,6 +32,8 @@
 #include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+
+#include <memory>
 
 namespace cudf {
 namespace detail {
@@ -200,7 +203,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
     query_set(probe_iter, contains_map.begin());
   }
   rmm::device_uvector<size_type> gather_map(probe.num_rows(), stream, mr);
-  auto gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
+  auto gather_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
                                         thrust::counting_iterator<size_type>(0),
                                         thrust::counting_iterator<size_type>(probe.num_rows()),
                                         gather_map.begin(),

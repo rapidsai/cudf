@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -87,7 +87,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   auto d_partition_offsets = rmm::device_uvector<size_t>(views.size() + 1, stream);
   d_partition_offsets.set_element_to_zero_async(0, stream);  // zero first element
 
-  thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+  thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                    device_views_ptr,
                                    device_views_ptr + views.size(),
                                    std::next(d_partition_offsets.begin()),

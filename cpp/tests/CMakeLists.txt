@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -166,8 +166,14 @@ ConfigureTest(
 # ##################################################################################################
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu join/distinct_join_tests.cpp
+  JOIN_TEST
+  join/join_tests.cpp
+  join/conditional_join_tests.cu
+  join/cross_join_tests.cpp
+  join/semi_anti_join_tests.cpp
+  join/mixed_join_tests.cu
+  join/distinct_join_tests.cpp
+  join/key_remapping_tests.cpp
   GPUS 1
   PERCENT 100
 )
