@@ -307,6 +307,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     }
     _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
 
+    def __init__(self, *args, **kwargs) -> None:
+        raise ValueError(
+            "ColumnBase and its subclasses must be instantiated via from_pylibcudf."
+        )
+
     @classmethod
     def _validate_args(
         cls, plc_column: plc.Column, dtype: DtypeObj
@@ -327,30 +332,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         children: tuple[ColumnBase, ...],
         dtype: DtypeObj,
     ) -> tuple[ColumnBase, ...]:
-        """
-        Apply type metadata to children based on parent dtype.
-
-        This method is a hook for subclasses to apply type-specific metadata
-        to their children. The base implementation returns children unchanged.
-
-        Parameters
-        ----------
-        children : tuple of ColumnBase
-            The wrapped child columns
-        dtype : DtypeObj
-            The parent column's dtype
-
-        Returns
-        -------
-        tuple of ColumnBase
-            The children with metadata applied (may be the same as input)
-        """
+        """Apply type metadata to children based on parent dtype."""
         return children
-
-    def __init__(self, *args, **kwargs) -> None:
-        raise ValueError(
-            "ColumnBase and its subclasses must be instantiated via from_pylibcudf."
-        )
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
