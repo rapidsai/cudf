@@ -189,7 +189,7 @@ template <typename T, std::size_t Extent = cudf::dynamic_extent>
 class host_span {
  public:
   using element_type    = T;
-  using value_type      = std::remove_cv_t<T>;
+  using value_type      = std::remove_cv<T>;  ///< Stored value type
   using size_type       = std::size_t;
   using difference_type = std::ptrdiff_t;
   using pointer         = T*;
@@ -293,6 +293,7 @@ class host_span {
   // not noexcept due to undefined behavior when idx < 0 || idx >= size
   [[nodiscard]] constexpr reference operator[](size_type idx) const
   {
+    static_assert(sizeof(idx) >= sizeof(size_t), "index type must not be smaller than size_t");
     return _data[idx];
   }
 
@@ -332,10 +333,7 @@ class host_span {
   }
 
   // Device accessibility
-  [[nodiscard]] constexpr bool is_device_accessible() const noexcept
-  {
-    return _is_device_accessible;
-  }
+  [[nodiscard]] bool is_device_accessible() const { return _is_device_accessible; }
 
  private:
   T* _data{nullptr};
