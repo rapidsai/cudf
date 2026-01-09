@@ -265,6 +265,7 @@ size_type null_count(bitmask_type const* bitmask,
  * @brief Given a list of validity bitmasks, counts the number of null elements (unset bits) in the
  * range `[start, stop)` for each bitmask.
  *
+ * The same bit range `[start, stop)` is used for all bitmasks.
  * If a bitmask pointer is `nullptr`, all elements corresponding to that bitmask are assumed to be
  * valid and the null count is `0`.
  *
