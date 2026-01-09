@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -394,7 +394,7 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
   rmm::cuda_stream_view stream)
 {
   auto indices = rmm::device_uvector<cudf::size_type>(size, stream);
-  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
   cudf::size_type threshold_index = threshold_count < size ? size : 0;
 
   // if we counted a split of above/below threshold then

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1279,7 +1279,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, List)
   auto offset_iter = cudf::detail::make_counting_transform_iterator(0, offset_gen{list_size});
   auto offset_col  = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                offset_iter,
                offset_iter + num_rows + 1,
                offset_col->mutable_view().begin<int>());
@@ -1289,7 +1289,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, List)
   auto value_iter        = cudf::detail::make_counting_transform_iterator(0, value_gen<int>{});
   auto value_col         = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                value_iter,
                value_iter + num_ints,
                value_col->mutable_view().begin<int>());
@@ -1431,7 +1431,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
   auto offset_iter = cudf::detail::make_counting_transform_iterator(0, offset_gen{list_size});
   auto offset_col  = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                offset_iter,
                offset_iter + num_rows + 1,
                offset_col->mutable_view().begin<int>());
@@ -1441,7 +1441,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
   auto value_iter        = cudf::detail::make_counting_transform_iterator(0, value_gen<int>{});
   auto value_col         = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                value_iter,
                value_iter + num_ints,
                value_col->mutable_view().begin<int>());
@@ -1458,13 +1458,13 @@ TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
   auto str_offset_iter    = cudf::detail::make_counting_transform_iterator(0, offset_gen{str_size});
   auto str_offset_col     = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                str_offset_iter,
                str_offset_iter + num_rows + 1,
                str_offset_col->mutable_view().begin<int>());
   auto str_iter = cudf::detail::make_counting_transform_iterator(0, char_values{});
   rmm::device_buffer str_chars(num_chars, stream);
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                str_iter,
                str_iter + num_chars,
                static_cast<int8_t*>(str_chars.data()));
@@ -1479,7 +1479,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
   auto double_iter = cudf::detail::make_counting_transform_iterator(0, value_gen<double>{});
   auto col3        = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::FLOAT64}, num_rows, cudf::mask_state::UNALLOCATED);
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                double_iter,
                double_iter + num_rows,
                col3->mutable_view().begin<double>());
