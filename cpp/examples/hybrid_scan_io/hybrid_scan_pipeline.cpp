@@ -195,7 +195,6 @@ auto hybrid_scan_pipelined(io_source const& io_source,
       offset += part_size;
     }
   } else {
-    auto const all_row_groups    = reader->all_row_groups(options);
     auto const buffers_size      = file_buffer_span.size();
     auto const buffer_chunk_size = buffers_size / num_partitions;
     size_t buffer_offset         = 0;
@@ -205,7 +204,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
                              .num_bytes(buffer_chunk_size)
                              .build();
       auto filtered_row_groups =
-        reader->filter_row_groups_with_byte_range(all_row_groups, split_options);
+        readers.front()->filter_row_groups_with_byte_range(row_groups_indices, split_options);
       if (filtered_row_groups.empty()) {
         num_partitions--;
         std::cout << "Adjusting number of partitions to " << num_partitions << "\n";
