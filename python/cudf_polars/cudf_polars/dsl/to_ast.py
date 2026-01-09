@@ -94,6 +94,39 @@ REVERSED_COMPARISON = {
     plc.binaryop.BinaryOperator.GREATER_EQUAL: plc.binaryop.BinaryOperator.LESS_EQUAL,
 }
 
+# IsIn is handled separately.
+_SUPPORTED_BOOLEAN_OPS = frozenset(
+    {
+        expr.BooleanFunction.Name.IsNull,
+        expr.BooleanFunction.Name.IsNotNull,
+        expr.BooleanFunction.Name.Not,
+    }
+)
+
+
+def _is_supported_binop(op: plc.binaryop.BinaryOperator) -> bool:
+    """Check if a binary operator is supported for AST conversion."""
+    return op in BINOP_TO_ASTOP or op == plc.binaryop.BinaryOperator.NULL_NOT_EQUALS
+
+
+def _is_supported_unary_function(node: expr.UnaryFunction) -> bool:
+    """Check if a unary function is supported for AST conversion."""
+    return node.name in node._OP_MAPPING and node._OP_MAPPING[node.name] in UOP_TO_ASTOP
+
+
+def _is_supported_boolean_function(
+    node: expr.BooleanFunction,
+) -> bool:
+    """
+    Check if a boolean function is supported for AST conversion.
+
+    For IsIn, also validates that the haystack is a short LiteralColumn.
+    """
+    if node.name is expr.BooleanFunction.Name.IsIn:
+        _, haystack = node.children
+        return isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16
+    return node.name in _SUPPORTED_BOOLEAN_OPS
+
 
 class ASTState(TypedDict):
     """
@@ -144,6 +177,22 @@ ExprTransformer: TypeAlias = GenericTransformer[
 
 @singledispatch
 def _validate_to_ast(node: expr.Expr, self: ValidateTransformer) -> None:
+    """
+    Validate an expression to a libcudf AST.
+
+    Parameters
+    ----------
+    node
+        Expression to validate.
+    self
+        Recursive validator. The state dictionary is an instance of
+        :class:`ValidateState`.
+
+    Raises
+    ------
+    NotImplementedError
+        If the expression contains operations that cannot be validated.
+    """
     raise NotImplementedError(f"Unhandled expression type {type(node)}")
 
 
@@ -159,12 +208,14 @@ def _(node: expr.ColRef, self: ValidateTransformer) -> None:
 
 @_validate_to_ast.register
 def _(node: expr.BinOp, self: ValidateTransformer) -> None:
+    if not _is_supported_binop(node.op):
+        raise NotImplementedError(f"Unsupported binary operator for AST: {node.op}")
     if node.op == plc.binaryop.BinaryOperator.NULL_NOT_EQUALS:
         self(
             expr.BinOp(
                 node.dtype, plc.binaryop.BinaryOperator.NULL_EQUALS, *node.children
             )
-        )  # check for validation errors
+        )
         return None
     for child in node.children:
         self(child)
@@ -172,25 +223,21 @@ def _(node: expr.BinOp, self: ValidateTransformer) -> None:
 
 @_validate_to_ast.register
 def _(node: expr.BooleanFunction, self: ValidateTransformer) -> None:
+    if not _is_supported_boolean_function(node):
+        raise NotImplementedError(f"AST conversion does not support {node.name}")
     if node.name is expr.BooleanFunction.Name.IsIn:
-        needles, haystack = node.children
-        if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
-            self(needles)
-            return None
-    if (
-        node.name is expr.BooleanFunction.Name.IsNull
-        or node.name is expr.BooleanFunction.Name.IsNotNull
-        or node.name is expr.BooleanFunction.Name.Not
-    ):
-        self(node.children[0])  # check for validation errors
-        return None
-    raise NotImplementedError(f"AST conversion does not support {node.name}")
+        # Only validate the needles; haystack is a LiteralColumn (checked above)
+        self(node.children[0])
+    else:
+        # IsNull, IsNotNull, Not - validate the single child
+        self(node.children[0])
 
 
 @_validate_to_ast.register
 def _(node: expr.UnaryFunction, self: ValidateTransformer) -> None:
-    self(node.children[0])  # check for validation errors
-    return None
+    if not _is_supported_unary_function(node):
+        raise NotImplementedError(f"Unsupported unary function for AST: {node.name}")
+    self(node.children[0])
 
 
 @singledispatch
@@ -242,6 +289,11 @@ def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
+    if not _is_supported_binop(node.op):
+        # We'll raise in validate_to_ast before reaching here.
+        raise NotImplementedError(
+            f"Unsupported binary operator for AST: {node.op}"
+        )  # pragma: no cover
     if node.op == plc.binaryop.BinaryOperator.NULL_NOT_EQUALS:
         return plc_expr.Operation(
             plc_expr.ASTOperator.NOT,
@@ -280,33 +332,38 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
+    if not _is_supported_boolean_function(node):
+        # We'll raise in validate_to_ast before reaching here.
+        raise NotImplementedError(
+            f"AST conversion does not support {node.name}"
+        )  # pragma: no cover
     if node.name is expr.BooleanFunction.Name.IsIn:
         needles, haystack = node.children
-        if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
-            # 16 is an arbitrary limit
-            needle_ref = self(needles)
-            if haystack.dtype.id() == plc.TypeId.LIST:
-                # Because we originally translated pl_expr.Literal with a list scalar
-                # to a expr.LiteralColumn, so the actual type is in the inner type
-                # .inner returns DataTypeClass | DataType, need to cast to DataType
-                plc_dtype = DataType(
-                    cast(pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner)
-                ).plc_type
-            else:
-                plc_dtype = haystack.dtype.plc_type  # pragma: no cover
-            values = (
-                plc_expr.Literal(
-                    plc.Scalar.from_py(val, plc_dtype, stream=self.state["stream"])
-                )
-                for val in haystack.value
+        # _is_supported_boolean_function already validated haystack constraints
+        haystack = cast(expr.LiteralColumn, haystack)
+        needle_ref = self(needles)
+        if haystack.dtype.id() == plc.TypeId.LIST:
+            # Because we originally translated pl_expr.Literal with a list scalar
+            # to a expr.LiteralColumn, so the actual type is in the inner type
+            # .inner returns DataTypeClass | DataType, need to cast to DataType
+            plc_dtype = DataType(
+                cast(pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner)
+            ).plc_type
+        else:
+            plc_dtype = haystack.dtype.plc_type  # pragma: no cover
+        values = (
+            plc_expr.Literal(
+                plc.Scalar.from_py(val, plc_dtype, stream=self.state["stream"])
             )
-            return reduce(
-                partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
-                (
-                    plc_expr.Operation(plc_expr.ASTOperator.EQUAL, needle_ref, value)
-                    for value in values
-                ),
-            )
+            for val in haystack.value
+        )
+        return reduce(
+            partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
+            (
+                plc_expr.Operation(plc_expr.ASTOperator.EQUAL, needle_ref, value)
+                for value in values
+            ),
+        )
     if self.state["for_parquet"] and isinstance(node.children[0], expr.Col):
         raise NotImplementedError(
             f"Parquet filters don't support {node.name} on columns"
@@ -318,19 +375,20 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
             plc_expr.ASTOperator.NOT,
             plc_expr.Operation(plc_expr.ASTOperator.IS_NULL, self(node.children[0])),
         )
-    elif node.name is expr.BooleanFunction.Name.Not:
-        return plc_expr.Operation(plc_expr.ASTOperator.NOT, self(node.children[0]))
-    # we'll raise in validate_to_ast before reaching here.
-    raise NotImplementedError(
-        f"AST conversion does not support {node.name}"
-    )  # pragma: no cover
+    # Not
+    return plc_expr.Operation(plc_expr.ASTOperator.NOT, self(node.children[0]))
 
 
 @_to_ast.register
 def _(node: expr.UnaryFunction, self: Transformer) -> plc_expr.Expression:
+    if not _is_supported_unary_function(node):
+        # We'll raise in validate_to_ast before reaching here.
+        raise NotImplementedError(
+            f"Unsupported unary function for AST: {node.name}"
+        )  # pragma: no cover
     if isinstance(node.children[0], expr.Col) and self.state["for_parquet"]:
         raise NotImplementedError(
-            "Parquet filters don't support {node.name} on columns"
+            f"Parquet filters don't support {node.name} on columns"
         )
     return plc_expr.Operation(
         UOP_TO_ASTOP[node._OP_MAPPING[node.name]], self(node.children[0])
@@ -362,11 +420,23 @@ def to_parquet_filter(node: expr.Expr, stream: Stream) -> plc_expr.Expression | 
 
 
 def validate_to_ast(node: expr.Expr) -> None:
-    """Validate it."""
-    mapper: ValidateTransformer = CachingVisitor(
-        _validate_to_ast, state={"for_parquet": False}
-    )
-    return mapper(node)
+    """
+    Validate that an expression can be converted to a libcudf AST.
+
+    This performs validation without requiring a CUDA stream, suitable for
+    use at IR translation time before a stream is available.
+
+    Parameters
+    ----------
+    node
+        Expression to validate.
+
+    Raises
+    ------
+    NotImplementedError
+        If the expression contains operations that cannot be translated to AST.
+    """
+    CachingVisitor(_validate_to_ast, state={"for_parquet": False})(node)
 
 
 def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression:
