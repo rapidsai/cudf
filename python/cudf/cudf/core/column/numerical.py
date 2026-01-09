@@ -53,9 +53,9 @@ if TYPE_CHECKING:
         ScalarLike,
     )
     from cudf.core.column import DecimalBaseColumn
-    from cudf.core.column.datetime import DatetimeColumn  # noqa: TC004
-    from cudf.core.column.string import StringColumn  # noqa: TC004
-    from cudf.core.column.timedelta import TimeDeltaColumn  # noqa: TC004
+    from cudf.core.column.datetime import DatetimeColumn
+    from cudf.core.column.string import StringColumn
+    from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.dtypes import DecimalDtype
 
 
@@ -481,7 +481,10 @@ class NumericalColumn(NumericalBaseColumn):
             plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
                 self.plc_column
             )
-            return cast(StringColumn, type(self).from_pylibcudf(plc_column))
+            return cast(
+                cudf.core.column.string.StringColumn,
+                type(self).from_pylibcudf(plc_column),
+            )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         col = self
@@ -521,7 +524,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         with col.access(mode="read", scope="internal"):
             return cast(
-                StringColumn,
+                cudf.core.column.string.StringColumn,
                 type(self)
                 .from_pylibcudf(conv_func(col.plc_column))
                 ._with_type_metadata(dtype),
@@ -541,7 +544,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return cast(
-            DatetimeColumn,
+            cudf.core.column.datetime.DatetimeColumn,
             type(self)
             .from_pylibcudf(self._as_temporal_column(dtype))
             ._with_type_metadata(dtype),
@@ -549,7 +552,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         return cast(
-            TimeDeltaColumn,
+            cudf.core.column.timedelta.TimeDeltaColumn,
             type(self)
             .from_pylibcudf(self._as_temporal_column(dtype))
             ._with_type_metadata(dtype),
@@ -925,7 +928,10 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
-            codes = cast(NumericalColumn, self.astype(codes_dtype))
+            codes = cast(
+                cudf.core.column.numerical.NumericalColumn,
+                self.astype(codes_dtype),
+            )
             return CategoricalColumn._from_preprocessed(
                 codes.plc_column, dtype, (codes,)
             )

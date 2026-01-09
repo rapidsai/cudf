@@ -102,7 +102,7 @@ if TYPE_CHECKING:
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.decimal import DecimalBaseColumn
     from cudf.core.column.interval import IntervalColumn
-    from cudf.core.column.numerical import NumericalColumn  # noqa: TC004
+    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.strings import StringColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.index import Index
@@ -1962,7 +1962,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         else:
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 ColumnBase.from_pylibcudf(
                     sorting.order_by(
                         [self], [ascending], [na_position], stable=True
@@ -2354,7 +2354,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             [codes], [left_gather_map], [True], ["last"], stable=True
         )[0]
         return cast(
-            NumericalColumn,
+            cudf.core.column.numerical.NumericalColumn,
             ColumnBase.from_pylibcudf(plc_codes).fillna(na_sentinel),
         )
 
@@ -2519,7 +2519,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 type(self).from_pylibcudf(
                     plc.labeling.label_bins(
                         self.plc_column,

@@ -128,7 +128,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         # will only have values in range [0, 1]
         if len(self) == 0:
             result = cast(
-                NumericalBaseColumn,
+                cudf.core.column.numerical_base.NumericalBaseColumn,
                 column_empty(row_count=len(q), dtype=self.dtype),
             )
         else:
@@ -150,7 +150,8 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     exact,
                 )
                 result = cast(
-                    NumericalBaseColumn, type(self).from_pylibcudf(plc_column)
+                    cudf.core.column.numerical_base.NumericalBaseColumn,
+                    type(self).from_pylibcudf(plc_column),
                 )
         if return_scalar:
             scalar_result = result.element_indexing(0)
@@ -259,7 +260,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         plc_how = plc.round.RoundingMethod[how.upper()]
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalBaseColumn,
+                cudf.core.column.numerical_base.NumericalBaseColumn,
                 type(self).from_pylibcudf(
                     plc.round.round(self.plc_column, decimals, plc_how)
                 ),

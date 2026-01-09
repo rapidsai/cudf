@@ -35,7 +35,7 @@ if TYPE_CHECKING:
         DtypeObj,
     )
     from cudf.core.column.numerical import NumericalColumn
-    from cudf.core.column.string import StringColumn  # noqa: TC004
+    from cudf.core.column.string import StringColumn
 
 
 @functools.cache
@@ -239,7 +239,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         else:
             with self.access(mode="read", scope="internal"):
                 return cast(
-                    StringColumn,
+                    cudf.core.column.string.StringColumn,
                     type(self).from_pylibcudf(
                         plc.strings.convert.convert_durations.from_durations(
                             self.plc_column, format

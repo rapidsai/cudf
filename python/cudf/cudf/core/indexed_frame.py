@@ -43,7 +43,6 @@ from cudf.core._internals import copying, stream_compaction
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
-    NumericalColumn,
     access_columns,
     as_column,
     column_empty,
@@ -3055,7 +3054,7 @@ class IndexedFrame(Frame):
             return self._gather(
                 GatherMap.from_column_unchecked(
                     cast(
-                        NumericalColumn,
+                        cudf.core.column.numerical.NumericalColumn,
                         as_column(
                             range(start, stop, stride),
                             dtype=SIZE_TYPE_DTYPE,
@@ -4917,7 +4916,7 @@ class IndexedFrame(Frame):
         try:
             gather_map = GatherMap.from_column_unchecked(
                 cast(
-                    NumericalColumn,
+                    cudf.core.column.numerical.NumericalColumn,
                     as_column(
                         random_state.choice(
                             len(self), size=n, replace=replace, p=weights

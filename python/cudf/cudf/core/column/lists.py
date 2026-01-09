@@ -10,12 +10,12 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
@@ -31,10 +31,9 @@ from cudf.utils.utils import _is_null_host_scalar
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from typing_extensions import Self  # noqa: TC004
-
     from cudf._typing import ColumnBinaryOperand, ColumnLike, DtypeObj
-    from cudf.core.column.string import StringColumn  # noqa: TC004
+    from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.string import StringColumn
 
 
 class ListColumn(ColumnBase):
@@ -141,7 +140,9 @@ class ListColumn(ColumnBase):
         """
         Integer offsets to elements specifying each row of the ListColumn
         """
-        return cast(NumericalColumn, self.children[0])
+        return cast(
+            cudf.core.column.numerical.NumericalColumn, self.children[0]
+        )
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -257,7 +258,10 @@ class ListColumn(ColumnBase):
                 pa_scalar_to_plc_scalar(pa.scalar("None")),
                 self._string_separators,
             )
-            return cast(StringColumn, type(self).from_pylibcudf(plc_column))
+            return cast(
+                cudf.core.column.string.StringColumn,
+                type(self).from_pylibcudf(plc_column),
+            )
 
     def _transform_leaves(
         self, func: Callable[[ColumnBase, DtypeObj], ColumnBase], *args: Any
@@ -466,7 +470,10 @@ class ListColumn(ColumnBase):
                 plc.strings.combine.SeparatorOnNulls.YES,
                 plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
             )
-            return cast(StringColumn, type(self).from_pylibcudf(plc_column))
+            return cast(
+                cudf.core.column.string.StringColumn,
+                type(self).from_pylibcudf(plc_column),
+            )
 
     def minhash_ngrams(
         self,

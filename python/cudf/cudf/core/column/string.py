@@ -311,7 +311,7 @@ class StringColumn(ColumnBase, Scannable):
         plc_dtype = dtype_to_pylibcudf_type(dtype)
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 type(self)
                 .from_pylibcudf(cast_func(self.plc_column, plc_dtype))
                 ._with_type_metadata(dtype=dtype),
@@ -362,7 +362,8 @@ class StringColumn(ColumnBase, Scannable):
         with self.access(mode="read", scope="internal"):
             plc_dtype = dtype_to_pylibcudf_type(dtype)
             result_col = cast(
-                DatetimeColumn | TimeDeltaColumn,
+                cudf.core.column.datetime.DatetimeColumn
+                | cudf.core.column.timedelta.TimeDeltaColumn,
                 type(self).from_pylibcudf(
                     casting_func(self.plc_column, plc_dtype, format)
                 ),
@@ -396,7 +397,8 @@ class StringColumn(ColumnBase, Scannable):
                 )
             )
             result = cast(
-                DecimalBaseColumn, ColumnBase.from_pylibcudf(plc_column)
+                cudf.core.column.decimal.DecimalBaseColumn,
+                ColumnBase.from_pylibcudf(plc_column),
             )
             result.dtype.precision = dtype.precision
             return result
@@ -554,7 +556,7 @@ class StringColumn(ColumnBase, Scannable):
             if op == "__add__":
                 if isinstance(other, pa.Scalar):
                     other = cast(
-                        StringColumn,
+                        cudf.core.column.string.StringColumn,
                         as_column(other, length=len(self)),
                     )
                 lhs, rhs = (other, self) if reflect else (self, other)
@@ -600,7 +602,7 @@ class StringColumn(ColumnBase, Scannable):
                     )
                 seed = np.uint32(seed)
             return cast(
-                ListColumn,
+                cudf.core.column.lists.ListColumn,
                 type(self).from_pylibcudf(
                     plc.nvtext.minhash.minhash(
                         self.plc_column,
@@ -628,7 +630,7 @@ class StringColumn(ColumnBase, Scannable):
                     )
                 seed = np.uint64(seed)
             return cast(
-                ListColumn,
+                cudf.core.column.lists.ListColumn,
                 type(self).from_pylibcudf(
                     plc.nvtext.minhash.minhash64(
                         self.plc_column,
@@ -647,7 +649,10 @@ class StringColumn(ColumnBase, Scannable):
                 other.plc_column,
                 width,
             )
-            return cast(NumericalColumn, type(self).from_pylibcudf(result))
+            return cast(
+                cudf.core.column.numerical.NumericalColumn,
+                type(self).from_pylibcudf(result),
+            )
 
     def generate_ngrams(self, ngrams: int, separator: plc.Scalar) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -666,7 +671,10 @@ class StringColumn(ColumnBase, Scannable):
             result = plc.nvtext.generate_ngrams.generate_character_ngrams(
                 self.plc_column, ngrams
             )
-            return cast(ListColumn, type(self).from_pylibcudf(result))
+            return cast(
+                cudf.core.column.lists.ListColumn,
+                type(self).from_pylibcudf(result),
+            )
 
     def hash_character_ngrams(
         self, ngrams: int, seed: int | np.uint32
@@ -682,7 +690,10 @@ class StringColumn(ColumnBase, Scannable):
             result = plc.nvtext.generate_ngrams.hash_character_ngrams(
                 self.plc_column, ngrams, seed
             )
-            return cast(ListColumn, type(self).from_pylibcudf(result))
+            return cast(
+                cudf.core.column.lists.ListColumn,
+                type(self).from_pylibcudf(result),
+            )
 
     def build_suffix_array(self, min_width: int) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -727,14 +738,20 @@ class StringColumn(ColumnBase, Scannable):
             result = plc.nvtext.edit_distance.edit_distance(
                 self.plc_column, targets.plc_column
             )
-            return cast(NumericalColumn, type(self).from_pylibcudf(result))
+            return cast(
+                cudf.core.column.numerical.NumericalColumn,
+                type(self).from_pylibcudf(result),
+            )
 
     def edit_distance_matrix(self) -> ListColumn:
         with self.access(mode="read", scope="internal"):
             result = plc.nvtext.edit_distance.edit_distance_matrix(
                 self.plc_column
             )
-            return cast(ListColumn, type(self).from_pylibcudf(result))
+            return cast(
+                cudf.core.column.lists.ListColumn,
+                type(self).from_pylibcudf(result),
+            )
 
     def byte_pair_encoding(
         self,
@@ -833,7 +850,7 @@ class StringColumn(ColumnBase, Scannable):
     def porter_stemmer_measure(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 type(self).from_pylibcudf(
                     plc.nvtext.stemmer.porter_stemmer_measure(self.plc_column)
                 ),
@@ -878,7 +895,7 @@ class StringColumn(ColumnBase, Scannable):
     def count_tokens_scalar(self, delimiter: plc.Scalar) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 type(self).from_pylibcudf(
                     plc.nvtext.tokenize.count_tokens_scalar(
                         self.plc_column, delimiter
@@ -889,7 +906,7 @@ class StringColumn(ColumnBase, Scannable):
     def count_tokens_column(self, delimiters: Self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 type(self).from_pylibcudf(
                     plc.nvtext.tokenize.count_tokens_column(
                         self.plc_column,
@@ -1012,7 +1029,7 @@ class StringColumn(ColumnBase, Scannable):
     def is_hex(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 (
                     type(self)
                     .from_pylibcudf(
@@ -1029,7 +1046,7 @@ class StringColumn(ColumnBase, Scannable):
     def hex_to_integers(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 type(self).from_pylibcudf(
                     plc.strings.convert.convert_integers.hex_to_integers(
                         self.plc_column, plc.DataType(plc.TypeId.INT64)
@@ -1040,7 +1057,7 @@ class StringColumn(ColumnBase, Scannable):
     def is_ipv4(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 type(self).from_pylibcudf(
                     plc.strings.convert.convert_ipv4.is_ipv4(
                         self.plc_column,
@@ -1051,7 +1068,7 @@ class StringColumn(ColumnBase, Scannable):
     def ipv4_to_integers(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 type(self).from_pylibcudf(
                     plc.strings.convert.convert_ipv4.ipv4_to_integers(
                         self.plc_column,
@@ -1062,7 +1079,7 @@ class StringColumn(ColumnBase, Scannable):
     def is_timestamp(self, format: str) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 (
                     type(self)
                     .from_pylibcudf(
@@ -1283,7 +1300,7 @@ class StringColumn(ColumnBase, Scannable):
                 self.plc_column
             )
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 (
                     type(self)
                     .from_pylibcudf(plc_column)
@@ -1299,7 +1316,7 @@ class StringColumn(ColumnBase, Scannable):
                 self.plc_column
             )
             return cast(
-                NumericalColumn,
+                cudf.core.column.numerical.NumericalColumn,
                 (
                     type(self)
                     .from_pylibcudf(plc_column)
@@ -1318,7 +1335,7 @@ class StringColumn(ColumnBase, Scannable):
             if cudf.get_option("mode.pandas_compatible"):
                 new_type = self._get_pandas_compatible_dtype(np.dtype("int64"))
                 res = res.astype(new_type)
-            return res
+            return cast(cudf.core.column.numerical.NumericalColumn, res)
 
     def count_bytes(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
@@ -1327,7 +1344,7 @@ class StringColumn(ColumnBase, Scannable):
             res = res._with_type_metadata(
                 get_dtype_of_same_kind(self.dtype, res.dtype)
             )
-            return res
+            return cast(cudf.core.column.numerical.NumericalColumn, res)
 
     def join_strings(self, separator: str, na_rep: str | None) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -1376,9 +1393,12 @@ class StringColumn(ColumnBase, Scannable):
             )
             return dict(
                 enumerate(
-                    type(self)
-                    .from_pylibcudf(col)
-                    ._with_type_metadata(self.dtype)
+                    cast(
+                        Self,
+                        type(self)
+                        .from_pylibcudf(col)
+                        ._with_type_metadata(self.dtype),
+                    )
                     for col in plc_table.columns()
                 )
             )
@@ -1592,7 +1612,10 @@ class StringColumn(ColumnBase, Scannable):
                     )
             else:
                 new_type = np.dtype("bool")
-            return res._with_type_metadata(new_type)
+            return cast(
+                cudf.core.column.numerical.NumericalColumn,
+                res._with_type_metadata(new_type),
+            )
 
     def filter_characters_of_type(
         self,
@@ -1743,7 +1766,7 @@ class StringColumn(ColumnBase, Scannable):
                     res = res.astype(np.dtype("int64"))
                 new_type = self._get_pandas_compatible_dtype(res.dtype)
                 res = res._with_type_metadata(new_type)
-            return res
+            return cast(cudf.core.column.numerical.NumericalColumn, res)
 
     def findall(
         self,
