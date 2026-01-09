@@ -1114,40 +1114,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             until there is a write operation being performed on
             them.
         """
+        plc_col = self.plc_column
         if deep:
-            with self.access(mode="read", scope="internal"):
-                result = type(self).from_pylibcudf(self.plc_column.copy())
-            return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
-        else:
-            col = type(self)._from_preprocessed(
-                plc_column=self.plc_column,
-                dtype=self.dtype,
-                children=tuple(s.copy(deep=False) for s in self.children),
-            )
-            # copy-on-write and spilling logic tracked on the Buffers
-            # so copy over the Buffers from self
-            col._children = tuple(
-                child.copy(deep=False) for child in self.children
-            )
-
-            value = (
-                self.data.copy(deep=False) if self.data is not None else None
-            )
-            if not isinstance(self.dtype, CategoricalDtype):
-                col.plc_column = plc.Column(
-                    data_type=col.plc_column.type(),
-                    size=col.plc_column.size(),
-                    data=value,
-                    mask=col.plc_column.null_mask(),
-                    null_count=col.plc_column.null_count(),
-                    offset=col.plc_column.offset(),
-                    children=[c.plc_column for c in col.children],
-                )
-
-            col._set_mask_inplace(
-                self.mask.copy(deep=False) if self.mask is not None else None
-            )
-            return col
+            plc_col = plc_col.copy()
+        return (
+            type(self).from_pylibcudf(plc_col)._with_type_metadata(self.dtype)
+        )
 
     def element_indexing(self, index: int) -> ScalarLike:
         """Default implementation for indexing to an element
