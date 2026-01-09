@@ -19,6 +19,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -159,143 +160,150 @@ class span_base {
 
 // ===== host_span =================================================================================
 
-template <typename T>
-struct is_host_span_supported_container : std::false_type {};
-
-template <typename T, typename Alloc>
-struct is_host_span_supported_container<  //
-  std::vector<T, Alloc>> : std::true_type {};
-
-template <typename T, typename Alloc>
-struct is_host_span_supported_container<  //
-  thrust::host_vector<T, Alloc>> : std::true_type {};
-
-template <typename T, typename Alloc>
-struct is_host_span_supported_container<  //
-  std::basic_string<T, std::char_traits<T>, Alloc>> : std::true_type {};
-
 /**
- * @brief C++20 std::span with reduced feature set.
+ * @brief Alias for std::span for host memory with device accessibility tracking.
  *
+ * This is a wrapper around std::span that adds tracking for whether the memory
+ * is device accessible (e.g. pinned memory). This information is used to optimize
+ * CUDA memory copy operations.
+ *
+ * @note This is provided for backward compatibility while transitioning to std::span.
+ *       New code should use std::span directly where device accessibility tracking is not needed.
  */
-template <typename T, std::size_t Extent = cudf::dynamic_extent>
-struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent>> {
-  using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;  ///< Base type
-  using base::base;
+template <typename T, std::size_t Extent = std::dynamic_extent>
+class host_span {
+ public:
+  using element_type    = typename std::span<T, Extent>::element_type;
+  using value_type      = typename std::span<T, Extent>::value_type;
+  using size_type       = typename std::span<T, Extent>::size_type;
+  using difference_type = typename std::span<T, Extent>::difference_type;
+  using pointer         = typename std::span<T, Extent>::pointer;
+  using const_pointer   = typename std::span<T, Extent>::const_pointer;
+  using reference       = typename std::span<T, Extent>::reference;
+  using iterator        = typename std::span<T, Extent>::iterator;
 
-  constexpr host_span() noexcept : base() {}  // required to compile on centos
+  static constexpr std::size_t extent = Extent;
 
-  /**
-   * @brief Constructor from pointer and size
-   *
-   * @note This needs to be host-device, as it's used by a host-device function in base_2dspan
-   *
-   * @param data Pointer to the first element in the span
-   * @param size The number of elements in the span
-   * @param is_device_accessible Whether the data is device accessible (e.g. pinned memory)
-   */
-  CUDF_HOST_DEVICE constexpr host_span(T* data, std::size_t size, bool is_device_accessible)
-    : base(data, size), _is_device_accessible{is_device_accessible}
+  // Default constructor
+  constexpr host_span() noexcept = default;
+
+  // Constructor from std::span
+  constexpr host_span(std::span<T, Extent> span, bool is_device_accessible = false) noexcept
+    : _span{span}, _is_device_accessible{is_device_accessible}
   {
   }
 
-  /// Constructor from container
-  /// @param in The container to construct the span from
-  template <typename C,
-            // Only supported containers of types convertible to T
-            std::enable_if_t<is_host_span_supported_container<C>::value &&
-                             std::is_convertible_v<
-                               std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
-                                 std::declval<C&>().data()))> (*)[],
-                               T (*)[]>>* = nullptr>  // NOLINT
-  constexpr host_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
+  // Constructor from pointer and size
+  CUDF_HOST_DEVICE constexpr host_span(T* data, std::size_t size) noexcept
+    : _span{data, size}, _is_device_accessible{false}
   {
   }
 
-  /// Constructor from const container
-  /// @param in The container to construct the span from
-  template <typename C,
-            // Only supported containers of types convertible to T
-            std::enable_if_t<is_host_span_supported_container<C>::value &&
-                             std::is_convertible_v<
-                               std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
-                                 std::declval<C&>().data()))> (*)[],
-                               T (*)[]>>* = nullptr>  // NOLINT
-  constexpr host_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
+  // Constructor from pointer, size, and device accessibility
+  CUDF_HOST_DEVICE constexpr host_span(T* data,
+                                       std::size_t size,
+                                       bool is_device_accessible) noexcept
+    : _span{data, size}, _is_device_accessible{is_device_accessible}
   {
   }
 
-  // Copy construction to support const conversion
-  /// @param other The span to copy
+  // Constructor from container (std::vector, thrust::host_vector, etc.)
+  template <typename Container,
+            typename = std::enable_if_t<
+              std::is_convertible_v<std::remove_pointer_t<decltype(std::declval<Container&>().data(
+                                      ))> (*)[],
+                                    T (*)[]> &&  // NOLINT
+              !std::is_same_v<std::remove_cvref_t<Container>, host_span>>>
+  constexpr host_span(Container& container) noexcept
+    : _span{container.data(), container.size()}, _is_device_accessible{false}
+  {
+  }
+
+  // Constructor from const container
+  template <typename Container,
+            typename = std::enable_if_t<
+              std::is_convertible_v<std::remove_pointer_t<decltype(std::declval<Container const&>()
+                                                                      .data()))> (*)[],
+                                    T (*)[]> &&  // NOLINT
+              !std::is_same_v<std::remove_cvref_t<Container>, host_span>>>
+  constexpr host_span(Container const& container) noexcept
+    : _span{container.data(), container.size()}, _is_device_accessible{false}
+  {
+  }
+
+  // Copy constructor from convertible host_span
   template <typename OtherT,
             std::size_t OtherExtent,
-            std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
-                               std::is_convertible_v<OtherT (*)[], T (*)[]>,  // NOLINT
-                             void>* = nullptr>
+            typename = std::enable_if_t<
+              std::is_convertible_v<std::span<OtherT, OtherExtent>, std::span<T, Extent>>>>
   constexpr host_span(host_span<OtherT, OtherExtent> const& other) noexcept
-    : base(other.data(), other.size()), _is_device_accessible{other.is_device_accessible()}
+    : _span{other._span}, _is_device_accessible{other._is_device_accessible}
   {
   }
-  // not noexcept due to undefined behavior when idx < 0 || idx >= size
-  /**
-   * @brief Returns a reference to the idx-th element of the sequence.
-   *
-   * The behavior is undefined if idx is out of range (i.e., if it is greater than or equal to
-   * size()).
-   *
-   * @param idx the index of the element to access
-   * @return A reference to the idx-th element of the sequence, i.e., `data()[idx]`
-   */
-  constexpr typename base::reference operator[](typename base::size_type idx) const
+
+  // Conversion to std::span
+  [[nodiscard]] constexpr operator std::span<T, Extent>() const noexcept { return _span; }
+
+  // Element access
+  [[nodiscard]] constexpr reference operator[](size_type idx) const noexcept
   {
-    static_assert(sizeof(idx) >= sizeof(size_t), "index type must not be smaller than size_t");
-    return this->_data[idx];
+    return _span[idx];
   }
 
-  // not noexcept due to undefined behavior when size = 0
-  /**
-   * @brief Returns a reference to the first element in the span.
-   *
-   * Calling front on an empty span results in undefined behavior.
-   *
-   * @return Reference to the first element in the span
-   */
-  [[nodiscard]] constexpr typename base::reference front() const { return this->_data[0]; }
-  // not noexcept due to undefined behavior when size = 0
-  /**
-   * @brief Returns a reference to the last element in the span.
-   *
-   * Calling last on an empty span results in undefined behavior.
-   *
-   * @return Reference to the last element in the span
-   */
-  [[nodiscard]] constexpr typename base::reference back() const
+  [[nodiscard]] constexpr reference front() const noexcept { return _span.front(); }
+  [[nodiscard]] constexpr reference back() const noexcept { return _span.back(); }
+  [[nodiscard]] constexpr pointer data() const noexcept { return _span.data(); }
+
+  // Iterators
+  [[nodiscard]] constexpr iterator begin() const noexcept { return _span.begin(); }
+  [[nodiscard]] constexpr iterator end() const noexcept { return _span.end(); }
+
+  // Capacity
+  [[nodiscard]] constexpr size_type size() const noexcept { return _span.size(); }
+  [[nodiscard]] constexpr size_type size_bytes() const noexcept { return _span.size_bytes(); }
+  [[nodiscard]] constexpr bool empty() const noexcept { return _span.empty(); }
+
+  // Subviews
+  template <std::size_t Count>
+  [[nodiscard]] constexpr host_span<T, Count> first() const noexcept
   {
-    return this->_data[this->_size - 1];
+    return host_span<T, Count>{_span.template first<Count>(), _is_device_accessible};
   }
 
-  /**
-   * @brief Returns whether the data is device accessible (e.g. pinned memory)
-   *
-   * @return true if the data is device accessible
-   */
-  [[nodiscard]] bool is_device_accessible() const { return _is_device_accessible; }
-
-  /**
-   * @brief Obtains a span that is a view over the `count` elements of this span starting at offset
-   *
-   * @param offset The offset of the first element in the subspan
-   * @param count The number of elements in the subspan
-   * @return A subspan of the sequence, of requested count and offset
-   */
-  [[nodiscard]] CUDF_HOST_DEVICE constexpr host_span subspan(
-    typename base::size_type offset, typename base::size_type count) const noexcept
+  [[nodiscard]] constexpr host_span<T, std::dynamic_extent> first(size_type count) const noexcept
   {
-    return host_span{this->data() + offset, count, _is_device_accessible};
+    return host_span<T, std::dynamic_extent>{_span.first(count), _is_device_accessible};
+  }
+
+  template <std::size_t Count>
+  [[nodiscard]] constexpr host_span<T, Count> last() const noexcept
+  {
+    return host_span<T, Count>{_span.template last<Count>(), _is_device_accessible};
+  }
+
+  [[nodiscard]] constexpr host_span<T, std::dynamic_extent> last(size_type count) const noexcept
+  {
+    return host_span<T, std::dynamic_extent>{_span.last(count), _is_device_accessible};
+  }
+
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr host_span<T, std::dynamic_extent> subspan(
+    size_type offset, size_type count) const noexcept
+  {
+    return host_span<T, std::dynamic_extent>{_span.data() + offset, count, _is_device_accessible};
+  }
+
+  // Device accessibility
+  [[nodiscard]] constexpr bool is_device_accessible() const noexcept
+  {
+    return _is_device_accessible;
   }
 
  private:
+  std::span<T, Extent> _span{};
   bool _is_device_accessible{false};
+
+  template <typename, std::size_t>
+  friend class host_span;
 };
 
 // ===== device_span ===============================================================================
