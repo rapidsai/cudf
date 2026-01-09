@@ -400,7 +400,7 @@ class StringColumn(ColumnBase, Scannable):
                 cudf.core.column.decimal.DecimalBaseColumn,
                 ColumnBase.from_pylibcudf(plc_column),
             )
-            result.dtype.precision = dtype.precision
+            cast("DecimalDtype", result.dtype).precision = dtype.precision
             return result
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:

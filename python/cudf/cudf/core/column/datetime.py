@@ -40,6 +40,8 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable
 
+    from typing_extensions import Self
+
     from cudf._typing import (
         ColumnBinaryOperand,
         DtypeObj,
@@ -244,7 +246,7 @@ class DatetimeColumn(TemporalBaseColumn):
             last_day_col = type(self).from_pylibcudf(
                 plc.datetime.last_day_of_month(self.plc_column)
             )
-        return (self.day == last_day_col.day).fillna(False)
+        return (self.day == cast("Self", last_day_col).day).fillna(False)
 
     @functools.cached_property
     def is_quarter_end(self) -> ColumnBase:

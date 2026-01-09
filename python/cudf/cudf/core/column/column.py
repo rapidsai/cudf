@@ -312,7 +312,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     _distinct_count: dict[bool, int]
     _exposed_buffers: set[Buffer]
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         raise ValueError(
             "ColumnBase and its subclasses must be instantiated via from_pylibcudf."
         )
@@ -550,12 +550,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             A new pylibcudf.Column with unwrapped buffers.
         """
         with self.access(mode="read", scope="internal"):
-            data = self.plc_column.data()
-            if data is not None:
-                data = data.owner.owner
-            mask = self.plc_column.null_mask()
-            if mask is not None:
-                mask = mask.owner.owner
+            data = self.data
+            unwrapped_data = (
+                cast("plc.span.Span", data.owner.owner)
+                if data is not None
+                else None
+            )
+            mask = self.mask
+            unwrapped_mask = (
+                cast("plc.span.Span", mask.owner.owner)
+                if mask is not None
+                else None
+            )
 
             # Recursively unwrap children
             children = [child.to_pylibcudf() for child in self.children]
@@ -564,8 +570,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return plc.Column(
                 data_type=self.plc_column.type(),
                 size=self.plc_column.size(),
-                data=data,
-                mask=mask,
+                data=unwrapped_data,
+                mask=unwrapped_mask,
                 null_count=self.plc_column.null_count(),
                 offset=self.plc_column.offset(),
                 children=children,
@@ -669,7 +675,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             validate=False,
         )
 
-        return cls._from_preprocessed(  # type: ignore[return-value]
+        return cls._from_preprocessed(
             plc_column=col,
             dtype=dtype,
             children=wrapped_children,
@@ -691,7 +697,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self = cls.__new__(cls)
         plc_column, dtype = self._validate_args(plc_column, dtype)
         self.plc_column = plc_column
-        self._distinct_count: dict[bool, int] = {}
+        self._distinct_count = {}
         self._dtype = dtype
         self._children = children
         # The set of exposed buffers associated with this column. These buffers must be
@@ -699,7 +705,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # CAI of this column will still be pointing to those buffers. As such objects
         # are destroyed, all references to this column will be removed as well,
         # triggering the destruction of the exposed buffers.
-        self._exposed_buffers: set[Buffer] = set()
+        self._exposed_buffers = set()
         return self
 
     @classmethod
