@@ -455,20 +455,18 @@ CUDF_KERNEL void count_set_bits_kernel(bitmask_type const* bitmask,
  * @tparam block_size Number of threads in each thread block
  *
  * @param bitmasks Array of bitmask pointers
- * @param num_bitmasks Number of bitmasks to process
  * @param first_bit_index The index (inclusive) of the first bit to count
  * @param last_bit_index The index (inclusive) of the last bit to count
  * @param global_count Output array of set bit counts for each bitmask
  */
 template <size_type block_size>
-CUDF_KERNEL void batch_count_set_bit_kernel(bitmask_type const* const* bitmasks,
-                                            size_type num_bitmasks,
+CUDF_KERNEL void batch_count_set_bit_kernel(device_span<bitmask_type const* const> bitmasks,
                                             size_type first_bit_index,
                                             size_type last_bit_index,
                                             size_type* global_count)
 {
-  auto const bitmask_idx = static_cast<size_type>(blockIdx.y);
-  if (bitmask_idx >= num_bitmasks) { return; }
+  auto const bitmask_idx = blockIdx.y;
+  if (bitmask_idx >= bitmasks.size()) { return; }
   auto const bitmask = bitmasks[bitmask_idx];
   if (bitmask == nullptr) { return; }
 
@@ -515,9 +513,8 @@ CUDF_KERNEL void batch_count_set_bit_kernel(bitmask_type const* const* bitmasks,
   size_type block_count{BlockReduce(temp_storage).Sum(thread_count)};
 
   if (threadIdx.x == 0) {
-    auto count_ref =
-      cuda::atomic_ref<size_type, cuda::thread_scope_device>{global_count[bitmask_idx]};
-    count_ref.fetch_add(block_count, cuda::std::memory_order_relaxed);
+    cuda::atomic_ref<size_type, cuda::thread_scope_device>{global_count[bitmask_idx]}.fetch_add(
+      block_count, cuda::std::memory_order_relaxed);
   }
 }
 
@@ -552,7 +549,7 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
   auto const kernel_grid =
     dim3{static_cast<unsigned int>(grid.num_blocks), static_cast<unsigned int>(num_bitmasks), 1};
   batch_count_set_bit_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
-    d_bitmasks.data(), num_bitmasks, start, stop - 1, d_non_zero_count.data());
+    d_bitmasks, start, stop - 1, d_non_zero_count.data());
 
   auto h_non_zero_count = cudf::detail::make_pinned_vector<size_type>(num_bitmasks, stream);
   cudf::detail::cuda_memcpy(host_span<size_type>{h_non_zero_count.data(), num_bitmasks},
