@@ -104,9 +104,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 /**
  * @brief Computes partition row indices without materializing the partitioned table.
  *
- * Returns a vector of columns where each column contains the row indices belonging
- * to that partition. This enables downstream operations to gather the partitions in
- * the most efficient format for their use case, avoiding an intermediate copy.
+ * Returns a vector of columns where each column contains the row indices of
+ * the input to generate a partition. This enables downstream operations to
+ * gather the partitions in the most efficient format for their use case,
+ * avoiding an intermediate copy.
  *
  * @code{.pseudo}
  * // Example usage:
