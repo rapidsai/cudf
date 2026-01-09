@@ -18,6 +18,11 @@
 #include <thrust/for_each.h>
 #include <thrust/tabulate.h>
 
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <utility>
+
 namespace cudf::groupby::detail::hash {
 
 namespace {
