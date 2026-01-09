@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -515,7 +515,11 @@ CUDF_KERNEL void batch_count_set_bit_kernel(bitmask_type const* const* bitmasks,
   __shared__ typename BlockReduce::TempStorage temp_storage;
   size_type block_count{BlockReduce(temp_storage).Sum(thread_count)};
 
-  if (threadIdx.x == 0) { atomicAdd(&global_count[bitmask_idx], block_count); }
+  if (threadIdx.x == 0) {
+    auto count_ref =
+      cuda::atomic_ref<size_type, cuda::thread_scope_device>{global_count[bitmask_idx]};
+    count_ref.fetch_add(block_count, cuda::std::memory_order_relaxed);
+  }
 }
 
 // Count null elements in the specified range of multiple validity bitmasks
@@ -524,7 +528,7 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
                                         size_type stop,
                                         rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
+  CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.", std::invalid_argument);
 
   auto const num_bitmasks      = bitmasks.size();
   auto const num_bits_to_count = stop - start;

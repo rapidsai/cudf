@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -268,8 +268,8 @@ size_type null_count(bitmask_type const* bitmask,
  * If a bitmask pointer is `nullptr`, all elements corresponding to that bitmask are assumed to be
  * valid and the null count is `0`.
  *
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
+ * @throws std::invalid_argument if `start > stop`
+ * @throws std::invalid_argument if `start < 0`
  *
  * @param bitmasks Validity bitmasks residing in device memory
  * @param start Index of the first bit to count (inclusive)
