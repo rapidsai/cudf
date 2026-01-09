@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -65,7 +65,7 @@ static void BM_make_strings_column_batch(nvbench::state& state)
   for (auto const& cv : data_table->view()) {
     auto const d_data_ptr = cudf::column_device_view::create(cv, stream);
     auto batch_input      = rmm::device_uvector<string_index_pair>(cv.size(), stream);
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      batch_input.begin(),
                      batch_input.end(),
                      [data_col = *d_data_ptr] __device__(auto const idx) {
