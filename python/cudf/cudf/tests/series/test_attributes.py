@@ -291,13 +291,6 @@ def test_timedelta_contains(data, timedelta_types_as_str, scalar):
     assert_eq(expected, actual)
 
 
-# TODO: This test _should_ be made CoW-safe, but it is acceptable to fail for now
-# because its failure indicates a performance issue rather than a correctness issue.
-# The problem is that accessing the `data` attribute of a Series creates a separate
-# buffer for Column._data that becomes a second reference because Column._base_data
-# exists. That means that any attempt to access a writeable pointer on the data
-# immediately triggers a copy when in fact we really only have a single reference.
-@pytest.mark.no_copy_on_write
 def test_cai_after_indexing():
     df = cudf.DataFrame({"a": [1, 2, 3]})
     cai1 = df["a"].__cuda_array_interface__

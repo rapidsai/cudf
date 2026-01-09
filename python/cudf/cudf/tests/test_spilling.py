@@ -39,9 +39,6 @@ if get_global_manager() is not None:
         allow_module_level=True,
     )
 
-# For now, don't try and make CoW and spilling play well together
-pytestmark = pytest.mark.no_copy_on_write
-
 
 @contextlib.contextmanager
 def set_rmm_memory_pool(nbytes: int):
@@ -397,6 +394,8 @@ def test_spilling_df_views(manager):
     assert single_column_df_data(df).spillable
 
 
+# This behavior is not compatible with copy-on-write
+@pytest.mark.no_copy_on_write
 def test_modify_spilled_views(manager):
     df = single_column_df()
     df_view = df.iloc[1:]
