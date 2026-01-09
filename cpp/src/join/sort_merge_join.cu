@@ -4,6 +4,7 @@
  */
 
 #include "cudf/detail/utilities/vector_factories.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -168,23 +169,28 @@ cudf::detail::device_scalar<ScalarType> flagged_if(
 }
 
 template <typename InputIts, typename OutputIts, typename SizeIt>
-void batched_copy(InputIts input_iterators, OutputIts output_iterators, SizeIt sizes, size_type num_ranges, rmm::cuda_stream_view stream) {
+void batched_copy(InputIts input_iterators,
+                  OutputIts output_iterators,
+                  SizeIt sizes,
+                  size_type num_ranges,
+                  rmm::cuda_stream_view stream)
+{
   size_t temp_storage_bytes = 0;
   cub::DeviceCopy::Batched(nullptr,
-                            temp_storage_bytes,
-                            input_iterators,
-                            output_iterators,
-                            sizes,
-                            num_ranges,
-                            stream.value());
+                           temp_storage_bytes,
+                           input_iterators,
+                           output_iterators,
+                           sizes,
+                           num_ranges,
+                           stream.value());
   rmm::device_buffer temp_storage(temp_storage_bytes, stream);
   cub::DeviceCopy::Batched(temp_storage.data(),
-                            temp_storage_bytes,
-                            input_iterators,
-                            output_iterators,
-                            sizes,
-                            num_ranges,
-                            stream.value());
+                           temp_storage_bytes,
+                           input_iterators,
+                           output_iterators,
+                           sizes,
+                           num_ranges,
+                           stream.value());
 }
 
 template <typename LargerIterator, typename SmallerIterator>
@@ -915,7 +921,8 @@ sort_merge_join::left_join(table_view const& left,
       // to the output with JoinNoMatch sentinel values for the right side.
 
       auto const num_filtered_nulls = preprocessed_left._num_nulls.value();
-      auto const total_output_size  = preprocessed_left_indices->size() + static_cast<int64_t>(num_filtered_nulls);
+      auto const total_output_size =
+        preprocessed_left_indices->size() + static_cast<int64_t>(num_filtered_nulls);
 
       // Create new result vectors with space for filtered rows
       rmm::device_uvector<size_type> left_result_indices(total_output_size, stream, mr);
@@ -924,13 +931,19 @@ sort_merge_join::left_join(table_view const& left,
       // Copy existing join results
       {
         using Iterator = decltype(preprocessed_left_indices->begin());
-        auto const h_input_iterators = std::vector{preprocessed_left_indices->begin(), preprocessed_right_indices->begin()};
-        auto const h_output_iterators = std::vector{left_result_indices.begin(), right_result_indices.begin()};
-        auto const h_sizes = std::vector<size_t>{preprocessed_left_indices->size(), preprocessed_right_indices->size()};
-        auto const input_iterators = cudf::detail::make_device_uvector_async<Iterator>(h_input_iterators, stream, temp_mr);
-        auto const output_iterators = cudf::detail::make_device_uvector_async<Iterator>(h_output_iterators, stream, temp_mr);
-        auto const sizes = cudf::detail::make_device_uvector_async<size_t>(h_sizes, stream, temp_mr);
-        
+        auto const h_input_iterators =
+          std::vector{preprocessed_left_indices->begin(), preprocessed_right_indices->begin()};
+        auto const h_output_iterators =
+          std::vector{left_result_indices.begin(), right_result_indices.begin()};
+        auto const h_sizes = std::vector<size_t>{preprocessed_left_indices->size(),
+                                                 preprocessed_right_indices->size()};
+        auto const input_iterators =
+          cudf::detail::make_device_uvector_async<Iterator>(h_input_iterators, stream, temp_mr);
+        auto const output_iterators =
+          cudf::detail::make_device_uvector_async<Iterator>(h_output_iterators, stream, temp_mr);
+        auto const sizes =
+          cudf::detail::make_device_uvector_async<size_t>(h_sizes, stream, temp_mr);
+
         batched_copy(input_iterators.begin(), output_iterators.begin(), sizes.begin(), 2, stream);
       }
 
@@ -946,7 +959,10 @@ sort_merge_join::left_join(table_view const& left,
                  left.num_rows(),
                  is_row_null{validity_mask},
                  stream);
-      cub::DeviceTransform::Fill(right_result_indices.begin() + preprocessed_right_indices->size(), num_filtered_nulls, JoinNoMatch, stream.value());
+      cub::DeviceTransform::Fill(right_result_indices.begin() + preprocessed_right_indices->size(),
+                                 num_filtered_nulls,
+                                 JoinNoMatch,
+                                 stream.value());
 
       return std::pair{
         std::make_unique<rmm::device_uvector<size_type>>(std::move(left_result_indices)),
