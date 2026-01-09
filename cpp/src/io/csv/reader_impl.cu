@@ -977,14 +977,13 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       auto streams               = cudf::detail::fork_streams(stream, num_tasks);
 
       auto process_string_column = [&](size_t str_col_idx, rmm::cuda_stream_view col_stream) {
-        auto const col_idx     = string_col_indices[str_col_idx];
-        auto const& flags      = is_quoted_flags[str_col_idx];
-        auto* buffer           = &out_buffers[col_idx];
-        auto const* flags_data = flags.data();
+        auto const col_idx    = string_col_indices[str_col_idx];
+        auto const& is_quoted = device_span<bool>(is_quoted_flags[str_col_idx]);
+        auto* buffer          = &out_buffers[col_idx];
 
         // Count how many rows were quoted to determine the fast path
-        auto const num_quoted =
-          thrust::count(rmm::exec_policy_nosync(col_stream), flags.begin(), flags.end(), true);
+        auto const num_quoted = thrust::count(
+          rmm::exec_policy_nosync(col_stream), is_quoted.begin(), is_quoted.end(), true);
         if (num_quoted == 0) {
           // No rows were quoted, skip replacement entirely
           out_columns[col_idx] = make_column(*buffer, nullptr, std::nullopt, col_stream);
@@ -1024,7 +1023,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
             replaced_iter,
             replaced_iter + num_records,
             original_iter,
-            [flags_data] __device__(size_type idx) { return flags_data[idx]; },
+            [is_quoted] __device__(size_type idx) { return is_quoted[idx]; },
             col_stream,
             mr);
         }
