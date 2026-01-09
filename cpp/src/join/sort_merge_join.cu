@@ -929,21 +929,18 @@ sort_merge_join::left_join(table_view const& left,
 
       // Copy existing join results
       {
-        using Iterator = decltype(preprocessed_left_indices->begin());
-        auto input_iterators =
-          cudf::detail::make_pinned_vector_async<Iterator>(2, stream);
-        input_iterators[0] = preprocessed_left_indices->begin();
-        input_iterators[1] = preprocessed_right_indices->begin();
+        using Iterator       = decltype(preprocessed_left_indices->begin());
+        auto input_iterators = cudf::detail::make_pinned_vector_async<Iterator>(2, stream);
+        input_iterators[0]   = preprocessed_left_indices->begin();
+        input_iterators[1]   = preprocessed_right_indices->begin();
 
-        auto output_iterators =
-          cudf::detail::make_pinned_vector_async<Iterator>(2, stream);
-        output_iterators[0] = left_result_indices.begin();
-        output_iterators[1] = right_result_indices.begin();
+        auto output_iterators = cudf::detail::make_pinned_vector_async<Iterator>(2, stream);
+        output_iterators[0]   = left_result_indices.begin();
+        output_iterators[1]   = right_result_indices.begin();
 
-        auto sizes =
-          cudf::detail::make_pinned_vector_async<size_t>(2, stream);
-        sizes[0] = preprocessed_left_indices->size();
-        sizes[1] = preprocessed_right_indices->size();
+        auto sizes = cudf::detail::make_pinned_vector_async<size_t>(2, stream);
+        sizes[0]   = preprocessed_left_indices->size();
+        sizes[1]   = preprocessed_right_indices->size();
 
         batched_copy(input_iterators.begin(), output_iterators.begin(), sizes.begin(), 2, stream);
       }
