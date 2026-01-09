@@ -481,7 +481,7 @@ class NumericalColumn(NumericalBaseColumn):
             plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
                 self.plc_column
             )
-            return type(self).from_pylibcudf(plc_column)
+            return cast(StringColumn, type(self).from_pylibcudf(plc_column))
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         col = self
@@ -520,12 +520,13 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError(f"No string conversion from type {self.dtype}")
 
         with col.access(mode="read", scope="internal"):
-            return (
+            return cast(
+                StringColumn,
                 type(self)
                 .from_pylibcudf(
                     conv_func(col.plc_column)
                 )
-                ._with_type_metadata(dtype)
+                ._with_type_metadata(dtype),
             )
 
     def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
@@ -541,17 +542,19 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        return (
+        return cast(
+            DatetimeColumn,
             type(self)
             .from_pylibcudf(self._as_temporal_column(dtype))
-            ._with_type_metadata(dtype)
+            ._with_type_metadata(dtype),
         )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return (
+        return cast(
+            TimeDeltaColumn,
             type(self)
             .from_pylibcudf(self._as_temporal_column(dtype))
-            ._with_type_metadata(dtype)
+            ._with_type_metadata(dtype),
         )
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
@@ -989,13 +992,16 @@ class NumericalColumn(NumericalBaseColumn):
             bin_col,
             self,
         ):
-            return type(self).from_pylibcudf(
+            return cast(
+                Self,
+                type(self).from_pylibcudf(
                 getattr(plc.search, "lower_bound" if right else "upper_bound")(
-                    plc.Table([bin_col.plc_column]),
-                    plc.Table([self.plc_column]),
-                    [plc.types.Order.ASCENDING],
-                    [plc.types.NullOrder.BEFORE],
+                plc.Table([bin_col.plc_column]),
+                plc.Table([self.plc_column]),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
                 )
+                ),
             )
 
 

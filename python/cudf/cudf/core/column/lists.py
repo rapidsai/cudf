@@ -226,7 +226,10 @@ class ListColumn(ColumnBase):
             0,
             [offset_col, data_plc_col],
         )
-        return cls.from_pylibcudf(plc_column)
+        return cast(
+            Self,
+            cls.from_pylibcudf(plc_column),
+        )
 
     @cached_property
     def _string_separators(self) -> plc.Column:
@@ -254,7 +257,7 @@ class ListColumn(ColumnBase):
                 pa_scalar_to_plc_scalar(pa.scalar("None")),
                 self._string_separators,
             )
-            return type(self).from_pylibcudf(plc_column)
+            return cast(StringColumn, type(self).from_pylibcudf(plc_column))
 
     def _transform_leaves(
         self, func: Callable[[ColumnBase, DtypeObj], ColumnBase], *args: Any
@@ -285,7 +288,10 @@ class ListColumn(ColumnBase):
                 col.offset,
                 [offsets, plc_leaf_col],
             )
-        return type(self).from_pylibcudf(plc_leaf_col)
+        return cast(
+            Self,
+            type(self).from_pylibcudf(plc_leaf_col),
+        )
 
     @property
     def element_type(self) -> DtypeObj:
@@ -460,7 +466,7 @@ class ListColumn(ColumnBase):
                 plc.strings.combine.SeparatorOnNulls.YES,
                 plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
             )
-            return type(self).from_pylibcudf(plc_column)
+            return cast(StringColumn, type(self).from_pylibcudf(plc_column))
 
     def minhash_ngrams(
         self,
@@ -477,14 +483,17 @@ class ListColumn(ColumnBase):
                         f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
                     )
                 seed = np.uint32(seed)
-            return type(self).from_pylibcudf(
+            return cast(
+                Self,
+                type(self).from_pylibcudf(
                 plc.nvtext.minhash.minhash_ngrams(
-                    self.plc_column,
-                    width,
-                    seed,
-                    a.plc_column,
-                    b.plc_column,
+                self.plc_column,
+                width,
+                seed,
+                a.plc_column,
+                b.plc_column,
                 )
+                ),
             )
 
     def minhash64_ngrams(
@@ -502,12 +511,15 @@ class ListColumn(ColumnBase):
                         f"seed must be in range [0, {np.iinfo(np.uint64).max}]"
                     )
                 seed = np.uint64(seed)
-            return type(self).from_pylibcudf(
+            return cast(
+                Self,
+                type(self).from_pylibcudf(
                 plc.nvtext.minhash.minhash64_ngrams(
-                    self.plc_column,
-                    width,
-                    seed,
-                    a.plc_column,
-                    b.plc_column,
+                self.plc_column,
+                width,
+                seed,
+                a.plc_column,
+                b.plc_column,
                 )
+                ),
             )

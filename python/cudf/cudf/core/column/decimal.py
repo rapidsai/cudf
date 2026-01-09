@@ -127,7 +127,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     -data.type.scale,
                 ),
             )
-            result = cls.from_pylibcudf(plc_column)
+            result = cast(Self, cls.from_pylibcudf(plc_column))
             result._dtype = dtype
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
@@ -165,7 +165,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                         self.plc_column,
                     )
                 )
-                return type(self).from_pylibcudf(plc_column)
+                return cast(StringColumn, type(self).from_pylibcudf(plc_column))
         else:
             return cast(
                 cudf.core.column.StringColumn,

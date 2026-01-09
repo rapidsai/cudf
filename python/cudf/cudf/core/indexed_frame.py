@@ -3286,7 +3286,7 @@ class IndexedFrame(Frame):
         result = as_column(
             True, length=len(self), dtype=bool
         )._scatter_by_column(
-            distinct,
+            cast(cudf.core.column.NumericalColumn, distinct),
             pa_scalar_to_plc_scalar(pa.scalar(False)),
             bounds_check=False,
         )

@@ -149,7 +149,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     indices.plc_column,
                     exact,
                 )
-                result = type(self).from_pylibcudf(plc_column)
+                result = cast(
+                    NumericalBaseColumn, type(self).from_pylibcudf(plc_column)
+                )
         if return_scalar:
             scalar_result = result.element_indexing(0)
             if interpolation in {"lower", "higher", "nearest"}:
@@ -256,9 +258,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return cast(NumericalBaseColumn, type(self).from_pylibcudf(
                 plc.round.round(self.plc_column, decimals, plc_how)
-            )
+            ))
 
     def _scan(self, op: str) -> ColumnBase:
         return self.scan(op.replace("cum", ""), True)._with_type_metadata(
