@@ -292,7 +292,6 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                                   smaller_indices.size(),
                                   mapping_functor<SmallerIterator>{sorted_smaller_order_begin},
                                   stream.value());
-  stream.synchronize();
 
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
