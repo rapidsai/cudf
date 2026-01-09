@@ -470,15 +470,15 @@ CUDF_KERNEL void batch_count_set_bit_kernel(device_span<bitmask_type const* cons
   auto const bitmask = bitmasks[bitmask_idx];
   if (bitmask == nullptr) { return; }
 
-  constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
+  constexpr auto word_size{detail::size_in_bits<bitmask_type>()};
   auto const first_word_index{word_index(first_bit_index)};
   auto const last_word_index{word_index(last_bit_index)};
 
   // Although we use a 2D grid for launching the kernel, elements of each bitmask are indexed by
   // the first dimension.
-  thread_index_type const tid    = grid_1d::global_thread_id<block_size>();
-  thread_index_type const stride = grid_1d::grid_stride<block_size>();
-  size_type thread_word_index    = tid + first_word_index;
+  auto const tid         = grid_1d::global_thread_id<block_size>();
+  auto const stride      = grid_1d::grid_stride<block_size>();
+  auto thread_word_index = tid + first_word_index;
   size_type thread_count{0};
 
   // First, just count the bits in all words
