@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -53,8 +53,7 @@ enum class split_strategy : uint8_t {
   if (name == "ROW_GROUPS") {
     return split_strategy::ROW_GROUPS;
   } else if (name == "BYTE_RANGES") {
-    CUDF_FAIL("BYTE_RANGES is not supported yet");
-    // return split_strategy::BYTE_RANGES;
+    return split_strategy::BYTE_RANGES;
   }
   throw std::invalid_argument("Invalid split strategy");
 }
@@ -108,7 +107,8 @@ struct hybrid_scan_fn {
 };
 
 /**
- * @brief Read parquet file with the next-gen parquet reader
+ * @brief Split parquet row groups into partitions and pipeline their reads using the next-gen
+ * parquet reader
  *
  * @param io_source io source to read
  * @param num_partitions Number of read partitions
@@ -118,12 +118,12 @@ struct hybrid_scan_fn {
  * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
  *         row validity column
  */
-auto hybrid_scan(io_source const& io_source,
-                 cudf::size_type num_partitions,
-                 split_strategy split_strategy,
-                 bool use_page_index,
-                 rmm::cuda_stream_pool& stream_pool,
-                 rmm::device_async_resource_ref mr)
+auto hybrid_scan_pipelined(io_source const& io_source,
+                           cudf::size_type num_partitions,
+                           split_strategy split_strategy,
+                           bool use_page_index,
+                           rmm::cuda_stream_pool& stream_pool,
+                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -164,7 +164,7 @@ auto hybrid_scan(io_source const& io_source,
 
   timer.print_elapsed_millis();
 
-  std::cout << "Reading tables... \n";
+  std::cout << "Creating row group partitions... \n";
   timer.reset();
 
   if (num_partitions == 1) {
@@ -179,11 +179,13 @@ auto hybrid_scan(io_source const& io_source,
     return std::move(tables.front());
   }
 
+  auto const total_row_groups            = row_groups_indices.size();
+  auto const one_row_group_per_partition = std::cmp_equal(num_partitions, total_row_groups);
+
   std::vector<std::vector<cudf::size_type>> row_group_parts(num_partitions);
-  if (split_strategy == split_strategy::ROW_GROUPS) {
-    auto const total_row_groups = row_groups_indices.size();
-    auto const chunk_size       = total_row_groups / num_partitions;
-    auto const remainder        = total_row_groups % num_partitions;
+  if (one_row_group_per_partition or split_strategy == split_strategy::ROW_GROUPS) {
+    auto const chunk_size = total_row_groups / num_partitions;
+    auto const remainder  = total_row_groups % num_partitions;
 
     size_t offset = 0;
     for (cudf::size_type i = 0; i < num_partitions; ++i) {
@@ -193,7 +195,31 @@ auto hybrid_scan(io_source const& io_source,
       offset += part_size;
     }
   } else {
+    auto const all_row_groups    = reader->all_row_groups(options);
+    auto const buffers_size      = file_buffer_span.size();
+    auto const buffer_chunk_size = buffers_size / num_partitions;
+    size_t buffer_offset         = 0;
+    for (cudf::size_type i = 0; i < num_partitions; ++i) {
+      auto split_options = cudf::io::parquet_reader_options::builder()
+                             .skip_bytes(buffer_offset)
+                             .num_bytes(buffer_chunk_size)
+                             .build();
+      auto filtered_row_groups =
+        reader->filter_row_groups_with_byte_range(all_row_groups, split_options);
+      if (filtered_row_groups.empty()) {
+        num_partitions--;
+        std::cout << "Adjusting number of partitions to " << num_partitions << "\n";
+      } else {
+        row_group_parts[i].assign(filtered_row_groups.begin(), filtered_row_groups.end());
+      }
+      buffer_offset += buffer_chunk_size;
+    }
   }
+
+  timer.print_elapsed_millis();
+
+  std::cout << "Pipelining table reads... \n";
+  timer.reset();
 
   std::vector<hybrid_scan_fn> read_tasks;
   read_tasks.reserve(num_partitions);
@@ -239,9 +265,10 @@ void inline print_usage()
 {
   std::cout << std::endl
             << "Usage: hybrid_scan_pipeline <input parquet file> <number of partitions> <io source "
-               "type>\n\n"
-            << "Available IO source types: HOST_BUFFER, PINNED_BUFFER (Default) \n\n"
-            << "Example usage: hybrid_scan_pipeline example.parquet 2 PINNED_BUFFER \n\n";
+               "type> <split strategy>\n\n"
+            << "Available IO source types: HOST_BUFFER  (Default), PINNED_BUFFER \n\n"
+            << "Available split strategies: ROW_GROUPS (Default), BYTE_RANGES \n\n"
+            << "Example usage: hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS \n\n";
 }
 
 }  // namespace
@@ -252,18 +279,18 @@ void inline print_usage()
  * Command line parameters:
  * 1. parquet input file name/path (default: "example.parquet")
  * 2. number of read partitions (default: 2)
- * 3. io source type (default: "PINNED_BUFFER")
+ * 3. io source type (default: "HOST_BUFFER")
  * 4. split strategy (default: "ROW_GROUPS")
  *
  * Example invocation from directory `cudf/cpp/examples/hybrid_scan`:
- * ./build/hybrid_scan_pipeline example.parquet 2 PINNED_BUFFER
+ * ./build/hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS
  *
  */
 int main(int argc, char const** argv)
 {
   auto input_filepath = std::string{"example.parquet"};
   auto num_partitions = 2;
-  auto io_source_type = io_source_type::PINNED_BUFFER;
+  auto io_source_type = io_source_type::HOST_BUFFER;
   auto split_strategy = split_strategy::ROW_GROUPS;
 
   switch (argc) {
@@ -308,8 +335,8 @@ int main(int argc, char const** argv)
   timer timer;
 
   constexpr bool use_page_index = false;
-  auto pipeline_table =
-    hybrid_scan(data_source, num_partitions, split_strategy, use_page_index, stream_pool, stats_mr);
+  auto pipeline_table           = hybrid_scan_pipelined(
+    data_source, num_partitions, split_strategy, use_page_index, stream_pool, stats_mr);
 
   timer.print_elapsed_millis();
 
