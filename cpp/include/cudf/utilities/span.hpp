@@ -203,7 +203,7 @@ class host_span {
   constexpr host_span() noexcept = default;
 
   // Constructor from std::span (only for compatible extents)
-  template <std::size_t OtherExtent = Extent,
+  template <std::size_t OtherExtent,
             std::enable_if_t<OtherExtent == Extent || Extent == cudf::dynamic_extent ||
                                OtherExtent == std::dynamic_extent,
                              void>* = nullptr>
@@ -235,7 +235,8 @@ class host_span {
                                std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
                                  std::declval<C&>().data()))> (*)[],
                                T (*)[]>>* = nullptr>  // NOLINT
-  constexpr host_span(C& in) : _data{thrust::raw_pointer_cast(in.data())}, _size{in.size()}
+  constexpr host_span(C& in)
+    : _data{thrust::raw_pointer_cast(in.data())}, _size{in.size()}, _is_device_accessible{false}
   {
   }
 
@@ -249,7 +250,7 @@ class host_span {
                                  std::declval<C&>().data()))> (*)[],
                                T (*)[]>>* = nullptr>  // NOLINT
   constexpr host_span(C const& in)
-    : _data{thrust::raw_pointer_cast(in.data())}, _size{in.size()}
+    : _data{thrust::raw_pointer_cast(in.data())}, _size{in.size()}, _is_device_accessible{false}
   {
   }
 
@@ -265,7 +266,7 @@ class host_span {
   }
 
   // Conversion to std::span (host-only, only for compatible extents)
-  template <std::size_t TargetExtent = Extent>
+  template <std::size_t TargetExtent>
   [[nodiscard]] constexpr
     std::enable_if_t<TargetExtent == Extent || TargetExtent == std::dynamic_extent,
                      std::span<T, TargetExtent>>
