@@ -27,20 +27,20 @@ void nvbench_hm_inner_join(nvbench::state& state,
   auto const num_keys     = state.get_int64("num_keys");
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto hash_join = [](cudf::table_view const& left_input,
-                      cudf::table_view const& right_input,
-                      cudf::null_equality compare_nulls) {
-    return cudf::inner_join(left_input, right_input, compare_nulls);
-  };
-  auto sort_merge_join = [](cudf::table_view const& left_input,
-                            cudf::table_view const& right_input,
-                            cudf::null_equality compare_nulls) {
-    auto smj = cudf::sort_merge_join(right_input, cudf::sorted::NO, compare_nulls);
-    return smj.inner_join(left_input, cudf::sorted::NO);
-  };
   if constexpr (Algorithm == join_t::HASH) {
+    auto hash_join = [](cudf::table_view const& left_input,
+                        cudf::table_view const& right_input,
+                        cudf::null_equality compare_nulls) {
+      return cudf::inner_join(left_input, right_input, compare_nulls);
+    };
     BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, hash_join, multiplicity);
   } else if constexpr (Algorithm == join_t::SORT_MERGE) {
+    auto sort_merge_join = [](cudf::table_view const& left_input,
+                              cudf::table_view const& right_input,
+                              cudf::null_equality compare_nulls) {
+      auto smj = cudf::sort_merge_join(right_input, cudf::sorted::NO, compare_nulls);
+      return smj.inner_join(left_input, cudf::sorted::NO);
+    };
     BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, sort_merge_join, multiplicity);
   }
 }
