@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -89,11 +89,13 @@ def test_cudf_to_datetime(data, dayfirst):
 
     expected = pd.to_datetime(pd_data, dayfirst=dayfirst)
     actual = cudf.to_datetime(gd_data, dayfirst=dayfirst)
-
     if isinstance(expected, pd.Series):
         assert_eq(actual, expected, check_dtype=False)
     else:
-        assert_eq(actual, expected, check_exact=False)
+        if expected is pd.NaT:
+            assert actual is expected
+        else:
+            assert_eq(actual, expected, check_exact=False)
 
 
 @pytest.mark.parametrize(

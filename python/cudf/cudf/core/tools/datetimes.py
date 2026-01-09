@@ -177,7 +177,7 @@ def to_datetime(
     #     unit = "us"
 
     if arg is None:
-        return None
+        return pd.NaT
 
     if exact is False:
         raise NotImplementedError("exact support is not yet implemented")
@@ -294,23 +294,59 @@ def to_datetime(
             )
             return Series._from_column(col, index=arg.index)
         else:
-            col = _process_col(
-                col=as_column(arg),
-                unit=unit,
-                dayfirst=dayfirst,
-                infer_datetime_format=infer_datetime_format,
-                format=format,
-                utc=utc,
-            )
+            # import pdb;pdb.set_trace()
+
+            # col = _process_col(
+            #     col=as_column(arg),
+            #     unit=unit,
+            #     dayfirst=dayfirst,
+            #     infer_datetime_format=infer_datetime_format,
+            #     format=format,
+            #     utc=utc,
+            # )
             if isinstance(arg, (Index, pd.Index)):
+                col = _process_col(
+                    col=as_column(arg),
+                    unit=unit,
+                    dayfirst=dayfirst,
+                    infer_datetime_format=infer_datetime_format,
+                    format=format,
+                    utc=utc,
+                )
                 return DatetimeIndex._from_column(col, name=arg.name)
             elif isinstance(arg, (Series, pd.Series)):
+                col = _process_col(
+                    col=as_column(arg),
+                    unit=unit,
+                    dayfirst=dayfirst,
+                    infer_datetime_format=infer_datetime_format,
+                    format=format,
+                    utc=utc,
+                )
                 return Series._from_column(
                     col, name=arg.name, index=ensure_index(arg.index)
                 )
             elif is_scalar(arg):
+                if unit is None:
+                    unit = "ns"
+                col = _process_col(
+                    col=as_column(arg),
+                    unit=unit,
+                    dayfirst=dayfirst,
+                    infer_datetime_format=infer_datetime_format,
+                    format=format,
+                    utc=utc,
+                )
                 return col.element_indexing(0)
             else:
+                col = _process_col(
+                    col=as_column(arg),
+                    unit=unit,
+                    dayfirst=dayfirst,
+                    infer_datetime_format=infer_datetime_format,
+                    format=format,
+                    utc=utc,
+                )
                 return Index._from_column(col)
     except Exception as e:
         if errors == "raise":
@@ -372,7 +408,19 @@ def _process_col(
                 dtype=np.dtype(_unit_dtype_map[unit]), format=format
             )
         else:
-            col = col.astype(dtype=np.dtype(_unit_dtype_map[unit]))
+            # import pdb;pdb.set_trace()
+            if len(col) == 0 and unit is None:
+                unit = "s"
+            elif unit is None:
+                # if (col / 1_000_000_000 > 1).any():
+                #     unit = "ns"
+                unit = "ns"
+
+            col = col.astype(
+                dtype=np.dtype(
+                    _unit_dtype_map.get(unit, _unit_dtype_map["us"])
+                )
+            )
 
     elif col.dtype.kind == "O":
         if unit not in (None, "ns") or col.null_count == len(col):
