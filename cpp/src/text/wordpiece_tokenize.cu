@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -238,7 +238,7 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
   // get the indices of all the ## prefixed entries
   auto sub_map_indices = rmm::device_uvector<cudf::size_type>(vocabulary->size(), stream);
   auto const end =
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
                     zero_itr,
                     thrust::counting_iterator<cudf::size_type>(sub_map_indices.size()),
                     sub_map_indices.begin(),
@@ -790,10 +790,10 @@ rmm::device_uvector<cudf::size_type> compute_some_tokens(
       *d_strings, d_input_chars, max_word_offsets.data(), start_words.data(), word_sizes.data());
 
   // remove the non-words
-  auto const end =
-    thrust::remove(rmm::exec_policy(stream), start_words.begin(), start_words.end(), no_word64);
+  auto const end = thrust::remove(
+    rmm::exec_policy_nosync(stream), start_words.begin(), start_words.end(), no_word64);
   auto const check =
-    thrust::remove(rmm::exec_policy(stream), word_sizes.begin(), word_sizes.end(), no_word);
+    thrust::remove(rmm::exec_policy_nosync(stream), word_sizes.begin(), word_sizes.end(), no_word);
 
   auto const total_words = static_cast<int64_t>(cuda::std::distance(start_words.begin(), end));
   // this should only trigger if there is a bug in the code above
