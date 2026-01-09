@@ -193,7 +193,7 @@ files:
       - depends_on_cupy
       - depends_on_libcudf
       - depends_on_numba_cuda
-#      - depends_on_pylibcudf_pyarrow
+      - depends_on_pylibcudf_pyarrow
       - depends_on_rmm
   py_test_cudf:
     output: pyproject
@@ -1006,29 +1006,29 @@ dependencies:
             packages:
               - pylibcudf-cu13==26.4.*,>=0.0.0a0
           - {matrix: null, packages: [*pylibcudf_unsuffixed]}
-  #depends_on_pylibcudf_pyarrow:
-  #  common:
-  #    - output_types: conda
-  #      packages:
-  #        - &plc_unsuffixed pylibcudf==26.4.*,>=0.0.0a0
-  #    - output_types: requirements
-  #      packages:
-  #        # pip recognizes the index as a global option for the requirements.txt file
-  #        - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
-  #  specific:
-  #    - output_types: [requirements, pyproject]
-  #      matrices:
-  #        - matrix:
-  #            cuda: "12.*"
-  #            cuda_suffixed: "true"
-  #          packages:
-  #            - pylibcudf-cu12[pyarrow]==26.4.*,>=0.0.0a0
-  #        - matrix:
-  #            cuda: "13.*"
-  #            cuda_suffixed: "true"
-  #          packages:
-  #            - pylibcudf-cu13[pyarrow]==26.4.*,>=0.0.0a0
-  #        - {matrix: null, packages: [*plc_unsuffixed]}
+  depends_on_pylibcudf_pyarrow:
+    common:
+      - output_types: conda
+        packages:
+          - &plc_unsuffixed pylibcudf==26.4.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - pylibcudf-cu12[pyarrow]==26.4.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - pylibcudf-cu13[pyarrow]==26.4.*,>=0.0.0a0
+          - {matrix: null, packages: [*plc_unsuffixed]}
   depends_on_cudf:
     common:
       - output_types: conda
