@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf.core.column import ColumnBase
+from cudf.core.column.utils import access_columns
 from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
 if TYPE_CHECKING:
@@ -47,13 +48,7 @@ def binaryop(
     op = op.upper()
     op = _op_map.get(op, op)
 
-    # Access context for column buffers
-    with ExitStack() as stack:
-        if isinstance(lhs, ColumnBase):
-            stack.enter_context(lhs.access(mode="read", scope="internal"))
-        if isinstance(rhs, ColumnBase):
-            stack.enter_context(rhs.access(mode="read", scope="internal"))
-
+    with access_columns(lhs, rhs, mode="read", scope="internal") as (lhs, rhs):
         return ColumnBase.from_pylibcudf(
             plc.binaryop.binary_operation(
                 lhs.plc_column if isinstance(lhs, ColumnBase) else lhs,

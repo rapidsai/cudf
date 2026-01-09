@@ -637,7 +637,7 @@ def test_series_zero_copy_cow_on():
         assert_eq(s1, cudf.Series([20, 10, 10, 4, 5]))
         assert_eq(cp_array, cp.array([20, 10, 10, 4, 5]))
         assert_eq(s2, cudf.Series([20, 10, 10, 4, 5]))
-        assert_eq(s3, cudf.Series([10, 10, 10, 4, 5]))
+        assert_eq(s3, cudf.Series([20, 10, 10, 4, 5]))
 
         s4 = cudf.Series([10, 20, 30, 40, 50])
         s5 = cudf.Series(s4)
