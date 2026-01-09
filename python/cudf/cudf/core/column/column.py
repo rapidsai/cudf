@@ -306,6 +306,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         "min",
     }
     _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
+    plc_column: plc.Column
+    _dtype: DtypeObj
+    _children: tuple[ColumnBase, ...]
+    _distinct_count: dict[bool, int]
+    _exposed_buffers: set[Buffer]
 
     def __init__(self, *args, **kwargs) -> None:
         raise ValueError(
