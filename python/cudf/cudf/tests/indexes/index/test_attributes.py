@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import re
@@ -148,12 +148,7 @@ def test_index_null_values():
     "data",
     [
         [1, 2, 3],
-        pytest.param(
-            [np.nan, 10, 15, 16],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/49818"
-            ),
-        ),
+        [np.nan, 10, 15, 16],
         range(0, 10),
         [np.nan, None, 10, 20],
         ["ab", "zx", "pq"],

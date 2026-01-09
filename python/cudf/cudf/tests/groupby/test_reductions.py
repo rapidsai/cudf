@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -444,15 +444,6 @@ def test_groupby_index_type():
 )
 @pytest.mark.parametrize("q", [0.25, 0.4, 0.5, 0.7, 1])
 def test_groupby_quantile(request, interpolation, q):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(q == 0.5 and interpolation == "nearest"),
-            reason=(
-                "Pandas NaN Rounding will fail nearest interpolation at 0.5"
-            ),
-        )
-    )
-
     raw_data = {
         "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
         "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],
