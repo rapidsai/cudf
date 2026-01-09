@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "thrust/count.h"
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -116,9 +115,9 @@ struct left_join_unequal_nulls {
   }
 };
 
-template <typename InputIt>
-cudf::detail::device_scalar<size_type> reduce(InputIt input,
-                                              cudf::detail::device_scalar<size_type>&& output,
+template <typename InputIt, typename ScalarType>
+cudf::detail::device_scalar<ScalarType> reduce(InputIt input,
+                                              cudf::detail::device_scalar<ScalarType>&& output,
                                               size_type num_items,
                                               rmm::cuda_stream_view stream)
 {
@@ -130,12 +129,12 @@ cudf::detail::device_scalar<size_type> reduce(InputIt input,
   return output;
 }
 
-template <typename InputIt, typename StencilIt, typename OutputIt, typename SelectOp>
-cudf::detail::device_scalar<size_type> flagged_if(
+template <typename InputIt, typename StencilIt, typename OutputIt, typename SelectOp, typename ScalarType>
+cudf::detail::device_scalar<ScalarType> flagged_if(
   InputIt input,
   StencilIt stencil,
   OutputIt output,
-  cudf::detail::device_scalar<size_type>&& num_selected_out,
+  cudf::detail::device_scalar<ScalarType>&& num_selected_out,
   size_type num_items,
   SelectOp lambda,
   rmm::cuda_stream_view stream)
@@ -385,7 +384,7 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
   cub::DeviceTransform::Transform(smaller_indices.begin(),
                                   smaller_indices.begin(),
                                   smaller_indices.size(),
-                                  mapping_functor<SmallerIterator>{sorted_smaller_order_begin},
+                                  index_mapping<SmallerIterator>{sorted_smaller_order_begin},
                                   stream.value());
   stream.synchronize();
 
@@ -434,17 +433,26 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
                              cuda::std::identity{},
                              stream);
 
-  // Fill in unmatched entries (left-join-only rows)
-  // These rows exist in the larger table but have no matches in the smaller table
-  reduce(match_counts->begin(), std::move(count_matches), larger_numrows, stream);
-  auto const inner_join_matches = count_matches.value(stream);
-  //auto const inner_join_matches = thrust::reduce(rmm::exec_policy_nosync(stream), match_counts->begin(), match_counts->end());
-  auto const left_join_only_matches = larger_numrows - h_count_matches;
+  cudf::detail::device_scalar<int64_t> total_matches(stream, temp_mr);
+  auto match_offsets =
+    cudf::detail::make_zeroed_device_uvector_async<int64_t>(match_counts->size(), stream, temp_mr);
+  auto output_itr   = cudf::detail::make_sizes_to_offsets_iterator(
+    match_offsets.begin(), match_offsets.end(), total_matches.data());
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                         match_counts->begin(),
+                         match_counts->end(),
+                         output_itr,
+                         int64_t{0});
+  auto const inner_join_matches = total_matches.value(stream);
+  auto const left_join_only_matches = static_cast<int64_t>(larger_numrows - h_count_matches);
   auto larger_indices               = cudf::detail::make_zeroed_device_uvector_async<size_type>(
     inner_join_matches + left_join_only_matches, stream, mr);
   rmm::device_uvector<size_type> smaller_indices(
     inner_join_matches + left_join_only_matches, stream, mr);
 
+
+  // Fill in unmatched entries (left-join-only rows)
+  // These rows exist in the larger table but have no matches in the smaller table
   count_matches.set_value_async(left_join_only_matches, stream);
   count_matches = flagged_if(
     cuda::counting_iterator(0),
@@ -454,47 +462,9 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
     larger_numrows,
     [] __device__(auto c) -> bool { return c == 0; },
     stream);
-  cub::DeviceTransform::Fill(smaller_indices.begin(), left_join_only_matches, JoinNoMatch(), stream.value());
-  /*
-  thrust::fill(rmm::exec_policy_nosync(stream),
-               smaller_indices.begin(),
-               smaller_indices.begin() + left_join_only_matches,
-               JoinNoMatch);
-  */
+  cub::DeviceTransform::Fill(smaller_indices.begin(), left_join_only_matches, JoinNoMatch, stream.value());
 
   // Fill in matched entries (same algorithm as inner join)
-  // Convert match counts to offsets for scatter operation
-  /*
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
-                         match_counts->begin(),
-                         match_counts->end(),
-                         match_counts->begin());
-  */
-  
-  auto match_offsets =
-    cudf::detail::make_zeroed_device_uvector_async<int64_t>(match_counts->size(), stream, temp_mr);
-  auto output_itr   = cudf::detail::make_sizes_to_offsets_iterator(
-    match_offsets.begin(), match_offsets.end(), count_matches.data());
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
-                         match_counts->begin(),
-                         match_counts->end(),
-                         output_itr,
-                         int64_t{0});
-
-  // Populate larger indices for matched rows
-  /*
-  thrust::scatter(rmm::exec_policy_nosync(stream),
-                  nonzero_matches.begin(),
-                  nonzero_matches.end(),
-                  thrust::permutation_iterator(match_counts->begin(), nonzero_matches.begin()),
-                  larger_indices.begin() + left_join_only_matches);
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                         larger_indices.begin() + left_join_only_matches,
-                         larger_indices.end(),
-                         larger_indices.begin() + left_join_only_matches,
-                         cuda::maximum<size_type>{});
-  */
-
   {
     auto const input_iterators = cuda::transform_iterator{
       nonzero_matches.begin(),
@@ -503,7 +473,7 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
     auto const output_iterators = cuda::transform_iterator{
       cuda::permutation_iterator{match_offsets.begin(), nonzero_matches.begin()},
       cuda::proclaim_return_type<rmm::device_uvector<size_type>::iterator>(
-        [larger_indices = larger_indices.begin()] __device__(auto val) {
+        [larger_indices = larger_indices.begin() + left_join_only_matches] __device__(auto val) {
           return larger_indices + val;
         })};
     auto const sizes = cuda::permutation_iterator{match_counts->begin(), nonzero_matches.begin()};
@@ -514,7 +484,7 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
                              input_iterators,
                              output_iterators,
                              sizes,
-                             count_matches,
+                             h_count_matches,
                              stream.value());
     rmm::device_buffer temp_storage(temp_storage_bytes, stream);
     cub::DeviceCopy::Batched(temp_storage.data(),
@@ -522,7 +492,7 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
                              input_iterators,
                              output_iterators,
                              sizes,
-                             count_matches,
+                             h_count_matches,
                              stream.value());
   }
 
@@ -582,55 +552,8 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
   cub::DeviceTransform::Transform(smaller_indices.begin() + left_join_only_matches,
                                   smaller_indices.begin() + left_join_only_matches,
                                   inner_join_matches,
-                                  mapping_functor<SmallerIterator>{sorted_smaller_order_begin},
+                                  index_mapping<SmallerIterator>{sorted_smaller_order_begin},
                                   stream.value());
-
-  /*
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                             smaller_indices.begin() + left_join_only_matches,
-                             smaller_indices.end(),
-                             1);
-  auto const comparator = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
-
-  auto smaller_tabulate_it = thrust::tabulate_output_iterator(
-    [nonzero_matches = nonzero_matches.begin(),
-     match_counts    = match_counts->begin(),
-     smaller_indices = smaller_indices.begin() + left_join_only_matches] __device__(auto idx,
-                                                                                    auto lb) {
-      auto const lhs_idx   = nonzero_matches[idx];
-      auto const pos       = match_counts[lhs_idx];
-      smaller_indices[pos] = lb;
-    });
-  auto smaller_it =
-    thrust::transform_iterator(sorted_smaller_order_begin,
-                               cuda::proclaim_return_type<detail::row::lhs_index_type>(
-                                 [] __device__(size_type idx) -> detail::row::lhs_index_type {
-                                   return static_cast<detail::row::lhs_index_type>(idx);
-                                 }));
-  auto larger_it =
-    thrust::transform_iterator(nonzero_matches.begin(),
-                               cuda::proclaim_return_type<detail::row::rhs_index_type>(
-                                 [] __device__(size_type idx) -> detail::row::rhs_index_type {
-                                   return static_cast<detail::row::rhs_index_type>(idx);
-                                 }));
-  thrust::lower_bound(rmm::exec_policy_nosync(stream),
-                      smaller_it,
-                      smaller_it + smaller_numrows,
-                      larger_it,
-                      larger_it + nonzero_matches.size(),
-                      smaller_tabulate_it,
-                      comparator);
-  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                larger_indices.begin() + left_join_only_matches,
-                                larger_indices.end(),
-                                smaller_indices.begin() + left_join_only_matches,
-                                smaller_indices.begin() + left_join_only_matches);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    smaller_indices.begin() + left_join_only_matches,
-                    smaller_indices.end(),
-                    smaller_indices.begin() + left_join_only_matches,
-                    index_mapping<SmallerIterator>{sorted_smaller_order_begin});
-                             */
 
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
@@ -808,7 +731,7 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
   auto temp_mr                  = cudf::get_current_device_resource_ref();
   auto const table_mapping_size = _table_view.num_rows() - _num_nulls.value();
   rmm::device_uvector<size_type> table_mapping(table_mapping_size, stream, temp_mr);
-  cudf::detail::device_scalar<size_type> d_table_mapping_size(table_mapping_size, stream, temp_mr);
+  cudf::detail::device_scalar<int64_t> d_table_mapping_size(table_mapping_size, stream, temp_mr);
   flagged_if(cuda::counting_iterator(0),
              cuda::counting_iterator(0),
              table_mapping.begin(),
@@ -831,7 +754,7 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
       cub::DeviceTransform::Transform(larger_indices.begin(),
                                       larger_indices.begin(),
                                       larger_indices.size(),
-                                      mapping_functor<device_span<size_type>>{left_mapping},
+                                      index_mapping<device_span<size_type>>{left_mapping},
                                       stream.value());
     }
     if (has_nested_nulls(preprocessed_right._table_view)) {
@@ -840,7 +763,7 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
       cub::DeviceTransform::Transform(smaller_indices.begin(),
                                       smaller_indices.begin(),
                                       smaller_indices.size(),
-                                      mapping_functor<device_span<size_type>>{right_mapping},
+                                      index_mapping<device_span<size_type>>{right_mapping},
                                       stream.value());
     }
   }
@@ -1013,7 +936,7 @@ sort_merge_join::left_join(table_view const& left,
       // Append filtered null rows with JoinNoMatch for right side
       auto const validity_mask =
         static_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
-      cudf::detail::device_scalar<size_type> d_num_filtered_nulls(
+      cudf::detail::device_scalar<int64_t> d_num_filtered_nulls(
         num_filtered_nulls, stream, temp_mr);
       flagged_if(cuda::counting_iterator(0),
                  cuda::counting_iterator(0),
