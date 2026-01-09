@@ -157,9 +157,10 @@ void nvbench_join_heuristics(nvbench::state& state,
 
       // Get max duplicate count via max reduction on count column
       auto const& counts_column = results[0].results[0];
-      [[maybe_unused]] auto max_count = cudf::reduce(*counts_column,
-                                          *cudf::make_max_aggregation<cudf::reduce_aggregation>(),
-                                          counts_column->type());
+      [[maybe_unused]] auto max_count =
+        cudf::reduce(*counts_column,
+                     *cudf::make_max_aggregation<cudf::reduce_aggregation>(),
+                     counts_column->type());
     } else if constexpr (Method == heuristic_method::KEY_REMAPPING) {
       // Approach 3: key_remapping with metrics
       cudf::key_remapping remap(
