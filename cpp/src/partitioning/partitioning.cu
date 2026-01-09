@@ -782,7 +782,7 @@ std::vector<std::unique_ptr<column>> create_partition_indices(partition_data& pd
     partition_offsets, stream, cudf::get_current_device_resource_ref());
 
   // Scatter row indices to their partition positions
-  thrust::for_each(rmm::exec_policy(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream),
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(num_rows),
                    [row_partition_numbers = pdata.row_partition_numbers.data(),
