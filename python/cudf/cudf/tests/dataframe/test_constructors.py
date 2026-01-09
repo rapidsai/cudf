@@ -239,7 +239,6 @@ def test_from_records(numeric_types_as_str):
     assert_eq(df, gdf)
 
 
-@pytest.mark.parametrize("columns", [None, ["first", "second", "third"]])
 @pytest.mark.parametrize(
     "index",
     [
@@ -252,15 +251,28 @@ def test_from_records(numeric_types_as_str):
         ["abc", "xyz"],
     ],
 )
-def test_from_records_index(columns, index):
+def test_from_records_index(index):
     rec_ary = np.array(
         [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
         dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
     )
-    gdf = cudf.DataFrame.from_records(rec_ary, columns=columns, index=index)
-    df = pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    gdf = cudf.DataFrame.from_records(rec_ary, index=index)
+    df = pd.DataFrame.from_records(rec_ary, index=index)
     assert isinstance(gdf, cudf.DataFrame)
     assert_eq(df, gdf)
+
+
+def test_from_records_index_invalid_columns_raises():
+    rec_ary = np.array(
+        [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
+        dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
+    )
+    index = None
+    columns = ["first", "second", "third"]
+    with pytest.raises(ValueError):
+        cudf.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    with pytest.raises(ValueError):
+        pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
 
 
 def test_dataframe_construction_from_cp_arrays():
