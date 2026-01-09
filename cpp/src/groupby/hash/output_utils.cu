@@ -24,6 +24,7 @@
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -194,8 +195,6 @@ void finalize_output(table_view const& values,
                      cudf::detail::result_cache* cache,
                      rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(agg_results->num_columns() > 0, "Invalid aggregation results");
-
   auto result_cols       = agg_results->release();
   auto const null_counts = [&]() -> std::vector<size_type> {
     auto const has_null_masks = std::any_of(
@@ -204,10 +203,9 @@ void finalize_output(table_view const& values,
 
     auto null_masks =
       cudf::detail::make_pinned_vector<bitmask_type const*>(aggregations.size(), stream);
-    for (size_t i = 0; i < aggregations.size(); i++) {
-      auto const& result = result_cols[i];
-      null_masks[i]      = result->view().null_mask();
-    }
+    std::ranges::transform(result_cols, null_masks.begin(), [](auto const& result) {
+      return result->view().null_mask();
+    });
     return cudf::batch_null_count(null_masks, 0, result_cols.front()->size(), stream);
   }();
 
