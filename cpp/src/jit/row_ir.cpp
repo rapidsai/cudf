@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,11 @@
 #include <algorithm>
 #include <format>
 #include <iostream>
+#include <iterator>
 #include <numeric>
+#include <span>
+#include <stdexcept>
+#include <utility>
 
 namespace cudf {
 
