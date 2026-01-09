@@ -32,7 +32,6 @@
 #include <cub/device/device_scan.cuh>
 #include <cub/device/device_select.cuh>
 #include <cub/device/device_transform.cuh>
-
 #include <cuda/functional>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
@@ -117,28 +116,24 @@ struct left_join_unequal_nulls {
 
 template <typename InputIt, typename ScalarType>
 cudf::detail::device_scalar<ScalarType> reduce(InputIt input,
-                                              cudf::detail::device_scalar<ScalarType>&& output,
-                                              size_type num_items,
-                                              rmm::cuda_stream_view stream)
+                                               cudf::detail::device_scalar<ScalarType>&& output,
+                                               size_type num_items,
+                                               rmm::cuda_stream_view stream)
 {
   size_t temp_storage_bytes = 0;
-  cub::DeviceReduce::Sum(nullptr,
-                               temp_storage_bytes,
-                               input,
-                               output.data(),
-                               num_items,
-                               stream.value());
+  cub::DeviceReduce::Sum(
+    nullptr, temp_storage_bytes, input, output.data(), num_items, stream.value());
   rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-  cub::DeviceReduce::Sum(nullptr,
-                               temp_storage_bytes,
-                               input,
-                               output.data(),
-                               num_items,
-                               stream.value());
+  cub::DeviceReduce::Sum(
+    nullptr, temp_storage_bytes, input, output.data(), num_items, stream.value());
   return output;
 }
 
-template <typename InputIt, typename StencilIt, typename OutputIt, typename SelectOp, typename ScalarType>
+template <typename InputIt,
+          typename StencilIt,
+          typename OutputIt,
+          typename SelectOp,
+          typename ScalarType>
 cudf::detail::device_scalar<ScalarType> flagged_if(
   InputIt input,
   StencilIt stencil,
@@ -336,7 +331,7 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
 
   // populate smaller indices
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
-  
+
   // Use cub API to handle large arrays (> INT32_MAX).
   cub::DeviceTransform::Fill(smaller_indices.begin(), smaller_indices.size(), 1, stream.value());
 
@@ -445,20 +440,19 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
   cudf::detail::device_scalar<int64_t> total_matches(stream, temp_mr);
   auto match_offsets =
     cudf::detail::make_zeroed_device_uvector_async<int64_t>(match_counts->size(), stream, temp_mr);
-  auto output_itr   = cudf::detail::make_sizes_to_offsets_iterator(
+  auto output_itr = cudf::detail::make_sizes_to_offsets_iterator(
     match_offsets.begin(), match_offsets.end(), total_matches.data());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          match_counts->begin(),
                          match_counts->end(),
                          output_itr,
                          int64_t{0});
-  auto const inner_join_matches = total_matches.value(stream);
+  auto const inner_join_matches     = total_matches.value(stream);
   auto const left_join_only_matches = static_cast<int64_t>(larger_numrows - h_count_matches);
   auto larger_indices               = cudf::detail::make_zeroed_device_uvector_async<size_type>(
     inner_join_matches + left_join_only_matches, stream, mr);
   rmm::device_uvector<size_type> smaller_indices(
     inner_join_matches + left_join_only_matches, stream, mr);
-
 
   // Fill in unmatched entries (left-join-only rows)
   // These rows exist in the larger table but have no matches in the smaller table
@@ -471,7 +465,8 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
     larger_numrows,
     [] __device__(auto c) -> bool { return c == 0; },
     stream);
-  cub::DeviceTransform::Fill(smaller_indices.begin(), left_join_only_matches, JoinNoMatch, stream.value());
+  cub::DeviceTransform::Fill(
+    smaller_indices.begin(), left_join_only_matches, JoinNoMatch, stream.value());
 
   // Fill in matched entries (same algorithm as inner join)
   {
@@ -506,14 +501,16 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
   }
 
   // Populate smaller indices for matched rows using binary search
-  cub::DeviceTransform::Fill(smaller_indices.begin() + left_join_only_matches, inner_join_matches, 1, stream.value());
+  cub::DeviceTransform::Fill(
+    smaller_indices.begin() + left_join_only_matches, inner_join_matches, 1, stream.value());
 
   {
     auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
     auto smaller_tabulate_it = thrust::tabulate_output_iterator(
       [nonzero_matches = nonzero_matches.begin(),
        match_offsets   = match_offsets.begin(),
-       smaller_indices = smaller_indices.begin() + left_join_only_matches] __device__(auto idx, auto lb) {
+       smaller_indices = smaller_indices.begin() + left_join_only_matches] __device__(auto idx,
+                                                                                      auto lb) {
         auto const lhs_idx   = nonzero_matches[idx];
         auto const pos       = match_offsets[lhs_idx];
         smaller_indices[pos] = lb;
