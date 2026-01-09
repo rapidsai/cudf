@@ -504,7 +504,6 @@ host_vector<T> make_pinned_vector_async(device_span<T const> source_data,
  * @note This function does not synchronize `stream` after the copy.
  *
  * @tparam Container The type of the container to copy from
- * @tparam T The type of the data to copy
  * @param c The input device container from which to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to a pinned host vector
@@ -543,7 +542,6 @@ host_vector<T> make_pinned_vector(device_span<T const> source_data, rmm::cuda_st
  * @note This function synchronizes `stream` after the copy.
  *
  * @tparam Container The type of the container to copy from
- * @tparam T The type of the data to copy
  * @param c The input device container from which to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to a pinned host vector
