@@ -93,7 +93,7 @@ struct list_nonnull_filter {
  * Maps table row indices to boolean values based on the validity mask.
  */
 struct is_row_valid {
-  bitmask_type const* const _validity_mask;  ///< Validity mask for the table
+  bitmask_type const* _validity_mask;  ///< Validity mask for the table
 
   __device__ auto operator()(size_type idx) const noexcept
   {
@@ -121,11 +121,20 @@ cudf::detail::device_scalar<ScalarType> reduce(InputIt input,
                                               size_type num_items,
                                               rmm::cuda_stream_view stream)
 {
-  auto env = cuda::std::execution::env{
-    cuda::std::execution::prop{cuda::get_stream_t{}, cuda::stream_ref{stream.value()}},
-    cuda::std::execution::prop{cuda::mr::get_memory_resource_t{},
-                               cudf::get_current_device_resource_ref()}};
-  CUDF_CUDA_TRY(cub::DeviceReduce::Sum(input, output.data(), num_items, env));
+  size_t temp_storage_bytes = 0;
+  cub::DeviceReduce::Sum(nullptr,
+                               temp_storage_bytes,
+                               input,
+                               output.data(),
+                               num_items,
+                               stream.value());
+  rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+  cub::DeviceReduce::Sum(nullptr,
+                               temp_storage_bytes,
+                               input,
+                               output.data(),
+                               num_items,
+                               stream.value());
   return output;
 }
 
