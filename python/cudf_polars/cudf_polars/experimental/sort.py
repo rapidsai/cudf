@@ -24,7 +24,6 @@ from cudf_polars.experimental.shuffle import _simple_shuffle_graph
 from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 from cudf_polars.utils.config import ShuffleMethod
 from cudf_polars.utils.cuda_stream import (
-    deferred_dealloc_stream,
     get_dask_cuda_stream,
     get_joined_cuda_stream,
 )
@@ -325,7 +324,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
 
         by = options["by"]
 
-        with deferred_dealloc_stream(context, [df, sort_boundaries]) as stream:
+        with context.stream_ordered_after(df, sort_boundaries) as stream:
             splits = find_sort_splits(
                 df.select(by).table,
                 sort_boundaries.table,

@@ -13,6 +13,7 @@ can be considered as functions:
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import json
 import random
@@ -45,14 +46,15 @@ from cudf_polars.dsl.utils.windows import (
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.config import CUDAStreamPolicy
 from cudf_polars.utils.cuda_stream import (
-    deferred_dealloc_stream,
     get_cuda_stream,
+    get_joined_cuda_stream,
     get_new_cuda_stream,
+    join_cuda_streams,
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_134
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable, Iterable, Sequence
+    from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
     from typing import Literal
 
     from typing_extensions import Self
@@ -123,6 +125,50 @@ class IRExecutionContext:
                 raise ValueError(
                     f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
                 )
+
+    @contextlib.contextmanager
+    def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:
+        """
+        Get a joined CUDA stream with safe stream ordering for deallocation of inputs.
+
+        Parameters
+        ----------
+        dfs
+            The dataframes being provided to stream-ordered operations.
+
+        Yields
+        ------
+        A CUDA stream that is downstream of the given dataframes.
+
+        Notes
+        -----
+        This context manager provides two useful guarantees when working with
+        objects holding references to stream-ordered objects:
+
+        1. The stream yield upon entering the context manager is *downstream* of
+           all the input dataframes.  This ensures that you can safely perform
+           stream-ordered operations on any input using the yielded stream.
+        2. The stream-ordered CUDA deallocation of the inputs happens *after* the
+           context manager exits. This ensures that all stream-ordered operations
+           submitted inside the context manager can complete before the memory
+           referenced by the inputs is deallocated.
+
+        Note that this does (deliberately) disconnect the dropping of the Python
+        object (by its refcount dropping to 0) from the actual stream-ordered
+        deallocation of the CUDA memory. This is precisely what we need to ensure
+        that the inputs are valid long enough for the stream-ordered operations to
+        complete.
+        """
+        result_stream = get_joined_cuda_stream(
+            self.get_cuda_stream, upstreams=[df.stream for df in dfs]
+        )
+
+        yield result_stream
+
+        # ensure that the inputs are downstream of result_stream (so that deallocation happens after the result is ready)
+        join_cuda_streams(
+            downstreams=[df.stream for df in dfs], upstreams=[result_stream]
+        )
 
 
 _BINOPS = {
@@ -2085,7 +2131,7 @@ class ConditionalJoin(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        with deferred_dealloc_stream(context, [left, right]) as stream:
+        with context.stream_ordered_after(left, right) as stream:
             left_casts, right_casts = _collect_decimal_binop_casts(
                 predicate_wrapper.predicate
             )
@@ -2377,10 +2423,7 @@ class Join(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        # Save the original streams before any reassignments, since we need
-        # them for the final join_cuda_streams call to ensure proper stream
-        # ordering for deallocations.
-        with deferred_dealloc_stream(context, [left, right]) as stream:
+        with context.stream_ordered_after(left, right) as stream:
             how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
             if how == "Cross":
                 # Separate implementation, since cross_join returns the
@@ -2878,7 +2921,7 @@ class MergeSorted(IR):
         cls, key: str, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        with deferred_dealloc_stream(context, dfs) as stream:
+        with context.stream_ordered_after(*dfs) as stream:
             left, right = dfs
             right = right.discard_columns(
                 right.column_names_set - left.column_names_set
@@ -3122,7 +3165,7 @@ class Union(IR):
         cls, zlice: Zlice | None, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        with deferred_dealloc_stream(context, dfs) as stream:
+        with context.stream_ordered_after(*dfs) as stream:
             # TODO: only evaluate what we need if we have a slice?
             return DataFrame.from_table(
                 plc.concatenate.concatenate([df.table for df in dfs], stream=stream),
@@ -3192,7 +3235,7 @@ class HConcat(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        with deferred_dealloc_stream(context, dfs) as stream:
+        with context.stream_ordered_after(*dfs) as stream:
             # Special should_broadcast case.
             # Used to recombine decomposed expressions
             if should_broadcast:
