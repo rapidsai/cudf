@@ -88,13 +88,6 @@ def single_column_df_data(df: cudf.DataFrame) -> SpillableBuffer:
     return ret
 
 
-def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
-    """Access `.data` of the column of a standard dataframe"""
-    ret = df._data._data["a"].data
-    assert isinstance(ret, SpillableBuffer)
-    return ret
-
-
 # Get number of bytes of the column of a standard dataframe
 gen_df_data_nbytes = single_column_df()._data._data["a"].data.nbytes
 
@@ -208,20 +201,20 @@ def test_spillable_df_groupby(manager: SpillManager):
     gb = df.groupby("a")
 
     # Before using context manager, no spill locks
-    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
+    assert len(single_column_df_data(df).owner._spill_locks) == 0
 
     with gb._groupby:
-        assert len(single_column_df_base_data(df).owner._spill_locks) == 1
+        assert len(single_column_df_data(df).owner._spill_locks) == 1
         assert not single_column_df_data(df).spillable
 
-    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
+    assert len(single_column_df_data(df).owner._spill_locks) == 0
     assert single_column_df_data(df).spillable
 
     # Operations should work correctly
     result = gb.sum()  # noqa: F841
 
     # After operation completes, no persistent locks
-    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
+    assert len(single_column_df_data(df).owner._spill_locks) == 0
 
 
 def test_spilling_buffer(manager: SpillManager):
