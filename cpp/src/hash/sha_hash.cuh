@@ -119,7 +119,8 @@ struct HashBase : public crtp<Hasher> {
       this->underlying().hash_step(state);
 
       // Take buffer-sized chunks of the data and do a hash step on each chunk.
-      while (len > Hasher::message_chunk_size + copylen) {
+      // Check with equality here because the last chunk may be exactly the size of the buffer.
+      while (len >= Hasher::message_chunk_size + copylen) {
         memcpy(state.buffer, data + copylen, Hasher::message_chunk_size);
         this->underlying().hash_step(state);
         copylen += Hasher::message_chunk_size;
