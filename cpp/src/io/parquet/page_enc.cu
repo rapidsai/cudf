@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,8 +9,8 @@
 #include "page_string_utils.cuh"
 #include "parquet_gpu.cuh"
 
-#include <cudf/detail/algorithm/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -1862,6 +1862,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   // for BYTE_STREAM_SPLIT, s->cur now points to the end of the first stream.
   // need it to point to the end of the Nth stream.
   if (is_split_stream and t == 0) { s->cur += (dtype_len_out - 1) * s->page.num_valid; }
+  __syncthreads();
   finish_page_encode<block_size>(
     s, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }

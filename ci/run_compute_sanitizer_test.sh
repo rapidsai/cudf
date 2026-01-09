@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -68,7 +68,8 @@ fi
 # Run compute-sanitizer on the specified test
 compute-sanitizer \
   --tool "${TOOL_NAME}" \
-  --kernel-name-exclude kns=nvcomp \
+  --force-blocking-launches \
+  --kernel-name-exclude kns=nvcomp,kns=zstd \
   --error-exitcode=1 \
   "${TEST_EXECUTABLE}" \
   "$@"

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -53,10 +53,10 @@ from cudf.api.types import (
 )
 from cudf.core import indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
+    access_columns,
     as_column,
     column_empty,
     concat_columns,
@@ -1970,11 +1970,35 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         ignore = ignore_index or are_all_range_index
         index_names = None if ignore else tables[0]._index_names
         column_names = tables[0]._column_names
-        with acquire_spill_lock():
+        with access_columns(
+            *(
+                col
+                for table in tables
+                for col in (
+                    table._columns
+                    if ignore
+                    else itertools.chain(table.index._columns, table._columns)
+                )
+            ),
+            mode="read",
+            scope="internal",
+        ) as accessed_cols:
+            # Build mapping from original columns to accessed columns
+            col_map = {}
+            accessed_idx = 0
+            for table in tables:
+                for col in (
+                    table._columns
+                    if ignore
+                    else itertools.chain(table.index._columns, table._columns)
+                ):
+                    col_map[id(col)] = accessed_cols[accessed_idx]
+                    accessed_idx += 1
+
             plc_tables = [
                 plc.Table(
                     [
-                        c.plc_column
+                        col_map[id(c)].plc_column
                         for c in (
                             table._columns
                             if ignore
@@ -2709,9 +2733,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if lo < 0 or hi >= map_size:
                 raise ValueError("Partition map has invalid values")
 
-        with acquire_spill_lock():
+        # Materialize iterator to avoid consuming it during access context setup
+        source_columns_list = list(source_columns)
+        with access_columns(
+            *source_columns_list, map_index, mode="read", scope="internal"
+        ) as (*source_columns_list, map_index):
             plc_table, offsets = plc.partitioning.partition(
-                plc.Table([col.plc_column for col in source_columns]),
+                plc.Table([col.plc_column for col in source_columns_list]),
                 map_index.plc_column,
                 map_size,
             )
@@ -4320,17 +4348,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif any(col.dtype != source_dtype for col in source_columns):
             raise ValueError("Columns must all have the same dtype")
 
-        result_table = plc.transpose.transpose(
-            plc.table.Table(
-                [col.to_pylibcudf(mode="read") for col in source_columns]
+        with access_columns(
+            *source_columns, mode="read", scope="internal"
+        ) as source_columns:
+            result_table = plc.transpose.transpose(
+                plc.table.Table([col.plc_column for col in source_columns])
             )
-        )
-        result_columns = (
-            ColumnBase.from_pylibcudf(
-                col, data_ptr_exposed=True
-            )._with_type_metadata(source_dtype)
-            for col in result_table.columns()
-        )
+            result_columns = (
+                ColumnBase.from_pylibcudf(col)._with_type_metadata(
+                    source_dtype
+                )
+                for col in result_table.columns()
+            )
 
         # Set the old column names as the new index
         result = type(self)._from_data(
@@ -5111,9 +5140,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         else:
             cols = self._columns
 
-        with acquire_spill_lock():
+        # Materialize iterator to avoid consuming it during access context setup
+        cols_list = list(cols)
+        with access_columns(*cols_list, mode="read", scope="internal"):
             plc_table, offsets = plc.partitioning.hash_partition(
-                plc.Table([col.plc_column for col in cols]),
+                plc.Table([col.plc_column for col in cols_list]),
                 key_indices,
                 nparts,
             )
@@ -5605,63 +5636,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         out_df.attrs = deepcopy(self.attrs)
 
         return out_df
-
-    @classmethod
-    @_performance_tracking
-    def from_pandas(cls, dataframe, nan_as_null=no_default):
-        """
-        Convert from a Pandas DataFrame.
-
-        Parameters
-        ----------
-        dataframe : Pandas DataFrame object
-            A Pandas DataFrame object which has to be converted
-            to cuDF DataFrame.
-        nan_as_null : bool, Default True
-            If ``True``, converts ``np.nan`` values to ``null`` values.
-            If ``False``, leaves ``np.nan`` values as is.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> data = [[0,1], [1,2], [3,4]]
-        >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-        >>> cudf.from_pandas(pdf)
-           a  b
-        0  0  1
-        1  1  2
-        2  3  4
-        """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Use the DataFrame constructor instead.",
-            FutureWarning,
-        )
-        if nan_as_null is no_default:
-            nan_as_null = (
-                False if get_option("mode.pandas_compatible") else None
-            )
-
-        if isinstance(dataframe, pd.DataFrame):
-            data = {
-                i: as_column(col_value.array, nan_as_null=nan_as_null)
-                for i, (_, col_value) in enumerate(dataframe.items())
-            }
-            index = from_pandas(dataframe.index, nan_as_null=nan_as_null)
-            df = cls._from_data(data, index)
-            # Checks duplicate columns and sets column metadata
-            df.columns = dataframe.columns
-            df._attrs = deepcopy(dataframe.attrs)
-            return df
-        else:
-            raise TypeError(
-                f"Could not construct DataFrame from {type(dataframe)}"
-            )
 
     @classmethod
     @_performance_tracking
@@ -6224,9 +6198,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise TypeError(msg)
 
         if method == "table":
-            with acquire_spill_lock():
+            with access_columns(
+                *self._columns, mode="read", scope="internal"
+            ) as columns:
                 plc_table = plc.quantiles.quantiles(
-                    plc.Table([c.plc_column for c in self._columns]),
+                    plc.Table([c.plc_column for c in columns]),
                     qs,
                     plc.types.Interpolation[
                         (interpolation or "nearest").upper()
@@ -7519,16 +7495,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(len(unique_named_levels))
 
         # Each column name should tile itself by len(df) times
-        with acquire_spill_lock():
+        cols = [
+            as_column(unique_named_levels.get_level_values(i))
+            for i in range(unique_named_levels.nlevels)
+        ]
+        with access_columns(*cols, mode="read", scope="internal"):
             plc_table = plc.reshape.tile(
-                plc.Table(
-                    [
-                        as_column(
-                            unique_named_levels.get_level_values(i)
-                        ).plc_column
-                        for i in range(unique_named_levels.nlevels)
-                    ]
-                ),
+                plc.Table([col.plc_column for col in cols]),
                 self.shape[0],
             )
             tiled_index = [
@@ -7605,10 +7578,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
             # homogenize the dtypes of the columns
-            homogenized = (
+            homogenized = [
                 col.astype(common_type) if col is not None else all_nulls()
                 for col in columns
-            )
+            ]
             if (
                 cudf.get_option("mode.pandas_compatible")
                 and common_type == "object"
@@ -7620,7 +7593,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                             "non-object dtypes is not supported. "
                         )
 
-            with acquire_spill_lock():
+            with access_columns(  # type: ignore[assignment]
+                *homogenized, mode="read", scope="internal"
+            ) as homogenized:
                 interleaved_col = ColumnBase.from_pylibcudf(
                     plc.reshape.interleave_columns(
                         plc.Table([col.plc_column for col in homogenized])
@@ -8156,7 +8131,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise ValueError(
                 "interleave_columns does not support 'category' dtype."
             )
-        with acquire_spill_lock():
+        with access_columns(*self._columns, mode="read", scope="internal"):
             result_col = ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table([col.plc_column for col in self._columns])
@@ -8164,14 +8139,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         return self._constructor_sliced._from_column(result_col)
 
-    @acquire_spill_lock()
     def _compute_column(self, expr: str) -> ColumnBase:
         """Helper function for eval"""
-        plc_column = plc.transform.compute_column(
-            plc.Table([col.plc_column for col in self._columns]),
-            plc.expressions.to_expression(expr, self._column_names),
-        )
-        return ColumnBase.from_pylibcudf(plc_column)
+        with access_columns(*self._columns, mode="read", scope="internal"):
+            plc_column = plc.transform.compute_column(
+                plc.Table([col.plc_column for col in self._columns]),
+                plc.expressions.to_expression(expr, self._column_names),
+            )
+            return ColumnBase.from_pylibcudf(plc_column)
 
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
@@ -8400,14 +8375,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return result
 
     @_performance_tracking
-    def to_pylibcudf(self, copy: bool = False) -> tuple[plc.Table, dict]:
+    def to_pylibcudf(self) -> tuple[plc.Table, dict]:
         """
         Convert this DataFrame to a pylibcudf.Table.
-
-        Parameters
-        ----------
-        copy : bool
-            Whether or not to generate a new copy of the underlying device data
 
         Returns
         -------
@@ -8418,14 +8388,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         Notes
         -----
-        User requests to convert to pylibcudf must assume that the
-        data may be modified afterwards.
+        This is always a zero-copy operation. The result is a view of the
+        existing data. Changes to the pylibcudf data will be reflected back
+        to the cudf object and vice versa.
         """
-        if copy:
-            raise NotImplementedError("copy=True is not supported")
         metadata = {"index": self.index, "columns": self._data.to_pandas_index}
         return plc.Table(
-            [col.to_pylibcudf(mode="write") for col in self._columns]
+            [col.to_pylibcudf() for col in self._columns]
         ), metadata
 
     @classmethod
@@ -8492,8 +8461,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         plc_columns = tbl.columns()
         cudf_cols = (
-            ColumnBase.from_pylibcudf(plc_col, data_ptr_exposed=True)
-            for plc_col in plc_columns
+            ColumnBase.from_pylibcudf(plc_col) for plc_col in plc_columns
         )
         # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:
