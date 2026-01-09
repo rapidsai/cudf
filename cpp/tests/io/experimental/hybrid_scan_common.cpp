@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -74,7 +74,6 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
       return buffer;
     });
 
-  stream.synchronize_no_throw();
   return buffers;
 }
 
