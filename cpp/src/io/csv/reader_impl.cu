@@ -985,47 +985,47 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         auto const num_quoted = thrust::count(
           rmm::exec_policy_nosync(col_stream), is_quoted.begin(), is_quoted.end(), true);
         if (num_quoted == 0) {
-          // No rows were quoted, skip replacement entirely
+          // Fast path: no rows were quoted, skip replacement entirely
           out_columns[col_idx] = make_column(*buffer, nullptr, std::nullopt, col_stream);
-        } else if (num_quoted == static_cast<decltype(num_quoted)>(num_records)) {
-          // All rows were quoted, apply replacement to all
-          std::unique_ptr<column> col = cudf::make_strings_column(*buffer->_strings, col_stream);
-          out_columns[col_idx]        = cudf::strings::detail::replace(
-            col->view(), dblquotechar_scalar, quotechar_scalar, -1, col_stream, mr);
         } else {
-          // Create the replaced column (with "" -> " applied to all rows)
-          std::unique_ptr<column> replaced_col = cudf::strings::detail::replace(
+          auto replaced_all_col = cudf::strings::detail::replace(
             cudf::make_strings_column(*buffer->_strings, col_stream)->view(),
             dblquotechar_scalar,
             quotechar_scalar,
             -1,
             col_stream,
             mr);
+          if (std::cmp_equal(num_quoted, num_records)) {
+            // Fast path: all rows were quoted, apply replacement to all
+            out_columns[col_idx] = std::move(replaced_all_col);
+          } else {
+            // Need to replace only the quoted rows
+            auto const replaced_all_view =
+              cudf::column_device_view::create(replaced_all_col->view(), col_stream);
+            auto const replaced_all_iter = cudf::detail::make_optional_iterator<cudf::string_view>(
+              *replaced_all_view, cudf::nullate::DYNAMIC{replaced_all_col->nullable()});
 
-          auto const replaced_view =
-            cudf::column_device_view::create(replaced_col->view(), col_stream);
-          auto const replaced_iter = cudf::detail::make_optional_iterator<cudf::string_view>(
-            *replaced_view, cudf::nullate::DYNAMIC{replaced_col->nullable()});
+            auto const* original_pairs = buffer->_strings->data();
+            auto const original_iter   = thrust::make_transform_iterator(
+              thrust::make_counting_iterator<size_type>(0),
+              cuda::proclaim_return_type<cuda::std::optional<cudf::string_view>>(
+                [original_pairs] __device__(
+                  size_type idx) -> cuda::std::optional<cudf::string_view> {
+                  auto const& p = original_pairs[idx];
+                  return p.first != nullptr
+                             ? cuda::std::optional<cudf::string_view>{cudf::string_view{p.first,
+                                                                                      p.second}}
+                             : cuda::std::nullopt;
+                }));
 
-          auto const* original_pairs = buffer->_strings->data();
-          auto const original_iter   = thrust::make_transform_iterator(
-            thrust::make_counting_iterator<size_type>(0),
-            cuda::proclaim_return_type<cuda::std::optional<cudf::string_view>>(
-              [original_pairs] __device__(size_type idx) -> cuda::std::optional<cudf::string_view> {
-                auto const& p = original_pairs[idx];
-                return p.first != nullptr
-                           ? cuda::std::optional<cudf::string_view>{cudf::string_view{p.first,
-                                                                                    p.second}}
-                           : cuda::std::nullopt;
-              }));
-
-          out_columns[col_idx] = cudf::strings::detail::copy_if_else(
-            replaced_iter,
-            replaced_iter + num_records,
-            original_iter,
-            [is_quoted] __device__(size_type idx) { return is_quoted[idx]; },
-            col_stream,
-            mr);
+            out_columns[col_idx] = cudf::strings::detail::copy_if_else(
+              replaced_all_iter,
+              replaced_all_iter + num_records,
+              original_iter,
+              [is_quoted] __device__(size_type idx) { return is_quoted[idx]; },
+              col_stream,
+              mr);
+          }
         }
       };
 
