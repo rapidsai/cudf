@@ -258,9 +258,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
         with self.access(mode="read", scope="internal"):
-            return cast(NumericalBaseColumn, type(self).from_pylibcudf(
-                plc.round.round(self.plc_column, decimals, plc_how)
-            ))
+            return cast(
+                NumericalBaseColumn,
+                type(self).from_pylibcudf(
+                    plc.round.round(self.plc_column, decimals, plc_how)
+                ),
+            )
 
     def _scan(self, op: str) -> ColumnBase:
         return self.scan(op.replace("cum", ""), True)._with_type_metadata(

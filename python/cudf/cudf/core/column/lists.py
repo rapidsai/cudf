@@ -31,10 +31,10 @@ from cudf.utils.utils import _is_null_host_scalar
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from typing_extensions import Self
+    from typing_extensions import Self  # noqa: TC004
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, DtypeObj
-    from cudf.core.column.string import StringColumn
+    from cudf.core.column.string import StringColumn  # noqa: TC004
 
 
 class ListColumn(ColumnBase):
@@ -486,13 +486,13 @@ class ListColumn(ColumnBase):
             return cast(
                 Self,
                 type(self).from_pylibcudf(
-                plc.nvtext.minhash.minhash_ngrams(
-                self.plc_column,
-                width,
-                seed,
-                a.plc_column,
-                b.plc_column,
-                )
+                    plc.nvtext.minhash.minhash_ngrams(
+                        self.plc_column,
+                        width,
+                        seed,
+                        a.plc_column,
+                        b.plc_column,
+                    )
                 ),
             )
 
@@ -514,12 +514,12 @@ class ListColumn(ColumnBase):
             return cast(
                 Self,
                 type(self).from_pylibcudf(
-                plc.nvtext.minhash.minhash64_ngrams(
-                self.plc_column,
-                width,
-                seed,
-                a.plc_column,
-                b.plc_column,
-                )
+                    plc.nvtext.minhash.minhash64_ngrams(
+                        self.plc_column,
+                        width,
+                        seed,
+                        a.plc_column,
+                        b.plc_column,
+                    )
                 ),
             )

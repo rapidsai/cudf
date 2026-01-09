@@ -523,9 +523,7 @@ class NumericalColumn(NumericalBaseColumn):
             return cast(
                 StringColumn,
                 type(self)
-                .from_pylibcudf(
-                    conv_func(col.plc_column)
-                )
+                .from_pylibcudf(conv_func(col.plc_column))
                 ._with_type_metadata(dtype),
             )
 
@@ -995,12 +993,14 @@ class NumericalColumn(NumericalBaseColumn):
             return cast(
                 Self,
                 type(self).from_pylibcudf(
-                getattr(plc.search, "lower_bound" if right else "upper_bound")(
-                plc.Table([bin_col.plc_column]),
-                plc.Table([self.plc_column]),
-                [plc.types.Order.ASCENDING],
-                [plc.types.NullOrder.BEFORE],
-                )
+                    getattr(
+                        plc.search, "lower_bound" if right else "upper_bound"
+                    )(
+                        plc.Table([bin_col.plc_column]),
+                        plc.Table([self.plc_column]),
+                        [plc.types.Order.ASCENDING],
+                        [plc.types.NullOrder.BEFORE],
+                    )
                 ),
             )
 

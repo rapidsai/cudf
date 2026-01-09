@@ -48,7 +48,7 @@ if TYPE_CHECKING:
         ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
-    from cudf.core.column.string import StringColumn
+    from cudf.core.column.string import StringColumn  # noqa: TC004
 
 
 def _to_plc_scalar(scalar: int | Decimal, dtype: DecimalDtype) -> plc.Scalar:
@@ -165,7 +165,9 @@ class DecimalBaseColumn(NumericalBaseColumn):
                         self.plc_column,
                     )
                 )
-                return cast(StringColumn, type(self).from_pylibcudf(plc_column))
+                return cast(
+                    StringColumn, type(self).from_pylibcudf(plc_column)
+                )
         else:
             return cast(
                 cudf.core.column.StringColumn,

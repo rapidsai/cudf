@@ -46,7 +46,7 @@ if TYPE_CHECKING:
         ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
-    from cudf.core.column.string import StringColumn
+    from cudf.core.column.string import StringColumn  # noqa: TC004
 
 # nanoseconds per time_unit
 _dtype_to_format_conversion = {
@@ -511,12 +511,15 @@ class DatetimeColumn(TemporalBaseColumn):
                 plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)), 0
             )
         with self.access(mode="read", scope="internal"):
-            return cast(StringColumn, type(self).from_pylibcudf(
-                plc.strings.convert.convert_datetime.from_timestamps(
-                    self.plc_column,
-                    format,
-                    names,
-                ))
+            return cast(
+                StringColumn,
+                type(self).from_pylibcudf(
+                    plc.strings.convert.convert_datetime.from_timestamps(
+                        self.plc_column,
+                        format,
+                        names,
+                    )
+                ),
             )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:

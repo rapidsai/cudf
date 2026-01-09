@@ -238,10 +238,13 @@ class TimeDeltaColumn(TemporalBaseColumn):
             return super().strftime(format)
         else:
             with self.access(mode="read", scope="internal"):
-                return cast(StringColumn, type(self).from_pylibcudf(
-                    plc.strings.convert.convert_durations.from_durations(
-                        self.plc_column, format
-                    ))
+                return cast(
+                    StringColumn,
+                    type(self).from_pylibcudf(
+                        plc.strings.convert.convert_durations.from_durations(
+                            self.plc_column, format
+                        )
+                    ),
                 )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:

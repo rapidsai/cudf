@@ -490,11 +490,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return cast(
             Self,
             (
-            type(self)
-            .from_pylibcudf(
-            new_plc_column,
-            )
-            ._with_type_metadata(self.dtype)
+                type(self)
+                .from_pylibcudf(
+                    new_plc_column,
+                )
+                ._with_type_metadata(self.dtype)
             ),
         )
 
@@ -920,7 +920,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cast(
                 Self,
                 ColumnBase.from_pylibcudf(
-                stream_compaction.drop_nulls([self])[0]
+                    stream_compaction.drop_nulls([self])[0]
                 )._with_type_metadata(self.dtype),
             )
         else:
@@ -1135,7 +1135,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return cast(
             Self,
             (
-            type(self).from_pylibcudf(plc_col)._with_type_metadata(self.dtype)
+                type(self)
+                .from_pylibcudf(plc_col)
+                ._with_type_metadata(self.dtype)
             ),
         )
 
@@ -1362,23 +1364,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return cast(
                     Self,
                     (
-                    type(self)
-                    .from_pylibcudf(plc_table.columns()[0])
-                    ._with_type_metadata(self.dtype)
+                        type(self)
+                        .from_pylibcudf(plc_table.columns()[0])
+                        ._with_type_metadata(self.dtype)
                     ),
                 )
         else:
             return cast(
                 Self,
                 ColumnBase.from_pylibcudf(
-                copying.scatter(
-                cast(list[plc.Scalar], [value])
-                if isinstance(value, plc.Scalar)
-                else cast(list[ColumnBase], [value]),
-                key,
-                [self],
-                bounds_check=bounds_check,
-                )[0]
+                    copying.scatter(
+                        cast(list[plc.Scalar], [value])
+                        if isinstance(value, plc.Scalar)
+                        else cast(list[ColumnBase], [value]),
+                        key,
+                        [self],
+                        bounds_check=bounds_check,
+                    )[0]
                 )._with_type_metadata(self.dtype),
             )
 
@@ -1418,11 +1420,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cast(
                 Self,
                 type(self).from_pylibcudf(
-                plc.replace.find_and_replace_all(
-                self.plc_column,
-                values_to_replace.plc_column,
-                replacement_values.plc_column,
-                )
+                    plc.replace.find_and_replace_all(
+                        self.plc_column,
+                        values_to_replace.plc_column,
+                        replacement_values.plc_column,
+                    )
                 ),
             )
 
@@ -1431,9 +1433,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cast(
                 Self,
                 type(self).from_pylibcudf(
-                plc.filling.repeat(
-                plc.Table([self.plc_column]), repeats
-                ).columns()[0]
+                    plc.filling.repeat(
+                        plc.Table([self.plc_column]), repeats
+                    ).columns()[0]
                 ),
             )
 
@@ -1809,9 +1811,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cast(
                 Self,
                 (
-                type(self)
-                .from_pylibcudf(plc_table.columns()[0])
-                ._with_type_metadata(self.dtype)
+                    type(self)
+                    .from_pylibcudf(plc_table.columns()[0])
+                    ._with_type_metadata(self.dtype)
                 ),
             )
 
@@ -1959,10 +1961,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 as_column(range(len(self) - 1, -1, -1)),
             )
         else:
-            return cast(NumericalColumn, ColumnBase.from_pylibcudf(
-                sorting.order_by(
-                    [self], [ascending], [na_position], stable=True
-                )
+            return cast(
+                NumericalColumn,
+                ColumnBase.from_pylibcudf(
+                    sorting.order_by(
+                        [self], [ascending], [na_position], stable=True
+                    )
+                ),
             )
 
     def __arrow_array__(self, type: pa.DataType | None = None) -> None:
@@ -2051,13 +2056,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return cast(
             Self,
             ColumnBase.from_pylibcudf(
-            sorting.search_sorted(
-            [self],
-            [value],
-            side=side,
-            ascending=[ascending],
-            na_position=[na_position],
-            )
+                sorting.search_sorted(
+                    [self],
+                    [value],
+                    side=side,
+                    ascending=[ascending],
+                    na_position=[na_position],
+                )
             ),
         )
 
@@ -2071,9 +2076,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cast(
                 Self,
                 ColumnBase.from_pylibcudf(
-                stream_compaction.drop_duplicates([self], keep="first")[
-                0
-                ]
+                    stream_compaction.drop_duplicates([self], keep="first")[0]
                 )._with_type_metadata(self.dtype),
             )
 
@@ -2350,7 +2353,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         plc_codes = sorting.sort_by_key(
             [codes], [left_gather_map], [True], ["last"], stable=True
         )[0]
-        return cast(NumericalColumn, ColumnBase.from_pylibcudf(plc_codes).fillna(na_sentinel)
+        return cast(
+            NumericalColumn,
+            ColumnBase.from_pylibcudf(plc_codes).fillna(na_sentinel),
+        )
 
     def copy_if_else(
         self, other: Self | plc.Scalar, boolean_mask: NumericalColumn
@@ -2361,17 +2367,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cast(
                 Self,
                 (
-                type(self)
-                .from_pylibcudf(
-                plc.copying.copy_if_else(
-                self.plc_column,
-                other
-                if isinstance(other, plc.Scalar)
-                else other.plc_column,
-                boolean_mask.plc_column,
-                )
-                )
-                ._with_type_metadata(self.dtype)
+                    type(self)
+                    .from_pylibcudf(
+                        plc.copying.copy_if_else(
+                            self.plc_column,
+                            other
+                            if isinstance(other, plc.Scalar)
+                            else other.plc_column,
+                            boolean_mask.plc_column,
+                        )
+                    )
+                    ._with_type_metadata(self.dtype)
                 ),
             )
 
@@ -2380,10 +2386,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> Generator[Self, None, None]:
         for cols in copying.columns_split([self], offsets):
             for col in cols:
-                yield (
+                yield cast(
+                    Self,
                     type(self)
                     .from_pylibcudf(col)
-                    ._with_type_metadata(self.dtype)
+                    ._with_type_metadata(self.dtype),
                 )
 
     def one_hot_encode(self, categories: ColumnBase) -> Generator[ColumnBase]:
@@ -2403,13 +2410,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cast(
                 Self,
                 type(self).from_pylibcudf(
-                plc.reduce.scan(
-                self.plc_column,
-                aggregation.make_aggregation(scan_op, kwargs).plc_obj,
-                plc.reduce.ScanType.INCLUSIVE
-                if inclusive
-                else plc.reduce.ScanType.EXCLUSIVE,
-                )
+                    plc.reduce.scan(
+                        self.plc_column,
+                        aggregation.make_aggregation(scan_op, kwargs).plc_obj,
+                        plc.reduce.ScanType.INCLUSIVE
+                        if inclusive
+                        else plc.reduce.ScanType.EXCLUSIVE,
+                    )
                 ),
             )
 
@@ -2491,14 +2498,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cast(
                 Self,
                 type(self).from_pylibcudf(
-                plc.sorting.rank(
-                self.plc_column,
-                method,
-                column_order,
-                null_handling,
-                null_precedence,
-                pct,
-                )
+                    plc.sorting.rank(
+                        self.plc_column,
+                        method,
+                        column_order,
+                        null_handling,
+                        null_precedence,
+                        pct,
+                    )
                 ),
             )
 
@@ -2511,18 +2518,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         right_inclusive: bool,
     ) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return cast(NumericalColumn, type(self).from_pylibcudf(
-                plc.labeling.label_bins(
-                    self.plc_column,
-                    left_edge.plc_column,
-                    plc.labeling.Inclusive.YES
-                    if left_inclusive
-                    else plc.labeling.Inclusive.NO,
-                    right_edge.plc_column,
-                    plc.labeling.Inclusive.YES
-                    if right_inclusive
-                    else plc.labeling.Inclusive.NO,
-                )
+            return cast(
+                NumericalColumn,
+                type(self).from_pylibcudf(
+                    plc.labeling.label_bins(
+                        self.plc_column,
+                        left_edge.plc_column,
+                        plc.labeling.Inclusive.YES
+                        if left_inclusive
+                        else plc.labeling.Inclusive.NO,
+                        right_edge.plc_column,
+                        plc.labeling.Inclusive.YES
+                        if right_inclusive
+                        else plc.labeling.Inclusive.NO,
+                    )
+                ),
             )
 
     def _cast_self_and_other_for_where(
