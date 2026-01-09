@@ -173,14 +173,14 @@ class span_base {
 template <typename T, std::size_t Extent = std::dynamic_extent>
 class host_span {
  public:
-  using element_type    = typename std::span<T, Extent>::element_type;
-  using value_type      = typename std::span<T, Extent>::value_type;
-  using size_type       = typename std::span<T, Extent>::size_type;
-  using difference_type = typename std::span<T, Extent>::difference_type;
-  using pointer         = typename std::span<T, Extent>::pointer;
-  using const_pointer   = typename std::span<T, Extent>::const_pointer;
-  using reference       = typename std::span<T, Extent>::reference;
-  using iterator        = typename std::span<T, Extent>::iterator;
+  using element_type    = T;
+  using value_type      = std::remove_cv_t<T>;
+  using size_type       = std::size_t;
+  using difference_type = std::ptrdiff_t;
+  using pointer         = T*;
+  using const_pointer   = T const*;
+  using reference       = T&;
+  using iterator        = T*;
 
   static constexpr std::size_t extent = Extent;
 
