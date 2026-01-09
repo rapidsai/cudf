@@ -244,7 +244,7 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
 /**
  * @brief Read parquet file with the hybrid scan reader
  *
- * @param buffer Buffer containing the parquet file
+ * @param file_buffer_span Input parquet buffer span
  * @param filter_expression Filter expression
  * @param num_filter_columns Number of filter columns
  * @param payload_column_names List of paths of select payload column names, if any
@@ -259,7 +259,7 @@ std::tuple<std::unique_ptr<cudf::table>,
            cudf::io::table_metadata,
            cudf::io::table_metadata,
            std::unique_ptr<cudf::column>>
-hybrid_scan(std::vector<char>& buffer,
+hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
             cudf::ast::operation const& filter_expression,
             cudf::size_type num_filter_columns,
             std::optional<std::vector<std::string>> const& payload_column_names,
@@ -270,7 +270,7 @@ hybrid_scan(std::vector<char>& buffer,
 /**
  * @brief Read parquet file with the hybrid scan reader
  *
- * @param buffer Buffer containing the parquet file
+ * @param file_buffer_span Input parquet buffer span
  * @param filter_expression Filter expression
  * @param num_filter_columns Number of filter columns
  * @param payload_column_names List of paths of select payload column names, if any
@@ -285,7 +285,7 @@ std::tuple<std::unique_ptr<cudf::table>,
            cudf::io::table_metadata,
            cudf::io::table_metadata,
            std::unique_ptr<cudf::column>>
-chunked_hybrid_scan(std::vector<char> const& buffer,
+chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
                     cudf::ast::operation const& filter_expression,
                     cudf::size_type num_filter_columns,
                     std::optional<std::vector<std::string>> const& payload_column_names,
@@ -296,7 +296,7 @@ chunked_hybrid_scan(std::vector<char> const& buffer,
 /**
  * @brief Read parquet file with the hybrid scan reader in a single step
  *
- * @param buffer Buffer containing the parquet file
+ * @param file_buffer_span Input parquet buffer span
  * @param filter_expression Filter expression, if any
  * @param column_names List of column names to read, if any
  * @param stream CUDA stream
@@ -305,7 +305,7 @@ chunked_hybrid_scan(std::vector<char> const& buffer,
  * @return Read table and metadata
  */
 cudf::io::table_with_metadata hybrid_scan_single_step(
-  std::vector<char>& buffer,
+  cudf::host_span<uint8_t const> file_buffer_span,
   std::optional<cudf::ast::operation> filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
   rmm::cuda_stream_view stream,
