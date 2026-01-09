@@ -1446,8 +1446,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
     def is_valid(self) -> ColumnBase:
+        """Identify non-null values"""
         with self.access(mode="read", scope="internal"):
-            """Identify non-null values"""
             return type(self).from_pylibcudf(
                 plc.unary.is_valid(self.plc_column)
             )
