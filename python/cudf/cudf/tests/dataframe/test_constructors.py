@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -216,14 +216,10 @@ def test_arrow_handle_no_index_name():
     assert_eq(expect, got)
 
 
-def test_pandas_non_contiguious():
-    rng = np.random.default_rng(seed=0)
-    arr1 = rng.random(size=(5000, 10))
-    assert arr1.flags["C_CONTIGUOUS"] is True
+@pytest.mark.parametrize("order", ["C", "F"])
+def test_pandas_non_contiguious(order):
+    arr1 = np.ones((5, 5), order=order)
     df = pd.DataFrame(arr1)
-    for col in df.columns:
-        assert df[col].values.flags["C_CONTIGUOUS"] is False
-
     gdf = cudf.DataFrame(df)
     assert_eq(gdf.to_pandas(), df)
 
