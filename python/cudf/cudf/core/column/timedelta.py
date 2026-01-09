@@ -35,7 +35,7 @@ if TYPE_CHECKING:
         DtypeObj,
     )
     from cudf.core.column.numerical import NumericalColumn
-    from cudf.core.column.string import StringColumn
+    from cudf.core.column.string import StringColumn  # noqa: TC004
 
 
 @functools.cache

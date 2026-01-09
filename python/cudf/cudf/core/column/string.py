@@ -1014,16 +1014,16 @@ class StringColumn(ColumnBase, Scannable):
             return cast(
                 NumericalColumn,
                 (
-                type(self)
-                .from_pylibcudf(
-                    plc.strings.convert.convert_integers.is_hex(
-                        self.plc_column,
+                    type(self)
+                    .from_pylibcudf(
+                        plc.strings.convert.convert_integers.is_hex(
+                            self.plc_column,
+                        )
                     )
-                )
-                ._with_type_metadata(
-                    get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-                )
-            ),
+                    ._with_type_metadata(
+                        get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
+                    )
+                ),
             )
 
     def hex_to_integers(self) -> NumericalColumn:
@@ -1064,16 +1064,16 @@ class StringColumn(ColumnBase, Scannable):
             return cast(
                 NumericalColumn,
                 (
-                type(self)
-                .from_pylibcudf(
-                    plc.strings.convert.convert_datetime.is_timestamp(
-                        self.plc_column, format
+                    type(self)
+                    .from_pylibcudf(
+                        plc.strings.convert.convert_datetime.is_timestamp(
+                            self.plc_column, format
+                        )
                     )
-                )
-                ._with_type_metadata(
-                    get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-                )
-            ),
+                    ._with_type_metadata(
+                        get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
+                    )
+                ),
             )
 
     def _split_record_re(
@@ -1285,12 +1285,12 @@ class StringColumn(ColumnBase, Scannable):
             return cast(
                 NumericalColumn,
                 (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(
-                    get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-                )
-            ),
+                    type(self)
+                    .from_pylibcudf(plc_column)
+                    ._with_type_metadata(
+                        get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
+                    )
+                ),
             )
 
     def is_float(self) -> NumericalColumn:
@@ -1301,12 +1301,12 @@ class StringColumn(ColumnBase, Scannable):
             return cast(
                 NumericalColumn,
                 (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(
-                    get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-                )
-            ),
+                    type(self)
+                    .from_pylibcudf(plc_column)
+                    ._with_type_metadata(
+                        get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
+                    )
+                ),
             )
 
     def count_characters(self) -> NumericalColumn:
@@ -1329,8 +1329,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return res
 
-    def join_strings(self, separator: str, na_rep: str | None) -> Self:,
-            )
+    def join_strings(self, separator: str, na_rep: str | None) -> Self:
         with self.access(mode="read", scope="internal"):
             plc_column = plc.strings.combine.join_strings(
                 self.plc_column,
@@ -1593,8 +1592,7 @@ class StringColumn(ColumnBase, Scannable):
                     )
             else:
                 new_type = np.dtype("bool")
-            return res._with_type_metadata(new_type),
-            )
+            return res._with_type_metadata(new_type)
 
     def filter_characters_of_type(
         self,
@@ -1754,8 +1752,7 @@ class StringColumn(ColumnBase, Scannable):
         ],
         pat: str,
         flags: int = 0,
-    ) -> Self:,
-            )
+    ) -> Self:
         with self.access(mode="read", scope="internal"):
             if len(self) == 0:
                 return cast(

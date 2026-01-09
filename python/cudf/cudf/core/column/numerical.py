@@ -53,9 +53,9 @@ if TYPE_CHECKING:
         ScalarLike,
     )
     from cudf.core.column import DecimalBaseColumn
-    from cudf.core.column.datetime import DatetimeColumn
-    from cudf.core.column.string import StringColumn
-    from cudf.core.column.timedelta import TimeDeltaColumn
+    from cudf.core.column.datetime import DatetimeColumn  # noqa: TC004
+    from cudf.core.column.string import StringColumn  # noqa: TC004
+    from cudf.core.column.timedelta import TimeDeltaColumn  # noqa: TC004
     from cudf.core.dtypes import DecimalDtype
 
 

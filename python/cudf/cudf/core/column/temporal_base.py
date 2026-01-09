@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import ColumnLike, DtypeObj, ScalarLike
-    from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.numerical import NumericalColumn  # noqa: TC004
     from cudf.core.column.string import StringColumn
 
 

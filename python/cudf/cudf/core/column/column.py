@@ -102,7 +102,7 @@ if TYPE_CHECKING:
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.decimal import DecimalBaseColumn
     from cudf.core.column.interval import IntervalColumn
-    from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.numerical import NumericalColumn  # noqa: TC004
     from cudf.core.column.strings import StringColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.index import Index
