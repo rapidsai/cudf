@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -271,7 +271,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     auto reference_pairs =
       rmm::device_uvector<index_pair>(reference.first->size(), cudf::get_default_stream());
 
-    thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+    thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                       result.first->begin(),
                       result.first->end(),
                       result.second->begin(),
@@ -279,7 +279,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
                       [] __device__(cudf::size_type first, cudf::size_type second) {
                         return index_pair{first, second};
                       });
-    thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+    thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                       reference.first->begin(),
                       reference.first->end(),
                       reference.second->begin(),
@@ -288,12 +288,14 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
                         return index_pair{first, second};
                       });
 
-    thrust::sort(
-      rmm::exec_policy(cudf::get_default_stream()), result_pairs.begin(), result_pairs.end());
-    thrust::sort(
-      rmm::exec_policy(cudf::get_default_stream()), reference_pairs.begin(), reference_pairs.end());
+    thrust::sort(rmm::exec_policy_nosync(cudf::get_default_stream()),
+                 result_pairs.begin(),
+                 result_pairs.end());
+    thrust::sort(rmm::exec_policy_nosync(cudf::get_default_stream()),
+                 reference_pairs.begin(),
+                 reference_pairs.end());
 
-    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::get_default_stream()),
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy_nosync(cudf::get_default_stream()),
                               reference_pairs.begin(),
                               reference_pairs.end(),
                               result_pairs.begin()));
@@ -732,10 +734,11 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
   void _compare_to_hash_join(std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& result,
                              std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& reference)
   {
-    thrust::sort(rmm::exec_policy(cudf::get_default_stream()), result->begin(), result->end());
     thrust::sort(
-      rmm::exec_policy(cudf::get_default_stream()), reference->begin(), reference->end());
-    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::get_default_stream()),
+      rmm::exec_policy_nosync(cudf::get_default_stream()), result->begin(), result->end());
+    thrust::sort(
+      rmm::exec_policy_nosync(cudf::get_default_stream()), reference->begin(), reference->end());
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy_nosync(cudf::get_default_stream()),
                               result->begin(),
                               result->end(),
                               reference->begin()));

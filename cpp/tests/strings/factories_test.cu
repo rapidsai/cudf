@@ -216,7 +216,7 @@ TEST_F(StringsFactoriesTest, StringPairWithNullsAndEmpty)
 
   auto d_column = cudf::column_device_view::create(data);
   rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::get_default_stream());
-  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                     d_column->pair_begin<cudf::string_view, true>(),
                     d_column->pair_end<cudf::string_view, true>(),
                     pairs.data(),

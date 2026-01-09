@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import copy
 import functools
 import itertools
 import textwrap
-import types
 import warnings
 from collections.abc import Mapping
 from functools import cached_property, singledispatch
@@ -24,7 +23,7 @@ from cudf.api.types import is_list_like, is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import access_columns
 from cudf.core.column.column import (
     ColumnBase,
     as_column,
@@ -405,6 +404,53 @@ b 2  1.000000  1.0
 )
 
 
+class _GroupByContextManager:
+    """Context manager for safe access to pylibcudf GroupBy object.
+
+    This context manager creates and holds the pylibcudf GroupBy object,
+    entering access contexts for key columns on each entry and exiting
+    them on exit. The same instance can be safely entered multiple times,
+    including nested entries.
+    """
+
+    __slots__ = (
+        "_grouping",
+        "_plc_groupby",
+        "_stack_list",
+    )
+
+    def __init__(self, grouping, dropna):
+        self._grouping = grouping
+        self._stack_list = []
+
+        # Create pylibcudf GroupBy eagerly
+        with access_columns(
+            *grouping._key_columns, mode="read", scope="internal"
+        ) as key_columns:
+            self._plc_groupby = plc.groupby.GroupBy(
+                plc.Table([col.plc_column for col in key_columns]),
+                plc.types.NullPolicy.EXCLUDE
+                if dropna
+                else plc.types.NullPolicy.INCLUDE,
+            )
+
+    def __enter__(self):
+        stack = access_columns(
+            *self._grouping._key_columns, mode="read", scope="internal"
+        )
+        stack.__enter__()
+        self._stack_list.append(stack)
+
+        # Return the private pylibcudf GroupBy object
+        return self._plc_groupby
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._stack_list:
+            stack = self._stack_list.pop()
+            return stack.__exit__(exc_type, exc_val, exc_tb)
+        return False
+
+
 class GroupBy(Serializable, Reducible, Scannable):
     obj: Series | DataFrame
 
@@ -494,6 +540,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             self.grouping = self._by
         else:
             self.grouping = _Grouping(obj, self._by, level)
+
+        self._groupby_manager = _GroupByContextManager(
+            self.grouping, self._dropna
+        )
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
@@ -756,33 +806,27 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result
 
-    @cached_property
-    def _groupby(self) -> types.SimpleNamespace:
-        with acquire_spill_lock() as spill_lock:
-            plc_groupby = plc.groupby.GroupBy(
-                plc.Table(
-                    [col.plc_column for col in self.grouping._key_columns]
-                ),
-                plc.types.NullPolicy.EXCLUDE
-                if self._dropna
-                else plc.types.NullPolicy.INCLUDE,
-            )
-            # Do we need this because we just check _spill_locks in test_spillable_df_groupby?
-            return types.SimpleNamespace(
-                plc_groupby=plc_groupby, _spill_locks=spill_lock
-            )
+    @property
+    def _groupby(self):
+        """Returns the cached context manager for safe access to the pylibcudf GroupBy."""
+        return self._groupby_manager
 
     def _groups(
         self, values: Iterable[ColumnBase]
     ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
-        plc_columns = [col.plc_column for col in values]
-        if not plc_columns:
-            plc_table = None
-        else:
-            plc_table = plc.Table(plc_columns)
-        offsets, grouped_keys, grouped_values = (
-            self._groupby.plc_groupby.get_groups(plc_table)
-        )
+        # Materialize iterator to avoid consuming it during access context setup
+        values_list = list(values)
+        with access_columns(*values_list, mode="read", scope="internal"):
+            plc_columns = [col.plc_column for col in values_list]
+            if not plc_columns:
+                plc_table = None
+            else:
+                plc_table = plc.Table(plc_columns)
+
+            with self._groupby as plc_groupby:
+                offsets, grouped_keys, grouped_values = plc_groupby.get_groups(
+                    plc_table
+                )
 
         return (
             offsets,
@@ -853,11 +897,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "All requested aggregations are unsupported."
             )
 
-        keys, results = (
-            self._groupby.plc_groupby.scan(requests)
-            if _is_all_scan_aggregate(aggregations)
-            else self._groupby.plc_groupby.aggregate(requests)
-        )
+        with access_columns(*values, mode="read", scope="internal"):
+            with self._groupby as plc_groupby:
+                keys, results = (
+                    plc_groupby.scan(requests)
+                    if _is_all_scan_aggregate(aggregations)
+                    else plc_groupby.aggregate(requests)
+                )
 
         for i, result, adjustments_i in zip(
             column_included, results, adjustments, strict=True
@@ -878,32 +924,43 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _shift(
         self, values: tuple[ColumnBase, ...], periods: int, fill_values: list
     ) -> Generator[ColumnBase]:
-        _, shifts = self._groupby.plc_groupby.shift(
-            plc.table.Table([col.plc_column for col in values]),
-            [periods] * len(values),
-            [
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(val, type=cudf_dtype_to_pa_type(col.dtype))
+        with access_columns(*values, mode="read", scope="internal"):
+            with self._groupby as plc_groupby:
+                _, shifts = plc_groupby.shift(
+                    plc.table.Table([col.plc_column for col in values]),
+                    [periods] * len(values),
+                    [
+                        pa_scalar_to_plc_scalar(
+                            pa.scalar(
+                                val, type=cudf_dtype_to_pa_type(col.dtype)
+                            )
+                        )
+                        for val, col in zip(fill_values, values, strict=True)
+                    ],
                 )
-                for val, col in zip(fill_values, values, strict=True)
-            ],
-        )
-        return (ColumnBase.from_pylibcudf(col) for col in shifts.columns())
+                return (
+                    ColumnBase.from_pylibcudf(col) for col in shifts.columns()
+                )
 
     def _replace_nulls(
         self, values: tuple[ColumnBase, ...], method: str
     ) -> Generator[ColumnBase]:
-        _, replaced = self._groupby.plc_groupby.replace_nulls(
-            plc.Table([col.plc_column for col in values]),
-            [
-                plc.replace.ReplacePolicy.PRECEDING
-                if method == "ffill"
-                else plc.replace.ReplacePolicy.FOLLOWING
-            ]
-            * len(values),
-        )
+        with access_columns(*values, mode="read", scope="internal"):
+            with self._groupby as plc_groupby:
+                _, replaced = plc_groupby.replace_nulls(
+                    plc.Table([col.plc_column for col in values]),
+                    [
+                        plc.replace.ReplacePolicy.PRECEDING
+                        if method == "ffill"
+                        else plc.replace.ReplacePolicy.FOLLOWING
+                    ]
+                    * len(values),
+                )
 
-        return (ColumnBase.from_pylibcudf(col) for col in replaced.columns())
+                return (
+                    ColumnBase.from_pylibcudf(col)
+                    for col in replaced.columns()
+                )
 
     @_performance_tracking
     def agg(self, func=None, *args, engine=None, engine_kwargs=None, **kwargs):
@@ -1105,11 +1162,26 @@ class GroupBy(Serializable, Reducible, Scannable):
                 join_keys = map(list, zip(*join_keys, strict=True))
                 # By construction, left and right keys are related by
                 # a permutation, so we can use an inner join.
-                with acquire_spill_lock():
-                    plc_tables = [
-                        plc.Table([col.plc_column for col in cols])
-                        for cols in join_keys
-                    ]
+                join_keys_list = list(join_keys)
+                # Flatten nested list of columns for access_columns
+                all_cols = [col for cols in join_keys_list for col in cols]
+                with access_columns(
+                    *all_cols, mode="read", scope="internal"
+                ) as all_cols:
+                    # Reconstruct join_keys_list structure from flattened all_cols
+                    idx = 0
+                    plc_tables = []
+                    for cols in join_keys_list:
+                        cols_len = len(cols)
+                        plc_tables.append(
+                            plc.Table(
+                                [
+                                    col.plc_column
+                                    for col in all_cols[idx : idx + cols_len]
+                                ]
+                            )
+                        )
+                        idx += cols_len
                     left_plc, right_plc = plc.join.inner_join(
                         plc_tables[0],
                         plc_tables[1],
@@ -1591,11 +1663,20 @@ class GroupBy(Serializable, Reducible, Scannable):
                 keys = cp.random.default_rng(seed=random_state).random(
                     size=nrows
                 )
-                with acquire_spill_lock():
+                indices_col = as_column(indices)
+                keys_col = as_column(keys)
+                group_offsets_col = as_column(group_offsets)
+                with access_columns(
+                    indices_col,
+                    keys_col,
+                    group_offsets_col,
+                    mode="read",
+                    scope="internal",
+                ) as (indices_col, keys_col, group_offsets_col):
                     plc_table = plc.sorting.stable_segmented_sort_by_key(
-                        plc.Table([as_column(indices).plc_column]),
-                        plc.Table([as_column(keys).plc_column]),
-                        as_column(group_offsets).plc_column,
+                        plc.Table([indices_col.plc_column]),
+                        plc.Table([keys_col.plc_column]),
+                        group_offsets_col.plc_column,
                         [plc.types.Order.ASCENDING],
                         [plc.types.NullOrder.AFTER],
                     )
@@ -2444,13 +2525,15 @@ class GroupBy(Serializable, Reducible, Scannable):
         # interleave: combines the correlation or covariance results for each
         # column-pair into a single column
 
-        @acquire_spill_lock()
         def interleave_columns(source_columns):
-            return ColumnBase.from_pylibcudf(
-                plc.reshape.interleave_columns(
-                    plc.Table([c.plc_column for c in source_columns])
+            with access_columns(
+                *source_columns, mode="read", scope="internal"
+            ) as source_columns:
+                return ColumnBase.from_pylibcudf(
+                    plc.reshape.interleave_columns(
+                        plc.Table([c.plc_column for c in source_columns])
+                    )
                 )
-            )
 
         res = DataFrame._from_data(
             {
