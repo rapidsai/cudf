@@ -165,7 +165,7 @@ class ListColumn(ColumnBase):
                 self.plc_column.offset(),
                 [child.plc_column for child in new_children],
             )
-            return type(self)(
+            return type(self)._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
                 children=new_children,

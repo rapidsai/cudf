@@ -675,7 +675,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     def _with_type_metadata(self, dtype: DtypeObj) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
-            return DatetimeTZColumn(
+            return DatetimeTZColumn._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=dtype,
                 children=self.children,
@@ -847,10 +847,8 @@ class DatetimeTZColumn(DatetimeColumn):
     @property
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
-        return DatetimeColumn(
-            plc_column=self.plc_column,
-            dtype=_get_base_dtype(self.dtype),
-            children=self.children,
+        return DatetimeColumn._from_preprocessed(
+            self.plc_column, _get_base_dtype(self.dtype), self.children
         )
 
     @functools.cached_property

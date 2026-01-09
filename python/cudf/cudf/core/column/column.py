@@ -347,23 +347,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         return children
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: DtypeObj,
-        children: tuple[ColumnBase, ...],
-    ) -> None:
-        plc_column, dtype = self._validate_args(plc_column, dtype)
-        self.plc_column = plc_column
-        self._distinct_count: dict[bool, int] = {}
-        self._dtype = dtype
-        self._children = children
-        # The set of exposed buffers associated with this column. These buffers must be
-        # kept alive for the lifetime of this column since anything that accessed the
-        # CAI of this column will still be pointing to those buffers. As such objects
-        # are destroyed, all references to this column will be removed as well,
-        # triggering the destruction of the exposed buffers.
-        self._exposed_buffers: set[Buffer] = set()
+    def __init__(self, *args, **kwargs) -> None:
+        raise ValueError(
+            "ColumnBase and its subclasses must be instantiated via from_pylibcudf."
+        )
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
@@ -691,11 +678,38 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             validate=False,
         )
 
-        return cls(  # type: ignore[return-value]
+        return cls._from_preprocessed(  # type: ignore[return-value]
             plc_column=col,
             dtype=dtype,
             children=wrapped_children,
         )
+
+    @classmethod
+    def _from_preprocessed(
+        cls,
+        plc_column: plc.Column,
+        dtype: DtypeObj,
+        children: tuple[ColumnBase, ...],
+    ) -> Self:
+        # TODO: This function bypassess some of the buffer copying/wrapping that would
+        # be done in from_pylibcudf, so it is only ever safe to call this in situations
+        # where we know that the plc_column and children are already properly wrapped.
+        # Ideally we should get rid of this altogether eventually and inline its logic
+        # in from_pylibcudf, but for now it is necessary for the various
+        # _with_type_metadata calls.
+        self = cls.__new__(cls)
+        plc_column, dtype = self._validate_args(plc_column, dtype)
+        self.plc_column = plc_column
+        self._distinct_count: dict[bool, int] = {}
+        self._dtype = dtype
+        self._children = children
+        # The set of exposed buffers associated with this column. These buffers must be
+        # kept alive for the lifetime of this column since anything that accessed the
+        # CAI of this column will still be pointing to those buffers. As such objects
+        # are destroyed, all references to this column will be removed as well,
+        # triggering the destruction of the exposed buffers.
+        self._exposed_buffers: set[Buffer] = set()
+        return self
 
     @classmethod
     def from_cuda_array_interface(cls, arbitrary: Any) -> ColumnBase:
@@ -1122,7 +1136,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 result = type(self).from_pylibcudf(self.plc_column.copy())
             return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
         else:
-            col = type(self)(
+            col = type(self)._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=self.dtype,
                 children=tuple(s.copy(deep=False) for s in self.children),

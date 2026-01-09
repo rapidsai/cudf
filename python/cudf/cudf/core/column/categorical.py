@@ -667,7 +667,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, CategoricalDtype):
-            return type(self)(
+            return type(self)._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=dtype,
                 children=self.children,

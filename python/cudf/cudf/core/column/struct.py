@@ -178,7 +178,7 @@ class StructColumn(ColumnBase):
                 self.plc_column.offset(),
                 [child.plc_column for child in new_children],
             )
-            return IntervalColumn(
+            return IntervalColumn._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
                 children=new_children,
@@ -197,7 +197,7 @@ class StructColumn(ColumnBase):
                 self.plc_column.offset(),
                 [child.plc_column for child in new_children],
             )
-            return StructColumn(
+            return StructColumn._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
                 children=new_children,

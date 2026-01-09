@@ -925,10 +925,8 @@ class NumericalColumn(NumericalBaseColumn):
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
             codes = cast(NumericalColumn, self.astype(codes_dtype))
-            return CategoricalColumn(
-                plc_column=codes.plc_column,
-                dtype=dtype,
-                children=(codes,),
+            return CategoricalColumn._from_preprocessed(
+                codes.plc_column, dtype, (codes,)
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)
