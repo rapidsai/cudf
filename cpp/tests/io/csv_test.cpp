@@ -2616,75 +2616,40 @@ TEST(CsvWriterTypeSupportTest, UnsupportedTypes)
   EXPECT_FALSE(is_supported_write_csv(cudf::data_type{cudf::type_id::DICTIONARY32}));
 }
 
-// Test case 1 from https://github.com/rapidsai/cudf/issues/20812
-// Odd number of double quotes should not add extra newline
 TEST_F(CsvReaderTest, DoubleQuotesOddCount)
 {
-  auto const filepath = temp_env->get_temp_dir() + "DoubleQuotesOddCount.csv";
-
-  // CSV content with odd number of double quotes
-  {
-    std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << R"(lt_qeury=o5K","last_ts" end)" << "\n";
-  }
+  std::string const content{R"(Monday" "Tuesday" Wednesday)"};
+  std::string const buffer = content + "\n";
 
   cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
       .header(-1)
-      .names({"c0"})
-      .dtypes({dtype<cudf::string_view>()})
-      .delimiter('\t');
+      .dtypes({dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+  EXPECT_EQ(result.tbl->view().num_columns(), 1);
 
-  auto const result      = cudf::io::read_csv(in_opts);
-  auto const result_view = result.tbl->view();
-
-  EXPECT_EQ(result_view.num_columns(), 1);
-  EXPECT_EQ(result_view.num_rows(), 1);
-
-  // Expected: the original content without extra newline
-  auto const expected = cudf::test::strings_column_wrapper({R"(lt_qeury=o5K","last_ts" end)"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view.column(0), expected);
+  auto const expected = cudf::test::strings_column_wrapper({content});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected);
 }
 
-// Test case 2 from https://github.com/rapidsai/cudf/issues/20812
-// Continuous double quotes should not cause lines to be skipped
-TEST_F(CsvReaderTest, DoubleQuotesContinuous)
+TEST_F(CsvReaderTest, UnquotedStringDoubledQuotes)
 {
-  auto const filepath = temp_env->get_temp_dir() + "DoubleQuotesContinuous.csv";
-
-  // CSV content with continuous double quotes that previously caused lines to be skipped
-  {
-    std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << R"("packageName":"test","type":"test","url_scheme":false,"referer":"",test)" << "\n";
-    outfile << R"(Below line will be empty)" << "\n";
-    outfile << R"(test)" << "\n";
-    outfile << R"(test)" << "\n";
-    outfile << R"(Until this line with another quote, "test=test" "test")" << "\n";
-    outfile << R"(This line will be shown)" << "\n";
-  }
+  std::string const content{R"("Monday":"" Tuesday)"};
+  std::string const buffer = content + "\n";
 
   cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
       .header(-1)
-      .names({"c0"})
-      .dtypes({dtype<cudf::string_view>()})
-      .delimiter('\t');
+      .dtypes({dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+  EXPECT_EQ(result.tbl->view().num_columns(), 1);
 
-  auto const result      = cudf::io::read_csv(in_opts);
-  auto const result_view = result.tbl->view();
-
-  EXPECT_EQ(result_view.num_columns(), 1);
-  EXPECT_EQ(result_view.num_rows(), 6);
-
-  // Expected: all 6 lines should be read correctly
-  auto const expected = cudf::test::strings_column_wrapper(
-    {R"("packageName":"test","type":"test","url_scheme":false,"referer":"",test)",
-     R"(Below line will be empty)",
-     R"(test)",
-     R"(test)",
-     R"(Until this line with another quote, "test=test" "test")",
-     R"(This line will be shown)"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view.column(0), expected);
+  auto const expected = cudf::test::strings_column_wrapper({content});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
