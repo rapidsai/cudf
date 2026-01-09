@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -53,7 +53,7 @@ OutputIterator copy_if_safe(InputIterator first,
   while (itr != last) {
     auto const copy_end =
       static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
-    result = thrust::copy_if(rmm::exec_policy(stream), itr, copy_end, stencil, result, pred);
+    result = thrust::copy_if(rmm::exec_policy_nosync(stream), itr, copy_end, stencil, result, pred);
     stencil += std::distance(itr, copy_end);
     itr = copy_end;
   }
@@ -90,37 +90,14 @@ template <typename InputIterator, typename OutputIterator, typename Predicate>
 {
   auto const num_items = cuda::std::distance(begin, end);
 
-  // Device scalar to store the number of selected elements
-  auto num_selected =
-    cudf::detail::device_scalar<cuda::std::size_t>(stream, cudf::get_current_device_resource_ref());
-
-  // First call to get temporary storage size
-  size_t temp_storage_bytes = 0;
-  CUDF_CUDA_TRY(cub::DeviceSelect::If(nullptr,
-                                      temp_storage_bytes,
-                                      begin,
-                                      output,
-                                      num_selected.data(),
-                                      num_items,
-                                      predicate,
-                                      stream.value()));
-
-  // Allocate temporary storage
-  rmm::device_buffer d_temp_storage(
-    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
-
-  // Run copy_if
-  CUDF_CUDA_TRY(cub::DeviceSelect::If(d_temp_storage.data(),
-                                      temp_storage_bytes,
-                                      begin,
-                                      output,
-                                      num_selected.data(),
-                                      num_items,
-                                      predicate,
-                                      stream.value()));
-
-  // Copy number of selected elements back to host via pinned memory
-  return output + num_selected.value(stream);
+  auto itr = first;
+  while (itr != last) {
+    auto const copy_end =
+      static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
+    result = thrust::copy_if(rmm::exec_policy_nosync(stream), itr, copy_end, result, pred);
+    itr    = copy_end;
+  }
+  return result;
 }
 
 /**
