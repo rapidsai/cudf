@@ -202,8 +202,12 @@ class host_span {
   // Default constructor
   constexpr host_span() noexcept = default;
 
-  // Constructor from std::span
-  constexpr host_span(std::span<T, Extent> span, bool is_device_accessible = false) noexcept
+  // Constructor from std::span (only for compatible extents)
+  template <std::size_t OtherExtent = Extent,
+            std::enable_if_t<OtherExtent == Extent || Extent == cudf::dynamic_extent ||
+                               OtherExtent == std::dynamic_extent,
+                             void>* = nullptr>
+  constexpr host_span(std::span<T, OtherExtent> span, bool is_device_accessible = false) noexcept
     : _data{span.data()}, _size{span.size()}, _is_device_accessible{is_device_accessible}
   {
   }
@@ -260,10 +264,20 @@ class host_span {
   {
   }
 
-  // Conversion to std::span (host-only)
-  [[nodiscard]] constexpr operator std::span<T, Extent>() const noexcept
+  // Conversion to std::span (host-only, only for compatible extents)
+  template <std::size_t TargetExtent = Extent>
+  [[nodiscard]] constexpr
+    std::enable_if_t<TargetExtent == Extent || TargetExtent == std::dynamic_extent,
+                     std::span<T, TargetExtent>>
+    to_std_span() const noexcept
   {
-    return std::span<T, Extent>{_data, _size};
+    return std::span<T, TargetExtent>{_data, _size};
+  }
+
+  // Implicit conversion to std::span with dynamic extent (most common case)
+  [[nodiscard]] constexpr operator std::span<T, std::dynamic_extent>() const noexcept
+  {
+    return std::span<T, std::dynamic_extent>{_data, _size};
   }
 
   // Element access
@@ -284,7 +298,7 @@ class host_span {
   [[nodiscard]] CUDF_HOST_DEVICE constexpr size_type size() const noexcept { return _size; }
   [[nodiscard]] CUDF_HOST_DEVICE constexpr size_type size_bytes() const noexcept
   {
-    return _size * sizeof(T);
+    return sizeof(T) * _size;
   }
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool empty() const noexcept { return _size == 0; }
 
