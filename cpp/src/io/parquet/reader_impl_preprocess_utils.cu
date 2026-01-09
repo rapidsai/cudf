@@ -13,6 +13,7 @@
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 
 #include <rmm/exec_policy.hpp>
 
@@ -164,6 +165,23 @@ void generate_depth_remappings(
   }
 }
 
+bool is_memcpy_batch_async_supported()
+{
+#if CUDART_VERSION >= 13000
+  // cudaMemcpyBatchAsync is supported on all CUDA 13 versions
+  return true;
+#else
+  // For CUDA 12, we check for CUDA runtime >=12.8 and cache the result
+  static auto supports_memcpy_batch_async{[] {
+    // CUDA 12.8 or higher is required for cudaMemcpyBatchAsync
+    int cuda_runtime_version{};
+    auto runtime_result = cudaRuntimeGetVersion(&cuda_runtime_version);
+    return runtime_result == cudaSuccess and cuda_runtime_version >= 12080;
+  }()};
+  return supports_memcpy_batch_async;
+#endif
+}
+
 [[nodiscard]] std::future<void> read_column_chunks_async(
   std::vector<std::unique_ptr<datasource>> const& sources,
   cudf::host_span<rmm::device_buffer> page_data,
@@ -174,8 +192,11 @@ void generate_depth_remappings(
   std::vector<size_type> const& chunk_source_map,
   rmm::cuda_stream_view stream)
 {
+  static std::mutex read_tasks_mutex;
+
   // Transfer chunk data, coalescing adjacent chunks
   std::vector<std::future<size_t>> read_tasks;
+  std::lock_guard<std::mutex> lock(read_tasks_mutex);
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
     size_t const io_offset = column_chunk_offsets[chunk];
     size_t io_size         = chunks[chunk].compressed_size;
@@ -191,7 +212,8 @@ void generate_depth_remappings(
     }
     if (io_size != 0) {
       auto& source = sources[chunk_source_map[chunk]];
-      if (source->is_device_read_preferred(io_size)) {
+      // TODO: Remove the false here
+      if (false and source->is_device_read_preferred(io_size)) {
         // Buffer needs to be padded.
         // Required by `gpuDecodePageData`.
         page_data[chunk] = rmm::device_buffer(
@@ -206,11 +228,45 @@ void generate_depth_remappings(
         page_data[chunk] = rmm::device_buffer(
           cudf::util::round_up_safe(read_buffer->size(), cudf::io::detail::BUFFER_PADDING_MULTIPLE),
           stream);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(page_data[chunk].data(),
-                                      read_buffer->data(),
-                                      read_buffer->size(),
-                                      cudaMemcpyDefault,
-                                      stream));
+
+        if (is_memcpy_batch_async_supported() and not stream.is_default()) {
+          std::array<void*, 1> valid_dsts{page_data[chunk].data()};
+          std::array<void*, 1> valid_srcs{
+            const_cast<void*>(static_cast<void const*>(read_buffer->data()))};
+          std::array<std::size_t, 1> valid_sizes{read_buffer->size()};
+          void** dsts        = valid_dsts.data();
+          void** srcs        = valid_srcs.data();
+          std::size_t* sizes = valid_sizes.data();
+          std::size_t count{1};
+#if CUDART_VERSION >= 12080
+          cudaMemcpyAttributes attrs[1] = {};  // zero-initialize all fields
+          attrs[0].srcAccessOrder       = cudaMemcpySrcAccessOrderStream;
+          attrs[0].flags                = cudaMemcpyFlagPreferOverlapWithCompute;
+          std::array<std::size_t, 1> attrs_idxs{0};
+          std::size_t num_attrs{1};
+#if CUDART_VERSION >= 13000
+          CUDF_CUDA_TRY(cudaMemcpyBatchAsync(
+            dsts, srcs, sizes, count, attrs, attrs_idxs.data(), num_attrs, stream.value()));
+#else
+          std::size_t fail_idx;
+          cudaMemcpyBatchAsync(dsts,
+                               srcs,
+                               sizes,
+                               count,
+                               attrs,
+                               attrs_idxs.data(),
+                               num_attrs,
+                               &fail_idx,
+                               stream.value());
+#endif  // CUDART_VERSION >= 13000
+#endif  // CUDART_VERSION >= 12080
+        } else {
+          CUDF_CUDA_TRY(cudaMemcpyAsync(page_data[chunk].data(),
+                                        read_buffer->data(),
+                                        read_buffer->size(),
+                                        cudaMemcpyDefault,
+                                        stream));
+        }
       }
       auto d_compdata = static_cast<uint8_t const*>(page_data[chunk].data());
       do {
@@ -279,7 +335,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
                        rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
-  auto page_indexes    = cudf::detail::make_host_vector<page_index_info>(num_pages, stream);
+  auto page_indexes    = cudf::detail::make_pinned_vector_async<page_index_info>(num_pages, stream);
 
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
@@ -445,7 +501,8 @@ void decode_page_headers(pass_intermediate_data& pass,
   // page headers kernel
   if (has_page_index) {
     auto host_page_locations =
-      cudf::detail::make_empty_host_vector<uint8_t*>(unsorted_pages.size(), stream);
+      cudf::detail::make_pinned_vector_async<uint8_t*>(unsorted_pages.size(), stream);
+    auto curr_page_idx = 0;
 
     std::for_each(pass.chunks.begin(), pass.chunks.end(), [&](auto const& chunk) {
       // Column chunk buffer's data pointer
@@ -462,7 +519,8 @@ void decode_page_headers(pass_intermediate_data& pass,
         CUDF_EXPECTS(std::cmp_less(chunk.h_chunk_info->dictionary_offset.value(),
                                    chunk.h_chunk_info->pages.front().location.offset),
                      "Encountered dictionary page located beyond the first data page");
-        host_page_locations.push_back(data_ptr);
+        host_page_locations[curr_page_idx] = data_ptr;
+        ++curr_page_idx;
         data_ptr += chunk.h_chunk_info->dictionary_size.value();
       }
 
@@ -474,7 +532,8 @@ void decode_page_headers(pass_intermediate_data& pass,
       std::for_each(thrust::counting_iterator(0),
                     thrust::counting_iterator(num_data_pages),
                     [&](auto const page_idx) {
-                      host_page_locations.push_back(data_ptr);
+                      host_page_locations[curr_page_idx] = data_ptr;
+                      ++curr_page_idx;
                       if (page_idx < num_data_pages - 1) {
                         data_ptr += chunk.h_chunk_info->pages[page_idx + 1].location.offset -
                                     chunk.h_chunk_info->pages[page_idx].location.offset;
@@ -483,7 +542,7 @@ void decode_page_headers(pass_intermediate_data& pass,
     });
 
     // Check if we have data ptrs for all input pages
-    CUDF_EXPECTS(host_page_locations.size() == unsorted_pages.size(),
+    CUDF_EXPECTS(std::cmp_equal(curr_page_idx, unsorted_pages.size()),
                  "Expected page offsets to match total pages");
 
     // Copy page data ptrs to device
@@ -517,15 +576,15 @@ void decode_page_headers(pass_intermediate_data& pass,
 
   // compute max bytes needed for level data
   auto level_bit_size = cudf::detail::make_counting_transform_iterator(
-    0, cuda::proclaim_return_type<int>([chunks = pass.chunks.d_begin()] __device__(int i) {
+    0, cuda::proclaim_return_type<int32_t>([chunks = pass.chunks.d_begin()] __device__(int i) {
       auto c = chunks[i];
-      return static_cast<int>(
-        max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
+      return std::max<int32_t>(c.level_bits[level_type::REPETITION],
+                               c.level_bits[level_type::DEFINITION]);
     }));
   // max level data bit size.
   auto const max_level_bits = cudf::detail::reduce(
     level_bit_size, level_bit_size + pass.chunks.size(), int{0}, cuda::maximum<int>{}, stream);
-  pass.level_type_size = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
+  pass.level_type_size = std::max<int32_t>(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
   pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);

@@ -500,6 +500,31 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
+   * @brief Get byte ranges of column chunks of all (or selected) columns
+   *
+   * @param row_group_indices Input row groups indices
+   * @param options Parquet reader options
+   * @return Vector of byte ranges to column chunks of all (or selected) columns
+   */
+  [[nodiscard]] std::vector<byte_range_info> all_column_chunks_byte_ranges(
+    cudf::host_span<size_type const> row_group_indices,
+    parquet_reader_options const& options) const;
+
+  /**
+   * @brief Materializes all (or selected) columns and returns the final output table
+   *
+   * @param row_group_indices Input row groups indices
+   * @param column_chunk_buffers Device buffers containing column chunk data of all columns
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Table of materialized all columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns(
+    cudf::host_span<size_type const> row_group_indices,
+    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream) const;
+  /**
    * @brief Setup chunking information for filter columns and preprocess the input data pages
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
