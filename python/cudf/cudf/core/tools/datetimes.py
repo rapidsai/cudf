@@ -73,8 +73,7 @@ def to_datetime(
     utc: bool = False,
     format: str | None = None,
     exact: bool = True,
-    unit: str = None,
-    infer_datetime_format: bool = True,
+    unit: str | None = None,
     origin="unix",
     cache: bool = True,
 ):
@@ -111,11 +110,6 @@ def to_datetime(
         origin(unix epoch start).
         Example, with unit='ms' and origin='unix' (the default), this
         would calculate the number of milliseconds to the unix epoch start.
-    infer_datetime_format : bool, default True
-        If True and no `format` is given, attempt to infer the format of the
-        datetime strings, and if it can be inferred, switch to a faster
-        method of parsing them. In some cases this can increase the parsing
-        speed by ~5-10x.
 
     Returns
     -------
@@ -163,17 +157,6 @@ def to_datetime(
             "and catch exceptions explicitly instead",
             FutureWarning,
         )
-
-    # if infer_datetime_format in {None, False}:
-    #     warnings.warn(
-    #         "`infer_datetime_format` is deprecated and will "
-    #         "be removed in a future version of cudf.",
-    #         FutureWarning,
-    #     )
-    # infer_datetime_format = True
-    # import pdb;pdb.set_trace()
-    # if unit is None:
-    #     unit = "us"
 
     if arg is None:
         return pd.NaT
@@ -287,65 +270,30 @@ def to_datetime(
                 col=col,
                 unit=unit,
                 dayfirst=dayfirst,
-                infer_datetime_format=infer_datetime_format,
                 format=format,
                 utc=utc,
             )
             return Series._from_column(col, index=arg.index)
         else:
-            # import pdb;pdb.set_trace()
+            if unit is None and is_scalar(arg):
+                unit = "ns"
 
-            # col = _process_col(
-            #     col=as_column(arg),
-            #     unit=unit,
-            #     dayfirst=dayfirst,
-            #     infer_datetime_format=infer_datetime_format,
-            #     format=format,
-            #     utc=utc,
-            # )
+            col = _process_col(
+                col=as_column(arg),
+                unit=unit,
+                dayfirst=dayfirst,
+                format=format,
+                utc=utc,
+            )
             if isinstance(arg, (Index, pd.Index)):
-                col = _process_col(
-                    col=as_column(arg),
-                    unit=unit,
-                    dayfirst=dayfirst,
-                    infer_datetime_format=infer_datetime_format,
-                    format=format,
-                    utc=utc,
-                )
                 return DatetimeIndex._from_column(col, name=arg.name)
             elif isinstance(arg, (Series, pd.Series)):
-                col = _process_col(
-                    col=as_column(arg),
-                    unit=unit,
-                    dayfirst=dayfirst,
-                    infer_datetime_format=infer_datetime_format,
-                    format=format,
-                    utc=utc,
-                )
                 return Series._from_column(
                     col, name=arg.name, index=ensure_index(arg.index)
                 )
             elif is_scalar(arg):
-                if unit is None:
-                    unit = "ns"
-                col = _process_col(
-                    col=as_column(arg),
-                    unit=unit,
-                    dayfirst=dayfirst,
-                    infer_datetime_format=infer_datetime_format,
-                    format=format,
-                    utc=utc,
-                )
                 return col.element_indexing(0)
             else:
-                col = _process_col(
-                    col=as_column(arg),
-                    unit=unit,
-                    dayfirst=dayfirst,
-                    infer_datetime_format=infer_datetime_format,
-                    format=format,
-                    utc=utc,
-                )
                 return Index._from_column(col)
     except Exception as e:
         if errors == "raise":
@@ -364,15 +312,14 @@ def to_datetime(
 
 def _process_col(
     col,
-    unit: str,
+    unit: str | None,
     dayfirst: bool,
-    infer_datetime_format: bool,
     format: str | None,
     utc: bool,
 ):
     if col.dtype.kind == "f":
         if unit not in (None, "ns"):
-            col = col * unit_to_nanoseconds_conversion[unit]
+            col = col * unit_to_nanoseconds_conversion[unit]  # type: ignore[index]
 
         if format is not None:
             # Converting to int because,
@@ -403,16 +350,15 @@ def _process_col(
             col = col * factor
 
         if format is not None:
+            if unit is None:
+                unit = "us"
             col = col.astype(CUDF_STRING_DTYPE).strptime(
                 dtype=np.dtype(_unit_dtype_map[unit]), format=format
             )
         else:
-            # import pdb;pdb.set_trace()
             if len(col) == 0 and unit is None:
                 unit = "s"
             elif unit is None:
-                # if (col / 1_000_000_000 > 1).any():
-                #     unit = "ns"
                 unit = "ns"
 
             col = col.astype(
@@ -431,30 +377,37 @@ def _process_col(
                 col=col,
                 unit=unit,
                 dayfirst=dayfirst,
-                infer_datetime_format=infer_datetime_format,
                 format=format,
                 utc=utc,
             )
         else:
-            if format is None:
-                if not infer_datetime_format and dayfirst:
-                    raise NotImplementedError(
-                        f"{dayfirst=} not implemented "
-                        f"when {format=} and {infer_datetime_format=}."
-                    )
-                format = infer_format(
-                    element=col.element_indexing(0),
-                    dayfirst=dayfirst,
+            if format is not None and "f" in format and unit is None:
+                col_ns = col.strptime(
+                    dtype=np.dtype(_unit_dtype_map["ns"]), format=format
                 )
-            col = col.strptime(
-                dtype=np.dtype(
-                    _unit_dtype_map.get(unit, _unit_dtype_map["us"])
-                ),
-                format=format,
-            )
+                col_us = col.strptime(
+                    dtype=np.dtype(_unit_dtype_map["us"]), format=format
+                )
+                res = col_ns != col_us
+                if res.any():
+                    col = col_ns
+                else:
+                    col = col_us
+            else:
+                if format is None:
+                    format = infer_format(
+                        element=col.element_indexing(0),
+                        dayfirst=dayfirst,
+                    )
+                col = col.strptime(
+                    dtype=np.dtype(
+                        _unit_dtype_map.get(unit, _unit_dtype_map["us"])  # type: ignore[arg-type]
+                    ),
+                    format=format,
+                )
     elif col.dtype.kind != "M":
         raise TypeError(
-            f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
+            f"dtype {col.dtype} cannot be converted to {_unit_dtype_map.get(unit, _unit_dtype_map['us'])}"  # type: ignore[arg-type]
         )
     if utc and not isinstance(col.dtype, pd.DatetimeTZDtype):
         return col.tz_localize("UTC")

@@ -392,12 +392,6 @@ class SpillableBufferOwner(BufferOwner):
             if self.is_spilled:
                 self.spill(target="gpu")
             self._last_accessed = time.monotonic()
-        # If we have context-based spill locks, unspill if needed
-        elif len(self._spill_locks) > 0:
-            with self.lock:
-                if self.is_spilled:
-                    self.spill(target="gpu")
-            self._last_accessed = time.monotonic()
         return self._ptr
 
     def memory_info(self) -> tuple[int, int, str]:
