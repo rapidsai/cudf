@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -41,10 +42,12 @@ struct element_argminmax_fn {
     if (out_of_bounds_or_null(rhs_idx)) { return lhs_idx; }
 
     auto const lhs = d_col.type().id() == type_id::DICTIONARY32
-                       ? d_col.child(1).element<T>(d_col.element<dictionary32>(lhs_idx).value())
+                       ? d_col.child(dictionary_column_view::keys_column_index)
+                           .element<T>(d_col.element<dictionary32>(lhs_idx).value())
                        : d_col.element<T>(lhs_idx);
     auto const rhs = d_col.type().id() == type_id::DICTIONARY32
-                       ? d_col.child(1).element<T>(d_col.element<dictionary32>(rhs_idx).value())
+                       ? d_col.child(dictionary_column_view::keys_column_index)
+                           .element<T>(d_col.element<dictionary32>(rhs_idx).value())
                        : d_col.element<T>(rhs_idx);
 
     // Return `lhs_idx` iff:
