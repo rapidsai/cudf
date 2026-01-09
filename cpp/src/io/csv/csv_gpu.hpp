@@ -207,7 +207,7 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
  * @param[out] columns Device memory output of column data
  * @param[out] valids Device memory output of column valids bitmap data
  * @param[out] valid_counts Device memory output of the number of valid fields in each column
- * @param[out] quoted_flags Per-column boolean arrays indicating which rows were quoted fields
+ * @param[out] is_quoted Per-column boolean arrays indicating which rows were quoted fields
  *                          (nullptr entries mean the column doesn't need quote tracking)
  * @param[in] stream CUDA stream to use
  */
@@ -219,7 +219,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
-                            device_span<bool* const> quoted_flags,
+                            device_span<bool* const> is_quoted,
                             rmm::cuda_stream_view stream);
 
 }  // namespace gpu

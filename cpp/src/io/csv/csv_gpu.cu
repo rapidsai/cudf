@@ -295,7 +295,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
  * @param[out] columns The output column data
  * @param[out] valids The bitmaps indicating whether column fields are valid
  * @param[out] valid_counts The number of valid fields in each column
- * @param[out] quoted_flags Per-column boolean arrays tracking which rows were quoted fields
+ * @param[out] is_quoted_flags Per-column boolean arrays tracking which rows were quoted fields
  */
 CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   convert_csv_to_cudf(cudf::io::parse_options_view options,
@@ -306,7 +306,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<void* const> columns,
                       device_span<cudf::bitmask_type* const> valids,
                       device_span<size_type> valid_counts,
-                      device_span<bool* const> quoted_flags)
+                      device_span<bool* const> is_quoted_flags)
 {
   auto const raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
@@ -340,12 +340,13 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         field_start = trimmed_field.first;
         field_end   = trimmed_field.second;
       }
+      bool* const is_quoted_output =
+        is_quoted_flags.empty() ? nullptr : is_quoted_flags[actual_col];
       if (is_valid) {
         // Type dispatcher does not handle STRING
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
-          auto end            = next_delimiter;
-          bool was_quoted     = false;
-          bool* quoted_output = quoted_flags.empty() ? nullptr : quoted_flags[actual_col];
+          auto end        = next_delimiter;
+          bool was_quoted = false;
           if (not options.keepquotes) {
             if (not options.detect_whitespace_around_quotes) {
               if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
@@ -365,7 +366,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
             }
           }
           // Track whether this field was quoted (for doublequote unescaping)
-          if (quoted_output != nullptr) { quoted_output[rec_id] = was_quoted; }
+          if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = was_quoted; }
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
           str_list[rec_id].first  = field_start;
           str_list[rec_id].second = end - field_start;
@@ -388,9 +389,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         auto str_list           = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
         str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
-        // Null/invalid strings are not quoted
-        bool* quoted_output = quoted_flags.empty() ? nullptr : quoted_flags[actual_col];
-        if (quoted_output != nullptr) { quoted_output[rec_id] = false; }
+        if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = false; }
       }
       ++actual_col;
     }
@@ -830,7 +829,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
-                            device_span<bool* const> quoted_flags,
+                            device_span<bool* const> is_quoted_flags,
                             rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count
@@ -838,8 +837,15 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
   auto const num_rows   = row_offsets.size() - 1;
   auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
 
-  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(
-    options, data, column_flags, row_offsets, dtypes, columns, valids, valid_counts, quoted_flags);
+  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(options,
+                                                                    data,
+                                                                    column_flags,
+                                                                    row_offsets,
+                                                                    dtypes,
+                                                                    columns,
+                                                                    valids,
+                                                                    valid_counts,
+                                                                    is_quoted_flags);
 }
 
 uint32_t __host__ gather_row_offsets(parse_options_view const& options,

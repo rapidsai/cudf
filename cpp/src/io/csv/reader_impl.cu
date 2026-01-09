@@ -628,7 +628,7 @@ void infer_column_types(parse_options const& parse_opts,
  */
 struct decode_result {
   std::vector<column_buffer> buffers;
-  std::vector<rmm::device_uvector<bool>> quoted_flags;
+  std::vector<rmm::device_uvector<bool>> is_quoted_flags;
 };
 
 decode_result decode_data(parse_options const& parse_opts,
@@ -665,15 +665,13 @@ decode_result decode_data(parse_options const& parse_opts,
     h_valid[i] = out_buffers[i].null_mask();
   }
 
-  // Allocate quoted_flags arrays for string columns (to track which fields were quoted)
-  std::vector<rmm::device_uvector<bool>> quoted_flags_storage;
-  auto h_quoted_flags = cudf::detail::make_host_vector<bool*>(num_active_columns, stream);
+  // Allocate is_quoted_flags arrays for string columns to track which fields were quoted
+  std::vector<rmm::device_uvector<bool>> is_quoted_flags_storage;
+  auto h_is_quoted_flags = cudf::detail::make_host_vector<bool*>(num_active_columns, stream);
   for (int i = 0; i < num_active_columns; ++i) {
     if (column_types[i].id() == type_id::STRING) {
-      quoted_flags_storage.emplace_back(num_records, stream);
-      h_quoted_flags[i] = quoted_flags_storage.back().data();
-    } else {
-      h_quoted_flags[i] = nullptr;
+      is_quoted_flags_storage.emplace_back(num_records, stream);
+      h_is_quoted_flags[i] = is_quoted_flags_storage.back().data();
     }
   }
 
@@ -689,7 +687,7 @@ decode_result decode_data(parse_options const& parse_opts,
     make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref()),
     make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
     d_valid_counts,
-    make_device_uvector_async(h_quoted_flags, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(h_is_quoted_flags, stream, cudf::get_current_device_resource_ref()),
     stream);
 
   auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);
@@ -697,7 +695,7 @@ decode_result decode_data(parse_options const& parse_opts,
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
   }
 
-  return {std::move(out_buffers), std::move(quoted_flags_storage)};
+  return {std::move(out_buffers), std::move(is_quoted_flags_storage)};
 }
 
 cudf::detail::host_vector<data_type> determine_column_types(
@@ -954,22 +952,16 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
     out_columns.resize(column_types.size());
 
-    auto& out_buffers  = decode_result.buffers;
-    auto& quoted_flags = decode_result.quoted_flags;
+    auto& out_buffers     = decode_result.buffers;
+    auto& is_quoted_flags = decode_result.is_quoted_flags;
 
     bool const doublequote_enabled = (parse_opts.quotechar != '\0' && parse_opts.doublequote);
 
     // Identify string columns that need doublequote processing
     std::vector<size_t> string_col_indices;
-    std::vector<size_t> quoted_flags_indices;
     if (doublequote_enabled) {
-      size_t qf_idx = 0;
       for (size_t i = 0; i < column_types.size(); ++i) {
-        if (column_types[i].id() == type_id::STRING) {
-          string_col_indices.push_back(i);
-          quoted_flags_indices.push_back(qf_idx);
-          ++qf_idx;
-        }
+        if (column_types[i].id() == type_id::STRING) { string_col_indices.push_back(i); }
       }
     }
 
@@ -986,8 +978,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
       auto process_string_column = [&](size_t str_col_idx, rmm::cuda_stream_view col_stream) {
         auto const col_idx     = string_col_indices[str_col_idx];
-        auto const qf_idx      = quoted_flags_indices[str_col_idx];
-        auto const& flags      = quoted_flags[qf_idx];
+        auto const& flags      = is_quoted_flags[str_col_idx];
         auto* buffer           = &out_buffers[col_idx];
         auto const* flags_data = flags.data();
 
