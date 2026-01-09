@@ -404,10 +404,10 @@ namespace {
  * @param global_count Output array of set bit counts for each bitmask
  */
 template <size_type block_size>
-CUDF_KERNEL void count_set_bit_kernel(device_span<bitmask_type const* const> bitmasks,
-                                      size_type first_bit_index,
-                                      size_type last_bit_index,
-                                      size_type* global_count)
+CUDF_KERNEL void count_set_bits_kernel(device_span<bitmask_type const* const> bitmasks,
+                                       size_type first_bit_index,
+                                       size_type last_bit_index,
+                                       size_type* global_count)
 {
   auto const bitmask_idx = blockIdx.y;
   if (bitmask_idx >= bitmasks.size()) { return; }
@@ -492,7 +492,7 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
   auto const grid = grid_1d{num_words, block_size};
   auto const kernel_grid =
     dim3{static_cast<unsigned int>(grid.num_blocks), static_cast<unsigned int>(num_bitmasks), 1};
-  count_set_bit_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
+  count_set_bits_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
     d_bitmasks, start, stop - 1, d_non_zero_count.data());
 
   auto h_non_zero_count = cudf::detail::make_pinned_vector<size_type>(num_bitmasks, stream);
@@ -526,7 +526,7 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask,
   constexpr size_type block_size{256};
   auto const grid        = grid_1d{num_words, block_size};
   auto const kernel_grid = dim3{static_cast<unsigned int>(grid.num_blocks), 1, 1};
-  count_set_bit_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
+  count_set_bits_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
     device_span<bitmask_type const* const>{d_bitmask.data(), 1},
     start,
     stop - 1,
