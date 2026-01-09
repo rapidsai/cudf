@@ -207,9 +207,13 @@ class host_span {
             std::enable_if_t<OtherExtent == Extent || Extent == cudf::dynamic_extent ||
                                OtherExtent == std::dynamic_extent,
                              void>* = nullptr>
-  constexpr host_span(std::span<T, OtherExtent> span, bool is_device_accessible = false) noexcept
+  constexpr host_span(std::span<T, OtherExtent> span, bool is_device_accessible = false)
     : _data{span.data()}, _size{span.size()}, _is_device_accessible{is_device_accessible}
   {
+    // When converting from dynamic to fixed extent, ensure size matches
+    if constexpr (Extent != cudf::dynamic_extent && OtherExtent == std::dynamic_extent) {
+      CUDF_EXPECTS(span.size() == Extent, "Span size must match fixed extent");
+    }
   }
 
   // Constructor from pointer and size
@@ -270,8 +274,12 @@ class host_span {
   [[nodiscard]] constexpr
     std::enable_if_t<TargetExtent == Extent || TargetExtent == std::dynamic_extent,
                      std::span<T, TargetExtent>>
-    to_std_span() const noexcept
+    to_std_span() const
   {
+    // When converting to fixed extent, ensure size matches
+    if constexpr (TargetExtent != std::dynamic_extent) {
+      CUDF_EXPECTS(_size == TargetExtent, "Span size must match target fixed extent");
+    }
     return std::span<T, TargetExtent>{_data, _size};
   }
 
@@ -282,13 +290,16 @@ class host_span {
   }
 
   // Element access
-  [[nodiscard]] constexpr reference operator[](size_type idx) const noexcept
+  // not noexcept due to undefined behavior when idx < 0 || idx >= size
+  [[nodiscard]] constexpr reference operator[](size_type idx) const
   {
     return _data[idx];
   }
 
-  [[nodiscard]] constexpr reference front() const noexcept { return _data[0]; }
-  [[nodiscard]] constexpr reference back() const noexcept { return _data[_size - 1]; }
+  // not noexcept due to undefined behavior when size = 0
+  [[nodiscard]] constexpr reference front() const { return _data[0]; }
+  // not noexcept due to undefined behavior when size = 0
+  [[nodiscard]] constexpr reference back() const { return _data[_size - 1]; }
   [[nodiscard]] CUDF_HOST_DEVICE constexpr pointer data() const noexcept { return _data; }
 
   // Iterators
