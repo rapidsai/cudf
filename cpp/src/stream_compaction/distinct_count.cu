@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -91,7 +91,7 @@ struct has_nans {
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
-    return thrust::any_of(rmm::exec_policy(stream),
+    return thrust::any_of(rmm::exec_policy_nosync(stream),
                           thrust::counting_iterator<cudf::size_type>(0),
                           thrust::counting_iterator<cudf::size_type>(input.size()),
                           check_for_nan<T>(device_view));
