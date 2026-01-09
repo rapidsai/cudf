@@ -5915,8 +5915,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if columns is None and data.dtype.names is None:
             names = range(num_cols)
 
-        elif data.dtype.names is not None:
-            names = data.dtype.names
+        elif (names := data.dtype.names) is not None:
+            if diff := set(columns) - set(names):
+                raise ValueError(
+                    f"Found columns that don't exist in data: {diff}"
+                )
 
         else:
             if len(columns) != num_cols:

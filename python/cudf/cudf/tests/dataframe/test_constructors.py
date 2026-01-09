@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -216,14 +216,10 @@ def test_arrow_handle_no_index_name():
     assert_eq(expect, got)
 
 
-def test_pandas_non_contiguious():
-    rng = np.random.default_rng(seed=0)
-    arr1 = rng.random(size=(5000, 10))
-    assert arr1.flags["C_CONTIGUOUS"] is True
+@pytest.mark.parametrize("order", ["C", "F"])
+def test_pandas_non_contiguious(order):
+    arr1 = np.ones((5, 5), order=order)
     df = pd.DataFrame(arr1)
-    for col in df.columns:
-        assert df[col].values.flags["C_CONTIGUOUS"] is False
-
     gdf = cudf.DataFrame(df)
     assert_eq(gdf.to_pandas(), df)
 
@@ -243,7 +239,6 @@ def test_from_records(numeric_types_as_str):
     assert_eq(df, gdf)
 
 
-@pytest.mark.parametrize("columns", [None, ["first", "second", "third"]])
 @pytest.mark.parametrize(
     "index",
     [
@@ -256,15 +251,28 @@ def test_from_records(numeric_types_as_str):
         ["abc", "xyz"],
     ],
 )
-def test_from_records_index(columns, index):
+def test_from_records_index(index):
     rec_ary = np.array(
         [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
         dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
     )
-    gdf = cudf.DataFrame.from_records(rec_ary, columns=columns, index=index)
-    df = pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    gdf = cudf.DataFrame.from_records(rec_ary, index=index)
+    df = pd.DataFrame.from_records(rec_ary, index=index)
     assert isinstance(gdf, cudf.DataFrame)
     assert_eq(df, gdf)
+
+
+def test_from_records_index_invalid_columns_raises():
+    rec_ary = np.array(
+        [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
+        dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
+    )
+    index = None
+    columns = ["first", "second", "third"]
+    with pytest.raises(ValueError):
+        cudf.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    with pytest.raises(ValueError):
+        pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
 
 
 def test_dataframe_construction_from_cp_arrays():
@@ -294,13 +302,20 @@ def test_dataframe_construction_from_cp_arrays():
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=0, drop=False)
     assert isinstance(gdf, cudf.DataFrame)
-
+    assert gdf.index.dtype == np.dtype("int32")
+    # pandas retuns a RangeIndex
+    assert not isinstance(gdf.index, cudf.RangeIndex)
+    gdf.index = gdf.index.astype(np.int64)
     assert_eq(df, gdf)
 
     gdf = cudf.DataFrame(d_ary)
     gdf = gdf.set_index(keys=1, drop=False)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=1, drop=False)
+    assert gdf.index.dtype == np.dtype("int32")
+    # pandas retuns a RangeIndex
+    assert not isinstance(gdf.index, cudf.RangeIndex)
+    gdf.index = gdf.index.astype(np.int64)
     assert isinstance(gdf, cudf.DataFrame)
 
     assert_eq(df, gdf)
