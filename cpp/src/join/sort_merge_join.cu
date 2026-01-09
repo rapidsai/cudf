@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "cudf/detail/utilities/vector_factories.hpp"
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -105,7 +106,7 @@ struct is_row_valid {
  *
  * Returns true for rows that have nulls and were filtered out during preprocessing.
  */
-struct left_join_unequal_nulls {
+struct is_row_null {
   bitmask_type const* const _validity_mask;  ///< Validity mask for the table
 
   __device__ auto operator()(size_type idx) const noexcept
@@ -125,7 +126,7 @@ cudf::detail::device_scalar<ScalarType> reduce(InputIt input,
     nullptr, temp_storage_bytes, input, output.data(), num_items, stream.value());
   rmm::device_buffer temp_storage(temp_storage_bytes, stream);
   cub::DeviceReduce::Sum(
-    nullptr, temp_storage_bytes, input, output.data(), num_items, stream.value());
+    temp_storage.data(), temp_storage_bytes, input, output.data(), num_items, stream.value());
   return output;
 }
 
@@ -164,6 +165,26 @@ cudf::detail::device_scalar<ScalarType> flagged_if(
                                lambda,
                                stream.value());
   return num_selected_out;
+}
+
+template <typename InputIts, typename OutputIts, typename SizeIt>
+void batched_copy(InputIts input_iterators, OutputIts output_iterators, SizeIt sizes, size_type num_ranges, rmm::cuda_stream_view stream) {
+  size_t temp_storage_bytes = 0;
+  cub::DeviceCopy::Batched(nullptr,
+                            temp_storage_bytes,
+                            input_iterators,
+                            output_iterators,
+                            sizes,
+                            num_ranges,
+                            stream.value());
+  rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+  cub::DeviceCopy::Batched(temp_storage.data(),
+                            temp_storage_bytes,
+                            input_iterators,
+                            output_iterators,
+                            sizes,
+                            num_ranges,
+                            stream.value());
 }
 
 template <typename LargerIterator, typename SmallerIterator>
@@ -266,7 +287,7 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
   // naive: iterate through larger table and binary search on smaller table
   auto match_counts = matches_per_row(stream, temp_mr);
 
-  auto count_matches_it = thrust::transform_iterator(
+  auto count_matches_it = cuda::transform_iterator(
     match_counts->begin(),
     cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
   auto const count_matches = thrust::reduce(
@@ -311,22 +332,7 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
         })};
     auto const sizes = cuda::permutation_iterator{match_counts->begin(), nonzero_matches.begin()};
 
-    size_t temp_storage_bytes = 0;
-    cub::DeviceCopy::Batched(nullptr,
-                             temp_storage_bytes,
-                             input_iterators,
-                             output_iterators,
-                             sizes,
-                             count_matches,
-                             stream.value());
-    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-    cub::DeviceCopy::Batched(temp_storage.data(),
-                             temp_storage_bytes,
-                             input_iterators,
-                             output_iterators,
-                             sizes,
-                             count_matches,
-                             stream.value());
+    batched_copy(input_iterators, output_iterators, sizes, count_matches, stream);
   }
 
   // populate smaller indices
@@ -345,11 +351,11 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
         auto const pos       = match_offsets[lhs_idx];
         smaller_indices[pos] = lb;
       });
-    auto smaller_it = thrust::transform_iterator(
+    auto smaller_it = cuda::transform_iterator(
       sorted_smaller_order_begin,
       cuda::proclaim_return_type<detail::row::lhs_index_type>(
         [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
-    auto larger_it = thrust::transform_iterator(
+    auto larger_it = cuda::transform_iterator(
       nonzero_matches.begin(),
       cuda::proclaim_return_type<detail::row::rhs_index_type>(
         [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
@@ -423,7 +429,7 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
   auto match_counts = matches_per_row(stream, temp_mr);
 
   cudf::detail::device_scalar<size_type> count_matches(stream, temp_mr);
-  auto count_matches_it = thrust::transform_iterator(
+  auto count_matches_it = cuda::transform_iterator(
     match_counts->begin(),
     cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
   count_matches = reduce(count_matches_it, std::move(count_matches), larger_numrows, stream);
@@ -482,22 +488,7 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
         })};
     auto const sizes = cuda::permutation_iterator{match_counts->begin(), nonzero_matches.begin()};
 
-    size_t temp_storage_bytes = 0;
-    cub::DeviceCopy::Batched(nullptr,
-                             temp_storage_bytes,
-                             input_iterators,
-                             output_iterators,
-                             sizes,
-                             h_count_matches,
-                             stream.value());
-    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-    cub::DeviceCopy::Batched(temp_storage.data(),
-                             temp_storage_bytes,
-                             input_iterators,
-                             output_iterators,
-                             sizes,
-                             h_count_matches,
-                             stream.value());
+    batched_copy(input_iterators, output_iterators, sizes, h_count_matches, stream);
   }
 
   // Populate smaller indices for matched rows using binary search
@@ -515,11 +506,11 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
         auto const pos       = match_offsets[lhs_idx];
         smaller_indices[pos] = lb;
       });
-    auto smaller_it = thrust::transform_iterator(
+    auto smaller_it = cuda::transform_iterator(
       sorted_smaller_order_begin,
       cuda::proclaim_return_type<detail::row::lhs_index_type>(
         [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
-    auto larger_it = thrust::transform_iterator(
+    auto larger_it = cuda::transform_iterator(
       nonzero_matches.begin(),
       cuda::proclaim_return_type<detail::row::rhs_index_type>(
         [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
@@ -924,37 +915,38 @@ sort_merge_join::left_join(table_view const& left,
       // to the output with JoinNoMatch sentinel values for the right side.
 
       auto const num_filtered_nulls = preprocessed_left._num_nulls.value();
-      auto const total_output_size  = preprocessed_left_indices->size() + num_filtered_nulls;
+      auto const total_output_size  = preprocessed_left_indices->size() + static_cast<int64_t>(num_filtered_nulls);
 
       // Create new result vectors with space for filtered rows
       rmm::device_uvector<size_type> left_result_indices(total_output_size, stream, mr);
       rmm::device_uvector<size_type> right_result_indices(total_output_size, stream, mr);
 
       // Copy existing join results
-      thrust::copy(
-        rmm::exec_policy_nosync(stream),
-        thrust::make_zip_iterator(preprocessed_left_indices->begin(),
-                                  preprocessed_right_indices->begin()),
-        thrust::make_zip_iterator(preprocessed_left_indices->end(),
-                                  preprocessed_right_indices->end()),
-        thrust::make_zip_iterator(left_result_indices.begin(), right_result_indices.begin()));
+      {
+        using Iterator = decltype(preprocessed_left_indices->begin());
+        auto const h_input_iterators = std::vector{preprocessed_left_indices->begin(), preprocessed_right_indices->begin()};
+        auto const h_output_iterators = std::vector{left_result_indices.begin(), right_result_indices.begin()};
+        auto const h_sizes = std::vector<size_t>{preprocessed_left_indices->size(), preprocessed_right_indices->size()};
+        auto const input_iterators = cudf::detail::make_device_uvector_async<Iterator>(h_input_iterators, stream, temp_mr);
+        auto const output_iterators = cudf::detail::make_device_uvector_async<Iterator>(h_output_iterators, stream, temp_mr);
+        auto const sizes = cudf::detail::make_device_uvector_async<size_t>(h_sizes, stream, temp_mr);
+        
+        batched_copy(input_iterators.begin(), output_iterators.begin(), sizes.begin(), 2, stream);
+      }
 
       // Append filtered null rows with JoinNoMatch for right side
       auto const validity_mask =
         static_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
-      cudf::detail::device_scalar<int64_t> d_num_filtered_nulls(
+      cudf::detail::device_scalar<size_type> d_num_filtered_nulls(
         num_filtered_nulls, stream, temp_mr);
       flagged_if(cuda::counting_iterator(0),
                  cuda::counting_iterator(0),
                  left_result_indices.begin() + preprocessed_left_indices->size(),
                  std::move(d_num_filtered_nulls),
                  left.num_rows(),
-                 left_join_unequal_nulls{validity_mask},
+                 is_row_null{validity_mask},
                  stream);
-      thrust::fill(rmm::exec_policy_nosync(stream),
-                   right_result_indices.begin() + preprocessed_right_indices->size(),
-                   right_result_indices.end(),
-                   JoinNoMatch);
+      cub::DeviceTransform::Fill(right_result_indices.begin() + preprocessed_right_indices->size(), num_filtered_nulls, JoinNoMatch, stream.value());
 
       return std::pair{
         std::make_unique<rmm::device_uvector<size_type>>(std::move(left_result_indices)),
