@@ -15,8 +15,12 @@
 #include <cudf/utilities/pinned_memory.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
+
+#include <thrust/sequence.h>
 
 using cudf::host_span;
 using cudf::detail::host_2dspan;
@@ -98,6 +102,70 @@ TEST_F(PinnedMemoryTest, MakePinnedVector)
   {
     auto const vec = cudf::detail::make_pinned_vector_async<char>(1, cudf::get_default_stream());
     EXPECT_TRUE(vec.get_allocator().is_device_accessible());
+  }
+}
+
+TEST_F(PinnedMemoryTest, MakePinnedVectorFromDeviceSpan)
+{
+  cudf::set_allocate_host_as_pinned_threshold(0);
+
+  auto stream = cudf::get_default_stream();
+
+  // Create some test data on the device
+  constexpr int num_elements = 100;
+  rmm::device_uvector<int32_t> device_data(num_elements, stream);
+
+  // Fill with test values (0, 1, 2, ...)
+  thrust::sequence(
+    rmm::exec_policy(stream), device_data.begin(), device_data.end(), int32_t{0});
+  stream.synchronize();
+
+  // Test async version with device_span
+  {
+    auto const vec = cudf::detail::make_pinned_vector_async(
+      cudf::device_span<int32_t const>{device_data}, stream);
+    stream.synchronize();
+    EXPECT_TRUE(vec.get_allocator().is_device_accessible());
+    EXPECT_EQ(vec.size(), num_elements);
+    // Verify data correctness
+    for (int i = 0; i < num_elements; ++i) {
+      EXPECT_EQ(vec[i], i);
+    }
+  }
+
+  // Test async version with device container
+  {
+    auto const vec = cudf::detail::make_pinned_vector_async(device_data, stream);
+    stream.synchronize();
+    EXPECT_TRUE(vec.get_allocator().is_device_accessible());
+    EXPECT_EQ(vec.size(), num_elements);
+    // Verify data correctness
+    for (int i = 0; i < num_elements; ++i) {
+      EXPECT_EQ(vec[i], i);
+    }
+  }
+
+  // Test sync version with device_span
+  {
+    auto const vec =
+      cudf::detail::make_pinned_vector(cudf::device_span<int32_t const>{device_data}, stream);
+    EXPECT_TRUE(vec.get_allocator().is_device_accessible());
+    EXPECT_EQ(vec.size(), num_elements);
+    // Verify data correctness
+    for (int i = 0; i < num_elements; ++i) {
+      EXPECT_EQ(vec[i], i);
+    }
+  }
+
+  // Test sync version with device container
+  {
+    auto const vec = cudf::detail::make_pinned_vector(device_data, stream);
+    EXPECT_TRUE(vec.get_allocator().is_device_accessible());
+    EXPECT_EQ(vec.size(), num_elements);
+    // Verify data correctness
+    for (int i = 0; i < num_elements; ++i) {
+      EXPECT_EQ(vec[i], i);
+    }
   }
 }
 
