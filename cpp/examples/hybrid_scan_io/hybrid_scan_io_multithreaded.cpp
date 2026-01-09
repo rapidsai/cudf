@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -55,8 +55,10 @@ struct hybrid_scan_fn {
     for (auto curr_file_idx = thread_id; curr_file_idx < input_sources.size();
          curr_file_idx += thread_count) {
       timer timer;
-      std::ignore =
-        hybrid_scan<false>(input_sources[curr_file_idx], filter_expression, filters, stream, mr);
+      constexpr bool print_progress = false;
+      constexpr bool single_step_materialize = true;
+      std::ignore = hybrid_scan<print_progress, single_step_materialize>(
+         input_sources[curr_file_idx], filter_expression, filters, stream, mr);
       std::cout << "Thread " << thread_id << " ";
       timer.print_elapsed_millis();
     }
@@ -142,7 +144,7 @@ int32_t main(int argc, char const** argv)
   int32_t num_reads             = 1;
   auto column_name              = std::string{"string_col"};
   auto literal_value            = std::string{"0000001"};
-  io_source_type io_source_type = io_source_type::PINNED_BUFFER;
+  io_source_type io_source_type = io_source_type::HOST_BUFFER;
 
   // Set to the provided args
   switch (argc) {

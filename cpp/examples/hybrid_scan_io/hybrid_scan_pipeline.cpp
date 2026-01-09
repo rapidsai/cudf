@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -108,7 +108,7 @@ struct hybrid_scan_fn {
 };
 
 /**
- * @brief Read parquet file with the next-gen parquet reader
+ * @brief Split parquet row groups into partitions and pipeline their reads using the next-gen parquet reader
  *
  * @param io_source io source to read
  * @param num_partitions Number of read partitions
@@ -118,7 +118,7 @@ struct hybrid_scan_fn {
  * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
  *         row validity column
  */
-auto hybrid_scan(io_source const& io_source,
+auto hybrid_scan_pipelined(io_source const& io_source,
                  cudf::size_type num_partitions,
                  split_strategy split_strategy,
                  bool use_page_index,
@@ -193,6 +193,7 @@ auto hybrid_scan(io_source const& io_source,
       offset += part_size;
     }
   } else {
+    CUDF_FAIL("BYTE_RANGES split strategy is not implemented yet");
   }
 
   std::vector<hybrid_scan_fn> read_tasks;

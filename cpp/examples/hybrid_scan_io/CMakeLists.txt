@@ -1,5 +1,5 @@
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 
@@ -46,7 +46,9 @@ target_link_libraries(
                                        $<TARGET_OBJECTS:hybrid_scan_io_utils>
 )
 target_compile_features(hybrid_scan_io_multithreaded PRIVATE cxx_std_20)
-install(TARGETS hybrid_scan_io_multithreaded DESTINATION bin/examples/libcudf/hybrid_scan_io_multithreaded)
+install(TARGETS hybrid_scan_io_multithreaded
+        DESTINATION bin/examples/libcudf/hybrid_scan_io_multithreaded
+)
 
 # Build and install hybrid_scan_pipeline
 add_executable(hybrid_scan_pipeline hybrid_scan_pipeline.cpp)

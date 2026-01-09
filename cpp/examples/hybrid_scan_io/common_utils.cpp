@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +9,7 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
@@ -164,14 +165,6 @@ void check_tables_equal(cudf::table_view const& lhs_table,
   }
 }
 
-namespace {
-
-/**
- * @brief Fetches a host span of Parquet footer bytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @return A host span of the footer bytes
- */
 cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
 {
   CUDF_FUNC_RANGE();
@@ -198,13 +191,6 @@ cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const>
                                         ender->footer_len);
 }
 
-/**
- * @brief Fetches a host span of Parquet PageIndexbytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @param page_index_bytes Byte range of `PageIndex` to fetch
- * @return A host span of the PageIndex bytes
- */
 cudf::host_span<uint8_t const> fetch_page_index_bytes(
   cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes)
 {
@@ -213,16 +199,6 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
     page_index_bytes.size());
 }
 
-/**
- * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
- *
- * @param host_buffer Host buffer span
- * @param byte_ranges Byte ranges to fetch
- * @param stream CUDA stream
- * @param mr Device memory resource to create device buffers with
- *
- * @return Vector of device buffers
- */
 std::vector<rmm::device_buffer> fetch_byte_ranges(
   cudf::host_span<uint8_t const> host_buffer,
   cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
@@ -232,8 +208,6 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
   static std::mutex mutex;
 
   CUDF_FUNC_RANGE();
-
-  static std::mutex mutex;
 
   std::vector<rmm::device_buffer> buffers(byte_ranges.size());
   {
@@ -277,8 +251,6 @@ std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_
   return table;
 }
 
-}  // namespace
-
 /**
  * @brief Read parquet file with the next-gen parquet reader
  *
@@ -291,7 +263,7 @@ std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_
  * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
  *         row validity column
  */
-template <bool print_progress>
+template <bool print_progress, bool single_step_materialize>
 std::unique_ptr<cudf::table> hybrid_scan(io_source const& io_source,
                                          cudf::ast::expression const& filter_expression,
                                          std::unordered_set<parquet_filter_type> const& filters,
@@ -441,75 +413,107 @@ std::unique_ptr<cudf::table> hybrid_scan(io_source const& io_source,
       cudf::data_type{cudf::type_id::BOOL8}, num_rows, rmm::device_buffer{}, 0, stream, mr);
   }
 
-  if constexpr (print_progress) {
-    std::cout << "READER: Materialize filter columns...\n";
-    timer.reset();
-  }
-  // Get column chunk byte ranges from the reader
-  auto const filter_column_chunk_byte_ranges =
-    reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
-  auto filter_column_chunk_buffers =
-    fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
-
-  // Materialize the table with only the filter columns
-  auto row_mask_mutable_view = row_mask->mutable_view();
-  auto filter_table =
-    reader
-      ->materialize_filter_columns(
-        current_row_group_indices,
-        std::move(filter_column_chunk_buffers),
-        row_mask_mutable_view,
-        prune_filter_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
-        options,
-        stream)
-      .tbl;
-  if constexpr (print_progress) { timer.print_elapsed_millis(); }
-
-  // Check whether to prune payload column data pages
-  auto const prune_payload_data_pages =
-    filters.contains(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
-
-  if constexpr (print_progress) {
-    if (prune_payload_data_pages) {
-      std::cout << "READER: Filter data pages of payload columns with row mask...\n";
-    } else {
-      std::cout << "SKIP: Payload column data page filtering with row mask...\n\n";
+  if constexpr (single_step_materialize) {
+    if constexpr (print_progress) {
+      std::cout << "READER: Materialize all columns...\n";
+      timer.reset();
     }
+    auto const all_column_chunk_byte_ranges =
+      reader->all_column_chunks_byte_ranges(current_row_group_indices, options);
+    auto all_column_chunk_buffers =
+      fetch_byte_ranges(file_buffer_span, all_column_chunk_byte_ranges, stream, mr);
+    auto read_table =
+      reader
+        ->materialize_all_columns(
+          current_row_group_indices, std::move(all_column_chunk_buffers), options, stream)
+        .tbl;
+    if constexpr (print_progress) { timer.print_elapsed_millis(); }
+    return std::move(read_table);
+  } else {
+    if constexpr (print_progress) {
+      std::cout << "READER: Materialize filter columns...\n";
+      timer.reset();
+    }
+    // Get column chunk byte ranges from the reader
+    auto const filter_column_chunk_byte_ranges =
+      reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
+    auto filter_column_chunk_buffers =
+      fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
 
-    std::cout << "READER: Materialize payload columns...\n";
-    timer.reset();
+    // Materialize the table with only the filter columns
+    auto row_mask_mutable_view = row_mask->mutable_view();
+    auto filter_table =
+      reader
+        ->materialize_filter_columns(
+          current_row_group_indices,
+          std::move(filter_column_chunk_buffers),
+          row_mask_mutable_view,
+          prune_filter_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
+          options,
+          stream)
+        .tbl;
+    if constexpr (print_progress) { timer.print_elapsed_millis(); }
+
+    // Check whether to prune payload column data pages
+    auto const prune_payload_data_pages =
+      filters.contains(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
+
+    if constexpr (print_progress) {
+      if (prune_payload_data_pages) {
+        std::cout << "READER: Filter data pages of payload columns with row mask...\n";
+      } else {
+        std::cout << "SKIP: Payload column data page filtering with row mask...\n\n";
+      }
+
+      std::cout << "READER: Materialize payload columns...\n";
+      timer.reset();
+    }
+    // Get column chunk byte ranges from the reader
+    auto const payload_column_chunk_byte_ranges =
+      reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
+    auto payload_column_chunk_buffers =
+      fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
+
+    // Materialize the table with only the payload columns
+    auto payload_table =
+      reader
+        ->materialize_payload_columns(
+          current_row_group_indices,
+          std::move(payload_column_chunk_buffers),
+          row_mask->view(),
+          prune_payload_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
+          options,
+          stream)
+        .tbl;
+    if constexpr (print_progress) { timer.print_elapsed_millis(); }
+
+    return combine_tables(std::move(filter_table), std::move(payload_table));
   }
-  // Get column chunk byte ranges from the reader
-  auto const payload_column_chunk_byte_ranges =
-    reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
-  auto payload_column_chunk_buffers =
-    fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
-
-  // Materialize the table with only the payload columns
-  auto payload_table =
-    reader
-      ->materialize_payload_columns(
-        current_row_group_indices,
-        std::move(payload_column_chunk_buffers),
-        row_mask->view(),
-        prune_payload_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
-        options,
-        stream)
-      .tbl;
-  if constexpr (print_progress) { timer.print_elapsed_millis(); }
-
-  return combine_tables(std::move(filter_table), std::move(payload_table));
 }
 
 // Explicit template instantiations
-template std::unique_ptr<cudf::table> hybrid_scan<true>(
+template std::unique_ptr<cudf::table> hybrid_scan<true, true>(
   io_source const& io_source,
   cudf::ast::expression const& filter_expression,
   std::unordered_set<parquet_filter_type> const& filters,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-template std::unique_ptr<cudf::table> hybrid_scan<false>(
+template std::unique_ptr<cudf::table> hybrid_scan<true, false>(
+  io_source const& io_source,
+  cudf::ast::expression const& filter_expression,
+  std::unordered_set<parquet_filter_type> const& filters,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+template std::unique_ptr<cudf::table> hybrid_scan<false, true>(
+  io_source const& io_source,
+  cudf::ast::expression const& filter_expression,
+  std::unordered_set<parquet_filter_type> const& filters,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+template std::unique_ptr<cudf::table> hybrid_scan<false, false>(
   io_source const& io_source,
   cudf::ast::expression const& filter_expression,
   std::unordered_set<parquet_filter_type> const& filters,
