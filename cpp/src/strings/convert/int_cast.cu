@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,6 +19,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <cuda/std/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -93,7 +94,7 @@ std::unique_ptr<column> cast_to_integer(strings_column_view const& input,
   auto d_results = mutable_column_device_view::create(*results, stream);
 
   auto const type_size = static_cast<size_type>(cudf::size_of(output_type));
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      input.size(),
                      cast_to_integer_fn{*d_strings, *d_results, swap, type_size});

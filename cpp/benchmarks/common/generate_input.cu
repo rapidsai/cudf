@@ -34,6 +34,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -42,13 +43,13 @@
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/random/uniform_real_distribution.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -437,34 +438,42 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
 
 struct valid_or_zero {
   template <typename T>
-  __device__ T operator()(thrust::tuple<T, bool> len_valid) const
+  __device__ T operator()(cuda::std::tuple<T, bool> len_valid) const
   {
-    return thrust::get<1>(len_valid) ? thrust::get<0>(len_valid) : T{0};
+    return cuda::std::get<1>(len_valid) ? cuda::std::get<0>(len_valid) : T{0};
   }
 };
 
+enum class string_encoding {
+  ASCII,
+  UTF8,
+};
+
+template <string_encoding Encoding = string_encoding::UTF8>
 struct string_generator {
   char* chars;
   thrust::minstd_rand engine;
   thrust::uniform_int_distribution<unsigned char> char_dist;
   string_generator(char* c, thrust::minstd_rand& engine)
-    : chars(c), engine(engine), char_dist(32, 137)
+    : chars(c), engine(engine), char_dist(32, Encoding == string_encoding::ASCII ? 126 : 137)
   // ~90% ASCII, ~10% UTF-8.
   // ~80% not-space, ~20% space.
   // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
   {
   }
-  __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
+  __device__ void operator()(cuda::std::tuple<int64_t, int64_t> str_begin_end)
   {
-    auto begin = thrust::get<0>(str_begin_end);
-    auto end   = thrust::get<1>(str_begin_end);
+    auto begin = cuda::std::get<0>(str_begin_end);
+    auto end   = cuda::std::get<1>(str_begin_end);
     engine.discard(begin);
     for (auto i = begin; i < end; ++i) {
       auto ch = char_dist(engine);
-      if (i == end - 1 && ch >= '\x7F') ch = ' ';  // last element ASCII only.
-      if (ch >= '\x7F') {                          // x7F is at the top edge of ASCII
-        chars[i++] = '\xC4';                       // these characters are assigned two bytes
-        ch         = ch | 0x80;
+      if constexpr (Encoding == string_encoding::UTF8) {
+        if (i == end - 1 && ch >= '\x7F') ch = ' ';  // last element ASCII only.
+        if (ch >= '\x7F') {                          // x7F is at the top edge of ASCII
+          chars[i++] = '\xC4';                       // these characters are assigned two bytes
+          ch         = (ch >> 2) | 0x80;
+        }
       }
       chars[i] = static_cast<char>(ch);
     }
@@ -475,6 +484,7 @@ struct string_generator {
  * @brief Create a UTF-8 string column with the average length.
  *
  */
+template <string_encoding Encoding = string_encoding::UTF8>
 std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile const& profile,
                                                                thrust::minstd_rand& engine,
                                                                cudf::size_type num_rows)
@@ -497,7 +507,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     cuda::proclaim_return_type<cudf::size_type>([] __device__(auto) { return 0; }),
     cuda::std::logical_not<bool>{});
   auto valid_lengths = thrust::make_transform_iterator(
-    thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(lengths.begin(), null_mask.begin())),
     valid_or_zero{});
 
   // offsets are created as INT32 or INT64 as appropriate
@@ -507,9 +517,9 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   auto offsets_itr = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   rmm::device_uvector<char> chars(chars_length, cudf::get_default_stream());
   thrust::for_each_n(thrust::device,
-                     thrust::make_zip_iterator(offsets_itr, offsets_itr + 1),
+                     thrust::make_zip_iterator(cuda::std::make_tuple(offsets_itr, offsets_itr + 1)),
                      num_rows,
-                     string_generator{chars.data(), engine});
+                     string_generator<Encoding>{chars.data(), engine});
 
   auto [result_bitmask, null_count] =
     profile.get_null_probability().has_value()
@@ -590,26 +600,13 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     dtype, num_rows, data.release(), std::move(*result_bitmask.release()), null_count);
 }
 
+// catch-all for all types not handled specifically below
 template <typename T>
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           thrust::minstd_rand& engine,
                                                           cudf::size_type num_rows)
 {
-  using DeviceType = cudf::device_storage_type_t<T>;
-
-  auto init = cudf::make_fixed_width_scalar(T{});
-  auto col  = cudf::sequence(num_rows, *init);
-
-  if (profile.get_null_probability().has_value()) {
-    auto valid_dist =
-      random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_probability().value()});
-    auto null_mask = valid_dist(engine, num_rows);
-    auto [result_bitmask, null_count] =
-      cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), cudf::get_default_stream());
-    col->set_null_mask(std::move(*result_bitmask.release()), null_count);
-  }
-
-  return std::move(cudf::sample(cudf::table_view({col->view()}), num_rows)->release()[0]);
+  return create_random_column<T>(profile, engine, num_rows);
 }
 
 /**
@@ -628,6 +625,26 @@ struct create_rand_col_fn {
     return create_random_column<T>(profile, engine, num_rows);
   }
 };
+
+template <typename T, CUDF_ENABLE_IF(cudf::is_numeric_not_bool<T>())>
+std::unique_ptr<cudf::column> create_random_column<T>(data_profile const& profile,
+                                                      thrust::minstd_rand& engine,
+                                                      cudf::size_type num_rows)
+{
+  auto init = cudf::make_fixed_width_scalar(T{});
+  auto col  = cudf::sequence(num_rows, *init);
+
+  if (profile.get_null_probability().has_value()) {
+    auto valid_dist =
+      random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_probability().value()});
+    auto null_mask = valid_dist(engine, num_rows);
+    auto [result_bitmask, null_count] =
+      cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), cudf::get_default_stream());
+    col->set_null_mask(std::move(*result_bitmask.release()), null_count);
+  }
+
+  return std::move(cudf::sample(cudf::table_view({col->view()}), num_rows)->release()[0]);
+}
 
 /**
  * @brief Creates a string column with random content.
@@ -769,15 +786,13 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::struct_view>(
   return std::move(cudf::sample(cudf::table_view({structs_col->view()}), num_rows)->release()[0]);
 }
 
+template <typename T>
 struct clamp_down {
-  cudf::size_type max;
-  bool const* validity;
-  uint32_t* sizes;
-  __device__ uint32_t operator()(cudf::size_type idx) const
-  {
-    return validity[idx] ? cuda::std::min(sizes[idx], static_cast<uint32_t>(max)) : 0;
-  }
+  T max;
+  clamp_down(T max) : max(max) {}
+  __host__ __device__ T operator()(T x) const { return min(x, max); }
 };
+
 /**
  * @brief Creates a list column with random content.
  *
@@ -820,15 +835,12 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     auto offsets = len_dist(engine, current_num_rows + 1);
     auto valids  = valid_dist(engine, current_num_rows);
     // to ensure these values <= current_child_column->size()
-    thrust::transform(thrust::device,
-                      thrust::counting_iterator<cudf::size_type>(0),
-                      thrust::counting_iterator<cudf::size_type>(current_num_rows),
-                      offsets.begin(),
-                      clamp_down{current_child_column->size(), valids.begin(), offsets.begin()});
-    thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), offsets.begin());
-    // Always include all elements
-    offsets.set_element(
-      offsets.size() - 1, current_child_column->size(), cudf::get_default_stream());
+    auto output_offsets = thrust::make_transform_output_iterator(
+      offsets.begin(), clamp_down{current_child_column->size()});
+
+    thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), output_offsets);
+    thrust::device_pointer_cast(offsets.end())[-1] =
+      current_child_column->size();  // Always include all elements
 
     auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
                                                          current_num_rows + 1,
@@ -1047,6 +1059,14 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
                                   cudf::get_default_stream(),
                                   cudf::get_current_device_resource_ref());
   }
+}
+
+std::unique_ptr<cudf::column> create_ascii_string_column(data_profile const& profile,
+                                                         cudf::size_type num_rows,
+                                                         unsigned seed = 1)
+{
+  auto engine = deterministic_engine(seed);
+  return create_random_utf8_string_column<string_encoding::ASCII>(profile, engine, num_rows);
 }
 
 std::vector<cudf::type_id> get_type_or_group(int32_t id)

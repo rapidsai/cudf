@@ -11,7 +11,7 @@ on:
 
 jobs:
     get-project-id:
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@main
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@cuda-13.1.0
       if: github.event.pull_request.state == 'open'
       secrets: inherit
       permissions:
@@ -22,7 +22,7 @@ jobs:
 
     update-status:
       # This job sets the PR and its linked issues to "In Progress" status
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@main
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@cuda-13.1.0
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
       with:
@@ -36,45 +36,34 @@ jobs:
         UPDATE_LINKED_ISSUES: true
       secrets: inherit
 
-    update-sprint:
-      # This job sets the PR and its linked issues to the current "Weekly Sprint"
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-iteration-field.yaml@main
-      if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
-      needs: get-project-id
-      with:
-        PROJECT_ID: "PVT_kwDOAp2shc4AiNzl"
-        ITERATION_FIELD_ID: "PVTIF_lADOAp2shc4AiNzlzgbU_po"
-        ITERATION_FIELD_NAME: "Weekly Sprint"
-        ITEM_PROJECT_ID: "${{ needs.get-project-id.outputs.ITEM_PROJECT_ID }}"
-        ITEM_NODE_ID: "${{ github.event.pull_request.node_id }}"
-        UPDATE_ITEM: true
-        UPDATE_LINKED_ISSUES: true
-      secrets: inherit
-
-    process-branch-name:
+    get-release:
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
       runs-on: ubuntu-latest
       outputs:
-        branch-name: ${{ steps.process-branch-name.outputs.branch-name }}
+        release: ${{ steps.get-release.outputs.release }}
       steps:
-        - name: Extract branch name
-          id: process-branch-name
+        - name: Checkout repository
+          uses: actions/checkout@v4
+          with:
+            ref: ${{ github.event.pull_request.base.ref }}
+        - name: Extract version from VERSION file
+          id: get-release
           run: |
-            branch=${{ github.event.pull_request.base.ref }}
-            release=${branch#branch-}
-            echo "branch-name=$release" >> "$GITHUB_OUTPUT"
+            version=$(cat VERSION)
+            release=${version%.*}
+            echo "release=$release" >> "$GITHUB_OUTPUT"
 
     update-release:
       # This job sets the PR and its linked issues to the release they are targeting
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@main
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@cuda-13.1.0
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
-      needs: [get-project-id, process-branch-name]
+      needs: [get-project-id, get-release]
       with:
         PROJECT_ID: "PVT_kwDOAp2shc4AiNzl"
         SINGLE_SELECT_FIELD_ID: "PVTSSF_lADOAp2shc4AiNzlzgg52UQ"
         SINGLE_SELECT_FIELD_NAME: "Release"
-        SINGLE_SELECT_OPTION_VALUE: "${{ needs.process-branch-name.outputs.branch-name }}"
+        SINGLE_SELECT_OPTION_VALUE: "${{ needs.get-release.outputs.release }}"
         ITEM_PROJECT_ID: "${{ needs.get-project-id.outputs.ITEM_PROJECT_ID }}"
         ITEM_NODE_ID: "${{ github.event.pull_request.node_id }}"
         UPDATE_ITEM: true

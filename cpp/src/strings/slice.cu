@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -99,8 +99,8 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
   }();
   auto const end = d_str.data() + d_str.size_bytes();
 
-  auto start_counts = thrust::make_pair(0, 0);
-  auto stop_counts  = thrust::make_pair(0, 0);
+  auto start_counts = cuda::std::make_pair(0, 0);
+  auto stop_counts  = cuda::std::make_pair(0, 0);
 
   auto itr = d_str.data() + warp.thread_rank();
 
@@ -247,7 +247,7 @@ std::unique_ptr<column> compute_substrings_from_fn(strings_column_view const& in
   auto const d_column = column_device_view::create(input.parent(), stream);
 
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::counting_iterator<size_type>(0),
                       thrust::counting_iterator<size_type>(input.size()),
                       results.begin(),
@@ -327,17 +327,8 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
                "Parameter starts must have the same number of rows as strings.");
   CUDF_EXPECTS(stops_column.size() == input.size(),
                "Parameter stops must have the same number of rows as strings.");
-  CUDF_EXPECTS(cudf::have_same_types(starts_column, stops_column),
-               "Parameters starts and stops must be of the same type.",
-               cudf::data_type_error);
   CUDF_EXPECTS(starts_column.null_count() == 0, "Parameter starts must not contain nulls.");
   CUDF_EXPECTS(stops_column.null_count() == 0, "Parameter stops must not contain nulls.");
-  CUDF_EXPECTS(starts_column.type().id() != data_type{type_id::BOOL8}.id(),
-               "Positions values must not be bool type.",
-               cudf::data_type_error);
-  CUDF_EXPECTS(is_fixed_width(starts_column.type()),
-               "Positions values must be fixed width type.",
-               cudf::data_type_error);
 
   auto starts_iter = cudf::detail::indexalator_factory::make_input_iterator(starts_column);
   auto stops_iter  = cudf::detail::indexalator_factory::make_input_iterator(stops_column);

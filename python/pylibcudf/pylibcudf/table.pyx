@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -75,7 +75,7 @@ cdef class Table:
     def to_arrow(
         self,
         metadata: list[ColumnMetadata | str] | None = None,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> ArrowLike:
         """Create a pyarrow table from a pylibcudf table.
 
@@ -242,6 +242,8 @@ cdef class Table:
         calling libcudf algorithms, and should generally not be needed by users
         (even direct pylibcudf Cython users).
         """
+        assert stream is not None, "stream cannot be None"
+        assert mr is not None, "mr cannot be None"
         cdef vector[unique_ptr[column]] c_columns = dereference(libcudf_tbl).release()
 
         cdef vector[unique_ptr[column]].size_type i
@@ -312,6 +314,25 @@ cdef class Table:
     cpdef tuple shape(self):
         """The shape of this table"""
         return (self.num_rows(), self.num_columns())
+
+    cpdef Table copy(self, Stream stream=None, DeviceMemoryResource mr=None):
+        """Create a deep copy of the table.
+
+        Parameters
+        ----------
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
+        mr : DeviceMemoryResource | None
+            Device memory resource for allocations.
+
+        Returns
+        -------
+        Table
+            A new Table with deep copies of all columns.
+        """
+        stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
+        return Table([col.copy(stream, mr) for col in self._columns])
 
     def _to_schema(self, metadata=None):
         """Create an Arrow schema from this table."""

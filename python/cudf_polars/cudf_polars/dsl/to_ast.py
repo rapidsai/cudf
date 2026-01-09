@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Conversion of expression nodes to libcudf AST nodes."""
@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 from functools import partial, reduce, singledispatch
-from typing import TYPE_CHECKING, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
+
+import polars as pl
 
 import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
@@ -286,10 +288,10 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
             if haystack.dtype.id() == plc.TypeId.LIST:
                 # Because we originally translated pl_expr.Literal with a list scalar
                 # to a expr.LiteralColumn, so the actual type is in the inner type
-                #
-                # the type-ignore is safe because the for plc.TypeID.LIST, we know
-                # we have a polars.List type, which has an inner attribute.
-                plc_dtype = DataType(haystack.dtype.polars_type.inner).plc_type
+                # .inner returns DataTypeClass | DataType, need to cast to DataType
+                plc_dtype = DataType(
+                    cast(pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner)
+                ).plc_type
             else:
                 plc_dtype = haystack.dtype.plc_type  # pragma: no cover
             values = (

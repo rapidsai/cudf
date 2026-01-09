@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Run Pandas unit tests with cudf.pandas.
@@ -65,12 +65,13 @@ EOF
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
     # the pandas-tests directory.
-    for hit in $(find . -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
+    for hit in $(find pandas-tests -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
         # Get the relative path to the test module
         test_module=$(echo "$hit" | cut -d "/" -f 2-)
         # Get the number of directories to go up
-        num_dirs=$(echo "$test_module" | grep -o "/" | wc -l)
-        num_dots=$((num_dirs - 2))
+        num_dirs="${test_module//[^\/]/}"
+        num_dirs="${#num_dirs}"
+        num_dots=$((num_dirs - 1))
         # Construct the relative import
         relative_import=$(printf "%0.s." $(seq 1 $num_dots))
         # Replace the import
@@ -80,6 +81,13 @@ fi
 
 # append the contents of patch-confest.py to conftest.py
 cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
+
+# apply copy-on-write patches that won't be fixed until pandas 3
+PATCH_FILE_1="../python/cudf/cudf/pandas/scripts/pandas-2-cow-1.patch"
+PATCH_FILE_2="../python/cudf/cudf/pandas/scripts/pandas-2-cow-2.patch"
+PANDAS_PATH=$(python -c "import pandas, os; print(os.path.dirname(pandas.__file__))")
+patch -d "$PANDAS_PATH" -p2 < "$PATCH_FILE_1"
+patch -d "$PANDAS_PATH" -p2 < "$PATCH_FILE_2"
 
 # Run the tests
 cd pandas-tests/
@@ -164,11 +172,16 @@ IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
                                              "--ignore=tests/util/test_deprecate_kwarg.py"
                                              "--ignore=tests/util/test_deprecate.py"
                                              "--ignore=tests/util/test_doc.py"
+                                             "--ignore=tests/frame/methods/test_to_dict_of_blocks.py"
                                              "--ignore=tests/tslibs/"
                                              "--ignore=tests/libs/"
                                              "--ignore=tests/internals/"
                                              "--ignore=tests/groupby/test_libgroupby.py"
                                              "--ignore=tests/frame/test_block_internals.py"
+                                             "--ignore=tests/arrays/sparse/test_libsparse.py"
+                                             "--ignore=tests/copy_view/test_internals.py"
+                                             "--ignore=tests/indexing/test_chaining_and_caching.py"
+                                             "--ignore=tests/indexing/multiindex/test_chaining_and_caching.py"
 )
 
 
@@ -181,6 +194,6 @@ PANDAS_CI="1" python -m pytest -p cudf.pandas \
 
 mv ./*.json ..
 cd ..
-rm -rf pandas-testing/pandas-tests/
+rm -rf pandas-tests/
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

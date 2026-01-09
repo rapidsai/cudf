@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core import column
 from cudf.core._internals import sorting
 from cudf.core.algorithms import factorize
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import access_columns
 from cudf.core.column.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -918,10 +918,18 @@ class MultiIndex(Index):
         | list[tuple[Any, ...]],
     ) -> DataFrameOrSeries:
         if isinstance(row_tuple, slice):
+            if row_tuple.step == 0:
+                raise ValueError("slice step cannot be zero")
             if row_tuple.start is None:
                 row_tuple = slice(self[0], row_tuple.stop, row_tuple.step)
             if row_tuple.stop is None:
                 row_tuple = slice(row_tuple.start, self[-1], row_tuple.step)
+            if isinstance(row_tuple.start, bool) or isinstance(
+                row_tuple.stop, bool
+            ):
+                raise TypeError(
+                    f"{row_tuple}: boolean values can not be used in a slice"
+                )
         self._validate_indexer(row_tuple)
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df)
@@ -1013,6 +1021,8 @@ class MultiIndex(Index):
             start, stop, step = index.indices(len(self))
             idx = range(start, stop, step)
         elif is_scalar(index):
+            if isinstance(index, float):
+                raise IndexError("indexing with a float is disallowed.")
             idx = [index]
         else:
             idx = index
@@ -1722,47 +1732,6 @@ class MultiIndex(Index):
             names=self.names,
         )
 
-    @classmethod
-    @_performance_tracking
-    def from_pandas(
-        cls, multiindex: pd.MultiIndex, nan_as_null=no_default
-    ) -> Self:
-        """
-        Convert from a Pandas MultiIndex
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> pmi = pd.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
-        ...                     codes=[[0, 1], [1, 1]])
-        >>> cudf.from_pandas(pmi)
-        MultiIndex([('a', 'd'),
-                    ('b', 'd')],
-                   )
-        """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Pass the MultiIndex names, codes and levels to the MultiIndex constructor instead.",
-            FutureWarning,
-        )
-        if not isinstance(multiindex, pd.MultiIndex):
-            raise TypeError("not a pandas.MultiIndex")
-        if nan_as_null is no_default:
-            nan_as_null = (
-                False if cudf.get_option("mode.pandas_compatible") else None
-            )
-        return cls(
-            levels=multiindex.levels,
-            codes=multiindex.codes,
-            names=multiindex.names,
-            nan_as_null=nan_as_null,
-        )
-
     @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
     def is_unique(self) -> bool:
@@ -2012,12 +1981,13 @@ class MultiIndex(Index):
             _match_join_keys(lcol, rcol, "inner")
             for lcol, rcol in zip(target._columns, self._columns, strict=True)
         ]
-        join_keys = map(list, zip(*join_keys, strict=True))
-        with acquire_spill_lock():
-            plc_tables = [
-                plc.Table([col.to_pylibcudf(mode="read") for col in cols])
-                for cols in join_keys
-            ]
+        join_keys = list(map(list, zip(*join_keys, strict=True)))
+        # Flatten for access_columns
+        flattened = [col for cols in join_keys for col in cols]
+        with access_columns(*flattened, mode="read", scope="internal"):
+            plc_tables = []
+            for cols in join_keys:
+                plc_tables.append(plc.Table([col.plc_column for col in cols]))
             left_plc, right_plc = plc.join.inner_join(
                 plc_tables[0],
                 plc_tables[1],

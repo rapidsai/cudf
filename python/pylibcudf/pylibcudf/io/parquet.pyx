@@ -198,6 +198,10 @@ cdef class ParquetReaderOptions:
         """
         self.c_obj.set_source(src.c_obj)
 
+    cpdef bool is_enabled_use_jit_filter(self):
+        """Returns whether to use JIT compilation for filtering."""
+        return self.c_obj.is_enabled_use_jit_filter()
+
 
 cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val):
@@ -250,6 +254,23 @@ cdef class ParquetReaderOptionsBuilder:
         self.c_obj.allow_mismatched_pq_schemas(val)
         return self
 
+    cpdef ParquetReaderOptionsBuilder ignore_missing_columns(self, bool val):
+        """
+        Sets to enable/disable ignoring of non-existent projected columns while reading.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean indicating whether to ignore non-existent projected columns
+            while reading.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.ignore_missing_columns(val)
+        return self
+
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val):
         """
         Sets to enable/disable use of arrow schema to read.
@@ -299,6 +320,22 @@ cdef class ParquetReaderOptionsBuilder:
         for name in col_names:
             vec.push_back(<string>str(name).encode())
         self.c_obj.columns(vec)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter):
+        """
+        Sets whether to use JIT compilation for filtering.
+
+        Parameters
+        ----------
+        use_jit_filter : bool
+            Boolean value whether to use JIT filter
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.use_jit_filter(use_jit_filter)
         return self
 
     cpdef build(self):

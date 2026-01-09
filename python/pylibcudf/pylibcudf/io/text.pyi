@@ -6,6 +6,13 @@ from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 
+class ByteRangeInfo:
+    def __init__(self, offset: int, size: int) -> None: ...
+    @property
+    def offset(self) -> int: ...
+    @property
+    def size(self) -> int: ...
+
 class ParseOptions:
     def __init__(
         self,

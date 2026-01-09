@@ -17,6 +17,7 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -636,6 +637,38 @@ TEST_F(OrcWriterTest, Slice)
   auto read_table = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(read_table.tbl->view(), tbl);
+}
+
+TEST_F(OrcWriterTest, BoolColumnLongRLE)
+{
+  // Test boolean column with extremely long RLE runs
+  // Pattern: 130 trues followed by 130 falses, repeating for 10,000 rows
+  constexpr auto num_rows   = 10000;
+  constexpr auto run_length = 130;
+
+  std::vector<bool> bool_data(num_rows);
+  for (int i = 0; i < num_rows; ++i) {
+    // Alternating runs of 130 trues and 130 falses
+    bool_data[i] = ((i / run_length) % 2) == 0;
+  }
+
+  bool_col col(bool_data.begin(), bool_data.end());
+  table_view expected({col});
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("bools_long_rle");
+
+  auto filepath = temp_env->get_temp_filepath("BoolColumnLongRLE.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(expected_metadata);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TEST_F(OrcChunkedWriterTest, SingleTable)
@@ -2093,6 +2126,9 @@ TEST_F(OrcWriterTest, BounceBufferBug)
 
 TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
 {
+  // this test runs over 1.5 hours when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   using cudf::test::iterators::no_nulls;
   constexpr auto num_rows   = 500'000'000l;
   constexpr auto num_reps   = 5;
@@ -2391,5 +2427,26 @@ INSTANTIATE_TEST_CASE_P(Host,
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::ZSTD)));
+
+TEST_F(OrcWriterTest, DISABLED_SizeTypeOverflow)
+{
+  constexpr auto num_rows = std::numeric_limits<cudf::size_type>::max();
+
+  auto const val = cudf::numeric_scalar<bool>(true, true);
+  auto const col = cudf::make_column_from_scalar(val, num_rows);
+  ASSERT_EQ(col->size(), num_rows);
+
+  std::vector<char> buffer;
+  buffer.reserve(num_rows);
+  cudf::io::orc_writer_options const options = cudf::io::orc_writer_options::builder(
+    cudf::io::sink_info{&buffer}, cudf::table_view({col->view()}));
+  EXPECT_NO_THROW(cudf::io::write_orc(options));
+
+  cudf::io::orc_reader_options const read_opts = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{cudf::host_span<char const>(buffer.data(), buffer.size())});
+  auto const result = cudf::io::read_orc(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view({col->view()}), result.tbl->view());
+}
 
 CUDF_TEST_PROGRAM_MAIN()

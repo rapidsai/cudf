@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any
@@ -16,6 +16,11 @@ class Table:
     def num_rows(self) -> int: ...
     def shape(self) -> tuple[int, int]: ...
     def columns(self) -> list[Column]: ...
+    def copy(
+        self,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Table: ...
     def to_arrow(self, metadata: list) -> ArrowLike: ...
     # Private methods below are included because polars is currently using them,
     # but we want to remove stubs for these private methods eventually

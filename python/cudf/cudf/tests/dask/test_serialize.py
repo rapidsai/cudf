@@ -117,6 +117,7 @@ from cudf.testing import assert_eq
                 "OGbssOJLUI",
             ]
         ),
+        lambda: cudf.date_range("2000-01-01", periods=12, freq="10s"),
     ],
     ids=itertools.count(),
 )
@@ -171,8 +172,8 @@ def test_serialize_dataframe():
     df = cudf.DataFrame()
     df["a"] = np.arange(100)
     df["b"] = np.arange(100, dtype=np.float32)
-    df["c"] = pd.Categorical(
-        ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
+    df["c"] = pd.Categorical.from_codes(
+        [0, 1, 2, -1, -1] * 20, categories=["a", "b", "c"]
     )
     outdf = cudf.DataFrame.deserialize(*df.serialize())
     assert_eq(df, outdf)
@@ -184,8 +185,8 @@ def test_serialize_dataframe_with_index():
         {
             "a": np.arange(100),
             "b": rng.random(100),
-            "c": pd.Categorical(
-                ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
+            "c": pd.Categorical.from_codes(
+                [0, 1, 2, -1, -1] * 20, categories=["a", "b", "c"]
             ),
         }
     )

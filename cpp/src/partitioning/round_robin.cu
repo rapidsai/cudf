@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -30,7 +30,6 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
-#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <cmath>  // for std::ceil()
@@ -88,7 +87,8 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 
   if (num_partitions == nrows) {
     rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
-    thrust::sequence(rmm::exec_policy(stream), partition_offsets.begin(), partition_offsets.end());
+    thrust::sequence(
+      rmm::exec_policy_nosync(stream), partition_offsets.begin(), partition_offsets.end());
 
     auto uniq_tbl = cudf::detail::gather(input,
                                          rotated_iter_begin,
@@ -104,7 +104,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     // copy rotated right partition indexes that
     // fall in the interval [0, nrows):
     //(this relies on a _stable_ copy_if())
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
                     rotated_iter_begin,
                     rotated_iter_begin + num_partitions,
                     d_row_indices.begin(),
@@ -129,7 +129,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 
     // offsets (part 2: compute partition offsets):
     rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream),
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                            nedges_iter_begin,
                            nedges_iter_begin + num_partitions,
                            partition_offsets.begin());

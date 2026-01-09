@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -13,13 +13,13 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/std/tuple>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
-#include <thrust/tuple.h>
 
 #include <utility>
 
@@ -38,16 +38,16 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   auto device_in = cudf::column_device_view::create(grouped_value, stream);
   auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
-  auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
+  auto in_begin  = thrust::make_zip_iterator(cuda::std::make_tuple(index, valid_it));
 
   rmm::device_uvector<cudf::size_type> gather_map(size, stream);
   auto gm_begin = thrust::make_zip_iterator(
-    thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
+    cuda::std::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
   auto func = cudf::detail::replace_policy_functor();
   cuda::std::equal_to<cudf::size_type> eq;
   if (replace_policy == cudf::replace_policy::PRECEDING) {
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                   group_labels.begin(),
                                   group_labels.begin() + size,
                                   in_begin,
@@ -59,7 +59,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
     auto in_rbegin = thrust::make_reverse_iterator(in_begin + size);
     auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + size);
     thrust::inclusive_scan_by_key(
-      rmm::exec_policy(stream), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
+      rmm::exec_policy_nosync(stream), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
   }
 
   auto output = cudf::detail::gather(cudf::table_view({grouped_value}),

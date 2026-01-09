@@ -1,6 +1,5 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-import sys
 from decimal import Decimal
 
 import cupy as cp
@@ -9,14 +8,11 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-import rmm
-
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_VERSION,
 )
-from cudf.core.buffer import as_buffer
 from cudf.core.column.column import _can_values_be_equal, as_column
 from cudf.core.column.decimal import Decimal32Column, Decimal64Column
 from cudf.testing import assert_eq
@@ -92,28 +88,11 @@ def test_column_set_equal_length_object_by_mask():
 @pytest.mark.parametrize("size", [50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
     col = as_column(pandas_input)
-    col = cudf.core.column.build_column(
-        data=col.base_data,
-        dtype=col.dtype,
-        mask=col.base_mask,
-        size=size,
-        offset=offset,
-        null_count=col.null_count,
-        children=col.base_children,
-    )
+
+    col = col.slice(offset, offset + size)
 
     if isinstance(col.dtype, cudf.CategoricalDtype):
         assert col.size == col.codes.size
-        assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
-    elif cudf.api.types.is_string_dtype(col.dtype):
-        if col.size > 0:
-            assert col.size == (col.children[0].size - 1)
-            assert col.size == (
-                (col.children[0].data.size / col.children[0].dtype.itemsize)
-                - 1
-            )
-    else:
-        assert col.size == (col.data.size / col.dtype.itemsize)
 
     got = cudf.Series._from_column(col)
 
@@ -513,25 +492,6 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 def test__can_values_be_equal(left, right, expected):
     assert _can_values_be_equal(left, right) is expected
     assert _can_values_be_equal(right, left) is expected
-
-
-def test_string_no_children_properties():
-    empty_col = cudf.core.column.StringColumn(
-        as_buffer(rmm.DeviceBuffer(size=0)),
-        size=0,
-        dtype=np.dtype("object"),
-        mask=None,
-        offset=0,
-        null_count=0,
-        children=(),
-    )
-    assert empty_col.base_children == ()
-    assert empty_col.base_size == 0
-
-    assert empty_col.children == ()
-    assert empty_col.size == 0
-
-    assert sys.getsizeof(empty_col) >= 0  # Accounts for Python GC overhead
 
 
 def test_string_int_to_ipv4():

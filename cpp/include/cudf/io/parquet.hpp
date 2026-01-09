@@ -13,7 +13,6 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -93,6 +92,8 @@ class parquet_reader_options {
   bool _use_arrow_schema = true;
   // Whether to allow reading matching select columns from mismatched Parquet files.
   bool _allow_mismatched_pq_schemas = false;
+  // Whether to ignore non-existent projected columns
+  bool _ignore_missing_columns = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
@@ -169,6 +170,15 @@ class parquet_reader_options {
   {
     return _allow_mismatched_pq_schemas;
   }
+
+  /**
+   * @brief Returns boolean depending on whether to ignore non-existent projected columns while
+   * reading.
+   *
+   * @return `true` if non-existent projected columns will be ignored while reading.
+   *
+   */
+  [[nodiscard]] bool is_enabled_ignore_missing_columns() const { return _ignore_missing_columns; }
 
   /**
    * @brief Returns optional tree of metadata.
@@ -356,6 +366,14 @@ class parquet_reader_options {
   void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
   /**
+   * @brief Sets to enable/disable ignoring of non-existent projected columns while reading.
+   *
+   * @param val Boolean indicating whether to ignore non-existent projected columns while reading.
+   *
+   */
+  void enable_ignore_missing_columns(bool val) { _ignore_missing_columns = val; }
+
+  /**
    * @brief Sets reader column schema.
    *
    * @param val Tree of schema nodes to enable/disable conversion of binary to string columns.
@@ -513,6 +531,19 @@ class parquet_reader_options_builder {
   }
 
   /**
+   * @brief Sets to enable/disable ignoring of non-existent projected columns while reading.
+   *
+   * @param val Boolean indicating whether to ignore non-existent projected columns while reading.
+   *
+   * @return this for chaining.
+   */
+  parquet_reader_options_builder& ignore_missing_columns(bool val)
+  {
+    options._ignore_missing_columns = val;
+    return *this;
+  }
+
+  /**
    * @brief Sets reader metadata.
    *
    * @param val Tree of metadata information.
@@ -637,6 +668,34 @@ table_with_metadata read_parquet(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Reads a Parquet dataset into a set of columns using pre-existing Parquet datasources and
+ * file metadatas.
+ *
+ * The following code snippet demonstrates how to read a dataset from a file:
+ * @code
+ *  auto sources = cudf::io::make_datasources(cudf::io::source_info("dataset.parquet"));
+ *  auto metadatas = cudf::io::read_parquet_footers(sources);
+ *  auto options = cudf::io::parquet_reader_options::builder();
+ *  auto result  = cudf::io::read_parquet(std::move(sources), std::move(metadatas), options);
+ * @endcode
+ *
+ * @param sources Input `datasource` objects to read the dataset from
+ * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
+ * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
+ *
+ * @return The set of columns along with metadata
+ */
+table_with_metadata read_parquet(
+  std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+  std::vector<parquet::FileMetaData>&& parquet_metadatas,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief The chunked parquet reader class to read Parquet file iteratively in to a series of
  * tables, chunk by chunk.
  *
@@ -675,6 +734,30 @@ class chunked_parquet_reader {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
+   * @brief Constructor for chunked reader using pre-existing Parquet datasources and
+   * file metadatas.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, and an additional parameter to specify the size byte limit of the
+   * output table for each reading.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+    std::vector<parquet::FileMetaData>&& parquet_metadatas,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
    * @brief Constructor for chunked reader.
    *
    * This constructor requires the same `parquet_reader_option` parameter as in
@@ -696,6 +779,37 @@ class chunked_parquet_reader {
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Constructor for chunked reader using pre-existing Parquet datasources and
+   * file metadatas.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, with additional parameters to specify the size byte limit of the
+   * output table for each reading, and a byte limit on the amount of temporary memory to use
+   * when reading. pass_read_limit affects how many row groups we can read at a time by limiting
+   * the amount of memory dedicated to decompression space. pass_read_limit is a hint, not an
+   * absolute limit - if a single row group cannot fit within the limit given, it will still be
+   * loaded.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   * or `0` if there is no limit
+   * @param pass_read_limit Limit on the amount of memory used for reading and decompressing data or
+   * `0` if there is no limit
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+    std::vector<parquet::FileMetaData>&& parquet_metadatas,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -1598,14 +1712,6 @@ class chunked_parquet_writer {
   /// Unique pointer to impl writer class
   std::unique_ptr<parquet::detail::writer> writer;
 };
-
-/**
- * @brief Deprecated type alias for the `chunked_parquet_writer`
- *
- * @deprecated Use chunked_parquet_writer instead. This alias will be removed in a future release.
- */
-using parquet_chunked_writer [[deprecated("Use chunked_parquet_writer instead")]] =
-  chunked_parquet_writer;
 
 /** @} */  // end of group
 

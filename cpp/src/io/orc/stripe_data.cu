@@ -7,12 +7,12 @@
 #include "io/utilities/column_buffer.hpp"
 #include "orc_gpu.hpp"
 
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/io/orc_types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 
 namespace cudf::io::orc::detail {
 
@@ -1504,17 +1504,17 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       } else {
         row_plus1 = 0;
       }
+      __syncthreads();
       if (t == nrows - 1) { s->u.rowdec.nz_count = min(nz_count, s->top.data.max_vals); }
       __syncthreads();
 
       // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the
       // last row
       last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
-      last_row = block_reduce(temp_storage).Reduce(last_row, cudf::detail::maximum{});
+      last_row = block_reduce(temp_storage).Reduce(last_row, cuda::maximum{});
       nz_pos   = (valid) ? nz_count : 0;
       if (t == 0) { s->top.data.nrows = last_row; }
       if (valid && nz_pos - 1 < s->u.rowdec.nz_count) { s->u.rowdec.row[nz_pos - 1] = row_plus1; }
-      __syncthreads();
     } else {
       // All values are valid
       nrows = min(nrows, s->top.data.max_vals - s->u.rowdec.nz_count);
@@ -1524,8 +1524,8 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
         s->top.data.nrows += nrows;
         s->u.rowdec.nz_count += nrows;
       }
-      __syncthreads();
     }
+    __syncthreads();
   }
 }
 
@@ -1646,17 +1646,17 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     bytestream_fill(&s->bs, t);
     bytestream_fill(&s->bs2, t);
     __syncthreads();
+    uint32_t num_remaining_rows = s->chunk.start_row + s->chunk.num_rows - s->top.data.cur_row;
+    if (num_rowgroups > 0 && (s->is_string || s->chunk.type_kind == TIMESTAMP)) {
+      num_remaining_rows +=
+        s->top.data.index.run_pos[is_dictionary(s->chunk.encoding_kind) ? CI_DATA : CI_DATA2];
+    }
     if (t == 0) {
-      uint32_t max_vals = s->chunk.start_row + s->chunk.num_rows - s->top.data.cur_row;
-      if (num_rowgroups > 0 && (s->is_string || s->chunk.type_kind == TIMESTAMP)) {
-        max_vals +=
-          s->top.data.index.run_pos[is_dictionary(s->chunk.encoding_kind) ? CI_DATA : CI_DATA2];
-      }
       s->bs.fill_count  = 0;
       s->bs2.fill_count = 0;
       s->top.data.nrows = 0;
       s->top.data.max_vals =
-        min(max_vals, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
+        min(num_remaining_rows, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
     }
     __syncthreads();
     // Decode data streams
@@ -1728,9 +1728,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         // Adjust the maximum number of values
         if (numvals == 0 && vals_skipped == 0) {
           numvals = s->top.data.max_vals;  // Just so that we don't hang if the stream is corrupted
-        } else {
-          if (t == 0 && numvals < s->top.data.max_vals) { s->top.data.max_vals = numvals; }
         }
+        __syncthreads();
+        if (t == 0) { s->top.data.max_vals = cuda::std::min(s->top.data.max_vals, numvals); }
       }
       __syncthreads();
       // Account for skipped values
@@ -1741,6 +1741,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
             : s->top.data.index.run_pos[CI_DATA];
         numvals =
           min(numvals + run_pos, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
+        num_remaining_rows += run_pos;
       }
       // Decode the primary data stream
       if (s->chunk.type_kind == INT || s->chunk.type_kind == DATE || s->chunk.type_kind == SHORT) {
@@ -1764,10 +1765,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       } else if (s->chunk.type_kind == BOOLEAN) {
         int n = ((numvals + 7) >> 3);
         if (n > s->top.data.buffered_count) {
+          // we can buffer for extraction up to blockDim.x BYTES at a time,
+          // since that's the max we can save for the next iteration in secondary_val
+          int max_bytes_buffered =
+            min(blockDim.x, (num_remaining_rows + 7) / 8);  // guard against stream end
           numvals = byte_rle(&s->bs,
                              &s->u.rle8,
                              &s->vals.u8[s->top.data.buffered_count],
-                             n - s->top.data.buffered_count,
+                             max_bytes_buffered - s->top.data.buffered_count,
                              t) +
                     s->top.data.buffered_count;
         } else {

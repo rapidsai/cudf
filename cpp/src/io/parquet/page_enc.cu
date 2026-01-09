@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 #include "parquet_gpu.cuh"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -20,6 +21,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cooperative_groups.h>
 #include <cub/cub.cuh>
 #include <cuda/std/chrono>
 #include <cuda/std/functional>
@@ -36,7 +38,6 @@
 #include <thrust/merge.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
-#include <thrust/tuple.h>
 
 #include <bitset>
 
@@ -1861,6 +1862,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   // for BYTE_STREAM_SPLIT, s->cur now points to the end of the first stream.
   // need it to point to the end of the Nth stream.
   if (is_split_stream and t == 0) { s->cur += (dtype_len_out - 1) * s->page.num_valid; }
+  __syncthreads();
   finish_page_encode<block_size>(
     s, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }
@@ -2216,7 +2218,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   auto const output_ptr = packer.flush();
 
   // now copy the char data
-  memcpy_block<block_size, true>(output_ptr, first_string, string_data_len, t);
+  memcpy_block<block_size, true>(
+    output_ptr, first_string, string_data_len, cooperative_groups::this_thread_block());
 
   finish_page_encode<block_size>(
     s, output_ptr + string_data_len, pages, comp_in, comp_out, comp_results, true);
@@ -3051,6 +3054,8 @@ CUDF_KERNEL void __launch_bounds__(encode_block_size)
 // blockDim(1024, 1, 1)
 CUDF_KERNEL void __launch_bounds__(1024) gpuGatherPages(device_span<EncColumnChunk> chunks)
 {
+  namespace cg = cooperative_groups;
+
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
 
@@ -3078,7 +3083,7 @@ CUDF_KERNEL void __launch_bounds__(1024) gpuGatherPages(device_span<EncColumnChu
     src = ck_g.is_compressed ? page_g.compressed_data : page_g.page_data;
     // Copy page header
     hdr_len = page_g.hdr_size;
-    memcpy_block<1024, true>(dst, src, hdr_len, t);
+    memcpy_block<1024, true>(dst, src, hdr_len, cg::this_thread_block());
     src += page_g.max_hdr_size;
     dst += hdr_len;
     uncompressed_size += hdr_len;
@@ -3086,12 +3091,12 @@ CUDF_KERNEL void __launch_bounds__(1024) gpuGatherPages(device_span<EncColumnChu
     // Copy page data. For V2, the level data and page data are disjoint.
     if (page_g.is_v2()) {
       auto const lvl_len = page_g.level_bytes();
-      memcpy_block<1024, true>(dst, src, lvl_len, t);
+      memcpy_block<1024, true>(dst, src, lvl_len, cg::this_thread_block());
       src += page_g.max_lvl_size;
       dst += lvl_len;
       data_len -= lvl_len;
     }
-    memcpy_block<1024, true>(dst, src, data_len, t);
+    memcpy_block<1024, true>(dst, src, data_len, cg::this_thread_block());
     dst += data_len;
     __syncthreads();
     if (t == 0 && page == 0 && ck_g.use_dictionary) { ck_g.dictionary_size = hdr_len + data_len; }
@@ -3419,12 +3424,8 @@ void EncodePages(device_span<EncPage> pages,
   auto num_pages = pages.size();
 
   // determine which kernels to invoke
-  auto mask_iter       = thrust::make_transform_iterator(pages.begin(), mask_tform{});
-  uint32_t kernel_mask = thrust::reduce(rmm::exec_policy(stream),
-                                        mask_iter,
-                                        mask_iter + pages.size(),
-                                        0U,
-                                        cuda::std::bit_or<uint32_t>{});
+  auto kernel_mask = cudf::detail::transform_reduce(
+    pages.begin(), pages.end(), mask_tform{}, uint32_t{0}, cuda::std::bit_or<uint32_t>{}, stream);
 
   // get the number of streams we need from the pool
   int nkernels = std::bitset<32>(kernel_mask).count();

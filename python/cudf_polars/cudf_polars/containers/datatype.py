@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from functools import cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
 from typing_extensions import assert_never
 
@@ -17,6 +17,7 @@ import pylibcudf as plc
 if TYPE_CHECKING:
     from cudf_polars.typing import (
         DataTypeHeader,
+        PolarsDataType,
     )
 
 __all__ = ["DataType"]
@@ -46,7 +47,15 @@ def _dtype_to_header(dtype: pl.DataType) -> DataTypeHeader:
     if name in SCALAR_NAME_TO_POLARS_TYPE_MAP:
         return {"kind": "scalar", "name": name}
     if isinstance(dtype, pl.Decimal):
-        return {"kind": "decimal", "precision": dtype.precision, "scale": dtype.scale}
+        # TODO: Add version guard once we support polars 1.34
+        # Also keep in mind the typing change in polars:
+        # https://github.com/pola-rs/polars/pull/25227
+        precision = dtype.precision if dtype.precision is not None else 38
+        return {
+            "kind": "decimal",
+            "precision": precision,
+            "scale": dtype.scale,
+        }
     if isinstance(dtype, pl.Datetime):
         return {
             "kind": "datetime",
@@ -56,12 +65,17 @@ def _dtype_to_header(dtype: pl.DataType) -> DataTypeHeader:
     if isinstance(dtype, pl.Duration):
         return {"kind": "duration", "time_unit": dtype.time_unit}
     if isinstance(dtype, pl.List):
-        return {"kind": "list", "inner": _dtype_to_header(dtype.inner)}
+        # isinstance narrows dtype to pl.List, but .inner returns DataTypeClass | DataType
+        return {
+            "kind": "list",
+            "inner": _dtype_to_header(cast(pl.DataType, dtype.inner)),
+        }
     if isinstance(dtype, pl.Struct):
+        # isinstance narrows dtype to pl.Struct, but field.dtype returns DataTypeClass | DataType
         return {
             "kind": "struct",
             "fields": [
-                {"name": f.name, "dtype": _dtype_to_header(f.dtype)}
+                {"name": f.name, "dtype": _dtype_to_header(cast(pl.DataType, f.dtype))}
                 for f in dtype.fields
             ],
         }
@@ -78,9 +92,14 @@ def _dtype_from_header(header: DataTypeHeader) -> pl.DataType:
     if header["kind"] == "decimal":
         return pl.Decimal(header["precision"], header["scale"])
     if header["kind"] == "datetime":
-        return pl.Datetime(time_unit=header["time_unit"], time_zone=header["time_zone"])
+        return pl.Datetime(
+            time_unit=cast(Literal["ns", "us", "ms"], header["time_unit"]),
+            time_zone=header["time_zone"],
+        )
     if header["kind"] == "duration":
-        return pl.Duration(time_unit=header["time_unit"])
+        return pl.Duration(
+            time_unit=cast(Literal["ns", "us", "ms"], header["time_unit"])
+        )
     if header["kind"] == "list":
         return pl.List(_dtype_from_header(header["inner"]))
     if header["kind"] == "struct":
@@ -182,9 +201,14 @@ class DataType:
     polars_type: pl.datatypes.DataType
     plc_type: plc.DataType
 
-    def __init__(self, polars_dtype: pl.DataType) -> None:
-        self.polars_type = polars_dtype
-        self.plc_type = _from_polars(polars_dtype)
+    def __init__(self, polars_dtype: PolarsDataType) -> None:
+        # Convert DataTypeClass to DataType instance if needed
+        # polars allows both pl.Int64 (class) and pl.Int64() (instance)
+        if isinstance(polars_dtype, type):
+            polars_dtype = polars_dtype()
+        # After conversion, it's guaranteed to be a DataType instance
+        self.polars_type = cast(pl.DataType, polars_dtype)
+        self.plc_type = _from_polars(self.polars_type)
 
     def id(self) -> plc.TypeId:
         """The pylibcudf.TypeId of this DataType."""
@@ -193,12 +217,16 @@ class DataType:
     @property
     def children(self) -> list[DataType]:
         """The children types of this DataType."""
-        # these type ignores are needed because the type checker doesn't
-        # see that these equality checks passing imply a specific type for each child field.
+        # Type checker doesn't narrow polars_type through plc_type.id() checks
         if self.plc_type.id() == plc.TypeId.STRUCT:
-            return [DataType(field.dtype) for field in self.polars_type.fields]
+            # field.dtype returns DataTypeClass | DataType, need to cast to DataType
+            return [
+                DataType(cast(pl.DataType, field.dtype))
+                for field in cast(pl.Struct, self.polars_type).fields
+            ]
         elif self.plc_type.id() == plc.TypeId.LIST:
-            return [DataType(self.polars_type.inner)]
+            # .inner returns DataTypeClass | DataType, need to cast to DataType
+            return [DataType(cast(pl.DataType, cast(pl.List, self.polars_type).inner))]
         return []
 
     def scale(self) -> int:

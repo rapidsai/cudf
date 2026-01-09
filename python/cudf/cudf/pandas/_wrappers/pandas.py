@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import copyreg
+import datetime
 import functools
 import importlib
 import inspect
 import os
 import pickle
 
+import numpy as np
 import pandas as pd
 
 # cuGraph third party integration test, test_cugraph_from_pandas_adjacency,
@@ -43,6 +45,7 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _maybe_wrap_result,
+    _State,
     _Unusable,
     is_proxy_object,
     make_final_proxy_type as _make_final_proxy_type,
@@ -68,6 +71,7 @@ from pandas.io.sas.sas_xport import (  # isort: skip
 from pandas.core.resample import (  # isort: skip
     Resampler as pd_Resampler,
     TimeGrouper as pd_TimeGrouper,
+    DatetimeIndexResampler as pd_DatetimeIndexResampler,
 )
 
 try:
@@ -120,9 +124,15 @@ def make_final_proxy_type(
     )
 
 
-def make_intermediate_proxy_type(name, fast_type, slow_type):
+def make_intermediate_proxy_type(
+    name,
+    fast_type,
+    slow_type,
+    **kwargs,
+):
+    assert "module" not in kwargs
     return _make_intermediate_proxy_type(
-        name, fast_type, slow_type, module=slow_type.__module__
+        name, fast_type, slow_type, module=slow_type.__module__, **kwargs
     )
 
 
@@ -172,6 +182,7 @@ def Timestamp_Timedelta__new__(cls, *args, **kwargs):
     # hence this method is needed.
     self, _ = _fast_slow_function_call(
         lambda cls, args, kwargs: cls(*args, **kwargs),
+        None,
         cls,
         args,
         kwargs,
@@ -183,6 +194,7 @@ Timedelta = make_final_proxy_type(
     "Timedelta",
     _Unusable,
     pd.Timedelta,
+    bases=(datetime.timedelta,),
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -197,6 +209,7 @@ Timestamp = make_final_proxy_type(
     "Timestamp",
     _Unusable,
     pd.Timestamp,
+    bases=(datetime.datetime,),
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -281,11 +294,24 @@ def _DataFrame_dtypes_apply_func(value):
 def _DataFrame__dtypes(self):
     result = _fast_slow_function_call(
         lambda self: self.dtypes,
+        None,
         self,
     )[0]
     result = _maybe_wrap_result(
         result._fsproxy_slow.apply(_DataFrame_dtypes_apply_func), None
     )
+    result.force_state(_State.SLOW)
+    return result
+
+
+@functools.wraps(pd.DataFrame.columns)
+def _DataFrame_columns(self):
+    result = _fast_slow_function_call(
+        lambda self: self.columns,
+        None,
+        self,
+    )[0]
+    result.force_state(_State.SLOW)
     return result
 
 
@@ -303,6 +329,7 @@ DataFrame = make_final_proxy_type(
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
+        "columns": property(_DataFrame_columns),
         "dtypes": property(_DataFrame__dtypes),
         "__iter__": custom_iter,
         "attrs": _FastSlowAttribute("attrs"),
@@ -318,6 +345,8 @@ DataFrame = make_final_proxy_type(
         ),
         "_AXIS_ORDERS": _FastSlowAttribute("_AXIS_ORDERS", private=True),
         "flags": _FastSlowAttribute("flags", private=True),
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
     },
 )
 
@@ -327,6 +356,7 @@ def custom_repr_html(obj):
     # for ipython
     return _fast_slow_function_call(
         lambda obj: obj._repr_html_(),
+        None,
         obj,
     )[0]
 
@@ -343,6 +373,26 @@ def _Series_dtype(self):
     return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
 
 
+_SeriesAtIndexer = make_intermediate_proxy_type(
+    "_SeriesAtIndexer",
+    cudf.core.series._SeriesAtIndexer,
+    pd.core.indexing._AtIndexer,
+)
+
+
+_SeriesiAtIndexer = make_intermediate_proxy_type(
+    "_SeriesiAtIndexer",
+    cudf.core.series._SeriesiAtIndexer,
+    pd.core.indexing._iAtIndexer,
+)
+
+
+def _argsort(self, *args, **kwargs):
+    return _maybe_wrap_result(
+        self._fsproxy_wrapped.argsort(*args, **kwargs).astype(np.intp), self
+    )
+
+
 Series = make_final_proxy_type(
     "Series",
     cudf.Series,
@@ -356,7 +406,11 @@ Series = make_final_proxy_type(
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__iter__": custom_iter,
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
+        "at": _FastSlowAttribute("at"),
+        "iat": _FastSlowAttribute("iat"),
         "str": _AccessorAttr(StringMethods),
         "list": _AccessorAttr(ListMethods),
         "struct": _AccessorAttr(StructAccessor),
@@ -365,6 +419,7 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
+        "argsort": _argsort,
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -386,6 +441,7 @@ def Index__new__(cls, *args, **kwargs):
     # make_final_proxy_type provides.
     self, _ = _fast_slow_function_call(
         lambda cls, args, kwargs: cls(*args, **kwargs),
+        None,
         cls,
         args,
         kwargs,
@@ -421,6 +477,8 @@ Index = make_final_proxy_type(
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "__iter__": custom_iter,
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "__init__": _DELETE,
         "__new__": Index__new__,
         "__setattr__": Index__setattr__,
@@ -429,9 +487,14 @@ Index = make_final_proxy_type(
         "_accessors": set(),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        # TODO: Handle special cases like mergesort being unsupported
+        # and raising for certain types like Categorical and RangeIndex
+        "argsort": _argsort,
     },
 )
 
@@ -449,6 +512,8 @@ RangeIndex = make_final_proxy_type(
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
         "_range": _FastSlowAttribute("_range"),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
     },
 )
 
@@ -500,6 +565,8 @@ CategoricalIndex = make_final_proxy_type(
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
     },
 )
 
@@ -534,6 +601,8 @@ DatetimeIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -575,6 +644,8 @@ TimedeltaIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -635,6 +706,8 @@ PeriodIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
     },
 )
@@ -686,6 +759,12 @@ MultiIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "names": _FastSlowAttribute("names"),
+        "_lexsort_depth": _FastSlowAttribute("_lexsort_depth", private=True),
+        "_should_fallback_to_positional": _FastSlowAttribute(
+            "_should_fallback_to_positional", private=True
+        ),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
     },
 )
 
@@ -930,6 +1009,8 @@ IntervalIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
     },
 )
@@ -1013,6 +1094,9 @@ DataFrameGroupBy = make_intermediate_proxy_type(
     "DataFrameGroupBy",
     cudf.core.groupby.groupby.DataFrameGroupBy,
     pd.core.groupby.DataFrameGroupBy,
+    additional_attributes={
+        "_grouper": _FastSlowAttribute("_grouper", private=True),
+    },
 )
 
 RollingGroupBy = make_intermediate_proxy_type(
@@ -1131,6 +1215,10 @@ DataFrameResampler = make_intermediate_proxy_type(
 
 SeriesResampler = make_intermediate_proxy_type(
     "SeriesResampler", cudf.core.resample.SeriesResampler, pd_Resampler
+)
+
+DatetimeIndexResampler = make_intermediate_proxy_type(
+    "DatetimeIndexResampler", _Unusable, pd_DatetimeIndexResampler
 )
 
 StataReader = make_intermediate_proxy_type(
@@ -1989,6 +2077,15 @@ NamedAgg = make_final_proxy_type(
     },
 )
 
+
+def _arrow_extension_array_astype(self, dtype=None, copy: bool = False):
+    if copy is False and cudf.api.types.is_dtype_equal(self.dtype, dtype):
+        return self
+    return _maybe_wrap_result(
+        self._fsproxy_wrapped.astype(dtype=dtype, copy=copy), self
+    )
+
+
 ArrowExtensionArray = make_final_proxy_type(
     "ArrowExtensionArray",
     _Unusable,
@@ -2004,6 +2101,8 @@ ArrowExtensionArray = make_final_proxy_type(
         "__abs__": _FastSlowAttribute("__abs__"),
         "__contains__": _FastSlowAttribute("__contains__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__arrow_array__": arrow_array_method,
+        "astype": _arrow_extension_array_astype,
     },
 )
 
@@ -2066,6 +2165,8 @@ NDArrayBackedExtensionIndex = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
+        "_cache": _FastSlowAttribute("_cache", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
         "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
@@ -2122,10 +2223,6 @@ _original_Series_init = cudf.Series.__init__
 _original_DataFrame_init = cudf.DataFrame.__init__
 _original_Index_init = cudf.Index.__init__
 _original_from_pandas = cudf.from_pandas
-_original_DataFrame_from_pandas = cudf.DataFrame.from_pandas
-_original_Series_from_pandas = cudf.Series.from_pandas
-_original_Index_from_pandas = cudf.Index.from_pandas
-_original_MultiIndex_from_pandas = cudf.MultiIndex.from_pandas
 
 
 def wrap_init(original_init):
@@ -2257,28 +2354,7 @@ def initial_setup():
     cudf.Index.__init__ = wrap_init(_original_Index_init)
     cudf.DataFrame.__init__ = DataFrame_init_
     cudf.from_pandas = wrap_from_pandas(_original_from_pandas)
-    cudf.DataFrame.from_pandas = wrap_from_pandas_dataframe(
-        _original_DataFrame_from_pandas
-    )
-    cudf.Series.from_pandas = wrap_from_pandas_series(
-        _original_Series_from_pandas
-    )
-    cudf.Index.from_pandas = wrap_from_pandas_index(
-        _original_Index_from_pandas
-    )
-    cudf.MultiIndex.from_pandas = wrap_from_pandas_multiindex(
-        _original_MultiIndex_from_pandas
-    )
     cudf.set_option("mode.pandas_compatible", True)
-
-
-def _reduce_obj(obj):
-    from cudf.pandas.module_accelerator import disable_module_accelerator
-
-    with disable_module_accelerator():
-        pickled_args = pickle.dumps(obj.__reduce__())
-
-    return _unpickle_obj, (pickled_args,)
 
 
 def _unpickle_obj(pickled_args):
@@ -2288,6 +2364,24 @@ def _unpickle_obj(pickled_args):
         unpickler, args = pickle.loads(pickled_args)
     obj = unpickler(*args)
     return obj
+
+
+def _reduce_proxied_td_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj._fsproxy_wrapped.__reduce__())
+
+    return _unpickle_obj, (pickled_args,)
+
+
+def _reduce_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj.__reduce__())
+
+    return _unpickle_obj, (pickled_args,)
 
 
 def _generic_reduce_obj(obj, unpickle_func):
@@ -2341,8 +2435,10 @@ def _unpickle_offset_obj(pickled_args):
     return obj
 
 
+copyreg.dispatch_table[Timestamp] = _reduce_proxied_td_obj
 copyreg.dispatch_table[pd.Timestamp] = _reduce_obj
 # same reducer/unpickler can be used for Timedelta:
+copyreg.dispatch_table[Timedelta] = _reduce_proxied_td_obj
 copyreg.dispatch_table[pd.Timedelta] = _reduce_obj
 
 # TODO: Need to find a way to unpickle cross-version(old) pickled objects.

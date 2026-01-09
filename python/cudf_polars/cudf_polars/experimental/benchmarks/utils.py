@@ -227,6 +227,8 @@ class RunConfig:
     queries: list[int]
     suffix: str
     executor: ExecutorType
+    runtime: str
+    stream_policy: str | None
     cluster: str
     scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
@@ -254,6 +256,8 @@ class RunConfig:
     query_set: str
     collect_traces: bool = False
     stats_planning: bool
+    max_io_threads: int
+    native_parquet: bool
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -267,6 +271,12 @@ class RunConfig:
         executor: ExecutorType = args.executor
         cluster = args.cluster
         scheduler = args.scheduler
+        runtime = args.runtime
+        stream_policy = args.stream_policy
+
+        # Handle "auto" stream policy
+        if stream_policy == "auto":
+            stream_policy = None
 
         # Deal with deprecated scheduler argument
         # and non-streaming executors
@@ -320,7 +330,15 @@ class RunConfig:
             if scale_factor_int == scale_factor:
                 scale_factor = scale_factor_int
 
-        if "pdsh" in name and args.scale is not None:
+        skip_scale_factor_inference = (
+            "LIBCUDF_IO_REROUTE_LOCAL_DIR_PATTERN" in os.environ
+        ) and ("LIBCUDF_IO_REROUTE_REMOTE_DIR_PATTERN" in os.environ)
+
+        if (
+            "pdsh" in name
+            and args.scale is not None
+            and skip_scale_factor_inference is False
+        ):
             # Validate the user-supplied scale factor
             sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
@@ -335,6 +353,8 @@ class RunConfig:
             executor=executor,
             cluster=cluster,
             scheduler=scheduler,
+            runtime=runtime,
+            stream_policy=stream_policy,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
             gather_shuffle_stats=args.rapidsmpf_dask_statistics,
@@ -353,6 +373,8 @@ class RunConfig:
             query_set=args.query_set,
             collect_traces=args.collect_traces,
             stats_planning=args.stats_planning,
+            max_io_threads=args.max_io_threads,
+            native_parquet=args.native_parquet,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -374,12 +396,16 @@ class RunConfig:
             print(f"path: {self.dataset_path}")
             print(f"scale_factor: {self.scale_factor}")
             print(f"executor: {self.executor}")
+            print(f"stream_policy: {self.stream_policy}")
             if self.executor == "streaming":
+                print(f"runtime: {self.runtime}")
                 print(f"cluster: {self.cluster}")
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
                 print(f"stats_planning: {self.stats_planning}")
+                if self.runtime == "rapidsmpf":
+                    print(f"native_parquet: {self.native_parquet}")
                 if self.cluster == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
@@ -415,20 +441,31 @@ def get_executor_options(
     """Generate executor_options for GPUEngine."""
     executor_options: dict[str, Any] = {}
 
-    if run_config.blocksize:
-        executor_options["target_partition_size"] = run_config.blocksize
-    if run_config.max_rows_per_partition:
-        executor_options["max_rows_per_partition"] = run_config.max_rows_per_partition
-    if run_config.shuffle:
-        executor_options["shuffle_method"] = run_config.shuffle
-    if run_config.broadcast_join_limit:
-        executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
-    if run_config.rapidsmpf_spill:
-        executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
-    if run_config.cluster == "distributed":
-        executor_options["cluster"] = "distributed"
-    if run_config.stats_planning:
-        executor_options["stats_planning"] = {"use_reduction_planning": True}
+    if run_config.executor == "streaming":
+        if run_config.blocksize:
+            executor_options["target_partition_size"] = run_config.blocksize
+        if run_config.max_rows_per_partition:
+            executor_options["max_rows_per_partition"] = (
+                run_config.max_rows_per_partition
+            )
+        if run_config.shuffle:
+            executor_options["shuffle_method"] = run_config.shuffle
+        if run_config.broadcast_join_limit:
+            executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
+        if run_config.rapidsmpf_spill:
+            executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+        if run_config.cluster == "distributed":
+            executor_options["cluster"] = "distributed"
+        executor_options["stats_planning"] = {
+            "use_reduction_planning": run_config.stats_planning,
+            "use_sampling": (
+                # Always allow row-group sampling for rapidsmpf runtime
+                run_config.stats_planning or run_config.runtime == "rapidsmpf"
+            ),
+        }
+        executor_options["client_device_threshold"] = run_config.spill_device
+        executor_options["runtime"] = run_config.runtime
+        executor_options["max_io_threads"] = run_config.max_io_threads
 
     if (
         benchmark
@@ -467,7 +504,7 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(explain_query(q, engine, physical=False))
-        if args.explain:
+        if args.explain and run_config.executor == "streaming":
             print(f"\nQuery {q_id} - Physical plan\n")
             print(explain_query(q, engine))
     else:
@@ -560,7 +597,7 @@ def execute_query(
                     return evaluate_streaming(
                         ir,
                         translator.config_options,
-                    ).to_polars()
+                    )
                 assert_never(run_config.executor)
             else:
                 return q.collect(engine=engine)
@@ -670,6 +707,22 @@ def parse_args(
             Scheduler type to use with the 'streaming' executor.
                 - synchronous : Run locally in a single process
                 - distributed : Use Dask for multi-GPU execution"""),
+    )
+    parser.add_argument(
+        "--runtime",
+        type=str,
+        choices=["tasks", "rapidsmpf"],
+        default="tasks",
+        help="Runtime to use for the streaming executor (tasks or rapidsmpf).",
+    )
+    parser.add_argument(
+        "--stream-policy",
+        type=str,
+        choices=["auto", "default", "new", "pool"],
+        default="auto",
+        help=textwrap.dedent("""\
+            CUDA stream policy (auto, default, new, pool).
+            Default: auto (use the default policy for the runtime)"""),
     )
     parser.add_argument(
         "--n-workers",
@@ -838,6 +891,18 @@ def parse_args(
         default=False,
         help="Enable statistics planning.",
     )
+    parser.add_argument(
+        "--max-io-threads",
+        default=2,
+        type=int,
+        help="Maximum number of IO threads for rapidsmpf runtime.",
+    )
+    parser.add_argument(
+        "--native-parquet",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use C++ read_parquet nodes for the rapidsmpf runtime.",
+    )
 
     parsed_args = parser.parse_args(args)
 
@@ -867,10 +932,21 @@ def run_polars(
 
     if run_config.executor != "cpu":
         executor_options = get_executor_options(run_config, benchmark=benchmark)
+        if run_config.runtime == "rapidsmpf":
+            parquet_options = {
+                "use_rapidsmpf_native": run_config.native_parquet,
+            }
+        else:
+            parquet_options = {}
         engine = pl.GPUEngine(
             raise_on_fail=True,
+            memory_resource=rmm.mr.CudaAsyncMemoryResource()
+            if run_config.rmm_async
+            else None,
+            cuda_stream_policy=run_config.stream_policy,
             executor=run_config.executor,
             executor_options=executor_options,
+            parquet_options=parquet_options,
         )
 
     for q_id in run_config.queries:
@@ -928,7 +1004,10 @@ def run_polars(
             if args.print_results:
                 print(result)
 
-            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
+            print(
+                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                flush=True,
+            )
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
@@ -1115,6 +1194,45 @@ PDSH_TABLE_NAMES: list[str] = [
 ]
 
 
+def print_duckdb_plan(
+    q_id: int,
+    sql: str,
+    dataset_path: Path,
+    suffix: str,
+    query_set: str,
+    args: argparse.Namespace,
+) -> None:
+    """Print DuckDB query plan using EXPLAIN."""
+    if duckdb is None:
+        raise ImportError(duckdb_err)
+
+    if query_set == "pdsds":
+        tbl_names = PDSDS_TABLE_NAMES
+    else:
+        tbl_names = PDSH_TABLE_NAMES
+
+    with duckdb.connect() as conn:
+        for name in tbl_names:
+            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            conn.execute(
+                f"CREATE OR REPLACE VIEW {name} AS "
+                f"SELECT * FROM parquet_scan('{pattern}');"
+            )
+
+        if args.explain_logical and args.explain:
+            conn.execute("PRAGMA explain_output = 'all';")
+        elif args.explain_logical:
+            conn.execute("PRAGMA explain_output = 'optimized_only';")
+        else:
+            conn.execute("PRAGMA explain_output = 'physical_only';")
+
+        print(f"\nDuckDB Query {q_id} - Plan\n")
+
+        plan_rows = conn.execute(f"EXPLAIN {sql}").fetchall()
+        for _, line in plan_rows:
+            print(line)
+
+
 def execute_duckdb_query(
     query: str,
     dataset_path: Path,
@@ -1155,6 +1273,17 @@ def run_duckdb(
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
         sql = get_q(run_config)
+
+        if args.explain or args.explain_logical:
+            print_duckdb_plan(
+                q_id=q_id,
+                sql=sql,
+                dataset_path=run_config.dataset_path,
+                suffix=run_config.suffix,
+                query_set=duckdb_queries_cls.name,
+                args=args,
+            )
+
         print(f"DuckDB Executing: {q_id}")
         records[q_id] = []
 

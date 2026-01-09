@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,13 +25,13 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -49,7 +49,7 @@ namespace {
  * The first value is the keys offsets and the second values is the indices offsets.
  * These are offsets to the beginning of each input column after concatenating.
  */
-using offsets_pair = thrust::pair<size_type, size_type>;
+using offsets_pair = cuda::std::pair<size_type, size_type>;
 
 /**
  * @brief Utility for calculating the offsets for the concatenated child columns
@@ -162,7 +162,7 @@ struct dispatch_compute_indices {
     // new indices values are computed by matching the concatenated keys to the new key set
 
 #ifdef NDEBUG
-    thrust::lower_bound(rmm::exec_policy(stream),
+    thrust::lower_bound(rmm::exec_policy_nosync(stream),
                         begin,
                         end,
                         all_itr,
@@ -173,7 +173,7 @@ struct dispatch_compute_indices {
     // There is a problem with thrust::lower_bound and the output_indexalator.
     // https://github.com/NVIDIA/thrust/issues/1452; thrust team created nvbug 3322776
     // This is a workaround.
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       all_itr,
                       all_itr + all_indices.size(),
                       result_itr,
@@ -257,7 +257,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     }));
   // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     children_offsets.begin() + 1,
     children_offsets.end(),
     indices_itr,

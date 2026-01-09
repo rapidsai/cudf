@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -15,13 +15,15 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core._internals import binaryop
-from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
+    get_dtype_of_same_kind,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
@@ -47,24 +49,6 @@ def get_np_td_unit_conversion(
 
 
 class TimeDeltaColumn(TemporalBaseColumn):
-    """
-    Parameters
-    ----------
-    data : Buffer
-        The Timedelta values
-    dtype : np.dtype
-        The data type
-    size : int
-        Size of memory allocation.
-    mask : Buffer; optional
-        The validity mask
-    offset : int
-        Data offset
-    null_count : int, optional
-        The number of null values.
-        If None, it is calculated automatically.
-    """
-
     _NP_SCALAR = np.timedelta64
     _PD_SCALAR = pd.Timedelta
     _VALID_BINARY_OPERATIONS = {
@@ -87,31 +71,24 @@ class TimeDeltaColumn(TemporalBaseColumn):
         "__rtruediv__",
         "__rfloordiv__",
     }
+    _VALID_PLC_TYPES = {
+        plc.TypeId.DURATION_SECONDS,
+        plc.TypeId.DURATION_MILLISECONDS,
+        plc.TypeId.DURATION_MICROSECONDS,
+        plc.TypeId.DURATION_NANOSECONDS,
+    }
 
-    def __init__(
-        self,
-        data: Buffer,
-        size: int,
-        dtype: np.dtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple = (),
-    ):
+    @classmethod
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: np.dtype
+    ) -> tuple[plc.Column, np.dtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
         if cudf.get_option("mode.pandas_compatible"):
             if not dtype.kind == "m":
                 raise ValueError("dtype must be a timedelta numpy dtype.")
         elif not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
             raise ValueError("dtype must be a timedelta numpy dtype.")
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
+        return plc_column, dtype
 
     def _clear_cache(self) -> None:
         super()._clear_cache()
@@ -167,13 +144,15 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 "NULL_EQUALS",
                 "NULL_NOT_EQUALS",
             }:
-                out_dtype = np.dtype(np.bool_)
+                out_dtype = get_dtype_of_same_kind(
+                    self.dtype, np.dtype(np.bool_)
+                )
             elif op == "__mod__":
                 out_dtype = find_common_type((self.dtype, other_cudf_dtype))
             elif op in {"__truediv__", "__floordiv__"}:
                 common_dtype = find_common_type((self.dtype, other_cudf_dtype))
                 out_dtype = (
-                    np.dtype(np.float64)
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.float64))
                     if op == "__truediv__"
                     else self._UNDERLYING_DTYPE
                 )
@@ -221,9 +200,20 @@ class TimeDeltaColumn(TemporalBaseColumn):
         lhs, rhs = (other, this) if reflect else (this, other)
 
         result = binaryop.binaryop(lhs, rhs, op, out_dtype)
-        if cudf.get_option("mode.pandas_compatible") and out_dtype.kind == "b":
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and out_dtype.kind == "b"
+            and not is_pandas_nullable_extension_dtype(out_dtype)
+        ):
             result = result.fillna(op == "__ne__")
         return result
+
+    def _scan(self, op: str) -> ColumnBase:
+        if op == "cumprod":
+            raise TypeError("cumprod not supported for Timedelta.")
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )
 
     def total_seconds(self) -> ColumnBase:
         conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9
@@ -247,17 +237,17 @@ class TimeDeltaColumn(TemporalBaseColumn):
         if len(self) == 0:
             return super().strftime(format)
         else:
-            with acquire_spill_lock():
+            with self.access(mode="read", scope="internal"):
                 return type(self).from_pylibcudf(  # type: ignore[return-value]
                     plc.strings.convert.convert_durations.from_durations(
-                        self.to_pylibcudf(mode="read"), format
+                        self.plc_column, format
                     )
                 )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):
             if isinstance(dtype, np.dtype) and dtype.kind == "O":
-                raise TypeError(
+                raise MixedTypeError(
                     f"cannot astype a timedelta like from {self.dtype} to {dtype}"
                 )
         return self.strftime("%D days %H:%M:%S")

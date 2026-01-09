@@ -6,7 +6,11 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
 from pyarrow.parquet import read_table
-from utils import assert_table_and_meta_eq, get_bytes_from_source, make_source
+from utils import (
+    assert_table_and_meta_eq,
+    get_bytes_from_source,
+    make_source,
+)
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.stream import Stream
@@ -184,7 +188,9 @@ def test_read_parquet_from_device_buffers(
         binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
     )
 
-    buf = DeviceBuffer.to_device(get_bytes_from_source(source))
+    buf = DeviceBuffer.to_device(
+        get_bytes_from_source(source), plc.utils._get_stream(stream)
+    )
 
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo([buf] * num_buffers)
@@ -284,3 +290,67 @@ def test_write_parquet(
 
     result = plc.io.parquet.write_parquet(options, stream)
     assert isinstance(result, memoryview)
+
+
+@pytest.mark.parametrize("use_jit_filter", [False, True])
+@pytest.mark.parametrize(
+    "pa_filter,plc_filter",
+    [
+        (
+            pc.field("col_int64") >= 10,
+            Operation(
+                ASTOperator.GREATER_EQUAL,
+                ColumnNameReference("col_int64"),
+                Literal(plc.Scalar.from_arrow(pa.scalar(10, type=pa.int64()))),
+            ),
+        ),
+        (
+            pc.field("col_str") == "foo",
+            Operation(
+                ASTOperator.EQUAL,
+                ColumnNameReference("col_str"),
+                Literal(
+                    plc.Scalar.from_arrow(pa.scalar("foo", type=pa.string()))
+                ),
+            ),
+        ),
+    ],
+)
+def test_read_parquet_filters_jit(
+    binary_source_or_sink,
+    pa_filter,
+    plc_filter,
+    use_jit_filter,
+):
+    pa_table = pa.table(
+        {
+            "col_int64": pa.array([6, 0, 2, 2], type=pa.int64()),
+            "col_str": pa.array(
+                ["bar", "foo", "baz", "foo"], type=pa.string()
+            ),
+        }
+    )
+
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+
+    options = (
+        plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo([source])
+        )
+        .use_jit_filter(use_jit_filter)
+        .build()
+    )
+    options.set_filter(plc_filter)
+
+    assert options.is_enabled_use_jit_filter() is use_jit_filter
+
+    got = plc.io.parquet.read_parquet(options)
+    expect = read_table(source, filters=pa_filter)
+
+    assert_table_and_meta_eq(
+        expect,
+        got,
+        check_field_nullability=False,
+    )
