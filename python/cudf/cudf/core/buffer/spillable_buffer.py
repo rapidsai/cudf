@@ -147,7 +147,7 @@ class SpillableBufferCAIWrapper:
 
     @property
     def __cuda_array_interface__(self) -> dict:
-        self._buf.spill_lock(self._spill_lock)
+        self._buf._owner.spill_lock(self._spill_lock)
         # Accessing _memory_info doesn't trigger spilling
         ptr, size, _ = self._buf.memory_info()
         return {
@@ -516,20 +516,6 @@ class SpillableBuffer(Buffer):
         """
         return _SpillableBufferAccessContext(self, mode, scope)
 
-    def spill(self, target: str = "cpu") -> None:
-        return self._owner.spill(target=target)
-
-    @property
-    def is_spilled(self) -> bool:
-        return self._owner.is_spilled
-
-    @property
-    def spillable(self) -> bool:
-        return self._owner.spillable
-
-    def spill_lock(self, spill_lock: SpillLock) -> None:
-        self._owner.spill_lock(spill_lock=spill_lock)
-
     def memory_info(self) -> tuple[int, int, str]:
         (ptr, _, device_type) = self._owner.memory_info()
         return (ptr + self._offset, self.nbytes, device_type)
@@ -558,7 +544,7 @@ class SpillableBuffer(Buffer):
         with self._owner.lock:
             header["owner-type-serialized-name"] = type(self._owner).__name__
             header["frame_count"] = 1
-            if self.is_spilled:
+            if self._owner.is_spilled:
                 frames = [self.memoryview()]
             else:
                 # TODO: Use `frames=[self]` instead of this hack, see doc above
@@ -575,7 +561,7 @@ class SpillableBuffer(Buffer):
         if not deep:
             return super().copy(deep=False)
 
-        if self.is_spilled:
+        if self._owner.is_spilled:
             # In this case, we make the new copy point to the same spilled
             # data in host memory. We can do this since spilled data is never
             # modified.
