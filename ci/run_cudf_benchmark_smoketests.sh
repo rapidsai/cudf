@@ -12,7 +12,7 @@ for bench in *_NVBENCH; do
   if [[ -x "$bench" && -f "$bench" ]]; then
     echo "Running $bench with --profile..."
     date
-    timeout 1m "./$bench" --profile --devices 0 --benchmark 0 -q --rmm_mode cuda
+    timeout 2m "./$bench" --profile --devices 0 --benchmark 0 -q --rmm_mode cuda
     date
   fi
 done
