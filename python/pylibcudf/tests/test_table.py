@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
@@ -35,3 +35,21 @@ def test_table_to_arrow(table_data, stream):
     # is a pyarrow object while `got` is a pylibcudf object,
     # whereas in this case those types are reversed.
     assert_table_eq(got, expect)
+
+
+def test_table_copy(table_data):
+    plc_tbl, _ = table_data
+    original = plc_tbl.tbl
+
+    copied = original.copy()
+
+    assert copied.shape() == original.shape()
+    assert copied.num_columns() == original.num_columns()
+    assert copied.num_rows() == original.num_rows()
+
+    for orig_col, copy_col in zip(
+        original.columns(), copied.columns(), strict=True
+    ):
+        assert orig_col is not copy_col
+
+    assert_table_eq(original.to_arrow(), copied)
