@@ -94,14 +94,6 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
-    @property
-    def base_data(self) -> None:
-        """
-        Categorical columns don't have a data buffer - data is stored
-        in the codes child column instead.
-        """
-        return None
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
             encoded = self._encode(item)
