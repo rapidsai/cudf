@@ -63,61 +63,61 @@ struct CUDF_LTO_ALIAS string_view {
   mutable size_type __length = 0;
 
  public:
-  [[nodiscard]] __device__ size_type size_bytes() const;
+  [[nodiscard]] __device__ inline size_type size_bytes() const;
 
-  [[nodiscard]] __device__ size_type length() const;
+  [[nodiscard]] __device__ inline size_type length() const;
 
-  [[nodiscard]] __device__ char const* data() const;
+  [[nodiscard]] __device__ inline char const* data() const;
 
-  [[nodiscard]] __device__ bool empty() const;
+  [[nodiscard]] __device__ inline bool empty() const;
 
-  __device__ char_utf8 operator[](size_type pos) const;
+  [[nodiscard]] __device__ inline char_utf8 operator[](size_type pos) const;
 
-  [[nodiscard]] __device__ size_type byte_offset(size_type pos) const;
+  [[nodiscard]] __device__ inline size_type byte_offset(size_type pos) const;
 
-  [[nodiscard]] __device__ int compare(string_view const& str) const;
+  [[nodiscard]] __device__ inline int compare(string_view const& str) const;
 
-  __device__ int compare(char const* str, size_type bytes) const;
+  [[nodiscard]] __device__ inline int compare(char const* str, size_type bytes) const;
 
-  __device__ bool operator==(string_view const& rhs) const;
+  [[nodiscard]] __device__ inline bool operator==(string_view const& rhs) const;
 
-  __device__ bool operator!=(string_view const& rhs) const;
+  [[nodiscard]] __device__ inline bool operator!=(string_view const& rhs) const;
 
-  __device__ bool operator<(string_view const& rhs) const;
+  [[nodiscard]] __device__ inline bool operator<(string_view const& rhs) const;
 
-  __device__ bool operator>(string_view const& rhs) const;
+  [[nodiscard]] __device__ inline bool operator>(string_view const& rhs) const;
 
-  __device__ bool operator<=(string_view const& rhs) const;
+  [[nodiscard]] __device__ inline bool operator<=(string_view const& rhs) const;
 
-  __device__ bool operator>=(string_view const& rhs) const;
+  [[nodiscard]] __device__ inline bool operator>=(string_view const& rhs) const;
 
-  [[nodiscard]] __device__ size_type find(string_view const& str,
-                                          size_type pos   = 0,
-                                          size_type count = -1) const;
+  [[nodiscard]] __device__ inline size_type find(string_view const& str,
+                                                 size_type pos   = 0,
+                                                 size_type count = -1) const;
 
-  __device__ size_type find(char const* str,
-                            size_type bytes,
-                            size_type pos   = 0,
-                            size_type count = -1) const;
+  [[nodiscard]] __device__ inline size_type find(char const* str,
+                                                 size_type bytes,
+                                                 size_type pos   = 0,
+                                                 size_type count = -1) const;
 
-  [[nodiscard]] __device__ size_type find(char_utf8 character,
-                                          size_type pos   = 0,
-                                          size_type count = -1) const;
+  [[nodiscard]] __device__ inline size_type find(char_utf8 character,
+                                                 size_type pos   = 0,
+                                                 size_type count = -1) const;
 
-  [[nodiscard]] __device__ size_type rfind(string_view const& str,
-                                           size_type pos   = 0,
-                                           size_type count = -1) const;
+  [[nodiscard]] __device__ inline size_type rfind(string_view const& str,
+                                                  size_type pos   = 0,
+                                                  size_type count = -1) const;
 
-  __device__ size_type rfind(char const* str,
-                             size_type bytes,
-                             size_type pos   = 0,
-                             size_type count = -1) const;
+  [[nodiscard]] __device__ inline size_type rfind(char const* str,
+                                                  size_type bytes,
+                                                  size_type pos   = 0,
+                                                  size_type count = -1) const;
 
-  [[nodiscard]] __device__ size_type rfind(char_utf8 character,
-                                           size_type pos   = 0,
-                                           size_type count = -1) const;
+  [[nodiscard]] __device__ inline size_type rfind(char_utf8 character,
+                                                  size_type pos   = 0,
+                                                  size_type count = -1) const;
 
-  [[nodiscard]] __device__ string_view substr(size_type start, size_type length) const;
+  [[nodiscard]] __device__ inline string_view substr(size_type start, size_type length) const;
 
   static inline size_type const npos{-1};
 };
@@ -282,30 +282,30 @@ struct alignas(16) CUDF_LTO_ALIAS column_device_view_core {
 
  public:
   template <typename T>
-  __device__ T const* head() const;
+  __device__ inline T const* head() const;
 
-  __device__ size_type size() const;
+  __device__ inline size_type size() const;
 
-  __device__ bool nullable() const;
+  __device__ inline bool nullable() const;
 
-  __device__ bitmask_type const* null_mask() const;
+  __device__ inline bitmask_type const* null_mask() const;
 
-  __device__ size_type offset() const;
+  __device__ inline size_type offset() const;
 
-  __device__ bool is_valid(size_type idx) const;
+  __device__ inline bool is_valid(size_type idx) const;
 
-  __device__ bool is_valid_nocheck(size_type idx) const;
+  __device__ inline bool is_valid_nocheck(size_type idx) const;
 
-  __device__ bool is_null(size_type idx) const;
+  __device__ inline bool is_null(size_type idx) const;
 
-  __device__ bool is_null_nocheck(size_type idx) const;
+  __device__ inline bool is_null_nocheck(size_type idx) const;
 
-  __device__ bitmask_type get_mask_word(size_type word_index) const;
+  __device__ inline bitmask_type get_mask_word(size_type word_index) const;
 
   template <typename T>
-  __device__ T element(size_type idx) const;
+  __device__ inline T element(size_type idx) const;
 
-  __device__ size_type num_child_columns() const;
+  __device__ inline size_type num_child_columns() const;
 };
 
 #define CUDF_LTO_DECL(Type) \
@@ -386,28 +386,28 @@ struct alignas(16) CUDF_LTO_ALIAS mutable_column_device_view_core {
 
  public:
   template <typename T>
-  __device__ T* head() const;
+  __device__ inline T* head() const;
 
-  __device__ size_type size() const;
+  __device__ inline size_type size() const;
 
-  __device__ bool nullable() const;
+  __device__ inline bool nullable() const;
 
-  __device__ bitmask_type* null_mask() const;
+  __device__ inline bitmask_type* null_mask() const;
 
-  __device__ size_type offset() const;
+  __device__ inline size_type offset() const;
 
-  __device__ bool is_valid(size_type idx) const;
+  __device__ inline bool is_valid(size_type idx) const;
 
-  __device__ bool is_valid_nocheck(size_type idx) const;
+  __device__ inline bool is_valid_nocheck(size_type idx) const;
 
-  __device__ bool is_null(size_type idx) const;
+  __device__ inline bool is_null(size_type idx) const;
 
-  __device__ bool is_null_nocheck(size_type idx) const;
+  __device__ inline bool is_null_nocheck(size_type idx) const;
 
-  __device__ bitmask_type get_mask_word(size_type word_index) const;
+  __device__ inline bitmask_type get_mask_word(size_type word_index) const;
 
   template <typename T>
-  __device__ T element(size_type idx) const;
+  __device__ inline T element(size_type idx) const;
 };
 
 #define CUDF_LTO_DECL(Type) \

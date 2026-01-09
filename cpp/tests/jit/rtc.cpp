@@ -22,10 +22,10 @@ TEST_F(RTCTest, CreateFragment)
                                         "test_kernel_key",
                                         R"***(
     #include "cudf/jit/transform_params.cuh"
-    #include "cudf/jit/lto/operators.inl.cuh"
-    #include "cudf/jit/lto/types.inl.cuh"
+    #include "jit/lto/operators.inl.cuh"
+    #include "jit/lto/types.inl.cuh"
 
-    extern "C" __device__ transform_operation(){
+    extern "C" __device__ void transform_operator(cudf::lto::transform_params const*){
     }
 
     )***",

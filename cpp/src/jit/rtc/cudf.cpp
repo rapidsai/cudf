@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/defer.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -25,6 +26,8 @@
 
 namespace cudf {
 namespace rtc {
+
+namespace {
 
 int32_t get_driver_version()
 {
@@ -54,10 +57,12 @@ int32_t get_current_device_physical_model()
   return props.major * 10 + props.minor;
 }
 
+/*
 void max_occupancy_config()
 {
+  CUDF_FAIL("Not implemented", std::logic_error);
   // TODO: Same as configure_1d_max_occupancy
-}
+}*/
 
 sha256_hash hash_string(std::span<char const> input)
 {
@@ -126,6 +131,8 @@ std::vector<unsigned char> read_file(char const* path)
 
 void copy_includes_to_dir(char const* dir)
 {
+  CUDF_FUNC_RANGE();
+
   for (size_t i = 0; i < cudf_jit_embed_sources_file_data.size; ++i) {
     auto const data      = cudf_jit_embed_sources_file_data.elements[i];
     auto const data_size = cudf_jit_embed_sources_file_data.element_sizes[i];
@@ -145,6 +152,8 @@ void copy_includes_to_dir(char const* dir)
 
 void create_new_include_dir(std::string const& include_path)
 {
+  CUDF_FUNC_RANGE();
+
   // directory does not exist, so create it
   char tmp_dir_data[] = "/tmp/jit-includes_XXXXXX";
   char* tmp_dir       = mkdtemp(tmp_dir_data);
@@ -156,6 +165,8 @@ void create_new_include_dir(std::string const& include_path)
 
   copy_includes_to_dir(tmp_dir);
 
+  // [ ] use flockdir and use locks when accessing?
+
   // rename the temporary directory to the target include_path
   if (rename(tmp_dir, include_path.c_str()) == -1) {
     throw_posix(
@@ -166,6 +177,8 @@ void create_new_include_dir(std::string const& include_path)
 
 void create_include_dir(std::string const& include_path)
 {
+  CUDF_FUNC_RANGE();
+
   struct stat path_info;
 
   if (lstat(include_path.c_str(), &path_info) == -1) {
@@ -180,6 +193,7 @@ void create_include_dir(std::string const& include_path)
       CUDF_FAIL(+std::format("RTC include path ({}) exists but is not a directory", include_path),
                 std::runtime_error);
     } else {
+      // TODO: address, should not error out here
       // verify contents match expected headers
       auto hash_path = std::format("{}/state.hash", include_path);
       auto hash_data = read_file(hash_path.c_str());
@@ -196,8 +210,12 @@ void create_include_dir(std::string const& include_path)
   }
 }
 
+}  // namespace
+
 fragment_t const& compile_fragment(char const* name, char const* source_code_cstr, char const* key)
 {
+  CUDF_FUNC_RANGE();
+
   auto sm              = get_current_device_physical_model();
   auto const cache_key = std::format(R"***(
       fragment_type=LTO_IR,
@@ -274,6 +292,8 @@ fragment_t const& compile_fragment(char const* name, char const* source_code_cst
 
 fragment_t const& compile_library_fragment()
 {
+  CUDF_FUNC_RANGE();
+
   return compile_fragment("cudf_lto_library",
                           R"***(
  #include "jit/lto/library.inl.cuh"
@@ -283,6 +303,8 @@ fragment_t const& compile_library_fragment()
 
 fragment_t const& compile_udf_fragment(char const* source_code_cstr, char const* key)
 {
+  CUDF_FUNC_RANGE();
+
   return compile_fragment("cudf_udf_fragment", source_code_cstr, key);
 }
 
@@ -292,6 +314,8 @@ kernel_ref compile_and_link_udf(char const* name,
                                 char const* udf_code,
                                 char const* udf_key)
 {
+  CUDF_FUNC_RANGE();
+
   auto sm                       = get_current_device_physical_model();
   auto library_key              = std::format(R"***(
       fragment_types=LTO_IR,
@@ -334,14 +358,28 @@ kernel_ref compile_and_link_udf(char const* name,
   auto fut = std::shared_future{prom.get_future()};
   cache.store_library(library_key_sha256, fut);
 
-  blob_view const link_fragments[]          = {library_frag.get_cubin()->view(),
-                                               udf_frag.get_cubin()->view()};
+  blob_view const link_fragments[]          = {library_frag.get_lto_ir()->view(),
+                                               udf_frag.get_lto_ir()->view()};
   binary_type const fragment_binary_types[] = {binary_type::LTO_IR, binary_type::LTO_IR};
 
   char const* const fragment_names[] = {"cudf_lto_library", "cudf_udf_fragment"};
 
+  // TODO: optimization flags
+  // TODO: split compile
+  // TODO: split-compile-extended
+  // TODO: lineinfo and debug info options
+  // TODO: -kernels-used=
+  // TODO: sass dump
+  // TODO: time dump
+  // TODO: env variable to control options
+  // TODO: fma
+  // TODO: variables-used
+  // TODO: -optimize-unused-variables
+  // TODO: -nocache
+  // TODO: -device-stack-protector
   auto arch_flag                   = std::format("-arch=sm_{}", sm);
-  char const* const link_options[] = {"-lto", arch_flag.c_str()};
+  char const* const link_options[] = {
+    "-lto", "-optimize-unused-variables", "-kernels-used=transform_kernel", arch_flag.c_str()};
 
   auto const params = library_t::link_params{.name                  = name,
                                              .output_type           = binary_type::CUBIN,

@@ -51,45 +51,45 @@ using lifted_type_of = typename lifted_type_of_t<T>::type;
     using type = lowered_type;                                                               \
   };                                                                                         \
                                                                                              \
-  __forceinline__ __device__ lowered_type* lower(lifted_type* p)                             \
+  __device__ __forceinline__ lowered_type* lower(lifted_type* p)                             \
   {                                                                                          \
     return reinterpret_cast<lowered_type*>(p);                                               \
   }                                                                                          \
                                                                                              \
-  __forceinline__ __device__ lowered_type const* lower(lifted_type const* p)                 \
+  __device__ __forceinline__ lowered_type const* lower(lifted_type const* p)                 \
   {                                                                                          \
     return reinterpret_cast<lowered_type const*>(p);                                         \
   }                                                                                          \
                                                                                              \
-  __forceinline__ __device__ lto::optional<lowered_type>* lower(                             \
+  __device__ __forceinline__ lto::optional<lowered_type>* lower(                             \
     cuda::std::optional<lifted_type>* p)                                                     \
   {                                                                                          \
     return reinterpret_cast<lto::optional<lowered_type>*>(p);                                \
   }                                                                                          \
                                                                                              \
-  __forceinline__ __device__ lto::optional<lowered_type> const* lower(                       \
+  __device__ __forceinline__ lto::optional<lowered_type> const* lower(                       \
     cuda::std::optional<lifted_type> const* p)                                               \
   {                                                                                          \
     return reinterpret_cast<lto::optional<lowered_type> const*>(p);                          \
   }                                                                                          \
                                                                                              \
-  __forceinline__ __device__ lifted_type* lift(lowered_type* p)                              \
+  __device__ __forceinline__ lifted_type* lift(lowered_type* p)                              \
   {                                                                                          \
     return reinterpret_cast<lifted_type*>(p);                                                \
   }                                                                                          \
                                                                                              \
-  __forceinline__ __device__ lifted_type const* lift(lowered_type const* p)                  \
+  __device__ __forceinline__ lifted_type const* lift(lowered_type const* p)                  \
   {                                                                                          \
     return reinterpret_cast<lifted_type const*>(p);                                          \
   }                                                                                          \
                                                                                              \
-  __forceinline__ __device__ cuda::std::optional<lifted_type>* lift(                         \
+  __device__ __forceinline__ cuda::std::optional<lifted_type>* lift(                         \
     lto::optional<lowered_type>* p)                                                          \
   {                                                                                          \
     return reinterpret_cast<cuda::std::optional<lifted_type>*>(p);                           \
   }                                                                                          \
                                                                                              \
-  __forceinline__ __device__ cuda::std::optional<lifted_type> const* lift(                   \
+  __device__ __forceinline__ cuda::std::optional<lifted_type> const* lift(                   \
     lto::optional<lowered_type> const* p)                                                    \
   {                                                                                          \
     return reinterpret_cast<cuda::std::optional<lifted_type> const*>(p);                     \

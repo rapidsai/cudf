@@ -11,10 +11,11 @@ namespace lto {
 
 namespace operators {
 
-#define CUDF_LTO_DECL(op, type)                                       \
-  extern __device__ void op(type* out, type const* a, type const* b); \
-                                                                      \
-  extern __device__ void op(optional<type>* out, optional<type> const* a, optional<type> const* b)
+#define CUDF_LTO_DECL(op, type)                                              \
+  __device__ extern inline void op(type* out, type const* a, type const* b); \
+                                                                             \
+  __device__ extern inline void op(                                          \
+    optional<type>* out, optional<type> const* a, optional<type> const* b)
 
 CUDF_LTO_DECL(add, int32_t);
 CUDF_LTO_DECL(add, int64_t);
@@ -75,12 +76,13 @@ CUDF_LTO_DECL(pow, float64_t);
 
 #undef CUDF_LTO_DECL
 
-#define CUDF_LTO_DECL(op, type)                                                           \
-  extern __device__ void op(bool* out, type const* a, type const* b);                     \
-                                                                                          \
-  extern __device__ void op(bool* out, optional<type> const* a, optional<type> const* b); \
-                                                                                          \
-  extern __device__ void op(optional<bool>* out, optional<type> const* a, optional<type> const* b)
+#define CUDF_LTO_DECL(op, type)                                                                  \
+  __device__ extern inline void op(bool* out, type const* a, type const* b);                     \
+                                                                                                 \
+  __device__ extern inline void op(bool* out, optional<type> const* a, optional<type> const* b); \
+                                                                                                 \
+  __device__ extern inline void op(                                                              \
+    optional<bool>* out, optional<type> const* a, optional<type> const* b)
 
 CUDF_LTO_DECL(equal, bool);
 CUDF_LTO_DECL(equal, int8_t);
@@ -134,10 +136,11 @@ CUDF_LTO_DECL(null_equal, string_view);
 
 #undef CUDF_LTO_DECL
 
-#define CUDF_LTO_DECL(op, type)                                       \
-  extern __device__ void op(bool* out, type const* a, type const* b); \
-                                                                      \
-  extern __device__ void op(optional<bool>* out, optional<type> const* a, optional<type> const* b)
+#define CUDF_LTO_DECL(op, type)                                              \
+  __device__ extern inline void op(bool* out, type const* a, type const* b); \
+                                                                             \
+  __device__ extern inline void op(                                          \
+    optional<bool>* out, optional<type> const* a, optional<type> const* b)
 
 CUDF_LTO_DECL(less, bool);
 CUDF_LTO_DECL(less, int8_t);
@@ -241,10 +244,11 @@ CUDF_LTO_DECL(greater_equal, string_view);
 
 #undef CUDF_LTO_DECL
 
-#define CUDF_LTO_DECL(op, type)                                       \
-  extern __device__ void op(type* out, type const* a, type const* b); \
-                                                                      \
-  extern __device__ void op(optional<type>* out, optional<type> const* a, optional<type> const* b)
+#define CUDF_LTO_DECL(op, type)                                              \
+  __device__ extern inline void op(type* out, type const* a, type const* b); \
+                                                                             \
+  __device__ extern inline void op(                                          \
+    optional<type>* out, optional<type> const* a, optional<type> const* b)
 
 CUDF_LTO_DECL(bitwise_and, int32_t);
 CUDF_LTO_DECL(bitwise_and, int64_t);
@@ -263,10 +267,11 @@ CUDF_LTO_DECL(bitwise_xor, uint64_t);
 
 #undef CUDF_LTO_DECL
 
-#define CUDF_LTO_DECL(op, type)                                       \
-  extern __device__ void op(type* out, type const* a, type const* b); \
-                                                                      \
-  extern __device__ void op(optional<type>* out, optional<type> const* a, optional<type> const* b);
+#define CUDF_LTO_DECL(op, type)                                              \
+  __device__ extern inline void op(type* out, type const* a, type const* b); \
+                                                                             \
+  __device__ extern inline void op(                                          \
+    optional<type>* out, optional<type> const* a, optional<type> const* b);
 
 CUDF_LTO_DECL(logical_and, bool);
 
@@ -278,10 +283,10 @@ CUDF_LTO_DECL(null_logical_or, bool);
 
 #undef CUDF_LTO_DECL
 
-#define CUDF_LTO_DECL(op, type)                        \
-  extern __device__ void op(type* out, type const* a); \
-                                                       \
-  extern __device__ void op(optional<type>* out, optional<type> const* a)
+#define CUDF_LTO_DECL(op, type)                               \
+  __device__ extern inline void op(type* out, type const* a); \
+                                                              \
+  __device__ extern inline void op(optional<type>* out, optional<type> const* a)
 
 CUDF_LTO_DECL(identity, bool);
 CUDF_LTO_DECL(identity, int8_t);
@@ -374,10 +379,10 @@ CUDF_LTO_DECL(bit_invert, int64_t);
 
 #undef CUDF_LTO_DECL
 
-#define CUDF_LTO_DECL(op, ret_type, type)                  \
-  extern __device__ void op(ret_type* out, type const* a); \
-                                                           \
-  extern __device__ void op(optional<ret_type>* out, optional<type> const* a)
+#define CUDF_LTO_DECL(op, ret_type, type)                         \
+  __device__ extern inline void op(ret_type* out, type const* a); \
+                                                                  \
+  __device__ extern inline void op(optional<ret_type>* out, optional<type> const* a)
 
 CUDF_LTO_DECL(cast_to_int64, int64_t, bool);
 CUDF_LTO_DECL(cast_to_int64, int64_t, int8_t);
@@ -417,12 +422,12 @@ CUDF_LTO_DECL(cast_to_float64, float64_t, float64_t);
 
 #undef CUDF_LTO_DECL
 
-#define CUDF_LTO_DECL(op, type)                                  \
-  extern __device__ void op(bool* out, type const* a);           \
-                                                                 \
-  extern __device__ void op(bool* out, optional<type> const* a); \
-                                                                 \
-  extern __device__ void op(optional<bool>* out, optional<type> const* a)
+#define CUDF_LTO_DECL(op, type)                                         \
+  __device__ extern inline void op(bool* out, type const* a);           \
+                                                                        \
+  __device__ extern inline void op(bool* out, optional<type> const* a); \
+                                                                        \
+  __device__ extern inline void op(optional<bool>* out, optional<type> const* a)
 
 CUDF_LTO_DECL(is_null, bool);
 CUDF_LTO_DECL(is_null, int8_t);

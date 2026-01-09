@@ -23,50 +23,51 @@
 #define CUDFRTC_CONCATENATE_DETAIL(x, y) x##y
 #define CUDFRTC_CONCATENATE(x, y)        CUDFRTC_CONCATENATE_DETAIL(x, y)
 
-#define CUDFRTC_CHECK_CUDA(...)                                               \
-  do {                                                                        \
-    ::CUresult result = (__VA_ARGS__);                                        \
-    if (result != CUDA_SUCCESS) {                                             \
-      char const* enum_str;                                                   \
-      CUDF_EXPECTS(::cuGetErrorString(result, &enum_str) == CUDA_SUCCESS,     \
-                   "Unable to get CUDA error string");                        \
-      auto errstr = ::std::format("CUDA Call {} failed, with error ({}): {}", \
-                                  #__VA_ARGS__,                               \
-                                  static_cast<int64_t>(result),               \
-                                  enum_str);                                  \
-      CUDF_FAIL(+errstr, ::std::runtime_error);                               \
-    }                                                                         \
+#define CUDFRTC_CHECK_CUDA(...)                                                   \
+  do {                                                                            \
+    ::CUresult __result = (__VA_ARGS__);                                          \
+    if (__result != ::CUDA_SUCCESS) {                                             \
+      char const* __enum_str;                                                     \
+      CUDF_EXPECTS(::cuGetErrorString(__result, &__enum_str) == ::CUDA_SUCCESS,   \
+                   "Unable to get CUDA error string");                            \
+      auto __errstr = ::std::format("(cuda) Call {} failed, with error ({}): {}", \
+                                    #__VA_ARGS__,                                 \
+                                    static_cast<::int64_t>(__result),             \
+                                    __enum_str);                                  \
+      CUDF_FAIL(+__errstr, ::std::runtime_error);                                 \
+    }                                                                             \
   } while (0)
 
-#define CUDFRTC_CHECK_NVRTC(params, program, ...)                                                  \
-  do {                                                                                             \
-    ::nvrtcResult result = (__VA_ARGS__);                                                          \
-    if (result != NVRTC_SUCCESS) {                                                                 \
-      auto errstr = ::std::format("NVRTC Call {} failed, with error ({}): {}",                     \
-                                  #__VA_ARGS__,                                                    \
-                                  static_cast<int64_t>(result),                                    \
-                                  ::nvrtcGetErrorString(result));                                  \
-      CUDF_FAIL(+errstr + "\n" +                                                                   \
-                  (program == nullptr ? "" : ::cudf::rtc::get_nvrtc_log(params, program, result)), \
-                ::std::runtime_error);                                                             \
-    }                                                                                              \
-  } while (0)
-
-#define CUDFRTC_CHECK_NVJITLINK(...)                                               \
+#define CUDFRTC_CHECK_NVRTC(params, program, ...)                                  \
   do {                                                                             \
-    ::nvJitLinkResult result = (__VA_ARGS__);                                      \
-    if (result != NVJITLINK_SUCCESS) {                                             \
-      auto errstr = ::std::format("nvJitLink Call {} failed, with error ({}): {}", \
-                                  #__VA_ARGS__,                                    \
-                                  static_cast<int64_t>(result),                    \
-                                  ::cudf::rtc::get_nvJitLinkResultString(result)); \
-      CUDF_FAIL(+errstr, std::runtime_error);                                      \
+    ::nvrtcResult __result = (__VA_ARGS__);                                        \
+    ::cudf::rtc::log_nvrtc_result(params, program, __result);                      \
+    if (__result != ::NVRTC_SUCCESS) {                                             \
+      auto __errstr = ::std::format("(nvrtc) Call {} failed, with error ({}): {}", \
+                                    #__VA_ARGS__,                                  \
+                                    static_cast<::int64_t>(__result),              \
+                                    ::nvrtcGetErrorString(__result));              \
+      CUDF_FAIL(+__errstr, ::std::runtime_error);                                  \
     }                                                                              \
+  } while (0)
+
+#define CUDFRTC_CHECK_NVJITLINK(params, handle, ...)                                   \
+  do {                                                                                 \
+    ::nvJitLinkResult __result = (__VA_ARGS__);                                        \
+    ::cudf::rtc::log_nvJitLink_result(params, handle, __result);                       \
+    if (__result != ::NVJITLINK_SUCCESS) {                                             \
+      auto __errstr = ::std::format("(nvJitLink) Call {} failed, with error ({}): {}", \
+                                    #__VA_ARGS__,                                      \
+                                    static_cast<::int64_t>(__result),                  \
+                                    ::cudf::rtc::get_nvJitLinkResultString(__result)); \
+      CUDF_FAIL(+__errstr, ::std::runtime_error);                                      \
+    }                                                                                  \
   } while (0)
 
 namespace cudf {
 namespace rtc {
 
+namespace {
 char const* get_nvJitLinkResultString(nvJitLinkResult result)
 {
   switch (result) {
@@ -89,7 +90,10 @@ char const* get_nvJitLinkResultString(nvJitLinkResult result)
     case NVJITLINK_ERROR_UNRECOGNIZED_ARCH: return "NVJITLINK_ERROR_UNRECOGNIZED_ARCH";
     case NVJITLINK_ERROR_UNSUPPORTED_ARCH: return "NVJITLINK_ERROR_UNSUPPORTED_ARCH";
     case NVJITLINK_ERROR_LTO_NOT_ENABLED: return "NVJITLINK_ERROR_LTO_NOT_ENABLED";
-    default: CUDF_FAIL("Unrecognized nvJitLinkResult type", std::runtime_error);
+    default:
+      CUDF_FAIL(
+        +std::format("Unrecognized nvJitLinkResult type: ({})", static_cast<int64_t>(result)),
+        std::runtime_error);
   }
 }
 
@@ -100,9 +104,167 @@ char const* binary_type_string(binary_type type)
     case binary_type::CUBIN: return "CUBIN";
     case binary_type::FATBIN: return "FATBIN";
     case binary_type::PTX: return "PTX";
-    default: CUDF_FAIL("Unrecognized binary_type", std::runtime_error);
+    default:
+      CUDF_FAIL(+std::format("Unrecognized binary_type: ({})", static_cast<int64_t>(type)),
+                std::runtime_error);
   }
 }
+
+nvJitLinkInputType to_nvjitlink_input_type(binary_type bin_type)
+{
+  switch (bin_type) {
+    case binary_type::LTO_IR: return NVJITLINK_INPUT_LTOIR;
+    case binary_type::CUBIN: return NVJITLINK_INPUT_CUBIN;
+    case binary_type::FATBIN: return NVJITLINK_INPUT_FATBIN;
+    case binary_type::PTX: return NVJITLINK_INPUT_PTX;
+    default:
+      CUDF_FAIL(
+        +std::format("Unrecognized binary type for linking: ({}) ", static_cast<int64_t>(bin_type)),
+        std::logic_error);
+  }
+}
+
+void log_nvrtc_result(fragment_t::compile_params const& params,
+                      nvrtcProgram program,
+                      nvrtcResult compile_result)
+{
+  if (program == nullptr) { return; }
+
+  size_t log_size;
+  if (auto errc = nvrtcGetProgramLogSize(program, &log_size); errc != NVRTC_SUCCESS) {
+    CUDF_FAIL(+std::format("Failed to get NVRTC program log size with error ({}): {}",
+                           static_cast<int64_t>(errc),
+                           nvrtcGetErrorString(errc)),
+              std::runtime_error);
+  }
+
+  if (log_size <= 1) { return; }
+
+  std::vector<char> log;
+  log.resize(log_size);
+
+  if (auto errc = nvrtcGetProgramLog(program, log.data()); errc != NVRTC_SUCCESS) {
+    CUDF_FAIL(+std::format("Failed to get NVRTC program log with error ({}): {}",
+                           static_cast<int64_t>(errc),
+                           nvrtcGetErrorString(errc)),
+              std::runtime_error);
+  }
+
+  log.resize(log_size == 0 ? 0 : (log_size - 1));
+
+  auto status_str = (compile_result == NVRTC_SUCCESS && !log.empty()) ? "completed with warning"
+                                                                      : "failed with error";
+
+  std::string headers_str;
+  for (auto const& header : params.headers.include_names) {
+    headers_str = std::format("{}\t{}\n", headers_str, header);
+  }
+
+  std::string options_str;
+  for (auto const& option : params.options) {
+    options_str = std::format("{}\t{}\n", options_str, option);
+  }
+
+  auto msg = std::format(
+    "NVRTC Compilation for `{}` {} ({}): {}.\nHeaders:\n{}\n\nOptions:\n{}\n\nLog:\n\t{}",
+    params.name == nullptr ? "<unnamed>" : params.name,
+    status_str,
+    static_cast<int64_t>(compile_result),
+    nvrtcGetErrorString(compile_result),
+    headers_str,
+    options_str,
+    std::string_view{log.data(), log.size()});
+
+  if (compile_result != NVRTC_SUCCESS) {
+    CUDF_LOG_ERROR(msg);
+  } else {
+    CUDF_LOG_WARN(msg);
+  }
+}
+
+void log_nvJitLink_result(library_t::link_params const& params,
+                          nvJitLinkHandle handle,
+                          nvJitLinkResult link_result)
+{
+  if (handle == nullptr) { return; }
+
+  size_t info_log_size;
+  if (auto errc = nvJitLinkGetInfoLogSize(handle, &info_log_size); errc != NVJITLINK_SUCCESS) {
+    CUDF_FAIL(+std::format("Failed to get nvJitLink info log size with error ({}): {}",
+                           static_cast<int64_t>(errc),
+                           get_nvJitLinkResultString(errc)),
+              std::runtime_error);
+  }
+
+  std::vector<char> info_log;
+  if (info_log_size > 1) {
+    info_log.resize(info_log_size);
+    if (auto errc = nvJitLinkGetInfoLog(handle, info_log.data()); errc != NVJITLINK_SUCCESS) {
+      CUDF_FAIL(+std::format("Failed to get nvJitLink info log with error ({}): {}",
+                             static_cast<int64_t>(errc),
+                             get_nvJitLinkResultString(errc)),
+                std::runtime_error);
+    }
+  }
+  info_log.resize(info_log_size == 0 ? 0 : (info_log_size - 1));
+
+  size_t error_log_size;
+  if (auto errc = nvJitLinkGetErrorLogSize(handle, &error_log_size); errc != NVJITLINK_SUCCESS) {
+    CUDF_FAIL(+std::format("Failed to get nvJitLink error log size with error ({}): {}",
+                           static_cast<int64_t>(errc),
+                           get_nvJitLinkResultString(errc)),
+              std::runtime_error);
+  }
+
+  std::vector<char> error_log;
+
+  if (error_log_size > 1) {
+    error_log.resize(error_log_size);
+    if (auto errc = nvJitLinkGetErrorLog(handle, error_log.data()); errc != NVJITLINK_SUCCESS) {
+      CUDF_FAIL(+std::format("Failed to get nvJitLink error log with error ({}): {}",
+                             static_cast<int64_t>(errc),
+                             get_nvJitLinkResultString(errc)),
+                std::runtime_error);
+    }
+  }
+  error_log.resize(error_log_size == 0 ? 0 : (error_log_size - 1));
+
+  if (info_log.empty() && error_log.empty()) { return; }
+
+  std::string fragments_str;
+  for (auto const& fragment_name : params.fragment_names) {
+    fragments_str = std::format("{}\t{}\n", fragments_str, fragment_name);
+  }
+
+  std::string link_options_str;
+  for (auto const& option : params.link_options) {
+    link_options_str = std::format("{}\t{}\n", link_options_str, option);
+  }
+
+  char const* binary_type_str = binary_type_string(params.output_type);
+
+  auto status_str = error_log.empty() ? "completed with warnings" : "failed with errors";
+
+  auto msg = std::format(
+    "(nvJitLink) Linking for `{}` ({}) {}, error code ({}): {}.\nFragments: \n{}\n"
+    "Link Options: \n{}\n\nInfo Log:\n\t{}\n\nError Log:\n\t{}\n\n",
+    params.name == nullptr ? "<unnamed>" : params.name,
+    binary_type_str,
+    status_str,
+    static_cast<int64_t>(link_result),
+    get_nvJitLinkResultString(link_result),
+    fragments_str,
+    link_options_str,
+    std::string_view{info_log.data(), info_log.size()},
+    std::string_view{error_log.data(), error_log.size()});
+
+  if (!error_log.empty()) {
+    CUDF_LOG_ERROR(msg);
+  } else {
+    CUDF_LOG_WARN(msg);
+  }
+}
+}  // namespace
 
 blob_t blob_t::from_vector(std::vector<uint8_t>&& data)
 {
@@ -122,100 +284,14 @@ blob_t blob_t::from_static_data(std::span<uint8_t const> data)
 fragment fragment_t::load(load_params const& params)
 {
   CUDF_FUNC_RANGE();
+  // TODO: check
 
   return std::make_shared<fragment_t>(params.binary, params.type);
 }
 
-std::string get_nvrtc_log(fragment_t::compile_params const& params,
-                          nvrtcProgram program,
-                          nvrtcResult compile_result)
-{
-  size_t log_size;
-  if (nvrtcGetProgramLogSize(program, &log_size) != NVRTC_SUCCESS) { return std::string{}; }
-
-  std::vector<char> log;
-  log.resize(log_size);
-
-  if (nvrtcGetProgramLog(program, log.data()) != NVRTC_SUCCESS) { return std::string{}; }
-
-  auto status_str =
-    (compile_result == NVRTC_SUCCESS) ? "completed with warning" : "failed with error";
-
-  std::string headers_str;
-  for (auto const& header : params.headers.include_names) {
-    headers_str = std::format("{}\t{}\n", headers_str, header);
-  }
-
-  std::string options_str;
-  for (auto const& option : params.options) {
-    options_str = std::format("{}\t{}\n", options_str, option);
-  }
-
-  return std::format("NCRTC Compilation for {} {} ({}): {}.\nHeaders:\n{}\n\nOptions:\n{}\n\n{}",
-                     params.name == nullptr ? "<unnamed>" : params.name,
-                     status_str,
-                     static_cast<int64_t>(compile_result),
-                     nvrtcGetErrorString(compile_result),
-                     headers_str,
-                     options_str,
-                     log.data());
-}
-
-void log_nvJitLink_link_result(library_t::link_params const& params,
-                               nvJitLinkHandle handle,
-                               nvJitLinkResult link_result)
-{
-  size_t info_log_size;
-  CUDFRTC_CHECK_NVJITLINK(nvJitLinkGetInfoLogSize(handle, &info_log_size));
-
-  std::vector<char> info_log;
-  info_log.resize(info_log_size);
-  CUDFRTC_CHECK_NVJITLINK(nvJitLinkGetInfoLog(handle, info_log.data()));
-
-  size_t error_log_size;
-  CUDFRTC_CHECK_NVJITLINK(nvJitLinkGetErrorLogSize(handle, &error_log_size));
-
-  std::vector<char> error_log;
-  error_log.resize(error_log_size);
-  CUDFRTC_CHECK_NVJITLINK(nvJitLinkGetErrorLog(handle, error_log.data()));
-
-  std::string fragments_str;
-  for (auto const& fragment_name : params.fragment_names) {
-    fragments_str = std::format("{}\t{}\n", fragments_str, fragment_name);
-  }
-
-  std::string link_options_str;
-  for (auto const& option : params.link_options) {
-    link_options_str = std::format("{}\t{}\n", link_options_str, option);
-  }
-
-  char const* binary_type_str = binary_type_string(params.output_type);
-
-  auto status_str =
-    (link_result == NVJITLINK_SUCCESS) ? "completed successfully" : "failed with error";
-
-  auto str = std::format(
-    "nvJitLink Linking for {} ({}) {} ({}): {}.\nFragments: \n{}\n"
-    "Link Options: \n{}\n\nInfo Log:\n{}\n\nError Log:\n{}\n\n",
-    params.name == nullptr ? "<unnamed>" : params.name,
-    binary_type_str,
-    status_str,
-    static_cast<int64_t>(link_result),
-    get_nvJitLinkResultString(link_result),
-    fragments_str,
-    link_options_str,
-    info_log.data(),
-    error_log.data());
-
-  if (link_result != NVJITLINK_SUCCESS) {
-    CUDF_FAIL(+str, std::runtime_error);
-  } else if (!info_log.empty() || !error_log.empty()) {
-    CUDF_LOG_WARN(str);
-  }
-}
-
 fragment fragment_t::compile(compile_params const& params)
 {
+  // TODO: check
   CUDF_FUNC_RANGE();
 
   nvrtcProgram program = nullptr;
@@ -235,10 +311,6 @@ fragment fragment_t::compile(compile_params const& params)
     params,
     program,
     nvrtcCompileProgram(program, static_cast<int>(params.options.size()), params.options.data()));
-
-  if (auto log = get_nvrtc_log(params, program, NVRTC_SUCCESS); !log.empty()) {
-    CUDF_LOG_WARN(log);
-  }
 
   switch (params.target_type) {
     case binary_type::LTO_IR: {
@@ -328,6 +400,7 @@ library_t::~library_t()
 
 library library_t::load(load_params const& params)
 {
+  // TODO: check
   CUDF_FUNC_RANGE();
 
   CUlibrary handle;
@@ -353,46 +426,49 @@ blob library_t::link_as_blob(link_params const& params)
   CUDF_EXPECTS(params.output_type == binary_type::CUBIN || params.output_type == binary_type::PTX,
                "Only CUBIN and PTX output types are supported for linking modules",
                std::logic_error);
+  CUDF_EXPECTS(params.fragments.size() == params.fragment_binary_types.size(),
+               "Mismatched number of fragments and fragment binary types",
+               std::logic_error);
+  CUDF_EXPECTS(params.fragments.size() == params.fragment_names.size(),
+               "Mismatched number of fragments and fragment names",
+               std::logic_error);
+  CUDF_EXPECTS(params.fragments.size() > 0, "No fragments provided for linking", std::logic_error);
 
-  nvJitLinkHandle handle;
+  for (auto& frag : params.fragments) {
+    CUDF_EXPECTS(frag.size_bytes() > 0, "Fragment binary data must be non-empty", std::logic_error);
+  }
 
-  CUDFRTC_CHECK_NVJITLINK(nvJitLinkCreate(&handle,
+  nvJitLinkHandle handle = nullptr;
+
+  CUDFRTC_CHECK_NVJITLINK(params,
+                          handle,
+                          nvJitLinkCreate(&handle,
                                           static_cast<uint32_t>(params.link_options.size()),
                                           const_cast<char const**>(params.link_options.data())));
 
   CUDF_DEFER([&] { nvJitLinkDestroy(&handle); });
 
   for (size_t i = 0; i < params.fragments.size(); i++) {
-    auto name     = params.fragment_names[i];
-    auto fragment = params.fragments[i];
-    auto bin_type = params.fragment_binary_types[i];
-
-    nvJitLinkInputType nv_type;
-
-    switch (bin_type) {
-      case binary_type::LTO_IR: nv_type = NVJITLINK_INPUT_LTOIR; break;
-      case binary_type::CUBIN: nv_type = NVJITLINK_INPUT_CUBIN; break;
-      case binary_type::FATBIN: nv_type = NVJITLINK_INPUT_FATBIN; break;
-      case binary_type::PTX: nv_type = NVJITLINK_INPUT_PTX; break;
-      default: CUDF_FAIL("Unsupported binary type for loading fragment", std::logic_error);
-    }
+    auto name                  = params.fragment_names[i];
+    auto fragment              = params.fragments[i];
+    auto bin_type              = params.fragment_binary_types[i];
+    nvJitLinkInputType nv_type = to_nvjitlink_input_type(bin_type);
 
     CUDFRTC_CHECK_NVJITLINK(
+      params,
+      handle,
       nvJitLinkAddData(handle, nv_type, fragment.data(), fragment.size_bytes(), name));
   }
 
-  nvJitLinkResult link_result = nvJitLinkComplete(handle);
-
-  log_nvJitLink_link_result(params, handle, link_result);
+  CUDFRTC_CHECK_NVJITLINK(params, handle, nvJitLinkComplete(handle));
 
   switch (params.output_type) {
     case binary_type::CUBIN: {
       size_t cubin_size;
-
-      CUDFRTC_CHECK_NVJITLINK(nvJitLinkGetLinkedCubinSize(handle, &cubin_size));
+      CUDFRTC_CHECK_NVJITLINK(params, handle, nvJitLinkGetLinkedCubinSize(handle, &cubin_size));
       std::vector<unsigned char> cubin;
       cubin.resize(cubin_size);
-      CUDFRTC_CHECK_NVJITLINK(nvJitLinkGetLinkedCubin(handle, cubin.data()));
+      CUDFRTC_CHECK_NVJITLINK(params, handle, nvJitLinkGetLinkedCubin(handle, cubin.data()));
 
       return std::make_shared<blob_t>(blob_t::from_vector(std::move(cubin)));
     } break;
@@ -400,16 +476,20 @@ blob library_t::link_as_blob(link_params const& params)
     case binary_type::PTX: {
       size_t ptx_size;
 
-      CUDFRTC_CHECK_NVJITLINK(nvJitLinkGetLinkedPtxSize(handle, &ptx_size));
+      CUDFRTC_CHECK_NVJITLINK(params, handle, nvJitLinkGetLinkedPtxSize(handle, &ptx_size));
       std::vector<unsigned char> ptx;
       ptx.resize(ptx_size);
-      CUDFRTC_CHECK_NVJITLINK(nvJitLinkGetLinkedPtx(handle, reinterpret_cast<char*>(ptx.data())));
+
+      CUDFRTC_CHECK_NVJITLINK(
+        params, handle, nvJitLinkGetLinkedPtx(handle, reinterpret_cast<char*>(ptx.data())));
 
       return std::make_shared<blob_t>(blob_t::from_vector(std::move(ptx)));
     } break;
 
     default:
-      CUDF_FAIL("Unsupported output binary type for linking CUDA libraries", std::runtime_error);
+      CUDF_FAIL(+std::format("Unsupported output binary type for linking CUDA libraries: ({})",
+                             static_cast<int64_t>(params.output_type)),
+                std::runtime_error);
   }
 }
 
