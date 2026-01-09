@@ -413,10 +413,10 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   // that it is difficult/impossible for a given page to know that it is writing the very
   // last value that should then be followed by a terminator (because rows can span
   // page boundaries).
-  auto out_buffers =
-    cudf::detail::make_empty_host_vector<size_type*>(_input_columns.size(), _stream);
-  auto final_offsets =
-    cudf::detail::make_empty_host_vector<size_type>(_input_columns.size(), _stream);
+  std::vector<size_type*> out_buffers;
+  std::vector<size_type> final_offsets;
+  out_buffers.reserve(_input_columns.size());
+  final_offsets.reserve(_input_columns.size());
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     input_column_info const& input_col = _input_columns[idx];
 
