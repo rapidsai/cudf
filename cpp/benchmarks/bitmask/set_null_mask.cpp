@@ -9,6 +9,7 @@
 #include <nvbench/nvbench.cuh>
 
 #include <random>
+#include <stdexcept>
 
 namespace {
 
@@ -102,6 +103,8 @@ void BM_setnullmask_safe_bulk(nvbench::state& state)
   auto const mask_size = static_cast<cudf::size_type>(state.get_int64("max_mask_size"));
   auto const num_masks = static_cast<cudf::size_type>(state.get_int64("num_masks"));
   bool const use_variable_mask_sizes = static_cast<bool>(state.get_int64("use_variable_mask_size"));
+
+  if (mask_size > 0) { throw std::runtime_error("testing runtime error"); }
 
   auto [begin_bits, end_bits, valids, masks, masks_ptr] =
     generate_test_data(num_masks, mask_size, use_variable_mask_sizes);
