@@ -520,10 +520,10 @@ class hybrid_scan_reader {
    * @return Table of all materialized columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
-   cudf::host_span<size_type const> row_group_indices,
-   std::vector<rmm::device_buffer>&& column_chunk_buffers,
-   parquet_reader_options const& options,
-   rmm::cuda_stream_view stream) const;
+    cudf::host_span<size_type const> row_group_indices,
+    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream) const;
   /**
    * @brief Setup chunking information for filter columns and preprocess the input data pages
    *
