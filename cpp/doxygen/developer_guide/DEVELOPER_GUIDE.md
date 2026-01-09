@@ -93,7 +93,7 @@ All headers in cudf should use `#pragma once` for include guards.
 
 Only use `.cu` and `.cuh` if necessary. A good indicator is the inclusion of `__device__` and other
 symbols that are only recognized by `nvcc`. Another indicator is Thrust algorithm APIs with a device
-execution policy (always `rmm::exec_policy` in libcudf).
+execution policy (always `rmm::exec_policy_nosync` in libcudf).
 
 ## Code and Documentation Style and Formatting
 
@@ -480,7 +480,7 @@ This policy applies only to fixed-width types. It does **not** apply to variable
 (strings) or nested types (lists, structs), which have their own requirements as described in the
 sections above.
 
-## Treat libcudf APIs as if they were asynchronous
+## Treat libcudf APIs as if they were asynchronous {#async-apis}
 
 libcudf APIs called on the host do not guarantee that the stream is synchronized before returning.
 Work in libcudf occurs on `cudf::get_default_stream().value`, which defaults to the CUDA default
@@ -547,7 +547,7 @@ void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_reso
   rmm::device_buffer buff(..., stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
   kernel<<<..., stream>>>(...);
-  thrust::algorithm(rmm::exec_policy(stream), ...);
+  thrust::algorithm(rmm::exec_policy_nosync(stream), ...);
 }
 } // namespace detail
 
@@ -567,7 +567,7 @@ asynchrony.
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
 This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
 
- ### Stream Creation
+### Stream Creation
 
 There may be times in implementing libcudf features where it would be advantageous to use streams
 *internally*, i.e., to accomplish overlap in implementing an algorithm. However, dynamically
@@ -575,6 +575,30 @@ creating a stream can be expensive. RMM has a stream pool class to help avoid dy
 creation. However, this is not yet exposed in libcudf, so for the time being, libcudf features
 should avoid creating streams (even if it is slightly less efficient). It is a good idea to leave a
 `// TODO:` note indicating where using a stream would be beneficial.
+
+### Thrust Execution Policy
+
+libcudf uses `rmm::exec_policy_nosync(stream)` for all Thrust algorithm calls. This execution policy
+avoids internal stream synchronizations except when required for correctness, such as when an
+algorithm returns a value to the host (e.g., `thrust::reduce`).
+
+Using `nosync` provides significant performance improvements, particularly for small data sizes
+where synchronization overhead is proportionally larger. Benchmarks have shown speedups of 10-40%
+for many operations on small inputs.
+
+This policy aligns with libcudf's existing stream semantics: libcudf APIs called on the host
+[do not guarantee that the stream is synchronized before returning](#async-apis).
+Callers must explicitly synchronize if they need to access results on the host.
+
+Notes on `nosync`:
+
+- Algorithms that return values to the host (like `thrust::reduce`) will still synchronize
+  internally as needed for correctness.
+- Ensure that stream-ordered accesses are considered in the context of RAII. Host objects that could
+  go out of scope (whose lifetime could expire before stream-ordered access) may require an explicit
+  synchronization before returning or exiting that scope.
+- All new code should use `rmm::exec_policy_nosync(stream)` rather than `rmm::exec_policy(stream)`.
+  If a stream sync is needed, call `stream.synchronize()` explicitly.
 
 ## Memory Allocation
 
@@ -904,7 +928,7 @@ Example output iterator usage:
 
 ```c++
 auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
-thrust::lower_bound(rmm::exec_policy(stream),
+thrust::lower_bound(rmm::exec_policy_nosync(stream),
                     input->begin<Element>(),
                     input->end<Element>(),
                     values->begin<Element>(),
