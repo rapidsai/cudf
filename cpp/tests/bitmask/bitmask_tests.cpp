@@ -95,9 +95,9 @@ TEST_F(CountBitmaskTest, NegativeStart)
 {
   auto mask = make_mask(1);
   EXPECT_THROW(cudf::detail::count_set_bits(mask.data(), -1, 32, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::detail::valid_count(mask.data(), -1, 32, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
 
   std::vector<cudf::size_type> indices = {0, 16, -1, 32};
   EXPECT_THROW(
@@ -112,9 +112,9 @@ TEST_F(CountBitmaskTest, StartLargerThanStop)
 {
   auto mask = make_mask(1);
   EXPECT_THROW(cudf::detail::count_set_bits(mask.data(), 32, 31, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::detail::valid_count(mask.data(), 32, 31, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
 
   std::vector<cudf::size_type> indices = {0, 16, 31, 30};
   EXPECT_THROW(
