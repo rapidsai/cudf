@@ -17,6 +17,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <filesystem>
 #include <format>
 
 namespace cudf {
@@ -26,10 +27,10 @@ namespace {
 
 [[noreturn]] void throw_posix(std::string_view message, std::string_view syscall_name)
 {
-  auto error_code = errno;
-  auto error_str  = std::format(
-    "{}. `{}` failed with {} ({})", message, syscall_name, error_code, std::strerror(error_code));
-  CUDF_FAIL(+error_str, std::runtime_error);
+  auto errc = errno;
+  auto err_str =
+    std::format("{}. `{}` failed with {} ({})", message, syscall_name, errc, std::strerror(errc));
+  CUDF_FAIL(+err_str, std::runtime_error);
 }
 
 }  // namespace
@@ -99,9 +100,7 @@ void cache_t::store_blob_to_disk(sha256_hash const& sha, blob_view binary)
     if (fd == -1) { throw_posix("Failed to create temporary file for RTC cache", "mkstemp"); }
 
     CUDF_DEFER([&] {
-      if (remove(temp_path) == -1) {
-        throw_posix("Failed to remove temporary RTC cache file", "remove");
-      }
+      if (close(fd) == -1) { throw_posix("Failed to close temporary RTC cache file", "close"); }
     });
 
     if (write(fd, binary.data(), binary.size()) == -1) {
@@ -109,26 +108,26 @@ void cache_t::store_blob_to_disk(sha256_hash const& sha, blob_view binary)
     }
   }
 
-  auto hex = sha.to_hex_string();
-  char final_path[PATH_MAX + 1];
-  auto result = std::format_to_n(final_path, PATH_MAX, "{}/{}.blob", cache_dir_, hex.view());
-  CUDF_EXPECTS(
-    result.out != (final_path + PATH_MAX), "Path length exceeded PATH_MAX", std::runtime_error);
-  *result.out = '\0';
+  auto hex        = sha.to_hex_string();
+  auto final_path = std::format("{}/{}.blob", cache_dir_, hex.view());
+
+  std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
 
   // rename is atomic, even if another process is performing the same operation
-  if (rename(temp_path, final_path) == -1) {
-    auto error_code = errno;
+  if (rename(temp_path, final_path.c_str()) == -1) {
+    auto errc = errno;
 
-    if (error_code == EEXIST) {
+    if (errc == EEXIST) {
       // another process has already created the file, so just remove our temp file
       if (remove(temp_path) == -1) {
         throw_posix("Failed to remove temporary RTC cache file", "remove");
       }
       return;
+    } else {
+      throw_posix(
+        std::format("Failed to move temporary RTC cache file to final location ({})", final_path),
+        "rename");
     }
-
-    throw_posix("Failed to move temporary RTC cache file to final location", "rename");
   }
 }
 

@@ -11,27 +11,47 @@
 
 #include <jit/rtc/cudf.hpp>
 
+#include <chrono>
+
 using namespace cudf;
 
 struct RTCTest : public ::testing::Test {};
 
 TEST_F(RTCTest, CreateFragment)
 {
-  auto kern = rtc::compile_and_link_udf("test_fragment",
-                                        "transform_kernel",
-                                        "test_kernel_key",
-                                        R"***(
+  auto fn = []() {
+    auto begin = std::chrono::high_resolution_clock::now();
+    auto kern  = rtc::compile_and_link_udf("test_fragment",
+                                          "transform_kernel",
+                                          "test_kernel_key",
+                                          R"***(
     #include "cudf/jit/transform_params.cuh"
-    #include "jit/lto/operators.inl.cuh"
-    #include "jit/lto/types.inl.cuh"
+    // #include "cudf/jit/lto/operators.cuh"
 
-    extern "C" __device__ void transform_operator(cudf::lto::transform_params const*){
+    extern "C" __device__ void transform_operator(cudf::lto::transform_params const* p){
+      int a = 1;
+      int b = 2;
+      int c = 3;
+      int * out = (int *)p->outputs;
+      // cudf::lto::operators::add(&c, &a, &b);
+      // cudf::lto::operators::sub(&c, &a, &b);
+      // cudf::lto::operators::mul(&c, &a, &b);
+      // cudf::lto::operators::mul(&c, &a, &b);
+      *out = a + b * c;
     }
 
     )***",
-                                        "test_udf_key");
+                                          "test_udf_key");
 
-  (void)kern;
+    (void)kern;
+    auto end = std::chrono::high_resolution_clock::now();
+    auto dur = end - begin;
+    std::cout << "RTC compilation took "
+              << std::chrono::duration_cast<std::chrono::microseconds>(dur).count() << " us\n";
+  };
+
+  fn();
+  fn();
 }
 
 CUDF_TEST_PROGRAM_MAIN()

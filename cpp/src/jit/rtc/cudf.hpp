@@ -13,6 +13,8 @@
 namespace CUDF_EXPORT cudf {
 namespace rtc {
 
+void install_includes(char const* cache_dir);
+
 kernel_ref compile_and_link_udf(char const* name,
                                 char const* kernel_name,
                                 char const* kernel_key,

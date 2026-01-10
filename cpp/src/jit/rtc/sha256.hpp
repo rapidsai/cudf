@@ -4,6 +4,7 @@
  */
 
 #pragma once
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <cstddef>
@@ -30,6 +31,19 @@ struct [[nodiscard]] sha256_hex_string {
   [[nodiscard]] char const* c_str() const { return data_; }
 
   static constexpr size_t size() { return 64; }
+
+  static sha256_hex_string make(std::span<uint8_t const> input)
+  {
+    CUDF_EXPECTS(input.size() == 32, "Input size must be 32 bytes for SHA256 hash");
+    constexpr char const HEX_CHARS[] = "0123456789abcdef";
+    sha256_hex_string hex;
+    for (size_t i = 0; i < 32; ++i) {
+      hex.data_[i * 2]     = HEX_CHARS[(input[i] >> 4) & 0x0F];
+      hex.data_[i * 2 + 1] = HEX_CHARS[input[i] & 0x0F];
+    }
+    hex.data_[64] = '\0';
+    return hex;
+  }
 };
 
 struct [[nodiscard]] sha256_hash {
@@ -42,16 +56,9 @@ struct [[nodiscard]] sha256_hash {
 
   constexpr bool operator!=(sha256_hash const& hash) const { return !(*this == hash); }
 
-  constexpr sha256_hex_string to_hex_string() const
+  sha256_hex_string to_hex_string() const
   {
-    constexpr char const HEX_CHARS[] = "0123456789abcdef";
-    sha256_hex_string hex;
-    for (size_t i = 0; i < 32; ++i) {
-      hex.data_[i * 2]     = HEX_CHARS[(data_[i] >> 4) & 0x0F];
-      hex.data_[i * 2 + 1] = HEX_CHARS[data_[i] & 0x0F];
-    }
-    hex.data_[64] = '\0';
-    return hex;
+    return sha256_hex_string::make(std::span{data_, sizeof(data_)});
   }
 };
 

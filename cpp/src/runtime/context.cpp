@@ -9,6 +9,7 @@
 #include "io/utilities/getenv_or.hpp"
 #include "jit/cache.hpp"
 #include "jit/rtc/cache.hpp"
+#include "jit/rtc/cudf.hpp"
 
 #include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
@@ -51,6 +52,7 @@ void context::initialize_components(init_flags flags)
     _program_cache = std::make_unique<jit::program_cache>();
     // TODO: Make cache directory configurable
     _rtc_cache = std::make_unique<rtc::cache_t>(true, "/tmp/cudf-rtc-cache", rtc::cache_limits{});
+    cudf::rtc::install_includes("/tmp/cudf-rtc-cache");
   }
 
   if (has_flag(new_flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }

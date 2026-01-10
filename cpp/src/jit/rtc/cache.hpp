@@ -267,6 +267,8 @@ struct cache_statistics_counter {
 struct cache_t {
  private:
   bool enabled_;
+  // TODO: store under more structured pathsi, i.e. /cache.
+  // TODO: stamp binaries so we can pre-load?
 
   std::string cache_dir_;
 

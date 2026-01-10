@@ -40,16 +40,21 @@ PREAMBLE = f"""
 
 extern "C" {{
 
-typedef struct {NAMESPACE_PREFIX}byte_array_t {{
+typedef struct {NAMESPACE_PREFIX}bytes_t {{
     {BYTE_TYPE} const * data;
     {SIZE_TYPE} size;
-}} {NAMESPACE_PREFIX}byte_array_t;
+}} {NAMESPACE_PREFIX}bytes_t;
 
-typedef struct {NAMESPACE_PREFIX}array_of_byte_arrays_t {{
-    {BYTE_TYPE} const * const * elements;
-    {SIZE_TYPE} const * element_sizes;
+typedef struct {NAMESPACE_PREFIX}byte_range_t {{
+    {SIZE_TYPE} offset;
     {SIZE_TYPE} size;
-}} {NAMESPACE_PREFIX}array_of_byte_arrays_t;
+}} {NAMESPACE_PREFIX}byte_range_t;
+
+typedef struct {NAMESPACE_PREFIX}bytes_array_t {{
+    {NAMESPACE_PREFIX}bytes_t bytes;
+    {NAMESPACE_PREFIX}byte_range_t const * ranges;
+    {SIZE_TYPE} num_ranges;
+}} {NAMESPACE_PREFIX}bytes_array_t;
 
 }}
 
@@ -64,7 +69,7 @@ def list_string(strings: list[str]) -> str:
     return ",\n".join(lines)
 
 
-def hex_string(value: int) -> str:
+def byte_hex_string(value: int) -> str:
     return f"0x{value:02X}"
 
 
@@ -72,12 +77,9 @@ class CXXVarDecl(NamedTuple):
     id: str
     expr: str
 
-    def code(self: Self) -> str:
-        return f"""{self.expr}"""
-
     @staticmethod
     def of_bytes(id: str, data: bytes, alignment: int) -> Self:
-        byte_array = list_string([hex_string(b) for b in data])
+        byte_array = list_string([byte_hex_string(b) for b in data])
         expr = f"""alignas({alignment}) {STORAGE_SPEC} {BYTE_TYPE} const {id}[{len(data)}] = {{
 {byte_array}
 }};"""
@@ -88,137 +90,188 @@ class CXXVarDecl(NamedTuple):
         expr = f"{STORAGE_SPEC} {SIZE_TYPE} const {id} = {size}ULL;"
         return CXXVarDecl(id=id, expr=expr)
 
+    def decl(self: Self) -> str:
+        return f"""{self.expr}"""
+
 
 class CXXSizeArrayDecl(NamedTuple):
     id: str
     sizes: list[int]
 
-    def decl(self: Self) -> CXXVarDecl:
+    @staticmethod
+    def of_sizes(id: str, sizes: list[int]) -> Self:
+        return CXXSizeArrayDecl(id=id, sizes=sizes)
+
+    def var(self: Self) -> CXXVarDecl:
         size_array = list_string([f"{size}ULL" for size in self.sizes])
         expr = f"""{STORAGE_SPEC} {SIZE_TYPE} const {self.id}[{len(self.sizes)}] = {{
 {size_array}
 }};"""
         return CXXVarDecl(id=self.id, expr=expr)
 
-    @staticmethod
-    def of_sizes(id: str, sizes: list[int]) -> Self:
-        return CXXSizeArrayDecl(id=id, sizes=sizes)
 
-
-class CXXByteArrayDecl(NamedTuple):
+class CXXBytesDecl(NamedTuple):
     id: str
-    data: CXXVarDecl
-    size: CXXVarDecl
-
-    def decl(self: Self) -> CXXVarDecl:
-        return CXXVarDecl(
-            id=self.id,
-            expr=f"""
-{self.data.code()}
-
-{self.size.code()}
-
-
-{STORAGE_SPEC} {NAMESPACE_PREFIX}byte_array_t const {self.id} = {{
-    {self.data.id},
-    {self.size.id}
-}};
-""",
-        )
+    data: bytes
+    alignment: int
+    num_null_terminators: int
 
     @staticmethod
     def of_bytes(
         id: str, data: bytes, alignment: int, num_null_terminators: int
     ) -> Self:
-        # exclude null terminator from length
-        size_decl = CXXVarDecl.of_size(id=f"{id}_size", size=len(data))
-
-        data += b"\0" * num_null_terminators
-
-        data_decl = CXXVarDecl.of_bytes(
-            id=f"{id}_data", data=data, alignment=alignment
+        return CXXBytesDecl(
+            id=id,
+            data=data,
+            alignment=alignment,
+            num_null_terminators=num_null_terminators,
         )
 
-        return CXXByteArrayDecl(id=id, data=data_decl, size=size_decl)
+    def var(self: Self) -> CXXVarDecl:
+        # exclude null terminator from length
+        size_decl = CXXVarDecl.of_size(
+            id=f"{self.id}_size", size=len(self.data)
+        )
 
+        data = self.data + b"\0" * self.num_null_terminators
 
-class CXXArrayOfByteArraysDecl(NamedTuple):
-    id: str
-    elements: list[CXXByteArrayDecl]
-    size: CXXVarDecl
-
-    def decl(self: Self) -> CXXVarDecl:
-        elements_decl = "\n".join(e.decl().code() for e in self.elements)
-        count = len(self.elements)
-        data_ids = ", ".join([d.data.id for d in self.elements])
-        size_ids = ", ".join([d.size.id for d in self.elements])
+        data_decl = CXXVarDecl.of_bytes(
+            id=f"{self.id}_data", data=data, alignment=self.alignment
+        )
 
         return CXXVarDecl(
             id=self.id,
             expr=f"""
-{elements_decl}
+{data_decl.decl()}
 
-{STORAGE_SPEC} {BYTE_TYPE} const * const {self.id}_elements[{count}] = {{ {data_ids} }};
-{STORAGE_SPEC} {SIZE_TYPE} const {self.id}_element_sizes[{count}] = {{ {size_ids} }};
+{size_decl.decl()}
 
 
-{STORAGE_SPEC} {NAMESPACE_PREFIX}array_of_byte_arrays_t const {self.id} = {{
-    {self.id}_elements,
-    {self.id}_element_sizes,
-    {count}ULL
+{STORAGE_SPEC} {NAMESPACE_PREFIX}bytes_t const {self.id} = {{
+    .data = {data_decl.id},
+    .size = {size_decl.id}
 }};
 """,
         )
 
+
+class CXXRangesDecl(NamedTuple):
+    id: str
+    ranges: list[tuple[int, int]]  # list of (offset, size)
+
     @staticmethod
-    def of_bytes_array(
-        id: str,
-        data_list: list[bytes],
-        data_alignment: int,
-        num_null_terminators: int,
-    ) -> Self:
-        size = len(data_list)
-        size_decl = CXXVarDecl.of_size(id=f"{id}_size", size=size)
-        array_decls: list[CXXByteArrayDecl] = [
-            CXXByteArrayDecl.of_bytes(
-                id=f"{id}_element_{i}",
-                data=data,
-                alignment=data_alignment,
-                num_null_terminators=num_null_terminators,
-            )
-            for i, data in enumerate(data_list)
+    def of_ranges(id: str, ranges: list[tuple[int, int]]) -> Self:
+        return CXXRangesDecl(id=id, ranges=ranges)
+
+    def var(self: Self) -> CXXVarDecl:
+        ranges_str = [
+            f"{{{offset}UL, {size}UL}}" for offset, size in self.ranges
         ]
 
-        return CXXArrayOfByteArraysDecl(
-            id=id, elements=array_decls, size=size_decl
+        ranges_str_formatted = list_string(ranges_str)
+
+        expr = f"""{STORAGE_SPEC} {NAMESPACE_PREFIX}byte_range_t const {self.id}[{len(self.ranges)}] = {{
+{ranges_str_formatted}
+}};"""
+        return CXXVarDecl(id=self.id, expr=expr)
+
+
+class CXXArrayOfBytesDecl(NamedTuple):
+    id: str
+    data: bytes
+    alignment: int
+    ranges: list[tuple[int, int]]  # list of (offset, size)
+
+    @staticmethod
+    def of_byte_ranges(
+        id: str,
+        data: bytes,
+        ranges: list[tuple[int, int]],
+        alignment: int,
+    ) -> Self:
+        return CXXArrayOfBytesDecl(
+            id=id,
+            data=data,
+            alignment=alignment,
+            ranges=ranges,
+        )
+
+    def var(self: Self) -> CXXVarDecl:
+        bytes_decl = CXXBytesDecl.of_bytes(
+            id=f"{self.id}_bytes",
+            data=self.data,
+            alignment=self.alignment,
+            num_null_terminators=0,
+        )
+
+        ranges_decl = CXXRangesDecl.of_ranges(
+            id=f"{self.id}_ranges", ranges=self.ranges
+        )
+
+        expr = f"""
+{bytes_decl.var().decl()}
+
+{ranges_decl.var().decl()}
+
+{STORAGE_SPEC} {NAMESPACE_PREFIX}bytes_array_t const {self.id} = {{
+    .bytes = {bytes_decl.id},
+    .ranges = {ranges_decl.id},
+    .num_ranges = {len(self.ranges)}
+}};
+"""
+
+        return CXXVarDecl(
+            id=self.id,
+            expr=expr,
         )
 
 
-def generate_cxx_string_data(id: str, strings: list[str]) -> str:
-    arrays: list[bytes] = [s.encode("utf-8") for s in strings]
+def merge_bytes_with_null_terminators(
+    bytes_lists: list[bytes],
+) -> tuple[bytes, list[tuple[int, int]]]:
+    merged: bytes = bytes()
+    ranges: list[tuple[int, int]] = []
 
-    # compute combined sha256 hash of all strings
-    sha = hashlib.sha256()
-    for arr in arrays:
-        sha.update(arr)
-    data_hash: bytes = sha.digest()
+    for byte_data in bytes_lists:
+        ranges.append((len(merged), len(byte_data)))
+        merged += byte_data + b"\0"
 
-    arrays_decl = CXXArrayOfByteArraysDecl.of_bytes_array(
-        id=f"{id}", data_list=arrays, data_alignment=1, num_null_terminators=1
+    return merged, ranges
+
+
+def generate_cxx_strings_data(id: str, strings: list[str]) -> str:
+    data, ranges = merge_bytes_with_null_terminators(
+        [s.encode("utf-8") for s in strings]
     )
 
-    data_hash_decl: CXXByteArrayDecl = CXXByteArrayDecl.of_bytes(
-        id=f"{id}_data_hash",
+    sha = hashlib.sha256()
+    sha.update(data)
+    data_hash: bytes = sha.digest()
+
+    arrays_decl = CXXArrayOfBytesDecl.of_byte_ranges(
+        id=f"{id}",
+        data=data,
+        alignment=1,
+        ranges=ranges,
+    )
+
+    data_hash_decl: CXXBytesDecl = CXXBytesDecl.of_bytes(
+        id=f"{id}_hash",
         data=data_hash,
         alignment=1,
         num_null_terminators=0,
     )
 
     return f"""
-{arrays_decl.decl().code()}
+{arrays_decl.var().decl()}
 
-{data_hash_decl.decl().code()}
+{data_hash_decl.var().decl()}
 """
+
+
+def load_file_bytes(file_path: str) -> bytes:
+    with open(file_path, "rb") as f:
+        return f.read()
 
 
 def generate_cxx_source_files_data(
@@ -227,68 +280,68 @@ def generate_cxx_source_files_data(
     dests: list[str],
     include_directories: list[str] = [],
 ) -> str:
-    files_bytes: list[bytes] = []
+    files_bytes, files_ranges = merge_bytes_with_null_terminators(
+        [load_file_bytes(p) for p in file_paths]
+    )
+
+    merged_dests_bytes, merged_dests_ranges = (
+        merge_bytes_with_null_terminators([d.encode("utf-8") for d in dests])
+    )
+
+    merged_include_directories_bytes, merged_include_directories_ranges = (
+        merge_bytes_with_null_terminators(
+            [d.encode("utf-8") for d in include_directories]
+        )
+    )
 
     # compute combined sha256 hash of all files
     sha = hashlib.sha256()
+    sha.update(files_bytes)
+    sha.update(merged_dests_bytes)
+    sha.update(merged_include_directories_bytes)
 
-    for file_path in file_paths:
-        with open(file_path, "rb") as f:
-            data = f.read()
-            sha.update(data)
-        files_bytes.append(data)
+    hash: bytes = sha.digest()
 
-    file_data_hash: bytes = sha.digest()
-
-    file_destinations_decls: CXXArrayOfByteArraysDecl = (
-        CXXArrayOfByteArraysDecl.of_bytes_array(
+    file_destinations_decls: CXXArrayOfBytesDecl = (
+        CXXArrayOfBytesDecl.of_byte_ranges(
             id=f"{id}_file_destinations",
-            data_list=[f.encode("utf-8") for f in dests],
-            data_alignment=1,
-            num_null_terminators=1,
+            data=merged_dests_bytes,
+            ranges=merged_dests_ranges,
+            alignment=1,
         )
     )
 
-    file_data_decl: CXXArrayOfByteArraysDecl = (
-        CXXArrayOfByteArraysDecl.of_bytes_array(
-            id=f"{id}_file_data",
-            data_list=files_bytes,
-            data_alignment=1,
-            num_null_terminators=1,
+    file_data_decl: CXXArrayOfBytesDecl = CXXArrayOfBytesDecl.of_byte_ranges(
+        id=f"{id}_file_data",
+        data=files_bytes,
+        ranges=files_ranges,
+        alignment=1,
+    )
+
+    include_directories_decls: CXXArrayOfBytesDecl = (
+        CXXArrayOfBytesDecl.of_byte_ranges(
+            id=f"{id}_include_directories",
+            data=merged_include_directories_bytes,
+            ranges=merged_include_directories_ranges,
+            alignment=1,
         )
     )
 
-    file_data_hash_decl: CXXByteArrayDecl = CXXByteArrayDecl.of_bytes(
-        id=f"{id}_file_data_hash",
-        data=file_data_hash,
+    hash_decl: CXXBytesDecl = CXXBytesDecl.of_bytes(
+        id=f"{id}_hash",
+        data=hash,
         alignment=1,
         num_null_terminators=0,
     )
 
-    file_size_decls: CXXSizeArrayDecl = CXXSizeArrayDecl.of_sizes(
-        id=f"{id}_file_sizes",
-        sizes=[len(f) for f in files_bytes],
-    )
-
-    include_directories_decls: CXXArrayOfByteArraysDecl = (
-        CXXArrayOfByteArraysDecl.of_bytes_array(
-            id=f"{id}_include_directories",
-            data_list=[d.encode("utf-8") for d in include_directories],
-            data_alignment=1,
-            num_null_terminators=1,
-        )
-    )
-
     return f"""
-{file_destinations_decls.decl().code()}
+{file_destinations_decls.var().decl()}
 
-{file_data_decl.decl().code()}
+{file_data_decl.var().decl()}
 
-{file_data_hash_decl.decl().code()}
+{include_directories_decls.var().decl()}
 
-{file_size_decls.decl().code()}
-
-{include_directories_decls.decl().code()}
+{hash_decl.var().decl()}
 """
 
 
@@ -312,7 +365,7 @@ def generate_embed_source(entries: dict[str, dict[str, dict]]) -> str:
 
         elif entry_type == "strings":
             options: list[str] = entry_value["strings"]
-            code += generate_cxx_string_data(entry_id, options)
+            code += generate_cxx_strings_data(entry_id, options)
 
         else:
             raise ValueError(f"Unknown type: {entry_type}")
