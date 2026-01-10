@@ -126,9 +126,9 @@ struct HashBase : public crtp<Hasher> {
         copylen += Hasher::message_chunk_size;
       }
 
-      // The remaining data chunk does not fill the buffer. We copy the data into
+      // The remaining data chunk (if any) does not fill the buffer. We copy the data into
       // the buffer but do not trigger a hash step yet.
-      memcpy(state.buffer, data + copylen, len - copylen);
+      if (len > copylen) { memcpy(state.buffer, data + copylen, len - copylen); }
       state.buffer_length = len - copylen;
     }
   }
