@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import itertools
 import re
-from functools import cached_property, lru_cache
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -137,25 +137,6 @@ class StringColumn(ColumnBase, Scannable):
         ):
             dtype = CUDF_STRING_DTYPE
         return plc_column, dtype
-
-    @cached_property
-    def start_offset(self) -> int:
-        if len(self.children) == 1 and self.offset < self.children[0].size:
-            return int(self.children[0].element_indexing(self.offset))
-        else:
-            return 0
-
-    @cached_property
-    def end_offset(self) -> int:
-        if (
-            len(self.children) == 1
-            and (self.offset + self.size) < self.children[0].size
-        ):
-            return int(
-                self.children[0].element_indexing(self.offset + self.size)
-            )
-        else:
-            return 0
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:

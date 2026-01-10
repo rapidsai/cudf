@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import io
@@ -77,7 +77,7 @@ def test_pickle_index():
 
 def test_pickle_buffer():
     arr = np.arange(10).view("|u1")
-    buf = as_buffer(arr)
+    buf = as_buffer(memoryview(arr))
     assert buf.size == arr.nbytes
     pickled = pickle.dumps(buf)
     unpacked = pickle.loads(pickled)
