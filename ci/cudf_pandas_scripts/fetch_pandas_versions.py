@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
@@ -43,7 +43,11 @@ def get_pandas_versions(pandas_range):
                 url, timeout=timeout, context=ssl_context
             ) as response:
                 data = json.loads(response.read())
-        except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            TimeoutError,
+        ) as e:
             if isinstance(e, urllib.error.HTTPError):
                 code = e.code
             else:
