@@ -103,62 +103,6 @@ class _SpillableBufferAccessContext(_BufferAccessContext):
         return False
 
 
-class DelayedPointerTuple(collections.abc.Sequence):
-    """
-    A delayed version of the "data" field in __cuda_array_interface__.
-
-    The idea is to delay the access to `Buffer.ptr` until the user
-    actually accesses the data pointer.
-
-    For instance, in many cases __cuda_array_interface__ is accessed
-    only to determine whether an object is a CUDA object or not.
-
-    TODO: this doesn't support libraries such as PyTorch that declare
-    the tuple of __cuda_array_interface__["data"] in Cython. In such
-    cases, Cython will raise an error because DelayedPointerTuple
-    isn't a "real" tuple.
-    """
-
-    def __init__(self, buffer) -> None:
-        self._buf = buffer
-
-    def __len__(self):
-        return 2
-
-    def __getitem__(self, i):
-        if i == 0:
-            # Accessing via __cuda_array_interface__ exposes the pointer externally
-            with self._buf.access(mode="write", scope="external"):
-                return self._buf.ptr
-        elif i == 1:
-            return False
-        raise IndexError("tuple index out of range")
-
-
-class SpillableBufferCAIWrapper:
-    # A wrapper that exposes the __cuda_array_interface__ of a SpillableBuffer without
-    # actually accessing __cuda_array_interface__, which triggers spilling.
-
-    _buf: SpillableBuffer
-
-    def __init__(self, buf: SpillableBuffer) -> None:
-        self._buf = buf
-        self._spill_lock = SpillLock()
-
-    @property
-    def __cuda_array_interface__(self) -> dict:
-        self._buf._owner.spill_lock(self._spill_lock)
-        # Accessing _memory_info doesn't trigger spilling
-        ptr, size, _ = self._buf.memory_info()
-        return {
-            "data": (ptr, False),
-            "shape": (size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 3,
-        }
-
-
 class SpillableBufferOwner(BufferOwner):
     """A Buffer that supports spilling memory off the GPU to avoid OOMs.
 
@@ -430,16 +374,6 @@ class SpillableBufferOwner(BufferOwner):
     def last_accessed(self) -> float:
         return self._last_accessed
 
-    @property
-    def __cuda_array_interface__(self) -> dict:
-        return {
-            "data": DelayedPointerTuple(self),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 3,
-        }
-
     def memoryview(
         self, *, offset: int = 0, size: int | None = None
     ) -> memoryview:
@@ -472,6 +406,62 @@ class SpillableBufferOwner(BufferOwner):
             f"num-spill-locks={len(self._spill_locks)} "
             f"ptr={ptr_info} owner={self._owner!r}>"
         )
+
+
+class DelayedPointerTuple(collections.abc.Sequence):
+    """
+    A delayed version of the "data" field in __cuda_array_interface__.
+
+    The idea is to delay the access to `Buffer.ptr` until the user
+    actually accesses the data pointer.
+
+    For instance, in many cases __cuda_array_interface__ is accessed
+    only to determine whether an object is a CUDA object or not.
+
+    TODO: this doesn't support libraries such as PyTorch that declare
+    the tuple of __cuda_array_interface__["data"] in Cython. In such
+    cases, Cython will raise an error because DelayedPointerTuple
+    isn't a "real" tuple.
+    """
+
+    def __init__(self, buffer) -> None:
+        self._buf = buffer
+
+    def __len__(self):
+        return 2
+
+    def __getitem__(self, i):
+        if i == 0:
+            # Accessing via __cuda_array_interface__ exposes the pointer externally
+            with self._buf.access(mode="write", scope="external"):
+                return self._buf.ptr
+        elif i == 1:
+            return False
+        raise IndexError("tuple index out of range")
+
+
+class SpillableBufferCAIWrapper:
+    # A wrapper that exposes the __cuda_array_interface__ of a SpillableBuffer without
+    # actually accessing __cuda_array_interface__, which triggers spilling.
+
+    _buf: SpillableBuffer
+
+    def __init__(self, buf: SpillableBuffer) -> None:
+        self._buf = buf
+        self._spill_lock = SpillLock()
+
+    @property
+    def __cuda_array_interface__(self) -> dict:
+        self._buf._owner.spill_lock(self._spill_lock)
+        # Accessing _memory_info doesn't trigger spilling
+        ptr, size, _ = self._buf.memory_info()
+        return {
+            "data": (ptr, False),
+            "shape": (size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 3,
+        }
 
 
 class SpillableBuffer(Buffer):
@@ -538,16 +528,12 @@ class SpillableBuffer(Buffer):
         later accessed through `__cuda_array_interface__`, which is exactly
         what libraries like Dask+UCX would do when communicating!
 
-        The sound solution is to modify Dask et al. so that they access the
-        frames through `.get_ptr()` and holds on to the `spill_lock` until
-        the frame has been transferred. However, until this adaptation we
-        use a hack where the frame is a `Buffer` with a `spill_lock` as the
-        owner, which makes `self` unspillable while the frame is alive but
-        doesn't expose `self` when `__cuda_array_interface__` is accessed.
-
-        Warning, this hack means that the returned frame must be copied before
-        given to `.deserialize()`, otherwise we would have a `Buffer` pointing
-        to memory already owned by an existing `SpillableBufferOwner`.
+        To avoid this, we use a hack where the frame is a `Buffer` with a `spill_lock`
+        as the owner, which makes `self` unspillable while the frame is alive but
+        doesn't expose `self` when `__cuda_array_interface__` is accessed. Warning, this
+        hack means that the returned frame must be copied before given to
+        `.deserialize()`, otherwise we would have a `Buffer` pointing to memory already
+        owned by an existing `SpillableBufferOwner`.
         """
         header: dict[str, Any] = {}
         frames: list[Buffer | memoryview]
