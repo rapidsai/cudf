@@ -436,7 +436,7 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
         stream);
       return bitmask;
     } else {
-      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
+      auto bitmask = cudf::detail::make_pinned_vector_async<bitmask_type>(num_bitmasks, stream);
       std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
       return bitmask;
     }
