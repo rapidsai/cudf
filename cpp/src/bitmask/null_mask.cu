@@ -469,7 +469,7 @@ std::vector<size_type> batch_count_set_bits(host_span<bitmask_type const* const>
                                             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
+  CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.", std::invalid_argument);
 
   auto const num_bitmasks      = bitmasks.size();
   auto const num_bits_to_count = stop - start;
@@ -496,11 +496,13 @@ std::vector<size_type> batch_count_set_bits(host_span<bitmask_type const* const>
   count_set_bits_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
     d_bitmasks, start, stop - 1, d_non_zero_count.data());
 
+  // Use pinned memory to copy the result back to the host, then copy again to the output vector.
   auto h_non_zero_count = cudf::detail::make_pinned_vector<size_type>(num_bitmasks, stream);
   cudf::detail::cuda_memcpy(host_span<size_type>{h_non_zero_count.data(), num_bitmasks},
                             device_span<size_type const>{d_non_zero_count.data(), num_bitmasks},
                             stream);
   std::copy(h_non_zero_count.begin(), h_non_zero_count.end(), output.begin());
+
   return output;
 }
 

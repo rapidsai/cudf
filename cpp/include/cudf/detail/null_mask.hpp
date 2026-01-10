@@ -42,9 +42,9 @@ void set_null_mask(bitmask_type* bitmask,
  * @brief Given a bitmask, counts the number of set (1) bits in the range
  * `[start, stop)`.
  *
- * @throws cudf::logic_error if `bitmask == nullptr`
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
+ * @throws cudf::invalid_argument if `bitmask == nullptr`
+ * @throws cudf::invalid_argument if `start > stop`
+ * @throws cudf::invalid_argument if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted.
  * @param start Index of the first bit to count (inclusive).
@@ -62,9 +62,9 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask,
  * @brief Given a bitmask, counts the number of unset (0) bits in the range
  * `[start, stop)`.
  *
- * @throws cudf::logic_error if `bitmask == nullptr`
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
+ * @throws cudf::invalid_argument if `bitmask == nullptr`
+ * @throws cudf::invalid_argument if `start > stop`
+ * @throws cudf::invalid_argument if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted.
  * @param start Index of the first bit to count (inclusive).
@@ -121,8 +121,8 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
  * If `bitmask == nullptr`, all elements are assumed to be valid and the
  * function returns `stop-start`.
  *
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
+ * @throws cudf::invalid_argument if `start > stop`
+ * @throws cudf::invalid_argument if `start < 0`
  *
  * @param[in] bitmask Validity bitmask residing in device memory.
  * @param[in] start Index of the first bit to count (inclusive).
