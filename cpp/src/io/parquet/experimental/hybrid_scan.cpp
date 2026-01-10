@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -230,6 +230,33 @@ table_with_metadata hybrid_scan_reader::materialize_payload_columns(
                                             mask_data_pages,
                                             options,
                                             stream);
+}
+
+std::vector<byte_range_info> hybrid_scan_reader::all_column_chunks_byte_ranges(
+  cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
+{
+  CUDF_FUNC_RANGE();
+
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+
+  return _impl->all_column_chunks_byte_ranges(input_row_group_indices, options).first;
+}
+
+table_with_metadata hybrid_scan_reader::materialize_all_columns(
+  cudf::host_span<size_type const> row_group_indices,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream) const
+{
+  CUDF_FUNC_RANGE();
+
+  // Temporary vector with row group indices from the first source
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+
+  return _impl->materialize_all_columns(
+    input_row_group_indices, std::move(column_chunk_buffers), options, stream);
 }
 
 void hybrid_scan_reader::setup_chunking_for_filter_columns(
