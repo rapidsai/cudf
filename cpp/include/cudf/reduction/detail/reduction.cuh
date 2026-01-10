@@ -55,16 +55,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
   using ScalarType         = cudf::scalar_type_t<OutputType>;
-
-  auto host_scalar = cudf::detail::make_pinned_vector_async<OutputType>(1, stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    host_scalar.data(), &initial_value, sizeof(OutputType), cudaMemcpyHostToHost, stream.value()));
-  rmm::device_scalar<OutputType> result{stream, mr};
-  CUDF_CUDA_TRY(cudaMemcpyAsync(result.data(),
-                                host_scalar.data(),
-                                sizeof(OutputType),
-                                cudaMemcpyHostToDevice,
-                                stream.value()));  // device <- host pinned
+  auto result              = std::make_unique<ScalarType>(initial_value, true, stream, mr);
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -72,7 +63,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
                             temp_storage_bytes,
                             d_in,
-                            result.data(),
+                            result->data(),
                             num_items,
                             binary_op,
                             initial_value,
@@ -83,13 +74,12 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
                             temp_storage_bytes,
                             d_in,
-                            result.data(),
+                            result->data(),
                             num_items,
                             binary_op,
                             initial_value,
                             stream.value());
-  auto s = new ScalarType(std::move(result), true, stream, mr);
-  return std::unique_ptr<scalar>(s);
+  return result;
 }
 
 template <typename Op,

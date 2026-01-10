@@ -61,7 +61,7 @@ OutputIterator copy_if_safe(InputIterator first,
 }
 
 /**
- * @brief Helper to copy elements satisfying a predicate using CUB with pinned memory
+ * @brief Utility for calling `thrust::copy_if`.
  *
  * @deprecated in 26.02 and to be removed in a future release. Use `cudf::detail::copy_if` instead.
  *
@@ -69,16 +69,17 @@ OutputIterator copy_if_safe(InputIterator first,
  * (https://github.com/NVIDIA/thrust/issues/1302) where it cannot iterate over int-max values
  * `distance(first,last) > int-max` This calls thrust::copy_if in 2B chunks instead.
  *
- * @tparam Predicate **[inferred]** Type of the unary predicate
- * @tparam InputIterator **[inferred]** Type of device-accessible input iterator
- * @tparam OutputIterator **[inferred]** Type of device-accessible output iterator
+ * @tparam InputIterator Type of the input iterator
+ * @tparam OutputIterator Type of the output iterator
+ * @tparam Predicate Type of the binary predicate used to determine elements to copy
  *
- * @param begin Device-accessible iterator to start of input values
- * @param end Device-accessible iterator to end of input values
- * @param output Device-accessible iterator to start of output values
- * @param predicate Unary predicate that returns true for elements to copy
- * @param stream CUDA stream to use
- * @return Iterator pointing to the end of the output range
+ * @param first The beginning of the sequence from which to copy
+ * @param last The end of the sequence from which to copy
+ * @param result The beginning of the sequence into which to copy
+ * @param pred The predicate to test on every value of the range `[first, last)`
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return An iterator pointing to the position `result + n`, where `n` is equal to the number of
+ *         times `pred` evaluated to `true` in the range `[first, last)`.
  */
 template <typename InputIterator, typename OutputIterator, typename Predicate>
 [[deprecated("Use cudf::detail::copy_if instead")]] OutputIterator copy_if_safe(
@@ -88,7 +89,8 @@ template <typename InputIterator, typename OutputIterator, typename Predicate>
   Predicate pred,
   rmm::cuda_stream_view stream)
 {
-  auto const num_items = cuda::std::distance(begin, end);
+  auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
+                                  static_cast<std::size_t>(std::numeric_limits<int>::max()));
 
   auto itr = first;
   while (itr != last) {
