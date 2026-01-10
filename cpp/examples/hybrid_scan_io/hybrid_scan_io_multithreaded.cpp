@@ -160,8 +160,8 @@ int32_t main(int argc, char const** argv)
 
   // Set to the provided args
   switch (argc) {
-    case 8: io_source_type = get_io_source_type(argv[8]); [[fallthrough]];
-    case 7: is_two_step_read = get_boolean(argv[7]); [[fallthrough]];
+    case 9: io_source_type = get_io_source_type(argv[8]); [[fallthrough]];
+    case 8: is_two_step_read = get_boolean(argv[7]); [[fallthrough]];
     case 7: literal_value = argv[6]; [[fallthrough]];
     case 6: column_name = argv[5]; [[fallthrough]];
     case 5: num_reads = std::max(1, std::stoi(argv[4])); [[fallthrough]];

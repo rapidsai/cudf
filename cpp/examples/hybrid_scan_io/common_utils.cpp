@@ -25,6 +25,7 @@
 #include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -120,11 +121,12 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
   std::vector<io_source> input_sources;
   input_sources.reserve(parquet_files.size());
   // Transform input files to the specified io sources
-  std::transform(
-    parquet_files.begin(),
-    parquet_files.end(),
-    std::back_inserter(input_sources),
-    [&](auto const& file_name) { return io_source{file_name, io_source_type, stream}; });
+  std::transform(parquet_files.begin(),
+                 parquet_files.end(),
+                 std::back_inserter(input_sources),
+                 [&](auto const& file_name) {
+                   return io_source{file_name, io_source_type, stream};
+                 });
   stream.synchronize();
   return input_sources;
 }
