@@ -24,7 +24,7 @@
 /**
  * @brief Available IO source types
  */
-enum class io_source_type { HOST_BUFFER, PINNED_BUFFER };
+enum class io_source_type { HOST_BUFFER, PINNED_BUFFER, FILEPATH };
 
 /**
  * @brief Get io source type from the string keyword argument
@@ -66,7 +66,7 @@ struct pinned_allocator : public std::allocator<T> {
 };
 
 /**
- * @brief Class to create a cudf::io::source_info of given type from the input parquet file
+ * @brief Class to create a cudf::io::source_info of given type from the input parquet file.
  *
  */
 class io_source {
@@ -74,9 +74,9 @@ class io_source {
   io_source(std::string_view file_path, io_source_type io_type, rmm::cuda_stream_view stream);
 
   // Get the internal source info
-  [[nodiscard]] cudf::io::source_info get_source_info() const { return source_info; }
+  [[nodiscard]] cudf::io::source_info get_source_info() const { return _source_info; }
 
-  [[nodiscard]] io_source_type get_source_type() const { return io_type; }
+  [[nodiscard]] io_source_type get_source_type() const { return _io_type; }
 
   // Get the internal buffer span
   [[nodiscard]] cudf::host_span<uint8_t const> get_host_buffer_span() const;
@@ -85,8 +85,8 @@ class io_source {
   // alias for pinned vector
   template <typename T>
   using pinned_vector = thrust::host_vector<T, pinned_allocator<T>>;
-  cudf::io::source_info source_info;
-  io_source_type io_type;
-  std::vector<char> h_buffer;
-  pinned_vector<char> pinned_buffer;
+  cudf::io::source_info _source_info;
+  io_source_type _io_type;
+  std::vector<char> _h_buffer;
+  pinned_vector<char> _pinned_buffer;
 };
