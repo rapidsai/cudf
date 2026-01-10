@@ -179,25 +179,85 @@ filter_join_indices(cudf::table_view const& left,
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
 
   } else if (join_kind == join_kind::LEFT_JOIN) {
-    // LEFT_JOIN: preserve all left rows, nullify right indices for failed predicates
-    auto [filtered_left_indices, filtered_right_indices] = make_result_vectors(left_indices.size());
-
-    auto transform_op = [=] __device__(size_type i) -> cuda::std::tuple<size_type, size_type> {
-      auto left_idx  = left_ptr[i];
-      auto right_idx = right_ptr[i];
-      return predicate_results_ptr[i] ? cuda::std::tuple{left_idx, right_idx}
-                                      : cuda::std::tuple{left_idx, JoinNoMatch};
-    };
-
-    auto output_iter = thrust::make_zip_iterator(
-      cuda::std::tuple{filtered_left_indices->begin(), filtered_right_indices->begin()});
-
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    // LEFT_JOIN: Keep pairs that pass predicate, add one unmatched entry per left row with no matches
+    
+    // Step 1: Count passing predicates
+    auto valid_predicate = [=] __device__(size_type i) -> bool { return predicate_results_ptr[i]; };
+    
+    auto const num_valid =
+      thrust::count_if(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator{0},
+                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+                       valid_predicate);
+    
+    // Step 2: Find unique left indices that have at least one passing match
+    // Create a boolean array marking which left indices have matches
+    auto const num_left_rows = left.num_rows();
+    auto left_has_match = rmm::device_uvector<bool>(num_left_rows, stream);
+    thrust::fill(rmm::exec_policy_nosync(stream), 
+                 left_has_match.begin(), 
+                 left_has_match.end(), 
+                 false);
+    
+    // Mark left indices that have at least one passing match
+    thrust::for_each(rmm::exec_policy_nosync(stream),
+                     thrust::counting_iterator{0},
+                     thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+                     [=, left_has_match_ptr = left_has_match.data()] __device__(size_type i) {
+                       if (predicate_results_ptr[i]) {
+                         left_has_match_ptr[left_ptr[i]] = true;
+                       }
+                     });
+    
+    // Step 3: Count left rows with no matches
+    auto const num_unmatched =
+      thrust::count(rmm::exec_policy_nosync(stream),
+                    left_has_match.begin(),
+                    left_has_match.end(),
+                    false);
+    
+    auto const output_size = num_valid + num_unmatched;
+    if (output_size == 0) { return make_empty_result(); }
+    
+    auto [filtered_left_indices, filtered_right_indices] = make_result_vectors(output_size);
+    
+    // Step 4: Copy passing matches
+    if (num_valid > 0) {
+      auto input_iter =
+        thrust::make_zip_iterator(cuda::std::tuple{left_indices.begin(), right_indices.begin()});
+      auto output_iter = thrust::make_zip_iterator(
+        cuda::std::tuple{filtered_left_indices->begin(), filtered_right_indices->begin()});
+      
+      thrust::copy_if(rmm::exec_policy_nosync(stream),
+                      input_iter,
+                      input_iter + left_indices.size(),
                       thrust::counting_iterator{0},
-                      thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
                       output_iter,
-                      transform_op);
-
+                      [valid_predicate] __device__(size_type idx) { return valid_predicate(idx); });
+    }
+    
+    // Step 5: Add unmatched left rows
+    if (num_unmatched > 0) {
+      auto unmatched_iter = cudf::detail::make_counting_transform_iterator(
+        0, [=, left_has_match_ptr = left_has_match.data()] __device__(size_type i) 
+           -> cuda::std::tuple<size_type, size_type> {
+          return cuda::std::tuple{i, JoinNoMatch};
+        });
+      
+      auto unmatched_output_iter = thrust::make_zip_iterator(
+        cuda::std::tuple{filtered_left_indices->begin() + num_valid,
+                         filtered_right_indices->begin() + num_valid});
+      
+      thrust::copy_if(rmm::exec_policy_nosync(stream),
+                      unmatched_iter,
+                      unmatched_iter + num_left_rows,
+                      thrust::counting_iterator{0},
+                      unmatched_output_iter,
+                      [left_has_match_ptr = left_has_match.data()] __device__(size_type i) {
+                        return !left_has_match_ptr[i];
+                      });
+    }
+    
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
 
   } else if (join_kind == join_kind::FULL_JOIN) {

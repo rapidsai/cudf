@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+#include <cudf_test/debug_utilities.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
@@ -217,6 +218,17 @@ struct MixedJoinTest : public cudf::test::BaseFixture {
     // Sort both results since order is not guaranteed
     std::sort(expected_pairs.begin(), expected_pairs.end());
     std::sort(actual_pairs.begin(), actual_pairs.end());
+
+    std::cout << "inside compare_join_results\n";
+    std::cout << "hash + post filter result pairs = \n";
+    for(auto const &p : actual_pairs) {
+      std::cout << p.first << " " << p.second << std::endl;
+    }
+    std::cout << "mixed join pairs = \n";
+    for(auto const &p : expected_pairs) {
+      std::cout << p.first << " " << p.second << std::endl;
+    }
+    std::cout << std::endl;
 
     EXPECT_EQ(expected_pairs.size(), actual_pairs.size());
     EXPECT_TRUE(std::equal(expected_pairs.begin(), expected_pairs.end(), actual_pairs.begin()));
@@ -803,6 +815,36 @@ TYPED_TEST(MixedLeftJoinTest, Basic2)
              predicate,
              {1, 1, 1, 1},
              {{0, cudf::JoinNoMatch}, {1, cudf::JoinNoMatch}, {2, cudf::JoinNoMatch}, {3, 3}});
+}
+
+TYPED_TEST(MixedLeftJoinTest, Debug)
+{
+  auto const col_ref_left_conditional  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_conditional = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto scalar_1 = cudf::numeric_scalar<cudf::size_type>(1);
+  auto scalar_2 = cudf::numeric_scalar<cudf::size_type>(2);
+  auto literal_2 = cudf::ast::literal(scalar_2);
+  auto literal_1 = cudf::ast::literal(scalar_1);
+
+  // (A.c2 + B.c2)
+  auto add_expr = cudf::ast::operation(
+      cudf::ast::ast_operator::ADD, col_ref_left_conditional, col_ref_right_conditional);
+
+  // (A.c2 + B.c2) % 2
+  auto mod_expr = cudf::ast::operation(
+      cudf::ast::ast_operator::MOD, add_expr, literal_2);
+
+  // (A.c2 + B.c2) % 2 == 1
+  auto predicate = cudf::ast::operation(
+      cudf::ast::ast_operator::EQUAL, mod_expr, literal_1);
+
+  this->test({{0, 1, 2, 3, 4, 5, 6}, {0, 1, 2, 3, 4, 5, 6}},
+             {{0, 1, 2, 3, 4, 0, 1}, {111, 113, 115, 117, 119, 121, 123}},
+             {0},
+             {1},
+             predicate,
+             {2, 1, 1, 1, 1, 1, 1},
+             {{0, 0}, {0, 5}, {1, cudf::JoinNoMatch}, {2, 2}, {3, cudf::JoinNoMatch}, {4, 4}, {5, cudf::JoinNoMatch}, {6, cudf::JoinNoMatch}});
 }
 
 TYPED_TEST(MixedLeftJoinTest, SizeBasedLeftJoinRegression)
