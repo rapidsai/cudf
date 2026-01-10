@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -47,6 +47,7 @@ struct hybrid_scan_fn {
   std::unordered_set<parquet_filter_type> const& filters;
   int const thread_id;
   int const thread_count;
+  bool const is_two_step_read;
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
   void operator()()
@@ -55,8 +56,16 @@ struct hybrid_scan_fn {
     for (auto curr_file_idx = thread_id; curr_file_idx < input_sources.size();
          curr_file_idx += thread_count) {
       timer timer;
-      std::ignore =
-        hybrid_scan<false>(input_sources[curr_file_idx], filter_expression, filters, stream, mr);
+      constexpr bool print_progress = false;
+      if (not is_two_step_read) {
+        constexpr bool single_step_materialize = true;
+        std::ignore = hybrid_scan<print_progress, single_step_materialize>(
+          input_sources[curr_file_idx], filter_expression, filters, stream, mr);
+      } else {
+        constexpr bool single_step_materialize = false;
+        std::ignore = hybrid_scan<print_progress, single_step_materialize>(
+          input_sources[curr_file_idx], filter_expression, filters, stream, mr);
+      }
       std::cout << "Thread " << thread_id << " ";
       timer.print_elapsed_millis();
     }
@@ -73,6 +82,7 @@ struct hybrid_scan_fn {
  * @param filter_expression Filter expression
  * @param filters Filters to apply
  * @param thread_count Number of threads
+ * @param is_two_step_read Whether to use two-step table materialization
  * @param stream_pool CUDA stream pool to use for threads
  */
 void hybrid_scan_multithreaded(
@@ -80,6 +90,7 @@ void hybrid_scan_multithreaded(
   std::vector<cudf::ast::operation> const& filter_expressions,
   std::unordered_set<parquet_filter_type> const& filters,
   int32_t thread_count,
+  bool is_two_step_read,
   rmm::cuda_stream_pool& stream_pool,
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
@@ -96,6 +107,7 @@ void hybrid_scan_multithreaded(
                        .filters           = filters,
                        .thread_id         = tid,
                        .thread_count      = thread_count,
+                       .is_two_step_read  = is_two_step_read,
                        .stream            = stream_pool.get_stream(),
                        .mr                = mr});
     });
@@ -120,9 +132,10 @@ void inline print_usage()
                "<input multiplier>\n"
                "                                    <thread count> <number of times to read> "
                "<column name>\n"
-               "                                    <literal> <io source type> \n\n"
+               "                                    <literal> <two_step_read: Y/N> <io "
+               "source type> \n\n"
 
-               "Available IO source types: HOST_BUFFER, PINNED_BUFFER (Default)\n\n"
+               "Available IO source types: HOST_BUFFER (Default), PINNED_BUFFER\n\n"
                "Note: Provide as many arguments as you like in the above order. Default values\n"
                "      for the unprovided arguments will be used. All input parquet files will\n"
                "      be converted to the specified IO source type before reading\n\n";
@@ -142,11 +155,13 @@ int32_t main(int argc, char const** argv)
   int32_t num_reads             = 1;
   auto column_name              = std::string{"string_col"};
   auto literal_value            = std::string{"0000001"};
-  io_source_type io_source_type = io_source_type::PINNED_BUFFER;
+  bool is_two_step_read         = false;
+  io_source_type io_source_type = io_source_type::HOST_BUFFER;
 
   // Set to the provided args
   switch (argc) {
-    case 8: io_source_type = get_io_source_type(argv[7]); [[fallthrough]];
+    case 8: io_source_type = get_io_source_type(argv[8]); [[fallthrough]];
+    case 7: is_two_step_read = get_boolean(argv[7]); [[fallthrough]];
     case 7: literal_value = argv[6]; [[fallthrough]];
     case 6: column_name = argv[5]; [[fallthrough]];
     case 5: num_reads = std::max(1, std::stoi(argv[4])); [[fallthrough]];
@@ -227,12 +242,13 @@ int32_t main(int argc, char const** argv)
     auto stream_pool = rmm::cuda_stream_pool(thread_count, rmm::cuda_stream::flags::non_blocking);
 
     timer timer;
-    std::for_each(thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(num_reads),
-                  [&](auto i) {  // Read parquet files and discard the tables
-                    hybrid_scan_multithreaded(
-                      input_sources, filter_expressions, filters, thread_count, stream_pool);
-                  });
+    std::for_each(
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(num_reads),
+      [&](auto i) {  // Read parquet files and discard the tables
+        hybrid_scan_multithreaded(
+          input_sources, filter_expressions, filters, thread_count, is_two_step_read, stream_pool);
+      });
     std::cout << "Total ";
     timer.print_elapsed_millis();
   }

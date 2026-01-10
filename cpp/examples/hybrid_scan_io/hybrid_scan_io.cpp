@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -144,8 +144,10 @@ int main(int argc, char const** argv)
   timer timer;
   std::cout << "Reading " << input_filepath << " with next-gen parquet reader...\n";
   timer.reset();
-  auto const table_next_gen_reader =
-    hybrid_scan<true>(data_source, filter_expression, filters, stream, stats_mr);
+  constexpr bool print_progress          = true;
+  constexpr bool single_step_materialize = false;
+  auto const table_next_gen_reader       = hybrid_scan<print_progress, single_step_materialize>(
+    data_source, filter_expression, filters, stream, stats_mr);
   timer.print_elapsed_millis();
 
   std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
