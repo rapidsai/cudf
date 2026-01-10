@@ -21,7 +21,6 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>

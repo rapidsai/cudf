@@ -451,13 +451,6 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
       }
     }
   }
-  auto pinned_final_offsets =
-    cudf::detail::make_pinned_vector_async<cudf::size_type>(final_offsets.size(), _stream);
-  auto pinned_out_buffers =
-    cudf::detail::make_pinned_vector_async<cudf::size_type*>(out_buffers.size(), _stream);
-  std::move(final_offsets.begin(), final_offsets.end(), pinned_final_offsets.begin());
-  std::move(out_buffers.begin(), out_buffers.end(), pinned_out_buffers.begin());
-
   // Write the final offsets for list and string columns in a batched manner
   auto pinned_final_offsets =
     cudf::detail::make_pinned_vector_async<cudf::size_type>(final_offsets.size(), _stream);

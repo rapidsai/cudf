@@ -8,7 +8,6 @@
 
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
-#include <cudf/reduction/detail/reduction.cuh>
 
 #include <rmm/exec_policy.hpp>
 
