@@ -6,7 +6,7 @@ from __future__ import annotations
 import datetime
 import functools
 import warnings
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import cupy as cp
 import numpy as np
@@ -261,7 +261,10 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             offset=self.offset,
             children=[],
         )
-        return type(self).from_pylibcudf(new_plc_column).astype(dtype)  # type:ignore[return-value]
+        return cast(
+            cudf.core.column.numerical.NumericalColumn,
+            type(self).from_pylibcudf(new_plc_column).astype(dtype),
+        )
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")

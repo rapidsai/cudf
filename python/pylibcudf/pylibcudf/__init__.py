@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 # If libcudf was installed as a wheel, we must request it to load the library symbols.
@@ -43,6 +43,7 @@ from . import (
     round,
     search,
     sorting,
+    span,
     stream_compaction,
     strings,
     traits,
@@ -98,6 +99,7 @@ __all__ = [
     "round",
     "search",
     "sorting",
+    "span",
     "stream_compaction",
     "strings",
     "traits",

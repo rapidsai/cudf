@@ -69,10 +69,7 @@ def scatter(
             cast(list[plc.Scalar], sources)
             if isinstance(sources[0], plc.Scalar)
             else plc.Table(
-                [
-                    col.plc_column  # type: ignore[union-attr]
-                    for col in sources
-                ]
+                [col.plc_column for col in cast("list[ColumnBase]", sources)]
             ),
             scatter_map.plc_column,
             plc.Table([col.plc_column for col in target_columns]),
