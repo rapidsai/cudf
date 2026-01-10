@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -157,7 +157,7 @@ struct group_reduction_functor<
 
     // Perform segmented reduction.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::reduce_by_key(rmm::exec_policy(stream),
+      thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
                             inp_iter,
@@ -220,7 +220,7 @@ struct group_reduction_functor<
 
     // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::reduce_by_key(rmm::exec_policy(stream),
+      thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
                             inp_iter,

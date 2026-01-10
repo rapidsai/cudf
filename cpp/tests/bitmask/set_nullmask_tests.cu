@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -38,7 +38,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
   {
     rmm::device_uvector<bool> result(expect.size(), stream);
     auto counting_iter = thrust::counting_iterator<cudf::size_type>{0};
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       counting_iter + start_bit,
                       counting_iter + start_bit + expect.size(),
                       result.begin(),

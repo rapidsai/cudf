@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -190,7 +190,7 @@ rmm::device_buffer decompress_data(datasource& source,
       cudf::detail::hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
     auto inflate_stats =
       cudf::detail::hostdevice_vector<codec_exec_result>(meta.block_list.size(), stream);
-    thrust::fill(rmm::exec_policy(stream),
+    thrust::fill(rmm::exec_policy_nosync(stream),
                  inflate_stats.d_begin(),
                  inflate_stats.d_end(),
                  codec_exec_result{0, codec_status::FAILURE});
@@ -294,7 +294,7 @@ rmm::device_buffer decompress_data(datasource& source,
 
     rmm::device_buffer decompressed_data(uncompressed_data_size, stream);
     rmm::device_uvector<device_span<uint8_t>> decompressed_blocks(num_blocks, stream);
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      decompressed_blocks.begin(),
                      decompressed_blocks.end(),
                      [off  = uncompressed_offsets.device_ptr(),
@@ -316,7 +316,7 @@ rmm::device_buffer decompress_data(datasource& source,
                max_decomp_block_size,
                uncompressed_data_size,
                stream);
-    CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+    CUDF_EXPECTS(thrust::equal(rmm::exec_policy_nosync(stream),
                                uncompressed_sizes.d_begin(),
                                uncompressed_sizes.d_end(),
                                decomp_results.begin(),

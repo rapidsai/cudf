@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -58,7 +58,7 @@ std::unique_ptr<table> sample(table_view const& input,
       make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream);
     auto gather_map_mutable_view = gather_map->mutable_view();
     // Shuffle all the row indices
-    thrust::shuffle_copy(rmm::exec_policy(stream),
+    thrust::shuffle_copy(rmm::exec_policy_nosync(stream),
                          thrust::counting_iterator<size_type>(0),
                          thrust::counting_iterator<size_type>(num_rows),
                          gather_map_mutable_view.begin<size_type>(),

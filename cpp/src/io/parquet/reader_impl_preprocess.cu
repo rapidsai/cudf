@@ -613,7 +613,7 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
   // absolute row index for the whole file. chunk_row in PageInfo is relative to the beginning of
   // the chunk. so in the kernels, chunk.start_row + page.chunk_row gives us the absolute row index
   if (is_estimate_row_counts == is_estimate_row_counts::YES) {
-    thrust::for_each(rmm::exec_policy(_stream),
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
                      pass.pages.d_begin(),
                      pass.pages.d_end(),
                      set_list_row_count_estimate{pass.chunks});
@@ -889,10 +889,10 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   // compute output column sizes by examining the pages of the -input- columns
   if (has_lists) {
     auto h_cols_info =
-      cudf::detail::make_empty_host_vector<input_col_info>(_input_columns.size(), _stream);
+      cudf::detail::make_pinned_vector_async<input_col_info>(_input_columns.size(), _stream);
     std::transform(_input_columns.cbegin(),
                    _input_columns.cend(),
-                   std::back_inserter(h_cols_info),
+                   h_cols_info.begin(),
                    [](auto& col) -> input_col_info {
                      return {col.schema_idx, static_cast<size_type>(col.nesting_depth())};
                    });
@@ -1008,8 +1008,12 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   }
 
   // Need to set null mask bufs to all high bits
+  auto pinned_nullmask_bufs =
+    cudf::detail::make_pinned_vector_async<cudf::device_span<cudf::bitmask_type>>(
+      nullmask_bufs.size(), _stream);
+  std::move(nullmask_bufs.begin(), nullmask_bufs.end(), pinned_nullmask_bufs.begin());
   cudf::detail::batched_memset<cudf::bitmask_type>(
-    nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
+    pinned_nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
 cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
@@ -1042,7 +1046,12 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               cuda::std::plus<>{},
                               _stream);
 
-  return cudf::detail::make_host_vector(d_col_sizes, _stream);
+  auto col_string_sizes =
+    cudf::detail::make_pinned_vector_async<size_t>(d_col_sizes.size(), _stream);
+  cudf::detail::cuda_memcpy(cudf::host_span<size_t>{col_string_sizes.data(), d_col_sizes.size()},
+                            cudf::device_span<size_t const>{d_col_sizes.data(), d_col_sizes.size()},
+                            _stream);
+  return col_string_sizes;
 }
 
 }  // namespace cudf::io::parquet::detail

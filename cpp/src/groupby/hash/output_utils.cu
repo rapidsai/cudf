@@ -23,6 +23,14 @@
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <memory>
+#include <span>
+#include <utility>
+#include <vector>
+
 namespace cudf::groupby::detail::hash {
 namespace {
 
