@@ -100,7 +100,7 @@ endfunction()
 # * copying benchmarks ----------------------------------------------------------------------------
 ConfigureNVBench(
   COPYING_NVBENCH copying/concatenate.cpp copying/copy_if_else.cpp copying/gather.cu
-  copying/scatter.cu copying/shift.cpp
+  copying/scatter.cu copying/shift.cpp copying/pack.cpp
 )
 
 # ##################################################################################################
