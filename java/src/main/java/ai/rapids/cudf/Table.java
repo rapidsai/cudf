@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -2457,7 +2457,7 @@ public final class Table implements AutoCloseable {
    * {@link Table} class
    */
   public PartitionedTable roundRobinPartition(int numberOfPartitions, int startPartition) {
-    int[] partitionOffsets = new int[numberOfPartitions];
+    int[] partitionOffsets = new int[numberOfPartitions + 1];
     return new PartitionedTable(new Table(Table.roundRobinPartition(nativeHandle,
         numberOfPartitions, startPartition,
         partitionOffsets)), partitionOffsets);
@@ -4597,12 +4597,12 @@ public final class Table implements AutoCloseable {
      * @return Table that exposes a limited functionality of the {@link Table} class
      */
     public PartitionedTable hashPartition(HashType type, int numberOfPartitions, int seed) {
-      int[] partitionOffsets = new int[numberOfPartitions];
+      int[] partitionOffsets = new int[numberOfPartitions + 1];
       return new PartitionedTable(new Table(Table.hashPartition(
           operation.table.nativeHandle,
           operation.indices,
           type.nativeId,
-          partitionOffsets.length,
+          numberOfPartitions,
           seed,
           partitionOffsets)), partitionOffsets);
     }
