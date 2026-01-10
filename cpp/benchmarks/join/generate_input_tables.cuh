@@ -54,7 +54,8 @@ CUDF_KERNEL void init_build_tbl(key_type* const build_tbl,
 
   for (cudf::thread_index_type tidx = start_idx; tidx < build_tbl_size; tidx += stride) {
     auto const idx = static_cast<size_type>(tidx);
-    double const x = curand_uniform_double(&localState);
+    double const x =
+      1.0 - curand_uniform_double(&localState);  // curand_uniform_double returns (0.0, 1.0]
 
     build_tbl[idx] = static_cast<key_type>(x * (build_tbl_size / multiplicity));
   }
@@ -81,18 +82,17 @@ CUDF_KERNEL void init_probe_tbl(key_type* const probe_tbl,
   for (cudf::thread_index_type tidx = start_idx; tidx < probe_tbl_size; tidx += stride) {
     auto const idx = static_cast<size_type>(tidx);
     key_type val;
-    double x = curand_uniform_double(&localState);
+    double const x = 1.0 - curand_uniform_double(&localState);
 
     if (x <= selectivity) {
       // x <= selectivity means this key in the probe table should be present in the build table, so
-      // we pick a key from [0, build_tbl_size / multiplicity]
-      x   = curand_uniform_double(&localState);
+      // we pick a key from [0, build_tbl_size / multiplicity)
       val = static_cast<key_type>(x * (build_tbl_size / multiplicity));
     } else {
-      // This key in the probe table should not be present in the build table, so we pick a key from
-      // [build_tbl_size, rand_max].
-      x   = curand_uniform_double(&localState);
-      val = static_cast<key_type>(x * (rand_max - build_tbl_size) + build_tbl_size);
+      // This key in the probe table should not be present in the build table, so we pick the key
+      // from [build_tbl_size / multiplicity, rand_max]
+      val = static_cast<key_type>(x * (rand_max - (build_tbl_size / multiplicity)) +
+                                  (build_tbl_size / multiplicity));
     }
     probe_tbl[idx] = val;
   }
@@ -149,7 +149,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
   double const null_probability = Nullable ? 0.3 : 0;
   auto const profile            = data_profile{data_profile_builder()
                                       .null_probability(null_probability)
-                                      .cardinality(unique_rows_build_table_numrows + 1)};
+                                      .cardinality(2 * unique_rows_build_table_numrows)};
   auto unique_rows_build_table =
     create_random_table(key_types, row_count{unique_rows_build_table_numrows + 1}, profile, 1);
 
@@ -177,7 +177,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
   CUDF_CHECK_CUDA(0);
 
   auto build_table_gather_map = cudf::make_numeric_column(
-    cudf::data_type{cudf::type_id::INT32}, build_table_numrows, cudf::mask_state::ALL_VALID);
+    cudf::data_type{cudf::type_id::INT32}, build_table_numrows, cudf::mask_state::UNALLOCATED);
   init_build_tbl<cudf::size_type, cudf::size_type>
     <<<num_sms * num_blocks_init_build_tbl, BLOCK_SIZE, 0, cudf::get_default_stream().value()>>>(
       build_table_gather_map->mutable_view().data<cudf::size_type>(),
@@ -188,9 +188,9 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
 
   CUDF_CHECK_CUDA(0);
 
-  auto const rand_max         = build_table_numrows;
+  auto const rand_max         = build_table_numrows / multiplicity;
   auto probe_table_gather_map = cudf::make_numeric_column(
-    cudf::data_type{cudf::type_id::INT32}, probe_table_numrows, cudf::mask_state::ALL_VALID);
+    cudf::data_type{cudf::type_id::INT32}, probe_table_numrows, cudf::mask_state::UNALLOCATED);
   init_probe_tbl<cudf::size_type, cudf::size_type>
     <<<num_sms * num_blocks_init_build_tbl, BLOCK_SIZE, 0, cudf::get_default_stream().value()>>>(
       probe_table_gather_map->mutable_view().data<cudf::size_type>(),
