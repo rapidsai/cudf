@@ -603,6 +603,8 @@ def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
         return cudf.Decimal128Dtype(
             precision=cudf.Decimal128Dtype.MAX_PRECISION, scale=-type_.scale()
         )
+    elif tid == plc.TypeId.STRING:
+        return pd.StringDtype(na_value=np.nan)
     else:
         return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
 
