@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -517,7 +517,7 @@ class hybrid_scan_reader {
    * @param column_chunk_buffers Device buffers containing column chunk data of all columns
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Table of materialized all columns and metadata
+   * @return Table of all materialized columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
     cudf::host_span<size_type const> row_group_indices,

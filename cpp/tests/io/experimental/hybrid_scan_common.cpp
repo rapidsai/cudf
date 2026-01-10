@@ -1,4 +1,3 @@
-
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
@@ -200,7 +199,7 @@ std::tuple<std::unique_ptr<cudf::table>,
            cudf::io::table_metadata,
            cudf::io::table_metadata,
            std::unique_ptr<cudf::column>>
-hybrid_scan(std::vector<char>& buffer,
+hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
             cudf::ast::operation const& filter_expression,
             cudf::size_type num_filter_columns,
             std::optional<std::vector<std::string>> const& payload_column_names,
@@ -214,10 +213,6 @@ hybrid_scan(std::vector<char>& buffer,
 
   // Set payload column names if provided
   if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
-
-  // Input file buffer span
-  auto const file_buffer_span =
-    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
 
   auto [reader, filtered_row_group_indices, row_mask] =
     apply_parquet_filters(file_buffer_span, options, stream, mr);
@@ -271,7 +266,7 @@ std::tuple<std::unique_ptr<cudf::table>,
            cudf::io::table_metadata,
            cudf::io::table_metadata,
            std::unique_ptr<cudf::column>>
-chunked_hybrid_scan(std::vector<char> const& buffer,
+chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
                     cudf::ast::operation const& filter_expression,
                     cudf::size_type num_filter_columns,
                     std::optional<std::vector<std::string>> const& payload_column_names,
@@ -285,10 +280,6 @@ chunked_hybrid_scan(std::vector<char> const& buffer,
 
   // Set payload column names if provided
   if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
-
-  // Input file buffer span
-  auto const file_buffer_span =
-    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
 
   auto [reader, filtered_row_group_indices, row_mask] =
     apply_parquet_filters(file_buffer_span, options, stream, mr);
@@ -389,7 +380,7 @@ chunked_hybrid_scan(std::vector<char> const& buffer,
 }
 
 cudf::io::table_with_metadata hybrid_scan_single_step(
-  std::vector<char>& buffer,
+  cudf::host_span<uint8_t const> file_buffer_span,
   std::optional<cudf::ast::operation> filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
   rmm::cuda_stream_view stream,
@@ -400,10 +391,6 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
 
   if (column_names.has_value()) { options.set_columns(column_names.value()); }
   if (filter_expression.has_value()) { options.set_filter(filter_expression.value()); }
-
-  // Input file buffer span
-  auto const file_buffer_span =
-    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
 
   auto [reader, filtered_row_group_indices, _ /*row_mask*/] =
     apply_parquet_filters(file_buffer_span, options, stream, mr);

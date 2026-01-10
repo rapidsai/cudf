@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -181,7 +181,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::cuda_stream_view stream);
 
   /**
-   * @brief Fetches byte ranges for all (or specified) column chunks
+   * @brief Fetches byte ranges for all (or selected) column chunks
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
