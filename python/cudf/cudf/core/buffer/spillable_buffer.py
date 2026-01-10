@@ -22,6 +22,7 @@ from cudf.core.buffer.buffer import (
     host_memory_allocation,
 )
 from cudf.core.buffer.string import format_bytes
+from cudf.options import get_option
 from cudf.utils.performance_tracking import _get_color_for_nvtx
 
 if TYPE_CHECKING:
@@ -554,6 +555,9 @@ class SpillableBuffer(Buffer):
             return header, frames
 
     def copy(self, deep: bool = True) -> Self:
+        if get_option("copy_on_write"):
+            deep = deep or self._owner.exposed
+
         if not deep:
             return super().copy(deep=False)
 
