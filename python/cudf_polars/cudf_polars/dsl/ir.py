@@ -35,7 +35,7 @@ from cudf_polars.containers.dataframe import NamedColumn
 from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
-from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
+from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter, validate_to_ast
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
@@ -2008,22 +2008,26 @@ class ConditionalJoin(IR):
         """Serializable wrapper for a predicate expression."""
 
         predicate: expr.Expr
-        ast: plc.expressions.Expression
 
         def __init__(self, predicate: expr.Expr):
+            validate_to_ast(predicate)
             self.predicate = predicate
-            stream = get_cuda_stream()
-            ast_result = to_ast(predicate, stream=stream)
-            stream.synchronize()
-            if ast_result is None:
-                raise NotImplementedError(
-                    f"Conditional join with predicate {predicate}"
-                )  # pragma: no cover; polars never delivers expressions we can't handle
-            self.ast = ast_result
 
-        def __reduce__(self) -> tuple[Any, ...]:
-            """Pickle a Predicate object."""
-            return (type(self), (self.predicate,))
+        def ast(self, stream: Stream) -> plc.expressions.Expression:
+            """
+            Translate the predicate cudf-polars expression to a pylibcudf expression.
+
+            Parameters
+            ----------
+            stream
+                CUDA stream used for device memory operations and kernel launches.
+
+            Returns
+            -------
+            plc.expressions.Expression
+                The pylibcudf expression representing the predicate.
+            """
+            return to_ast(self.predicate, stream=stream)
 
     __slots__ = ("ast_predicate", "options", "predicate")
     _non_child = ("schema", "predicate", "options")
@@ -2101,7 +2105,7 @@ class ConditionalJoin(IR):
         lg, rg = plc.join.conditional_inner_join(
             _apply_casts(left, left_casts).table,
             _apply_casts(right, right_casts).table,
-            predicate_wrapper.ast,
+            predicate_wrapper.ast(stream=stream),
             stream=stream,
         )
         left_result = DataFrame.from_table(
