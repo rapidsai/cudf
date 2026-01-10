@@ -206,6 +206,7 @@ class SpillableBufferOwner(BufferOwner):
         self._spill_locks = weakref.WeakSet()
         self._last_accessed = time.monotonic()
         self._ptr_desc = ptr_desc
+        self._exposed: bool = False
         manager = get_global_manager()
         if manager is None:
             raise ValueError(
@@ -347,7 +348,7 @@ class SpillableBufferOwner(BufferOwner):
             if not self.exposed:
                 self._manager.statistics.log_expose(self)
             self.spill(target="gpu")
-            super().mark_exposed()
+            self._exposed = True
             self._last_accessed = time.monotonic()
 
     def spill_lock(self, spill_lock: SpillLock) -> None:
@@ -411,6 +412,15 @@ class SpillableBufferOwner(BufferOwner):
                 self._ptr_desc["memoryview"], copy=False
             ).__array_interface__["data"][0]
         return (ptr, self.nbytes, self._ptr_desc["type"])
+
+    @property
+    def exposed(self) -> bool:
+        """The current exposure status of the buffer
+
+        This is used by copy-on-write to determine when a deep copy
+        is required and by SpillableBuffer to mark the buffer unspillable.
+        """
+        return self._exposed
 
     @property
     def spillable(self) -> bool:

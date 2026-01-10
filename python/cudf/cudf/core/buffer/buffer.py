@@ -51,12 +51,6 @@ class BufferOwner(Serializable):
     the ones used throughout cuDF, can then refer to the same
     `BufferOwner` instance.
 
-    In order to implement copy-on-write and spillable buffers, we need the
-    ability to detect external access to the underlying memory. We say that
-    the buffer has been exposed if the device pointer (integer or void*) has
-    been accessed outside of BufferOwner. In this case, we have no control
-    over knowing if the data is being modified by a third party.
-
     Use `from_device_memory` and `from_host_memory` to create
     a new instance from either device or host memory respectively.
 
@@ -69,8 +63,6 @@ class BufferOwner(Serializable):
     owner
         Python object to which the lifetime of the memory allocation is tied.
         This buffer will keep a reference to `owner`.
-    exposed
-        Pointer to the underlying memory
 
     Raises
     ------
@@ -81,7 +73,6 @@ class BufferOwner(Serializable):
     _ptr: int
     _size: int
     _owner: object
-    _exposed: bool
     # The set of buffers that point to this owner.
     _slices: weakref.WeakSet[Buffer]
 
@@ -98,7 +89,6 @@ class BufferOwner(Serializable):
         self._ptr = ptr
         self._size = size
         self._owner = owner
-        self._exposed = False
         self._slices = weakref.WeakSet()
 
     @classmethod
@@ -174,29 +164,9 @@ class BufferOwner(Serializable):
         return self._owner
 
     @property
-    def exposed(self) -> bool:
-        """The current exposure status of the buffer
-
-        This is used by copy-on-write to determine when a deep copy
-        is required and by SpillableBuffer to mark the buffer unspillable.
-        """
-        return self._exposed
-
-    @property
     def ptr(self) -> int:
         """Device pointer to the start of the buffer (Span protocol)."""
         return self._ptr
-
-    def mark_exposed(self) -> None:
-        """Mark the buffer as "exposed" permanently
-
-        This is used by copy-on-write to determine when a deep copy
-        is required and by SpillableBuffer to mark the buffer unspillable.
-
-        Notice, once the exposure status becomes True, it will never change
-        back.
-        """
-        self._exposed = True
 
     def memoryview(
         self, *, offset: int = 0, size: int | None = None
@@ -348,12 +318,6 @@ class Buffer(Serializable):
     def copy(self, deep: bool = True) -> Self:
         """Return a copy of Buffer.
 
-        What actually happens when `deep == False` depends on the
-        "copy_on_write" option. When copy-on-write is enabled, a shallow copy
-        becomes a deep copy if the buffer has been exposed. This is because we
-        have no control over knowing if the data is being modified when the
-        buffer has been exposed to third-party.
-
         Parameters
         ----------
         deep : bool, default True
@@ -373,9 +337,6 @@ class Buffer(Serializable):
             `BufferOwner` depending on the expose status of the owner and the
             copy-on-write option (see above).
         """
-        if get_option("copy_on_write"):
-            deep = deep or self._owner.exposed
-
         # When doing a shallow copy, we just return a new slice
         if not deep:
             return self.__class__(
