@@ -25,10 +25,9 @@
 /**
  * @file hybrid_scan_pipeline.cpp
  *
- * @brief This example demonstrates the use of libcudf next-gen parquet reader to optimally read
- * a parquet file subject to a highly selective string-type point lookup (col_name ==
- * literal) filter. The same file is also read using the libcudf legacy parquet reader and the read
- * times are compared.
+ * @brief This example demonstrates splitting a parquet file into multiple partitions, reading them
+ * in a pipelined fashion, and concatenating the results using the next-gen parquet reader. The same
+ * file is also read using the libcudf main parquet reader and the read times are compared.
  */
 
 namespace {
