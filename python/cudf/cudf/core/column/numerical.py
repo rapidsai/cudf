@@ -481,7 +481,10 @@ class NumericalColumn(NumericalBaseColumn):
             plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
                 self.plc_column
             )
-            return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+            return cast(
+                cudf.core.column.string.StringColumn,
+                type(self).from_pylibcudf(plc_column),
+            )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         col = self
@@ -520,12 +523,11 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError(f"No string conversion from type {self.dtype}")
 
         with col.access(mode="read", scope="internal"):
-            return (
+            return cast(
+                cudf.core.column.string.StringColumn,
                 type(self)
-                .from_pylibcudf(  # type: ignore[return-value]
-                    conv_func(col.plc_column)
-                )
-                ._with_type_metadata(dtype)
+                .from_pylibcudf(conv_func(col.plc_column))
+                ._with_type_metadata(dtype),
             )
 
     def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
@@ -541,17 +543,19 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        return (
-            type(self)  # type: ignore[return-value]
+        return cast(
+            cudf.core.column.datetime.DatetimeColumn,
+            type(self)
             .from_pylibcudf(self._as_temporal_column(dtype))
-            ._with_type_metadata(dtype)
+            ._with_type_metadata(dtype),
         )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return (
-            type(self)  # type: ignore[return-value]
+        return cast(
+            cudf.core.column.timedelta.TimeDeltaColumn,
+            type(self)
             .from_pylibcudf(self._as_temporal_column(dtype))
-            ._with_type_metadata(dtype)
+            ._with_type_metadata(dtype),
         )
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
@@ -924,10 +928,12 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
-            codes = cast(NumericalColumn, self.astype(codes_dtype))
-            return CategoricalColumn(
-                plc_column=codes.plc_column,
-                dtype=dtype,
+            codes = cast(
+                cudf.core.column.numerical.NumericalColumn,
+                self.astype(codes_dtype),
+            )
+            return CategoricalColumn._from_preprocessed(
+                codes.plc_column, dtype, (codes,)
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)
@@ -990,13 +996,18 @@ class NumericalColumn(NumericalBaseColumn):
             bin_col,
             self,
         ):
-            return type(self).from_pylibcudf(
-                getattr(plc.search, "lower_bound" if right else "upper_bound")(
-                    plc.Table([bin_col.plc_column]),
-                    plc.Table([self.plc_column]),
-                    [plc.types.Order.ASCENDING],
-                    [plc.types.NullOrder.BEFORE],
-                )
+            return cast(
+                Self,
+                type(self).from_pylibcudf(
+                    getattr(
+                        plc.search, "lower_bound" if right else "upper_bound"
+                    )(
+                        plc.Table([bin_col.plc_column]),
+                        plc.Table([self.plc_column]),
+                        [plc.types.Order.ASCENDING],
+                        [plc.types.NullOrder.BEFORE],
+                    )
+                ),
             )
 
 

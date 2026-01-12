@@ -10,12 +10,12 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
@@ -31,9 +31,8 @@ from cudf.utils.utils import _is_null_host_scalar
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from typing_extensions import Self
-
     from cudf._typing import ColumnBinaryOperand, ColumnLike, DtypeObj
+    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
 
 
@@ -56,17 +55,18 @@ class ListColumn(ColumnBase):
             raise ValueError("dtype must be a cudf.ListDtype")
         return plc_column, dtype
 
-    def _get_children_from_pylibcudf_column(
-        self,
-        plc_column: plc.Column,
+    @classmethod
+    def _apply_child_metadata(
+        cls,
+        children: tuple[ColumnBase, ...],
         dtype: ListDtype,  # type: ignore[override]
-    ) -> tuple[ColumnBase, ColumnBase]:
-        children = super()._get_children_from_pylibcudf_column(
-            plc_column, dtype
-        )
+    ) -> tuple[ColumnBase, ...]:
+        """Apply list element type metadata to elements child (child[1])."""
         return (
-            children[0],
-            children[1]._with_type_metadata(dtype.element_type),
+            children[0],  # Offsets column unchanged
+            children[1]._with_type_metadata(
+                dtype.element_type
+            ),  # Elements with metadata
         )
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
@@ -78,7 +78,7 @@ class ListColumn(ColumnBase):
 
         if idx == 1:
             sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-            return type(self._children[idx]).from_pylibcudf(sliced_plc_col)
+            return ColumnBase.from_pylibcudf(sliced_plc_col)
 
         return self._children[idx]
 
@@ -140,7 +140,9 @@ class ListColumn(ColumnBase):
         """
         Integer offsets to elements specifying each row of the ListColumn
         """
-        return cast(NumericalColumn, self.children[0])
+        return cast(
+            cudf.core.column.numerical.NumericalColumn, self.children[0]
+        )
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -151,10 +153,10 @@ class ListColumn(ColumnBase):
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, ListDtype):
             elements = self.children[1]._with_type_metadata(dtype.element_type)
-            new_children = [
-                self.children[0].plc_column,
-                elements.plc_column,
-            ]
+            new_children = (
+                self.children[0],  # Offsets unchanged
+                elements,  # Elements with metadata
+            )
             new_plc_column = plc.Column(
                 plc.DataType(plc.TypeId.LIST),
                 self.plc_column.size(),
@@ -162,11 +164,12 @@ class ListColumn(ColumnBase):
                 self.plc_column.null_mask(),
                 self.plc_column.null_count(),
                 self.plc_column.offset(),
-                new_children,
+                [child.plc_column for child in new_children],
             )
-            return type(self)(
+            return type(self)._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
+                children=new_children,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
@@ -224,7 +227,10 @@ class ListColumn(ColumnBase):
             0,
             [offset_col, data_plc_col],
         )
-        return cls.from_pylibcudf(plc_column)
+        return cast(
+            Self,
+            cls.from_pylibcudf(plc_column),
+        )
 
     @cached_property
     def _string_separators(self) -> plc.Column:
@@ -252,7 +258,10 @@ class ListColumn(ColumnBase):
                 pa_scalar_to_plc_scalar(pa.scalar("None")),
                 self._string_separators,
             )
-            return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+            return cast(
+                cudf.core.column.string.StringColumn,
+                type(self).from_pylibcudf(plc_column),
+            )
 
     def _transform_leaves(
         self, func: Callable[[ColumnBase, DtypeObj], ColumnBase], *args: Any
@@ -283,7 +292,10 @@ class ListColumn(ColumnBase):
                 col.offset,
                 [offsets, plc_leaf_col],
             )
-        return type(self).from_pylibcudf(plc_leaf_col)
+        return cast(
+            Self,
+            type(self).from_pylibcudf(plc_leaf_col),
+        )
 
     @property
     def element_type(self) -> DtypeObj:
@@ -359,7 +371,7 @@ class ListColumn(ColumnBase):
 
     def extract_element_scalar(self, index: int) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.from_pylibcudf(
                 plc.lists.extract_list_element(
                     self.plc_column,
                     index,
@@ -368,7 +380,7 @@ class ListColumn(ColumnBase):
 
     def extract_element_column(self, index: ColumnBase) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.from_pylibcudf(
                 plc.lists.extract_list_element(
                     self.plc_column,
                     index.plc_column,
@@ -458,7 +470,10 @@ class ListColumn(ColumnBase):
                 plc.strings.combine.SeparatorOnNulls.YES,
                 plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
             )
-            return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+            return cast(
+                cudf.core.column.string.StringColumn,
+                type(self).from_pylibcudf(plc_column),
+            )
 
     def minhash_ngrams(
         self,
@@ -475,14 +490,17 @@ class ListColumn(ColumnBase):
                         f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
                     )
                 seed = np.uint32(seed)
-            return type(self).from_pylibcudf(
-                plc.nvtext.minhash.minhash_ngrams(
-                    self.plc_column,
-                    width,
-                    seed,
-                    a.plc_column,
-                    b.plc_column,
-                )
+            return cast(
+                Self,
+                type(self).from_pylibcudf(
+                    plc.nvtext.minhash.minhash_ngrams(
+                        self.plc_column,
+                        width,
+                        seed,
+                        a.plc_column,
+                        b.plc_column,
+                    )
+                ),
             )
 
     def minhash64_ngrams(
@@ -500,12 +518,15 @@ class ListColumn(ColumnBase):
                         f"seed must be in range [0, {np.iinfo(np.uint64).max}]"
                     )
                 seed = np.uint64(seed)
-            return type(self).from_pylibcudf(
-                plc.nvtext.minhash.minhash64_ngrams(
-                    self.plc_column,
-                    width,
-                    seed,
-                    a.plc_column,
-                    b.plc_column,
-                )
+            return cast(
+                Self,
+                type(self).from_pylibcudf(
+                    plc.nvtext.minhash.minhash64_ngrams(
+                        self.plc_column,
+                        width,
+                        seed,
+                        a.plc_column,
+                        b.plc_column,
+                    )
+                ),
             )
