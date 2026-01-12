@@ -166,8 +166,14 @@ ConfigureTest(
 # ##################################################################################################
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu join/distinct_join_tests.cpp
+  JOIN_TEST
+  join/join_tests.cpp
+  join/conditional_join_tests.cu
+  join/cross_join_tests.cpp
+  join/semi_anti_join_tests.cpp
+  join/mixed_join_tests.cu
+  join/distinct_join_tests.cpp
+  join/key_remapping_tests.cpp
   GPUS 1
   PERCENT 100
 )
