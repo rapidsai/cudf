@@ -131,6 +131,6 @@ jitify2::ProgramCache<>& jit::program_cache::get(jitify2::PreprocessedProgramDat
 
 jitify2::ProgramCache<>& jit::get_program_cache(jitify2::PreprocessedProgramData const& preprog)
 {
-  return cudf::get_context().program_cache().get(preprog);
+  return cudf::get_context(init_flags::INIT_JIT_CACHE).program_cache().get(preprog);
 }
 }  // namespace cudf

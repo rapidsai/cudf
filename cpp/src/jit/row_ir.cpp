@@ -586,7 +586,7 @@ transform_args ast_converter::compute_column(target target_id,
                            is_null_aware,
                            output_nullability};
 
-  if (get_context().dump_codegen()) {
+  if (get_context(init_flags::NONE).dump_codegen()) {
     std::cout << "Generated code for transform: " << transform.udf << std::endl;
   }
 
@@ -643,7 +643,7 @@ filter_args ast_converter::filter(target target_id,
                      std::nullopt,
                      is_null_aware};
 
-  if (get_context().dump_codegen()) {
+  if (get_context(init_flags::NONE).dump_codegen()) {
     std::cout << "Generated code for filter: " << filter.predicate_udf << std::endl;
   }
 

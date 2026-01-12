@@ -38,15 +38,18 @@ class context {
 
   [[nodiscard]] bool dump_codegen() const;
 
-  /// @brief Initialize additional components based on the provided flags
+  [[nodiscard]] bool use_jit() const;
+
+ private:
+  /// @brief Initialize components based on the provided flags
   /// @param flags The initialization flags to process
   void initialize_components(init_flags flags);
 
-  [[nodiscard]] bool use_jit() const;
+  friend void initialize(init_flags flags);
 };
 
-std::unique_ptr<context>& get_context_ptr_ref();
-
-context& get_context();
+/// @brief Get the cuDF global context
+/// @param expected the initialization flags that are expected
+context& get_context(init_flags expected);
 
 }  // namespace cudf

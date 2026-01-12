@@ -64,14 +64,10 @@ constexpr bool has_flag(init_flags flags, init_flags flag) noexcept
   return (flags | flag) == flags;
 }
 
-/// @brief Initialize the cudf global context
+/// @brief Initialize the cuDF global context
 /// @param flags Optional flags to control which initialization steps to perform.
-/// Can be called multiple times to initialize additional components. If all selected
-/// steps are already performed, the call has no effect.
-void initialize(init_flags flags = init_flags::INIT_JIT_CACHE);
-
-/// @brief de-initialize the cudf global context
-/// @throws std::runtime_error if the context is already de-initialized
-void deinitialize();
+/// Can be called multiple times. Only the first call will have an effect.
+/// @thread-safety This function is thread-safe.
+void initialize(init_flags flags = init_flags::ALL);
 
 }  // namespace CUDF_EXPORT cudf
