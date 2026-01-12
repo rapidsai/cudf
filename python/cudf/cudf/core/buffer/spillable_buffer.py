@@ -39,67 +39,63 @@ class _SpillableBufferAccessContext(_BufferAccessContext):
     Extends the base BufferAccessContext to add spill lock management.
     """
 
-    __slots__ = ("_scope", "_spill_lock")
+    __slots__ = ("_pending_scope", "_spill_lock_stack")
 
     _buffer: "SpillableBuffer"  # Type hint for mypy
-    _spill_lock: SpillLock | None
+    _spill_lock_stack: list[SpillLock | None]
 
-    def __init__(
-        self,
-        buffer: "SpillableBuffer",
-        mode: Literal["read", "write"],
-        scope: Literal["internal", "external"],
-    ):
+    def __init__(self, buffer: "SpillableBuffer"):
         """Initialize the context manager.
 
         Parameters
         ----------
         buffer : SpillableBuffer
             The buffer to manage access for.
-        mode : {"read", "write"}
-            Access mode for copy-on-write.
-        scope : {"internal", "external"}
-            Spill scope - internal for temporary access, external for permanent exposure.
         """
-        # Initialize base class (just stores buffer and mode)
-        super().__init__(buffer, mode)
-        self._scope = scope
-        self._spill_lock = None
+        # Initialize base class (just stores buffer)
+        super().__init__(buffer)
+        self._pending_scope: Literal["internal", "external"] | None = None
+        self._spill_lock_stack: list[SpillLock | None] = []
 
     def __enter__(self) -> "SpillableBuffer":
         """Enter the context, setting up mode stack and spill locks."""
         # Call parent to push mode onto stack
-        result = super().__enter__()
+        buffer = super().__enter__()
 
-        # Handle spill locking based on scope
-        if self._scope == "internal":
-            # Create temporary spill lock for this context
-            self._spill_lock = SpillLock()
-            with self._buffer._owner.lock:
-                self._buffer._owner._spill_locks.add(self._spill_lock)
-        elif self._scope == "external":
+        # Handle spill locking based on pending scope
+        if self._pending_scope == "internal":
+            # Create temporary spill lock for this context entry
+            spill_lock = SpillLock()
+            with buffer._owner.lock:
+                buffer._owner._spill_locks.add(spill_lock)
+            # Push to stack to handle nesting
+            self._spill_lock_stack.append(spill_lock)
+        elif self._pending_scope == "external":
             # Permanently mark as exposed (unspillable)
-            self._buffer._owner.mark_exposed()
+            buffer._owner.mark_exposed()
+            # Push None to maintain stack alignment
+            self._spill_lock_stack.append(None)
         else:
             raise ValueError(
-                f"Invalid scope: {self._scope!r}. Must be 'internal' or 'external'."
+                f"Invalid scope: {self._pending_scope!r}. Must be 'internal' or 'external'."
             )
 
-        return result
+        return buffer
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> Literal[False]:
         """Exit the context, cleaning up mode stack and releasing spill lock.
 
         Note: Spill lock cleanup happens automatically via weakref
-        when self._spill_lock goes out of scope. We explicitly clear
-        the reference to ensure immediate cleanup.
+        when the lock goes out of scope. We pop it from the stack
+        to ensure immediate cleanup.
         """
         # Call parent to pop mode from stack
         super().__exit__(exc_type, exc_val, exc_tb)
 
-        # Explicitly release the spill lock reference
+        # Pop and release the spill lock reference for this exit
         # This allows the WeakSet to remove it immediately
-        self._spill_lock = None
+        if self._spill_lock_stack:
+            self._spill_lock_stack.pop()
 
         return False
 
@@ -469,6 +465,18 @@ class SpillableBuffer(Buffer):
     """A slice of a spillable buffer"""
 
     _owner: SpillableBufferOwner
+    _access_context: _SpillableBufferAccessContext
+
+    def __init__(
+        self,
+        *,
+        owner: "SpillableBufferOwner",
+        offset: int = 0,
+        size: int | None = None,
+    ) -> None:
+        super().__init__(owner=owner, offset=offset, size=size)
+        # Create reusable context for this buffer
+        self._access_context = _SpillableBufferAccessContext(self)
 
     def access(
         self,
@@ -515,7 +523,9 @@ class SpillableBuffer(Buffer):
         >>> with column.access(mode="write", scope="external"):
         ...     ptr = column.ptr  # Permanently marks as unspillable
         """
-        return _SpillableBufferAccessContext(self, mode, scope)
+        self._access_context._pending_mode = mode
+        self._access_context._pending_scope = scope
+        return self._access_context
 
     def memory_info(self) -> tuple[int, int, str]:
         (ptr, _, device_type) = self._owner.memory_info()

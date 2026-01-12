@@ -190,18 +190,27 @@ class BufferOwner(Serializable):
 class _BufferAccessContext:
     """Context manager for buffer access mode control."""
 
-    __slots__ = ("_buffer", "_mode")
+    __slots__ = ("_buffer_ref", "_pending_mode")
 
-    def __init__(self, buffer: Buffer, mode: Literal["read", "write"]):
-        self._buffer = buffer
-        self._mode = mode
+    def __init__(self, buffer: Buffer):
+        # Use weakref to avoid circular reference that prevents GC
+        self._buffer_ref = weakref.ref(buffer)
+        self._pending_mode: Literal["read", "write"] | None = None
 
     def __enter__(self):
-        self._buffer._access_mode_stack.append(self._mode)
-        return self._buffer
+        # Get buffer from weakref
+        buffer = self._buffer_ref()
+        if buffer is None:
+            raise RuntimeError("Buffer has been garbage collected")
+
+        # Push pending mode to stack - nesting naturally supported
+        buffer._access_mode_stack.append(self._pending_mode)
+        return buffer
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._buffer._access_mode_stack.pop()
+        buffer = self._buffer_ref()
+        if buffer is not None:
+            buffer._access_mode_stack.pop()
         return False
 
 
@@ -244,6 +253,7 @@ class Buffer(Serializable):
         self._offset = offset
         self._size = size
         self._access_mode_stack: list[Literal["read", "write"]] = []
+        self._access_context = _BufferAccessContext(self)
         # Track this slice for copy-on-write
         if get_option("copy_on_write"):
             self._owner._slices.add(self)
@@ -296,7 +306,8 @@ class Buffer(Serializable):
         _BufferAccessContext
             A context manager that controls the access mode.
         """
-        return _BufferAccessContext(self, mode)
+        self._access_context._pending_mode = mode
+        return self._access_context
 
     def __getitem__(self, key: slice) -> Self:
         """Create a new slice of the buffer."""
