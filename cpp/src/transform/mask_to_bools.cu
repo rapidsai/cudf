@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -31,13 +31,13 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
   CUDF_EXPECTS(length >= 0, "begin_bit should be less than or equal to end_bit");
   CUDF_EXPECTS((bitmask != nullptr) or (length == 0), "nullmask is null");
 
-  auto out_col =
-    make_fixed_width_column(data_type(type_id::BOOL8), length, mask_state::UNALLOCATED, stream, resources);
+  auto out_col = make_fixed_width_column(
+    data_type(type_id::BOOL8), length, mask_state::UNALLOCATED, stream, resources);
 
   if (length > 0) {
     auto mutable_view = out_col->mutable_view();
 
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<cudf::size_type>(begin_bit),
                       thrust::make_counting_iterator<cudf::size_type>(end_bit),
                       mutable_view.begin<bool>(),

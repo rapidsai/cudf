@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -50,11 +50,15 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
   auto const total_count = static_cast<size_type>(total_elements);
 
   // create output column
-  auto results = make_numeric_column(
-    data_type{type_id::INT32}, total_count, rmm::device_buffer{0, stream, mr}, 0, stream, resources);
+  auto results = make_numeric_column(data_type{type_id::INT32},
+                                     total_count,
+                                     rmm::device_buffer{0, stream, mr},
+                                     0,
+                                     stream,
+                                     resources);
 
   // fill output column with position values
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(total_count),
                     results->mutable_view().begin<int32_t>(),

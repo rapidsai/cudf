@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -86,8 +86,7 @@ std::unique_ptr<column> cast_to_integer(strings_column_view const& input,
 
   auto results   = make_numeric_column(output_type,
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
@@ -95,7 +94,7 @@ std::unique_ptr<column> cast_to_integer(strings_column_view const& input,
   auto d_results = mutable_column_device_view::create(*results, stream);
 
   auto const type_size = static_cast<size_type>(cudf::size_of(output_type));
-  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      input.size(),
                      cast_to_integer_fn{*d_strings, *d_results, swap, type_size});
@@ -189,8 +188,7 @@ std::unique_ptr<column> cast_from_integer(column_view const& integers,
                              std::move(offsets),
                              chars.release(),
                              integers.null_count(),
-                             cudf::detail::copy_bitmask(integers, stream,
-                  resources));
+                             cudf::detail::copy_bitmask(integers, stream, resources));
 }
 
 }  // namespace detail

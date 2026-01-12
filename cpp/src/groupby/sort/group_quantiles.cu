@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -103,7 +103,7 @@ struct quantiles_functor {
     // For each group, calculate quantile
     if (!cudf::is_dictionary(values.type())) {
       auto values_iter = values_view->begin<T>();
-      thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          thrust::make_counting_iterator(0),
                          num_groups,
                          calculate_quantile_fn<ResultType, decltype(values_iter)>{
@@ -117,7 +117,7 @@ struct quantiles_functor {
                            null_count.data()});
     } else {
       auto values_iter = cudf::dictionary::detail::make_dictionary_iterator<T>(*values_view);
-      thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          thrust::make_counting_iterator(0),
                          num_groups,
                          calculate_quantile_fn<ResultType, decltype(values_iter)>{
@@ -155,8 +155,8 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                                         rmm::cuda_stream_view stream,
                                         cudf::memory_resources resources)
 {
-  auto dv_quantiles = cudf::detail::make_device_uvector_async(
-    quantiles, stream, resources.get_temporary_mr());
+  auto dv_quantiles =
+    cudf::detail::make_device_uvector_async(quantiles, stream, resources.get_temporary_mr());
 
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()

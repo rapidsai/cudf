@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -104,16 +104,14 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
   // Handle empty column
   if (col.size() == 0 || col.size() == col.null_count()) {
     // Create struct with {null sum, false overflow}
-    auto sum_scalar =
-      cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT64}, stream, resources);
+    auto sum_scalar = cudf::make_default_constructed_scalar(
+      cudf::data_type{cudf::type_id::INT64}, stream, resources);
     sum_scalar->set_valid_async(false, stream);
     auto overflow_scalar = cudf::make_fixed_width_scalar<bool>(false, stream, resources);
 
     std::vector<std::unique_ptr<cudf::column>> children;
-    children.push_back(cudf::make_column_from_scalar(*sum_scalar, 1, stream,
-                  resources));
-    children.push_back(cudf::make_column_from_scalar(*overflow_scalar, 1, stream,
-                  resources));
+    children.push_back(cudf::make_column_from_scalar(*sum_scalar, 1, stream, resources));
+    children.push_back(cudf::make_column_from_scalar(*overflow_scalar, 1, stream, resources));
 
     // Use host_span of column_views instead of table_view to avoid double wrapping
     std::vector<cudf::column_view> child_views;
@@ -150,7 +148,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
   } else {
     // Use direct iterator for non-null case
     auto input_iter = dcol->begin<int64_t>();
-    result          = thrust::transform_reduce(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+    result = thrust::transform_reduce(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                       input_iter,
                                       input_iter + col.size(),
                                       to_sum_overflow{},
@@ -164,10 +162,8 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
 
   // Create struct scalar using cudf::make_struct_scalar with host_span of column_views
   std::vector<std::unique_ptr<cudf::column>> children;
-  children.push_back(cudf::make_column_from_scalar(*sum_scalar, 1, stream,
-                  resources));
-  children.push_back(cudf::make_column_from_scalar(*overflow_scalar, 1, stream,
-                  resources));
+  children.push_back(cudf::make_column_from_scalar(*sum_scalar, 1, stream, resources));
+  children.push_back(cudf::make_column_from_scalar(*overflow_scalar, 1, stream, resources));
 
   // Use host_span of column_views instead of table_view to avoid double wrapping
   std::vector<cudf::column_view> child_views;

@@ -1,27 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "join/conditional_join.hpp"
 #include "join/conditional_join_kernels.cuh"
-#include "join/join_common_utils.cuh"
 #include "join/join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/join/conditional_join.hpp>
 #include <cudf/join/join.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -44,8 +40,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
 {
   if (right.num_rows() == 0) {
     switch (join_type) {
-      case join_kind::LEFT_ANTI_JOIN: return get_trivial_left_join_indices(left, stream,
-                  resources).first;
+      case join_kind::LEFT_ANTI_JOIN:
+        return get_trivial_left_join_indices(left, stream, resources).first;
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources);
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -94,7 +90,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
 
   cudf::detail::device_scalar<std::size_t> write_index(0, stream);
 
-  auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
+  auto left_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
 
   auto const& join_output_l = left_indices->data();
 
@@ -145,10 +142,8 @@ conditional_join(table_view const& left,
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN:
-        return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources),
-                         std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources));
+        return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources),
+                         std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources));
       default: CUDF_FAIL("Invalid join kind."); break;
     }
   } else if (left.num_rows() == 0) {
@@ -158,10 +153,8 @@ conditional_join(table_view const& left,
       case join_kind::LEFT_ANTI_JOIN:
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN:
-        return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources),
-                         std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources));
+        return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources),
+                         std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources));
       // Full joins need to return the trivial complement.
       case join_kind::FULL_JOIN: {
         auto ret_flipped = get_trivial_left_join_indices(right, stream, resources);
@@ -230,16 +223,16 @@ conditional_join(table_view const& left,
   // all other cases (inner, left semi, and left anti joins) if we reach this
   // point we can safely return an empty result.
   if (join_size == 0) {
-    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources));
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources));
   }
 
   cudf::detail::device_scalar<std::size_t> write_index(0, stream);
 
-  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
-  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
+  auto left_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
+  auto right_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
 
   auto const& join_output_l = left_indices->data();
   auto const& join_output_r = right_indices->data();

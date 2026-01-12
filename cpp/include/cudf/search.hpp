@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -61,7 +61,7 @@ std::unique_ptr<column> lower_bound(
   table_view const& needles,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -103,7 +103,7 @@ std::unique_ptr<column> upper_bound(
   table_view const& needles,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -152,7 +152,7 @@ bool contains(column_view const& haystack,
 std::unique_ptr<column> contains(
   column_view const& haystack,
   column_view const& needles,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

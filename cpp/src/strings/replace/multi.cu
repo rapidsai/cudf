@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -313,8 +313,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     get_offset_value(input.offsets(), input.offset() + strings_count, stream) -
     get_offset_value(input.offsets(), input.offset(), stream);
 
-  auto d_targets =
-    create_string_vector_from_column(targets, stream, resources.get_temporary_mr());
+  auto d_targets = create_string_vector_from_column(targets, stream, resources.get_temporary_mr());
   auto d_replacements =
     create_string_vector_from_column(repls, stream, resources.get_temporary_mr());
 
@@ -334,8 +333,10 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto target_count = d_count.value(stream);
   // Create a vector of every target position in the chars column.
   // These may also include overlapping targets which will be resolved later.
-  auto targets_positions = rmm::device_uvector<int64_t>(target_count, stream, resources.get_temporary_mr());
-  auto targets_indices   = rmm::device_uvector<size_type>(target_count, stream, resources.get_temporary_mr());
+  auto targets_positions =
+    rmm::device_uvector<int64_t>(target_count, stream, resources.get_temporary_mr());
+  auto targets_indices =
+    rmm::device_uvector<size_type>(target_count, stream, resources.get_temporary_mr());
 
   // cudf::detail::make_counting_transform_iterator hardcodes size_type
   auto const copy_itr = thrust::make_transform_iterator(thrust::counting_iterator<int64_t>(0),
@@ -353,8 +354,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto d_targets_indices = targets_indices.data();
 
   // create a vector of offsets to each string's set of target positions
-  auto const targets_offsets = create_offsets_from_positions(
-    input, targets_positions, stream, resources.get_temporary_mr());
+  auto const targets_offsets =
+    create_offsets_from_positions(input, targets_positions, stream, resources.get_temporary_mr());
   auto const d_targets_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(targets_offsets->view());
 
@@ -378,7 +379,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // build a vector of all the positions for all the strings
-  auto indices   = rmm::device_uvector<string_index_pair>(total_strings, stream, resources.get_temporary_mr());
+  auto indices =
+    rmm::device_uvector<string_index_pair>(total_strings, stream, resources.get_temporary_mr());
   auto d_indices = indices.data();
   auto d_sizes   = counts.data();  // reusing this vector to hold output sizes now
   thrust::for_each_n(
@@ -401,17 +403,15 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto chars_data = chars->release().data;
 
   // create offsets from the sizes
-  offsets = std::get<0>(
-    cudf::strings::detail::make_offsets_child_column(counts.begin(), counts.end(), stream,
-                  resources));
+  offsets = std::get<0>(cudf::strings::detail::make_offsets_child_column(
+    counts.begin(), counts.end(), stream, resources));
 
   // build the strings columns from the chars and offsets
   return make_strings_column(strings_count,
                              std::move(offsets),
                              std::move(chars_data.release()[0]),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 /**
@@ -488,8 +488,7 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 }  // namespace
@@ -511,8 +510,7 @@ std::unique_ptr<column> replace_multiple(strings_column_view const& input,
   return (input.size() == input.null_count() ||
           ((input.chars_size(stream) / (input.size() - input.null_count())) <
            AVG_CHAR_BYTES_THRESHOLD))
-           ? replace_string_parallel(input, targets, repls, stream,
-                  resources)
+           ? replace_string_parallel(input, targets, repls, stream, resources)
            : replace_character_parallel(input, targets, repls, stream, resources);
 }
 

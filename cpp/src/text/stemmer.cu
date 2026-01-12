@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -97,14 +97,13 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
   auto results =
     cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::BOOL8},
                                   strings.size(),
-                                  cudf::detail::copy_bitmask(strings.parent(), stream,
-                  resources),
+                                  cudf::detail::copy_bitmask(strings.parent(), stream, resources),
                                   strings.null_count(),
                                   stream,
                                   resources);
   // set values into output column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings.size()),
                     results->mutable_view().data<bool>(),
@@ -214,14 +213,13 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
   auto results =
     cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                   strings.size(),
-                                  cudf::detail::copy_bitmask(strings.parent(), stream,
-                  resources),
+                                  cudf::detail::copy_bitmask(strings.parent(), stream, resources),
                                   strings.null_count(),
                                   stream,
                                   resources);
   // compute measures into output column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings.size()),
                     results->mutable_view().data<cudf::size_type>(),
@@ -251,8 +249,11 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,
                                         cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_letter(
-    input, ltype, thrust::make_constant_iterator<cudf::size_type>(character_index), stream, resources);
+  return detail::is_letter(input,
+                           ltype,
+                           thrust::make_constant_iterator<cudf::size_type>(character_index),
+                           stream,
+                           resources);
 }
 
 std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,

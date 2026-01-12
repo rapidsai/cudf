@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,7 +35,9 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                                              rmm::cuda_stream_view stream,
                                              cudf::memory_resources resources)
 {
-  if (!input.is_valid(stream)) { return std::make_unique<string_scalar>("", false, stream, resources); }
+  if (!input.is_valid(stream)) {
+    return std::make_unique<string_scalar>("", false, stream, resources);
+  }
   if (input.size() == 0 || repeat_times <= 0) {
     return std::make_unique<string_scalar>("", true, stream, resources);
   }
@@ -50,7 +52,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
   auto buff           = rmm::device_buffer(repeat_times * input.size(), stream, resources);
 
   // Pull data from the input string into each byte of the output string.
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     iter,
                     iter + repeat_times * str_size,
                     static_cast<char*>(buff.data()),
@@ -72,8 +74,11 @@ auto generate_empty_output(strings_column_view const& input,
                            rmm::cuda_stream_view stream,
                            cudf::memory_resources resources)
 {
-  auto offsets_column = make_numeric_column(
-    data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, resources);
+  auto offsets_column = make_numeric_column(data_type{type_to_id<size_type>()},
+                                            strings_count + 1,
+                                            mask_state::UNALLOCATED,
+                                            stream,
+                                            resources);
   CUDF_CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<size_type>(),
                                 0,
                                 offsets_column->size() * sizeof(size_type),
@@ -83,8 +88,7 @@ auto generate_empty_output(strings_column_view const& input,
                              std::move(offsets_column),
                              rmm::device_buffer{},
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 /**
@@ -162,8 +166,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 namespace {

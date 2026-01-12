@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -234,8 +234,9 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   verify_valid_requests(requests);
 
-  if (_keys.num_rows() == 0) { return {empty_like(_keys), empty_results(requests, stream,
-                  resources)}; }
+  if (_keys.num_rows() == 0) {
+    return {empty_like(_keys), empty_results(requests, stream, resources)};
+  }
 
   return dispatch_aggregation(requests, stream, resources);
 }
@@ -256,8 +257,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
   verify_valid_requests(requests);
 
   if (_keys.num_rows() == 0) {
-    return std::pair(empty_like(_keys), empty_results(requests, stream,
-                  resources));
+    return std::pair(empty_like(_keys), empty_results(requests, stream, resources));
   }
 
   return sort_scan(requests, stream, resources);
@@ -313,8 +313,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
       auto final_mr       = nullable ? resources.get_temporary_mr() : mr;
       auto grouped_values = helper().grouped_values(values.column(i), stream, final_mr);
       return nullable ? detail::group_replace_nulls(
-                          *grouped_values, group_labels, replace_policies[i], stream,
-                  resources)
+                          *grouped_values, group_labels, replace_policies[i], stream, resources)
                       : std::move(grouped_values);
     });
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -79,7 +79,7 @@ size_type num_bitmask_words(size_type number_of_bits);
 rmm::device_buffer create_null_mask(
   size_type size,
   mask_state state,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -164,7 +164,7 @@ rmm::device_buffer copy_bitmask(
   bitmask_type const* mask,
   size_type begin_bit,
   size_type end_bit,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -181,7 +181,7 @@ rmm::device_buffer copy_bitmask(
  */
 rmm::device_buffer copy_bitmask(
   column_view const& view,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -198,7 +198,7 @@ rmm::device_buffer copy_bitmask(
  */
 std::pair<rmm::device_buffer, size_type> bitmask_and(
   table_view const& view,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -220,7 +220,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(
 std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
 segmented_bitmask_and(host_span<column_view const> colviews,
                       host_span<size_type const> segment_offsets,
-                      rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                      rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                       cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -237,7 +237,7 @@ segmented_bitmask_and(host_span<column_view const> colviews,
  */
 std::pair<rmm::device_buffer, size_type> bitmask_or(
   table_view const& view,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**

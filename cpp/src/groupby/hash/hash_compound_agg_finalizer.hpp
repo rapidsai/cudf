@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -8,6 +8,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf::groupby::detail::hash {
 
@@ -17,7 +18,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   cudf::detail::result_cache* cache;
   bitmask_type const* d_row_bitmask;
   rmm::cuda_stream_view stream;
-  rmm::device_async_resource_ref mr;
+  cudf::memory_resources resources;
 
  public:
   using cudf::detail::aggregation_finalizer::visit;
@@ -26,7 +27,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               cudf::detail::result_cache* cache,
                               bitmask_type const* d_row_bitmask,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr);
+                              cudf::memory_resources resources);
 
   // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
   auto gather_argminmax(cudf::aggregation const& agg);

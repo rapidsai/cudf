@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -79,7 +79,8 @@ std::unique_ptr<column> split_part_fn(strings_column_view const& input,
   auto const d_tokens    = tokens.data();
 
   // get just the indexed value of each element
-  auto d_indices = rmm::device_uvector<string_index_pair>(input.size(), stream, resources.get_temporary_mr());
+  auto d_indices =
+    rmm::device_uvector<string_index_pair>(input.size(), stream, resources.get_temporary_mr());
   thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(input.size()),

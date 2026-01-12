@@ -1,39 +1,34 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
+#include "mixed_filter_join_common_utils.cuh"
 #include "mixed_join_kernels_semi.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
-#include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuda/std/iterator>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
 
 #include <optional>
-#include <utility>
 
 namespace cudf {
 namespace detail {
@@ -70,8 +65,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
       // Anti and semi return all the row indices from left
       // with a corresponding NULL from the right.
       case join_kind::LEFT_ANTI_JOIN:
-        return get_trivial_left_join_indices(left_conditional, stream,
-                  resources).first;
+        return get_trivial_left_join_indices(left_conditional, stream, resources).first;
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources);
@@ -181,7 +175,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     row_set.ref(cuco::contains).rebind_hash_function(hash_probe);
 
   // Vector used to indicate indices from left/probe table which are present in output
-  auto left_table_keep_mask = rmm::device_uvector<bool>(probe.num_rows(), stream, resources.get_temporary_mr());
+  auto left_table_keep_mask =
+    rmm::device_uvector<bool>(probe.num_rows(), stream, resources.get_temporary_mr());
 
   launch_mixed_join_semi(has_nulls,
                          *left_conditional_view,
@@ -196,11 +191,12 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                          shmem_size_per_block,
                          stream);
 
-  auto gather_map = std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, resources);
+  auto gather_map =
+    std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, resources);
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end =
-    thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(probe.num_rows()),
                     left_table_keep_mask.begin(),

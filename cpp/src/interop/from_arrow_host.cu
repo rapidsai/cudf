@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -92,13 +92,13 @@ CUDF_KERNEL void copy_shifted_bitmask(bitmask_type* __restrict__ destination,
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> get_mask_buffer(
   ArrowArray const* input, rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
-  if (input->length == 0) { return {std::make_unique<rmm::device_buffer>(0, stream,
-                  resources), 0}; }
+  if (input->length == 0) {
+    return {std::make_unique<rmm::device_buffer>(0, stream, resources), 0};
+  }
 
   auto bitmap = static_cast<uint8_t const*>(input->buffers[validity_buffer_idx]);
   if (bitmap == nullptr || input->null_count == 0) {
-    return {std::make_unique<rmm::device_buffer>(0, stream,
-                  resources), 0};
+    return {std::make_unique<rmm::device_buffer>(0, stream, resources), 0};
   }
 
   constexpr auto bits_in_byte = static_cast<int64_t>(size_in_bits<uint8_t>());
@@ -204,7 +204,8 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSch
     data = std::move(dest_data);
   }
 
-  auto out_col = mask_to_bools(static_cast<bitmask_type*>(data.data()), 0, num_rows, stream, resources);
+  auto out_col =
+    mask_to_bools(static_cast<bitmask_type*>(data.data()), 0, num_rows, stream, resources);
 
   if (!skip_mask) {
     auto [out_mask, null_count] = get_mask_buffer(input, stream, resources);
@@ -224,12 +225,11 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::string_v
     std::overflow_error);
 
   if (input->length == 0) { return make_empty_column(type_id::STRING); }
-  auto [mask, null_count] = !skip_mask
-                              ? get_mask_buffer(input, stream,
-                  resources)
-                              : std::pair{std::make_unique<rmm::device_buffer>(0, stream,
-                  resources), 0};
-  return string_column_from_arrow_host(schema, input, std::move(mask), null_count, stream, resources);
+  auto [mask, null_count] =
+    !skip_mask ? get_mask_buffer(input, stream, resources)
+               : std::pair{std::make_unique<rmm::device_buffer>(0, stream, resources), 0};
+  return string_column_from_arrow_host(
+    schema, input, std::move(mask), null_count, stream, resources);
 }
 
 template <>
@@ -255,7 +255,8 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::dictiona
     }
   }();
 
-  auto indices_column = get_column_copy(schema, input, dict_indices_type, skip_mask, stream, resources);
+  auto indices_column =
+    get_column_copy(schema, input, dict_indices_type, skip_mask, stream, resources);
   // child columns shouldn't have masks and we need the mask in the main column
   auto column_contents = indices_column->release();
   indices_column       = std::make_unique<column>(dict_indices_type,
@@ -288,14 +289,13 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::struct_v
                    child_array.offset += input->offset;
                    child_array.length = std::min(input->length, child_array.length);
 
-                   return get_column_copy(&view, &child_array, child_type, false, stream, resources);
+                   return get_column_copy(
+                     &view, &child_array, child_type, false, stream, resources);
                  });
 
   auto [out_mask, null_count] =
-    !skip_mask ? get_mask_buffer(input, stream,
-                  resources)
-               : std::pair{std::make_unique<rmm::device_buffer>(0, stream,
-                  resources), 0};
+    !skip_mask ? get_mask_buffer(input, stream, resources)
+               : std::pair{std::make_unique<rmm::device_buffer>(0, stream, resources), 0};
 
   return make_structs_column(
     input->length, std::move(child_columns), null_count, std::move(*out_mask), stream, resources);
@@ -320,13 +320,12 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
   child_array.offset += offset;
   child_array.length = std::min(length, child_array.length);
 
-  auto child_column = get_column_copy(&view, &child_array, child_type, skip_mask, stream, resources);
+  auto child_column =
+    get_column_copy(&view, &child_array, child_type, skip_mask, stream, resources);
 
   auto [out_mask, null_count] =
-    !skip_mask ? get_mask_buffer(input, stream,
-                  resources)
-               : std::pair{std::make_unique<rmm::device_buffer>(0, stream,
-                  resources), 0};
+    !skip_mask ? get_mask_buffer(input, stream, resources)
+               : std::pair{std::make_unique<rmm::device_buffer>(0, stream, resources), 0};
 
   return make_lists_column(static_cast<size_type>(input->length),
                            std::move(offsets_column),
@@ -396,10 +395,11 @@ std::tuple<std::unique_ptr<column>, int64_t, int64_t> copy_offsets_column(
   if (offset != 0) {
     auto begin = result->mutable_view().template begin<OffsetType>();
     auto end   = begin + offsets->length;
-    thrust::transform(
-      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), begin, end, begin, [offset] __device__(auto o) {
-        return o - offset;
-      });
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                      begin,
+                      end,
+                      begin,
+                      [offset] __device__(auto o) { return o - offset; });
   }
   return std::tuple{std::move(result), offset, length};
 }

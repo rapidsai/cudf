@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -921,7 +921,7 @@ class json_reader_options_builder {
  */
 table_with_metadata read_json(
   json_reader_options options,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

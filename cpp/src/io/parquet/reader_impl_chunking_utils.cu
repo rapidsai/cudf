@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -266,7 +266,10 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
     rmm::device_uvector<size_t> indices(c_info.size(), stream);
     rmm::device_uvector<size_t> sort_order(c_info.size(), stream);
 
-    thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), indices.begin(), indices.end(), 0);
+    thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                     indices.begin(),
+                     indices.end(),
+                     0);
     thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       c_info.begin(),
                       c_info.end(),
@@ -326,8 +329,10 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                                  .second;
 
   size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
-  thrust::exclusive_scan(
-    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                         key_offsets.begin(),
+                         key_offsets.end(),
+                         key_offsets.begin());
 
   // adjust the cumulative info such that for each row count, the size includes any pages that span
   // that row count. this is so that if we have this case:
@@ -581,10 +586,10 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                    subpass_decomp_offset);
   }
 
-  auto const d_comp_in = cudf::detail::make_device_uvector_async(
-    comp_in, stream, resources.get_temporary_mr());
-  auto const d_comp_out = cudf::detail::make_device_uvector_async(
-    comp_out, stream, resources.get_temporary_mr());
+  auto const d_comp_in =
+    cudf::detail::make_device_uvector_async(comp_in, stream, resources.get_temporary_mr());
+  auto const d_comp_out =
+    cudf::detail::make_device_uvector_async(comp_out, stream, resources.get_temporary_mr());
   rmm::device_uvector<codec_exec_result> comp_res(num_comp_pages, stream);
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                              comp_res.begin(),
@@ -614,10 +619,10 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   }
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
-    auto const d_copy_in = cudf::detail::make_device_uvector_async(
-      copy_in, stream, resources.get_temporary_mr());
-    auto const d_copy_out = cudf::detail::make_device_uvector_async(
-      copy_out, stream, resources.get_temporary_mr());
+    auto const d_copy_in =
+      cudf::detail::make_device_uvector_async(copy_in, stream, resources.get_temporary_mr());
+    auto const d_copy_out =
+      cudf::detail::make_device_uvector_async(copy_out, stream, resources.get_temporary_mr());
 
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
   }
@@ -707,8 +712,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
 
-  rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
-    temp_cost, stream, resources.get_temporary_mr());
+  rmm::device_uvector<size_t> d_temp_cost =
+    cudf::detail::make_device_uvector_async(temp_cost, stream, resources.get_temporary_mr());
 
   std::array codecs{compression_type::BROTLI,
                     compression_type::GZIP,

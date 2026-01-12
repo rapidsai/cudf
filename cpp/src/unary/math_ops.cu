@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -308,8 +308,7 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
 
   auto result = cudf::make_fixed_width_column(input.type(),
                                               input.size(),
-                                              detail::copy_bitmask(input, stream,
-                  resources),
+                                              detail::copy_bitmask(input, stream, resources),
                                               input.null_count(),
                                               stream,
                                               resources);
@@ -321,7 +320,7 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
     n *= 10;
   }
 
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     input.begin<Type>(),
                     input.end<Type>(),
                     out_view.begin<Type>(),
@@ -351,7 +350,11 @@ std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
                             resources);
 
   auto output_view = output->mutable_view();
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()), begin, end, output_view.begin<OutputType>(), UFN{});
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                    begin,
+                    end,
+                    output_view.begin<OutputType>(),
+                    UFN{});
   output->set_null_count(null_count);
   return output;
 }
@@ -363,8 +366,7 @@ std::unique_ptr<cudf::column> transform_fn(cudf::column_view const& input,
 {
   return transform_fn<T, UFN>(input.begin<T>(),
                               input.end<T>(),
-                              detail::copy_bitmask(input, stream,
-                  resources),
+                              detail::copy_bitmask(input, stream, resources),
                               input.null_count(),
                               stream,
                               resources);
@@ -386,7 +388,10 @@ std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& i
                                      stream,
                                      default_mr);
   return cudf::dictionary::detail::encode(
-    output->view(), dictionary::detail::get_indices_type_for_size(output->size()), stream, resources);
+    output->view(),
+    dictionary::detail::get_indices_type_for_size(output->size()),
+    stream,
+    resources);
 }
 
 template <typename T>
@@ -427,8 +432,7 @@ struct MathOpDispatcher {
     requires(Supported<T>::is_supported())
   {
     return (input.type().id() == type_id::DICTIONARY32)
-             ? transform_fn<T, UFN>(cudf::dictionary_column_view(input), stream,
-                  resources)
+             ? transform_fn<T, UFN>(cudf::dictionary_column_view(input), stream, resources)
              : transform_fn<T, UFN>(input, stream, resources);
   }
 
@@ -464,16 +468,14 @@ struct BitwiseCountDispatcher {
       auto dictionary_itr  = dictionary::detail::make_dictionary_iterator<T>(*dictionary_view);
       return transform_fn<OutputType, UFN>(dictionary_itr,
                                            dictionary_itr + input.size(),
-                                           cudf::detail::copy_bitmask(input, stream,
-                  resources),
+                                           cudf::detail::copy_bitmask(input, stream, resources),
                                            input.null_count(),
                                            stream,
                                            resources);
     }
     return transform_fn<OutputType, UFN>(input.begin<T>(),
                                          input.end<T>(),
-                                         cudf::detail::copy_bitmask(input, stream,
-                  resources),
+                                         cudf::detail::copy_bitmask(input, stream, resources),
                                          input.null_count(),
                                          stream,
                                          resources);
@@ -508,16 +510,14 @@ struct LogicalOpDispatcher {
       auto dictionary_itr  = dictionary::detail::make_dictionary_iterator<T>(*dictionary_view);
       return transform_fn<bool, UFN>(dictionary_itr,
                                      dictionary_itr + input.size(),
-                                     cudf::detail::copy_bitmask(input, stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input, stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
     }
     return transform_fn<bool, UFN>(input.begin<T>(),
                                    input.end<T>(),
-                                   cudf::detail::copy_bitmask(input, stream,
-                  resources),
+                                   cudf::detail::copy_bitmask(input, stream, resources),
                                    input.null_count(),
                                    stream,
                                    resources);
@@ -566,7 +566,8 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               cudf::memory_resources resources)
 {
   if (cudf::is_fixed_point(input.type()))
-    return type_dispatcher(input.type(), detail::FixedPointOpDispatcher{}, input, op, stream, resources);
+    return type_dispatcher(
+      input.type(), detail::FixedPointOpDispatcher{}, input, op, stream, resources);
 
   if (input.is_empty()) {
     if (op == cudf::unary_operator::NOT) { return make_empty_column(type_id::BOOL8); }

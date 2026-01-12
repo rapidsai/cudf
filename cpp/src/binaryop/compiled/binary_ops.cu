@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -69,8 +69,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   auto offsets_transformer_itr =
     thrust::make_constant_iterator<size_type>(h_scalar_type_view.size());
   auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + 1, stream,
-                  resources));
+    offsets_transformer_itr, offsets_transformer_itr + 1, stream, resources));
 
   auto chars_column_v = column_view(
     data_type{type_id::INT8}, h_scalar_type_view.size(), h_scalar_type_view.data(), nullptr, 0);
@@ -103,10 +102,9 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::struc
  * @return        pair with column_view and column containing any auxiliary data to create
  * column_view from scalar
  */
-auto scalar_to_column_view(
-  scalar const& scal,
-  rmm::cuda_stream_view stream,
-  cudf::memory_resources resources = resources.get_temporary_mr())
+auto scalar_to_column_view(scalar const& scal,
+                           rmm::cuda_stream_view stream,
+                           cudf::memory_resources resources = resources.get_temporary_mr())
 {
   return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, resources);
 }
@@ -190,7 +188,7 @@ struct null_considering_binop {
     compare_functor<LhsViewT, RhsViewT, OutT, CompareFunc> binop_func{lhsv, rhsv, cfunc};
 
     // Execute it on every element
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(col_size),
                       out_col,
@@ -261,7 +259,8 @@ std::unique_ptr<column> string_null_min_max(scalar const& lhs,
                "Unsupported binary operation");
   if (rhs.is_empty()) return cudf::make_empty_column(output_type);
   auto rhs_device_view = cudf::column_device_view::create(rhs, stream);
-  return null_considering_binop{}(lhs, *rhs_device_view, op, output_type, rhs.size(), stream, resources);
+  return null_considering_binop{}(
+    lhs, *rhs_device_view, op, output_type, rhs.size(), stream, resources);
 }
 
 std::unique_ptr<column> string_null_min_max(column_view const& lhs,
@@ -278,7 +277,8 @@ std::unique_ptr<column> string_null_min_max(column_view const& lhs,
                "Unsupported binary operation");
   if (lhs.is_empty()) return cudf::make_empty_column(output_type);
   auto lhs_device_view = cudf::column_device_view::create(lhs, stream);
-  return null_considering_binop{}(*lhs_device_view, rhs, op, output_type, lhs.size(), stream, resources);
+  return null_considering_binop{}(
+    *lhs_device_view, rhs, op, output_type, lhs.size(), stream, resources);
 }
 
 std::unique_ptr<column> string_null_min_max(column_view const& lhs,

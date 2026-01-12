@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -113,7 +113,8 @@ struct copy_if_else_functor_impl<string_view> {
 
     auto lhs_iter = cudf::detail::make_optional_iterator<T>(lhs, nullate::DYNAMIC{left_nullable});
     auto rhs_iter = cudf::detail::make_optional_iterator<T>(rhs, nullate::DYNAMIC{right_nullable});
-    return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, resources);
+    return strings::detail::copy_if_else(
+      lhs_iter, lhs_iter + size, rhs_iter, filter, stream, resources);
   }
 };
 
@@ -157,11 +158,12 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      cudf::memory_resources resources)
 {
   auto gather_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const gather_map_end = thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
-                                              thrust::make_counting_iterator(size_type{0}),
-                                              thrust::make_counting_iterator(size_type{size}),
-                                              gather_map.begin(),
-                                              is_left);
+  auto const gather_map_end =
+    thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                    thrust::make_counting_iterator(size_type{0}),
+                    thrust::make_counting_iterator(size_type{size}),
+                    gather_map.begin(),
+                    is_left);
 
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
 
@@ -191,11 +193,12 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                      cudf::memory_resources resources)
 {
   auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
-                                               thrust::make_counting_iterator(size_type{0}),
-                                               thrust::make_counting_iterator(size_type{size}),
-                                               scatter_map.begin(),
-                                               is_left);
+  auto const scatter_map_end =
+    thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                    thrust::make_counting_iterator(size_type{0}),
+                    thrust::make_counting_iterator(size_type{size}),
+                    scatter_map.begin(),
+                    is_left);
 
   auto const scatter_map_size  = std::distance(scatter_map.begin(), scatter_map_end);
   auto scatter_source          = std::vector<std::reference_wrapper<scalar const>>{std::ref(lhs)};
@@ -205,8 +208,11 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                    nullptr,
                                                    0};
 
-  auto result = cudf::detail::scatter(
-    scatter_source, scatter_map_column_view, table_view{std::vector<column_view>{rhs}}, stream, resources);
+  auto result = cudf::detail::scatter(scatter_source,
+                                      scatter_map_column_view,
+                                      table_view{std::vector<column_view>{rhs}},
+                                      stream,
+                                      resources);
 
   return std::move(result->release()[0]);
 }
@@ -373,7 +379,8 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
   CUDF_EXPECTS(
     cudf::have_same_types(rhs, lhs), "Both inputs must be of the same type", cudf::data_type_error);
 
-  return copy_if_else(lhs, rhs, !lhs.is_valid(stream), rhs.has_nulls(), boolean_mask, stream, resources);
+  return copy_if_else(
+    lhs, rhs, !lhs.is_valid(stream), rhs.has_nulls(), boolean_mask, stream, resources);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
@@ -388,7 +395,8 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
   CUDF_EXPECTS(
     cudf::have_same_types(lhs, rhs), "Both inputs must be of the same type", cudf::data_type_error);
 
-  return copy_if_else(lhs, rhs, lhs.has_nulls(), !rhs.is_valid(stream), boolean_mask, stream, resources);
+  return copy_if_else(
+    lhs, rhs, lhs.has_nulls(), !rhs.is_valid(stream), boolean_mask, stream, resources);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,

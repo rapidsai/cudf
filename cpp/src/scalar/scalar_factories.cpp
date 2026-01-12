@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -129,8 +129,7 @@ template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<string_view>(
   rmm::cuda_stream_view stream, cudf::memory_resources resources)
 {
-  return std::unique_ptr<scalar>(new string_scalar("", false, stream,
-                  resources));
+  return std::unique_ptr<scalar>(new string_scalar("", false, stream, resources));
 }
 
 template <>

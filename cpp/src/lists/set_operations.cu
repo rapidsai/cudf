@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -81,20 +81,22 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   auto const num_rows = lhs.size();
 
   // This stores the unique label values, used as scatter map.
-  auto list_indices = rmm::device_uvector<size_type>(num_rows, stream, resources.get_temporary_mr());
+  auto list_indices =
+    rmm::device_uvector<size_type>(num_rows, stream, resources.get_temporary_mr());
 
   // Stores the result of checking overlap for non-empty lists.
   auto overlap_results = rmm::device_uvector<bool>(num_rows, stream, resources.get_temporary_mr());
 
-  auto const labels_begin           = rhs_labels->view().begin<size_type>();
-  auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
-                                         labels_begin,  // keys
-                                         labels_begin + rhs_labels->size(),  // keys
-                                         contained.begin(),  // values to reduce
-                                         list_indices.begin(),     // out keys
-                                         overlap_results.begin(),  // out values
-                                         cuda::std::equal_to{},  // comp for keys
-                                         cuda::std::logical_or{});  // reduction op for values
+  auto const labels_begin = rhs_labels->view().begin<size_type>();
+  auto const end =
+    thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                          labels_begin,                       // keys
+                          labels_begin + rhs_labels->size(),  // keys
+                          contained.begin(),                  // values to reduce
+                          list_indices.begin(),               // out keys
+                          overlap_results.begin(),            // out values
+                          cuda::std::equal_to{},              // comp for keys
+                          cuda::std::logical_or{});           // reduction op for values
   auto const num_non_empty_segments = cuda::std::distance(overlap_results.begin(), end.second);
 
   auto [null_mask, null_count] =
@@ -105,9 +107,11 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
 
   // `overlap_results` only stores the results of non-empty lists.
   // We need to initialize `false` for the entire output array then scatter these results over.
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream, resources.get_temporary_mr()), result_begin, result_begin + num_rows, false);
-  thrust::scatter(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                             result_begin,
+                             result_begin + num_rows,
+                             false);
+  thrust::scatter(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                   overlap_results.begin(),
                   overlap_results.begin() + num_non_empty_segments,
                   list_indices.begin(),
@@ -163,7 +167,8 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                                  resources);
 
   auto const num_rows = lhs.size();
-  auto out_offsets    = reconstruct_offsets(out_table->get_column(0).view(), num_rows, stream, resources);
+  auto out_offsets =
+    reconstruct_offsets(out_table->get_column(0).view(), num_rows, stream, resources);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, resources);
   auto output = make_lists_column(num_rows,
@@ -250,7 +255,8 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                                  resources);
 
   auto const num_rows = lhs.size();
-  auto out_offsets    = reconstruct_offsets(out_table->get_column(0).view(), num_rows, stream, resources);
+  auto out_offsets =
+    reconstruct_offsets(out_table->get_column(0).view(), num_rows, stream, resources);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, resources);
 

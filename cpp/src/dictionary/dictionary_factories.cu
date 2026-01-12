@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -47,9 +47,9 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
   CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls");
   if (keys_column.is_empty()) return make_empty_column(type_id::DICTIONARY32);
 
-  auto keys_copy = std::make_unique<column>(keys_column, stream, resources);
-  auto indices_copy =
-    type_dispatcher(indices_column.type(), dispatch_create_indices{}, indices_column, stream, resources);
+  auto keys_copy    = std::make_unique<column>(keys_column, stream, resources);
+  auto indices_copy = type_dispatcher(
+    indices_column.type(), dispatch_create_indices{}, indices_column, stream, resources);
   rmm::device_buffer null_mask{0, stream, mr};
   auto null_count = indices_column.null_count();
   if (null_count) null_mask = detail::copy_bitmask(indices_column, stream, resources);

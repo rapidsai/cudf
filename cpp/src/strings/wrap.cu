@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -100,7 +100,8 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, resources);
 
   // build offsets column
-  auto offsets_column = std::make_unique<column>(strings.offsets(), stream, resources);  // makes a copy
+  auto offsets_column =
+    std::make_unique<column>(strings.offsets(), stream, resources);  // makes a copy
   auto d_new_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
@@ -112,7 +113,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
 
   device_execute_functor d_execute_fctr{d_column, d_new_offsets, d_chars, width};
 
-  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      d_execute_fctr);

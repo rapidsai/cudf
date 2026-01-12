@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -160,7 +160,8 @@ std::unique_ptr<cudf::column> hybrid_scan_reader::build_row_mask_with_page_index
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->build_row_mask_with_page_index_stats(input_row_group_indices, options, stream, resources);
+  return _impl->build_row_mask_with_page_index_stats(
+    input_row_group_indices, options, stream, resources);
 }
 
 [[nodiscard]] std::vector<text::byte_range_info>

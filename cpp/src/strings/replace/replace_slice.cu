@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -91,8 +91,7 @@ std::unique_ptr<column> replace_slice(strings_column_view const& input,
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 }  // namespace detail

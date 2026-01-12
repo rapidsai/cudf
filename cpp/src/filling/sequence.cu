@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -60,7 +60,8 @@ struct sequence_functor {
                                      cudf::memory_resources resources)
     requires(cudf::is_numeric<T>() and not cudf::is_boolean<T>())
   {
-    auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, resources);
+    auto result =
+      make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, resources);
     auto result_device_view = mutable_column_device_view::create(*result, stream);
 
     auto n_init =
@@ -71,7 +72,7 @@ struct sequence_functor {
     // not using thrust::sequence because it requires init and step to be passed as
     // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,
     // which is undesirable from a performance perspective.
-    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::tabulate(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      result_device_view->begin<T>(),
                      result_device_view->end<T>(),
                      tabulator<T>{n_init, n_step});
@@ -86,7 +87,8 @@ struct sequence_functor {
                                      cudf::memory_resources resources)
     requires(cudf::is_numeric<T>() and not cudf::is_boolean<T>())
   {
-    auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, resources);
+    auto result =
+      make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, resources);
     auto result_device_view = mutable_column_device_view::create(*result, stream);
 
     auto n_init =
@@ -95,7 +97,7 @@ struct sequence_functor {
     // not using thrust::sequence because it requires init and step to be passed as
     // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,
     // which is undesirable from a performance perspective.
-    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::tabulate(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      result_device_view->begin<T>(),
                      result_device_view->end<T>(),
                      const_tabulator<T>{n_init});

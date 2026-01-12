@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -93,9 +93,9 @@ struct out_of_place_copy_range_dispatch {
   {
     auto p_ret = std::make_unique<cudf::column>(target, stream, resources);
     if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end, stream)) {
-      p_ret->set_null_mask(
-        cudf::detail::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream,
-                  resources), 0);
+      p_ret->set_null_mask(cudf::detail::create_null_mask(
+                             p_ret->size(), cudf::mask_state::ALL_VALID, stream, resources),
+                           0);
     }
 
     if (source_end != source_begin) {  // otherwise no-op
@@ -266,7 +266,8 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_range(source, target, source_begin, source_end, target_begin, stream, resources);
+  return detail::copy_range(
+    source, target, source_begin, source_end, target_begin, stream, resources);
 }
 
 }  // namespace cudf

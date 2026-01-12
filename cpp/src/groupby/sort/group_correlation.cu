@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -151,7 +151,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
   auto corr_iter =
     thrust::make_transform_iterator(thrust::make_counting_iterator(0), covariance_transform_op);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         group_labels.begin(),
                         group_labels.end(),
                         corr_iter,
@@ -161,8 +161,8 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
   auto is_null = [ddof, min_periods] __device__(size_type group_size) {
     return not(group_size == 0 or group_size - ddof <= 0 or group_size < min_periods);
   };
-  auto [new_nullmask, null_count] =
-    cudf::detail::valid_if(count.begin<size_type>(), count.end<size_type>(), is_null, stream, resources);
+  auto [new_nullmask, null_count] = cudf::detail::valid_if(
+    count.begin<size_type>(), count.end<size_type>(), is_null, stream, resources);
   if (null_count != 0) { result->set_null_mask(std::move(new_nullmask), null_count); }
   return result;
 }
@@ -180,13 +180,12 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
   auto stddev_iter = thrust::make_zip_iterator(cuda::std::make_tuple(stddev0_ptr, stddev1_ptr));
   auto result      = make_numeric_column(covariance.type(),
                                     covariance.size(),
-                                    cudf::detail::copy_bitmask(covariance, stream,
-                  resources),
+                                    cudf::detail::copy_bitmask(covariance, stream, resources),
                                     covariance.null_count(),
                                     stream,
                                     resources);
   auto d_result    = result->mutable_view().begin<result_type>();
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     covariance.begin<result_type>(),
                     covariance.end<result_type>(),
                     stddev_iter,

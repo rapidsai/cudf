@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -10,6 +10,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
 
@@ -137,10 +138,9 @@ class distinct_hash_join {
   /**
    * @copydoc cudf::distinct_hash_join::left_join
    */
-  std::unique_ptr<rmm::device_uvector<size_type>> left_join(
-    cudf::table_view const& probe,
-    rmm::cuda_stream_view stream,
-    cudf::memory_resources resources) const;
+  std::unique_ptr<rmm::device_uvector<size_type>> left_join(cudf::table_view const& probe,
+                                                            rmm::cuda_stream_view stream,
+                                                            cudf::memory_resources resources) const;
 
  private:
   using probing_scheme_type = cuco::linear_probing<1, hasher>;

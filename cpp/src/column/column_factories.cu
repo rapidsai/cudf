@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,25 +49,28 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   if (!value.is_valid(stream)) {
     return make_strings_column(
       size,
-      make_column_from_scalar(numeric_scalar<int32_t>(0, true, stream), size + 1, stream,
-                  resources),
+      make_column_from_scalar(
+        numeric_scalar<int32_t>(0, true, stream), size + 1, stream, resources),
       rmm::device_buffer{},
       size,
-      cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream,
-                  resources));
+      cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, resources));
   }
 
   auto& ss         = static_cast<scalar_type_t<cudf::string_view> const&>(value);
   auto const d_str = ss.value(stream);  // no actual data is copied
 
   // fill the column with the scalar
-  rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(size, stream, resources.get_temporary_mr());
+  rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(
+    size, stream, resources.get_temporary_mr());
   auto const row_value =
     d_str.empty() ? cudf::strings::detail::string_index_pair{"", 0}
                   : cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()};
-  thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), indices.begin(), indices.end(), row_value);
-  return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, resources);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                             indices.begin(),
+                             indices.end(),
+                             row_value);
+  return cudf::strings::detail::make_strings_column(
+    indices.begin(), indices.end(), stream, resources);
 }
 
 template <>
@@ -102,15 +105,14 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
   auto children =
     detail::gather(ss.view(), iter, iter + size, out_of_bounds_policy::NULLIFY, stream, resources);
   auto const is_valid = ss.is_valid(stream);
-  return make_structs_column(size,
-                             std::move(children->release()),
-                             is_valid ? 0 : size,
-                             is_valid
-                               ? rmm::device_buffer{}
-                               : detail::create_null_mask(size, mask_state::ALL_NULL, stream,
-                  resources),
-                             stream,
-                             resources);
+  return make_structs_column(
+    size,
+    std::move(children->release()),
+    is_valid ? 0 : size,
+    is_valid ? rmm::device_buffer{}
+             : detail::create_null_mask(size, mask_state::ALL_NULL, stream, resources),
+    stream,
+    resources);
 }
 
 }  // anonymous namespace

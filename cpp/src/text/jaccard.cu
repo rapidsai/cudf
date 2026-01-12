@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -107,7 +107,7 @@ rmm::device_uvector<cudf::size_type> compute_unique_counts(uint32_t const* value
                                                            cudf::size_type rows,
                                                            rmm::cuda_stream_view stream)
 {
-  auto d_results        = rmm::device_uvector<cudf::size_type>(rows, stream, resources.get_temporary_mr());
+  auto d_results = rmm::device_uvector<cudf::size_type>(rows, stream, resources.get_temporary_mr());
   auto const num_blocks = cudf::util::div_rounding_up_safe(
     static_cast<cudf::thread_index_type>(rows) * cudf::detail::warp_size, block_size);
   sorted_unique_fn<<<num_blocks, block_size, 0, stream.value()>>>(
@@ -181,7 +181,7 @@ rmm::device_uvector<cudf::size_type> compute_intersect_counts(uint32_t const* va
                                                               cudf::size_type rows,
                                                               rmm::cuda_stream_view stream)
 {
-  auto d_results        = rmm::device_uvector<cudf::size_type>(rows, stream, resources.get_temporary_mr());
+  auto d_results = rmm::device_uvector<cudf::size_type>(rows, stream, resources.get_temporary_mr());
   auto const num_blocks = cudf::util::div_rounding_up_safe(
     static_cast<cudf::thread_index_type>(rows) * cudf::detail::warp_size, block_size);
   sorted_intersect_fn<<<num_blocks, block_size, 0, stream.value()>>>(
@@ -331,7 +331,8 @@ std::pair<rmm::device_uvector<uint32_t>, rmm::device_uvector<int64_t>> hash_subs
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
   // count substrings
-  auto offsets          = rmm::device_uvector<int64_t>(input.size() + 1, stream, resources.get_temporary_mr());
+  auto offsets =
+    rmm::device_uvector<int64_t>(input.size() + 1, stream, resources.get_temporary_mr());
   auto const num_blocks = cudf::util::div_rounding_up_safe(
     static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size);
   count_substrings_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
@@ -356,11 +357,15 @@ std::pair<rmm::device_uvector<uint32_t>, rmm::device_uvector<int64_t>> hash_subs
     auto const sort_sections  = cudf::util::div_rounding_up_safe(total_hashes, section_size);
     auto const offset_indices = [&] {
       // build a set of indices that point to offsets subsections
-      auto sub_offsets = rmm::device_uvector<int64_t>(sort_sections + 1, stream, resources.get_temporary_mr());
-      thrust::sequence(
-        rmm::exec_policy(stream, resources.get_temporary_mr()), sub_offsets.begin(), sub_offsets.end(), 0L, section_size);
-      auto indices = rmm::device_uvector<int64_t>(sub_offsets.size(), stream, resources.get_temporary_mr());
-      thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      auto sub_offsets =
+        rmm::device_uvector<int64_t>(sort_sections + 1, stream, resources.get_temporary_mr());
+      thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                       sub_offsets.begin(),
+                       sub_offsets.end(),
+                       0L,
+                       section_size);
+      auto indices = rmm::device_uvector<int64_t>(sub_offsets.size(), stream);
+      thrust::lower_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                           offsets.begin(),
                           offsets.end(),
                           sub_offsets.begin(),
@@ -382,8 +387,8 @@ std::pair<rmm::device_uvector<uint32_t>, rmm::device_uvector<int64_t>> hash_subs
       // There is a bug in the CUB segmented sort and the workaround is to
       // shift the offset values so the first offset is 0.
       // This transform can be removed once the bug is fixed.
-      auto sort_offsets = rmm::device_uvector<int64_t>(num_segments + 1, stream, resources.get_temporary_mr());
-      thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      auto sort_offsets = rmm::device_uvector<int64_t>(num_segments + 1, stream);
+      thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         offsets.begin() + index1,
                         offsets.begin() + index2 + 1,
                         sort_offsets.begin(),
@@ -463,15 +468,15 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
   auto d_results = results->mutable_view().data<float>();
 
   // compute the jaccard using the unique counts and the intersect counts
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(results->size()),
                     d_results,
                     jaccard_fn{d_uniques1.data(), d_uniques2.data(), d_intersects.data()});
 
   if (input1.null_count() || input2.null_count()) {
-    auto [null_mask, null_count] =
-      cudf::detail::bitmask_and(cudf::table_view({input1.parent(), input2.parent()}), stream, resources);
+    auto [null_mask, null_count] = cudf::detail::bitmask_and(
+      cudf::table_view({input1.parent(), input2.parent()}), stream, resources);
     results->set_null_mask(std::move(null_mask), null_count);
   }
 

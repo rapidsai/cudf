@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -70,8 +70,8 @@ struct regex_program;
 std::unique_ptr<table> split_re(
   strings_column_view const& input,
   regex_program const& prog,
-  size_type maxsplit                = -1,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  size_type maxsplit               = -1,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -126,8 +126,8 @@ std::unique_ptr<table> split_re(
 std::unique_ptr<table> rsplit_re(
   strings_column_view const& input,
   regex_program const& prog,
-  size_type maxsplit                = -1,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  size_type maxsplit               = -1,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -184,8 +184,8 @@ std::unique_ptr<table> rsplit_re(
 std::unique_ptr<column> split_record_re(
   strings_column_view const& input,
   regex_program const& prog,
-  size_type maxsplit                = -1,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  size_type maxsplit               = -1,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -244,8 +244,8 @@ std::unique_ptr<column> split_record_re(
 std::unique_ptr<column> rsplit_record_re(
   strings_column_view const& input,
   regex_program const& prog,
-  size_type maxsplit                = -1,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  size_type maxsplit               = -1,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group

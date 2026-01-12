@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -74,10 +74,14 @@ void reduce_by_key_fn(column_device_view const& values,
   // Using a temporary buffer for intermediate transform results instead of
   // using the transform-iterator directly in thrust::reduce_by_key
   // improves compile-time significantly.
-  auto vars = rmm::device_uvector<ResultType>(values.size(), stream, resources.get_temporary_mr());
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()), itr, itr + values.size(), vars.begin(), var_fn);
+  auto vars = rmm::device_uvector<ResultType>(values.size(), stream);
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                    itr,
+                    itr + values.size(),
+                    vars.begin(),
+                    var_fn);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         group_labels.begin(),
                         group_labels.end(),
                         vars.begin(),
@@ -126,7 +130,7 @@ struct var_functor {
     auto null_count   = cudf::detail::device_scalar<cudf::size_type>(0, stream, resources);
     auto d_null_count = null_count.data();
     thrust::for_each_n(
-      rmm::exec_policy(stream, resources.get_temporary_mr()),
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
       thrust::make_counting_iterator(0),
       group_sizes.size(),
       [d_result = *result_view, d_group_sizes, ddof, d_null_count] __device__(size_type i) {
@@ -172,8 +176,15 @@ std::unique_ptr<column> group_var(column_view const& values,
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
 
-  return type_dispatcher(
-    values_type, var_functor{}, values, group_means, group_sizes, group_labels, ddof, stream, resources);
+  return type_dispatcher(values_type,
+                         var_functor{},
+                         values,
+                         group_means,
+                         group_sizes,
+                         group_labels,
+                         ddof,
+                         stream,
+                         resources);
 }
 
 }  // namespace detail

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -132,10 +132,13 @@ std::unique_ptr<column> compute_variance_std(TransformFunc&& transform_fn,
 
   auto const out_it =
     thrust::make_zip_iterator(output->mutable_view().begin<TargetType>(), validity.begin());
-  thrust::tabulate(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), out_it, out_it + size, transform_fn);
+  thrust::tabulate(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                   out_it,
+                   out_it + size,
+                   transform_fn);
 
-  auto [null_mask, null_count] =
-    cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, resources);
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+    validity.begin(), validity.end(), cuda::std::identity{}, stream, resources);
   if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
 
   return output;

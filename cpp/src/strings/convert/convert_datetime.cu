@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -152,8 +152,7 @@ struct format_compiler {
     }
 
     // copy format_items to device memory
-    d_items = cudf::detail::make_device_uvector_async(
-      items, stream, resources.get_temporary_mr());
+    d_items = cudf::detail::make_device_uvector_async(items, stream, resources.get_temporary_mr());
   }
 
   device_span<format_item const> format_items() { return device_span<format_item const>(d_items); }
@@ -407,7 +406,7 @@ struct dispatch_to_timestamps_fn {
   {
     format_compiler compiler(format, stream);
     parse_datetime<T> pfn{d_strings, compiler.format_items(), compiler.subsecond_precision()};
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
                       results_view.data<T>(),
@@ -439,13 +438,13 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
-  auto results = make_timestamp_column(timestamp_type,
-                                       input.size(),
-                                       cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
-                                       input.null_count(),
-                                       stream,
-                                       resources);
+  auto results =
+    make_timestamp_column(timestamp_type,
+                          input.size(),
+                          cudf::detail::copy_bitmask(input.parent(), stream, resources),
+                          input.null_count(),
+                          stream,
+                          resources);
 
   auto results_view = results->mutable_view();
   cudf::type_dispatcher(
@@ -680,15 +679,14 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
 
   auto results   = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
   auto d_results = results->mutable_view().data<bool>();
 
   format_compiler compiler(format, stream);
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -1159,8 +1157,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                              std::move(offsets_column),
                              chars.release(),
                              timestamps.null_count(),
-                             cudf::detail::copy_bitmask(timestamps, stream,
-                  resources));
+                             cudf::detail::copy_bitmask(timestamps, stream, resources));
 }
 
 }  // namespace detail

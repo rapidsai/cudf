@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -231,8 +231,9 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
     cudf::util::div_rounding_up_safe<size_t>(cumulative_null_mask_words, num_bitmasks);
 
   // Create device vectors from host spans
-  auto const mr     = rmm::mr::get_current_device_resource_ref();
-  auto destinations = cudf::detail::make_device_uvector_async<bitmask_type*>(bitmasks, stream, resources);
+  auto const mr = rmm::mr::get_current_device_resource_ref();
+  auto destinations =
+    cudf::detail::make_device_uvector_async<bitmask_type*>(bitmasks, stream, resources);
   auto const d_begin_bits = cudf::detail::make_device_uvector_async(begin_bits, stream, resources);
   auto const d_end_bits   = cudf::detail::make_device_uvector_async(end_bits, stream, resources);
   auto const d_valids     = cudf::detail::make_device_uvector_async(valids, stream, resources);

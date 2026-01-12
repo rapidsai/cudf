@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -36,8 +36,8 @@ std::unique_ptr<column> build_output_offsets(lists_column_view const& input,
                                              cudf::memory_resources resources)
 {
   auto output_offset = make_numeric_column(
-    input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, resources);
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     input.offsets_begin(),
                     input.offsets_end(),
                     output_offset->mutable_view().begin<size_type>(),
@@ -72,8 +72,7 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                            std::move(output_offset),
                            std::move(sorted_child_table->release().front()),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                           cudf::detail::copy_bitmask(input.parent(), stream, resources),
                            stream,
                            resources);
 }
@@ -101,8 +100,7 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
                            std::move(output_offset),
                            std::move(sorted_child_table->release().front()),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                           cudf::detail::copy_bitmask(input.parent(), stream, resources),
                            stream,
                            resources);
 }

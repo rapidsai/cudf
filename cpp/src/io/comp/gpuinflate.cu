@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (C) 2002-2013 Mark Adler, all rights reserved
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0 AND Zlib
  */
 
@@ -1260,7 +1260,8 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
 {
   CUDF_FUNC_RANGE();
   rmm::device_uvector<std::size_t> order(inputs.size(), stream, resources);
-  thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), order.begin(), order.end());
+  thrust::sequence(
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), order.begin(), order.end());
 
   // Precompute costs to avoid repeated computation during sorting
   rmm::device_uvector<double> costs(inputs.size(), stream, resources);
@@ -1281,14 +1282,16 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                  return costs[a] > costs[b];
                });
 
-  auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream, resources);
+  auto sorted_inputs =
+    rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream, resources);
   thrust::gather(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                  order.begin(),
                  order.end(),
                  inputs.begin(),
                  sorted_inputs.begin());
 
-  auto sorted_outputs = rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream, resources);
+  auto sorted_outputs =
+    rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream, resources);
   thrust::gather(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                  order.begin(),
                  order.end(),

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -84,7 +84,8 @@ struct sequences_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      cudf::memory_resources resources)
   {
-    return sequences_functor<T>::invoke(n_lists, n_elements, starts, steps, offsets, stream, resources);
+    return sequences_functor<T>::invoke(
+      n_lists, n_elements, starts, steps, offsets, stream, resources);
   }
 };
 
@@ -104,8 +105,8 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
                                         rmm::cuda_stream_view stream,
                                         cudf::memory_resources resources)
   {
-    auto result =
-      make_fixed_width_column(starts.type(), n_elements, mask_state::UNALLOCATED, stream, resources);
+    auto result = make_fixed_width_column(
+      starts.type(), n_elements, mask_state::UNALLOCATED, stream, resources);
     if (starts.is_empty()) { return result; }
 
     auto const result_begin = result->mutable_view().template begin<T>();
@@ -116,7 +117,10 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     auto const steps_begin  = steps ? steps.value().template begin<T>() : nullptr;
 
     auto const op = tabulator<T>{n_lists, n_elements, starts_begin, steps_begin, offsets};
-    thrust::tabulate(rmm::exec_policy(stream, resources.get_temporary_mr()), result_begin, result_begin + n_elements, op);
+    thrust::tabulate(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                     result_begin,
+                     result_begin + n_elements,
+                     op);
 
     return result;
   }
@@ -169,8 +173,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                            std::move(list_offsets),
                            std::move(child),
                            0,
-                           rmm::device_buffer(0, stream,
-                  resources),
+                           rmm::device_buffer(0, stream, resources),
                            stream,
                            resources);
 }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,7 +29,7 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
   auto offset_begin  = offsets.begin<size_type>();
   auto offset_end    = offsets.end<size_type>();
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     counting_iter,
                     counting_iter + segment_ids.size(),
                     segment_ids.begin(),

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -55,10 +55,8 @@ filter_join_indices(cudf::table_view const& left,
                std::invalid_argument);
 
   auto make_empty_result = [&]() {
-    return std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources)};
+    return std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources)};
   };
 
   if (left_indices.empty()) { return make_empty_result(); }
@@ -81,7 +79,8 @@ filter_join_indices(cudf::table_view const& left,
   auto right_table = table_device_view::create(right, stream);
 
   // Allocate array to store predicate evaluation results
-  auto predicate_results = rmm::device_uvector<bool>(left_indices.size(), stream, resources.get_temporary_mr());
+  auto predicate_results =
+    rmm::device_uvector<bool>(left_indices.size(), stream, resources.get_temporary_mr());
 
   // Configure kernel parameters with dynamic shared memory calculation
   int device_id;
@@ -147,10 +146,8 @@ filter_join_indices(cudf::table_view const& left,
   auto right_ptr             = right_indices.data();
 
   auto make_result_vectors = [&](size_t size) {
-    return std::pair{std::make_unique<rmm::device_uvector<size_type>>(size, stream,
-                  resources),
-                     std::make_unique<rmm::device_uvector<size_type>>(size, stream,
-                  resources)};
+    return std::pair{std::make_unique<rmm::device_uvector<size_type>>(size, stream, resources),
+                     std::make_unique<rmm::device_uvector<size_type>>(size, stream, resources)};
   };
 
   // Handle different join semantics

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -82,8 +82,7 @@ struct dispatch_to_arrow_host {
     enable_hugepage(&bitmap->buffer);
     CUDF_CUDA_TRY(cudaMemcpyAsync(bitmap->buffer.data,
                                   (column.offset() > 0)
-                                    ? cudf::detail::copy_bitmask(column, stream,
-                  resources).data()
+                                    ? cudf::detail::copy_bitmask(column, stream, resources).data()
                                     : column.null_mask(),
                                   bitmap->buffer.size_bytes,
                                   cudaMemcpyDefault,
@@ -472,22 +471,24 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
   // using max/2 here ensures no buffer is greater than 2GB
   constexpr int64_t max_size = std::numeric_limits<int32_t>::max() / 2;
   auto const num_buffers     = cudf::util::div_rounding_up_safe(longer_chars_size, max_size);
-  auto buffer_offsets        = rmm::device_uvector<int64_t>(num_buffers, stream, resources.get_temporary_mr());
+  auto buffer_offsets =
+    rmm::device_uvector<int64_t>(num_buffers, stream, resources.get_temporary_mr());
   // copy the bytes for the longer strings into Arrow variadic buffers
   if (longer_chars_size > 0) {
     // compute buffer boundaries (less than 2GB per buffer)
-    auto buffer_indices  = rmm::device_uvector<int64_t>(num_buffers, stream, resources.get_temporary_mr());
+    auto buffer_indices =
+      rmm::device_uvector<int64_t>(num_buffers, stream, resources.get_temporary_mr());
     auto const bound_itr = make_counting_transform_iterator(
       0, cuda::proclaim_return_type<int64_t>([] __device__(auto idx) {
         return (idx + 1) * max_size;
       }));
-    thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::lower_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         d_offsets,
                         d_offsets + longer_strings.size(),
                         bound_itr,
                         bound_itr + num_buffers,
                         buffer_indices.begin());
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       buffer_indices.begin(),
                       buffer_indices.end(),
                       buffer_offsets.begin(),
@@ -510,7 +511,8 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
   }
 
   // now build BinaryView objects from the strings in device memory
-  auto d_items = rmm::device_uvector<ArrowBinaryView>(col.size(), stream, resources.get_temporary_mr());
+  auto d_items =
+    rmm::device_uvector<ArrowBinaryView>(col.size(), stream, resources.get_temporary_mr());
   thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::counting_iterator<cudf::size_type>(0),
                      col.size(),

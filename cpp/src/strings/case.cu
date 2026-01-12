@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -414,8 +414,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
                                std::move(offsets),
                                chars.release(),
                                input.null_count(),
-                               cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                               cudf::detail::copy_bitmask(input.parent(), stream, resources));
   }
 
   // Check if the input contains special multi-byte characters where the case equivalent
@@ -452,12 +451,14 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         ccfn, *d_strings, sizes.data());
     // convert sizes to offsets
-    return cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, resources);
+    return cudf::strings::detail::make_offsets_child_column(
+      sizes.begin(), sizes.end(), stream, resources);
   }();
 
   // build sub-offsets
   auto const sub_count = chars_size / LS_SUB_BLOCK_SIZE;
-  auto tmp_offsets     = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream, resources.get_temporary_mr());
+  auto tmp_offsets     = rmm::device_uvector<int64_t>(
+    sub_count + input.size() + 1, stream, resources.get_temporary_mr());
   {
     rmm::device_uvector<int64_t> sub_offsets(sub_count, stream);
     auto const count_itr = thrust::make_counting_iterator<int64_t>(0);
@@ -482,15 +483,13 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // run case conversion over the new sub-strings
   auto const tmp_size = static_cast<size_type>(tmp_offsets.size()) - 1;
   upper_lower_ls_fn sub_conv{ccfn, input_chars, tmp_offsets.data()};
-  auto chars = std::get<1>(make_strings_children(sub_conv, tmp_size, stream,
-                  resources));
+  auto chars = std::get<1>(make_strings_children(sub_conv, tmp_size, stream, resources));
 
   return make_strings_column(input.size(),
                              std::move(offsets),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 }  // namespace

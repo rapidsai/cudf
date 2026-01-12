@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -269,7 +269,8 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
   auto [offsets, total_ngrams] = [&] {
-    auto counts               = rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
+    auto counts =
+      rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
     auto const avg_char_bytes = (input.chars_size(stream) / (input.size() - input.null_count()));
     auto const tile_size      = (avg_char_bytes < AVG_CHAR_BYTES_THRESHOLD)
                                   ? 1                         // thread per row
@@ -286,14 +287,19 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                "Insufficient number of characters in each string to generate ngrams");
 
   character_ngram_generator_fn generator{*d_strings, ngrams, d_offsets};
-  auto [offsets_column, chars] =
-    cudf::strings::detail::make_strings_children(generator, input.size(), total_ngrams, stream, resources);
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
+    generator, input.size(), total_ngrams, stream, resources);
 
   auto output = cudf::make_strings_column(
     total_ngrams, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 
-  return make_lists_column(
-    input.size(), std::move(offsets), std::move(output), 0, rmm::device_buffer{}, stream, resources);
+  return make_lists_column(input.size(),
+                           std::move(offsets),
+                           std::move(output),
+                           0,
+                           rmm::device_buffer{},
+                           stream,
+                           resources);
 }
 
 namespace {
@@ -375,7 +381,8 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
 
   // build offsets column by computing the number of ngrams per string
   auto [offsets, total_ngrams] = [&] {
-    auto counts = rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
+    auto counts =
+      rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
     count_char_ngrams_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *d_strings, ngrams, cudf::detail::warp_size, counts.data());
     return cudf::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, resources);
@@ -386,15 +393,20 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
                "Insufficient number of characters in each string to generate ngrams");
 
   // compute ngrams and build hashes
-  auto hashes =
-    cudf::make_numeric_column(output_type, total_ngrams, cudf::mask_state::UNALLOCATED, stream, resources);
+  auto hashes = cudf::make_numeric_column(
+    output_type, total_ngrams, cudf::mask_state::UNALLOCATED, stream, resources);
   auto d_hashes = hashes->mutable_view().data<cudf::hash_value_type>();
 
   character_ngram_hash_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, ngrams, seed, d_offsets, d_hashes);
 
-  return make_lists_column(
-    input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{}, stream, resources);
+  return make_lists_column(input.size(),
+                           std::move(offsets),
+                           std::move(hashes),
+                           0,
+                           rmm::device_buffer{},
+                           stream,
+                           resources);
 }
 
 }  // namespace detail

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -191,8 +191,10 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
   auto const d_targets = column_device_view::create(targets.parent(), stream);
 
   // copy the first byte of each target and sort them
-  auto first_bytes = rmm::device_uvector<u_char>(targets.size(), stream, resources.get_temporary_mr());
-  auto indices     = rmm::device_uvector<size_type>(targets.size(), stream, resources.get_temporary_mr());
+  auto first_bytes =
+    rmm::device_uvector<u_char>(targets.size(), stream, resources.get_temporary_mr());
+  auto indices =
+    rmm::device_uvector<size_type>(targets.size(), stream, resources.get_temporary_mr());
   {
     auto tgt_itr = thrust::make_transform_iterator(
       d_targets->begin<string_view>(),
@@ -215,10 +217,15 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
   }
 
   // remove duplicates to help speed up lower_bound
-  auto offsets = rmm::device_uvector<size_type>(targets.size(), stream, resources.get_temporary_mr());
-  thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), offsets.begin(), offsets.end());
-  auto const end = thrust::unique_by_key(
-    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), first_bytes.begin(), first_bytes.end(), offsets.begin());
+  auto offsets =
+    rmm::device_uvector<size_type>(targets.size(), stream, resources.get_temporary_mr());
+  thrust::sequence(
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), offsets.begin(), offsets.end());
+  auto const end =
+    thrust::unique_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                          first_bytes.begin(),
+                          first_bytes.end(),
+                          offsets.begin());
   auto const unique_count =
     static_cast<size_type>(cuda::std::distance(first_bytes.begin(), end.first));
 
@@ -226,8 +233,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
   auto const results_iter = cudf::detail::make_counting_transform_iterator(0, [&](int i) {
     return make_numeric_column(data_type{type_id::BOOL8},
                                input.size(),
-                               cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                               cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                input.null_count(),
                                stream,
                                resources);
@@ -274,7 +280,8 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
       (targets.size() <= targets_threshold) ? (block_size * targets.size()) : 0;
     auto const work_mem_size =
       (targets.size() <= targets_threshold) ? 0 : tile_size * targets.size() * input.size();
-    auto working_memory = rmm::device_uvector<bool>(work_mem_size, stream, resources.get_temporary_mr());
+    auto working_memory =
+      rmm::device_uvector<bool>(work_mem_size, stream, resources.get_temporary_mr());
 
     cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()) * tile_size,
                                block_size};

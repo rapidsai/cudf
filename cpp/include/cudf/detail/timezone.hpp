@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -22,7 +22,7 @@ namespace detail {
 std::unique_ptr<table> make_timezone_transition_table(
   std::optional<std::string_view> tzif_dir,
   std::string_view timezone_name,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 }  // namespace detail

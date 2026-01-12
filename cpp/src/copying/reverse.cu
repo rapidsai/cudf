@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,7 +35,8 @@ std::unique_ptr<table> reverse(table_view const& source_table,
     }));
   auto elements_end = elements + source_table.num_rows();
 
-  return gather(source_table, elements, elements_end, out_of_bounds_policy::DONT_CHECK, stream, resources);
+  return gather(
+    source_table, elements, elements_end, out_of_bounds_policy::DONT_CHECK, stream, resources);
 }
 
 std::unique_ptr<column> reverse(column_view const& source_column,
@@ -43,8 +44,7 @@ std::unique_ptr<column> reverse(column_view const& source_column,
                                 cudf::memory_resources resources)
 {
   return std::move(
-    cudf::detail::reverse(table_view({source_column}), stream,
-                  resources)->release().front());
+    cudf::detail::reverse(table_view({source_column}), stream, resources)->release().front());
 }
 }  // namespace detail
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -64,7 +64,7 @@ std::unique_ptr<column> to_durations(
   strings_column_view const& input,
   data_type duration_type,
   std::string_view format,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -114,8 +114,8 @@ std::unique_ptr<column> to_durations(
  */
 std::unique_ptr<column> from_durations(
   column_view const& durations,
-  std::string_view format           = "%D days %H:%M:%S",
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  std::string_view format          = "%D days %H:%M:%S",
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group

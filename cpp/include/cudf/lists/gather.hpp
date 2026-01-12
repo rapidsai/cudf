@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -64,7 +64,7 @@ std::unique_ptr<column> segmented_gather(
   lists_column_view const& gather_map_list,
   out_of_bounds_policy bounds_policy = out_of_bounds_policy::DONT_CHECK,
   rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources   = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace lists

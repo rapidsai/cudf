@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -74,15 +74,17 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       cudf::memory_resources resources)
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
-  if (!input.has_nulls()) { return std::make_unique<cudf::column>(input.parent(), stream, resources); }
+  if (!input.has_nulls()) {
+    return std::make_unique<cudf::column>(input.parent(), stream, resources);
+  }
   CUDF_EXPECTS(cudf::have_same_types(input.keys(), replacement.keys()),
                "keys must match",
                cudf::data_type_error);
   CUDF_EXPECTS(replacement.size() == input.size(), "column sizes must match");
 
   // first combine the keys so both input dictionaries have the same set
-  auto matched =
-    match_dictionaries(std::vector<dictionary_column_view>({input, replacement}), stream, resources);
+  auto matched = match_dictionaries(
+    std::vector<dictionary_column_view>({input, replacement}), stream, resources);
 
   // now build the new indices by doing replace-null using the updated input indices
   auto const input_indices =
@@ -95,8 +97,10 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                     stream,
                     resources);
 
-  return make_dictionary_column(
-    std::move(matched.front()->release().children.back()), std::move(new_indices), stream, resources);
+  return make_dictionary_column(std::move(matched.front()->release().children.back()),
+                                std::move(new_indices),
+                                stream,
+                                resources);
 }
 
 /**

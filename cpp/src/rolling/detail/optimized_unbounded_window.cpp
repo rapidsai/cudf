@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -144,8 +144,7 @@ std::unique_ptr<column> optimized_unbounded_window(table_view const& group_keys,
                                                    cudf::memory_resources resources)
 {
   return group_keys.num_columns() > 0
-           ? aggregation_based_rolling_window(group_keys, input, aggr, stream,
-                  resources)
+           ? aggregation_based_rolling_window(group_keys, input, aggr, stream, resources)
            : reduction_based_rolling_window(input, aggr, stream, resources);
 }
 }  // namespace cudf::detail

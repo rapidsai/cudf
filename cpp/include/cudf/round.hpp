@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -65,9 +65,9 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
  */
 [[deprecated]] std::unique_ptr<column> round(
   column_view const& input,
-  int32_t decimal_places            = 0,
-  rounding_method method            = rounding_method::HALF_UP,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  int32_t decimal_places           = 0,
+  rounding_method method           = rounding_method::HALF_UP,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -104,9 +104,9 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
  */
 std::unique_ptr<column> round_decimal(
   column_view const& input,
-  int32_t decimal_places            = 0,
-  rounding_method method            = rounding_method::HALF_UP,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  int32_t decimal_places           = 0,
+  rounding_method method           = rounding_method::HALF_UP,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

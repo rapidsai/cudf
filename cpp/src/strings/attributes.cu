@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -70,19 +70,19 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
                                   cudf::memory_resources resources)
 {
   // create output column
-  auto results   = make_numeric_column(data_type{type_to_id<size_type>()},
-                                     strings.size(),
-                                     cudf::detail::copy_bitmask(strings.parent(), stream,
-                  resources),
-                                     strings.null_count(),
-                                     stream,
-                                     resources);
+  auto results =
+    make_numeric_column(data_type{type_to_id<size_type>()},
+                        strings.size(),
+                        cudf::detail::copy_bitmask(strings.parent(), stream, resources),
+                        strings.null_count(),
+                        stream,
+                        resources);
   auto d_lengths = results->mutable_view().data<int32_t>();
   // input column device view
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // fill in the lengths
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings.size()),
                     d_lengths,
@@ -134,8 +134,7 @@ std::unique_ptr<column> count_characters_parallel(strings_column_view const& inp
   // create output column
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
@@ -222,7 +221,7 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
   // create offsets vector to account for each string's character length
   rmm::device_uvector<size_type> offsets(input.size() + 1, stream);
   thrust::transform_inclusive_scan(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(input.size()),
     offsets.begin() + 1,
@@ -244,7 +243,7 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
   // fill column with character code-point values
   auto d_results = results_view.data<int32_t>();
   // now set the ranges from each strings' character values
-  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      input.size(),
                      code_points_fn{d_column, offsets.data(), d_results});

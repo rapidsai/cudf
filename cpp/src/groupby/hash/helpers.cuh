@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -9,6 +9,8 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
+
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
 

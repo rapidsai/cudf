@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,8 +37,7 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   // Otherwise, we have only one nullable column and can use its null mask directly.
   if (nullable_columns.size() > 1) {
     auto row_bitmask =
-      cudf::detail::bitmask_and(
-        table_view{nullable_columns}, stream, resources.get_temporary_mr())
+      cudf::detail::bitmask_and(table_view{nullable_columns}, stream, resources.get_temporary_mr())
         .first;
     auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
     return std::pair(std::move(row_bitmask), row_bitmask_ptr);

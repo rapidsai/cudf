@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -72,8 +72,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
                  std::back_inserter(device_views),
                  [](auto const& col) { return *col; });
 
-  auto d_views =
-    make_device_uvector_async(device_views, stream, resources.get_temporary_mr());
+  auto d_views = make_device_uvector_async(device_views, stream, resources.get_temporary_mr());
 
   // Compute the partition offsets
   auto offsets = cudf::detail::make_host_vector<size_t>(views.size() + 1, stream);
@@ -84,8 +83,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
     cuda::std::plus{});
-  auto d_offsets =
-    make_device_uvector_async(offsets, stream, resources.get_temporary_mr());
+  auto d_offsets         = make_device_uvector_async(offsets, stream, resources.get_temporary_mr());
   auto const output_size = offsets.back();
 
   return std::make_tuple(
@@ -292,7 +290,8 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
 
   using mask_policy = cudf::mask_allocation_policy;
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-  auto col = cudf::detail::allocate_like(views.front(), total_element_count, policy, stream, resources);
+  auto col =
+    cudf::detail::allocate_like(views.front(), total_element_count, policy, stream, resources);
 
   auto m_view = col->mutable_view();
 
@@ -542,8 +541,7 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
 
     // verify all types match and that we won't overflow size_type in output size
     bounds_and_type_check(cols, stream);
-    concat_columns.emplace_back(detail::concatenate(cols, stream,
-                  resources));
+    concat_columns.emplace_back(detail::concatenate(cols, stream, resources));
   }
   return std::make_unique<table>(std::move(concat_columns));
 }
@@ -560,8 +558,8 @@ rmm::device_buffer concatenate_masks(host_span<column_view const> views,
         return accumulator + v.size();
       });
 
-    rmm::device_buffer null_mask =
-      cudf::detail::create_null_mask(total_element_count, mask_state::UNINITIALIZED, stream, resources);
+    rmm::device_buffer null_mask = cudf::detail::create_null_mask(
+      total_element_count, mask_state::UNINITIALIZED, stream, resources);
 
     detail::concatenate_masks(views, static_cast<bitmask_type*>(null_mask.data()), stream);
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -157,7 +157,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -188,7 +188,7 @@ std::unique_ptr<column> binary_operation(
   scalar const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -218,7 +218,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -249,7 +249,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   std::string const& ptx,
   data_type output_type,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -302,7 +302,7 @@ bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_
 std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
   column_view const& col,
   scalar const& s,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 }  // namespace binops

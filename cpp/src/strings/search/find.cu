@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -178,7 +178,7 @@ void find_utility(strings_column_view const& input,
         *d_strings, target_itr, start, stop, d_results);
   } else {
     // string-per-thread function
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       d_results,
@@ -201,8 +201,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   // create output column
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
@@ -215,7 +214,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   if (d_target.empty()) {
     auto d_strings = column_device_view::create(input.parent(), stream);
     auto d_results = results->mutable_view().data<size_type>();
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::counting_iterator<size_type>(0),
                       thrust::counting_iterator<size_type>(input.size()),
                       d_results,
@@ -377,8 +376,7 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
   // create output column
   auto results = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
@@ -386,8 +384,10 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
   // fill the output with `false` unless the `d_target` is empty
   auto results_view = results->mutable_view();
   if (d_target.empty()) {
-    thrust::fill(
-      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), results_view.begin<bool>(), results_view.end<bool>(), true);
+    thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                 results_view.begin<bool>(),
+                 results_view.end<bool>(),
+                 true);
   } else {
     // launch warp per string
     auto const d_strings                   = column_device_view::create(input.parent(), stream);
@@ -430,9 +430,8 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   if (target.size() == 0)  // empty target string returns true
   {
     auto const true_scalar = make_fixed_width_scalar<bool>(true, stream);
-    auto results           = make_column_from_scalar(*true_scalar, strings.size(), stream, resources);
-    results->set_null_mask(cudf::detail::copy_bitmask(strings.parent(), stream,
-                  resources),
+    auto results = make_column_from_scalar(*true_scalar, strings.size(), stream, resources);
+    results->set_null_mask(cudf::detail::copy_bitmask(strings.parent(), stream, resources),
                            strings.null_count());
     return results;
   }
@@ -441,17 +440,17 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create output column
-  auto results      = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings_count,
-                                     cudf::detail::copy_bitmask(strings.parent(), stream,
-                  resources),
-                                     strings.null_count(),
-                                     stream,
-                                     resources);
+  auto results =
+    make_numeric_column(data_type{type_id::BOOL8},
+                        strings_count,
+                        cudf::detail::copy_bitmask(strings.parent(), stream, resources),
+                        strings.null_count(),
+                        stream,
+                        resources);
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -495,18 +494,18 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create output column
-  auto results      = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings.size(),
-                                     cudf::detail::copy_bitmask(strings.parent(), stream,
-                  resources),
-                                     strings.null_count(),
-                                     stream,
-                                     resources);
+  auto results =
+    make_numeric_column(data_type{type_id::BOOL8},
+                        strings.size(),
+                        cudf::detail::copy_bitmask(strings.parent(), stream, resources),
+                        strings.null_count(),
+                        stream,
+                        resources);
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
   thrust::transform(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings.size()),
     d_results,

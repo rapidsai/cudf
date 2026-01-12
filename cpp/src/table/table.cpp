@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,8 +21,7 @@ table::table(table const& other, rmm::cuda_stream_view stream, cudf::memory_reso
   CUDF_FUNC_RANGE();
   _columns.reserve(other._columns.size());
   for (auto const& c : other._columns) {
-    _columns.emplace_back(std::make_unique<column>(*c, stream,
-                  resources));
+    _columns.emplace_back(std::make_unique<column>(*c, stream, resources));
   }
 }
 
@@ -49,8 +48,7 @@ table::table(table_view view, rmm::cuda_stream_view stream, cudf::memory_resourc
   CUDF_FUNC_RANGE();
   _columns.reserve(view.num_columns());
   for (auto const& c : view) {
-    _columns.emplace_back(std::make_unique<column>(c, stream,
-                  resources));
+    _columns.emplace_back(std::make_unique<column>(c, stream, resources));
   }
 }
 

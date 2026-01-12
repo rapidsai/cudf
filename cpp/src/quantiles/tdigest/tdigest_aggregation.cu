@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -390,7 +390,8 @@ std::unique_ptr<scalar> to_tdigest_scalar(std::unique_ptr<column>&& tdigest,
   CUDF_EXPECTS(tdigest->size() == 1,
                "Encountered invalid tdigest column when converting to scalar");
   auto contents = tdigest->release();
-  return std::make_unique<struct_scalar>(table(std::move(contents.children)), true, stream, resources);
+  return std::make_unique<struct_scalar>(
+    table(std::move(contents.children)), true, stream, resources);
 }
 
 /**
@@ -668,8 +669,9 @@ size_t compute_simple_cluster_count(int delta,
     }));
 
   // total size
-  return thrust::reduce(
-    rmm::exec_policy(stream, resources.get_temporary_mr()), group_num_clusters.begin(), group_num_clusters.end());
+  return thrust::reduce(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                        group_num_clusters.begin(),
+                        group_num_clusters.end());
 }
 
 /**
@@ -686,7 +688,7 @@ void compute_cluster_starts(cluster_info& cinfo, rmm::cuda_stream_view stream)
       [group_num_clusters = cinfo.num_clusters.begin(), num_groups] __device__(size_type index) {
         return index == num_groups ? 0 : group_num_clusters[index];
       }));
-  thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          cluster_size,
                          cluster_size + num_groups + 1,
                          cinfo.cluster_start.begin(),
@@ -811,12 +813,10 @@ cluster_info generate_group_cluster_info(int delta,
   // Note that the size of this data will tend to be very small compared to the size of the
   // input columns themselves, so we are not doing huge memory transfers.
   if (use_cpu) {
-    auto p_cluster_wl = std::move(cinfo.cluster_wl);
-    cinfo.cluster_wl =
-      rmm::device_uvector(p_cluster_wl, stream, resources.get_temporary_mr());
+    auto p_cluster_wl   = std::move(cinfo.cluster_wl);
+    cinfo.cluster_wl    = rmm::device_uvector(p_cluster_wl, stream, resources.get_temporary_mr());
     auto p_num_clusters = std::move(cinfo.num_clusters);
-    cinfo.num_clusters =
-      rmm::device_uvector(p_num_clusters, stream, resources.get_temporary_mr());
+    cinfo.num_clusters  = rmm::device_uvector(p_num_clusters, stream, resources.get_temporary_mr());
     auto p_cluster_start = std::move(cinfo.cluster_start);
     // cluster_start is returned as part of the output, so make sure to use the user supplied mr
     // instead of the current resource.
@@ -829,8 +829,9 @@ cluster_info generate_group_cluster_info(int delta,
   // Note: group_cluster_start does not need to be updated.
   cinfo.total_clusters =
     (simple_mem_usage <= max_simple_cluster_usage)
-      ? thrust::reduce(
-          rmm::exec_policy(stream, resources.get_temporary_mr()), cinfo.num_clusters.begin(), cinfo.num_clusters.end())
+      ? thrust::reduce(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                       cinfo.num_clusters.begin(),
+                       cinfo.num_clusters.end())
       : allocated_clusters;
 
   stream.synchronize();
@@ -862,7 +863,8 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
     if (!has_nulls) { return 0; }
     auto iter = cudf::detail::make_counting_transform_iterator(
       0, cuda::proclaim_return_type<size_type>(is_stub_digest));
-    return thrust::reduce(rmm::exec_policy(stream, resources.get_temporary_mr()), iter, iter + num_rows);
+    return thrust::reduce(
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), iter, iter + num_rows);
   }();
 
   // if there are no stub tdigests, we can return immediately.
@@ -880,8 +882,8 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   // otherwise we need to strip out the stubs.
   auto remove_stubs = [&](column_view const& col, size_type num_stubs) {
     auto result = cudf::make_numeric_column(
-      data_type{type_id::FLOAT64}, col.size() - num_stubs, mask_state::UNALLOCATED, stream, resources);
-    thrust::remove_copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      data_type{type_id::FLOAT64}, col.size() - num_stubs, mask_state::UNALLOCATED, stream, mr);
+    thrust::remove_copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                            col.begin<double>(),
                            col.end<double>(),
                            thrust::make_counting_iterator(0),
@@ -896,7 +898,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   // adjust offsets.
   rmm::device_uvector<size_type> sizes(num_rows, stream);
   thrust::transform(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(0) + num_rows,
     sizes.begin(),
@@ -908,7 +910,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
       [sizes = sizes.begin(), is_stub_digest, num_rows] __device__(size_type i) {
         return i == num_rows || is_stub_digest(i) ? 0 : sizes[i];
       }));
-  thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          iter,
                          iter + num_rows + 1,
                          offsets->mutable_view().begin<size_type>(),
@@ -1046,7 +1048,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
     mean_col.begin<double>(), weight_col.begin<double>(), thrust::make_discard_iterator()));
 
   auto const num_values = std::distance(centroids_begin, centroids_end);
-  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         keys,
                         keys + num_values,                // keys
                         centroids_begin,                  // values
@@ -1165,7 +1167,7 @@ struct typed_group_tdigest {
     auto max_col = cudf::make_numeric_column(
       data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, resources);
     thrust::transform(
-      rmm::exec_policy(stream, resources.get_temporary_mr()),
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
@@ -1243,7 +1245,7 @@ struct typed_reduce_tdigest {
     auto max_col = cudf::make_numeric_column(
       data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED, stream, resources);
     thrust::transform(
-      rmm::exec_policy(stream, resources.get_temporary_mr()),
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + 1,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
@@ -1441,7 +1443,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     thrust::make_transform_iterator(thrust::make_zip_iterator(cuda::std::make_tuple(
                                       tdv.min_begin(), cudf::tdigest::detail::size_begin(tdv))),
                                     tdigest_min{});
-  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         group_labels,
                         group_labels + num_group_labels,
                         min_iter,
@@ -1456,7 +1458,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     thrust::make_transform_iterator(thrust::make_zip_iterator(cuda::std::make_tuple(
                                       tdv.max_begin(), cudf::tdigest::detail::size_begin(tdv))),
                                     tdigest_max{});
-  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         group_labels,
                         group_labels + num_group_labels,
                         max_iter,
@@ -1473,13 +1475,13 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     0,
     group_num_clusters_func<decltype(group_offsets)>{group_offsets,
                                                      tdigest_offsets.begin<size_type>()});
-  thrust::replace_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::replace_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      merged_min_col->mutable_view().begin<double>(),
                      merged_min_col->mutable_view().end<double>(),
                      group_num_clusters,
                      group_is_empty{},
                      0);
-  thrust::replace_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::replace_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      merged_max_col->mutable_view().begin<double>(),
                      merged_max_col->mutable_view().end<double>(),
                      group_num_clusters,
@@ -1500,13 +1502,13 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   // generate group keys for all centroids in the entire column
   rmm::device_uvector<size_type> group_keys(num_centroids, stream, temp_mr);
   auto iter = thrust::make_counting_iterator(0);
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     iter,
                     iter + num_centroids,
                     group_keys.begin(),
                     group_key_func<decltype(group_labels)>{
                       group_labels, tdigest_offsets.begin<size_type>(), tdigest_offsets.size()});
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                 group_keys.begin(),
                                 group_keys.begin() + num_centroids,
                                 merged_weights.begin(),
@@ -1614,7 +1616,9 @@ std::unique_ptr<scalar> reduce_tdigest(column_view const& col,
                                        rmm::cuda_stream_view stream,
                                        cudf::memory_resources resources)
 {
-  if (col.size() == 0) { return cudf::tdigest::detail::make_empty_tdigest_scalar(stream, resources); }
+  if (col.size() == 0) {
+    return cudf::tdigest::detail::make_empty_tdigest_scalar(stream, resources);
+  }
 
   // since this isn't coming out of a groupby, we need to sort the inputs in ascending
   // order with nulls at the end.
@@ -1639,14 +1643,16 @@ std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
 {
   tdigest_column_view tdv(input);
 
-  if (input.size() == 0) { return cudf::tdigest::detail::make_empty_tdigest_scalar(stream, resources); }
+  if (input.size() == 0) {
+    return cudf::tdigest::detail::make_empty_tdigest_scalar(stream, resources);
+  }
 
   auto group_offsets_ = group_offsets_fn{input.size()};
   auto group_offsets  = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
   auto group_labels   = thrust::make_constant_iterator(0);
   return to_tdigest_scalar(
-    merge_tdigests(tdv, group_offsets, group_labels, input.size(), 1, max_centroids, stream,
-                  resources),
+    merge_tdigests(
+      tdv, group_offsets, group_labels, input.size(), 1, max_centroids, stream, resources),
     stream,
     resources);
 }
@@ -1660,7 +1666,9 @@ std::unique_ptr<column> group_tdigest(column_view const& col,
                                       rmm::cuda_stream_view stream,
                                       cudf::memory_resources resources)
 {
-  if (col.size() == 0) { return cudf::tdigest::detail::make_empty_tdigests_column(1, stream, resources); }
+  if (col.size() == 0) {
+    return cudf::tdigest::detail::make_empty_tdigests_column(1, stream, resources);
+  }
 
   auto const delta = max_centroids;
   return cudf::type_dispatcher(col.type(),

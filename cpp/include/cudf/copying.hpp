@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -75,7 +75,7 @@ std::unique_ptr<table> gather(
   column_view const& gather_map,
   out_of_bounds_policy bounds_policy = out_of_bounds_policy::DONT_CHECK,
   rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources   = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Reverses the rows within a table.
@@ -94,7 +94,7 @@ std::unique_ptr<table> gather(
  */
 std::unique_ptr<table> reverse(
   table_view const& source_table,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -114,7 +114,7 @@ std::unique_ptr<table> reverse(
  */
 std::unique_ptr<column> reverse(
   column_view const& source_column,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -163,7 +163,7 @@ std::unique_ptr<table> scatter(
   table_view const& source,
   column_view const& scatter_map,
   table_view const& target,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -206,7 +206,7 @@ std::unique_ptr<table> scatter(
   std::vector<std::reference_wrapper<scalar const>> const& source,
   column_view const& indices,
   table_view const& target,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -255,7 +255,7 @@ std::unique_ptr<column> allocate_like(
   column_view const& input,
   mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources  = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
@@ -278,7 +278,7 @@ std::unique_ptr<column> allocate_like(
   size_type size,
   mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources  = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a table of empty columns with the same types as the `input_table`
@@ -369,7 +369,7 @@ std::unique_ptr<column> copy_range(
   size_type source_begin,
   size_type source_end,
   size_type target_begin,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -413,7 +413,7 @@ std::unique_ptr<column> shift(
   column_view const& input,
   size_type offset,
   scalar const& fill_value,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -616,7 +616,7 @@ std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
   column_view const& rhs,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -642,7 +642,7 @@ std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
   column_view const& rhs,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -668,7 +668,7 @@ std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
   scalar const& rhs,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -692,7 +692,7 @@ std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
   scalar const& rhs,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -736,7 +736,7 @@ std::unique_ptr<table> boolean_mask_scatter(
   table_view const& input,
   table_view const& target,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -775,7 +775,7 @@ std::unique_ptr<table> boolean_mask_scatter(
   std::vector<std::reference_wrapper<scalar const>> const& input,
   table_view const& target,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -795,7 +795,7 @@ std::unique_ptr<table> boolean_mask_scatter(
 std::unique_ptr<scalar> get_element(
   column_view const& input,
   size_type index,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -840,7 +840,7 @@ std::unique_ptr<table> sample(
   sample_with_replacement replacement = sample_with_replacement::FALSE,
   int64_t const seed                  = 0,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources    = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Checks if a column or its descendants have non-empty null rows
@@ -956,7 +956,7 @@ bool may_have_nonempty_nulls(column_view const& input);
  */
 std::unique_ptr<column> purge_nonempty_nulls(
   column_view const& input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */

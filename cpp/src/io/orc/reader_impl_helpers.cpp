@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -112,9 +112,14 @@ column_buffer assemble_buffer(size_type orc_col_id,
     case STRUCT: {
       auto const& children_indices = selected_columns.children.at(orc_col_id);
       for (auto const child_id : children_indices) {
-        col_buffer.children.emplace_back(assemble_buffer(
-          child_id, level + 1, col_meta, metadata, selected_columns, col_buffers, stream,
-                  resources));
+        col_buffer.children.emplace_back(assemble_buffer(child_id,
+                                                         level + 1,
+                                                         col_meta,
+                                                         metadata,
+                                                         selected_columns,
+                                                         col_buffers,
+                                                         stream,
+                                                         resources));
       }
     } break;
 
@@ -125,8 +130,7 @@ column_buffer assemble_buffer(size_type orc_col_id,
       for (std::size_t idx = 0; idx < children_indices.size(); idx++) {
         auto const col = children_indices[idx];
         child_col_buffers.emplace_back(assemble_buffer(
-          col, level + 1, col_meta, metadata, selected_columns, col_buffers, stream,
-                  resources));
+          col, level + 1, col_meta, metadata, selected_columns, col_buffers, stream, resources));
         child_col_buffers.back().name = get_map_child_col_name(idx);
       }
       // Create a struct buffer

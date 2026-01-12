@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -73,8 +73,7 @@ std::unique_ptr<table> build_table(
                                               stream,
                                               mr)
                                  ->release()[0])
-                   : std::make_unique<column>(sliced_child, stream,
-                  resources));
+                   : std::make_unique<column>(sliced_child, stream, resources));
 
   if (position_array) {
     size_type position_size = position_array->size();
@@ -121,7 +120,7 @@ std::unique_ptr<table> explode(table_view const& input_table,
   // This looks like an off-by-one bug, but what is going on here is that we need to reduce each
   // result from `lower_bound` by 1 to build the correct gather map. This can be accomplished by
   // skipping the first entry and using the result of `lower_bound` directly.
-  thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::lower_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       offsets_minus_one,
                       offsets_minus_one + explode_col.size(),
                       counting_iter,
@@ -162,7 +161,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
   // result from `lower_bound` by 1 to build the correct gather map. This can be accomplished by
   // skipping the first entry and using the result of `lower_bound` directly.
   thrust::transform(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     counting_iter,
     counting_iter + gather_map.size(),
     gather_map.begin(),
@@ -208,7 +207,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
       [offsets, offsets_size = explode_col.size() - 1] __device__(int idx) {
         return (idx > offsets_size || (offsets[idx + 1] != offsets[idx])) ? 0 : 1;
       }));
-  thrust::inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          null_or_empty,
                          null_or_empty + explode_col.size(),
                          null_or_empty_offset.begin());
@@ -218,9 +217,9 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   if (null_or_empty_count == 0) {
     // performance penalty to run the below loop if there are no nulls or empty lists.
     // run simple explode instead
-    return include_position ? detail::explode_position(input_table, explode_column_idx, stream,
-                  resources)
-                            : detail::explode(input_table, explode_column_idx, stream, resources);
+    return include_position
+             ? detail::explode_position(input_table, explode_column_idx, stream, resources)
+             : detail::explode(input_table, explode_column_idx, stream, resources);
   }
 
   auto gather_map_size = sliced_child.size() + null_or_empty_count;
@@ -273,8 +272,10 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   auto loop_count = std::max(sliced_child.size(), explode_col.size());
 
   // Fill in gather map with all the child column's entries
-  thrust::for_each(
-    rmm::exec_policy(stream, resources.get_temporary_mr()), counting_iter, counting_iter + loop_count, fill_gather_maps);
+  thrust::for_each(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                   counting_iter,
+                   counting_iter + loop_count,
+                   fill_gather_maps);
 
   return build_table(
     input_table,

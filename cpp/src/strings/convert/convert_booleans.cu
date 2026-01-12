@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,15 +44,14 @@ std::unique_ptr<column> to_booleans(strings_column_view const& input,
   // create output column copying the strings' null-mask
   auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
 
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -130,8 +129,8 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, resources);
 
-  auto [offsets, chars] =
-    make_strings_children(from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, resources);
+  auto [offsets, chars] = make_strings_children(
+    from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, resources);
 
   return make_strings_column(strings_count,
                              std::move(offsets),

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -57,7 +57,9 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
     "Range is out of bounds.",
     std::invalid_argument);
 
-  if (target_end == target_begin) { return std::make_unique<column>(target.parent(), stream, resources); }
+  if (target_end == target_begin) {
+    return std::make_unique<column>(target.parent(), stream, resources);
+  }
   auto source_device_view = column_device_view::create(source.parent(), stream);
   auto d_source           = *source_device_view;
   auto target_device_view = column_device_view::create(target.parent(), stream);

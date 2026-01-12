@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -162,7 +162,10 @@ rmm::device_uvector<uint8_t> is_all_nulls_each_column(device_span<SymbolT const>
   auto const num_nodes = col_ids.size();
   auto const num_cols  = d_column_tree.node_categories.size();
   rmm::device_uvector<uint8_t> is_all_nulls(num_cols, stream);
-  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), is_all_nulls.begin(), is_all_nulls.end(), true);
+  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+               is_all_nulls.begin(),
+               is_all_nulls.end(),
+               true);
 
   auto parse_opt = parsing_options(options, stream);
   thrust::for_each_n(
@@ -301,12 +304,14 @@ void make_device_json_column(device_span<SymbolT const> input,
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   // make a copy
-  auto sorted_col_ids = cudf::detail::make_device_uvector_async(
-    col_ids, stream, resources.get_temporary_mr());
+  auto sorted_col_ids =
+    cudf::detail::make_device_uvector_async(col_ids, stream, resources.get_temporary_mr());
 
   // sort by {col_id} on {node_ids} stable
   rmm::device_uvector<NodeIndexT> node_ids(col_ids.size(), stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), node_ids.begin(), node_ids.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                   node_ids.begin(),
+                   node_ids.end());
   thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                              sorted_col_ids.begin(),
                              sorted_col_ids.end(),
@@ -433,8 +438,10 @@ std::
         cuda::std::make_tuple(0, 0));
     } else if (column_category == NC_LIST) {
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
-      thrust::uninitialized_fill(
-        rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), col.child_offsets.begin(), col.child_offsets.end(), 0);
+      thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                                 col.child_offsets.begin(),
+                                 col.child_offsets.end(),
+                                 0);
     }
     col.num_rows = max_row_offsets[i] + 1;
     col.validity =
@@ -818,9 +825,10 @@ std::
       }
     }
   };
-  auto inserted = parent_ref.get()
-                    .child_columns.try_emplace(list_child_name, device_json_column(stream, resources))
-                    .second;
+  auto inserted =
+    parent_ref.get()
+      .child_columns.try_emplace(list_child_name, device_json_column(stream, resources))
+      .second;
   CUDF_EXPECTS(inserted, "child column insertion failed, duplicate column name in the parent");
   parent_ref = std::ref(parent_ref.get().child_columns.at(list_child_name));
   columns.try_emplace(adj[parent_node_sentinel][0], parent_ref);
@@ -866,12 +874,12 @@ void scatter_offsets(tree_meta_t const& tree,
                                             static_cast<bitmask_type*>(col.validity.data())};
   }
 
-  auto d_ignore_vals = cudf::detail::make_device_uvector_async(
-    ignore_vals, stream, resources.get_temporary_mr());
-  auto d_is_mixed_pruned = cudf::detail::make_device_uvector_async(
-    is_mixed_pruned, stream, resources.get_temporary_mr());
-  auto d_columns_data = cudf::detail::make_device_uvector_async(
-    columns_data, stream, resources.get_temporary_mr());
+  auto d_ignore_vals =
+    cudf::detail::make_device_uvector_async(ignore_vals, stream, resources.get_temporary_mr());
+  auto d_is_mixed_pruned =
+    cudf::detail::make_device_uvector_async(is_mixed_pruned, stream, resources.get_temporary_mr());
+  auto d_columns_data =
+    cudf::detail::make_device_uvector_async(columns_data, stream, resources.get_temporary_mr());
 
   // 3. scatter string offsets to respective columns, set validity bits
   thrust::for_each_n(

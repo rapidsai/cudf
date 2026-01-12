@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -338,8 +338,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     auto num_tile_states   = std::max(32, TILES_PER_CHUNK * concurrency + 32);
     auto tile_multistates =
       scan_tile_state<multistate>(num_tile_states, stream, resources.get_temporary_mr());
-    auto tile_offsets = scan_tile_state<output_offset>(
-      num_tile_states, stream, resources.get_temporary_mr());
+    auto tile_offsets =
+      scan_tile_state<output_offset>(num_tile_states, stream, resources.get_temporary_mr());
 
     multibyte_split_init_kernel<<<TILES_PER_CHUNK,
                                   THREADS_PER_TILE,
@@ -526,7 +526,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   };
   if (insert_begin) { set_offset_value(0, 0); }
   if (insert_end) { set_offset_value(offsets->size() - 1, chars_bytes); }
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     global_offsets.begin(),
                     global_offsets.end(),
                     offsets_itr + insert_begin,

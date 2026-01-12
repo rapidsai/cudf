@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -134,8 +134,9 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   rmm::device_uvector<NodeIndexT> rev_mapped_col_ids(num_columns, stream);
   rmm::device_uvector<NodeIndexT> reordering_index(unpermuted_col_ids.size(), stream);
 
-  thrust::sequence(
-    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), reordering_index.begin(), reordering_index.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                   reordering_index.begin(),
+                   reordering_index.end());
   // Reorder nodes and column ids in level-wise fashion
   thrust::sort_by_key(
     rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
@@ -146,10 +147,11 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
       unpermuted_tree.node_levels, unpermuted_col_ids, unpermuted_tree.parent_node_ids});
 
   {
-    auto mapped_col_ids_copy = cudf::detail::make_device_uvector_async(
-      mapped_col_ids, stream, resources.get_temporary_mr());
-    thrust::sequence(
-      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), rev_mapped_col_ids.begin(), rev_mapped_col_ids.end());
+    auto mapped_col_ids_copy =
+      cudf::detail::make_device_uvector_async(mapped_col_ids, stream, resources.get_temporary_mr());
+    thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                     rev_mapped_col_ids.begin(),
+                     rev_mapped_col_ids.end());
     thrust::sort_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         mapped_col_ids_copy.begin(),
                         mapped_col_ids_copy.end(),
@@ -188,8 +190,10 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
     // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
     // children adjacency
 
-    auto num_non_leaf_columns = thrust::unique_count(
-      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), parent_col_ids.begin() + 1, parent_col_ids.end());
+    auto num_non_leaf_columns =
+      thrust::unique_count(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                           parent_col_ids.begin() + 1,
+                           parent_col_ids.end());
     rmm::device_uvector<NodeIndexT> non_leaf_nodes(num_non_leaf_columns, stream);
     rmm::device_uvector<NodeIndexT> non_leaf_nodes_children(num_non_leaf_columns, stream);
     thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
@@ -233,7 +237,10 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
                                      device_span<NodeIndexT const> parent_col_ids,
                                      device_span<NodeIndexT const> row_idx) {
     rmm::device_uvector<NodeIndexT> col_idx((num_columns - 1) * 2, stream);
-    thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), col_idx.begin(), col_idx.end(), -1);
+    thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                 col_idx.begin(),
+                 col_idx.end(),
+                 -1);
     // excluding root node, construct scatter map
     rmm::device_uvector<NodeIndexT> map(num_columns - 1, stream);
     thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),

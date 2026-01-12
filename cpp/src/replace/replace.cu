@@ -3,7 +3,7 @@
  * SPDX-FileCopyrightText: Copyright 2018 BlazingDB, Inc.
  * SPDX-FileCopyrightText: Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
  * SPDX-FileCopyrightText: Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 // clang-format on
@@ -337,6 +337,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    rmm::cuda_stream_view stream,
                                                    cudf::memory_resources resources)
 {
-  return detail::find_and_replace_all(input_col, values_to_replace, replacement_values, stream, resources);
+  return detail::find_and_replace_all(
+    input_col, values_to_replace, replacement_values, stream, resources);
 }
 }  // namespace cudf

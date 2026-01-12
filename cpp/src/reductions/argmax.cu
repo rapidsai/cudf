@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,8 +16,11 @@ std::unique_ptr<scalar> argmax(column_view const& input,
 {
   auto const dispatch_type =
     is_dictionary(input.type()) ? dictionary_column_view(input).indices().type() : input.type();
-  return type_dispatcher(
-    dispatch_type, simple::detail::arg_minmax_dispatcher<aggregation::ARGMAX>{}, input, stream, resources);
+  return type_dispatcher(dispatch_type,
+                         simple::detail::arg_minmax_dispatcher<aggregation::ARGMAX>{},
+                         input,
+                         stream,
+                         resources);
 }
 
 }  // namespace cudf::reduction::detail

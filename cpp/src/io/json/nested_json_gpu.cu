@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1542,11 +1542,11 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   auto const num_total_tokens = d_num_selected_tokens.value(stream);
   rmm::device_uvector<PdaTokenT> tokens_out{num_total_tokens, stream, mr};
   rmm::device_uvector<SymbolOffsetT> token_indices_out{num_total_tokens, stream, mr};
-  thrust::copy(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::copy(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                filtered_tokens_out.end() - num_total_tokens,
                filtered_tokens_out.end(),
                tokens_out.data());
-  thrust::copy(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::copy(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                filtered_token_indices_out.end() - num_total_tokens,
                filtered_token_indices_out.end(),
                token_indices_out.data());
@@ -1707,7 +1707,8 @@ void make_json_column(json_column& root_column,
   CUDF_FUNC_RANGE();
 
   // Parse the JSON and get the token stream
-  auto const [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, resources);
+  auto const [d_tokens_gpu, d_token_indices_gpu] =
+    get_token_stream(d_input, options, stream, resources);
 
   // Copy the JSON tokens to the host
   auto tokens            = cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
@@ -2211,11 +2212,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         column_names.back().children = names;
       }
       auto [result_bitmask, null_count] = make_validity(json_col);
-      return {
-        make_structs_column(
-          num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream,
-                  resources),
-        column_names};
+      return {make_structs_column(num_rows,
+                                  std::move(child_columns),
+                                  null_count,
+                                  std::move(result_bitmask),
+                                  stream,
+                                  resources),
+              column_names};
       break;
     }
     case json_col_t::ListColumn: {

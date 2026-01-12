@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -162,7 +162,7 @@ void index_of(InputIterator input_it,
 {
   auto const keys_dv_ptr       = column_device_view::create(search_keys, stream);
   auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     input_it,
                     input_it + num_rows,
                     output_it,
@@ -244,8 +244,8 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                "Expected input column of type cudf::size_type.");
   auto const positions_begin = key_positions->view().template begin<size_type>();
   auto result                = make_numeric_column(
-    data_type{type_id::BOOL8}, key_positions->size(), mask_state::UNALLOCATED, stream, resources);
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    data_type{type_id::BOOL8}, key_positions->size(), mask_state::UNALLOCATED, stream, mr);
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     positions_begin,
                     positions_begin + key_positions->size(),
                     result->mutable_view().template begin<bool>(),
@@ -273,8 +273,7 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
     return make_numeric_column(
       data_type{cudf::type_to_id<size_type>()},
       lists.size(),
-      cudf::detail::create_null_mask(lists.size(), mask_state::ALL_NULL, stream,
-                  resources),
+      cudf::detail::create_null_mask(lists.size(), mask_state::ALL_NULL, stream, resources),
       lists.size(),
       stream,
       resources);
@@ -304,11 +303,8 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  cudf::memory_resources resources)
 {
-  auto key_indices = detail::index_of(lists,
-                                      search_key,
-                                      duplicate_find_option::FIND_FIRST,
-                                      stream,
-                                      resources.get_temporary_mr());
+  auto key_indices = detail::index_of(
+    lists, search_key, duplicate_find_option::FIND_FIRST, stream, resources.get_temporary_mr());
   return to_contains(std::move(key_indices), stream, resources);
 }
 
@@ -320,11 +316,8 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
 
-  auto key_indices = detail::index_of(lists,
-                                      search_keys,
-                                      duplicate_find_option::FIND_FIRST,
-                                      stream,
-                                      resources.get_temporary_mr());
+  auto key_indices = detail::index_of(
+    lists, search_keys, duplicate_find_option::FIND_FIRST, stream, resources.get_temporary_mr());
   return to_contains(std::move(key_indices), stream, resources);
 }
 
@@ -335,8 +328,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const lists_cv      = lists.parent();
   auto output              = make_numeric_column(data_type{type_to_id<bool>()},
                                     lists.size(),
-                                    cudf::detail::copy_bitmask(lists_cv, stream,
-                  resources),
+                                    cudf::detail::copy_bitmask(lists_cv, stream, resources),
                                     lists_cv.null_count(),
                                     stream,
                                     resources);
@@ -344,7 +336,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const lists_cdv_ptr = column_device_view::create(lists_cv, stream);
 
   thrust::tabulate(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     out_begin,
     out_begin + lists.size(),
     cuda::proclaim_return_type<bool>([lists = cudf::detail::lists_column_device_view{

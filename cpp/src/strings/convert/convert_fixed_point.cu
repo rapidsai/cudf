@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -128,17 +128,17 @@ struct dispatch_to_fixed_point_fn {
     auto const d_column = column_device_view::create(input.parent(), stream);
 
     // create output column
-    auto results   = make_fixed_point_column(output_type,
-                                           input.size(),
-                                           cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
-                                           input.null_count(),
-                                           stream,
-                                           resources);
+    auto results =
+      make_fixed_point_column(output_type,
+                              input.size(),
+                              cudf::detail::copy_bitmask(input.parent(), stream, resources),
+                              input.null_count(),
+                              stream,
+                              resources);
     auto d_results = results->mutable_view().data<DecimalType>();
 
     // convert strings into decimal values
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       d_results,
@@ -167,7 +167,8 @@ std::unique_ptr<column> to_fixed_point(strings_column_view const& input,
                                        cudf::memory_resources resources)
 {
   if (input.is_empty()) return make_empty_column(output_type);
-  return type_dispatcher(output_type, dispatch_to_fixed_point_fn{}, input, output_type, stream, resources);
+  return type_dispatcher(
+    output_type, dispatch_to_fixed_point_fn{}, input, output_type, stream, resources);
 }
 
 }  // namespace detail
@@ -235,15 +236,14 @@ struct dispatch_from_fixed_point_fn {
 
     auto const d_column = column_device_view::create(input, stream);
 
-    auto [offsets, chars] =
-      make_strings_children(from_fixed_point_fn<DecimalType>{*d_column}, input.size(), stream, resources);
+    auto [offsets, chars] = make_strings_children(
+      from_fixed_point_fn<DecimalType>{*d_column}, input.size(), stream, resources);
 
     return make_strings_column(input.size(),
                                std::move(offsets),
                                chars.release(),
                                input.null_count(),
-                               cudf::detail::copy_bitmask(input, stream,
-                  resources));
+                               cudf::detail::copy_bitmask(input, stream, resources));
   }
 
   template <typename T>
@@ -294,17 +294,17 @@ struct dispatch_is_fixed_point_fn {
     auto const d_column = column_device_view::create(input.parent(), stream);
 
     // create output column
-    auto results   = make_numeric_column(data_type{type_id::BOOL8},
-                                       input.size(),
-                                       cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
-                                       input.null_count(),
-                                       stream,
-                                       resources);
+    auto results =
+      make_numeric_column(data_type{type_id::BOOL8},
+                          input.size(),
+                          cudf::detail::copy_bitmask(input.parent(), stream, resources),
+                          input.null_count(),
+                          stream,
+                          resources);
     auto d_results = results->mutable_view().data<bool>();
 
     // check strings for valid fixed-point chars
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       d_results,

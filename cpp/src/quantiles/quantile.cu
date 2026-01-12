@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -63,12 +63,14 @@ struct quantile_functor {
 
     auto const type =
       is_fixed_point(input.type()) ? input.type() : data_type{type_to_id<StorageResult>()};
-    auto output = make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream, resources);
+    auto output =
+      make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream, resources);
 
     if (output->size() == 0) { return output; }
 
     if (input.is_empty()) {
-      auto mask = cudf::detail::create_null_mask(output->size(), mask_state::ALL_NULL, stream, resources);
+      auto mask =
+        cudf::detail::create_null_mask(output->size(), mask_state::ALL_NULL, stream, resources);
       output->set_null_mask(std::move(mask), output->size());
       return output;
     }
@@ -76,13 +78,12 @@ struct quantile_functor {
     auto d_input  = column_device_view::create(input, stream);
     auto d_output = mutable_column_device_view::create(output->mutable_view(), stream);
 
-    auto q_device =
-      cudf::detail::make_device_uvector(q, stream, resources.get_temporary_mr());
+    auto q_device = cudf::detail::make_device_uvector(q, stream, resources.get_temporary_mr());
 
     if (!cudf::is_dictionary(input.type())) {
       auto sorted_data =
         thrust::make_permutation_iterator(input.data<StorageType>(), ordered_indices);
-      thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),
@@ -94,7 +95,7 @@ struct quantile_functor {
     } else {
       auto sorted_data = thrust::make_permutation_iterator(
         dictionary::detail::make_dictionary_iterator<T>(*d_input), ordered_indices);
-      thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),

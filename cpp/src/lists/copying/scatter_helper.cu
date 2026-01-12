@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -164,9 +164,13 @@ struct list_child_constructor {
 
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
-        ? construct_child_nullmask(
-            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream,
-                  resources)
+        ? construct_child_nullmask(list_vector,
+                                   list_offsets,
+                                   source_lists,
+                                   target_lists,
+                                   num_child_rows,
+                                   stream,
+                                   resources)
         : std::pair(rmm::device_buffer{}, 0);
 
     auto child_column = cudf::make_fixed_width_column(source_lists_column_view.child().type(),
@@ -224,7 +228,8 @@ struct list_child_constructor {
 
     if (num_child_rows == 0) { return make_empty_column(type_id::STRING); }
 
-    auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream, resources.get_temporary_mr());
+    auto string_views =
+      rmm::device_uvector<string_view>(num_child_rows, stream, resources.get_temporary_mr());
 
     auto const null_string_view = string_view{nullptr, 0};  // placeholder for factory function
 
@@ -290,7 +295,8 @@ struct list_child_constructor {
       return empty_like(source_lists_column_view.child());
     }
 
-    auto child_list_views = rmm::device_uvector<unbound_list_view>(num_child_rows, stream, resources);
+    auto child_list_views =
+      rmm::device_uvector<unbound_list_view>(num_child_rows, stream, resources);
 
     // Convert from parent list_device_view instances to child list_device_views.
     // For instance, if a parent list_device_view has 3 elements, it should have 3 corresponding
@@ -331,9 +337,8 @@ struct list_child_constructor {
       child_list_views.begin(),
       cuda::proclaim_return_type<size_type>([] __device__(auto const& row) { return row.size(); }));
 
-    auto child_offsets = std::get<0>(
-      cudf::detail::make_offsets_child_column(begin, begin + child_list_views.size(), stream,
-                  resources));
+    auto child_offsets = std::get<0>(cudf::detail::make_offsets_child_column(
+      begin, begin + child_list_views.size(), stream, resources));
 
     auto child_column = cudf::type_dispatcher<dispatch_storage_type>(
       source_lists_column_view.child().child(1).type(),
@@ -347,9 +352,13 @@ struct list_child_constructor {
 
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
-        ? construct_child_nullmask(
-            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream,
-                  resources)
+        ? construct_child_nullmask(list_vector,
+                                   list_offsets,
+                                   source_lists,
+                                   target_lists,
+                                   num_child_rows,
+                                   stream,
+                                   resources)
         : std::pair(rmm::device_buffer{}, 0);
 
     return cudf::make_lists_column(num_child_rows,
@@ -441,9 +450,13 @@ struct list_child_constructor {
 
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
-        ? construct_child_nullmask(
-            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream,
-                  resources)
+        ? construct_child_nullmask(list_vector,
+                                   list_offsets,
+                                   source_lists,
+                                   target_lists,
+                                   num_child_rows,
+                                   stream,
+                                   resources)
         : std::pair(rmm::device_buffer{}, 0);
 
     return cudf::make_structs_column(num_child_rows,

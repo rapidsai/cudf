@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -193,10 +193,10 @@ rmm::device_uvector<size_type> compute_page_indices_async(
   cudf::memory_resources resources)
 {
   // Copy page-level row counts and offsets to device
-  auto row_counts = cudf::detail::make_device_uvector_async(
-    page_row_counts, stream, resources.get_temporary_mr());
-  auto row_offsets = cudf::detail::make_device_uvector_async(
-    page_row_offsets, stream, resources.get_temporary_mr());
+  auto row_counts =
+    cudf::detail::make_device_uvector_async(page_row_counts, stream, resources.get_temporary_mr());
+  auto row_offsets =
+    cudf::detail::make_device_uvector_async(page_row_offsets, stream, resources.get_temporary_mr());
 
   // Make a zeroed device vector to store page indices of each row
   auto page_indices =

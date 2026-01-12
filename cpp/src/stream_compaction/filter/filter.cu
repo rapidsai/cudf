@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -41,8 +41,8 @@ void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
   auto outputs = cudf::jit::to_device_vector(
     std::vector{cudf::jit::device_optional_span<bool>{output, nullptr}}, stream, resources);
 
-  auto [input_handles, inputs] =
-    cudf::jit::column_views_to_device<column_device_view, column_view>(input_columns, stream, resources);
+  auto [input_handles, inputs] = cudf::jit::column_views_to_device<column_device_view, column_view>(
+    input_columns, stream, resources);
 
   cudf::jit::device_optional_span<bool> const* p_outputs = outputs.data();
   column_device_view const* p_inputs                     = inputs.data();
@@ -264,8 +264,14 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& pred
                                             cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter(
-    predicate_columns, predicate_udf, filter_columns, is_ptx, user_data, is_null_aware, stream, resources);
+  return detail::filter(predicate_columns,
+                        predicate_udf,
+                        filter_columns,
+                        is_ptx,
+                        user_data,
+                        is_null_aware,
+                        stream,
+                        resources);
 }
 
 std::unique_ptr<table> filter(table_view const& predicate_table,

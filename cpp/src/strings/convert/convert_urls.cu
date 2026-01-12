@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -133,8 +133,7 @@ std::unique_ptr<column> url_encode(strings_column_view const& input,
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 }  // namespace detail
@@ -389,7 +388,8 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   auto const d_strings = column_device_view::create(strings.parent(), stream);
 
   // build offsets column by computing the output row sizes and scanning the results
-  auto row_sizes = rmm::device_uvector<size_type>(strings_count, stream, resources.get_temporary_mr());
+  auto row_sizes =
+    rmm::device_uvector<size_type>(strings_count, stream, resources.get_temporary_mr());
   url_decode_char_counter<num_warps_per_threadblock, char_block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(*d_strings, row_sizes.data());
   // performs scan on the sizes and builds the appropriate offsets column

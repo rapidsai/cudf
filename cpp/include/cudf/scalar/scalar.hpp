@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -103,7 +103,7 @@ class scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   scalar(scalar const& other,
-         rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+         rmm::cuda_stream_view stream     = cudf::get_default_stream(),
          cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -118,8 +118,8 @@ class scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   scalar(data_type type,
-         bool is_valid                     = false,
-         rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+         bool is_valid                    = false,
+         rmm::cuda_stream_view stream     = cudf::get_default_stream(),
          cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 };
 
@@ -156,7 +156,7 @@ class fixed_width_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_width_scalar(fixed_width_scalar const& other,
-                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                     rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                      cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -199,8 +199,8 @@ class fixed_width_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_width_scalar(T value,
-                     bool is_valid                     = true,
-                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                     bool is_valid                    = true,
+                     rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                      cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -212,8 +212,8 @@ class fixed_width_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_width_scalar(rmm::device_scalar<T>&& data,
-                     bool is_valid                     = true,
-                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                     bool is_valid                    = true,
+                     rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                      cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 };
 
@@ -249,7 +249,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   numeric_scalar(numeric_scalar const& other,
-                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -261,8 +261,8 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   numeric_scalar(T value,
-                 bool is_valid                     = true,
-                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 bool is_valid                    = true,
+                 rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -274,8 +274,8 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   numeric_scalar(rmm::device_scalar<T>&& data,
-                 bool is_valid                     = true,
-                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 bool is_valid                    = true,
+                 rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 };
 
@@ -312,7 +312,7 @@ class fixed_point_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_point_scalar(fixed_point_scalar const& other,
-                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                     rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                      cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -326,8 +326,8 @@ class fixed_point_scalar : public scalar {
    */
   fixed_point_scalar(rep_type value,
                      numeric::scale_type scale,
-                     bool is_valid                     = true,
-                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                     bool is_valid                    = true,
+                     rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                      cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -339,8 +339,8 @@ class fixed_point_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_point_scalar(rep_type value,
-                     bool is_valid                     = true,
-                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                     bool is_valid                    = true,
+                     rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                      cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -352,8 +352,8 @@ class fixed_point_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_point_scalar(T value,
-                     bool is_valid                     = true,
-                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                     bool is_valid                    = true,
+                     rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                      cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -367,8 +367,8 @@ class fixed_point_scalar : public scalar {
    */
   fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
                      numeric::scale_type scale,
-                     bool is_valid                     = true,
-                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                     bool is_valid                    = true,
+                     rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                      cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -432,7 +432,7 @@ class string_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(string_scalar const& other,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -446,8 +446,8 @@ class string_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(std::string_view string,
-                bool is_valid                     = true,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                bool is_valid                    = true,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -461,8 +461,8 @@ class string_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(value_type const& source,
-                bool is_valid                     = true,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                bool is_valid                    = true,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -476,8 +476,8 @@ class string_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(rmm::device_scalar<value_type>& data,
-                bool is_valid                     = true,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                bool is_valid                    = true,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -492,8 +492,8 @@ class string_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(rmm::device_buffer&& data,
-                bool is_valid                     = true,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                bool is_valid                    = true,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -560,7 +560,7 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   chrono_scalar(chrono_scalar const& other,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -572,8 +572,8 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   chrono_scalar(T value,
-                bool is_valid                     = true,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                bool is_valid                    = true,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -585,8 +585,8 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   chrono_scalar(rmm::device_scalar<T>&& data,
-                bool is_valid                     = true,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                bool is_valid                    = true,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 };
 
@@ -619,7 +619,7 @@ class timestamp_scalar : public chrono_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   timestamp_scalar(timestamp_scalar const& other,
-                   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                   rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                    cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -635,7 +635,7 @@ class timestamp_scalar : public chrono_scalar<T> {
   template <typename Duration2>
   timestamp_scalar(Duration2 const& value,
                    bool is_valid,
-                   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                   rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                    cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -675,7 +675,7 @@ class duration_scalar : public chrono_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   duration_scalar(duration_scalar const& other,
-                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -688,7 +688,7 @@ class duration_scalar : public chrono_scalar<T> {
    */
   duration_scalar(rep_type value,
                   bool is_valid,
-                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -724,7 +724,7 @@ class list_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   list_scalar(list_scalar const& other,
-              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::cuda_stream_view stream     = cudf::get_default_stream(),
               cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -738,8 +738,8 @@ class list_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   list_scalar(cudf::column_view const& data,
-              bool is_valid                     = true,
-              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              bool is_valid                    = true,
+              rmm::cuda_stream_view stream     = cudf::get_default_stream(),
               cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -751,8 +751,8 @@ class list_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   list_scalar(cudf::column&& data,
-              bool is_valid                     = true,
-              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              bool is_valid                    = true,
+              rmm::cuda_stream_view stream     = cudf::get_default_stream(),
               cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -789,7 +789,7 @@ class struct_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   struct_scalar(struct_scalar const& other,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -803,8 +803,8 @@ class struct_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   struct_scalar(table_view const& data,
-                bool is_valid                     = true,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                bool is_valid                    = true,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -818,8 +818,8 @@ class struct_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   struct_scalar(host_span<column_view const> data,
-                bool is_valid                     = true,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                bool is_valid                    = true,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -834,8 +834,8 @@ class struct_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   struct_scalar(table&& data,
-                bool is_valid                     = true,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                bool is_valid                    = true,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**

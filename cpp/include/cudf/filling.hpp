@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -80,7 +80,7 @@ std::unique_ptr<column> fill(
   size_type begin,
   size_type end,
   scalar const& value,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -114,7 +114,7 @@ std::unique_ptr<column> fill(
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   column_view const& count,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -139,7 +139,7 @@ std::unique_ptr<table> repeat(
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   size_type count,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -171,7 +171,7 @@ std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
   scalar const& step,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -199,7 +199,7 @@ std::unique_ptr<column> sequence(
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -230,7 +230,7 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(
   size_type size,
   scalar const& init,
   size_type months,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

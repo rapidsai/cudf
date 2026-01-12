@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -66,7 +66,7 @@ std::unique_ptr<column> merge_offsets(host_span<lists_column_view const> columns
         (c.offset() > 0 ? cudf::detail::get_value<size_type>(c.offsets(), c.offset(), stream) : 0);
       column_device_view offsets(c.offsets(), nullptr, nullptr);
       thrust::transform(
-        rmm::exec_policy(stream, resources.get_temporary_mr()),
+        rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
         offsets.begin<size_type>() + c.offset(),
         offsets.begin<size_type>() + c.offset() + c.size() + 1,
         d_merged_offsets.begin<size_type>() + count,
@@ -115,8 +115,11 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
-  rmm::device_buffer null_mask = cudf::detail::create_null_mask(
-    total_list_count, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, resources);
+  rmm::device_buffer null_mask =
+    cudf::detail::create_null_mask(total_list_count,
+                                   has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED,
+                                   stream,
+                                   resources);
   auto null_mask_data = static_cast<bitmask_type*>(null_mask.data());
   auto const null_count =
     has_nulls ? cudf::detail::concatenate_masks(columns, null_mask_data, stream) : size_type{0};

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -93,7 +93,7 @@ mixed_inner_join(table_view const& left_equality,
                  null_equality compare_nulls            = null_equality::EQUAL,
                  output_size_data_type output_size_data = {},
                  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-                 cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+                 cudf::memory_resources resources       = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -154,7 +154,7 @@ mixed_left_join(table_view const& left_equality,
                 null_equality compare_nulls            = null_equality::EQUAL,
                 output_size_data_type output_size_data = {},
                 rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-                cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+                cudf::memory_resources resources       = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -215,7 +215,7 @@ mixed_full_join(table_view const& left_equality,
                 null_equality compare_nulls            = null_equality::EQUAL,
                 output_size_data_type output_size_data = {},
                 rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-                cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+                cudf::memory_resources resources       = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left tables
@@ -260,8 +260,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls       = null_equality::EQUAL,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  null_equality compare_nulls      = null_equality::EQUAL,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -308,8 +308,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls       = null_equality::EQUAL,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  null_equality compare_nulls      = null_equality::EQUAL,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -350,8 +350,8 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls       = null_equality::EQUAL,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  null_equality compare_nulls      = null_equality::EQUAL,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -392,8 +392,8 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls       = null_equality::EQUAL,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  null_equality compare_nulls      = null_equality::EQUAL,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

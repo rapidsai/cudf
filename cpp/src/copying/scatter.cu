@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -145,7 +145,7 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
     auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
     auto const begin       = thrust::make_constant_iterator(source_view);
     auto const end         = begin + scatter_rows;
-    auto result            = strings::detail::scatter(begin, end, scatter_iter, target, stream, resources);
+    auto result = strings::detail::scatter(begin, end, scatter_iter, target, stream, resources);
 
     scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, resources);
     return result;
@@ -164,8 +164,8 @@ struct column_scalar_scatterer_impl<list_view, MapIterator> {
     CUDF_EXPECTS(source.get().type() == target.type(),
                  "scalar and column types must match",
                  cudf::data_type_error);
-    auto result =
-      lists::detail::scatter(source, scatter_iter, scatter_iter + scatter_rows, target, stream, resources);
+    auto result = lists::detail::scatter(
+      source, scatter_iter, scatter_iter + scatter_rows, target, stream, resources);
 
     scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, resources);
     return result;
@@ -186,12 +186,13 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                    make_column_from_scalar(source.get(), 1, stream)->view(),
                                    stream,
                                    resources);
-    auto dict_view    = dictionary_column_view(dict_target->view());
-    auto scalar_index = dictionary::detail::get_index(
-      dict_view, source.get(), stream, resources.get_temporary_mr());
+    auto dict_view = dictionary_column_view(dict_target->view());
+    auto scalar_index =
+      dictionary::detail::get_index(dict_view, source.get(), stream, resources.get_temporary_mr());
     auto scalar_iter = thrust::make_permutation_iterator(
       indexalator_factory::make_input_iterator(*scalar_index), thrust::make_constant_iterator(0));
-    auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, resources);
+    auto new_indices =
+      std::make_unique<column>(dict_view.get_indices_annotated(), stream, resources);
     auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
 
     thrust::scatter(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
@@ -260,8 +261,8 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 
     auto scatter_functor   = column_scalar_scatterer<decltype(scatter_iter)>{};
     auto fields_iter_begin = make_counting_transform_iterator(0, [&](auto const& i) {
-      auto row_slr = detail::get_element(
-        typed_s->view().column(i), 0, stream, resources.get_temporary_mr());
+      auto row_slr =
+        detail::get_element(typed_s->view().column(i), 0, stream, resources.get_temporary_mr());
       return type_dispatcher<dispatch_storage_type>(row_slr->type(),
                                                     scatter_functor,
                                                     *row_slr,
@@ -276,21 +277,25 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
     // Compute null mask
     rmm::device_buffer null_mask =
       target.nullable()
-        ? detail::copy_bitmask(target, stream,
-                  resources)
+        ? detail::copy_bitmask(target, stream, resources)
         : detail::create_null_mask(target.size(), mask_state::UNALLOCATED, stream, resources);
     column null_mask_stub(data_type{type_id::STRUCT},
                           target.size(),
                           rmm::device_buffer{},
                           std::move(null_mask),
                           target.null_count());
-    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, null_mask_stub, stream, resources);
+    scatter_scalar_bitmask_inplace(
+      source, scatter_iter, scatter_rows, null_mask_stub, stream, resources);
     size_type null_count = null_mask_stub.null_count();
     auto contents        = null_mask_stub.release();
 
     // Null mask pushdown inside factory method
-    return make_structs_column(
-      target.size(), std::move(fields), null_count, std::move(*contents.null_mask), stream, resources);
+    return make_structs_column(target.size(),
+                               std::move(fields),
+                               null_count,
+                               std::move(*contents.null_mask),
+                               stream,
+                               resources);
   }
 };
 
@@ -408,8 +413,11 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
   // The scatter map is actually a table with only one column, which is scatter map.
   auto scatter_map = detail::apply_boolean_mask(
     table_view{{indices->view()}}, boolean_mask, stream, resources.get_temporary_mr());
-  auto output_table = detail::scatter(
-    table_view{{input}}, scatter_map->get_column(0).view(), table_view{{target}}, stream, resources);
+  auto output_table = detail::scatter(table_view{{input}},
+                                      scatter_map->get_column(0).view(),
+                                      table_view{{target}},
+                                      stream,
+                                      resources);
 
   // There is only one column in output_table
   return std::make_unique<column>(std::move(output_table->get_column(0)));
@@ -489,14 +497,14 @@ std::unique_ptr<table> boolean_mask_scatter(
 
   if (target.num_rows() != 0) {
     std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
-    std::transform(input.begin(),
-                   input.end(),
-                   target.begin(),
-                   out_columns.begin(),
-                   [&boolean_mask, resources, stream](auto const& scalar, auto const& target_column) {
-                     return boolean_mask_scatter(
-                       scalar.get(), target_column, boolean_mask, stream, resources);
-                   });
+    std::transform(
+      input.begin(),
+      input.end(),
+      target.begin(),
+      out_columns.begin(),
+      [&boolean_mask, resources, stream](auto const& scalar, auto const& target_column) {
+        return boolean_mask_scatter(scalar.get(), target_column, boolean_mask, stream, resources);
+      });
 
     return std::make_unique<table>(std::move(out_columns));
   } else {

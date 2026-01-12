@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -227,8 +227,12 @@ int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column&& colum
     if (child->type().id() == cudf::type_id::EMPTY) {
       NANOARROW_RETURN_NOT_OK(handle_empty_type_column(child_ptr, *child));
     } else {
-      NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-        child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, resources, child_ptr));
+      NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(child->type(),
+                                                    dispatch_to_arrow_device{},
+                                                    std::move(*child),
+                                                    stream,
+                                                    resources,
+                                                    child_ptr));
     }
   }
 
@@ -257,8 +261,12 @@ int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column&& column,
   if (child->type().id() == cudf::type_id::EMPTY) {
     NANOARROW_RETURN_NOT_OK(handle_empty_type_column(tmp->children[0], *child));
   } else {
-    NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-      child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, resources, tmp->children[0]));
+    NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(child->type(),
+                                                  dispatch_to_arrow_device{},
+                                                  std::move(*child),
+                                                  stream,
+                                                  resources,
+                                                  tmp->children[0]));
   }
 
   ArrowArrayMove(tmp.get(), out);
@@ -294,8 +302,12 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& colu
   auto keys = is_empty
                 ? cudf::make_empty_column(cudf::type_id::INT64)
                 : std::move(contents.children[cudf::dictionary_column_view::keys_column_index]);
-  NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-    keys->type(), dispatch_to_arrow_device{}, std::move(*keys), stream, resources, tmp->dictionary));
+  NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(keys->type(),
+                                                dispatch_to_arrow_device{},
+                                                std::move(*keys),
+                                                stream,
+                                                resources,
+                                                tmp->dictionary));
 
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
@@ -543,8 +555,12 @@ unique_device_array_t to_arrow_device(cudf::table&& table,
     if (col->type().id() == cudf::type_id::EMPTY) {
       NANOARROW_THROW_NOT_OK(handle_empty_type_column(child, *col));
     } else {
-      NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
-        col->type(), detail::dispatch_to_arrow_device{}, std::move(*col), stream, resources, child));
+      NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(col->type(),
+                                                   detail::dispatch_to_arrow_device{},
+                                                   std::move(*col),
+                                                   stream,
+                                                   resources,
+                                                   child));
     }
   }
 
@@ -560,8 +576,12 @@ unique_device_array_t to_arrow_device(cudf::column&& col,
   if (col.type().id() == cudf::type_id::EMPTY) {
     NANOARROW_THROW_NOT_OK(handle_empty_type_column(tmp.get(), col));
   } else {
-    NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
-      col.type(), detail::dispatch_to_arrow_device{}, std::move(col), stream, resources, tmp.get()));
+    NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(col.type(),
+                                                 detail::dispatch_to_arrow_device{},
+                                                 std::move(col),
+                                                 stream,
+                                                 resources,
+                                                 tmp.get()));
   }
 
   return create_device_array(std::move(tmp), stream);

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -65,15 +65,15 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
   }
 
   auto const total_size = input.size() * categories.size();
-  auto all_encodings =
-    make_numeric_column(data_type{type_id::BOOL8}, total_size, mask_state::UNALLOCATED, stream, resources);
+  auto all_encodings    = make_numeric_column(
+    data_type{type_id::BOOL8}, total_size, mask_state::UNALLOCATED, stream, resources);
 
   auto const t_lhs      = table_view{{input}};
   auto const t_rhs      = table_view{{categories}};
   auto const comparator = cudf::detail::row::equality::two_table_comparator{t_lhs, t_rhs, stream};
 
   auto const comparator_helper = [&](auto const d_equal) {
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(total_size),
                       all_encodings->mutable_view().begin<bool>(),

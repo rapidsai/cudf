@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -56,7 +56,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
   // into row offsets of the root column. Those entry offsets are subtracted by the first entry
   // offset to output zero-based offsets.
   auto const iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     iter,
                     iter + num_rows + 1,
                     d_out_offsets,
@@ -73,8 +73,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 
   auto [null_mask, null_count] = [&] {
     if (!build_null_mask)
-      return std::pair(cudf::detail::copy_bitmask(input, stream,
-                  resources), input.null_count());
+      return std::pair(cudf::detail::copy_bitmask(input, stream, resources), input.null_count());
 
     // The output row will be null only if all lists on the input row are null.
     auto const lists_dv_ptr = column_device_view::create(lists_column_view(input).child(), stream);
@@ -149,8 +148,7 @@ generate_list_offsets_and_validities(column_view const& input,
     }));
   // Compute offsets from sizes.
   auto out_offsets = std::get<0>(
-    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + num_rows, stream,
-                  resources));
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + num_rows, stream, resources));
 
   return {std::move(out_offsets), std::move(validities)};
 }
@@ -171,11 +169,12 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
   auto const entry_col      = lists_column_view(child_col).child();
   auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(child_col).offsets_begin();
-  auto gather_map           = rmm::device_uvector<size_type>(num_output_entries, stream, resources.get_temporary_mr());
+  auto gather_map =
+    rmm::device_uvector<size_type>(num_output_entries, stream, resources.get_temporary_mr());
 
   // Fill the gather map with indices of the lists from the child column of the input column.
   thrust::for_each_n(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     num_rows,
     [d_row_offsets,
@@ -207,8 +206,9 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
                                                           cudf::memory_resources resources)
 {
   // Generate offsets and validities of the output lists column.
-  auto [list_offsets, list_validities] = generate_list_offsets_and_validities(input, stream, resources);
-  auto const offsets_view              = list_offsets->view();
+  auto [list_offsets, list_validities] =
+    generate_list_offsets_and_validities(input, stream, resources);
+  auto const offsets_view = list_offsets->view();
 
   auto const num_rows = input.size();
   auto const num_output_entries =
@@ -253,8 +253,7 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
 
   bool const has_null_list = child.has_nulls();
   return (null_policy == concatenate_null_policy::IGNORE || !has_null_list)
-           ? concatenate_lists_ignore_null(input, has_null_list, stream,
-                  resources)
+           ? concatenate_lists_ignore_null(input, has_null_list, stream, resources)
            : concatenate_lists_nullifying_rows(input, stream, resources);
 }
 

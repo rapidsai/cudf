@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -80,7 +80,8 @@ std::unique_ptr<table> quantiles(table_view const& input,
   } else {
     auto sorted_idx = detail::sorted_order(
       input, column_order, null_precedence, stream, resources.get_temporary_mr());
-    return detail::quantiles(input, sorted_idx->view().data<size_type>(), q, interp, stream, resources);
+    return detail::quantiles(
+      input, sorted_idx->view().data<size_type>(), q, interp, stream, resources);
   }
 }
 

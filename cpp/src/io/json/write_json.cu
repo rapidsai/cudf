@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -178,8 +178,7 @@ struct escape_strings_fn {
                                std::move(offsets_column),
                                chars.release(),
                                column_v.null_count(),
-                               cudf::detail::copy_bitmask(column_v, stream,
-                  resources));
+                               cudf::detail::copy_bitmask(column_v, stream, resources));
   }
 };
 
@@ -526,8 +525,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
     std::make_unique<cudf::column>(std::move(row_string_offsets), rmm::device_buffer{}, 0),
     std::move(chars_data.release()[0]),
     lists_strings.null_count(),
-    cudf::detail::copy_bitmask(lists_strings.parent(), stream,
-                  resources));
+    cudf::detail::copy_bitmask(lists_strings.parent(), stream, resources));
 }
 
 /**
@@ -684,13 +682,13 @@ struct column_to_strings_fn {
     };
     auto new_offsets = cudf::lists::detail::get_normalized_offsets(
       lists_column_view(column), stream_, resources.get_temporary_mr());
-    auto const list_child_string = make_lists_column(
-      column.size(),
-      std::move(new_offsets),
-      child_string_with_null(),
-      column.null_count(),
-      cudf::detail::copy_bitmask(column, stream_, resources.get_temporary_mr()),
-      stream_);
+    auto const list_child_string =
+      make_lists_column(column.size(),
+                        std::move(new_offsets),
+                        child_string_with_null(),
+                        column.null_count(),
+                        cudf::detail::copy_bitmask(column, stream_, resources.get_temporary_mr()),
+                        stream_);
     return join_list_of_strings(lists_column_view(*list_child_string),
                                 list_row_begin_wrap.value(stream_),
                                 list_row_end_wrap.value(stream_),
@@ -807,8 +805,8 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
 {
   std::string const host_chars =
     std::accumulate(host_strings.begin(), host_strings.end(), std::string(""));
-  auto d_chars = cudf::detail::make_device_uvector_async(
-    host_chars, stream, resources.get_temporary_mr());
+  auto d_chars =
+    cudf::detail::make_device_uvector_async(host_chars, stream, resources.get_temporary_mr());
   std::vector<cudf::size_type> offsets(host_strings.size() + 1, 0);
   std::transform_inclusive_scan(host_strings.begin(),
                                 host_strings.end(),

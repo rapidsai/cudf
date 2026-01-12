@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,13 +34,13 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
   // create output indices column
   auto const merged_size  = lcol.size() + rcol.size();
   auto const indices_type = get_indices_type_for_size(merged_size);
-  auto indices_column =
-    make_fixed_width_column(indices_type, merged_size, cudf::mask_state::UNALLOCATED, stream, resources);
+  auto indices_column     = make_fixed_width_column(
+    indices_type, merged_size, cudf::mask_state::UNALLOCATED, stream, resources);
   auto output_iter =
     cudf::detail::indexalator_factory::make_output_iterator(indices_column->mutable_view());
 
   // merge the input indices columns into the output column
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     row_order.begin(),
                     row_order.end(),
                     output_iter,
@@ -51,8 +51,7 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
 
   // build dictionary; the validity mask is updated by the caller
   return make_dictionary_column(
-    std::make_unique<column>(lcol.keys(), stream,
-                  resources),
+    std::make_unique<column>(lcol.keys(), stream, resources),
     std::move(indices_column),
     cudf::detail::create_null_mask(
       lcol.has_nulls() || rcol.has_nulls() ? static_cast<size_t>(merged_size) : 0,

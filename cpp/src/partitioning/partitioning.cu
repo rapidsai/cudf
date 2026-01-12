@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -478,7 +478,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   auto grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
 
   // Allocate array to hold which partition each row belongs to
-  auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream, resources.get_temporary_mr());
+  auto row_partition_numbers =
+    rmm::device_uvector<size_type>(num_rows, stream, resources.get_temporary_mr());
 
   // Array to hold the size of each partition computed by each block
   //  i.e., { {block0 partition0 size, block1 partition0 size, ...},
@@ -486,10 +487,11 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   //          ...
   //          {block0 partition(num_partitions-1) size, block1
   //          partition(num_partitions -1) size, ...} }
-  auto block_partition_sizes = rmm::device_uvector<size_type>(grid_size * num_partitions, stream, resources.get_temporary_mr());
+  auto block_partition_sizes = rmm::device_uvector<size_type>(
+    grid_size * num_partitions, stream, resources.get_temporary_mr());
 
-  auto scanned_block_partition_sizes =
-    rmm::device_uvector<size_type>(grid_size * num_partitions, stream, resources.get_temporary_mr());
+  auto scanned_block_partition_sizes = rmm::device_uvector<size_type>(
+    grid_size * num_partitions, stream, resources.get_temporary_mr());
 
   // Holds the total number of rows in each partition
   auto global_partition_sizes = cudf::detail::make_zeroed_device_uvector_async<size_type>(
@@ -548,7 +550,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
   // Compute exclusive scan of all blocks' partition sizes in-place to determine
   // the starting point for each blocks portion of each partition in the output
-  thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          block_partition_sizes.begin(),
                          block_partition_sizes.end(),
                          scanned_block_partition_sizes.data());
@@ -556,7 +558,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   // Compute exclusive scan of size of each partition to determine offset
   // location of each partition in final output.
   // TODO This can be done independently on a separate stream
-  thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          global_partition_sizes.begin(),
                          global_partition_sizes.end(),
                          global_partition_sizes.begin());
@@ -599,8 +601,12 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                            stream);
 
       // Handle bitmask using gather to take advantage of ballot_sync
-      detail::gather_bitmask(
-        input, gather_map.begin(), output_cols, detail::gather_bitmask_op::DONT_CHECK, stream, resources);
+      detail::gather_bitmask(input,
+                             gather_map.begin(),
+                             output_cols,
+                             detail::gather_bitmask_op::DONT_CHECK,
+                             stream,
+                             resources);
     }
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
@@ -683,8 +689,10 @@ struct dispatch_map_type {
 
     // `histogram` was created with an extra entry at the end such that an
     // exclusive scan will put the total number of rows at the end
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream, resources.get_temporary_mr()), histogram.begin(), histogram.end(), histogram.begin());
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                           histogram.begin(),
+                           histogram.end(),
+                           histogram.begin());
 
     // Copy offsets to host before the transform below modifies the histogram
     auto const partition_offsets = cudf::detail::make_std_vector(histogram, stream);
@@ -695,7 +703,7 @@ struct dispatch_map_type {
 
     // For each `partition_map[i]`, atomically increment the corresponding
     // partition offset to determine `i`s location in the output
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       partition_map.begin<MapType>(),
                       partition_map.end<MapType>(),
                       scatter_map.begin(),

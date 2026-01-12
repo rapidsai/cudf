@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -72,8 +72,11 @@ struct count_checker {
     // static_cast is necessary due to bool
     if (static_cast<int64_t>(std::numeric_limits<T>::max()) >
         std::numeric_limits<cudf::size_type>::max()) {
-      auto max = thrust::reduce(
-        rmm::exec_policy(stream, resources.get_temporary_mr()), count.begin<T>(), count.end<T>(), 0, cuda::maximum<T>());
+      auto max = thrust::reduce(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                                count.begin<T>(),
+                                count.end<T>(),
+                                0,
+                                cuda::maximum<T>());
       CUDF_EXPECTS(max <= std::numeric_limits<cudf::size_type>::max(),
                    "count exceeds the column size limit",
                    std::overflow_error);
@@ -105,20 +108,26 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   auto count_iter = cudf::detail::indexalator_factory::make_input_iterator(count);
 
   rmm::device_uvector<cudf::size_type> offsets(count.size(), stream);
-  thrust::inclusive_scan(
-    rmm::exec_policy(stream, resources.get_temporary_mr()), count_iter, count_iter + count.size(), offsets.begin());
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                         count_iter,
+                         count_iter + count.size(),
+                         offsets.begin());
 
   size_type output_size{offsets.back_element(stream)};
   rmm::device_uvector<size_type> indices(output_size, stream);
-  thrust::upper_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::upper_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       offsets.begin(),
                       offsets.end(),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
 
-  return gather(
-    input_table, indices.begin(), indices.end(), out_of_bounds_policy::DONT_CHECK, stream, resources);
+  return gather(input_table,
+                indices.begin(),
+                indices.end(),
+                out_of_bounds_policy::DONT_CHECK,
+                stream,
+                resources);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
@@ -139,7 +148,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
     cuda::proclaim_return_type<size_type>([count] __device__(size_type i) { return i / count; }));
   auto map_end = map_begin + output_size;
 
-  return gather(input_table, map_begin, map_end, out_of_bounds_policy::DONT_CHECK, stream, resources);
+  return gather(
+    input_table, map_begin, map_end, out_of_bounds_policy::DONT_CHECK, stream, resources);
 }
 
 }  // namespace detail

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -47,7 +47,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   auto func = cudf::detail::replace_policy_functor();
   cuda::std::equal_to<cudf::size_type> eq;
   if (replace_policy == cudf::replace_policy::PRECEDING) {
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                   group_labels.begin(),
                                   group_labels.begin() + size,
                                   in_begin,
@@ -58,8 +58,13 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
     auto gl_rbegin = thrust::make_reverse_iterator(group_labels.begin() + size);
     auto in_rbegin = thrust::make_reverse_iterator(in_begin + size);
     auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + size);
-    thrust::inclusive_scan_by_key(
-      rmm::exec_policy(stream, resources.get_temporary_mr()), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
+    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                                  gl_rbegin,
+                                  gl_rbegin + size,
+                                  in_rbegin,
+                                  gm_rbegin,
+                                  eq,
+                                  func);
   }
 
   auto output = cudf::detail::gather(cudf::table_view({grouped_value}),

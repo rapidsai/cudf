@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/operator.hpp>
 #include <cuco/static_set.cuh>
@@ -74,8 +75,12 @@ auto gather_histogram(table_view const& input,
   std::vector<std::unique_ptr<column>> struct_children;
   struct_children.emplace_back(std::move(distinct_rows->release().front()));
   struct_children.emplace_back(std::move(distinct_counts));
-  auto output_structs = make_structs_column(
-    static_cast<size_type>(distinct_indices.size()), std::move(struct_children), 0, {}, stream, resources);
+  auto output_structs = make_structs_column(static_cast<size_type>(distinct_indices.size()),
+                                            std::move(struct_children),
+                                            0,
+                                            {},
+                                            stream,
+                                            resources);
 
   return std::make_unique<cudf::list_scalar>(
     std::move(*output_structs.release()), true, stream, resources);
@@ -172,10 +177,14 @@ compute_row_frequencies(table_view const& input,
   auto const set_size = row_set.size(stream);
 
   // Vector of distinct indices
-  auto distinct_indices = std::make_unique<rmm::device_uvector<size_type>>(set_size, stream, resources);
+  auto distinct_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(set_size, stream, resources);
   // Column of distinct counts
-  auto distinct_counts = make_numeric_column(
-    data_type{type_to_id<histogram_count_type>()}, set_size, mask_state::UNALLOCATED, stream, resources);
+  auto distinct_counts = make_numeric_column(data_type{type_to_id<histogram_count_type>()},
+                                             set_size,
+                                             mask_state::UNALLOCATED,
+                                             stream,
+                                             resources);
 
   // Copy row indices and counts to the output if counts are non-zero
   auto const input_it = thrust::make_zip_iterator(
@@ -185,8 +194,11 @@ compute_row_frequencies(table_view const& input,
 
   // Reduction results above are either group sizes of equal rows, or `0`.
   // The final output is non-zero group sizes only.
-  thrust::copy_if(
-    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), input_it, input_it + num_rows, output_it, is_not_zero{});
+  thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                  input_it,
+                  input_it + num_rows,
+                  output_it,
+                  is_not_zero{});
 
   return {std::move(distinct_indices), std::move(distinct_counts)};
 }
@@ -201,7 +213,8 @@ std::unique_ptr<cudf::scalar> histogram(column_view const& input,
   auto const input_tv = table_view{{input}};
   auto [distinct_indices, distinct_counts] =
     compute_row_frequencies(input_tv, std::nullopt, stream, resources);
-  return gather_histogram(input_tv, *distinct_indices, std::move(distinct_counts), stream, resources);
+  return gather_histogram(
+    input_tv, *distinct_indices, std::move(distinct_counts), stream, resources);
 }
 
 std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
@@ -225,7 +238,8 @@ std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
   auto const values_tv = table_view{{input_values}};
   auto [distinct_indices, distinct_counts] =
     compute_row_frequencies(values_tv, input_counts, stream, resources);
-  return gather_histogram(values_tv, *distinct_indices, std::move(distinct_counts), stream, resources);
+  return gather_histogram(
+    values_tv, *distinct_indices, std::move(distinct_counts), stream, resources);
 }
 
 }  // namespace cudf::reduction::detail

@@ -1,18 +1,18 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/table_utilities.hpp>
 
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
@@ -59,9 +59,7 @@ TEST_F(MemoryResourcesTest, ImplicitConversion)
   auto mr = rmm::mr::get_current_device_resource();
 
   // This should compile due to implicit conversion from device_async_resource_ref
-  auto test_implicit = [](cudf::memory_resources resources) {
-    return resources.get_output_mr();
-  };
+  auto test_implicit = [](cudf::memory_resources resources) { return resources.get_output_mr(); };
 
   // Call with device_async_resource_ref - should implicitly convert
   auto result = test_implicit(mr);
@@ -77,8 +75,8 @@ TEST_F(MemoryResourcesTest, SeparateMemoryPools)
   // Create two separate pool memory resources
   auto cuda_mr = rmm::mr::get_current_device_resource();
 
-  rmm::mr::pool_memory_resource output_pool{cuda_mr, 1024 * 1024};   // 1MB initial
-  rmm::mr::pool_memory_resource temp_pool{cuda_mr, 1024 * 1024};     // 1MB initial
+  rmm::mr::pool_memory_resource output_pool{cuda_mr, 1024 * 1024};  // 1MB initial
+  rmm::mr::pool_memory_resource temp_pool{cuda_mr, 1024 * 1024};    // 1MB initial
 
   cudf::memory_resources resources(&output_pool, &temp_pool);
 
@@ -201,7 +199,8 @@ TEST_F(MemoryResourcesTest, GatherWithSeparateResources)
 
   // Perform gather
   auto stream = cudf::get_default_stream();
-  auto result = cudf::gather(input, gather_map, cudf::out_of_bounds_policy::DONT_CHECK, stream, resources);
+  auto result =
+    cudf::gather(input, gather_map, cudf::out_of_bounds_policy::DONT_CHECK, stream, resources);
 
   // Verify result
   EXPECT_EQ(result->num_columns(), 2);
@@ -232,8 +231,12 @@ TEST_F(MemoryResourcesTest, ColumnFactoriesUseSeparateResources)
   auto numeric_col = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT64}, 500, cudf::mask_state::UNALLOCATED, stream, resources);
 
-  auto fixed_point_col = cudf::make_fixed_point_column(
-    cudf::data_type{cudf::type_id::DECIMAL32, -2}, 500, cudf::mask_state::UNALLOCATED, stream, resources);
+  auto fixed_point_col =
+    cudf::make_fixed_point_column(cudf::data_type{cudf::type_id::DECIMAL32, -2},
+                                  500,
+                                  cudf::mask_state::UNALLOCATED,
+                                  stream,
+                                  resources);
 
   // All output allocations should come from output_tracking
   EXPECT_GT(output_tracking.get_bytes_allocated(), 0);
@@ -287,11 +290,11 @@ TEST_F(MemoryResourcesTest, LargeAllocation)
   cudf::memory_resources resources(mr);
 
   auto stream    = cudf::get_default_stream();
-  auto large_col = cudf::make_numeric_column(
-    cudf::data_type{cudf::type_id::INT64}, 1000000,  // 1M elements
-    cudf::mask_state::UNALLOCATED,
-    stream,
-    resources);
+  auto large_col = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT64},
+                                             1000000,  // 1M elements
+                                             cudf::mask_state::UNALLOCATED,
+                                             stream,
+                                             resources);
 
   EXPECT_EQ(large_col->size(), 1000000);
   EXPECT_EQ(large_col->type().id(), cudf::type_id::INT64);
@@ -310,11 +313,8 @@ TEST_F(MemoryResourcesTest, NullMaskAllocation)
   auto stream = cudf::get_default_stream();
 
   // Create column with null mask
-  auto col = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
-                                       1000,
-                                       cudf::mask_state::ALL_NULL,
-                                       stream,
-                                       resources);
+  auto col = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_id::INT32}, 1000, cudf::mask_state::ALL_NULL, stream, resources);
 
   EXPECT_EQ(col->size(), 1000);
   EXPECT_EQ(col->null_count(), 1000);

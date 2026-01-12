@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -73,7 +73,7 @@ struct dispatch_compute_indices {
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
 
 #ifdef NDEBUG
-    thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::lower_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         begin,
                         end,
                         dictionary_itr,
@@ -84,7 +84,7 @@ struct dispatch_compute_indices {
     // There is a problem with thrust::lower_bound and the output_indexalator
     // https://github.com/NVIDIA/thrust/issues/1452; thrust team created nvbug 3322776
     // This is a workaround.
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       dictionary_itr,
                       dictionary_itr + input.size(),
                       result_itr,
@@ -177,9 +177,10 @@ std::vector<std::unique_ptr<column>> match_dictionaries(
   auto new_keys  = cudf::detail::concatenate(keys, stream, resources.get_temporary_mr());
   auto keys_view = new_keys->view();
   std::vector<std::unique_ptr<column>> result(input.size());
-  std::transform(input.begin(), input.end(), result.begin(), [keys_view, resources, stream](auto& col) {
-    return set_keys(col, keys_view, stream, resources);
-  });
+  std::transform(
+    input.begin(), input.end(), result.begin(), [keys_view, resources, stream](auto& col) {
+      return set_keys(col, keys_view, stream, resources);
+    });
   return result;
 }
 

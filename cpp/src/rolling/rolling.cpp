@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -30,8 +30,14 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::rolling_window(
-    input, default_outputs, preceding_window, following_window, min_periods, agg, stream, resources);
+  return detail::rolling_window(input,
+                                default_outputs,
+                                preceding_window,
+                                following_window,
+                                min_periods,
+                                agg,
+                                stream,
+                                resources);
 }
 
 // Applies a fixed-size rolling window function to the values in a column, without default specified

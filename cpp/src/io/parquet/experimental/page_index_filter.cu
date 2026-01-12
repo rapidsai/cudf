@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -99,7 +99,8 @@ struct page_stats_caster : public stats_caster_base {
     auto output_nullmask = rmm::device_buffer{};
     if (input_column.null_count()) {
       // Set all bits in output nullmask to valid
-      output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, resources);
+      output_nullmask =
+        cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, resources);
       // For each input page, invalidate the null mask for corresponding rows if needed.
       std::for_each(thrust::counting_iterator(0),
                     thrust::counting_iterator(total_pages),
@@ -215,7 +216,8 @@ struct page_stats_caster : public stats_caster_base {
     auto output_nullmask = rmm::device_buffer{};
     if (host_null_count) {
       // Set all bits in output nullmask to valid
-      output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, resources);
+      output_nullmask =
+        cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, resources);
       // For each input page, invalidate the null mask for corresponding rows if needed.
       std::for_each(thrust::counting_iterator(0),
                     thrust::counting_iterator(total_pages),
@@ -231,8 +233,8 @@ struct page_stats_caster : public stats_caster_base {
     }
 
     // Buffer for row-level string offsets (output).
-    auto row_str_offsets =
-      cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows + 1, stream, resources);
+    auto row_str_offsets = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
+      total_rows + 1, stream, resources);
     thrust::inclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                            row_str_sizes.begin(),
                            row_str_sizes.end(),
@@ -405,11 +407,8 @@ struct page_stats_caster : public stats_caster_base {
         compute_host_data<T>(schema_idx, dtype, stream);
 
       // Construct a row indices mapping based on page row counts and offsets
-      auto const page_indices = compute_page_indices_async(page_row_counts,
-                                                           page_row_offsets,
-                                                           total_rows,
-                                                           stream,
-                                                           resources.get_temporary_mr());
+      auto const page_indices = compute_page_indices_async(
+        page_row_counts, page_row_offsets, total_rows, stream, resources.get_temporary_mr());
 
       // For non-strings columns, directly gather the page-level column data and bitmask to the
       // row-level.
@@ -453,8 +452,7 @@ struct page_stats_caster : public stats_caster_base {
                   dtype, total_rows, std::move(max_data), std::move(max_nullmask), max_nulls),
                 has_is_null_operator
                   ? std::make_optional(build_is_null_device_column(
-                      is_null.value(), page_indices, page_row_offsets, stream,
-                  resources))
+                      is_null.value(), page_indices, page_row_offsets, stream, resources))
                   : std::nullopt};
       }
       // For strings columns, gather the page-level string offsets and bitmask to row-level
@@ -505,10 +503,10 @@ struct page_stats_caster : public stats_caster_base {
             std::move(max_data),
             max_nulls,
             std::move(max_nullmask)),
-          has_is_null_operator ? std::make_optional(build_is_null_device_column(
-                                   is_null.value(), page_indices, page_row_offsets, stream,
-                  resources))
-                               : std::nullopt};
+          has_is_null_operator
+            ? std::make_optional(build_is_null_device_column(
+                is_null.value(), page_indices, page_row_offsets, stream, resources))
+            : std::nullopt};
       }
     }
   }
@@ -561,16 +559,11 @@ struct page_stats_to_row_mask_converter : public page_stats_caster {
         filter.get(), num_columns, has_is_null_operator, stream};
 
       // Filter the input table using AST expression and return the (BOOL8) predicate column.
-      auto const page_mask = cudf::detail::compute_column(page_stats_table,
-                                                          stats_expr.get_stats_expr().get(),
-                                                          stream,
-                                                          resources.get_temporary_mr());
+      auto const page_mask = cudf::detail::compute_column(
+        page_stats_table, stats_expr.get_stats_expr().get(), stream, resources.get_temporary_mr());
 
-      auto const page_indices = compute_page_indices_async(page_row_counts,
-                                                           page_row_offsets,
-                                                           total_rows,
-                                                           stream,
-                                                           resources.get_temporary_mr());
+      auto const page_indices = compute_page_indices_async(
+        page_row_counts, page_row_offsets, total_rows, stream, resources.get_temporary_mr());
 
       auto const page_mask_nullmask =
         page_mask->null_count() ? cudf::detail::make_host_vector_async(
@@ -917,28 +910,25 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
       if (not stats_columns_mask[col_idx] or
           (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING)) {
         // Placeholder for unsupported types and non-participating columns
-        page_stats_columns.push_back(
-          cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                    total_rows,
-                                    rmm::device_buffer{},
-                                    0,
-                                    stream,
-                                    resources.get_temporary_mr()));
-        page_stats_columns.push_back(
-          cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                    total_rows,
-                                    rmm::device_buffer{},
-                                    0,
-                                    stream,
-                                    resources.get_temporary_mr()));
+        page_stats_columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                                               total_rows,
+                                                               rmm::device_buffer{},
+                                                               0,
+                                                               stream,
+                                                               resources.get_temporary_mr()));
+        page_stats_columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                                               total_rows,
+                                                               rmm::device_buffer{},
+                                                               0,
+                                                               stream,
+                                                               resources.get_temporary_mr()));
         if (has_is_null_operator) {
-          page_stats_columns.push_back(
-            cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                      total_rows,
-                                      rmm::device_buffer{},
-                                      0,
-                                      stream,
-                                      resources.get_temporary_mr()));
+          page_stats_columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                                                 total_rows,
+                                                                 rmm::device_buffer{},
+                                                                 0,
+                                                                 stream,
+                                                                 resources.get_temporary_mr()));
         }
         return;
       }

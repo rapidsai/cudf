@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -88,7 +88,11 @@ std::unique_ptr<column> merge_m2(column_view const& values,
                                        count_valid.template begin<count_type>(),
                                        mean_values.template begin<result_type>(),
                                        M2_values.template begin<result_type>()};
-  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), iter, iter + num_groups, out_iter, fn);
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                    iter,
+                    iter + num_groups,
+                    out_iter,
+                    fn);
 
   // Output is a structs column containing the merged values of `COUNT_VALID`, `MEAN`, and `M2`.
   std::vector<std::unique_ptr<column>> out_columns;
@@ -123,8 +127,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                "Input to `group_merge_m2` has invalid children type.");
 
   return count_type_id == type_id::INT64
-           ? merge_m2<int64_t>(values, group_offsets, num_groups, stream,
-                  resources)
+           ? merge_m2<int64_t>(values, group_offsets, num_groups, stream, resources)
            : merge_m2<result_type>(values, group_offsets, num_groups, stream, resources);
 }
 

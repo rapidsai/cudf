@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -66,8 +66,10 @@ struct sorted_order_radix_fn {
     auto d_in   = input.begin<T>();
     auto output = rmm::device_uvector<T>(input.size(), stream, resources.get_temporary_mr());
     auto d_out  = output.begin();  // not returned
-    auto seqs   = rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
-    thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), seqs.begin(), seqs.end(), 0);
+    auto seqs =
+      rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
+    thrust::sequence(
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), seqs.begin(), seqs.end(), 0);
     auto dv_in  = seqs.begin();
     auto dv_out = indices.begin<cudf::size_type>();
 
@@ -101,9 +103,10 @@ struct sorted_order_radix_fn {
     // pair_out/d_out is not returned to the caller but used as an intermediate
     auto pair_out = rmm::device_uvector<float_pair<T>>(input.size(), stream);
     auto d_out    = pair_out.begin();
-    auto vals     = rmm::device_uvector<size_type>(indices.size(), stream, resources.get_temporary_mr());
-    auto dv_in    = vals.begin();
-    auto dv_out   = indices.begin<cudf::size_type>();
+    auto vals =
+      rmm::device_uvector<size_type>(indices.size(), stream, resources.get_temporary_mr());
+    auto dv_in  = vals.begin();
+    auto dv_out = indices.begin<cudf::size_type>();
 
     auto zip_out = thrust::make_zip_iterator(d_in, dv_in);
     thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),

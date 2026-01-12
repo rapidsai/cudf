@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -98,12 +98,13 @@ void aggregate_result_functor::operator()<aggregation::COUNT_VALID>(aggregation 
     values,
     agg,
     get_grouped_values().nullable()
-      ? detail::group_count_valid(
-          get_grouped_values(), helper.group_labels(stream), helper.num_groups(stream), stream,
-                  resources)
+      ? detail::group_count_valid(get_grouped_values(),
+                                  helper.group_labels(stream),
+                                  helper.num_groups(stream),
+                                  stream,
+                                  resources)
       : detail::group_count_all(
-          helper.group_offsets(stream), helper.num_groups(stream), stream,
-                  resources));
+          helper.group_offsets(stream), helper.num_groups(stream), stream, resources));
 }
 
 template <>
@@ -111,11 +112,10 @@ void aggregate_result_functor::operator()<aggregation::COUNT_ALL>(aggregation co
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(
-    values,
-    agg,
-    detail::group_count_all(helper.group_offsets(stream), helper.num_groups(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::group_count_all(
+                     helper.group_offsets(stream), helper.num_groups(stream), stream, resources));
 }
 
 template <>
@@ -123,12 +123,13 @@ void aggregate_result_functor::operator()<aggregation::HISTOGRAM>(aggregation co
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(
-    values,
-    agg,
-    detail::group_histogram(
-      get_grouped_values(), helper.group_labels(stream), helper.num_groups(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::group_histogram(get_grouped_values(),
+                                           helper.group_labels(stream),
+                                           helper.num_groups(stream),
+                                           stream,
+                                           resources));
 }
 
 template <>
@@ -136,12 +137,13 @@ void aggregate_result_functor::operator()<aggregation::SUM>(aggregation const& a
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(
-    values,
-    agg,
-    detail::group_sum(
-      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::group_sum(get_grouped_values(),
+                                     helper.num_groups(stream),
+                                     helper.group_labels(stream),
+                                     stream,
+                                     resources));
 }
 
 template <>
@@ -149,12 +151,13 @@ void aggregate_result_functor::operator()<aggregation::PRODUCT>(aggregation cons
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(
-    values,
-    agg,
-    detail::group_product(
-      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::group_product(get_grouped_values(),
+                                         helper.num_groups(stream),
+                                         helper.group_labels(stream),
+                                         stream,
+                                         resources));
 }
 
 template <>
@@ -197,8 +200,11 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
                          ? dictionary_column_view(values).keys().type()
                          : values.type();
     if (cudf::is_fixed_width(values_type)) {
-      return detail::group_min(
-        get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, resources);
+      return detail::group_min(get_grouped_values(),
+                               helper.num_groups(stream),
+                               helper.group_labels(stream),
+                               stream,
+                               resources);
     } else {
       auto argmin_agg = make_argmin_aggregation();
       operator()<aggregation::ARGMIN>(*argmin_agg);
@@ -236,8 +242,11 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
                          ? dictionary_column_view(values).keys().type()
                          : values.type();
     if (cudf::is_fixed_width(values_type)) {
-      return detail::group_max(
-        get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, resources);
+      return detail::group_max(get_grouped_values(),
+                               helper.num_groups(stream),
+                               helper.group_labels(stream),
+                               stream,
+                               resources);
     } else {
       auto argmax_agg = make_argmax_aggregation();
       operator()<aggregation::ARGMAX>(*argmax_agg);
@@ -304,8 +313,8 @@ void aggregate_result_functor::operator()<aggregation::M2>(aggregation const& ag
   cache.add_result(
     values,
     agg,
-    detail::group_m2(get_grouped_values(), mean_result, helper.group_labels(stream), stream,
-                  resources));
+    detail::group_m2(
+      get_grouped_values(), mean_result, helper.group_labels(stream), stream, resources));
 }
 
 template <>
@@ -496,12 +505,13 @@ void aggregate_result_functor::operator()<aggregation::MERGE_LISTS>(aggregation 
 {
   if (cache.has_result(values, agg)) { return; }
 
-  cache.add_result(
-    values,
-    agg,
-    detail::group_merge_lists(
-      get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::group_merge_lists(get_grouped_values(),
+                                             helper.group_offsets(stream),
+                                             helper.num_groups(stream),
+                                             stream,
+                                             resources));
 }
 
 /**
@@ -571,12 +581,13 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
 {
   if (cache.has_result(values, agg)) { return; }
 
-  cache.add_result(
-    values,
-    agg,
-    detail::group_merge_m2(
-      get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::group_merge_m2(get_grouped_values(),
+                                          helper.group_offsets(stream),
+                                          helper.num_groups(stream),
+                                          stream,
+                                          resources));
 }
 
 /**
@@ -590,12 +601,13 @@ void aggregate_result_functor::operator()<aggregation::MERGE_HISTOGRAM>(aggregat
 {
   if (cache.has_result(values, agg)) { return; }
 
-  cache.add_result(
-    values,
-    agg,
-    detail::group_merge_histogram(
-      get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::group_merge_histogram(get_grouped_values(),
+                                                 helper.group_offsets(stream),
+                                                 helper.num_groups(stream),
+                                                 stream,
+                                                 resources));
 }
 
 /**
@@ -618,11 +630,9 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto mean_agg = make_mean_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream,
-                  resources)
+  aggregate_result_functor(values_child0, helper, cache, stream, resources)
     .operator()<aggregation::MEAN>(*mean_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream,
-                  resources)
+  aggregate_result_functor(values_child1, helper, cache, stream, resources)
     .operator()<aggregation::MEAN>(*mean_agg);
 
   auto const mean0 = cache.get_result(values_child0, *mean_agg);
@@ -671,11 +681,9 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto std_agg = make_std_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream,
-                  resources)
+  aggregate_result_functor(values_child0, helper, cache, stream, resources)
     .operator()<aggregation::STD>(*std_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream,
-                  resources)
+  aggregate_result_functor(values_child1, helper, cache, stream, resources)
     .operator()<aggregation::STD>(*std_agg);
 
   // Compute covariance here to avoid repeated computation of mean & count
@@ -707,8 +715,7 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   auto const stddev1    = cache.get_result(values_child1, *std_agg);
   auto const covariance = cache.get_result(values, *cov_agg);
   cache.add_result(
-    values, agg, detail::group_correlation(covariance, stddev0, stddev1, stream,
-                  resources));
+    values, agg, detail::group_correlation(covariance, stddev0, stddev1, stream, resources));
 }
 
 /**

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 schema_version: 1
 
@@ -69,7 +69,7 @@ requirements:
     - pip
     - cython >=3.0.3,<3.2.0
     - rapids-build-backend >=0.4.0,<0.5.0
-    - scikit-build-core >=0.10.0
+    - scikit-build-core>=0.11.0
     - dlpack >=0.8,<1.0
     - libcudf =${{ version }}
     - rmm =${{ minor_version }}
@@ -113,5 +113,5 @@ tests:
 
 about:
   homepage: ${{ load_from_file("python/pylibcudf/pyproject.toml").project.urls.Homepage }}
-  license: ${{ load_from_file("python/pylibcudf/pyproject.toml").project.license.text }}
+  license: ${{ load_from_file("python/pylibcudf/pyproject.toml").project.license }}
   summary: ${{ load_from_file("python/pylibcudf/pyproject.toml").project.description }}

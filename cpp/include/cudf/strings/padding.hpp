@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -46,9 +46,9 @@ namespace strings {
 std::unique_ptr<column> pad(
   strings_column_view const& input,
   size_type width,
-  side_type side                    = side_type::RIGHT,
-  std::string_view fill_char        = " ",
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  side_type side                   = side_type::RIGHT,
+  std::string_view fill_char       = " ",
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -78,7 +78,7 @@ std::unique_ptr<column> pad(
 std::unique_ptr<column> zfill(
   strings_column_view const& input,
   size_type width,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -112,7 +112,7 @@ std::unique_ptr<column> zfill(
 std::unique_ptr<column> zfill_by_widths(
   strings_column_view const& input,
   column_view const& widths,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group

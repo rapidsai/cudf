@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -41,14 +41,14 @@ std::unique_ptr<column> make_empty_column_from_schema(ArrowSchema const* schema,
         data_type(type_id::EMPTY), 0, rmm::device_buffer{}, rmm::device_buffer{}, 0);
     }
     case type_id::LIST: {
-      return cudf::make_lists_column(0,
-                                     cudf::make_empty_column(data_type{type_id::INT32}),
-                                     make_empty_column_from_schema(schema->children[0], stream,
-                  resources),
-                                     0,
-                                     {},
-                                     stream,
-                                     resources);
+      return cudf::make_lists_column(
+        0,
+        cudf::make_empty_column(data_type{type_id::INT32}),
+        make_empty_column_from_schema(schema->children[0], stream, resources),
+        0,
+        {},
+        stream,
+        resources);
     }
     case type_id::STRUCT: {
       std::vector<std::unique_ptr<column>> child_columns;
@@ -85,8 +85,7 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
   while (true) {
     NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, &chunk, nullptr));
     if (chunk.release == nullptr) { break; }
-    chunks.push_back(from_arrow(&schema, &chunk, stream,
-                  resources));
+    chunks.push_back(from_arrow(&schema, &chunk, stream, resources));
     chunk.release(&chunk);
   }
   input->release(input);
@@ -139,8 +138,7 @@ std::unique_ptr<column> from_arrow_stream_column(ArrowArrayStream* input,
   while (true) {
     NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, &chunk, nullptr));
     if (chunk.release == nullptr) { break; }
-    chunks.push_back(from_arrow_column(&schema, &chunk, stream,
-                  resources));
+    chunks.push_back(from_arrow_column(&schema, &chunk, stream, resources));
     chunk.release(&chunk);
   }
   input->release(input);

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -90,7 +90,7 @@ struct dispatch_hex_to_integers_fn {
     requires(cudf::is_integral_not_bool<IntegerType>())
   {
     auto d_results = output_column.data<IntegerType>();
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_column.size()),
                       d_results,
@@ -172,15 +172,14 @@ struct dispatch_integers_to_hex_fn {
   {
     auto const d_column = column_device_view::create(input, stream);
 
-    auto [offsets_column, chars] =
-      make_strings_children(integer_to_hex_fn<IntegerType>{*d_column}, input.size(), stream, resources);
+    auto [offsets_column, chars] = make_strings_children(
+      integer_to_hex_fn<IntegerType>{*d_column}, input.size(), stream, resources);
 
     return make_strings_column(input.size(),
                                std::move(offsets_column),
                                chars.release(),
                                input.null_count(),
-                               cudf::detail::copy_bitmask(input, stream,
-                  resources));
+                               cudf::detail::copy_bitmask(input, stream, resources));
   }
   // non-integer types throw an exception
   template <typename T, typename... Args>
@@ -204,13 +203,13 @@ std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create integer output column copying the strings null-mask
-  auto results      = make_numeric_column(output_type,
-                                     strings_count,
-                                     cudf::detail::copy_bitmask(strings.parent(), stream,
-                  resources),
-                                     strings.null_count(),
-                                     stream,
-                                     resources);
+  auto results =
+    make_numeric_column(output_type,
+                        strings_count,
+                        cudf::detail::copy_bitmask(strings.parent(), stream, resources),
+                        strings.null_count(),
+                        stream,
+                        resources);
   auto results_view = results->mutable_view();
   // fill output column with integers
   type_dispatcher(output_type, dispatch_hex_to_integers_fn{}, d_strings, results_view, stream);
@@ -225,15 +224,15 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
   // create output column
-  auto results   = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings.size(),
-                                     cudf::detail::copy_bitmask(strings.parent(), stream,
-                  resources),
-                                     strings.null_count(),
-                                     stream,
-                                     resources);
+  auto results =
+    make_numeric_column(data_type{type_id::BOOL8},
+                        strings.size(),
+                        cudf::detail::copy_bitmask(strings.parent(), stream, resources),
+                        strings.null_count(),
+                        stream,
+                        resources);
   auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings.size()),
                     d_results,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -122,8 +122,7 @@ struct get_element_functor {
       lists_column_view lcv(input);
       // Make a copy of the row
       auto row_slice_contents =
-        lists::detail::copy_slice(lcv, index, index + 1, stream,
-                  resources)->release();
+        lists::detail::copy_slice(lcv, index, index + 1, stream, resources)->release();
       // Construct scalar with row data
       return std::make_unique<list_scalar>(
         std::move(*row_slice_contents.children[child_col_idx]), valid, stream, resources);
@@ -168,8 +167,8 @@ struct get_element_functor {
   {
     bool valid = is_element_valid_sync(input, index, stream);
     auto row_contents =
-      std::make_unique<column>(slice(input, index, index + 1, stream), stream,
-                  resources)->release();
+      std::make_unique<column>(slice(input, index, index + 1, stream), stream, resources)
+        ->release();
     auto scalar_contents = table(std::move(row_contents.children));
     return std::make_unique<struct_scalar>(std::move(scalar_contents), valid, stream, resources);
   }

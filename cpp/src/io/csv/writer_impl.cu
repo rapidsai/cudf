@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -352,24 +352,23 @@ void write_chunked(data_sink* out_sink,
     auto const empty_str = string_scalar("", true, stream);
     // use join_strings when the output will be less than 2GB
     if (total_size < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
-      return cudf::strings::detail::join_strings(str_column_view, newline, empty_str, stream,
-                  resources)
+      return cudf::strings::detail::join_strings(
+               str_column_view, newline, empty_str, stream, resources)
         ->release();
     }
     auto nl_col = cudf::make_column_from_scalar(newline, str_column_view.size(), stream);
     // convert the last element into an empty string by resetting the last offset value
     auto& offsets     = nl_col->child(strings_column_view::offsets_column_index);
     auto offsets_view = offsets.mutable_view();
-    cudf::fill_in_place(offsets_view,
-                        offsets.size() - 1,  // set the last element with
-                        offsets.size(),      // the value from 2nd to last element
-                        *cudf::detail::get_element(offsets.view(), offsets.size() - 2, stream,
-                  resources),
-                        stream);
+    cudf::fill_in_place(
+      offsets_view,
+      offsets.size() - 1,  // set the last element with
+      offsets.size(),      // the value from 2nd to last element
+      *cudf::detail::get_element(offsets.view(), offsets.size() - 2, stream, resources),
+      stream);
     auto const nl_tbl = cudf::table_view({str_column_view.parent(), nl_col->view()});
     return cudf::strings::detail::concatenate(
-             nl_tbl, empty_str, empty_str, strings::separator_on_nulls::NO, stream,
-                  resources)
+             nl_tbl, empty_str, empty_str, strings::separator_on_nulls::NO, stream, resources)
       ->release();
   }();
   auto const total_num_bytes = contents_w_nl.data->size();

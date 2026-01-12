@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column.hpp>
@@ -146,7 +146,7 @@ struct normalize_nans_and_zeros_kernel_forwarder {
                   rmm::cuda_stream_view stream)
     requires(std::is_floating_point_v<T>)
   {
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(in.size()),
                       out.head<T>(),

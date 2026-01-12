@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -62,8 +62,8 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
   std::vector<order> column_order{order::ASCENDING};
   std::vector<null_order> null_precedence{null_order::AFTER};  // should be no nulls here
   auto sorted_keys =
-    cudf::detail::sort(table_keys->view(), column_order, null_precedence, stream,
-                  resources)->release();
+    cudf::detail::sort(table_keys->view(), column_order, null_precedence, stream, resources)
+      ->release();
 
   std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
   // create a map for the indices
@@ -112,11 +112,11 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
 
   // create new dictionary column with keys_column and indices_column
   // null mask has not changed
-  return make_dictionary_column(std::move(keys_column),
-                                std::move(indices_column),
-                                cudf::detail::copy_bitmask(dictionary_column.parent(), stream,
-                  resources),
-                                dictionary_column.null_count());
+  return make_dictionary_column(
+    std::move(keys_column),
+    std::move(indices_column),
+    cudf::detail::copy_bitmask(dictionary_column.parent(), stream, resources),
+    dictionary_column.null_count());
 }
 
 }  // namespace detail

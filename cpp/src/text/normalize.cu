@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -121,8 +121,7 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
                                    std::move(offsets_column),
                                    chars.release(),
                                    strings.null_count(),
-                                   cudf::detail::copy_bitmask(strings.parent(), stream,
-                  resources));
+                                   cudf::detail::copy_bitmask(strings.parent(), stream, resources));
 }
 
 /**
@@ -133,9 +132,10 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
  */
 rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_stream_view stream)
 {
-  auto table_vector = rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream, resources.get_temporary_mr());
-  auto table        = table_vector.data();
-  thrust::fill(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  auto table_vector = rmm::device_uvector<codepoint_metadata_type>(
+    codepoint_metadata_size, stream, resources.get_temporary_mr());
+  auto table = table_vector.data();
+  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                table + cp_section1_end,
                table + codepoint_metadata_size,
                codepoint_metadata_default_value);
@@ -161,9 +161,10 @@ rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_st
  */
 rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_stream_view stream)
 {
-  auto table_vector = rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream, resources.get_temporary_mr());
-  auto table        = table_vector.data();
-  thrust::fill(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  auto table_vector = rmm::device_uvector<aux_codepoint_data_type>(
+    aux_codepoint_data_size, stream, resources.get_temporary_mr());
+  auto table = table_vector.data();
+  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                table + aux_section1_end,
                table + aux_codepoint_data_size,
                aux_codepoint_default_value);
@@ -416,7 +417,8 @@ rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<uint32_t co
                                                    cudf::size_type size,
                                                    rmm::cuda_stream_view stream)
 {
-  auto output_sizes = rmm::device_uvector<cudf::size_type>(size, stream, resources.get_temporary_mr());
+  auto output_sizes =
+    rmm::device_uvector<cudf::size_type>(size, stream, resources.get_temporary_mr());
 
   auto d_data = d_normalized.data();
 
@@ -473,8 +475,9 @@ OutputIterator remove_copy_safe(InputIterator first,
   while (itr != last) {
     auto const copy_end =
       static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
-    result = thrust::remove_copy(rmm::exec_policy(stream, resources.get_temporary_mr()), itr, copy_end, result, value);
-    itr    = copy_end;
+    result = thrust::remove_copy(
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), itr, copy_end, result, value);
+    itr = copy_end;
   }
   return result;
 }
@@ -490,8 +493,9 @@ Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_st
   auto itr    = first;
   while (itr != last) {
     auto end = static_cast<std::size_t>(std::distance(itr, last)) <= size ? last : itr + size;
-    result   = thrust::remove(rmm::exec_policy(stream, resources.get_temporary_mr()), itr, end, value);
-    itr      = end;
+    result   = thrust::remove(
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), itr, end, value);
+    itr = end;
   }
   return result;
 }
@@ -517,7 +521,8 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   auto const& parameters = normalizer._impl;
 
-  auto d_normalized = rmm::device_uvector<uint32_t>(max_new_char_total, stream, resources.get_temporary_mr());
+  auto d_normalized =
+    rmm::device_uvector<uint32_t>(max_new_char_total, stream, resources.get_temporary_mr());
   data_normalizer_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     d_input_chars,
     chars_size,
@@ -557,8 +562,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
                                    std::move(offsets),
                                    chars.release(),
                                    input.null_count(),
-                                   cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                                   cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 }  // namespace detail

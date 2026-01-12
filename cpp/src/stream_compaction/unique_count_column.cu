@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -68,7 +68,7 @@ cudf::size_type unique_count(column_view const& input,
     cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
 
   return thrust::count_if(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::counting_iterator<cudf::size_type>(0),
     thrust::counting_iterator<cudf::size_type>(num_rows),
     [count_nulls, nan_is_null, should_check_nan, device_view, comp] __device__(cudf::size_type i) {

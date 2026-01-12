@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -320,9 +320,14 @@ dispatch_tuple_t get_column(ArrowSchemaView* schema,
     std::overflow_error);
 
   return type.id() != type_id::EMPTY
-           ? std::move(type_dispatcher(
-               type, dispatch_from_arrow_device{}, schema, input, type, skip_mask, stream,
-                  resources))
+           ? std::move(type_dispatcher(type,
+                                       dispatch_from_arrow_device{},
+                                       schema,
+                                       input,
+                                       type,
+                                       skip_mask,
+                                       stream,
+                                       resources))
            : std::make_tuple<column_view, owned_columns_t>({data_type(type_id::EMPTY),
                                                             static_cast<size_type>(input->length),
                                                             nullptr,

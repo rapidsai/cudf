@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,10 +33,11 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        cudf::memory_resources resources)
 {
   // Create a gather map containing indices of the prefix min/max elements.
-  auto gather_map = rmm::device_uvector<size_type>(input.size(), stream, resources.get_temporary_mr());
+  auto gather_map =
+    rmm::device_uvector<size_type>(input.size(), stream, resources.get_temporary_mr());
   auto const binop_generator =
     cudf::reduction::detail::arg_minmax_binop_generator::create<Op>(input, stream);
-  thrust::inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          thrust::counting_iterator<size_type>(0),
                          thrust::counting_iterator<size_type>(input.size()),
                          gather_map.begin(),
@@ -62,8 +63,12 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
                             ->release();
 
   // Don't need to set a null mask because that will be handled at the caller.
-  return make_structs_column(
-    input.size(), std::move(scanned_children), 0, rmm::device_buffer{0, stream, mr}, stream, resources);
+  return make_structs_column(input.size(),
+                             std::move(scanned_children),
+                             0,
+                             rmm::device_buffer{0, stream, mr},
+                             stream,
+                             resources);
 }
 
 template std::unique_ptr<column> scan_inclusive<DeviceMin>(column_view const& input_view,

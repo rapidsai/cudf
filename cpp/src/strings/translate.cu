@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -96,8 +96,8 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
     return lhs.first < rhs.first;
   });
   // copy translate table to device memory
-  rmm::device_uvector<translate_table> table = cudf::detail::make_device_uvector_async(
-    htable, stream, resources.get_temporary_mr());
+  rmm::device_uvector<translate_table> table =
+    cudf::detail::make_device_uvector_async(htable, stream, resources.get_temporary_mr());
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
@@ -108,8 +108,7 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
                              std::move(offsets_column),
                              chars.release(),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(strings.parent(), stream, resources));
 }
 
 }  // namespace detail

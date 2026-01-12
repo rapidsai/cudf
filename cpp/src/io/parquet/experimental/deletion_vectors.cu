@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -117,10 +117,17 @@ std::unique_ptr<cudf::column> compute_row_index_column(
 
   auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream, resources);
   auto row_indices_iter = static_cast<size_t*>(row_indices.data());
-  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), row_indices_iter, row_indices_iter + num_rows, 1);
+  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+               row_indices_iter,
+               row_indices_iter + num_rows,
+               1);
 
-  auto row_group_keys = rmm::device_uvector<size_type>(num_rows, stream, resources.get_temporary_mr());
-  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), row_group_keys.begin(), row_group_keys.end(), 0);
+  auto row_group_keys =
+    rmm::device_uvector<size_type>(num_rows, stream, resources.get_temporary_mr());
+  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+               row_group_keys.begin(),
+               row_group_keys.end(),
+               0);
 
   // Scatter row group offsets and row group indices (or span indices) to their corresponding
   // row group span offsets
@@ -213,7 +220,8 @@ std::unique_ptr<cudf::column> compute_partial_row_index_column(
   }
 
   // Compute the row index column with the computed row group row offsets and counts
-  return compute_row_index_column(row_offsets, row_counts, std::nullopt, num_rows, stream, resources);
+  return compute_row_index_column(
+    row_offsets, row_counts, std::nullopt, num_rows, stream, resources);
 }
 
 /**
@@ -442,8 +450,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                         resources.get_temporary_mr());
   return table_with_metadata{
     // Supply user-provided mr to apply_boolean_mask to allocate output table's memory
-    cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), stream,
-                  resources),
+    cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), stream, resources),
     std::move(metadata)};
 }
 

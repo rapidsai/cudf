@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -393,8 +393,9 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
   transform_fn tfn,
   rmm::cuda_stream_view stream)
 {
-  auto indices = rmm::device_uvector<cudf::size_type>(size, stream, resources.get_temporary_mr());
-  thrust::sequence(rmm::exec_policy(stream, resources.get_temporary_mr()), indices.begin(), indices.end());
+  auto indices = rmm::device_uvector<cudf::size_type>(size, stream);
+  thrust::sequence(
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), indices.begin(), indices.end());
   cudf::size_type threshold_index = threshold_count < size ? size : 0;
 
   // if we counted a split of above/below threshold then
@@ -403,12 +404,18 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
     auto sizes = rmm::device_uvector<cudf::size_type>(size, stream, resources.get_temporary_mr());
     auto begin = thrust::counting_iterator<cudf::size_type>(0);
     auto end   = begin + size;
-    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), begin, end, sizes.data(), tfn);
+    thrust::transform(
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), begin, end, sizes.data(), tfn);
     // these 2 are slightly faster than using partition()
-    thrust::sort_by_key(
-      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), sizes.begin(), sizes.end(), indices.begin());
-    auto const lb = thrust::lower_bound(
-      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), sizes.begin(), sizes.end(), wide_row_threshold);
+    thrust::sort_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                        sizes.begin(),
+                        sizes.end(),
+                        indices.begin());
+    auto const lb =
+      thrust::lower_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                          sizes.begin(),
+                          sizes.end(),
+                          wide_row_threshold);
     threshold_index = static_cast<cudf::size_type>(cuda::std::distance(sizes.begin(), lb));
   }
   return {threshold_index, std::move(indices)};
@@ -452,7 +459,8 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
   cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()) * block_size,
                              block_size};
   auto const hashes_size = input.chars_size(stream);
-  auto d_hashes          = rmm::device_uvector<hash_value_type>(hashes_size, stream, resources.get_temporary_mr());
+  auto d_hashes =
+    rmm::device_uvector<hash_value_type>(hashes_size, stream, resources.get_temporary_mr());
   auto d_threshold_count = cudf::detail::device_scalar<cudf::size_type>(0, stream);
 
   minhash_seed_kernel<HashFunction>
@@ -538,7 +546,8 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
   cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()) * block_size,
                              block_size};
   auto const hashes_size = input.child().size();
-  auto d_hashes          = rmm::device_uvector<hash_value_type>(hashes_size, stream, resources.get_temporary_mr());
+  auto d_hashes =
+    rmm::device_uvector<hash_value_type>(hashes_size, stream, resources.get_temporary_mr());
   auto d_threshold_count = cudf::detail::device_scalar<cudf::size_type>(0, stream);
 
   auto d_list = cudf::detail::lists_column_device_view(*d_input);
@@ -602,8 +611,7 @@ std::unique_ptr<cudf::column> build_list_result(cudf::column_view const& input,
                                   std::move(offsets),
                                   std::move(hashes),
                                   input.null_count(),
-                                  cudf::detail::copy_bitmask(input, stream,
-                  resources),
+                                  cudf::detail::copy_bitmask(input, stream, resources),
                                   stream,
                                   resources);
   // expect this condition to be very rare
@@ -623,9 +631,10 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::memory_resources resources)
 {
   using HashFunction = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
-  auto hashes =
-    detail::minhash_fn<HashFunction>(input, seed, parameter_a, parameter_b, width, stream, resources);
-  return build_list_result(input.parent(), std::move(hashes), parameter_a.size(), stream, resources);
+  auto hashes        = detail::minhash_fn<HashFunction>(
+    input, seed, parameter_a, parameter_b, width, stream, resources);
+  return build_list_result(
+    input.parent(), std::move(hashes), parameter_a.size(), stream, resources);
 }
 
 std::unique_ptr<cudf::column> minhash_ngrams(cudf::lists_column_view const& input,
@@ -639,7 +648,8 @@ std::unique_ptr<cudf::column> minhash_ngrams(cudf::lists_column_view const& inpu
   using HashFunction = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
   auto hashes        = detail::minhash_ngrams_fn<HashFunction>(
     input, ngrams, seed, parameter_a, parameter_b, stream, resources);
-  return build_list_result(input.parent(), std::move(hashes), parameter_a.size(), stream, resources);
+  return build_list_result(
+    input.parent(), std::move(hashes), parameter_a.size(), stream, resources);
 }
 
 std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
@@ -651,9 +661,10 @@ std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
                                         cudf::memory_resources resources)
 {
   using HashFunction = cudf::hashing::detail::MurmurHash3_x64_128<cudf::string_view>;
-  auto hashes =
-    detail::minhash_fn<HashFunction>(input, seed, parameter_a, parameter_b, width, stream, resources);
-  return build_list_result(input.parent(), std::move(hashes), parameter_a.size(), stream, resources);
+  auto hashes        = detail::minhash_fn<HashFunction>(
+    input, seed, parameter_a, parameter_b, width, stream, resources);
+  return build_list_result(
+    input.parent(), std::move(hashes), parameter_a.size(), stream, resources);
 }
 
 std::unique_ptr<cudf::column> minhash64_ngrams(cudf::lists_column_view const& input,
@@ -667,7 +678,8 @@ std::unique_ptr<cudf::column> minhash64_ngrams(cudf::lists_column_view const& in
   using HashFunction = cudf::hashing::detail::MurmurHash3_x64_128<cudf::string_view>;
   auto hashes        = detail::minhash_ngrams_fn<HashFunction>(
     input, ngrams, seed, parameter_a, parameter_b, stream, resources);
-  return build_list_result(input.parent(), std::move(hashes), parameter_a.size(), stream, resources);
+  return build_list_result(
+    input.parent(), std::move(hashes), parameter_a.size(), stream, resources);
 }
 
 }  // namespace detail

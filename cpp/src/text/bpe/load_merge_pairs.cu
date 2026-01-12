@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuda/functional>
 
@@ -96,9 +97,8 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
   cudf::memory_resources resources)
 {
   auto const space = std::string(" ");  // workaround to ARM issue
-  auto pairs =
-    cudf::strings::split_record(input, cudf::string_scalar(space, true, stream,
-                  resources), 1, stream, resources);
+  auto pairs       = cudf::strings::split_record(
+    input, cudf::string_scalar(space, true, stream, resources), 1, stream, resources);
   auto content = pairs->release();
   return create_bpe_merge_pairs_impl(std::move(content.children.back()), stream);
 }
@@ -147,8 +147,7 @@ bpe_merge_pairs::bpe_merge_pairs(std::unique_ptr<cudf::column>&& input,
 bpe_merge_pairs::bpe_merge_pairs(cudf::strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
                                  cudf::memory_resources resources)
-  : impl(detail::create_bpe_merge_pairs_impl(input, stream,
-                  resources).release())
+  : impl(detail::create_bpe_merge_pairs_impl(input, stream, resources).release())
 {
 }
 

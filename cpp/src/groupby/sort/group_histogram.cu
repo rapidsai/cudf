@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -43,8 +43,8 @@ std::unique_ptr<column> build_histogram(column_view const& values,
   auto const labeled_values = table_view{{labels_cv, values}};
 
   // Build histogram for the labeled values.
-  auto [distinct_indices, distinct_counts] =
-    cudf::reduction::detail::compute_row_frequencies(labeled_values, partial_counts, stream, resources);
+  auto [distinct_indices, distinct_counts] = cudf::reduction::detail::compute_row_frequencies(
+    labeled_values, partial_counts, stream, resources);
 
   // Gather the distinct rows for the output histogram.
   auto out_table = cudf::detail::gather(labeled_values,
@@ -120,15 +120,16 @@ std::unique_ptr<column> group_merge_histogram(column_view const& values,
   // Concatenate the histograms corresponding to the same key values.
   // That is equivalent to creating a new lists column (view) from the input lists column
   // with new offsets gathered as below.
-  auto new_offsets = rmm::device_uvector<size_type>(num_groups + 1, stream, resources.get_temporary_mr());
-  thrust::gather(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  auto new_offsets = rmm::device_uvector<size_type>(num_groups + 1, stream);
+  thrust::gather(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                  group_offsets.begin(),
                  group_offsets.end(),
                  lists_cv.offsets_begin(),
                  new_offsets.begin());
 
   // Generate labels for the new lists.
-  auto key_labels = rmm::device_uvector<size_type>(histogram_cv.size(), stream, resources.get_temporary_mr());
+  auto key_labels =
+    rmm::device_uvector<size_type>(histogram_cv.size(), stream, resources.get_temporary_mr());
   cudf::detail::label_segments(
     new_offsets.begin(), new_offsets.end(), key_labels.begin(), key_labels.end(), stream);
 

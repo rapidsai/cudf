@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -50,8 +50,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
 
   // Purge null entries in grouped values.
   auto null_purged_entries =
-    cudf::detail::copy_if(table_view{{values}}, not_null_pred, stream,
-                  resources)->release();
+    cudf::detail::copy_if(table_view{{values}}, not_null_pred, stream, resources)->release();
 
   auto null_purged_values = std::move(null_purged_entries.front());
   null_purged_values->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
@@ -60,7 +59,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   rmm::device_uvector<size_type> null_purged_sizes(num_groups, stream);
 
   thrust::transform(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_groups),
     null_purged_sizes.begin(),
@@ -72,8 +71,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
     });
 
   auto null_purged_offsets = std::get<0>(cudf::detail::make_offsets_child_column(
-    null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream,
-                  resources));
+    null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream, resources));
 
   return std::pair(std::move(null_purged_values), std::move(null_purged_offsets));
 }
@@ -87,10 +85,13 @@ std::unique_ptr<column> group_collect(column_view const& values,
 {
   auto [child_column,
         offsets_column] = [null_handling, num_groups, &values, &group_offsets, stream, mr] {
-    auto offsets_column = make_numeric_column(
-      data_type(type_to_id<size_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, resources);
+    auto offsets_column = make_numeric_column(data_type(type_to_id<size_type>()),
+                                              num_groups + 1,
+                                              mask_state::UNALLOCATED,
+                                              stream,
+                                              resources);
 
-    thrust::copy(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::copy(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                  group_offsets.begin(),
                  group_offsets.end(),
                  offsets_column->mutable_view().template begin<size_type>());
@@ -101,8 +102,7 @@ std::unique_ptr<column> group_collect(column_view const& values,
       return cudf::groupby::detail::purge_null_entries(
         values, offsets_column->view(), num_groups, stream, resources);
     } else {
-      return std::pair(std::make_unique<cudf::column>(values, stream,
-                  resources),
+      return std::pair(std::make_unique<cudf::column>(values, stream, resources),
                        std::move(offsets_column));
     }
   }();

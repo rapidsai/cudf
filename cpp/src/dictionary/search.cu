@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -63,7 +63,8 @@ struct find_index_fn {
              not std::is_same_v<Element, list_view> and not std::is_same_v<Element, struct_view>)
   {
     if (!key.is_valid(stream)) {
-      return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, resources);
+      return type_dispatcher(
+        input.indices().type(), dispatch_scalar_index{}, 0, false, stream, resources);
     }
     CUDF_EXPECTS(cudf::have_same_types(input.parent(), key),
                  "search key type must match dictionary keys type",
@@ -72,8 +73,10 @@ struct find_index_fn {
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter        = thrust::equal_range(
-      rmm::exec_policy(stream, resources.get_temporary_mr()), keys_view->begin<Element>(), keys_view->end<Element>(), find_key);
+    auto iter = thrust::equal_range(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                                    keys_view->begin<Element>(),
+                                    keys_view->end<Element>(),
+                                    find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
                            cuda::std::distance(keys_view->begin<Element>(), iter.first),
@@ -105,7 +108,8 @@ struct find_insert_index_fn {
              not std::is_same_v<Element, list_view> and not std::is_same_v<Element, struct_view>)
   {
     if (!key.is_valid(stream)) {
-      return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, resources);
+      return type_dispatcher(
+        input.indices().type(), dispatch_scalar_index{}, 0, false, stream, resources);
     }
     CUDF_EXPECTS(cudf::have_same_types(input.parent(), key),
                  "search key type must match dictionary keys type",
@@ -114,8 +118,10 @@ struct find_insert_index_fn {
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter        = thrust::lower_bound(
-      rmm::exec_policy(stream, resources.get_temporary_mr()), keys_view->begin<Element>(), keys_view->end<Element>(), find_key);
+    auto iter = thrust::lower_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                                    keys_view->begin<Element>(),
+                                    keys_view->end<Element>(),
+                                    find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
                            cuda::std::distance(keys_view->begin<Element>(), iter),

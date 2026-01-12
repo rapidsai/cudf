@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -58,7 +58,7 @@ enum class datetime_component : uint8_t {
 std::unique_ptr<cudf::column> extract_datetime_component(
   cudf::column_view const& column,
   datetime_component component,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
@@ -81,7 +81,7 @@ std::unique_ptr<cudf::column> extract_datetime_component(
  */
 std::unique_ptr<cudf::column> last_day_of_month(
   cudf::column_view const& column,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -97,7 +97,7 @@ std::unique_ptr<cudf::column> last_day_of_month(
  */
 std::unique_ptr<cudf::column> day_of_year(
   cudf::column_view const& column,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -134,7 +134,7 @@ std::unique_ptr<cudf::column> day_of_year(
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::column_view const& months,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -171,7 +171,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::scalar const& months,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -190,7 +190,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  */
 std::unique_ptr<cudf::column> is_leap_year(
   cudf::column_view const& column,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -208,7 +208,7 @@ std::unique_ptr<cudf::column> is_leap_year(
  */
 std::unique_ptr<cudf::column> days_in_month(
   cudf::column_view const& column,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -226,7 +226,7 @@ std::unique_ptr<cudf::column> days_in_month(
  */
 std::unique_ptr<cudf::column> extract_quarter(
   cudf::column_view const& column,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -257,7 +257,7 @@ enum class rounding_frequency : int32_t {
 std::unique_ptr<cudf::column> ceil_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -274,7 +274,7 @@ std::unique_ptr<cudf::column> ceil_datetimes(
 std::unique_ptr<cudf::column> floor_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -291,7 +291,7 @@ std::unique_ptr<cudf::column> floor_datetimes(
 std::unique_ptr<cudf::column> round_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

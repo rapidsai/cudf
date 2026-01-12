@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -120,7 +120,7 @@ class filtered_join {
    */
   [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> semi_join(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -147,7 +147,7 @@ class filtered_join {
    */
   [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> anti_join(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
  private:

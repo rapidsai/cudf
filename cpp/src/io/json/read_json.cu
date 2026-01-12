@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -192,7 +192,10 @@ size_type find_first_delimiter(device_span<char const> d_data,
                                rmm::cuda_stream_view stream)
 {
   auto const first_delimiter_position =
-    thrust::find(rmm::exec_policy(stream, resources.get_temporary_mr()), d_data.begin(), d_data.end(), delimiter);
+    thrust::find(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                 d_data.begin(),
+                 d_data.end(),
+                 delimiter);
   return first_delimiter_position != d_data.end()
            ? static_cast<size_type>(cuda::std::distance(d_data.begin(), first_delimiter_position))
            : -1;
@@ -341,7 +344,10 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     auto rev_it_begin = thrust::make_reverse_iterator(bufsubspan.end());
     auto rev_it_end   = thrust::make_reverse_iterator(bufsubspan.begin());
     auto const second_last_delimiter_it =
-      thrust::find(rmm::exec_policy(stream, resources.get_temporary_mr()), rev_it_begin, rev_it_end, delimiter);
+      thrust::find(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                   rev_it_begin,
+                   rev_it_end,
+                   delimiter);
     CUDF_EXPECTS(second_last_delimiter_it != rev_it_end,
                  "A single JSON line cannot be larger than the batch size limit");
     auto const last_line_size =
@@ -407,10 +413,8 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
   // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
   // invoke pre-processing FST
   if (reader_opts.is_enabled_normalize_single_quotes()) {
-    normalize_single_quotes(owning_buffers.first,
-                            reader_opts.get_delimiter(),
-                            stream,
-                            resources.get_temporary_mr());
+    normalize_single_quotes(
+      owning_buffers.first, reader_opts.get_delimiter(), stream, resources.get_temporary_mr());
     stream.synchronize();
   }
 
@@ -633,8 +637,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
                  partial_tables.end(),
                  partial_table_views.begin(),
                  [](auto const& table) { return table.tbl->view(); });
-  return table_with_metadata{cudf::concatenate(partial_table_views, stream,
-                  resources),
+  return table_with_metadata{cudf::concatenate(partial_table_views, stream, resources),
                              {partial_tables[0].metadata.schema_info}};
 }
 
@@ -702,8 +705,8 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     static_assert(num_delimiter_chars == 1,
                   "Currently only single-character delimiters are supported");
     auto const delimiter_source = thrust::make_constant_iterator(delimiter);
-    auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
-      delimiter_map, stream, resources.get_temporary_mr());
+    auto const d_delimiter_map =
+      cudf::detail::make_device_uvector_async(delimiter_map, stream, resources.get_temporary_mr());
     thrust::scatter(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     delimiter_source,
                     delimiter_source + d_delimiter_map.size(),

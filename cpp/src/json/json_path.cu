@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -984,14 +984,12 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       data_type{type_id::STRING},
       col.size(),
       rmm::device_buffer{0, stream, mr},  // no data
-      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream,
-                  resources),
+      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, resources),
       col.size());  // null count
   }
 
   // compute output sizes
-  auto sizes =
-    rmm::device_uvector<size_type>(col.size(), stream, resources.get_temporary_mr());
+  auto sizes     = rmm::device_uvector<size_type>(col.size(), stream, resources.get_temporary_mr());
   auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(col.offsets());
 
   constexpr int block_size = 512;

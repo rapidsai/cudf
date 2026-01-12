@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_factories.hpp>
@@ -49,7 +49,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
 
   // Compute the offsets column of the result:
   thrust::transform(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     offsets_data + start,
     offsets_data + end + 1,  // size of offsets column is 1 greater than slice length
     out_offsets.data(),
@@ -66,8 +66,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
   // view into a cudf::column:
   auto child =
     (lists.child().type() == cudf::data_type{type_id::LIST})
-      ? copy_slice(lists_column_view(lists.child()), start_offset, end_offset, stream,
-                  resources)
+      ? copy_slice(lists_column_view(lists.child()), start_offset, end_offset, stream, resources)
       : std::make_unique<cudf::column>(
           cudf::detail::slice(lists.child(), {start_offset, end_offset}, stream).front(),
           stream,

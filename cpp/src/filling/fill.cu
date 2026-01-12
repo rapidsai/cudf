@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -104,10 +104,9 @@ struct out_of_place_fill_range_dispatch {
 
     if (end != begin) {  // otherwise no fill
       if (!p_ret->nullable() && !value.is_valid(stream)) {
-        p_ret->set_null_mask(
-          cudf::detail::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream,
-                  resources),
-          0);
+        p_ret->set_null_mask(cudf::detail::create_null_mask(
+                               p_ret->size(), cudf::mask_state::ALL_VALID, stream, resources),
+                             0);
       }
 
       auto ret_view    = p_ret->mutable_view();

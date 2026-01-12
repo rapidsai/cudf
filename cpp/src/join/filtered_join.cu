@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,10 +16,12 @@
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cuco/bucket_storage.cuh>
@@ -30,6 +32,8 @@
 #include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+
+#include <memory>
 
 namespace cudf {
 namespace detail {
@@ -56,8 +60,7 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   // Otherwise, we have only one nullable column and can use its null mask directly.
   if (nullable_columns.size() > 1) {
     auto row_bitmask =
-      cudf::detail::bitmask_and(
-        table_view{nullable_columns}, stream, resources.get_temporary_mr())
+      cudf::detail::bitmask_and(table_view{nullable_columns}, stream, resources.get_temporary_mr())
         .first;
     auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
     return std::pair(std::move(row_bitmask), row_bitmask_ptr);
@@ -183,7 +186,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
     }
   };
 
-  auto contains_map = rmm::device_uvector<bool>(probe.num_rows(), stream, resources.get_temporary_mr());
+  auto contains_map =
+    rmm::device_uvector<bool>(probe.num_rows(), stream, resources.get_temporary_mr());
   if (is_primitive_row_op_compatible(_build)) {
     auto const d_probe_hasher = primitive_row_hasher{nullate::DYNAMIC{true}, preprocessed_probe};
     auto const probe_iter     = cudf::detail::make_counting_transform_iterator(
@@ -198,12 +202,13 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
 
     query_set(probe_iter, contains_map.begin());
   }
-  rmm::device_uvector<size_type> gather_map(probe.num_rows(), stream, resources);
-  auto gather_map_end = thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
-                                        thrust::counting_iterator<size_type>(0),
-                                        thrust::counting_iterator<size_type>(probe.num_rows()),
-                                        gather_map.begin(),
-                                        gather_mask{kind, contains_map});
+  rmm::device_uvector<size_type> gather_map(probe.num_rows(), stream, mr);
+  auto gather_map_end =
+    thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                    thrust::counting_iterator<size_type>(0),
+                    thrust::counting_iterator<size_type>(probe.num_rows()),
+                    gather_map.begin(),
+                    gather_mask{kind, contains_map});
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(gather_map));
 }
@@ -356,7 +361,9 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::an
   if (_build.num_rows() == 0) {
     auto result =
       std::make_unique<rmm::device_uvector<cudf::size_type>>(probe.num_rows(), stream, resources);
-    thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), result->begin(), result->end());
+    thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                     result->begin(),
+                     result->end());
     return result;
   }
 

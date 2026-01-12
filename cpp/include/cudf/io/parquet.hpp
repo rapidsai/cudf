@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -664,7 +664,7 @@ class parquet_reader_options_builder {
  */
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -692,7 +692,7 @@ table_with_metadata read_parquet(
   std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
   std::vector<parquet::FileMetaData>&& parquet_metadatas,
   parquet_reader_options const& options,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -730,7 +730,7 @@ class chunked_parquet_reader {
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -754,7 +754,7 @@ class chunked_parquet_reader {
     std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
     std::vector<parquet::FileMetaData>&& parquet_metadatas,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -780,7 +780,7 @@ class chunked_parquet_reader {
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -811,7 +811,7 @@ class chunked_parquet_reader {
     std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
     std::vector<parquet::FileMetaData>&& parquet_metadatas,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**

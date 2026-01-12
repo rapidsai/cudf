@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -341,11 +341,13 @@ std::
     4. Remove characters at output indices from concatenated buffer.
     5. Return updated buffer, segment lengths and updated segment offsets
    */
-  auto inbuf_lengths = cudf::detail::make_device_uvector_async(
-    col_lengths, stream, resources.get_temporary_mr());
+  auto inbuf_lengths =
+    cudf::detail::make_device_uvector_async(col_lengths, stream, resources.get_temporary_mr());
   size_t inbuf_lengths_size = inbuf_lengths.size();
   size_type inbuf_size =
-    thrust::reduce(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), inbuf_lengths.begin(), inbuf_lengths.end());
+    thrust::reduce(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                   inbuf_lengths.begin(),
+                   inbuf_lengths.end());
   rmm::device_uvector<char> inbuf(inbuf_size, stream);
   rmm::device_uvector<size_type> inbuf_offsets(inbuf_lengths_size, stream);
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),

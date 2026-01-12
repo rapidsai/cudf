@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,8 +15,7 @@ reader::reader(std::vector<std::unique_ptr<datasource>>&& sources,
                rmm::cuda_stream_view stream,
                cudf::memory_resources resources)
   : _impl(std::make_unique<reader_impl>(
-      std::move(sources), std::move(parquet_metadatas), options, stream,
-                  resources))
+      std::move(sources), std::move(parquet_metadatas), options, stream, resources))
 {
 }
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -30,7 +30,8 @@ std::unique_ptr<column> create_offsets_from_positions(strings_column_view const&
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
 
   // first, create a vector of string indices for each position
-  auto indices = rmm::device_uvector<size_type>(positions.size(), stream, resources.get_temporary_mr());
+  auto indices =
+    rmm::device_uvector<size_type>(positions.size(), stream, resources.get_temporary_mr());
   thrust::upper_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       d_offsets,
                       d_offsets + input.size(),
@@ -41,7 +42,8 @@ std::unique_ptr<column> create_offsets_from_positions(strings_column_view const&
   // compute position offsets per string
   auto counts = rmm::device_uvector<size_type>(input.size(), stream, resources.get_temporary_mr());
   // memset to zero-out the counts for any null-entries or strings with no positions
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), counts.begin(), counts.end(), 0);
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), counts.begin(), counts.end(), 0);
 
   // next, count the number of positions per string
   auto d_counts  = counts.data();
@@ -57,9 +59,8 @@ std::unique_ptr<column> create_offsets_from_positions(strings_column_view const&
     });
 
   // finally, convert the counts into offsets
-  return std::get<0>(
-    cudf::strings::detail::make_offsets_child_column(counts.begin(), counts.end(), stream,
-                  resources));
+  return std::get<0>(cudf::strings::detail::make_offsets_child_column(
+    counts.begin(), counts.end(), stream, resources));
 }
 
 }  // namespace cudf::strings::detail

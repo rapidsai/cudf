@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -235,8 +235,8 @@ index_vector generate_merged_indices(table_view const& left_table,
   auto lhs_device_view = table_device_view::create(left_table, stream);
   auto rhs_device_view = table_device_view::create(right_table, stream);
 
-  auto d_column_order = cudf::detail::make_device_uvector_async(
-    column_order, stream, resources.get_temporary_mr());
+  auto d_column_order =
+    cudf::detail::make_device_uvector_async(column_order, stream, resources.get_temporary_mr());
 
   if (has_nulls) {
     auto const new_null_precedence = [&]() {
@@ -254,7 +254,7 @@ index_vector generate_merged_indices(table_view const& left_table,
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view, *rhs_device_view, d_column_order, d_null_precedence);
-    thrust::merge(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::merge(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -264,7 +264,7 @@ index_vector generate_merged_indices(table_view const& left_table,
   } else {
     auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
       *lhs_device_view, *rhs_device_view, d_column_order, {});
-    thrust::merge(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::merge(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -291,12 +291,8 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
 
   index_vector merged_indices(total_size, stream);
 
-  auto const left_indices_col     = cudf::detail::lower_bound(right_table,
-                                                          left_table,
-                                                          column_order,
-                                                          null_precedence,
-                                                          stream,
-                                                          resources.get_temporary_mr());
+  auto const left_indices_col = cudf::detail::lower_bound(
+    right_table, left_table, column_order, null_precedence, stream, resources.get_temporary_mr());
   auto const left_indices         = left_indices_col->view();
   auto left_indices_mutable       = left_indices_col->mutable_view();
   auto const left_indices_begin   = left_indices.begin<cudf::size_type>();
@@ -390,7 +386,7 @@ struct column_merger {
     // and "gather" into merged_view.data()[indx_merged]
     // from lcol or rcol, depending on side;
     //
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       row_order_.begin(),
                       row_order_.end(),
                       merged_view.begin<Element>(),
@@ -437,8 +433,11 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(
   rmm::cuda_stream_view stream,
   cudf::memory_resources resources) const
 {
-  auto result = cudf::dictionary::detail::merge(
-    cudf::dictionary_column_view(lcol), cudf::dictionary_column_view(rcol), row_order_, stream, resources);
+  auto result = cudf::dictionary::detail::merge(cudf::dictionary_column_view(lcol),
+                                                cudf::dictionary_column_view(rcol),
+                                                row_order_,
+                                                stream,
+                                                resources);
 
   // set the validity mask
   if (lcol.has_nulls() || rcol.has_nulls()) {
@@ -505,8 +504,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::struct_view>(
   // materialize the output buffer
   rmm::device_buffer validity =
     lcol.has_nulls() || rcol.has_nulls()
-      ? detail::create_null_mask(merged_size, mask_state::UNINITIALIZED, stream,
-                  resources)
+      ? detail::create_null_mask(merged_size, mask_state::UNINITIALIZED, stream, resources)
       : rmm::device_buffer{};
   if (lcol.has_nulls() || rcol.has_nulls()) {
     materialize_bitmask(lcol,

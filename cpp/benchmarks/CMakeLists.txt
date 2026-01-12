@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -304,6 +304,16 @@ target_link_libraries(PARQUET_DELETION_VECTORS_NVBENCH PRIVATE roaring)
 # * parquet multithread reader benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_multithread.cpp)
+
+# ##################################################################################################
+# * cudftable reader benchmark
+# --------------------------------------------------------------------------
+ConfigureNVBench(CUDFTABLE_READER_NVBENCH io/cudftable/cudftable_reader.cpp)
+
+# ##################################################################################################
+# * cudftable writer benchmark
+# --------------------------------------------------------------------------
+ConfigureNVBench(CUDFTABLE_WRITER_NVBENCH io/cudftable/cudftable_writer.cpp)
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------

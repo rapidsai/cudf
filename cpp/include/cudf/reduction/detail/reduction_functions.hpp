@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -128,6 +128,17 @@ std::unique_ptr<scalar> argmin(column_view const& col,
 std::unique_ptr<scalar> argmax(column_view const& col,
                                rmm::cuda_stream_view stream,
                                cudf::memory_resources resources);
+
+/**
+ * @brief Computes the minimum and maximum values of the input column
+ *
+ * @param col input column to compute minmax
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return A pair consisting of the minimum value and the maximum value
+ */
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
+  cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes any of elements in input column is true when typecasted to bool

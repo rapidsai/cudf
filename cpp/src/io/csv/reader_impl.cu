@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -632,7 +632,8 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
 
   for (int col = 0, active_col = 0; col < num_actual_columns; ++col) {
     if (column_flags[col] & column_parse::enabled) {
-      auto out_buffer = column_buffer(column_types[active_col], num_records, true, stream, resources);
+      auto out_buffer =
+        column_buffer(column_types[active_col], num_records, true, stream, resources);
 
       out_buffer.name = column_names[col];
       out_buffers.emplace_back(std::move(out_buffer));
@@ -934,8 +935,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         // during the conversion stage
         std::unique_ptr<column> col = cudf::make_strings_column(*out_buffers[i]._strings, stream);
         out_columns.emplace_back(cudf::strings::detail::replace(
-          col->view(), dblquotechar_scalar, quotechar_scalar, -1, stream,
-                  resources));
+          col->view(), dblquotechar_scalar, quotechar_scalar, -1, stream, resources));
       } else {
         out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
       }

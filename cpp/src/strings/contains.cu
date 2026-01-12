@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -54,8 +54,7 @@ std::unique_ptr<column> contains_impl(strings_column_view const& input,
 {
   auto results = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
@@ -104,8 +103,7 @@ std::unique_ptr<column> count_re(strings_column_view const& input,
 
   auto result = count_matches(*d_strings, *d_prog, stream, resources);
   if (input.has_nulls()) {
-    result->set_null_mask(cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+    result->set_null_mask(cudf::detail::copy_bitmask(input.parent(), stream, resources),
                           input.null_count());
   }
   return result;

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -67,9 +67,11 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
   auto device_boolean_mask = cudf::column_device_view::create(boolean_mask, stream);
 
   if (boolean_mask.has_nulls()) {
-    return detail::copy_if(input, boolean_mask_filter<true>{*device_boolean_mask}, stream, resources);
+    return detail::copy_if(
+      input, boolean_mask_filter<true>{*device_boolean_mask}, stream, resources);
   } else {
-    return detail::copy_if(input, boolean_mask_filter<false>{*device_boolean_mask}, stream, resources);
+    return detail::copy_if(
+      input, boolean_mask_filter<false>{*device_boolean_mask}, stream, resources);
   }
 }
 

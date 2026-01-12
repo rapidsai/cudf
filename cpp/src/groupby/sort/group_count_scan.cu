@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,7 +35,7 @@ std::unique_ptr<column> count_scan(column_view const& values,
   auto resultview = result->mutable_view();
   // aggregation::COUNT_ALL
   if (nulls == null_policy::INCLUDE) {
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                   group_labels.begin(),
                                   group_labels.end(),
                                   thrust::make_constant_iterator<size_type>(1),
@@ -46,7 +46,7 @@ std::unique_ptr<column> count_scan(column_view const& values,
       0, [d_values = *d_values] __device__(auto idx) -> cudf::size_type {
         return d_values.is_valid(idx);
       });
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                   group_labels.begin(),
                                   group_labels.end(),
                                   itr,

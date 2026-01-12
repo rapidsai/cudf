@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,8 +17,11 @@ std::unique_ptr<column> generate_labels(lists_column_view const& input,
                                         rmm::cuda_stream_view stream,
                                         cudf::memory_resources resources)
 {
-  auto labels = make_numeric_column(
-    data_type(type_to_id<size_type>()), n_elements, cudf::mask_state::UNALLOCATED, stream, resources);
+  auto labels             = make_numeric_column(data_type(type_to_id<size_type>()),
+                                    n_elements,
+                                    cudf::mask_state::UNALLOCATED,
+                                    stream,
+                                    resources);
   auto const labels_begin = labels->mutable_view().template begin<size_type>();
   cudf::detail::label_segments(
     input.offsets_begin(), input.offsets_end(), labels_begin, labels_begin + n_elements, stream);
@@ -54,8 +57,8 @@ std::unique_ptr<column> get_normalized_offsets(lists_column_view const& input,
                                          input.size() + 1,
                                          cudf::mask_state::UNALLOCATED,
                                          stream,
-                                         resources);
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+                                         mr);
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     input.offsets_begin(),
                     input.offsets_end(),
                     out_offsets->mutable_view().begin<size_type>(),

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,8 +22,15 @@ std::unique_ptr<cudf::column> segmented_sum_of_squares(column_view const& col,
                                                        cudf::memory_resources resources)
 {
   using reducer = simple::detail::column_type_dispatcher<op::sum_of_squares>;
-  return cudf::type_dispatcher(
-    col.type(), reducer{}, col, offsets, output_dtype, null_handling, std::nullopt, stream, resources);
+  return cudf::type_dispatcher(col.type(),
+                               reducer{},
+                               col,
+                               offsets,
+                               output_dtype,
+                               null_handling,
+                               std::nullopt,
+                               stream,
+                               resources);
 }
 
 }  // namespace detail

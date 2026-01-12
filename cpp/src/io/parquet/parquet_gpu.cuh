@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,8 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/types.hpp>
+
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/pair.cuh>
 #include <cuco/storage.cuh>

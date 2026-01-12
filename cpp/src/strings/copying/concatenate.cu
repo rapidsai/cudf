@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -78,16 +78,17 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
       return static_cast<size_t>(col.size());
     });
   thrust::inclusive_scan(thrust::host, offset_it, input_offsets.end(), offset_it);
-  auto d_input_offsets = cudf::detail::make_device_uvector_async(
-    input_offsets, stream, resources.get_temporary_mr());
+  auto d_input_offsets =
+    cudf::detail::make_device_uvector_async(input_offsets, stream, resources.get_temporary_mr());
   auto const output_size = input_offsets.back();
 
   // Compute the partition offsets and size of chars column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
-  auto d_partition_offsets = rmm::device_uvector<size_t>(views.size() + 1, stream, resources.get_temporary_mr());
+  auto d_partition_offsets =
+    rmm::device_uvector<size_t>(views.size() + 1, stream, resources.get_temporary_mr());
   d_partition_offsets.set_element_to_zero_async(0, stream);  // zero first element
 
-  thrust::transform_inclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                    device_views_ptr,
                                    device_views_ptr + views.size(),
                                    std::next(d_partition_offsets.begin()),

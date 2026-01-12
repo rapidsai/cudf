@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -45,8 +45,10 @@ std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view
 
   auto first_null_position = [&] {
     size_type const first_null =
-      thrust::find_if_not(
-        rmm::exec_policy(stream, resources.get_temporary_mr()), valid_itr, valid_itr + input_view.size(), cuda::std::identity{}) -
+      thrust::find_if_not(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                          valid_itr,
+                          valid_itr + input_view.size(),
+                          cuda::std::identity{}) -
       valid_itr;
     size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
     return std::min(input_view.size(), first_null + exclusive_offset);
@@ -77,8 +79,11 @@ struct scan_functor {
 
     // CUB 2.0.0 requires that the binary operator returns the same type as the identity.
     auto const binary_op = cudf::detail::cast_functor<T>(Op{});
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream, resources.get_temporary_mr()), begin, begin + input_view.size(), result.data<T>(), binary_op);
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                           begin,
+                           begin + input_view.size(),
+                           result.data<T>(),
+                           binary_op);
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;
@@ -165,8 +170,8 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
 {
   auto [mask, null_count] = [&] {
     if (null_handling == null_policy::EXCLUDE) {
-      return std::make_pair(std::move(detail::copy_bitmask(input, stream,
-                  resources)), input.null_count());
+      return std::make_pair(std::move(detail::copy_bitmask(input, stream, resources)),
+                            input.null_count());
     } else if (input.nullable()) {
       return mask_scan(input, scan_type::INCLUSIVE, stream, resources);
     }
@@ -195,8 +200,12 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
                   });
 
     // Replace the children columns.
-    output = cudf::create_structs_hierarchy(
-      num_rows, std::move(content.children), null_count, std::move(*content.null_mask), stream, resources);
+    output = cudf::create_structs_hierarchy(num_rows,
+                                            std::move(content.children),
+                                            null_count,
+                                            std::move(*content.null_mask),
+                                            stream,
+                                            resources);
   }
 
   return output;

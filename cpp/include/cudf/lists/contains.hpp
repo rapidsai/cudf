@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -38,7 +38,7 @@ namespace lists {
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
   cudf::scalar const& search_key,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -62,7 +62,7 @@ std::unique_ptr<column> contains(
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
   cudf::column_view const& search_keys,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -84,7 +84,7 @@ std::unique_ptr<column> contains(
  */
 std::unique_ptr<column> contains_nulls(
   cudf::lists_column_view const& lists,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -129,7 +129,7 @@ std::unique_ptr<column> index_of(
   cudf::scalar const& search_key,
   duplicate_find_option find_option = duplicate_find_option::FIND_FIRST,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources  = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Create a column of values indicating the position of a search key
@@ -166,7 +166,7 @@ std::unique_ptr<column> index_of(
   cudf::column_view const& search_keys,
   duplicate_find_option find_option = duplicate_find_option::FIND_FIRST,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources  = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace lists

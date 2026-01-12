@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -201,7 +201,8 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
   CUDF_EXPECTS(na_rep.is_valid(stream), "Null replacement string must be valid");
 
   // create stack memory for processing nested lists
-  auto stack_buffer = rmm::device_uvector<stack_item>(input.size() * depth, stream, resources.get_temporary_mr());
+  auto stack_buffer =
+    rmm::device_uvector<stack_item>(input.size() * depth, stream, resources.get_temporary_mr());
 
   auto const d_input      = column_device_view::create(input.parent(), stream);
   auto const d_separators = column_device_view::create(separators.parent(), stream);

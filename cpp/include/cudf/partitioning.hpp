@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -69,7 +69,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -96,9 +96,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
-  hash_id hash_function             = hash_id::HASH_MURMUR3,
-  uint32_t seed                     = DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  hash_id hash_function            = hash_id::HASH_MURMUR3,
+  uint32_t seed                    = DEFAULT_HASH_SEED,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -242,8 +242,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
   cudf::size_type num_partitions,
-  cudf::size_type start_partition   = 0,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  cudf::size_type start_partition  = 0,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

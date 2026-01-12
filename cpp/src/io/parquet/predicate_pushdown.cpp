@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "reader_impl_helpers.hpp"
@@ -105,13 +105,10 @@ struct row_group_stats_caster : public stats_caster_base {
           stats_idx++;
         }
       };
-      return {min.to_device(dtype, stream,
-                  resources),
-              max.to_device(dtype, stream,
-                  resources),
+      return {min.to_device(dtype, stream, resources),
+              max.to_device(dtype, stream, resources),
               has_is_null_operator ? std::make_optional(is_null->to_device(
-                                       data_type{cudf::type_id::BOOL8}, stream,
-                  resources))
+                                       data_type{cudf::type_id::BOOL8}, stream, resources))
                                    : std::nullopt};
     }
   }
@@ -154,21 +151,30 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     if (not stats_columns_mask[col_idx] or
         (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING)) {
       // Placeholder for unsupported types and non-participating columns
-      columns.push_back(cudf::make_numeric_column(
-        data_type{cudf::type_id::BOOL8}, total_row_groups, rmm::device_buffer{}, 0, stream,
-                  resources));
-      columns.push_back(cudf::make_numeric_column(
-        data_type{cudf::type_id::BOOL8}, total_row_groups, rmm::device_buffer{}, 0, stream,
-                  resources));
+      columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                                  total_row_groups,
+                                                  rmm::device_buffer{},
+                                                  0,
+                                                  stream,
+                                                  resources));
+      columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                                  total_row_groups,
+                                                  rmm::device_buffer{},
+                                                  0,
+                                                  stream,
+                                                  resources));
       if (has_is_null_operator) {
-        columns.push_back(cudf::make_numeric_column(
-          data_type{cudf::type_id::BOOL8}, total_row_groups, rmm::device_buffer{}, 0, stream,
-                  resources));
+        columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                                    total_row_groups,
+                                                    rmm::device_buffer{},
+                                                    0,
+                                                    stream,
+                                                    resources));
       }
       continue;
     }
-    auto [min_col, max_col, is_null_col] =
-      cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, schema_idx, dtype, stream, resources);
+    auto [min_col, max_col, is_null_col] = cudf::type_dispatcher<dispatch_storage_type>(
+      dtype, stats_col, schema_idx, dtype, stream, resources);
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
     if (has_is_null_operator) {
@@ -426,8 +432,8 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   rmm::cuda_stream_view stream)
 {
   // Filter the input table using AST expression
-  auto predicate_col = cudf::detail::compute_column(
-    table, ast_expr.get(), stream, resources.get_temporary_mr());
+  auto predicate_col =
+    cudf::detail::compute_column(table, ast_expr.get(), stream, resources.get_temporary_mr());
   auto predicate = predicate_col->view();
   CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
                "Filter expression must return a boolean column");

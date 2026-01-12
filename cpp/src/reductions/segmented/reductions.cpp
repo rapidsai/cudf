@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -53,8 +53,7 @@ struct segmented_reduce_dispatch_functor {
                                     rmm::cuda_stream_view stream,
                                     cudf::memory_resources resources)
     : segmented_reduce_dispatch_functor(
-        segmented_values, offsets, output_dtype, null_handling, std::nullopt, stream,
-                  resources)
+        segmented_values, offsets, output_dtype, null_handling, std::nullopt, stream, resources)
   {
   }
 
@@ -65,7 +64,8 @@ struct segmented_reduce_dispatch_functor {
       case segmented_reduce_aggregation::SUM:
         return segmented_sum(col, offsets, output_dtype, null_handling, init, stream, resources);
       case segmented_reduce_aggregation::PRODUCT:
-        return segmented_product(col, offsets, output_dtype, null_handling, init, stream, resources);
+        return segmented_product(
+          col, offsets, output_dtype, null_handling, init, stream, resources);
       case segmented_reduce_aggregation::MIN:
         return segmented_min(col, offsets, output_dtype, null_handling, init, stream, resources);
       case segmented_reduce_aggregation::MAX:
@@ -75,7 +75,8 @@ struct segmented_reduce_dispatch_functor {
       case segmented_reduce_aggregation::ALL:
         return segmented_all(col, offsets, output_dtype, null_handling, init, stream, resources);
       case segmented_reduce_aggregation::SUM_OF_SQUARES:
-        return segmented_sum_of_squares(col, offsets, output_dtype, null_handling, stream, resources);
+        return segmented_sum_of_squares(
+          col, offsets, output_dtype, null_handling, stream, resources);
       case segmented_reduce_aggregation::MEAN:
         return segmented_mean(col, offsets, output_dtype, null_handling, stream, resources);
       case segmented_reduce_aggregation::VARIANCE: {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,8 +59,7 @@ struct scan_result_functor final : store_result_functor {
     if (grouped_values)
       return grouped_values->view();
     else
-      return (grouped_values = helper.grouped_values(values, stream,
-                  resources))->view();
+      return (grouped_values = helper.grouped_values(values, stream, resources))->view();
   };
 };
 
@@ -69,12 +68,13 @@ void scan_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(
-    values,
-    agg,
-    detail::sum_scan(
-      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::sum_scan(get_grouped_values(),
+                                    helper.num_groups(stream),
+                                    helper.group_labels(stream),
+                                    stream,
+                                    resources));
 }
 
 template <>
@@ -82,12 +82,13 @@ void scan_result_functor::operator()<aggregation::PRODUCT>(aggregation const& ag
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(
-    values,
-    agg,
-    detail::product_scan(
-      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::product_scan(get_grouped_values(),
+                                        helper.num_groups(stream),
+                                        helper.group_labels(stream),
+                                        stream,
+                                        resources));
 }
 
 template <>
@@ -95,12 +96,13 @@ void scan_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(
-    values,
-    agg,
-    detail::min_scan(
-      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::min_scan(get_grouped_values(),
+                                    helper.num_groups(stream),
+                                    helper.group_labels(stream),
+                                    stream,
+                                    resources));
 }
 
 template <>
@@ -108,12 +110,13 @@ void scan_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(
-    values,
-    agg,
-    detail::max_scan(
-      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::max_scan(get_grouped_values(),
+                                    helper.num_groups(stream),
+                                    helper.group_labels(stream),
+                                    stream,
+                                    resources));
 }
 
 template <>
@@ -121,11 +124,10 @@ void scan_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& 
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(
-    values,
-    agg,
-    detail::count_scan(values, null_policy::INCLUDE, helper.group_labels(stream), stream,
-                  resources));
+  cache.add_result(values,
+                   agg,
+                   detail::count_scan(
+                     values, null_policy::INCLUDE, helper.group_labels(stream), stream, resources));
 }
 
 template <>
@@ -137,8 +139,7 @@ void scan_result_functor::operator()<aggregation::COUNT_VALID>(aggregation const
     values,
     agg,
     detail::count_scan(
-      get_grouped_values(), null_policy::EXCLUDE, helper.group_labels(stream), stream,
-                  resources));
+      get_grouped_values(), null_policy::EXCLUDE, helper.group_labels(stream), stream, resources));
 }
 
 template <>
@@ -204,14 +205,13 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                                               stream,
                                               resources);
   }
-  result = std::move(
-    cudf::detail::scatter(table_view{{*result}}, *gather_map, table_view{{*result}}, stream,
-                  resources)
-      ->release()[0]);
+  result = std::move(cudf::detail::scatter(
+                       table_view{{*result}}, *gather_map, table_view{{*result}}, stream, resources)
+                       ->release()[0]);
   if (rank_agg._null_handling == null_policy::EXCLUDE) {
     auto const values = get_grouped_values();
-    result->set_null_mask(cudf::detail::copy_bitmask(values, stream,
-                  resources), values.null_count());
+    result->set_null_mask(cudf::detail::copy_bitmask(values, stream, resources),
+                          values.null_count());
   }
   cache.add_result(values, agg, std::move(result));
 }
@@ -229,8 +229,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
   cudf::detail::result_cache cache(requests.size());
 
   for (auto const& request : requests) {
-    auto store_functor =
-      detail::scan_result_functor(request.values, helper(), cache, stream, resources, _keys_are_sorted);
+    auto store_functor = detail::scan_result_functor(
+      request.values, helper(), cache, stream, resources, _keys_are_sorted);
     for (auto const& aggregation : request.aggregations) {
       // TODO (dm): single pass compute all supported reductions
       cudf::detail::aggregation_dispatcher(aggregation->kind, store_functor, *aggregation);

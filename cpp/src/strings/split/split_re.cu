@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -139,8 +139,8 @@ std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> gener
   auto const begin = cudf::detail::make_counting_transform_iterator(0, map_fn);
   auto const end   = begin + strings_count;
 
-  auto [offsets, total_tokens] = cudf::detail::make_offsets_child_column(
-    begin, end, stream, resources.get_temporary_mr());
+  auto [offsets, total_tokens] =
+    cudf::detail::make_offsets_child_column(begin, end, stream, resources.get_temporary_mr());
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // build a vector of tokens
@@ -198,8 +198,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
-  auto const counts =
-    count_matches(*d_strings, *d_prog, stream, resources.get_temporary_mr());
+  auto const counts = count_matches(*d_strings, *d_prog, stream, resources.get_temporary_mr());
 
   // get the split tokens from the input column; this also converts the counts into offsets
   auto [tokens, offsets] =
@@ -208,7 +207,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 
   // the output column count is the maximum number of tokens generated for any input string
   auto const columns_count = thrust::transform_reduce(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto const idx) -> size_type {
@@ -223,8 +222,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
       data_type{type_id::STRING},
       strings_count,
       rmm::device_buffer{0, stream, mr},  // no data
-      cudf::detail::create_null_mask(strings_count, mask_state::ALL_NULL, stream,
-                  resources),
+      cudf::detail::create_null_mask(strings_count, mask_state::ALL_NULL, stream, resources),
       strings_count));
     return std::make_unique<table>(std::move(results));
   }
@@ -281,8 +279,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                           cudf::detail::copy_bitmask(input.parent(), stream, resources),
                            stream,
                            resources);
 }

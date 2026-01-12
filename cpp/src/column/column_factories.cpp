@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -75,8 +75,7 @@ std::unique_ptr<column> make_numeric_column(data_type type,
     type,
     size,
     rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-    detail::create_null_mask(size, state, stream,
-                  resources),
+    detail::create_null_mask(size, state, stream, resources),
     state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
     std::vector<std::unique_ptr<column>>{});
 }
@@ -96,8 +95,7 @@ std::unique_ptr<column> make_fixed_point_column(data_type type,
     type,
     size,
     rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-    detail::create_null_mask(size, state, stream,
-                  resources),
+    detail::create_null_mask(size, state, stream, resources),
     state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
     std::vector<std::unique_ptr<column>>{});
 }
@@ -117,8 +115,7 @@ std::unique_ptr<column> make_timestamp_column(data_type type,
     type,
     size,
     rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-    detail::create_null_mask(size, state, stream,
-                  resources),
+    detail::create_null_mask(size, state, stream, resources),
     state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
     std::vector<std::unique_ptr<column>>{});
 }
@@ -138,8 +135,7 @@ std::unique_ptr<column> make_duration_column(data_type type,
     type,
     size,
     rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-    detail::create_null_mask(size, state, stream,
-                  resources),
+    detail::create_null_mask(size, state, stream, resources),
     state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
     std::vector<std::unique_ptr<column>>{});
 }
@@ -173,10 +169,8 @@ std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
   CUDF_EXPECTS(s.is_valid(stream), "cannot create a dictionary with a null key");
   return make_dictionary_column(
-    make_column_from_scalar(s, 1, stream,
-                  resources),
-    make_column_from_scalar(numeric_scalar<int32_t>(0, true, stream), size, stream,
-                  resources),
+    make_column_from_scalar(s, 1, stream, resources),
+    make_column_from_scalar(numeric_scalar<int32_t>(0, true, stream), size, stream, resources),
     rmm::device_buffer{0, stream, mr},
     0);
 }

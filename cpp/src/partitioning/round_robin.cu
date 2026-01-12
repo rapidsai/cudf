@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -87,7 +87,9 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 
   if (num_partitions == nrows) {
     rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
-    thrust::sequence(rmm::exec_policy(stream, resources.get_temporary_mr()), partition_offsets.begin(), partition_offsets.end());
+    thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                     partition_offsets.begin(),
+                     partition_offsets.end());
 
     auto uniq_tbl = cudf::detail::gather(input,
                                          rotated_iter_begin,
@@ -103,7 +105,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     // copy rotated right partition indexes that
     // fall in the interval [0, nrows):
     //(this relies on a _stable_ copy_if())
-    thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     rotated_iter_begin,
                     rotated_iter_begin + num_partitions,
                     d_row_indices.begin(),
@@ -128,7 +130,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 
     // offsets (part 2: compute partition offsets):
     rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                            nedges_iter_begin,
                            nedges_iter_begin + num_partitions,
                            partition_offsets.begin());
@@ -224,8 +226,12 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
       return num_partitions * index_within_partition + partition_index;
     }));
 
-  auto uniq_tbl = cudf::detail::gather(
-    input, iter_begin, iter_begin + nrows, cudf::out_of_bounds_policy::DONT_CHECK, stream, resources);
+  auto uniq_tbl = cudf::detail::gather(input,
+                                       iter_begin,
+                                       iter_begin + nrows,
+                                       cudf::out_of_bounds_policy::DONT_CHECK,
+                                       stream,
+                                       resources);
   auto ret_pair = std::pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
 
   // this has the effect of rotating the set of partition sizes

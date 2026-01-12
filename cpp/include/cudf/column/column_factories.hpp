@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -64,8 +64,8 @@ std::unique_ptr<column> make_empty_column(type_id id);
 std::unique_ptr<column> make_numeric_column(
   data_type type,
   size_type size,
-  mask_state state                  = mask_state::UNALLOCATED,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  mask_state state                 = mask_state::UNALLOCATED,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -91,7 +91,7 @@ std::unique_ptr<column> make_numeric_column(
   size_type size,
   B&& null_mask,
   size_type null_count,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref())
 {
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
@@ -122,8 +122,8 @@ std::unique_ptr<column> make_numeric_column(
 std::unique_ptr<column> make_fixed_point_column(
   data_type type,
   size_type size,
-  mask_state state                  = mask_state::UNALLOCATED,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  mask_state state                 = mask_state::UNALLOCATED,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -148,7 +148,7 @@ std::unique_ptr<column> make_fixed_point_column(
   size_type size,
   B&& null_mask,
   size_type null_count,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref())
 {
   CUDF_EXPECTS(is_fixed_point(type), "Invalid, non-fixed_point type.");
@@ -180,8 +180,8 @@ std::unique_ptr<column> make_fixed_point_column(
 std::unique_ptr<column> make_timestamp_column(
   data_type type,
   size_type size,
-  mask_state state                  = mask_state::UNALLOCATED,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  mask_state state                 = mask_state::UNALLOCATED,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -207,7 +207,7 @@ std::unique_ptr<column> make_timestamp_column(
   size_type size,
   B&& null_mask,
   size_type null_count,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref())
 {
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
@@ -239,8 +239,8 @@ std::unique_ptr<column> make_timestamp_column(
 std::unique_ptr<column> make_duration_column(
   data_type type,
   size_type size,
-  mask_state state                  = mask_state::UNALLOCATED,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  mask_state state                 = mask_state::UNALLOCATED,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -266,7 +266,7 @@ std::unique_ptr<column> make_duration_column(
   size_type size,
   B&& null_mask,
   size_type null_count,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref())
 {
   CUDF_EXPECTS(is_duration(type), "Invalid, non-duration type.");
@@ -298,8 +298,8 @@ std::unique_ptr<column> make_duration_column(
 std::unique_ptr<column> make_fixed_width_column(
   data_type type,
   size_type size,
-  mask_state state                  = mask_state::UNALLOCATED,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  mask_state state                 = mask_state::UNALLOCATED,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -325,7 +325,7 @@ std::unique_ptr<column> make_fixed_width_column(
   size_type size,
   B&& null_mask,
   size_type null_count,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref())
 {
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
@@ -364,7 +364,7 @@ std::unique_ptr<column> make_fixed_width_column(
  */
 std::unique_ptr<column> make_strings_column(
   cudf::device_span<cuda::std::pair<char const*, size_type> const> strings,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -384,7 +384,7 @@ std::unique_ptr<column> make_strings_column(
  */
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
   std::vector<cudf::device_span<cuda::std::pair<char const*, size_type> const>> const& input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -416,7 +416,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 std::unique_ptr<column> make_strings_column(
   cudf::device_span<string_view const> string_views,
   string_view const null_placeholder,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -504,7 +504,7 @@ std::unique_ptr<cudf::column> make_lists_column(
   std::unique_ptr<column> child_column,
   size_type null_count,
   rmm::device_buffer&& null_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -519,7 +519,7 @@ std::unique_ptr<cudf::column> make_lists_column(
  */
 std::unique_ptr<column> make_empty_lists_column(
   data_type child_type,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -550,7 +550,7 @@ std::unique_ptr<cudf::column> make_structs_column(
   std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,
   rmm::device_buffer&& null_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -584,7 +584,7 @@ std::unique_ptr<cudf::column> create_structs_hierarchy(
   std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,
   rmm::device_buffer&& null_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -604,7 +604,7 @@ std::unique_ptr<cudf::column> create_structs_hierarchy(
 std::unique_ptr<column> make_column_from_scalar(
   scalar const& s,
   size_type size,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -624,7 +624,7 @@ std::unique_ptr<column> make_column_from_scalar(
 std::unique_ptr<column> make_dictionary_from_scalar(
   scalar const& s,
   size_type size,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

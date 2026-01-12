@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -51,8 +51,11 @@ std::unique_ptr<column> count_matches(column_device_view const& d_strings,
                                       rmm::cuda_stream_view stream,
                                       cudf::memory_resources resources)
 {
-  auto results = make_numeric_column(
-    data_type{type_to_id<size_type>()}, d_strings.size(), mask_state::UNALLOCATED, stream, resources);
+  auto results = make_numeric_column(data_type{type_to_id<size_type>()},
+                                     d_strings.size(),
+                                     mask_state::UNALLOCATED,
+                                     stream,
+                                     resources);
 
   if (d_strings.size() == 0) { return results; }
 

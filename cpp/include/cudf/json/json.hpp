@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -154,8 +154,8 @@ class get_json_object_options {
 std::unique_ptr<cudf::column> get_json_object(
   cudf::strings_column_view const& col,
   cudf::string_scalar const& json_path,
-  get_json_object_options options   = get_json_object_options{},
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  get_json_object_options options  = get_json_object_options{},
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group

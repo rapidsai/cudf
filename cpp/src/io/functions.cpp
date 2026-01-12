@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,6 +20,7 @@
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/detail/utils.hpp>
+#include <cudf/io/experimental/cudftable.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
@@ -461,7 +462,8 @@ table_with_metadata read_orc(orc_reader_options const& options,
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader = std::make_unique<orc::detail::reader>(std::move(datasources), options, stream, resources);
+  auto reader =
+    std::make_unique<orc::detail::reader>(std::move(datasources), options, stream, resources);
   return reader->read();
 }
 
@@ -516,8 +518,7 @@ chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
                                        orc_reader_options const& options,
                                        rmm::cuda_stream_view stream,
                                        cudf::memory_resources resources)
-  : chunked_orc_reader(chunk_read_limit, 0UL, options, stream,
-                  resources)
+  : chunked_orc_reader(chunk_read_limit, 0UL, options, stream, resources)
 {
 }
 
@@ -1234,4 +1235,43 @@ chunked_parquet_writer_options_builder::chunked_parquet_writer_options_builder(
 {
 }
 
+namespace experimental {
+
+// Forward declarations for detail functions
+namespace detail {
+void write_cudftable(data_sink* sink, table_view const& input, rmm::cuda_stream_view stream);
+packed_table read_cudftable(datasource* source,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr);
+}  // namespace detail
+
+/**
+ * @copydoc cudf::io::experimental::write_cudftable
+ */
+void write_cudftable(cudftable_writer_options const& options, rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+
+  auto sinks = make_datasinks(options.get_sink());
+  CUDF_EXPECTS(sinks.size() == 1, "CudfTable format only supports single sink");
+
+  detail::write_cudftable(sinks[0].get(), options.get_table(), stream);
+}
+
+/**
+ * @copydoc cudf::io::experimental::read_cudftable
+ */
+packed_table read_cudftable(cudftable_reader_options const& options,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  auto datasources = make_datasources(options.get_source());
+  CUDF_EXPECTS(datasources.size() == 1, "CudfTable format only supports single source");
+
+  return detail::read_cudftable(datasources[0].get(), stream, mr);
+}
+
+}  // namespace experimental
 }  // namespace cudf::io

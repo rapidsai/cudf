@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -136,12 +136,10 @@ struct table_flattener {
     // sure the flattening results are tables having the same number of columns.
 
     if (nullability == column_nullability::FORCE || col.has_nulls()) {
-      validity_as_column.push_back(cudf::detail::is_valid(col, stream,
-                  resources));
+      validity_as_column.push_back(cudf::detail::is_valid(col, stream, resources));
       if (col.has_nulls()) {
         // copy bitmask is needed only if the column has null
-        validity_as_column.back()->set_null_mask(cudf::detail::copy_bitmask(col, stream,
-                  resources),
+        validity_as_column.back()->set_null_mask(cudf::detail::copy_bitmask(col, stream, resources),
                                                  col.null_count());
       }
       flat_columns.push_back(validity_as_column.back()->view());
@@ -240,8 +238,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
   auto const num_rows = input->size();
 
   if (!input->nullable()) {
-    input->set_null_mask(cudf::detail::copy_bitmask(null_mask, 0, num_rows, stream,
-                  resources),
+    input->set_null_mask(cudf::detail::copy_bitmask(null_mask, 0, num_rows, stream, resources),
                          null_count);
   } else {
     auto current_mask = input->mutable_view().null_mask();
@@ -476,7 +473,8 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
   auto ret_children    = std::vector<column_view>{};
 
   std::for_each(child_begin, child_end, [&](auto const& child) {
-    auto [processed_child, child_nullable_data] = push_down_nulls_no_sanitize(child, stream, resources);
+    auto [processed_child, child_nullable_data] =
+      push_down_nulls_no_sanitize(child, stream, resources);
     ret_children.emplace_back(std::move(processed_child));
     ret_nullable_data.emplace_back(std::move(child_nullable_data));
   });
@@ -544,8 +542,8 @@ std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
     auto const input_view = input->view();
     auto const nullbool   = cudf::detail::has_nonempty_nulls(input_view, stream);
     if (nullbool) {
-      purged_columns.emplace_back(cudf::detail::purge_nonempty_nulls(input_view, stream,
-                  resources));
+      purged_columns.emplace_back(
+        cudf::detail::purge_nonempty_nulls(input_view, stream, resources));
     } else {
       purged_columns.emplace_back(std::move(input));
     }
@@ -604,8 +602,8 @@ std::vector<std::unique_ptr<column>> enforce_null_consistency(
 
   // Apply parent struct nulls to all child columns (if there are any struct columns)
   if (!struct_root_masks.empty()) {
-    struct_child_cols =
-      superimpose_and_sanitize_nulls(struct_root_masks, std::move(struct_child_cols), stream, resources);
+    struct_child_cols = superimpose_and_sanitize_nulls(
+      struct_root_masks, std::move(struct_child_cols), stream, resources);
   }
 
   // Rebuild struct columns with the updated child columns
@@ -640,8 +638,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
   if (auto const output_view = output.first;
       cudf::detail::has_nonempty_nulls(output_view, stream)) {
     output.second.new_columns.emplace_back(
-      cudf::detail::purge_nonempty_nulls(output_view, stream,
-                  resources));
+      cudf::detail::purge_nonempty_nulls(output_view, stream, resources));
     output.first = output.second.new_columns.back()->view();
 
     // Don't need the temp null mask anymore, as we will create a new column.

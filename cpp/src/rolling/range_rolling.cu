@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -121,18 +121,22 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
     auto per_group_nulls = orderby.has_nulls() ? nulls_per_group(orderby, offsets, stream)
                                                : rmm::device_uvector<size_type>{0, stream};
     auto grouping = detail::rolling::preprocessed_group_info{labels, offsets, per_group_nulls};
-    return {
-      make_range_window(
-        orderby, grouping, rolling::direction::PRECEDING, order, null_order, preceding, stream,
-                  resources),
-      make_range_window(orderby,
-                        grouping,
-                        rolling::direction::FOLLOWING,
-                        order,
-                        null_order,
-                        following,
-                        stream,
-                        mr)};
+    return {make_range_window(orderby,
+                              grouping,
+                              rolling::direction::PRECEDING,
+                              order,
+                              null_order,
+                              preceding,
+                              stream,
+                              resources),
+            make_range_window(orderby,
+                              grouping,
+                              rolling::direction::FOLLOWING,
+                              order,
+                              null_order,
+                              following,
+                              stream,
+                              mr)};
   } else {
     return {make_range_window(orderby,
                               std::nullopt,

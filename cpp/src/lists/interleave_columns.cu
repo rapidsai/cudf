@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -48,16 +48,20 @@ generate_list_offsets_and_validities(table_view const& input,
   auto const table_dv_ptr     = table_device_view::create(input, stream);
 
   // The output offsets column.
-  auto list_offsets = make_numeric_column(
-    data_type{type_to_id<size_type>()}, num_output_lists + 1, mask_state::UNALLOCATED, stream, resources);
+  auto list_offsets    = make_numeric_column(data_type{type_to_id<size_type>()},
+                                          num_output_lists + 1,
+                                          mask_state::UNALLOCATED,
+                                          stream,
+                                          resources);
   auto const d_offsets = list_offsets->mutable_view().template begin<size_type>();
 
   // The array of int8_t to store validities for list elements.
-  auto validities = rmm::device_uvector<int8_t>(has_null_mask ? num_output_lists : 0, stream, resources.get_temporary_mr());
+  auto validities = rmm::device_uvector<int8_t>(
+    has_null_mask ? num_output_lists : 0, stream, resources.get_temporary_mr());
 
   // Compute list sizes and validities.
   thrust::transform(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_output_lists),
     d_offsets,
@@ -76,8 +80,10 @@ generate_list_offsets_and_validities(table_view const& input,
     }));
 
   // Compute offsets from sizes.
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream, resources.get_temporary_mr()), d_offsets, d_offsets + num_output_lists + 1, d_offsets);
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                         d_offsets,
+                         d_offsets + num_output_lists + 1,
+                         d_offsets);
 
   return {std::move(list_offsets), std::move(validities)};
 }
@@ -199,7 +205,8 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
                        thrust::counting_iterator<size_type>(0),
                        num_output_lists,
                        comp_fn);
-    return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, resources);
+    return cudf::strings::detail::make_strings_column(
+      indices.begin(), indices.end(), stream, resources);
   }
 };
 
@@ -225,11 +232,11 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
     auto output_dv_ptr = mutable_column_device_view::create(*output, stream);
 
     // The array of int8_t to store entry validities.
-    auto validities =
-      rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream, resources.get_temporary_mr());
+    auto validities = rmm::device_uvector<int8_t>(
+      data_has_null_mask ? num_output_entries : 0, stream, resources.get_temporary_mr());
 
     thrust::for_each_n(
-      rmm::exec_policy(stream, resources.get_temporary_mr()),
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
       thrust::make_counting_iterator<size_type>(0),
       num_output_lists,
       [num_cols,
@@ -324,14 +331,17 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   }
 
   if (input.num_rows() == 0) { return cudf::empty_like(input.column(0)); }
-  if (input.num_columns() == 1) { return std::make_unique<column>(*(input.begin()), stream, resources); }
+  if (input.num_columns() == 1) {
+    return std::make_unique<column>(*(input.begin()), stream, resources);
+  }
 
   // For nested types, we rely on the `concatenate_and_gather` method, which costs more memory due
   // to concatenation of the input columns into a temporary column. For non-nested types, we can
   // directly interleave the input columns into the output column for better efficiency.
   if (cudf::is_nested(entry_type)) {
     auto const input_columns = std::vector<column_view>(input.begin(), input.end());
-    return concatenate_and_gather_lists(host_span<column_view const>{input_columns}, stream, resources);
+    return concatenate_and_gather_lists(
+      host_span<column_view const>{input_columns}, stream, resources);
   }
 
   // Generate offsets of the output lists column.

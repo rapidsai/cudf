@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -53,7 +53,7 @@ namespace lists {
 std::unique_ptr<column> apply_boolean_mask(
   lists_column_view const& input,
   lists_column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -83,7 +83,7 @@ std::unique_ptr<column> distinct(
   nan_equality nans_equal           = nan_equality::ALL_EQUAL,
   duplicate_keep_option keep_option = duplicate_keep_option::KEEP_ANY,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources  = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 

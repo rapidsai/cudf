@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -47,7 +47,7 @@ std::unique_ptr<column> replace_re(
   string_scalar const& replacement           = string_scalar(""),
   std::optional<size_type> max_replace_count = std::nullopt,
   rmm::cuda_stream_view stream               = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources           = cudf::get_current_device_resource_ref());
 
 /**
  * @brief For each string, replaces any character sequence matching the given patterns
@@ -69,8 +69,8 @@ std::unique_ptr<column> replace_re(
   strings_column_view const& input,
   std::vector<std::string> const& patterns,
   strings_column_view const& replacements,
-  regex_flags const flags           = regex_flags::DEFAULT,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  regex_flags const flags          = regex_flags::DEFAULT,
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -95,7 +95,7 @@ std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& input,
   regex_program const& prog,
   std::string_view replacement,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 }  // namespace strings

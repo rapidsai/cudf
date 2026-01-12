@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -76,7 +76,7 @@ class sort_merge_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(table_view const& left,
              sorted is_left_sorted,
-             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+             rmm::cuda_stream_view stream     = cudf::get_default_stream(),
              cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -104,7 +104,7 @@ class sort_merge_join {
   cudf::join_match_context inner_join_match_context(
     table_view const& left,
     sorted is_left_sorted,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -157,7 +157,7 @@ class sort_merge_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   partitioned_inner_join(
     cudf::join_partition_context const& context,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
  private:
@@ -307,8 +307,8 @@ class sort_merge_join {
                          std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_inner_join(cudf::table_view const& left_keys,
                       cudf::table_view const& right_keys,
-                      null_equality compare_nulls       = null_equality::EQUAL,
-                      rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                      null_equality compare_nulls      = null_equality::EQUAL,
+                      rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                       cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -352,8 +352,8 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
                          std::unique_ptr<rmm::device_uvector<size_type>>>
 merge_inner_join(cudf::table_view const& left_keys,
                  cudf::table_view const& right_keys,
-                 null_equality compare_nulls       = null_equality::EQUAL,
-                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 null_equality compare_nulls      = null_equality::EQUAL,
+                 rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

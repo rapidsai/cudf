@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -55,7 +55,7 @@ std::unique_ptr<column> concatenate_rows(
   table_view const& input,
   concatenate_null_policy null_policy = concatenate_null_policy::IGNORE,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources    = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Concatenating multiple lists on the same row of a lists column into a single list.
@@ -86,7 +86,7 @@ std::unique_ptr<column> concatenate_list_elements(
   column_view const& input,
   concatenate_null_policy null_policy = concatenate_null_policy::IGNORE,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources    = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace lists

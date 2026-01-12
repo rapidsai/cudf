@@ -1,16 +1,16 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 
@@ -162,7 +162,8 @@ TEST_F(MemoryResourcesValidationTest, ComplexOperationUsesTemporaryMemory)
   fixed_width_column_wrapper<int32_t> gather_map({5, 4, 3, 2, 1, 0});  // Reverse order
 
   auto stream = cudf::get_default_stream();
-  auto result = cudf::gather(input, gather_map, cudf::out_of_bounds_policy::DONT_CHECK, stream, resources);
+  auto result =
+    cudf::gather(input, gather_map, cudf::out_of_bounds_policy::DONT_CHECK, stream, resources);
 
   // Both output and temporary resources should have been used
   EXPECT_GT(output_tracking.get_total_allocated_count(), 0);
@@ -183,10 +184,9 @@ TEST_F(MemoryResourcesValidationTest, DefaultParameterUsesGetCurrent)
   auto stream = cudf::get_default_stream();
 
   // Call without resources parameter - uses default which calls get_current_device_resource_ref()
-  EXPECT_NO_THROW(auto col = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
-                                                       100,
-                                                       cudf::mask_state::UNALLOCATED,
-                                                       stream));
+  EXPECT_NO_THROW(
+    auto col = cudf::make_numeric_column(
+      cudf::data_type{cudf::type_id::INT32}, 100, cudf::mask_state::UNALLOCATED, stream));
 }
 
 // =============================================================================

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -176,7 +176,8 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_repls   = column_device_view::create(replacements.parent(), stream);
 
-  auto found_ranges = rmm::device_uvector<found_range>(d_progs.size() * input.size(), stream, resources.get_temporary_mr());
+  auto found_ranges = rmm::device_uvector<found_range>(
+    d_progs.size() * input.size(), stream, resources.get_temporary_mr());
 
   auto [offsets_column, chars] = make_strings_children(
     replace_multi_regex_fn{*d_strings, d_progs, found_ranges.data(), *d_repls},
@@ -188,8 +189,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 }  // namespace detail

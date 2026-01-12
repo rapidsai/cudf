@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -320,9 +320,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
       } else {
         // Since child column doesn't have a mask, copy parent null mask
         auto mask_size = bitmask_allocation_size_bytes(parent_mask_len);
-        out_buffers[col_idx].set_null_mask(
-          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream,
-                  resources));
+        out_buffers[col_idx].set_null_mask(rmm::device_buffer(
+          static_cast<void*>(parent_valid_map_base), mask_size, stream, resources));
       }
     }
   }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -125,8 +125,7 @@ reader_impl::reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
                          orc_reader_options const& options,
                          rmm::cuda_stream_view stream,
                          cudf::memory_resources resources)
-  : reader_impl::reader_impl(0UL, 0UL, std::move(sources), options, stream,
-                  resources)
+  : reader_impl::reader_impl(0UL, 0UL, std::move(sources), options, stream, resources)
 {
 }
 
@@ -200,8 +199,7 @@ chunked_reader::chunked_reader(std::size_t chunk_read_limit,
                                rmm::cuda_stream_view stream,
                                cudf::memory_resources resources)
   : _impl{std::make_unique<reader_impl>(
-      chunk_read_limit, pass_read_limit, std::move(sources), options, stream,
-                  resources)}
+      chunk_read_limit, pass_read_limit, std::move(sources), options, stream, resources)}
 {
 }
 
@@ -232,8 +230,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                orc_reader_options const& options,
                rmm::cuda_stream_view stream,
                cudf::memory_resources resources)
-  : _impl{std::make_unique<reader_impl>(std::move(sources), options, stream,
-                  resources)}
+  : _impl{std::make_unique<reader_impl>(std::move(sources), options, stream, resources)}
 {
 }
 

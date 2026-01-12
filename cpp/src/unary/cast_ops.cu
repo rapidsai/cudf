@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -233,13 +233,12 @@ struct dispatch_unary_cast_to {
     auto output     = std::make_unique<column>(type,
                                            size,
                                            rmm::device_buffer{size * sizeof(TargetT), stream, mr},
-                                           detail::copy_bitmask(input, stream,
-                  resources),
+                                           detail::copy_bitmask(input, stream, resources),
                                            input.null_count());
 
     mutable_column_view output_mutable = *output;
 
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       input.begin<SourceT>(),
                       input.end<SourceT>(),
                       output_mutable.begin<TargetT>(),
@@ -258,8 +257,7 @@ struct dispatch_unary_cast_to {
     auto output     = std::make_unique<column>(type,
                                            size,
                                            rmm::device_buffer{size * sizeof(TargetT), stream, mr},
-                                           detail::copy_bitmask(input, stream,
-                  resources),
+                                           detail::copy_bitmask(input, stream, resources),
                                            input.null_count());
 
     mutable_column_view output_mutable = *output;
@@ -267,7 +265,7 @@ struct dispatch_unary_cast_to {
     using DeviceT    = device_storage_type_t<SourceT>;
     auto const scale = numeric::scale_type{input.type().scale()};
 
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       input.begin<DeviceT>(),
                       input.end<DeviceT>(),
                       output_mutable.begin<TargetT>(),
@@ -292,7 +290,7 @@ struct dispatch_unary_cast_to {
 
     auto const scale = numeric::scale_type{type.scale()};
 
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       input.begin<SourceT>(),
                       input.end<SourceT>(),
                       output_mutable.begin<DeviceT>(),
@@ -310,8 +308,7 @@ struct dispatch_unary_cast_to {
                                resources);
       if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
     } else {
-      output->set_null_mask(detail::copy_bitmask(input, stream,
-                  resources), input.null_count());
+      output->set_null_mask(detail::copy_bitmask(input, stream, resources), input.null_count());
     }
 
     return output;
@@ -348,13 +345,12 @@ struct dispatch_unary_cast_to {
         std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
                                  size,
                                  rmm::device_buffer{size * sizeof(TargetDeviceT), stream},
-                                 detail::copy_bitmask(input, stream,
-                  resources),
+                                 detail::copy_bitmask(input, stream, resources),
                                  input.null_count());
 
       mutable_column_view output_mutable = *output;
 
-      thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         input.begin<SourceDeviceT>(),
                         input.end<SourceDeviceT>(),
                         output_mutable.begin<TargetDeviceT>(),
@@ -424,7 +420,8 @@ std::unique_ptr<column> cast(column_view const& input,
 {
   CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
 
-  return type_dispatcher(input.type(), detail::dispatch_unary_cast_from{input}, type, stream, resources);
+  return type_dispatcher(
+    input.type(), detail::dispatch_unary_cast_from{input}, type, stream, resources);
 }
 
 struct is_supported_cast_impl {

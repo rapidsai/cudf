@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,7 +28,8 @@ std::unique_ptr<column> sorted_order(table_view const& input,
                                      rmm::cuda_stream_view stream,
                                      cudf::memory_resources resources)
 {
-  return sorted_order<sort_method::UNSTABLE>(input, column_order, null_precedence, stream, resources);
+  return sorted_order<sort_method::UNSTABLE>(
+    input, column_order, null_precedence, stream, resources);
 }
 
 std::unique_ptr<table> sort_by_key(table_view const& values,
@@ -41,8 +42,8 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
   CUDF_EXPECTS(values.num_rows() == keys.num_rows(),
                "Mismatch in number of rows for values and keys");
 
-  auto sorted_order = detail::sorted_order(
-    keys, column_order, null_precedence, stream, resources.get_temporary_mr());
+  auto sorted_order =
+    detail::sorted_order(keys, column_order, null_precedence, stream, resources.get_temporary_mr());
 
   return detail::gather(values,
                         sorted_order->view(),

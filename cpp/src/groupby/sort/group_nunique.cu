@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -84,7 +84,8 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
   auto const d_values_view = column_device_view::create(values, stream);
 
-  auto d_result = rmm::device_uvector<size_type>(group_labels.size(), stream, resources.get_temporary_mr());
+  auto d_result =
+    rmm::device_uvector<size_type>(group_labels.size(), stream, resources.get_temporary_mr());
 
   auto const comparator_helper = [&](auto const d_equal) {
     auto fn = is_unique_iterator_fn{nullate::DYNAMIC{values.has_nulls()},
@@ -93,7 +94,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                     null_handling,
                                     group_offsets.data(),
                                     group_labels.data()};
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(values.size()),
                       d_result.begin(),
@@ -112,7 +113,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
   // calling this with a vector instead of a transform iterator is 10x faster to compile;
   // it also helps that we are only calling it once for both conditions
-  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         group_labels.begin(),
                         group_labels.end(),
                         d_result.begin(),

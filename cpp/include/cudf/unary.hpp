@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -68,7 +68,7 @@ enum class unary_operator : int32_t {
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
   cudf::unary_operator op,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -84,7 +84,7 @@ std::unique_ptr<cudf::column> unary_operation(
  */
 std::unique_ptr<cudf::column> is_null(
   cudf::column_view const& input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -100,7 +100,7 @@ std::unique_ptr<cudf::column> is_null(
  */
 std::unique_ptr<cudf::column> is_valid(
   cudf::column_view const& input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -119,7 +119,7 @@ std::unique_ptr<cudf::column> is_valid(
 std::unique_ptr<column> cast(
   column_view const& input,
   data_type out_type,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -147,7 +147,7 @@ bool is_supported_cast(data_type from, data_type to) noexcept;
  */
 std::unique_ptr<column> is_nan(
   cudf::column_view const& input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -166,7 +166,7 @@ std::unique_ptr<column> is_nan(
  */
 std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -57,8 +57,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
   auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
   // apply any nulls to the output column
-  output_column->set_null_mask(cudf::detail::copy_bitmask(source.parent(), stream,
-                  resources),
+  output_column->set_null_mask(cudf::detail::copy_bitmask(source.parent(), stream, resources),
                                source.null_count());
 
   return output_column;

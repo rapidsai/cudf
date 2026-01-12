@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -577,8 +577,8 @@ void write_final_offsets(host_span<size_type const> offsets,
                          rmm::cuda_stream_view stream)
 {
   // Copy offsets to device and create an iterator
-  auto d_src_data = cudf::detail::make_device_uvector_async(
-    offsets, stream, resources.get_temporary_mr());
+  auto d_src_data =
+    cudf::detail::make_device_uvector_async(offsets, stream, resources.get_temporary_mr());
   // Iterator for the source (scalar) data
   auto src_iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator<std::size_t>(0),
@@ -586,8 +586,8 @@ void write_final_offsets(host_span<size_type const> offsets,
       [src = d_src_data.begin()] __device__(std::size_t i) { return src + i; }));
 
   // Copy buffer addresses to device and create an iterator
-  auto d_dst_addrs = cudf::detail::make_device_uvector_async(
-    buff_addrs, stream, resources.get_temporary_mr());
+  auto d_dst_addrs =
+    cudf::detail::make_device_uvector_async(buff_addrs, stream, resources.get_temporary_mr());
   // size_iter is simply a constant iterator of sizeof(size_type) bytes.
   auto size_iter = thrust::make_constant_iterator(sizeof(size_type));
 

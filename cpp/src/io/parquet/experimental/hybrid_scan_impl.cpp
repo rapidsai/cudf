@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -281,8 +281,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
   if (has_compressed_data) {
     // Use the `decompress_page_data` utility to decompress dictionary pages (passed as pass_pages)
     decompressed_dictionary_page_data =
-      std::get<0>(parquet::detail::decompress_page_data(chunks, pages, {}, {}, stream,
-                  resources));
+      std::get<0>(parquet::detail::decompress_page_data(chunks, pages, {}, {}, stream, resources));
     pages.host_to_device_async(stream);
   }
 

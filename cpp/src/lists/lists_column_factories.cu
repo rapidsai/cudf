@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,14 +28,14 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                                                             cudf::memory_resources resources)
 {
   if (size == 0) {
-    return make_lists_column(0,
-                             make_empty_column(type_to_id<size_type>()),
-                             empty_like(value.view()),
-                             0,
-                             cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream,
-                  resources),
-                             stream,
-                             resources);
+    return make_lists_column(
+      0,
+      make_empty_column(type_to_id<size_type>()),
+      empty_like(value.view()),
+      0,
+      cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream, resources),
+      stream,
+      resources);
   }
   auto mr_final = size == 1 ? mr : resources.get_temporary_mr();
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -175,10 +175,9 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
 {
   cudf::detail::result_cache cache(requests.size());
 
-  std::unique_ptr<table> unique_keys =
-    dispatch_groupby(keys, requests, &cache, cudf::has_nulls(keys), include_null_keys, stream, resources);
+  std::unique_ptr<table> unique_keys = dispatch_groupby(
+    keys, requests, &cache, cudf::has_nulls(keys), include_null_keys, stream, resources);
 
-  return std::pair(std::move(unique_keys), extract_results(requests, cache, stream,
-                  resources));
+  return std::pair(std::move(unique_keys), extract_results(requests, cache, stream, resources));
 }
 }  // namespace cudf::groupby::detail::hash

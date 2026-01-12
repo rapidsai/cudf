@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -60,10 +60,14 @@ void compute_m2_fn(column_device_view const& values,
   // Using a temporary buffer for intermediate transform results instead of
   // using the transform-iterator directly in thrust::reduce_by_key
   // improves compile-time significantly.
-  auto m2_vals = rmm::device_uvector<ResultType>(values.size(), stream, resources.get_temporary_mr());
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()), itr, itr + values.size(), m2_vals.begin(), m2_fn);
+  auto m2_vals = rmm::device_uvector<ResultType>(values.size(), stream);
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                    itr,
+                    itr + values.size(),
+                    m2_vals.begin(),
+                    m2_fn);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         group_labels.begin(),
                         group_labels.end(),
                         m2_vals.begin(),
@@ -124,7 +128,8 @@ std::unique_ptr<column> group_m2(column_view const& values,
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
 
-  return type_dispatcher(values_type, m2_functor{}, values, group_means, group_labels, stream, resources);
+  return type_dispatcher(
+    values_type, m2_functor{}, values, group_means, group_labels, stream, resources);
 }
 
 }  // namespace detail

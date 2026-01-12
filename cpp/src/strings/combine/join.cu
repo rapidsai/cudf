@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -140,9 +140,9 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
     if ((input.size() == input.null_count()) ||
         ((input.chars_size(stream) / (input.size() - input.null_count())) <=
          AVG_CHAR_BYTES_THRESHOLD)) {
-      return std::get<1>(make_strings_children(
-                           join_fn{*d_strings, d_separator, d_narep}, input.size(), stream,
-                  resources))
+      return std::get<1>(
+               make_strings_children(
+                 join_fn{*d_strings, d_separator, d_narep}, input.size(), stream, resources))
         .release();
     }
     // dynamically feeds index pairs to build the output
@@ -170,10 +170,9 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
   // build the null mask: only one output row so it is either all-valid or all-null
   auto const null_count =
     static_cast<size_type>(input.null_count() == input.size() && !narep.is_valid(stream));
-  auto null_mask = null_count
-                     ? cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream,
-                  resources)
-                     : rmm::device_buffer{0, stream, mr};
+  auto null_mask =
+    null_count ? cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, resources)
+               : rmm::device_buffer{0, stream, mr};
 
   // perhaps this return a string_scalar instead of a single-row column
   return make_strings_column(

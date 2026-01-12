@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from datetime import datetime
@@ -11,8 +11,9 @@ import pylibcudf as plc
 
 
 @pytest.fixture
-def pa_col():
-    return pa.array([2, 3, 5, 7, 11])
+def col():
+    c = pa.array([2, 3, 5, 7, 11])
+    return c, plc.Column.from_arrow(c)
 
 
 @pytest.fixture
@@ -21,9 +22,10 @@ def pa_table():
     return pa.table([pa_col], names=["a"])
 
 
-def test_fill(pa_col):
+def test_fill(col):
+    _, plc_col = col
     result = plc.filling.fill(
-        plc.Column.from_arrow(pa_col),
+        plc_col,
         1,
         3,
         plc.Scalar.from_arrow(pa.scalar(5)),
@@ -32,8 +34,8 @@ def test_fill(pa_col):
     assert_column_eq(result, expect)
 
 
-def test_fill_in_place(pa_col):
-    result = plc.Column.from_arrow(pa_col)
+def test_fill_in_place(col):
+    _, result = col
     plc.filling.fill_in_place(
         result,
         1,
@@ -41,6 +43,18 @@ def test_fill_in_place(pa_col):
         plc.Scalar.from_arrow(pa.scalar(5)),
     )
     expect = pa.array([2, 5, 5, 7, 11])
+    assert_column_eq(result, expect)
+
+
+def test_fill_in_place_null():
+    result = plc.Column.from_arrow(pa.array([None, 3, 5, 7, 11]))
+    plc.filling.fill_in_place(
+        result,
+        1,
+        3,
+        plc.Scalar.from_py(None, dtype=plc.DataType(plc.TypeId.INT64)),
+    )
+    expect = pa.array([None, None, None, 7, 11])
     assert_column_eq(result, expect)
 
 

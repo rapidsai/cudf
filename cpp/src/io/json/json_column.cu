@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -103,15 +103,17 @@ reduce_to_column_tree(tree_meta_t const& tree,
   CUDF_FUNC_RANGE();
 
   // 1. column count for allocation
-  auto const num_columns = thrust::unique_count(
-    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), sorted_col_ids.begin(), sorted_col_ids.end());
+  auto const num_columns =
+    thrust::unique_count(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                         sorted_col_ids.begin(),
+                         sorted_col_ids.end());
 
   // 2. reduce_by_key {col_id}, {row_offset}, max.
   rmm::device_uvector<NodeIndexT> unique_col_ids(num_columns, stream);
   rmm::device_uvector<size_type> max_row_offsets(num_columns, stream);
   auto ordered_row_offsets =
     thrust::make_permutation_iterator(row_offsets.begin(), ordered_node_ids.begin());
-  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         sorted_col_ids.begin(),
                         sorted_col_ids.end(),
                         ordered_row_offsets,
@@ -123,7 +125,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
   // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
   thrust::reduce_by_key(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     sorted_col_ids.begin(),
     sorted_col_ids.end(),
     thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
@@ -440,8 +442,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       auto [result_bitmask, null_count] = make_validity(json_col);
       // We do not need to ensure null consistency i.e. for json, we can skip superimposing and
       // sanitizing nulls in the descendant columns. Creating the struct hierarchy is sufficient.
-      auto ret_col = create_structs_hierarchy(
-        num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream, resources);
+      auto ret_col = create_structs_hierarchy(num_rows,
+                                              std::move(child_columns),
+                                              null_count,
+                                              std::move(result_bitmask),
+                                              stream,
+                                              resources);
       return {std::move(ret_col), column_names};
     }
     case json_col_t::ListColumn: {
@@ -464,7 +470,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         if (json_col.child_columns.empty()) {
           // EMPTY type could not used because gather throws exception on EMPTY type.
           auto empty_col = make_empty_column(
-            child_schema_element.value_or(schema_element{data_type{type_id::INT8}}), stream, resources);
+            child_schema_element.value_or(schema_element{data_type{type_id::INT8}}),
+            stream,
+            resources);
           auto children_metadata = std::vector<column_name_info>{
             make_column_name_info(
               child_schema_element.value_or(schema_element{data_type{type_id::INT8}}),
@@ -554,7 +562,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   device_json_column root_column(stream, resources);
   root_column.type = json_col_t::ListColumn;
   root_column.child_offsets.resize(2, stream);
-  thrust::fill(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                root_column.child_offsets.begin(),
                root_column.child_offsets.end(),
                0);

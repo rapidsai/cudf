@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -181,23 +181,23 @@ std::unique_ptr<table> partition(strings_column_view const& strings,
   if (strings_count == 0) return std::make_unique<table>(std::vector<std::unique_ptr<column>>());
   auto strings_column = column_device_view::create(strings.parent(), stream);
   string_view d_delimiter(delimiter.data(), delimiter.size());
-  auto left_indices  = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
-  auto delim_indices = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
-  auto right_indices = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
+  auto left_indices =
+    rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
+  auto delim_indices =
+    rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
+  auto right_indices =
+    rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
   partition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
 
-  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      partitioner);
   std::vector<std::unique_ptr<column>> results;
-  results.emplace_back(make_strings_column(left_indices, stream,
-                  resources));
-  results.emplace_back(make_strings_column(delim_indices, stream,
-                  resources));
-  results.emplace_back(make_strings_column(right_indices, stream,
-                  resources));
+  results.emplace_back(make_strings_column(left_indices, stream, resources));
+  results.emplace_back(make_strings_column(delim_indices, stream, resources));
+  results.emplace_back(make_strings_column(right_indices, stream, resources));
   return std::make_unique<table>(std::move(results));
 }
 
@@ -211,23 +211,23 @@ std::unique_ptr<table> rpartition(strings_column_view const& strings,
   if (strings_count == 0) return std::make_unique<table>(std::vector<std::unique_ptr<column>>());
   auto strings_column = column_device_view::create(strings.parent(), stream);
   string_view d_delimiter(delimiter.data(), delimiter.size());
-  auto left_indices  = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
-  auto delim_indices = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
-  auto right_indices = rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
+  auto left_indices =
+    rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
+  auto delim_indices =
+    rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
+  auto right_indices =
+    rmm::device_uvector<string_index_pair>(strings_count, stream, resources.get_temporary_mr());
   rpartition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
-  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      partitioner);
 
   std::vector<std::unique_ptr<column>> results;
-  results.emplace_back(make_strings_column(left_indices, stream,
-                  resources));
-  results.emplace_back(make_strings_column(delim_indices, stream,
-                  resources));
-  results.emplace_back(make_strings_column(right_indices, stream,
-                  resources));
+  results.emplace_back(make_strings_column(left_indices, stream, resources));
+  results.emplace_back(make_strings_column(delim_indices, stream, resources));
+  results.emplace_back(make_strings_column(right_indices, stream, resources));
   return std::make_unique<table>(std::move(results));
 }
 

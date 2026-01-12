@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -70,11 +70,13 @@ struct contains_scalar_dispatch {
       d_haystack->optional_begin<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
     auto const end = d_haystack->optional_end<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
 
-    return thrust::count_if(
-             rmm::exec_policy(stream, resources.get_temporary_mr()), begin, end, [d_needle] __device__(auto const val_pair) {
-               auto needle = get_scalar_value<Element>(d_needle);
-               return val_pair.has_value() && (needle == *val_pair);
-             }) > 0;
+    return thrust::count_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                            begin,
+                            end,
+                            [d_needle] __device__(auto const val_pair) {
+                              auto needle = get_scalar_value<Element>(d_needle);
+                              return val_pair.has_value() && (needle == *val_pair);
+                            }) > 0;
   }
 
   template <typename Element>
@@ -110,9 +112,10 @@ struct contains_scalar_dispatch {
     // Using a temporary buffer for intermediate transform results from the lambda containing
     // the comparator speeds up compile-time significantly without much degradation in
     // runtime performance over using the comparator in a transform iterator with thrust::count_if.
-    auto d_results = rmm::device_uvector<bool>(haystack.size(), stream, resources.get_temporary_mr());
+    auto d_results =
+      rmm::device_uvector<bool>(haystack.size(), stream, resources.get_temporary_mr());
     thrust::transform(
-      rmm::exec_policy(stream, resources.get_temporary_mr()),
+      rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
       begin,
       end,
       d_results.begin(),
@@ -123,7 +126,10 @@ struct contains_scalar_dispatch {
         return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
       });
 
-    return thrust::count(rmm::exec_policy(stream, resources.get_temporary_mr()), d_results.begin(), d_results.end(), true) > 0;
+    return thrust::count(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                         d_results.begin(),
+                         d_results.end(),
+                         true) > 0;
   }
 };
 
@@ -134,8 +140,8 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 {
   auto const dict_col = cudf::dictionary_column_view(haystack);
   // first, find the needle in the dictionary's key set
-  auto const index = cudf::dictionary::detail::get_index(
-    dict_col, needle, stream, resources.get_temporary_mr());
+  auto const index =
+    cudf::dictionary::detail::get_index(dict_col, needle, stream, resources.get_temporary_mr());
   // if found, check the index is actually in the indices column
   return index->is_valid(stream) && cudf::type_dispatcher(dict_col.indices().type(),
                                                           contains_scalar_dispatch{},

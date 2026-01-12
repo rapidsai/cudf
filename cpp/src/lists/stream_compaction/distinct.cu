@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -39,9 +39,8 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
 
   if (input.is_empty()) { return empty_like(input.parent()); }
 
-  auto const child = input.get_sliced_child(stream);
-  auto const labels =
-    generate_labels(input, child.size(), stream, resources.get_temporary_mr());
+  auto const child  = input.get_sliced_child(stream);
+  auto const labels = generate_labels(input, child.size(), stream, resources.get_temporary_mr());
 
   auto const distinct_table =
     cudf::detail::stable_distinct(table_view{{labels->view(), child}},  // input table
@@ -59,8 +58,7 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                            std::move(out_offsets),
                            std::move(distinct_table->release().back()),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                           cudf::detail::copy_bitmask(input.parent(), stream, resources),
                            stream,
                            resources);
 }

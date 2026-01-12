@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -62,8 +62,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
   // create column with keys_column and indices_column
   return make_dictionary_column(std::move(keys_column),
                                 std::move(indices_column),
-                                cudf::detail::copy_bitmask(input_column, stream,
-                  resources),
+                                cudf::detail::copy_bitmask(input_column, stream, resources),
                                 input_column.null_count());
 }
 

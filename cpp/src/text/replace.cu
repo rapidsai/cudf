@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -276,8 +276,7 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
                                      std::move(offsets_column),
                                      chars.release(),
                                      input.null_count(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources));
   }
 
   // Long strings logic builds a new fake strings column with the same data but additional offsets
@@ -290,7 +289,8 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
 
   // divide up long strings into shorter strings by finding new sub-offsets at delimiters
   auto sub_count   = chars_size / LS_SUB_BLOCK_SIZE;
-  auto tmp_offsets = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream, resources.get_temporary_mr());
+  auto tmp_offsets = rmm::device_uvector<int64_t>(
+    sub_count + input.size() + 1, stream, resources.get_temporary_mr());
   {
     rmm::device_uvector<int64_t> sub_offsets(sub_count, stream);
     auto const count_itr = thrust::make_counting_iterator<int64_t>(0);
@@ -301,7 +301,10 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
                       sub_offset_fn{input_chars, first_offset, last_offset});
     // remove 0s -- where sub-offset could not be computed
     auto const remove_end =
-      thrust::remove(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), sub_offsets.begin(), sub_offsets.end(), 0L);
+      thrust::remove(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                     sub_offsets.begin(),
+                     sub_offsets.end(),
+                     0L);
     sub_count = cuda::std::distance(sub_offsets.begin(), remove_end);
 
     // merge them with input offsets
@@ -324,7 +327,8 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
   auto const d_tmp_strings = cudf::column_device_view::create(tmp_strings, stream);
 
   // compute indices to the actual output rows
-  auto indices = rmm::device_uvector<cudf::size_type>(tmp_offsets.size(), stream, resources.get_temporary_mr());
+  auto indices =
+    rmm::device_uvector<cudf::size_type>(tmp_offsets.size(), stream, resources.get_temporary_mr());
   thrust::upper_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       input_offsets,
                       input_offsets + input.size() + 1,
@@ -333,25 +337,26 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
                       indices.begin());
 
   // initialize the output row sizes
-  auto d_sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
-  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), d_sizes.begin(), d_sizes.end(), 0);
+  auto d_sizes =
+    rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
+  thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+               d_sizes.begin(),
+               d_sizes.end(),
+               0);
 
   replacer.d_strings      = *d_tmp_strings;
   replacer.d_indices      = indices.data();
   replacer.d_output_sizes = d_sizes.data();
 
   auto chars = std::get<1>(
-    cudf::strings::detail::make_strings_children(replacer, tmp_strings.size(), stream,
-                  resources));
-  auto offsets_column = std::get<0>(
-    cudf::strings::detail::make_offsets_child_column(d_sizes.begin(), d_sizes.end(), stream,
-                  resources));
+    cudf::strings::detail::make_strings_children(replacer, tmp_strings.size(), stream, resources));
+  auto offsets_column = std::get<0>(cudf::strings::detail::make_offsets_child_column(
+    d_sizes.begin(), d_sizes.end(), stream, resources));
   return cudf::make_strings_column(input.size(),
                                    std::move(offsets_column),
                                    chars.release(),
                                    input.null_count(),
-                                   cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                                   cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 }  // namespace
 

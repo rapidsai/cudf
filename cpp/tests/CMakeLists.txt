@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -372,6 +372,7 @@ ConfigureTest(
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
+ConfigureTest(CUDFTABLE_TEST io/cudftable_test.cpp)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cpp)
 
 # ##################################################################################################

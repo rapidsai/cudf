@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,17 +33,17 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
   auto const child = input.get_sliced_child(stream);
 
   // The labels are also a map from each list element to its corresponding zero-based list index.
-  auto const labels =
-    generate_labels(input, child.size(), stream, resources.get_temporary_mr());
+  auto const labels = generate_labels(input, child.size(), stream, resources.get_temporary_mr());
 
   // The offsets of the output lists column.
   auto out_offsets = get_normalized_offsets(input, stream, resources);
 
   // Build a gather map to copy the output list elements from the input list elements.
-  auto gather_map = rmm::device_uvector<size_type>(child.size(), stream, resources.get_temporary_mr());
+  auto gather_map =
+    rmm::device_uvector<size_type>(child.size(), stream, resources.get_temporary_mr());
 
   // Build a segmented reversed order for the child column.
-  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::counting_iterator<size_type>(0),
                      child.size(),
                      [list_offsets = out_offsets->view().begin<size_type>(),
@@ -69,8 +69,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
                                  std::move(out_offsets),
                                  std::move(child_segmented_reversed->release().front()),
                                  input.null_count(),
-                                 cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                 cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                  stream,
                                  resources);
 }

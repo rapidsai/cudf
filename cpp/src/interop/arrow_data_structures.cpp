@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -235,17 +235,18 @@ arrow_column::arrow_column(ArrowSchema&& schema,
 {
   switch (input.device_type) {
     case ARROW_DEVICE_CPU: {
-      auto col        = from_arrow_host_column(&schema, &input, stream, resources);
-      auto tmp_column = arrow_column(std::move(*col), get_column_metadata(col->view()), stream, resources);
-      container       = tmp_column.container;
+      auto col = from_arrow_host_column(&schema, &input, stream, resources);
+      auto tmp_column =
+        arrow_column(std::move(*col), get_column_metadata(col->view()), stream, resources);
+      container = tmp_column.container;
       // Should always be non-null unless we're in some odd multithreaded
       // context but best to be safe.
       if (input.array.release != nullptr) { ArrowArrayRelease(&input.array); }
       break;
     }
     default:
-      container =
-        std::make_shared<arrow_array_container>(std::move(schema), std::move(input), stream, resources);
+      container = std::make_shared<arrow_array_container>(
+        std::move(schema), std::move(input), stream, resources);
   }
   auto tmp     = from_arrow_device_column(&container->schema, &container->owner, stream, resources);
   view_columns = std::move(tmp.get_deleter().owned_mem_);
@@ -319,15 +320,16 @@ arrow_table::arrow_table(ArrowSchema&& schema,
       // back-and-forth conversion without writing a lot of bespoke logic. I
       // suspect that the overhead of the memory copies will dwarf any extra
       // work here, but it's worth benchmarking to be sure.
-      auto tbl       = from_arrow_host(&schema, &input, stream, resources);
-      auto tmp_table = arrow_table(std::move(*tbl), get_table_metadata(tbl->view()), stream, resources);
-      container      = tmp_table.container;
+      auto tbl = from_arrow_host(&schema, &input, stream, resources);
+      auto tmp_table =
+        arrow_table(std::move(*tbl), get_table_metadata(tbl->view()), stream, resources);
+      container = tmp_table.container;
       if (input.array.release != nullptr) { ArrowArrayRelease(&input.array); }
       break;
     }
     default:
-      container =
-        std::make_shared<arrow_array_container>(std::move(schema), std::move(input), stream, resources);
+      container = std::make_shared<arrow_array_container>(
+        std::move(schema), std::move(input), stream, resources);
   }
   auto tmp     = from_arrow_device(&container->schema, &container->owner, stream, resources);
   view_columns = std::move(tmp.get_deleter().owned_mem_);

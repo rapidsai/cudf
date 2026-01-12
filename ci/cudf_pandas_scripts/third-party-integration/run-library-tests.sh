@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 cleanup() {
@@ -21,6 +21,7 @@ runtest() {
     pytest \
     "${plugin[@]}" \
     -v \
+    -W error \
     --continue-on-collection-errors \
     --cache-clear \
     --numprocesses="${NUM_PROCESSES}" \
@@ -40,6 +41,7 @@ main() {
     --compare \
     -p cudf.pandas \
     -v \
+    -W error \
     --continue-on-collection-errors \
     --cache-clear \
     --numprocesses="${NUM_PROCESSES}" \

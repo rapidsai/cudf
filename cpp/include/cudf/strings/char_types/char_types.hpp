@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -55,7 +55,7 @@ std::unique_ptr<column> all_characters_of_type(
   string_character_types types,
   string_character_types verify_types = string_character_types::ALL_TYPES,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources    = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Filter specific character types from a column of strings.
@@ -103,7 +103,7 @@ std::unique_ptr<column> filter_characters_of_type(
   string_scalar const& replacement     = string_scalar(""),
   string_character_types types_to_keep = string_character_types::ALL_TYPES,
   rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
+  cudf::memory_resources resources     = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

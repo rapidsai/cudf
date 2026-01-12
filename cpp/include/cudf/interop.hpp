@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -64,7 +64,7 @@ namespace CUDF_EXPORT cudf {
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -88,7 +88,7 @@ std::unique_ptr<table> from_dlpack(
  */
 DLManagedTensor* to_dlpack(
   table_view const& input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
@@ -235,7 +235,7 @@ class arrow_column {
    */
   arrow_column(cudf::column&& input,
                column_metadata const& metadata,
-               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -252,7 +252,7 @@ class arrow_column {
    */
   arrow_column(ArrowSchema&& schema,
                ArrowDeviceArray&& input,
-               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -269,7 +269,7 @@ class arrow_column {
    */
   arrow_column(ArrowSchema&& schema,
                ArrowArray&& input,
-               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -284,7 +284,7 @@ class arrow_column {
    * @param mr Device memory resource used for any allocations during conversion
    */
   arrow_column(ArrowArrayStream&& input,
-               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -299,7 +299,7 @@ class arrow_column {
    */
   void to_arrow_schema(
     ArrowSchema* output,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -311,8 +311,8 @@ class arrow_column {
    * @param mr Device memory resource used for any allocations during conversion
    */
   void to_arrow(ArrowDeviceArray* output,
-                ArrowDeviceType device_type       = ARROW_DEVICE_CUDA,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                ArrowDeviceType device_type      = ARROW_DEVICE_CUDA,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -355,7 +355,7 @@ class arrow_table {
    */
   arrow_table(cudf::table&& input,
               cudf::host_span<column_metadata const> metadata,
-              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::cuda_stream_view stream     = cudf::get_default_stream(),
               cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -372,7 +372,7 @@ class arrow_table {
    */
   arrow_table(ArrowSchema&& schema,
               ArrowDeviceArray&& input,
-              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::cuda_stream_view stream     = cudf::get_default_stream(),
               cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -389,7 +389,7 @@ class arrow_table {
    */
   arrow_table(ArrowSchema&& schema,
               ArrowArray&& input,
-              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::cuda_stream_view stream     = cudf::get_default_stream(),
               cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -404,7 +404,7 @@ class arrow_table {
    * @param mr Device memory resource used for any allocations during conversion
    */
   arrow_table(ArrowArrayStream&& input,
-              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::cuda_stream_view stream     = cudf::get_default_stream(),
               cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -419,7 +419,7 @@ class arrow_table {
    */
   void to_arrow_schema(
     ArrowSchema* output,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -431,8 +431,8 @@ class arrow_table {
    * @param mr Device memory resource used for any allocations during conversion
    */
   void to_arrow(ArrowDeviceArray* output,
-                ArrowDeviceType device_type       = ARROW_DEVICE_CUDA,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                ArrowDeviceType device_type      = ARROW_DEVICE_CUDA,
+                rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                 cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -498,7 +498,7 @@ unique_schema_t to_arrow_schema(cudf::table_view const& input,
  */
 unique_device_array_t to_arrow_device(
   cudf::table&& table,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -527,7 +527,7 @@ unique_device_array_t to_arrow_device(
  */
 unique_device_array_t to_arrow_device(
   cudf::column&& col,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -559,7 +559,7 @@ unique_device_array_t to_arrow_device(
  */
 unique_device_array_t to_arrow_device(
   cudf::table_view const& table,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -591,7 +591,7 @@ unique_device_array_t to_arrow_device(
  */
 unique_device_array_t to_arrow_device(
   cudf::column_view const& col,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -616,7 +616,7 @@ unique_device_array_t to_arrow_device(
  */
 unique_device_array_t to_arrow_host(
   cudf::table_view const& table,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -641,7 +641,7 @@ unique_device_array_t to_arrow_host(
  */
 unique_device_array_t to_arrow_host(
   cudf::column_view const& col,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -661,7 +661,7 @@ unique_device_array_t to_arrow_host(
  */
 unique_device_array_t to_arrow_host_stringview(
   cudf::strings_column_view const& col,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -684,7 +684,7 @@ unique_device_array_t to_arrow_host_stringview(
 std::unique_ptr<cudf::table> from_arrow(
   ArrowSchema const* schema,
   ArrowArray const* input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -703,7 +703,7 @@ std::unique_ptr<cudf::table> from_arrow(
 std::unique_ptr<cudf::column> from_arrow_column(
   ArrowSchema const* schema,
   ArrowArray const* input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -729,7 +729,7 @@ std::unique_ptr<cudf::column> from_arrow_column(
 std::unique_ptr<table> from_arrow_host(
   ArrowSchema const* schema,
   ArrowDeviceArray const* input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -747,7 +747,7 @@ std::unique_ptr<table> from_arrow_host(
  */
 std::unique_ptr<table> from_arrow_stream(
   ArrowArrayStream* input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -765,7 +765,7 @@ std::unique_ptr<table> from_arrow_stream(
  */
 std::unique_ptr<column> from_arrow_stream_column(
   ArrowArrayStream* input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -790,7 +790,7 @@ std::unique_ptr<column> from_arrow_stream_column(
 std::unique_ptr<column> from_arrow_host_column(
   ArrowSchema const* schema,
   ArrowDeviceArray const* input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -833,7 +833,7 @@ std::unique_ptr<column> from_arrow_host_column(
 unique_table_view_t from_arrow_device(
   ArrowSchema const* schema,
   ArrowDeviceArray const* input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /**
@@ -871,7 +871,7 @@ unique_table_view_t from_arrow_device(
 unique_column_view_t from_arrow_device_column(
   ArrowSchema const* schema,
   ArrowDeviceArray const* input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

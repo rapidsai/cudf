@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -61,7 +61,8 @@ std::unique_ptr<cudf::column> find_and_replace_all(
   auto d_values_to_replace = cudf::column_device_view::create(values_to_replace.parent(), stream);
   auto d_replacements      = cudf::column_device_view::create(replacement_values.parent(), stream);
 
-  auto indices = rmm::device_uvector<string_index_pair>(input.size(), stream, resources.get_temporary_mr());
+  auto indices =
+    rmm::device_uvector<string_index_pair>(input.size(), stream, resources.get_temporary_mr());
 
   thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::counting_iterator<size_type>(0),

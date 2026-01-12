@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "join_common_utils.cuh"
@@ -19,6 +19,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
@@ -228,10 +230,8 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
 
   // If output size is zero, return immediately
   if (probe_table_num_rows == 0) {
-    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources));
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources));
   }
 
   auto build_indices =
@@ -239,7 +239,8 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
   auto probe_indices =
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, resources);
 
-  auto found_indices = rmm::device_uvector<size_type>(probe_table_num_rows, stream, resources.get_temporary_mr());
+  auto found_indices =
+    rmm::device_uvector<size_type>(probe_table_num_rows, stream, resources.get_temporary_mr());
   auto const found_begin =
     thrust::make_transform_output_iterator(found_indices.begin(), output_fn{});
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -153,8 +153,8 @@ void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
   auto [output_handles, outputs] =
     cudf::jit::column_views_to_device<mutable_column_device_view, mutable_column_view>(
       output_columns, stream, resources);
-  auto [input_handles, inputs] =
-    cudf::jit::column_views_to_device<column_device_view, column_view>(input_columns, stream, resources);
+  auto [input_handles, inputs] = cudf::jit::column_views_to_device<column_device_view, column_view>(
+    input_columns, stream, resources);
 
   mutable_column_device_view const* p_outputs = outputs.data();
   column_device_view const* p_inputs          = inputs.data();
@@ -177,8 +177,8 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
 {
   auto outputs = cudf::jit::to_device_vector(std::vector{output}, stream, resources);
 
-  auto [input_handles, inputs] =
-    cudf::jit::column_views_to_device<column_device_view, column_view>(input_cols, stream, resources);
+  auto [input_handles, inputs] = cudf::jit::column_views_to_device<column_device_view, column_view>(
+    input_cols, stream, resources);
 
   cudf::jit::device_optional_span<T> const* p_outputs = outputs.data();
   column_device_view const* p_inputs                  = inputs.data();
@@ -206,8 +206,7 @@ std::tuple<rmm::device_buffer, size_type> and_null_mask(column_view base_column,
       // all nulls
       if (col.has_nulls()) {
         return std::make_tuple(
-          create_null_mask(base_column.size(), mask_state::ALL_NULL, stream,
-                  resources),
+          create_null_mask(base_column.size(), mask_state::ALL_NULL, stream, resources),
           base_column.size());
       }
     } else {
@@ -255,7 +254,8 @@ std::unique_ptr<column> transform_operation(column_view base_column,
 
   if (is_null_aware == null_aware::NO) {
     if (may_return_nulls) {
-      auto [and_mask_buffer, and_mask_null_count] = and_null_mask(base_column, inputs, stream, resources);
+      auto [and_mask_buffer, and_mask_null_count] =
+        and_null_mask(base_column, inputs, stream, resources);
       output->set_null_mask(std::move(and_mask_buffer), and_mask_null_count);
     }
   } else if (is_null_aware == null_aware::YES) {

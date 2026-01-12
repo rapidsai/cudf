@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,17 +32,15 @@ class device_scalar : public rmm::device_scalar<T> {
 
   device_scalar() = delete;
 
-  explicit device_scalar(
-    rmm::cuda_stream_view stream,
-    cudf::memory_resources resources = cudf::get_current_device_resource_ref())
+  explicit device_scalar(rmm::cuda_stream_view stream,
+                         cudf::memory_resources resources = cudf::get_current_device_resource_ref())
     : rmm::device_scalar<T>(stream, mr), bounce_buffer{make_pinned_vector<T>(1, stream)}
   {
   }
 
-  explicit device_scalar(
-    T const& initial_value,
-    rmm::cuda_stream_view stream,
-    cudf::memory_resources resources = cudf::get_current_device_resource_ref())
+  explicit device_scalar(T const& initial_value,
+                         rmm::cuda_stream_view stream,
+                         cudf::memory_resources resources = cudf::get_current_device_resource_ref())
     : rmm::device_scalar<T>(stream, mr), bounce_buffer{make_pinned_vector<T>(1, stream)}
   {
     bounce_buffer[0] = initial_value;

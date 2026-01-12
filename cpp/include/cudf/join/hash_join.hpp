@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -153,7 +153,7 @@ class hash_join {
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-            cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
+            cudf::memory_resources resources       = cudf::get_current_device_resource_ref()) const;
 
   /**
    * Returns the row indices that can be used to construct the result of performing
@@ -178,7 +178,7 @@ class hash_join {
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-            cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
+            cudf::memory_resources resources       = cudf::get_current_device_resource_ref()) const;
 
   /**
    * Returns the exact number of matches (rows) when performing an inner join with the specified
@@ -229,7 +229,7 @@ class hash_join {
    */
   [[nodiscard]] std::size_t full_join_size(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -255,7 +255,7 @@ class hash_join {
    */
   [[nodiscard]] cudf::join_match_context inner_join_match_context(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -280,7 +280,7 @@ class hash_join {
    */
   [[nodiscard]] cudf::join_match_context left_join_match_context(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -305,7 +305,7 @@ class hash_join {
    */
   [[nodiscard]] cudf::join_match_context full_join_match_context(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
  private:

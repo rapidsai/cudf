@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -126,8 +126,12 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
     // Only create null mask if at least one input structs column is nullable.
     auto [null_mask, null_count] =
       create_mask ? create_mask_fn() : std::pair{rmm::device_buffer{0, stream, mr}, size_type{0}};
-    return make_structs_column(
-      output_size, std::move(output_struct_members), null_count, std::move(null_mask), stream, resources);
+    return make_structs_column(output_size,
+                               std::move(output_struct_members),
+                               null_count,
+                               std::move(null_mask),
+                               stream,
+                               resources);
   }
 };
 
@@ -177,7 +181,8 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
                       indices.begin(),
                       interleave_strings_fn{*d_table});
 
-    return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, resources);
+    return cudf::strings::detail::make_strings_column(
+      indices.begin(), indices.end(), stream, resources);
   }
 };
 
@@ -190,8 +195,8 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
   {
     auto arch_column = input.column(0);
     auto output_size = input.num_columns() * input.num_rows();
-    auto output =
-      detail::allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, stream, resources);
+    auto output      = detail::allocate_like(
+      arch_column, output_size, mask_allocation_policy::NEVER, stream, resources);
     auto device_input  = table_device_view::create(input, stream);
     auto device_output = mutable_column_device_view::create(*output, stream);
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);
@@ -203,8 +208,11 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       });
 
     if (not create_mask) {
-      thrust::transform(
-        rmm::exec_policy(stream, resources.get_temporary_mr()), index_begin, index_end, device_output->begin<T>(), func_value);
+      thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                        index_begin,
+                        index_end,
+                        device_output->begin<T>(),
+                        func_value);
 
       return output;
     }
@@ -214,7 +222,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       return input.column(idx % divisor).is_valid(idx / divisor);
     };
 
-    thrust::transform_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          index_begin,
                          index_end,
                          device_output->begin<T>(),

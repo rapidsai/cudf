@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -85,10 +85,7 @@ class memory_resources {
    *
    * @return Memory resource reference for output allocations
    */
-  [[nodiscard]] rmm::device_async_resource_ref get_output_mr() const noexcept
-  {
-    return output_mr;
-  }
+  [[nodiscard]] rmm::device_async_resource_ref get_output_mr() const noexcept { return output_mr; }
 
  private:
   rmm::device_async_resource_ref output_mr;

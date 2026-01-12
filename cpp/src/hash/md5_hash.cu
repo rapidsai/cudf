@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -299,9 +299,9 @@ std::unique_ptr<column> md5(table_view const& input,
   // Digest size in bytes
   auto constexpr digest_size = 32;
   // Result column allocation and creation
-  auto begin = thrust::make_constant_iterator(digest_size);
-  auto [offsets_column, bytes] =
-    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, resources);
+  auto begin                   = thrust::make_constant_iterator(digest_size);
+  auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
+    begin, begin + input.num_rows(), stream, resources);
 
   rmm::device_uvector<char> chars(bytes, stream, resources);
   auto d_chars = chars.data();
@@ -310,7 +310,7 @@ std::unique_ptr<column> md5(table_view const& input,
 
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(input.num_rows()),
     [d_chars, device_input = *device_input] __device__(auto row_index) {

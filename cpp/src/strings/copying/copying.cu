@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,7 +49,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& input,
       cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
     auto input_offsets =
       cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), offsets_offset);
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       input_offsets,
                       input_offsets + offsets_column->size(),
                       d_offsets,

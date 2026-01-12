@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -148,8 +148,12 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
     auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
     auto const ufn    = cudf::detail::unique_copy_fn<decltype(itr), decltype(row_eq)>{
       itr, duplicate_keep_option::KEEP_FIRST, row_eq, size - 1};
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()), itr, itr + size, result.begin(), ufn);
-    result_end = thrust::copy_if(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                      itr,
+                      itr + size,
+                      result.begin(),
+                      ufn);
+    result_end = thrust::copy_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                  itr,
                                  itr + size,
                                  result.begin(),
@@ -158,7 +162,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   } else {
     auto const d_key_equal = comparator.equal_to<false>(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
-    result_end = thrust::unique_copy(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    result_end = thrust::unique_copy(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                                      thrust::counting_iterator<size_type>(0),
                                      thrust::counting_iterator<size_type>(size),
                                      group_offsets->begin(),
@@ -229,16 +233,17 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
   auto const zero = numeric_scalar<int8_t>(0, true, stream);
   // Create a temporary variable and only set _keys_bitmask_column right before the return.
   // This way, a 2nd (parallel) call to this will not be given a partially created object.
-  auto keys_bitmask_column = cudf::detail::sequence(
-    _keys.num_rows(), zero, zero, stream, resources.get_temporary_mr());
+  auto keys_bitmask_column =
+    cudf::detail::sequence(_keys.num_rows(), zero, zero, stream, resources.get_temporary_mr());
   keys_bitmask_column->set_null_mask(std::move(row_bitmask), null_count);
 
   _keys_bitmask_column = std::move(keys_bitmask_column);
   return _keys_bitmask_column->view();
 }
 
-sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
-  column_view const& values, rmm::cuda_stream_view stream, cudf::memory_resources resources)
+sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(column_view const& values,
+                                                                   rmm::cuda_stream_view stream,
+                                                                   cudf::memory_resources resources)
 {
   column_ptr values_sort_order =
     cudf::detail::stable_sorted_order(table_view({unsorted_keys_labels(stream), values}),

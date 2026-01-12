@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -117,7 +117,8 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Return an empty lists column if there are no valid rows
   if (strings_count == null_count) {
-    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING}, stream, resources);
+    return cudf::lists::detail::make_empty_lists_column(
+      data_type{type_id::STRING}, stream, resources);
   }
 
   // Convert counts into offsets.
@@ -126,8 +127,8 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
     0, cuda::proclaim_return_type<size_type>([d_counts, groups] __device__(auto idx) {
       return d_counts[idx] * groups;
     }));
-  auto [offsets, total_strings] =
-    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + strings_count, stream, resources);
+  auto [offsets, total_strings] = cudf::detail::make_offsets_child_column(
+    sizes_itr, sizes_itr + strings_count, stream, resources);
   auto d_offsets = offsets->view().data<size_type>();
 
   rmm::device_uvector<string_index_pair> indices(total_strings, stream);

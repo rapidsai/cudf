@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,9 +34,9 @@ std::unique_ptr<column> top_k(column_view const& col,
   if (k >= col.size()) { return std::make_unique<column>(col, stream, resources); }
 
   // code will be specialized for fixed-width types once CUB topk function is available
-  auto const nulls   = topk_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
-  auto const indices = sorted_order<sort_method::STABLE>(
-    col, topk_order, nulls, stream, resources.get_temporary_mr());
+  auto const nulls = topk_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
+  auto const indices =
+    sorted_order<sort_method::STABLE>(col, topk_order, nulls, stream, resources.get_temporary_mr());
   auto const k_indices = cudf::detail::split(indices->view(), {k}, stream).front();
   auto result          = cudf::detail::gather(cudf::table_view({col}),
                                      k_indices,
@@ -60,9 +60,9 @@ std::unique_ptr<column> top_k_order(column_view const& col,
       col.size(), numeric_scalar<size_type>(0, true, stream), stream, resources);
   }
 
-  auto const nulls   = topk_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
-  auto const indices = sorted_order<sort_method::STABLE>(
-    col, topk_order, nulls, stream, resources.get_temporary_mr());
+  auto const nulls = topk_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
+  auto const indices =
+    sorted_order<sort_method::STABLE>(col, topk_order, nulls, stream, resources.get_temporary_mr());
   return std::make_unique<column>(
     cudf::detail::split(indices->view(), {k}, stream).front(), stream, resources);
 }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,8 +35,7 @@ std::unique_ptr<column> scan(column_view const& input,
   }
 
   return inclusive == scan_type::EXCLUSIVE
-           ? detail::scan_exclusive(input, agg, null_handling, stream,
-                  resources)
+           ? detail::scan_exclusive(input, agg, null_handling, stream, resources)
            : detail::scan_inclusive(input, agg, null_handling, stream, resources);
 }
 

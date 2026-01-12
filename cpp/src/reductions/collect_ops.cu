@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -84,7 +84,8 @@ std::unique_ptr<scalar> collect_set(column_view const& col,
                                                stream,
                                                resources);
 
-  return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, resources);
+  return std::make_unique<list_scalar>(
+    std::move(distinct_table->get_column(0)), true, stream, resources);
 }
 
 std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
@@ -101,7 +102,8 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                                nans_equal,
                                                stream,
                                                resources);
-  return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, resources);
+  return std::make_unique<list_scalar>(
+    std::move(distinct_table->get_column(0)), true, stream, resources);
 }
 }  // namespace detail
 }  // namespace reduction

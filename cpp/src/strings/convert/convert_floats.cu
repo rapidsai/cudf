@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -63,7 +63,7 @@ struct dispatch_to_floats_fn {
     requires(std::is_floating_point_v<FloatType>)
   {
     auto d_results = output_column.data<FloatType>();
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_column.size()),
                       d_results,
@@ -95,8 +95,7 @@ std::unique_ptr<column> to_floats(strings_column_view const& input,
   // create float output column copying the strings null-mask
   auto results      = make_numeric_column(output_type,
                                      strings_count,
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
@@ -451,14 +450,13 @@ std::unique_ptr<column> is_float(strings_column_view const& input,
   // create output column
   auto results   = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
   auto d_results = results->mutable_view().data<bool>();
   // check strings for valid float chars
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(input.size()),
                     d_results,

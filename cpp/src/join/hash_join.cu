@@ -1,10 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/join/hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -23,6 +25,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
@@ -41,8 +44,35 @@ namespace detail {
 namespace {
 using hash_table_t = cudf::hash_join::impl_type::hash_table_t;
 
-// Multimap type used for mixed joins. TODO: This is a temporary alias used
-// TODO: `pair_equal` to be moved to common utils during mixed-join migration
+/**
+ * @brief Checks if a join operation is trivial (empty tables or certain join types with empty
+ * data).
+ */
+bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
+{
+  // If there is nothing to join, then send empty table with all columns
+  if (left.is_empty() || right.is_empty()) { return true; }
+
+  // If left join and the left table is empty, return immediately
+  if ((join_kind::LEFT_JOIN == join_type) && (0 == left.num_rows())) { return true; }
+
+  // If Inner Join and either table is empty, return immediately
+  if ((join_kind::INNER_JOIN == join_type) && ((0 == left.num_rows()) || (0 == right.num_rows()))) {
+    return true;
+  }
+
+  // If left semi join (contains) and right table is empty,
+  // return immediately
+  if ((join_kind::LEFT_SEMI_JOIN == join_type) && (0 == right.num_rows())) { return true; }
+
+  // If left semi- or anti- join, and the left table is empty, return immediately
+  if ((join_kind::LEFT_SEMI_JOIN == join_type || join_kind::LEFT_ANTI_JOIN == join_type) &&
+      (0 == left.num_rows())) {
+    return true;
+  }
+
+  return false;
+}
 
 template <typename Equal>
 class pair_equal {
@@ -286,14 +316,14 @@ probe_join_hash_table(
 
   // If output size is zero, return immediately
   if (join_size == 0) {
-    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources));
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources));
   }
 
-  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
-  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
+  auto left_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
+  auto right_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
   cudf::prefetch::detail::prefetch(*left_indices, stream);
   cudf::prefetch::detail::prefetch(*right_indices, stream);
 
@@ -405,7 +435,8 @@ std::size_t get_full_join_size(
   // If output size is zero, return immediately
   if (join_size == 0) { return join_size; }
 
-  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
+  auto right_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, resources);
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
@@ -487,10 +518,11 @@ std::size_t get_full_join_size(
                        valid);                      // Stencil Predicate
 
     // Create list of indices that have been marked as invalid
-    left_join_complement_size = thrust::count_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
-                                                 invalid_index_map->begin(),
-                                                 invalid_index_map->end(),
-                                                 cuda::std::identity());
+    left_join_complement_size =
+      thrust::count_if(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                       invalid_index_map->begin(),
+                       invalid_index_map->end(),
+                       cuda::std::identity());
   }
   return join_size + left_join_complement_size;
 }
@@ -707,7 +739,10 @@ cudf::join_match_context hash_join<Hasher>::inner_join_match_context(
     std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, resources);
 
   if (_is_empty) {
-    thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), match_counts->begin(), match_counts->end(), 0);
+    thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                 match_counts->begin(),
+                 match_counts->end(),
+                 0);
   } else {
     compute_match_counts(probe, match_counts->begin(), stream);
   }
@@ -727,7 +762,10 @@ cudf::join_match_context hash_join<Hasher>::left_join_match_context(
     std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, resources);
 
   if (_is_empty) {
-    thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), match_counts->begin(), match_counts->end(), 1);
+    thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                 match_counts->begin(),
+                 match_counts->end(),
+                 1);
   } else {
     auto transform = [] __device__(size_type count) { return count == 0 ? 1 : count; };
     auto transformed_output =
@@ -750,7 +788,10 @@ cudf::join_match_context hash_join<Hasher>::full_join_match_context(
     std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, resources);
 
   if (_is_empty) {
-    thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), match_counts->begin(), match_counts->end(), 1);
+    thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                 match_counts->begin(),
+                 match_counts->end(),
+                 1);
   } else {
     auto transform = [] __device__(size_type count) { return count == 0 ? 1 : count; };
     auto transformed_output =
@@ -823,10 +864,8 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                std::invalid_argument);
 
   if (is_trivial_join(probe, _build, join)) {
-    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream,
-                  resources));
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources));
   }
 
   CUDF_EXPECTS(cudf::have_same_types(_build, probe),
@@ -906,10 +945,9 @@ std::size_t hash_join::full_join_size(cudf::table_view const& probe,
   return _impl->full_join_size(probe, stream, resources);
 }
 
-cudf::join_match_context hash_join::inner_join_match_context(
-  cudf::table_view const& probe,
-  rmm::cuda_stream_view stream,
-  cudf::memory_resources resources) const
+cudf::join_match_context hash_join::inner_join_match_context(cudf::table_view const& probe,
+                                                             rmm::cuda_stream_view stream,
+                                                             cudf::memory_resources resources) const
 {
   return _impl->inner_join_match_context(probe, stream, resources);
 }

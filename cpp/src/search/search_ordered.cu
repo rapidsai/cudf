@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -39,8 +39,11 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
                "Mismatch between number of columns and null precedence.");
 
   // Allocate result column
-  auto result = make_numeric_column(
-    data_type{type_to_id<size_type>()}, needles.num_rows(), mask_state::UNALLOCATED, stream, resources);
+  auto result       = make_numeric_column(data_type{type_to_id<size_type>()},
+                                    needles.num_rows(),
+                                    mask_state::UNALLOCATED,
+                                    stream,
+                                    resources);
   auto const out_it = result->mutable_view().data<size_type>();
 
   // Handle empty inputs
@@ -67,7 +70,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   if (cudf::detail::has_nested_columns(haystack) || cudf::detail::has_nested_columns(needles)) {
     auto const d_comparator = comparator.less<true>(nullate::DYNAMIC{has_nulls});
     if (find_first) {
-      thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      thrust::lower_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                           haystack_it,
                           haystack_it + haystack.num_rows(),
                           needles_it,
@@ -75,7 +78,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
                           out_it,
                           d_comparator);
     } else {
-      thrust::upper_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      thrust::upper_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                           haystack_it,
                           haystack_it + haystack.num_rows(),
                           needles_it,
@@ -86,7 +89,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   } else {
     auto const d_comparator = comparator.less<false>(nullate::DYNAMIC{has_nulls});
     if (find_first) {
-      thrust::lower_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      thrust::lower_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                           haystack_it,
                           haystack_it + haystack.num_rows(),
                           needles_it,
@@ -94,7 +97,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
                           out_it,
                           d_comparator);
     } else {
-      thrust::upper_bound(rmm::exec_policy(stream, resources.get_temporary_mr()),
+      thrust::upper_bound(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                           haystack_it,
                           haystack_it + haystack.num_rows(),
                           needles_it,

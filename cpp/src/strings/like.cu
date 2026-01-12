@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -312,8 +312,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
 {
   auto results = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                      input.null_count(),
                                      stream,
                                      resources);
@@ -326,7 +325,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
   if ((input.size() == input.null_count()) ||
       ((last_offset - first_offset) / (input.size() - input.null_count())) <
         AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       results->mutable_view().data<bool>(),

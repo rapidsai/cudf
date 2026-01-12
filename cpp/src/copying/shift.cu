@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -77,8 +77,9 @@ struct shift_functor {
       cudf::strings_column_view(input), offset, fill_value, stream, resources);
 
     if (input.nullable() || not fill_value.is_valid(stream)) {
-      auto const d_input           = column_device_view::create(input, stream);
-      auto [null_mask, null_count] = create_null_mask(*d_input, offset, fill_value, stream, resources);
+      auto const d_input = column_device_view::create(input, stream);
+      auto [null_mask, null_count] =
+        create_null_mask(*d_input, offset, fill_value, stream, resources);
       output->set_null_mask(std::move(null_mask), null_count);
     }
 
@@ -131,7 +132,11 @@ struct shift_functor {
         return out_of_bounds(size, src_idx) ? *fill : input.element<T>(src_idx);
       };
 
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()), index_begin, index_end, data, func_value);
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                      index_begin,
+                      index_end,
+                      data,
+                      func_value);
 
     return output;
   }

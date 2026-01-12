@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,6 +20,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <utility>
 #include <vector>
@@ -117,12 +118,8 @@ std::unique_ptr<table> distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto const gather_map = detail::distinct_indices(input.select(keys),
-                                                   keep,
-                                                   nulls_equal,
-                                                   nans_equal,
-                                                   stream,
-                                                   resources.get_temporary_mr());
+  auto const gather_map = detail::distinct_indices(
+    input.select(keys), keep, nulls_equal, nans_equal, stream, resources.get_temporary_mr());
   return detail::gather(input,
                         gather_map,
                         out_of_bounds_policy::DONT_CHECK,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -330,12 +330,17 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
 
       // make child column
       CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child =
-        cudf::io::detail::empty_like<string_policy>(buffer.children[0], child_info, stream, resources);
+      auto child = cudf::io::detail::empty_like<string_policy>(
+        buffer.children[0], child_info, stream, resources);
 
       // make the final list column
-      return make_lists_column(
-        0, std::move(offsets), std::move(child), 0, rmm::device_buffer{0, stream, mr}, stream, resources);
+      return make_lists_column(0,
+                               std::move(offsets),
+                               std::move(child),
+                               0,
+                               rmm::device_buffer{0, stream, mr},
+                               stream,
+                               resources);
     } break;
 
     case type_id::STRUCT: {

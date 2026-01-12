@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -299,12 +299,14 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
     }
   }
 
-  auto d_page_indexes = cudf::detail::make_device_uvector_async(
-    page_indexes, stream, resources.get_temporary_mr());
+  auto d_page_indexes =
+    cudf::detail::make_device_uvector_async(page_indexes, stream, resources.get_temporary_mr());
 
   auto iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::for_each(
-    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), iter, iter + num_pages, copy_page_info{d_page_indexes, pages});
+  thrust::for_each(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                   iter,
+                   iter + num_pages,
+                   copy_page_info{d_page_indexes, pages});
 }
 
 std::string encoding_to_string(Encoding encoding)
@@ -390,7 +392,10 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
   // started generating kernels using too much shared memory when trying to sort the pages
   // directly.
   rmm::device_uvector<int32_t> sort_indices(unsorted_pages.size(), stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), sort_indices.begin(), sort_indices.end(), 0);
+  thrust::sequence(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                   sort_indices.begin(),
+                   sort_indices.end(),
+                   0);
   thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                              page_keys.begin(),
                              page_keys.end(),
@@ -545,7 +550,8 @@ void decode_page_headers(pass_intermediate_data& pass,
                                                            stream)
                                  .second;
   auto const num_page_counts = page_counts_end - page_counts.begin();
-  pass.page_offsets          = rmm::device_uvector<size_type>(num_page_counts + 1, stream, resources.get_temporary_mr());
+  pass.page_offsets =
+    rmm::device_uvector<size_type>(num_page_counts + 1, stream, resources.get_temporary_mr());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          page_counts.begin(),
                          page_counts.begin() + num_page_counts + 1,

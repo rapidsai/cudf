@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: Copyright 2018-2019 BlazingDB, Inc.
  * SPDX-FileCopyrightText: Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 /*
@@ -57,21 +57,19 @@ bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
-std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
-  column_view const& col,
-  scalar const& s,
-  rmm::cuda_stream_view stream,
-  cudf::memory_resources resources)
+std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(column_view const& col,
+                                                                   scalar const& s,
+                                                                   rmm::cuda_stream_view stream,
+                                                                   cudf::memory_resources resources)
 {
   if (col.is_empty()) return std::pair(rmm::device_buffer{0, stream, mr}, 0);
 
   if (not s.is_valid(stream)) {
-    return std::pair(cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream,
-                  resources),
-                     col.size());
+    return std::pair(
+      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, resources),
+      col.size());
   } else if (s.is_valid(stream) and col.nullable()) {
-    return std::pair(cudf::detail::copy_bitmask(col, stream,
-                  resources), col.null_count());
+    return std::pair(cudf::detail::copy_bitmask(col, stream, resources), col.null_count());
   } else {
     return std::pair(rmm::device_buffer{0, stream, mr}, 0);
   }
@@ -211,7 +209,8 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING and
       output_type.id() == type_id::STRING and
       (op == binary_operator::NULL_MAX or op == binary_operator::NULL_MIN))
-    return cudf::binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, resources);
+    return cudf::binops::compiled::string_null_min_max(
+      lhs, rhs, op, output_type, stream, resources);
 
   if (not cudf::binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
     CUDF_FAIL("Unsupported operator for these types", cudf::data_type_error);
@@ -267,9 +266,11 @@ std::unique_ptr<column> make_fixed_width_column_for_output(scalar const& lhs,
                                                            cudf::memory_resources resources)
 {
   if (binops::is_null_dependent(op)) {
-    return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, resources);
+    return make_fixed_width_column(
+      output_type, rhs.size(), mask_state::ALL_VALID, stream, resources);
   } else {
-    auto [new_mask, new_null_count] = binops::scalar_col_valid_mask_and(rhs, lhs, stream, resources);
+    auto [new_mask, new_null_count] =
+      binops::scalar_col_valid_mask_and(rhs, lhs, stream, resources);
     return make_fixed_width_column(
       output_type, rhs.size(), std::move(new_mask), new_null_count, stream, resources);
   }
@@ -294,9 +295,11 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
                                                            cudf::memory_resources resources)
 {
   if (binops::is_null_dependent(op)) {
-    return make_fixed_width_column(output_type, lhs.size(), mask_state::ALL_VALID, stream, resources);
+    return make_fixed_width_column(
+      output_type, lhs.size(), mask_state::ALL_VALID, stream, resources);
   } else {
-    auto [new_mask, new_null_count] = binops::scalar_col_valid_mask_and(lhs, rhs, stream, resources);
+    auto [new_mask, new_null_count] =
+      binops::scalar_col_valid_mask_and(lhs, rhs, stream, resources);
     return make_fixed_width_column(
       output_type, lhs.size(), std::move(new_mask), new_null_count, stream, resources);
   }
@@ -321,9 +324,11 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
                                                            cudf::memory_resources resources)
 {
   if (binops::is_null_dependent(op)) {
-    return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, resources);
+    return make_fixed_width_column(
+      output_type, rhs.size(), mask_state::ALL_VALID, stream, resources);
   } else {
-    auto [new_mask, null_count] = cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, resources);
+    auto [new_mask, null_count] =
+      cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, resources);
     return make_fixed_width_column(
       output_type, lhs.size(), std::move(new_mask), null_count, stream, resources);
   }
@@ -379,9 +384,10 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
-  auto [new_mask, null_count] = cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, resources);
-  auto out =
-    make_fixed_width_column(output_type, lhs.size(), std::move(new_mask), null_count, stream, resources);
+  auto [new_mask, null_count] =
+    cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, resources);
+  auto out = make_fixed_width_column(
+    output_type, lhs.size(), std::move(new_mask), null_count, stream, resources);
 
   // Check for 0 sized data
   if (lhs.is_empty() or rhs.is_empty()) return out;

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -800,20 +800,20 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   //  CUDF_FUNC_RANGE();
 
   auto const max_length = thrust::transform_reduce(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     str_tuples,
     str_tuples + col_size,
     cuda::proclaim_return_type<std::size_t>([] __device__(auto t) { return t.second; }),
     size_type{0},
     cuda::maximum<size_type>{});
 
-  auto sizes           = rmm::device_uvector<size_type>(col_size, stream, resources.get_temporary_mr());
-  auto d_sizes         = sizes.data();
+  auto sizes   = rmm::device_uvector<size_type>(col_size, stream, resources.get_temporary_mr());
+  auto d_sizes = sizes.data();
   auto null_count_data = d_null_count.data();
 
   auto single_thread_fn = string_parse<decltype(str_tuples)>{
     str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options, d_sizes};
-  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      col_size,
                      single_thread_fn);
@@ -865,7 +865,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   single_thread_fn.d_chars   = d_chars;
   single_thread_fn.d_offsets = d_offsets;
 
-  thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::make_counting_iterator<size_type>(0),
                      col_size,
                      single_thread_fn);
@@ -936,13 +936,13 @@ std::unique_ptr<column> parse_data(
       str_tuples, col_size, std::move(null_mask), d_null_count, options, stream, resources);
   }
 
-  auto out_col =
-    make_fixed_width_column(col_type, col_size, std::move(null_mask), null_count, stream, resources);
+  auto out_col = make_fixed_width_column(
+    col_type, col_size, std::move(null_mask), null_count, stream, resources);
   auto output_dv_ptr = mutable_column_device_view::create(*out_col, stream);
 
   // use `ConvertFunctor` to convert non-string values
   thrust::for_each_n(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     col_size,
     [str_tuples, col = *output_dv_ptr, options, col_type, null_count_data] __device__(

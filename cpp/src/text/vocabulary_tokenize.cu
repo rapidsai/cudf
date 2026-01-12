@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,6 +28,7 @@
 #include <nvtext/tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 #include <cuda/std/functional>
@@ -360,7 +361,8 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
 
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
     auto const zero_itr = thrust::make_counting_iterator<cudf::size_type>(0);
-    auto d_sizes        = rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
+    auto d_sizes =
+      rmm::device_uvector<cudf::size_type>(input.size(), stream, resources.get_temporary_mr());
     thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       zero_itr,
                       zero_itr + input.size(),
@@ -376,13 +378,15 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
     auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(token_offsets->view());
     vocabulary_tokenizer_fn<decltype(map_ref)> tokenizer{
       *d_strings, d_delimiter, map_ref, default_id, d_offsets, d_tokens};
-    thrust::for_each_n(rmm::exec_policy(stream, resources.get_temporary_mr()), zero_itr, input.size(), tokenizer);
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                       zero_itr,
+                       input.size(),
+                       tokenizer);
     return cudf::make_lists_column(input.size(),
                                    std::move(token_offsets),
                                    std::move(tokens),
                                    input.null_count(),
-                                   cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                   cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                    stream,
                                    resources);
   }
@@ -417,7 +421,8 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   auto [token_offsets, total_count] = cudf::detail::make_offsets_child_column(
     d_token_counts.begin(), d_token_counts.end(), stream, resources);
 
-  auto d_tmp_offsets = rmm::device_uvector<int64_t>(total_count + 1, stream, resources.get_temporary_mr());
+  auto d_tmp_offsets =
+    rmm::device_uvector<int64_t>(total_count + 1, stream, resources.get_temporary_mr());
   d_tmp_offsets.set_element(total_count, chars_size, stream);
   cudf::detail::copy_if(
     thrust::counting_iterator<int64_t>(0),
@@ -436,12 +441,12 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
 
   auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
 
-  auto tokens =
-    cudf::make_numeric_column(output_type, total_count, cudf::mask_state::UNALLOCATED, stream, resources);
+  auto tokens = cudf::make_numeric_column(
+    output_type, total_count, cudf::mask_state::UNALLOCATED, stream, resources);
   auto d_tokens = tokens->mutable_view().data<cudf::size_type>();
 
   transform_tokenizer_fn<decltype(map_ref)> tokenizer{d_delimiter, map_ref, default_id};
-  thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                     d_tmp_strings->begin<cudf::string_view>(),
                     d_tmp_strings->end<cudf::string_view>(),
                     d_tokens,
@@ -451,8 +456,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                                  std::move(token_offsets),
                                  std::move(tokens),
                                  input.null_count(),
-                                 cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources),
+                                 cudf::detail::copy_bitmask(input.parent(), stream, resources),
                                  stream,
                                  resources);
 }
@@ -467,7 +471,8 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                                                        cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return detail::tokenize_with_vocabulary(input, vocabulary, delimiter, default_id, stream, resources);
+  return detail::tokenize_with_vocabulary(
+    input, vocabulary, delimiter, default_id, stream, resources);
 }
 
 }  // namespace nvtext

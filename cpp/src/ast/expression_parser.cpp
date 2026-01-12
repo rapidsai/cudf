@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -77,8 +77,7 @@ expression_parser::expression_parser(expression const& expr,
                                      bool has_nulls,
                                      rmm::cuda_stream_view stream,
                                      cudf::memory_resources resources)
-  : expression_parser(expr, table, {}, has_nulls, stream,
-                  resources)
+  : expression_parser(expr, table, {}, has_nulls, stream, resources)
 {
 }
 

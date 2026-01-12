@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -241,13 +241,12 @@ struct dispatch_round {
 
     auto output = make_fixed_width_column(output_col_type,
                                           size,
-                                          cudf::detail::copy_bitmask(column, stream,
-                  resources),
+                                          cudf::detail::copy_bitmask(column, stream, resources),
                                           column.null_count(),
                                           stream,
                                           resources);
 
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       column.begin<Timestamp>(),
                       column.end<Timestamp>(),
                       output->mutable_view().begin<Timestamp>(),
@@ -285,7 +284,7 @@ struct launch_functor {
   void operator()(rmm::cuda_stream_view stream) const
     requires(cudf::is_timestamp_t<Timestamp>::value)
   {
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       input.begin<Timestamp>(),
                       input.end<Timestamp>(),
                       output.begin<OutputColT>(),
@@ -308,8 +307,7 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
 
   auto output = make_fixed_width_column(output_col_type,
                                         size,
-                                        cudf::detail::copy_bitmask(column, stream,
-                  resources),
+                                        cudf::detail::copy_bitmask(column, stream, resources),
                                         column.null_count(),
                                         stream,
                                         resources);
@@ -349,7 +347,7 @@ struct add_calendrical_months_functor {
       make_fixed_width_column(output_col_type, size, mask_state::UNALLOCATED, stream, resources);
     auto output_mview = output->mutable_view();
 
-    thrust::transform(rmm::exec_policy(stream, resources.get_temporary_mr()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       timestamp_column.begin<Timestamp>(),
                       timestamp_column.end<Timestamp>(),
                       months_begin,
@@ -408,8 +406,7 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
                                   months_begin_iter,
                                   stream,
                                   resources);
-    output->set_null_mask(cudf::detail::copy_bitmask(timestamp_column, stream,
-                  resources),
+    output->set_null_mask(cudf::detail::copy_bitmask(timestamp_column, stream, resources),
                           timestamp_column.null_count());
     return output;
   } else {
@@ -476,19 +473,20 @@ std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const
       column, stream,
                   resources)
 
-  switch (component) {
-    extract(datetime_component::YEAR);
-    extract(datetime_component::MONTH);
-    extract(datetime_component::DAY);
-    extract(datetime_component::WEEKDAY);
-    extract(datetime_component::HOUR);
-    extract(datetime_component::MINUTE);
-    extract(datetime_component::SECOND);
-    extract(datetime_component::MILLISECOND);
-    extract(datetime_component::MICROSECOND);
-    extract(datetime_component::NANOSECOND);
-    default: CUDF_FAIL("Unsupported datetime component.");
-  }
+  switch (component)
+                  {
+                    extract(datetime_component::YEAR);
+                    extract(datetime_component::MONTH);
+                    extract(datetime_component::DAY);
+                    extract(datetime_component::WEEKDAY);
+                    extract(datetime_component::HOUR);
+                    extract(datetime_component::MINUTE);
+                    extract(datetime_component::SECOND);
+                    extract(datetime_component::MILLISECOND);
+                    extract(datetime_component::MICROSECOND);
+                    extract(datetime_component::NANOSECOND);
+                    default: CUDF_FAIL("Unsupported datetime component.");
+                  }
 #undef extract
 }
 

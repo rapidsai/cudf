@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -393,7 +393,10 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   auto const n_upper     = (input.size() * (input.size() - 1L)) / 2L;
   auto const output_size = input.size() * input.size();
   rmm::device_uvector<std::ptrdiff_t> offsets(n_upper + 1, stream);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), offsets.begin(), offsets.end(), 0);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                             offsets.begin(),
+                             offsets.end(),
+                             0);
   thrust::for_each_n(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                      thrust::counting_iterator<cudf::size_type>(0),
                      output_size,

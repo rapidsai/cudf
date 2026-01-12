@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,8 +34,8 @@ struct bitwise_group_reduction_functor {
                                      cudf::memory_resources resources) const
 
   {
-    auto result =
-      make_fixed_width_column(values.type(), num_groups, mask_state::UNALLOCATED, stream, resources);
+    auto result = make_fixed_width_column(
+      values.type(), num_groups, mask_state::UNALLOCATED, stream, resources);
     if (values.is_empty()) { return result; }
 
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
@@ -74,8 +74,8 @@ struct bitwise_group_reduction_functor {
                    validity.begin(),
                    cuda::std::logical_or{});
 
-      auto [null_mask, null_count] =
-        cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, resources);
+      auto [null_mask, null_count] = cudf::detail::valid_if(
+        validity.begin(), validity.end(), cuda::std::identity{}, stream, resources);
       if (null_count > 0) { result->set_null_mask(std::move(null_mask), null_count); }
     }
     return result;

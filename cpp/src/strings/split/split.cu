@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -148,8 +148,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
 {
   std::vector<std::unique_ptr<column>> results;
   if (input.size() == input.null_count()) {
-    results.push_back(std::make_unique<column>(input.parent(), stream,
-                  resources));
+    results.push_back(std::make_unique<column>(input.parent(), stream, resources));
     return std::make_unique<table>(std::move(results));
   }
 
@@ -160,7 +159,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
 
   // compute the maximum number of tokens for any string
   auto const columns_count = thrust::transform_reduce(
-    rmm::exec_policy(stream, resources.get_temporary_mr()),
+    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(input.size()),
     cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto idx) -> size_type {
@@ -179,8 +178,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
           auto const token_count = static_cast<size_type>(d_offsets[idx + 1] - offset);
           return (col < token_count) ? d_tokens[offset + col] : string_index_pair{nullptr, 0};
         }));
-    results.emplace_back(make_strings_column(itr, itr + input.size(), stream,
-                  resources));
+    results.emplace_back(make_strings_column(itr, itr + input.size(), stream, resources));
   }
 
   return std::make_unique<table>(std::move(results));
@@ -216,8 +214,7 @@ std::unique_ptr<table> split(strings_column_view const& input,
     auto delimiter_fn = whitespace_delimiter_fn{};
     auto results      = split_fn(input, tokenizer, delimiter_fn, stream, resources);
     // boundary case: if no columns, return one null column (issue #119)
-    return (results->num_columns() == 0) ? make_all_null_table(input.size(), stream,
-                  resources)
+    return (results->num_columns() == 0) ? make_all_null_table(input.size(), stream, resources)
                                          : std::move(results);
   }
 
@@ -242,8 +239,7 @@ std::unique_ptr<table> rsplit(strings_column_view const& input,
     auto delimiter_fn = whitespace_delimiter_fn{};
     auto results      = split_fn(input, tokenizer, delimiter_fn, stream, resources);
     // boundary case: if no columns, return one null column (issue #119)
-    return (results->num_columns() == 0) ? make_all_null_table(input.size(), stream,
-                  resources)
+    return (results->num_columns() == 0) ? make_all_null_table(input.size(), stream, resources)
                                          : std::move(results);
   }
 

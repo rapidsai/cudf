@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -175,7 +175,7 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
     host_span<aggregation_request const> requests,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
   /**
    * @brief Performs grouped scans on the specified values.
@@ -231,7 +231,7 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> scan(
     host_span<scan_request const> requests,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -289,7 +289,7 @@ class groupby {
     table_view const& values,
     host_span<size_type const> offsets,
     std::vector<std::reference_wrapper<scalar const>> const& fill_values,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -319,8 +319,8 @@ class groupby {
    * returned groups
    * @return A `groups` object representing grouped keys and values
    */
-  groups get_groups(cudf::table_view values           = {},
-                    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  groups get_groups(cudf::table_view values          = {},
+                    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
   /**
@@ -362,7 +362,7 @@ class groupby {
   std::pair<std::unique_ptr<table>, std::unique_ptr<table>> replace_nulls(
     table_view const& values,
     host_span<cudf::replace_policy const> replace_policies,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
  private:

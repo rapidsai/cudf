@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -69,8 +69,11 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                          cudf::memory_resources resources)
 {
   // outgoing offsets.
-  auto offsets = cudf::make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, input.num_rows() + 1, mask_state::UNALLOCATED, stream, resources);
+  auto offsets = cudf::make_fixed_width_column(data_type{type_to_id<size_type>()},
+                                               input.num_rows() + 1,
+                                               mask_state::UNALLOCATED,
+                                               stream,
+                                               resources);
 
   auto keys = thrust::make_transform_iterator(
     thrust::make_counting_iterator(size_t{0}),
@@ -101,7 +104,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
       return offsets[row_index + 1] - offsets[row_index];
     }));
 
-  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         keys,
                         keys + (input.num_rows() * input.num_columns()),
                         values,
@@ -109,7 +112,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                         offsets->mutable_view().begin<size_type>());
 
   // convert to offsets
-  thrust::exclusive_scan(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                          offsets->view().begin<size_type>(),
                          offsets->view().begin<size_type>() + input.num_rows() + 1,
                          offsets->mutable_view().begin<size_type>(),
@@ -165,7 +168,7 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
       return col.null_mask() ? (bit_is_set(col.null_mask(), row_index + col.offset()) ? 0 : 1) : 0;
     }));
 
-  thrust::reduce_by_key(rmm::exec_policy(stream, resources.get_temporary_mr()),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                         keys,
                         keys + (input.num_rows() * input.num_columns()),
                         null_values,

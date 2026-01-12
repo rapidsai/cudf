@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,8 @@
 #include <cudf/hashing.hpp>
 #include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/utilities/default_stream.hpp>
+
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/bloom_filter.cuh>
 #include <cuco/bloom_filter_policies.cuh>

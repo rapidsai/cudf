@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -188,8 +188,7 @@ struct allnull_column_functor {
       size,
       std::move(child_columns),
       size,
-      cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream,
-                  resources),
+      cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, resources),
       stream,
       resources);
   }

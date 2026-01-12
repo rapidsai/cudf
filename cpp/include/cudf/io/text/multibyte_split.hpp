@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -81,8 +81,8 @@ struct parse_options {
 std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
   std::string_view delimiter,
-  parse_options options             = {},
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  parse_options options            = {},
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

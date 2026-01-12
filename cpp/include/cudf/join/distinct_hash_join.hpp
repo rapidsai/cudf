@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -84,7 +84,7 @@ class distinct_hash_join {
   [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                           std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
-             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+             rmm::cuda_stream_view stream     = cudf::get_default_stream(),
              cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -106,7 +106,7 @@ class distinct_hash_join {
    */
   [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> left_join(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream     = cudf::get_default_stream(),
     cudf::memory_resources resources = cudf::get_current_device_resource_ref()) const;
 
  private:

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,8 +44,11 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
   for (std::size_t idx = 0; idx < num_columns; ++idx) {
     auto const string_pairs = input[idx];
     auto const string_count = static_cast<size_type>(string_pairs.size());
-    auto offsets            = make_numeric_column(
-      data_type{type_to_id<OutputType>()}, string_count + 1, mask_state::UNALLOCATED, stream, resources);
+    auto offsets            = make_numeric_column(data_type{type_to_id<OutputType>()},
+                                       string_count + 1,
+                                       mask_state::UNALLOCATED,
+                                       stream,
+                                       resources);
 
     auto const offsets_transformer = cuda::proclaim_return_type<size_type>(
       [string_count, string_pairs = string_pairs.data()] __device__(size_type idx) -> size_type {
@@ -82,15 +85,16 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   null_masks.reserve(num_columns);
 
   rmm::device_uvector<size_type> d_valid_counts(num_columns, stream, resources);
-  thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream, resources.get_temporary_mr()), d_valid_counts.begin(), d_valid_counts.end(), 0);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                             d_valid_counts.begin(),
+                             d_valid_counts.end(),
+                             0);
 
   for (std::size_t idx = 0; idx < num_columns; ++idx) {
     auto const& string_pairs = input[idx];
     auto const string_count  = static_cast<size_type>(string_pairs.size());
     null_masks.emplace_back(
-      cudf::create_null_mask(string_count, mask_state::UNINITIALIZED, stream,
-                  resources));
+      cudf::create_null_mask(string_count, mask_state::UNINITIALIZED, stream, resources));
 
     if (string_count == 0) { continue; }
 
@@ -179,7 +183,8 @@ std::unique_ptr<column> make_strings_column(
   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
-  return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, resources);
+  return cudf::strings::detail::make_strings_column(
+    strings.begin(), strings.end(), stream, resources);
 }
 
 std::vector<std::unique_ptr<column>> make_strings_column_batch(

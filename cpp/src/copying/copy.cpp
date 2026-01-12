@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -113,13 +113,12 @@ std::unique_ptr<column> allocate_like(column_view const& input,
     is_fixed_width(input.type()), "Expects only fixed-width type column", cudf::data_type_error);
   mask_state const allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
 
-  return std::make_unique<column>(input.type(),
-                                  size,
-                                  rmm::device_buffer(size * size_of(input.type()), stream,
-                  resources),
-                                  detail::create_null_mask(size, allocate_mask, stream,
-                  resources),
-                                  0);
+  return std::make_unique<column>(
+    input.type(),
+    size,
+    rmm::device_buffer(size * size_of(input.type()), stream, resources),
+    detail::create_null_mask(size, allocate_mask, stream, resources),
+    0);
 }
 
 }  // namespace detail

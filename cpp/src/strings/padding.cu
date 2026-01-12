@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -120,8 +120,7 @@ std::unique_ptr<column> pad(strings_column_view const& input,
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 namespace {
@@ -161,17 +160,16 @@ std::unique_ptr<column> zfill(strings_column_view const& input,
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
-  auto d_strings = column_device_view::create(input.parent(), stream);
-  auto widths    = thrust::constant_iterator<size_type>(width);
-  auto [offsets_column, chars] =
-    make_strings_children(zfill_fn<decltype(widths)>{*d_strings, widths}, input.size(), stream, resources);
+  auto d_strings               = column_device_view::create(input.parent(), stream);
+  auto widths                  = thrust::constant_iterator<size_type>(width);
+  auto [offsets_column, chars] = make_strings_children(
+    zfill_fn<decltype(widths)>{*d_strings, widths}, input.size(), stream, resources);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 std::unique_ptr<column> zfill_by_widths(strings_column_view const& input,
@@ -195,8 +193,7 @@ std::unique_ptr<column> zfill_by_widths(strings_column_view const& input,
                              std::move(offsets_column),
                              chars.release(),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream,
-                  resources));
+                             cudf::detail::copy_bitmask(input.parent(), stream, resources));
 }
 
 }  // namespace detail

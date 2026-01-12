@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1326,12 +1326,11 @@ struct dictionary_caster {
       // Make sure all literals have the same type as the predicate column
       std::for_each(literals.begin(), literals.end(), [&](auto const& literal) {
         // Check if the literal has the same type as the predicate column
-        CUDF_EXPECTS(
-          dtype == literal->get_data_type() and
-            cudf::have_same_types(
-              cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
-              cudf::scalar_type_t<T>(T{}, false, stream, resources.get_temporary_mr())),
-          "Mismatched predicate column and literal types");
+        CUDF_EXPECTS(dtype == literal->get_data_type() and
+                       cudf::have_same_types(
+                         cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
+                         cudf::scalar_type_t<T>(T{}, false, stream, resources.get_temporary_mr())),
+                     "Mismatched predicate column and literal types");
       });
 
       // If there are only a few literals, just evaluate expression while decoding dictionary data

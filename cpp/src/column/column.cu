@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -45,8 +45,7 @@ column::column(column const& other, rmm::cuda_stream_view stream, cudf::memory_r
 {
   _children.reserve(other.num_children());
   for (auto const& c : other._children) {
-    _children.emplace_back(std::make_unique<column>(*c, stream,
-                  resources));
+    _children.emplace_back(std::make_unique<column>(*c, stream, resources));
   }
 }
 
@@ -181,16 +180,13 @@ struct create_column_from_view {
                                       nullptr,
                                       0,
                                       dict_view.offset());
-      children.emplace_back(std::make_unique<column>(indices_view, stream,
-                  resources));
-      children.emplace_back(std::make_unique<column>(dict_view.keys(), stream,
-                  resources));
+      children.emplace_back(std::make_unique<column>(indices_view, stream, resources));
+      children.emplace_back(std::make_unique<column>(dict_view.keys(), stream, resources));
     }
     return std::make_unique<column>(view.type(),
                                     view.size(),
                                     rmm::device_buffer{0, stream, mr},
-                                    cudf::detail::copy_bitmask(view, stream,
-                  resources),
+                                    cudf::detail::copy_bitmask(view, stream, resources),
                                     view.null_count(),
                                     std::move(children));
   }
@@ -199,7 +195,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
     requires(cudf::is_fixed_width<ColumnType>())
   {
-    auto op       = [&](auto const& child) { return std::make_unique<column>(child, stream, resources); };
+    auto op = [&](auto const& child) { return std::make_unique<column>(child, stream, resources); };
     auto begin    = thrust::make_transform_iterator(view.child_begin(), op);
     auto children = std::vector<std::unique_ptr<column>>(begin, begin + view.num_children());
 
@@ -211,8 +207,7 @@ struct create_column_from_view {
         view.size() * cudf::size_of(view.type()),
         stream,
         mr},
-      cudf::detail::copy_bitmask(view, stream,
-                  resources),
+      cudf::detail::copy_bitmask(view, stream, resources),
       view.null_count(),
       std::move(children));
   }
@@ -246,13 +241,13 @@ struct create_column_from_view {
 
     auto num_rows = view.size();
 
-    return make_structs_column(num_rows,
-                               std::move(children),
-                               view.null_count(),
-                               cudf::detail::copy_bitmask(view.null_mask(), begin, end, stream,
-                  resources),
-                               stream,
-                               resources);
+    return make_structs_column(
+      num_rows,
+      std::move(children),
+      view.null_count(),
+      cudf::detail::copy_bitmask(view.null_mask(), begin, end, stream, resources),
+      stream,
+      resources);
   }
 };
 }  // anonymous namespace
