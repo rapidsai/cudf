@@ -18,11 +18,16 @@ namespace cudf {
 
 context::context(init_flags flags) : _program_cache{nullptr}
 {
-  auto dump_codegen_flag = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
-  _dump_codegen          = (dump_codegen_flag == "ON" || dump_codegen_flag == "1");
+  auto dump_codegen_env = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
+  bool dump_codegen =
+    (dump_codegen_env == "ON" || dump_codegen_env == "on" || dump_codegen_env == "1");
 
-  auto use_jit_flag = getenv_or("LIBCUDF_JIT_ENABLED", std::string{"OFF"});
-  _use_jit          = (use_jit_flag == "ON" || use_jit_flag == "1");
+  auto use_jit_env = getenv_or("LIBCUDF_JIT_ENABLED", std::string{"OFF"});
+  bool use_jit     = (use_jit_env == "ON" || use_jit_env == "on" || use_jit_env == "1");
+
+  _dump_codegen = dump_codegen;
+
+  flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
   initialize_components(flags);
 }
