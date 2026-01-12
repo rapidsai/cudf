@@ -272,8 +272,12 @@ def test_column_chunked_array_creation():
 )
 def test_as_column_buffer(box, data):
     expected = as_column(data)
+    boxed = box(data)
     actual_column = as_column(
-        cudf.core.buffer.as_buffer(box(data)), dtype=data.dtype
+        cudf.core.buffer.as_buffer(
+            boxed if isinstance(boxed, cp.ndarray) else boxed.data
+        ),
+        dtype=data.dtype,
     )
     assert_eq(
         cudf.Series._from_column(actual_column),

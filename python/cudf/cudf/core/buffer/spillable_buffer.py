@@ -237,11 +237,8 @@ class SpillableBufferOwner(BufferOwner):
         return ret
 
     @classmethod
-    def from_host_memory(cls, data: Any) -> Self:
-        """Create a spillabe buffer from host memory.
-
-        Data must implement `__array_interface__`, the buffer protocol, and/or
-        be convertible to a buffer object using `numpy.asanyarray()`
+    def from_host_memory(cls, data: memoryview) -> Self:
+        """Create a spillable buffer from host memory.
 
         The new buffer is marked as spilled to host memory already.
 
@@ -249,7 +246,7 @@ class SpillableBufferOwner(BufferOwner):
 
         Parameters
         ----------
-        data : Any
+        data : memoryview
             An object that represents host memory.
 
         Returns
@@ -257,10 +254,6 @@ class SpillableBufferOwner(BufferOwner):
         SpillableBufferOwner
             Buffer representing a copy of `data`.
         """
-
-        # Convert to a memoryview using numpy array, this will not copy data
-        # in most cases.
-        data = memoryview(numpy.asanyarray(data))
         if not data.c_contiguous:
             raise ValueError("Buffer data must be C-contiguous")
         data = data.cast("B")  # Make sure itemsize==1
