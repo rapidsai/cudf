@@ -39,9 +39,6 @@ if get_global_manager() is not None:
         allow_module_level=True,
     )
 
-# For now, don't try and make CoW and spilling play well together
-pytestmark = pytest.mark.no_copy_on_write
-
 
 @contextlib.contextmanager
 def set_rmm_memory_pool(nbytes: int):
@@ -85,13 +82,6 @@ def single_column_df(target="gpu") -> cudf.DataFrame:
 
 
 def single_column_df_data(df: cudf.DataFrame) -> SpillableBuffer:
-    """Access `.data` of the column of a standard dataframe"""
-    ret = df._data._data["a"].data
-    assert isinstance(ret, SpillableBuffer)
-    return ret
-
-
-def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
     """Access `.data` of the column of a standard dataframe"""
     ret = df._data._data["a"].data
     assert isinstance(ret, SpillableBuffer)
@@ -175,14 +165,17 @@ def test_memory_info(manager: SpillManager, target):
     if target == "gpu":
         mem = rmm.DeviceBuffer(size=10)
         ptr = mem.ptr
+        size = mem.size
     elif target == "cpu":
-        mem = np.empty(10, dtype="u1")
-        ptr = mem.__array_interface__["data"][0]
+        data = np.empty(10, dtype="u1")
+        mem = memoryview(data)
+        ptr = data.__array_interface__["data"][0]
+        size = data.size
     b = as_buffer(data=mem)
-    assert b.memory_info() == (ptr, mem.size, target)
-    assert b[:].memory_info() == (ptr, mem.size, target)
-    assert b[:-1].memory_info() == (ptr, mem.size - 1, target)
-    assert b[1:].memory_info() == (ptr + 1, mem.size - 1, target)
+    assert b.memory_info() == (ptr, size, target)
+    assert b[:].memory_info() == (ptr, size, target)
+    assert b[:-1].memory_info() == (ptr, size - 1, target)
+    assert b[1:].memory_info() == (ptr + 1, size - 1, target)
     assert b[2:4].memory_info() == (ptr + 2, 2, target)
 
 
@@ -211,20 +204,20 @@ def test_spillable_df_groupby(manager: SpillManager):
     gb = df.groupby("a")
 
     # Before using context manager, no spill locks
-    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
+    assert len(single_column_df_data(df).owner._spill_locks) == 0
 
     with gb._groupby:
-        assert len(single_column_df_base_data(df).owner._spill_locks) == 1
+        assert len(single_column_df_data(df).owner._spill_locks) == 1
         assert not single_column_df_data(df).spillable
 
-    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
+    assert len(single_column_df_data(df).owner._spill_locks) == 0
     assert single_column_df_data(df).spillable
 
     # Operations should work correctly
     result = gb.sum()  # noqa: F841
 
     # After operation completes, no persistent locks
-    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
+    assert len(single_column_df_data(df).owner._spill_locks) == 0
 
 
 def test_spilling_buffer(manager: SpillManager):
@@ -397,6 +390,8 @@ def test_spilling_df_views(manager):
     assert single_column_df_data(df).spillable
 
 
+# This behavior is not compatible with copy-on-write
+@pytest.mark.no_copy_on_write
 def test_modify_spilled_views(manager):
     df = single_column_df()
     df_view = df.iloc[1:]
@@ -419,7 +414,7 @@ def test_get_ptr(manager: SpillManager, target):
     if target == "gpu":
         mem = rmm.DeviceBuffer(size=10)
     elif target == "cpu":
-        mem = np.empty(10, dtype="u1")
+        mem = np.empty(10, dtype="u1").data
     buf = as_buffer(data=mem)
     assert buf.spillable
     assert len(buf.owner._spill_locks) == 0
@@ -562,7 +557,7 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
 def test_memoryview_slice(manager: SpillManager, dtype):
     """Check .memoryview() of a sliced spillable buffer"""
 
-    data = np.arange(10, dtype=dtype)
+    data = np.arange(10, dtype=dtype).data
     # memoryview of a sliced spillable buffer
     m1 = as_buffer(data=data)[1:-1].memoryview()
     # sliced memoryview of data as bytes
