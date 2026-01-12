@@ -89,7 +89,6 @@ struct subpass_intermediate_data {
   // one subpass for the entire pass. this allows us to skip various pieces of work
   // during processing. notably, page_buf will not be allocated to hold a compacted
   // copy of the pages specific to the subpass.
-  bool single_subpass{false};
   cudf::detail::hostdevice_vector<PageInfo> page_buf{};
 
   // for each page in the subpass, the index of our source page in the pass
@@ -107,8 +106,6 @@ struct subpass_intermediate_data {
   // gpu::DecodeDeltaByteArray returns.
   rmm::device_uvector<uint8_t> delta_temp_buf{0, cudf::get_default_stream()};
 
-  uint32_t kernel_mask{0};
-
   // skip_rows and num_rows values for this particular subpass. in absolute row indices.
   size_t skip_rows;
   size_t num_rows;
@@ -121,6 +118,10 @@ struct subpass_intermediate_data {
   // For each page, the index into the column's string offset buffer
   // Used for non-dictionary, non-FLBA string columns
   rmm::device_uvector<size_t> page_string_offset_indices{0, cudf::get_default_stream()};
+
+  // Grouped smaller types together to reduce padding
+  uint32_t kernel_mask{0};
+  bool single_subpass{false};
 };
 
 /**
@@ -140,7 +141,6 @@ struct pass_intermediate_data {
   std::vector<rmm::device_buffer> raw_page_data;
 
   // rowgroup, chunk and page information for the current pass.
-  bool has_compressed_data{false};
   std::vector<row_group_info> row_groups{};
   cudf::detail::hostdevice_vector<ColumnChunkDesc> chunks{};
   cudf::detail::hostdevice_vector<PageInfo> pages{};
@@ -162,8 +162,6 @@ struct pass_intermediate_data {
   rmm::device_uvector<size_t> string_offset_sizes{0, cudf::get_default_stream()};
   rmm::device_uvector<string_index_pair> str_dict_index{0, cudf::get_default_stream()};
 
-  int level_type_size{0};
-
   // skip_rows / num_rows for this pass.
   // NOTE: skip_rows is the absolute row index in the file.
   size_t skip_rows;
@@ -175,6 +173,10 @@ struct pass_intermediate_data {
 
   // currently active subpass
   std::unique_ptr<subpass_intermediate_data> subpass{};
+
+  // Grouped smaller types together to reduce padding
+  int level_type_size{0};
+  bool has_compressed_data{false};
 };
 
 }  // namespace cudf::io::parquet::detail
