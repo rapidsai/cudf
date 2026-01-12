@@ -175,14 +175,17 @@ def test_memory_info(manager: SpillManager, target):
     if target == "gpu":
         mem = rmm.DeviceBuffer(size=10)
         ptr = mem.ptr
+        size = mem.size
     elif target == "cpu":
-        mem = np.empty(10, dtype="u1")
-        ptr = mem.__array_interface__["data"][0]
+        data = np.empty(10, dtype="u1")
+        mem = memoryview(data)
+        ptr = data.__array_interface__["data"][0]
+        size = data.size
     b = as_buffer(data=mem)
-    assert b.memory_info() == (ptr, mem.size, target)
-    assert b[:].memory_info() == (ptr, mem.size, target)
-    assert b[:-1].memory_info() == (ptr, mem.size - 1, target)
-    assert b[1:].memory_info() == (ptr + 1, mem.size - 1, target)
+    assert b.memory_info() == (ptr, size, target)
+    assert b[:].memory_info() == (ptr, size, target)
+    assert b[:-1].memory_info() == (ptr, size - 1, target)
+    assert b[1:].memory_info() == (ptr + 1, size - 1, target)
     assert b[2:4].memory_info() == (ptr + 2, 2, target)
 
 
@@ -419,7 +422,7 @@ def test_get_ptr(manager: SpillManager, target):
     if target == "gpu":
         mem = rmm.DeviceBuffer(size=10)
     elif target == "cpu":
-        mem = np.empty(10, dtype="u1")
+        mem = np.empty(10, dtype="u1").data
     buf = as_buffer(data=mem)
     assert buf.spillable
     assert len(buf.owner._spill_locks) == 0
@@ -562,7 +565,7 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
 def test_memoryview_slice(manager: SpillManager, dtype):
     """Check .memoryview() of a sliced spillable buffer"""
 
-    data = np.arange(10, dtype=dtype)
+    data = np.arange(10, dtype=dtype).data
     # memoryview of a sliced spillable buffer
     m1 = as_buffer(data=data)[1:-1].memoryview()
     # sliced memoryview of data as bytes
