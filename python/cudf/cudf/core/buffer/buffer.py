@@ -366,8 +366,6 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> Mapping:
         """Implementation of the CUDA Array Interface."""
-        if get_option("copy_on_write"):
-            self.make_single_owner_inplace()
         with self.access(mode="write"):
             return {
                 "data": (self.ptr, False),
