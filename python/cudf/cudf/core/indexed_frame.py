@@ -5451,7 +5451,12 @@ class IndexedFrame(Frame):
         # specified nested column. Other columns' corresponding rows are
         # duplicated. If ignore_index is set, the original index is not
         # exploded and will be replaced with a `RangeIndex`.
-        if not isinstance(self._data[explode_column].dtype, ListDtype):
+        dtype = self._data[explode_column].dtype
+        is_list_dtype = isinstance(dtype, ListDtype) or (
+            isinstance(dtype, pd.ArrowDtype)
+            and isinstance(dtype.pyarrow_dtype, pa.ListType)
+        )
+        if not is_list_dtype:
             result = self.copy()
             if ignore_index:
                 result.index = RangeIndex(len(result))
