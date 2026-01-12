@@ -67,7 +67,7 @@ constexpr bool has_flag(init_flags flags, init_flags flag) noexcept
 /// @brief Initialize the cuDF global context
 /// @param flags Optional flags to control which initialization steps to perform.
 /// Can be called multiple times. Only the first call will have an effect.
-/// @thread-safety This function is thread-safe.
+/// @note Thread-safety: This function is thread-safe.
 void initialize(init_flags flags = init_flags::ALL);
 
 }  // namespace CUDF_EXPORT cudf
