@@ -133,7 +133,7 @@ class BufferOwner(Serializable):
         return cls(ptr=ptr, size=size, owner=data)
 
     @classmethod
-    def from_host_memory(cls, data: Any) -> Self:
+    def from_host_memory(cls, data: memoryview) -> Self:
         """Create an owner from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -153,15 +153,10 @@ class BufferOwner(Serializable):
         BufferOwner
             BufferOwner wrapping a device copy of `data`.
         """
-
-        # Convert to numpy array, this will not copy data in most cases.
-        ary = numpy.asanyarray(data)
-        # Extract pointer and size
-        ptr, size = get_ptr_and_size(ary.__array_interface__)
-        # Copy to device memory
-        buf = rmm.DeviceBuffer(ptr=ptr, size=size)
-        # Create from device memory
-        return cls.from_device_memory(buf)
+        if not data.c_contiguous:
+            raise ValueError("Buffer data must be C-contiguous")
+        db = rmm.DeviceBuffer.to_device(data.cast("B"))
+        return cls.from_device_memory(db)
 
     @property
     def size(self) -> int:
