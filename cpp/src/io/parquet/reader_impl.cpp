@@ -401,7 +401,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   auto h_initial_str_offsets =
     cudf::detail::make_pinned_vector_async<size_t>(initial_str_offsets.size(), _stream);
   cudf::detail::cuda_memcpy_async(
-    cudf::host_span<size_t>{h_initial_str_offsets.data(), initial_str_offsets.size()},
+    cudf::host_span<size_t>{h_initial_str_offsets},
     cudf::device_span<size_t const>{initial_str_offsets.data(), initial_str_offsets.size()},
     _stream);
 
