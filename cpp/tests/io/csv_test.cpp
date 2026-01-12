@@ -2652,4 +2652,28 @@ TEST_F(CsvReaderTest, UnquotedStringDoubledQuotes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected);
 }
 
+TEST_F(CsvReaderTest, QuotedFieldWithTrailingDelimiter)
+{
+  std::string const buffer = R"(a,b
+1,"trailing,"
+2,"normal"
+3,end
+)";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_rows(), 3);
+  EXPECT_EQ(result.tbl->view().num_columns(), 2);
+
+  auto const expected_col0 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3});
+  auto const expected_col1 = cudf::test::strings_column_wrapper({"trailing,", "normal", "end"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_col0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
