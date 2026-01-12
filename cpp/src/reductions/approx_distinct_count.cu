@@ -12,6 +12,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -104,30 +105,33 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
   : _impl{cuco::precision{precision},
           cuda::std::identity{},
           rmm::mr::polymorphic_allocator<cuda::std::byte>{},
-          stream}
+          stream},
+    _null_handling{null_handling},
+    _nan_handling{nan_handling}
 {
   auto const num_rows = input.num_rows();
   if (num_rows == 0) { return; }
 
-  add(input, null_handling, nan_handling, stream);
+  add(input, stream);
 }
 
 approx_distinct_count::approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
                                              std::int32_t precision,
+                                             null_policy null_handling,
+                                             nan_policy nan_handling,
                                              rmm::cuda_stream_view stream)
   : _impl{cuco::precision{precision},
           cuda::std::identity{},
           rmm::mr::polymorphic_allocator<cuda::std::byte>{},
-          stream}
+          stream},
+    _null_handling{null_handling},
+    _nan_handling{nan_handling}
 {
   auto sketch_ref = hll_type::ref_type<>{sketch_span, cuda::std::identity{}};
   _impl.merge_async(sketch_ref, stream);
 }
 
-void approx_distinct_count::add(table_view const& input,
-                                null_policy null_handling,
-                                nan_policy nan_handling,
-                                rmm::cuda_stream_view stream)
+void approx_distinct_count::add(table_view const& input, rmm::cuda_stream_view stream)
 {
   auto const num_rows = input.num_rows();
   if (num_rows == 0) { return; }
@@ -138,8 +142,8 @@ void approx_distinct_count::add(table_view const& input,
   auto const row_hasher = cudf::detail::row::hash::row_hasher(preprocessed_input);
   auto const hash_key   = row_hasher.device_hasher<cudf::hashing::detail::XXHash_64>(has_nulls);
 
-  if (null_handling == null_policy::INCLUDE) {
-    if (nan_handling == nan_policy::NAN_IS_NULL) {
+  if (_null_handling == null_policy::INCLUDE) {
+    if (_nan_handling == nan_policy::NAN_IS_NULL) {
       // Include nulls and treat NaN as null - use custom hasher that maps NaN to NULL_HASH
       auto const d_table    = table_device_view::create(input, stream);
       auto const nan_hasher = nan_to_null_hasher{hash_key, *d_table};
@@ -154,7 +158,7 @@ void approx_distinct_count::add(table_view const& input,
     auto const hash_iter = cudf::detail::make_counting_transform_iterator(0, hash_key);
     auto const stencil   = thrust::counting_iterator{0};
 
-    if (nan_handling == nan_policy::NAN_IS_VALID) {
+    if (_nan_handling == nan_policy::NAN_IS_VALID) {
       if (!has_nulls) {
         _impl.add_async(hash_iter, hash_iter + num_rows, stream);
       } else {
@@ -181,6 +185,14 @@ void approx_distinct_count::add(table_view const& input,
 
 void approx_distinct_count::merge(approx_distinct_count const& other, rmm::cuda_stream_view stream)
 {
+  // Validate policies match
+  CUDF_EXPECTS(_null_handling == other._null_handling,
+               "Cannot merge sketches with different null handling policies",
+               std::invalid_argument);
+  CUDF_EXPECTS(_nan_handling == other._nan_handling,
+               "Cannot merge sketches with different NaN handling policies",
+               std::invalid_argument);
+
   _impl.merge_async(other._impl, stream);
 }
 
@@ -213,17 +225,16 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
 
 approx_distinct_count::approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
                                              std::int32_t precision,
+                                             null_policy null_handling,
+                                             nan_policy nan_handling,
                                              rmm::cuda_stream_view stream)
-  : _impl(std::make_unique<impl_type>(sketch_span, precision, stream))
+  : _impl(std::make_unique<impl_type>(sketch_span, precision, null_handling, nan_handling, stream))
 {
 }
 
-void approx_distinct_count::add(table_view const& input,
-                                null_policy null_handling,
-                                nan_policy nan_handling,
-                                rmm::cuda_stream_view stream)
+void approx_distinct_count::add(table_view const& input, rmm::cuda_stream_view stream)
 {
-  _impl->add(input, null_handling, nan_handling, stream);
+  _impl->add(input, stream);
 }
 
 void approx_distinct_count::merge(approx_distinct_count const& other, rmm::cuda_stream_view stream)

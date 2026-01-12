@@ -72,7 +72,7 @@ class approx_distinct_count {
   using impl_type = cudf::detail::approx_distinct_count;  ///< Implementation type
 
   /**
-   * @brief Construct an approximate distinct count sketch from a table.
+   * @brief Constructs an approximate distinct count sketch from a table
    *
    * @param input Table whose rows will be added to the sketch
    * @param precision The precision parameter for HyperLogLog (4-18). Higher precision gives
@@ -88,53 +88,59 @@ class approx_distinct_count {
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @brief Construct an approximate distinct count sketch from serialized sketch bytes.
+   * @brief Constructs an approximate distinct count sketch from serialized sketch bytes
    *
    * This constructor enables distributed distinct counting by allowing sketches to be
    * constructed from serialized data. The sketch data is copied into the newly created
    * object, which then owns its own independent storage.
    *
    * @warning The precision parameter must match the precision used to create the original
-   * sketch. The size of the sketch span must be exactly 2^precision bytes. Providing
-   * an incompatible sketch will produce incorrect results or errors.
+   * sketch. The size of the sketch span must be exactly 2^precision bytes. The null and
+   * NaN handling policies must match those used when creating the original sketch.
+   * Providing incompatible parameters will produce incorrect results or errors.
    *
    * @param sketch_span The serialized sketch bytes to reconstruct from
    * @param precision The precision parameter that was used to create the sketch (4-18)
+   * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
+   * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
                         std::int32_t precision,
+                        null_policy null_handling    = null_policy::EXCLUDE,
+                        nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   ~approx_distinct_count();
 
   approx_distinct_count(approx_distinct_count const&)            = delete;
   approx_distinct_count& operator=(approx_distinct_count const&) = delete;
-  /** @brief Default move constructor */
+  /**
+   * @brief Move constructor
+   */
   approx_distinct_count(approx_distinct_count&&) = default;
   /**
-   * @brief Default move assignment operator
+   * @brief Move assignment operator
+   *
    * @return Reference to this object
    */
   approx_distinct_count& operator=(approx_distinct_count&&) = default;
 
   /**
-   * @brief Add rows from a table to the sketch.
+   * @brief Adds rows from a table to the sketch
    *
    * @param input Table whose rows will be added
-   * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
-   * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  void add(table_view const& input,
-           null_policy null_handling    = null_policy::EXCLUDE,
-           nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
-           rmm::cuda_stream_view stream = cudf::get_default_stream());
+  void add(table_view const& input, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @brief Merge another sketch into this sketch.
+   * @brief Merges another sketch into this sketch
    *
    * After merging, this sketch will contain the combined distinct count estimate of both sketches.
+   *
+   * @throw std::invalid_argument if the sketches have different null handling policies
+   * @throw std::invalid_argument if the sketches have different NaN handling policies
    *
    * @param other The sketch to merge into this sketch
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -143,7 +149,7 @@ class approx_distinct_count {
              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @brief Merge a sketch from raw bytes into this sketch.
+   * @brief Merges a sketch from raw bytes into this sketch
    *
    * This allows merging sketches that have been serialized or created elsewhere, enabling
    * distributed distinct counting scenarios.
@@ -159,7 +165,7 @@ class approx_distinct_count {
              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @brief Get the raw sketch bytes for serialization or external merging.
+   * @brief Gets the raw sketch bytes for serialization or external merging
    *
    * The returned span provides access to the internal sketch storage.
    * This can be used to serialize the sketch, transfer it between processes,
@@ -170,7 +176,7 @@ class approx_distinct_count {
   [[nodiscard]] cuda::std::span<cuda::std::byte> sketch() noexcept;
 
   /**
-   * @brief Estimate the approximate number of distinct rows in the sketch.
+   * @brief Estimates the approximate number of distinct rows in the sketch
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Approximate number of distinct rows
