@@ -352,7 +352,7 @@ class SpillableBufferOwner(BufferOwner):
             ptr = numpy.array(
                 self._ptr_desc["memoryview"], copy=False
             ).__array_interface__["data"][0]
-        return (ptr, self.nbytes, self._ptr_desc["type"])
+        return (ptr, self.size, self._ptr_desc["type"])
 
     @property
     def exposed(self) -> bool:
@@ -496,7 +496,7 @@ class SpillableBuffer(Buffer):
 
     def memory_info(self) -> tuple[int, int, str]:
         (ptr, _, device_type) = self._owner.memory_info()
-        return (ptr + self._offset, self.nbytes, device_type)
+        return (ptr + self._offset, self.size, device_type)
 
     def serialize(self) -> tuple[dict, list]:
         """Serialize the Buffer

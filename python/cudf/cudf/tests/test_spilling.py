@@ -89,7 +89,7 @@ def single_column_df_data(df: cudf.DataFrame) -> SpillableBuffer:
 
 
 # Get number of bytes of the column of a standard dataframe
-gen_df_data_nbytes = single_column_df()._data._data["a"].data.nbytes
+gen_df_data_nbytes = single_column_df()._data._data["a"].data.size
 
 
 def spilled_and_unspilled(manager: SpillManager) -> tuple[int, int]:
@@ -599,7 +599,7 @@ def test_statistics_expose(manager: SpillManager):
     assert len(manager.statistics.exposes) == 1
     stat = next(iter(manager.statistics.exposes.values()))
     assert stat.count == 1
-    assert stat.total_nbytes == buffers[0].nbytes
+    assert stat.total_nbytes == buffers[0].size
     assert stat.spilled_nbytes == 0
 
     # Expose all 10 buffers
@@ -611,7 +611,7 @@ def test_statistics_expose(manager: SpillManager):
     assert len(manager.statistics.exposes) == 2
     stat = list(manager.statistics.exposes.values())[1]
     assert stat.count == 9
-    assert stat.total_nbytes == buffers[0].nbytes * 9
+    assert stat.total_nbytes == buffers[0].size * 9
     assert stat.spilled_nbytes == 0
 
     # Create and spill 10 new buffers
@@ -627,8 +627,8 @@ def test_statistics_expose(manager: SpillManager):
     assert len(manager.statistics.exposes) == 3
     stat = list(manager.statistics.exposes.values())[2]
     assert stat.count == 10
-    assert stat.total_nbytes == buffers[0].nbytes * 10
-    assert stat.spilled_nbytes == buffers[0].nbytes * 10
+    assert stat.total_nbytes == buffers[0].size * 10
+    assert stat.spilled_nbytes == buffers[0].size * 10
 
 
 def test_spill_on_demand(manager: SpillManager):
