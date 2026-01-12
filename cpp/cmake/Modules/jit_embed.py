@@ -334,6 +334,8 @@ def generate_cxx_source_files_data(
         num_null_terminators=0,
     )
 
+    # TODO: add lz4 compression and decompression as options (default)
+
     return f"""
 {file_destinations_decls.var().decl()}
 
