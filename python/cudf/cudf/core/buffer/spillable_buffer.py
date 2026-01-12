@@ -475,7 +475,6 @@ class SpillableBuffer(Buffer):
         size: int | None = None,
     ) -> None:
         super().__init__(owner=owner, offset=offset, size=size)
-        # Create reusable context for this buffer
         self._access_context = _SpillableBufferAccessContext(self)
 
     def access(
@@ -487,41 +486,9 @@ class SpillableBuffer(Buffer):
     ) -> _SpillableBufferAccessContext:
         """Context manager for controlled buffer access with spill locking.
 
-        Parameters
-        ----------
-        mode : {"read", "write"}
-            Access mode for copy-on-write:
-            - "read": ptr access will not trigger copy-on-write
-            - "write": ptr access will trigger copy-on-write if needed
-        scope : {"internal", "external"}, default "internal"
-            Spill scope for the buffer access:
-            - "internal" (default): Temporary ptr access within the context only.
-                         Buffer is spill-locked during context but can be
-                         spilled afterward. Use for passing to pylibcudf
-                         functions that won't retain the pointer.
-            - "external": Ptr may leak outside the context (e.g., exposed
-                         via __cuda_array_interface__ to external libraries).
-                         Buffer is permanently marked as unspillable.
-
-            NOTE: In future versions, this parameter will be required with
-            no default to ensure explicit scope specification.
-
-        Returns
-        -------
-        _SpillableBufferAccessContext
-            A context manager controlling both COW and spill behavior.
-
-        Examples
-        --------
-        For internal pylibcudf operations:
-
-        >>> with column.access(mode="read", scope="internal"):
-        ...     result = plc.some_operation(column.plc_column)
-
-        For external exposure:
-
-        >>> with column.access(mode="write", scope="external"):
-        ...     ptr = column.ptr  # Permanently marks as unspillable
+        This context augments the parent `Buffer.access()` context manager
+        to also manage spill locks based on the specified `scope` of access, internal or
+        external.
         """
         self._access_context._pending_mode = mode
         self._access_context._pending_scope = scope

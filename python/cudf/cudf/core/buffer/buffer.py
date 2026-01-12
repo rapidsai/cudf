@@ -193,7 +193,6 @@ class _BufferAccessContext:
     __slots__ = ("_buffer_ref", "_pending_mode")
 
     def __init__(self, buffer: Buffer):
-        # Use weakref to avoid circular reference that prevents GC
         self._buffer_ref = weakref.ref(buffer)
         self._pending_mode: Literal["read", "write"] | None = None
 
@@ -290,21 +289,7 @@ class Buffer(Serializable):
 
         Within this context, the buffer's ptr property will respect the
         specified access mode. The **kwargs allows subclasses to extend with additional
-        parameters.
-
-        Parameters
-        ----------
-        mode : {"read", "write"}, default "read"
-            Access mode for the buffer. If copy-on-write is enabled:
-            - "read": ptr access will not trigger copy-on-write
-            - "write": ptr access will trigger copy-on-write if needed
-        **kwargs
-            Additional parameters for subclass implementations.
-
-        Returns
-        -------
-        _BufferAccessContext
-            A context manager that controls the access mode.
+        parameters. The base buffer class supports read/write control for copy-on-write.
         """
         self._access_context._pending_mode = mode
         return self._access_context
