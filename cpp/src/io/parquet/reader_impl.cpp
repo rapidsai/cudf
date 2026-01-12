@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -184,17 +184,13 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   if (has_strings) {
     // Host vector to initialize the initial string offsets
     auto host_offsets_vector =
-      cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
+      cudf::detail::make_pinned_vector_async<size_t>(_input_columns.size(), _stream);
     std::fill(
       host_offsets_vector.begin(), host_offsets_vector.end(), std::numeric_limits<size_t>::max());
     // Initialize the initial string offsets vector from the host vector
     initial_str_offsets =
       cudf::detail::make_device_uvector_async(host_offsets_vector, _stream, _mr);
     chunk_nested_str_data.host_to_device_async(_stream);
-
-    // Allocate string offset buffers and get string offsets for non-dictionary, non-FLBA string
-    // columns
-    compute_page_string_offset_indices(skip_rows, num_rows);
   }
 
   // create this before we fork streams
@@ -215,7 +211,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
                              decoder_mask,
                              _subpass_page_mask,
                              initial_str_offsets,
-                             _page_string_offset_indices,
+                             subpass.page_string_offset_indices,
                              error_code.data(),
                              streams[s_idx++]);
   };
@@ -401,7 +397,12 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   update_output_nullmasks_for_pruned_pages(_subpass_page_mask, skip_rows, num_rows);
 
   // Copy over initial string offsets from device
-  auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
+  auto h_initial_str_offsets =
+    cudf::detail::make_pinned_vector_async<size_t>(initial_str_offsets.size(), _stream);
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<size_t>(h_initial_str_offsets.data(), initial_str_offsets.size()),
+    cudf::device_span<size_t const>(initial_str_offsets.data(), initial_str_offsets.size()),
+    _stream);
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
@@ -431,14 +432,14 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
         // the final offset for a list at level N is the size of it's child
         size_type const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-        out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1));
-        final_offsets.emplace_back(offset);
+        out_buffers.push_back(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1));
+        final_offsets.push_back(offset);
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // only if it is not a large strings column
         if (std::cmp_less_equal(col_string_sizes[idx], strings::detail::get_offset64_threshold())) {
-          out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
-          final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
+          out_buffers.push_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
+          final_offsets.push_back(static_cast<size_type>(col_string_sizes[idx]));
         }
         // Nested large strings column
         else if (input_col.nesting_depth() > 0) {
@@ -450,7 +451,13 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     }
   }
   // Write the final offsets for list and string columns in a batched manner
-  write_final_offsets(final_offsets, out_buffers, _stream);
+  auto pinned_final_offsets =
+    cudf::detail::make_pinned_vector_async<cudf::size_type>(final_offsets.size(), _stream);
+  auto pinned_out_buffers =
+    cudf::detail::make_pinned_vector_async<cudf::size_type*>(out_buffers.size(), _stream);
+  std::move(final_offsets.begin(), final_offsets.end(), pinned_final_offsets.begin());
+  std::move(out_buffers.begin(), out_buffers.end(), pinned_out_buffers.begin());
+  write_final_offsets(pinned_final_offsets, pinned_out_buffers, _stream);
 
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < subpass.pages.size(); idx++) {
@@ -475,18 +482,12 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     }
   }
 
-  // Clear string offset buffers to free device memory
-  _page_string_offset_indices.resize(0, _stream);
-  _string_offset_buffer.resize(0, _stream);
-
   _stream.synchronize();
 }
 
 reader_impl::reader_impl()
   : _options{},
-    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())},
-    _string_offset_buffer{0, cudf::get_default_stream()},
-    _page_string_offset_indices{0, cudf::get_default_stream()}
+    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())}
 {
 }
 
@@ -523,8 +524,6 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.is_enabled_use_jit_filter()},
     _sources{std::move(sources)},
     _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, _stream)},
-    _string_offset_buffer{0, _stream},
-    _page_string_offset_indices{0, _stream},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
@@ -646,6 +645,7 @@ void reader_impl::preprocess_chunk_strings(read_mode mode, row_range const& read
     compute_page_string_sizes_pass1(subpass.pages,
                                     pass.chunks,
                                     _subpass_page_mask,
+                                    subpass.page_string_offset_indices,
                                     read_info.skip_rows,
                                     read_info.num_rows,
                                     subpass.kernel_mask,
@@ -939,9 +939,9 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   auto page_and_mask_begin =
     thrust::make_zip_iterator(cuda::std::make_tuple(pages.host_begin(), page_mask.begin()));
 
-  auto null_masks = std::vector<bitmask_type*>{};
-  auto begin_bits = std::vector<cudf::size_type>{};
-  auto end_bits   = std::vector<cudf::size_type>{};
+  auto host_null_masks = std::vector<bitmask_type*>{};
+  auto host_begin_bits = std::vector<cudf::size_type>{};
+  auto host_end_bits   = std::vector<cudf::size_type>{};
 
   std::for_each(
     page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
@@ -994,9 +994,9 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
         cols          = &out_buf.children;
         if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
         // Add the nullmask and bit bounds to corresponding lists
-        null_masks.emplace_back(out_buf.null_mask());
-        begin_bits.emplace_back(start_row);
-        end_bits.emplace_back(end_row);
+        host_null_masks.emplace_back(out_buf.null_mask());
+        host_begin_bits.emplace_back(start_row);
+        host_end_bits.emplace_back(end_row);
 
         // Increment the null count by the number of rows in this page
         out_buf.null_count() += page.num_rows;
@@ -1006,9 +1006,20 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   // Min number of nullmasks to use bulk update optimally
   constexpr auto min_nullmasks_for_bulk_update = 32;
 
+  // Use a bounce buffer to avoid pageable copies
+  auto null_masks =
+    cudf::detail::make_pinned_vector_async<bitmask_type*>(host_null_masks.size(), _stream);
+  auto begin_bits =
+    cudf::detail::make_pinned_vector_async<cudf::size_type>(host_begin_bits.size(), _stream);
+  auto end_bits =
+    cudf::detail::make_pinned_vector_async<cudf::size_type>(host_end_bits.size(), _stream);
+  std::move(host_null_masks.begin(), host_null_masks.end(), null_masks.begin());
+  std::move(host_begin_bits.begin(), host_begin_bits.end(), begin_bits.begin());
+  std::move(host_end_bits.begin(), host_end_bits.end(), end_bits.begin());
+
   // Bulk update the nullmasks if the number of pages is above the threshold
   if (null_masks.size() >= min_nullmasks_for_bulk_update) {
-    auto valids = cudf::detail::make_host_vector<bool>(null_masks.size(), _stream);
+    auto valids = cudf::detail::make_pinned_vector_async<bool>(null_masks.size(), _stream);
     std::fill(valids.begin(), valids.end(), false);
     cudf::set_null_masks_safe(null_masks, begin_bits, end_bits, valids, _stream);
   }

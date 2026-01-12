@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
-    dtype_from_pylibcudf_column,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -104,20 +103,12 @@ class CategoricalColumn(column.ColumnBase):
         return None
 
     def _get_children_from_pylibcudf_column(
-        self, plc_column: plc.Column, dtype: DtypeObj, exposed: bool
+        self, plc_column: plc.Column, dtype: DtypeObj
     ) -> tuple[ColumnBase]:
         """
         This column considers the plc_column (i.e. codes) as children
         """
-        return (
-            type(self).from_pylibcudf(plc_column, data_ptr_exposed=exposed),
-        )
-
-    @property
-    def base_size(self) -> int:
-        return int(
-            (self.base_children[0].size) / self.base_children[0].dtype.itemsize
-        )
+        return (type(self).from_pylibcudf(plc_column),)
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -132,41 +123,20 @@ class CategoricalColumn(column.ColumnBase):
         # Convert values to categorical dtype like self
         return self, column.as_column(values, dtype=self.dtype)
 
-    def _recompute_children(self) -> None:
-        if self.offset == 0 and self.size == self.base_size:
-            # Optimization: for non-sliced columns, children == base_children (just references)
-            self._children = self.base_children  # type: ignore[assignment]
-        else:
-            # Pass along size, offset, null_count from __init__
-            # which doesn't necessarily match the attributes of plc_column
-            # Use base_children[0]'s plc_column as it has the actual codes data
-            child = cudf.core.column.numerical.NumericalColumn(
-                plc_column=self.base_children[0].plc_column,
-                dtype=dtype_from_pylibcudf_column(
-                    self.base_children[0].plc_column
-                ),
-                exposed=False,
-            )
-            self._children = (child,)
-
-    @property
-    def children(self) -> tuple[NumericalColumn]:
-        return self._children
-
     @property
     def categories(self) -> ColumnBase:
         return self.dtype.categories._column
 
     @property
     def codes(self) -> NumericalColumn:
-        return self.children[0]
+        return cast(cudf.core.column.NumericalColumn, self.children[0])
 
     @property
     def ordered(self) -> bool | None:
         return self.dtype.ordered
 
-    def to_pylibcudf(self, mode: Literal["read", "write"]) -> plc.Column:
-        return self.base_children[0].to_pylibcudf(mode)
+    def to_pylibcudf(self) -> plc.Column:
+        return self.children[0].to_pylibcudf()
 
     def __setitem__(self, key: Any, value: Any) -> None:
         if is_scalar(value) and _is_null_host_scalar(value):
@@ -646,7 +616,16 @@ class CategoricalColumn(column.ColumnBase):
             return self.codes
         gather_map = self.codes.astype(SIZE_TYPE_DTYPE).fillna(0)
         out = self.categories.take(gather_map)
-        out = out.set_mask(self.mask)
+        mask = self.mask
+        if self.offset > 0 and mask is not None:
+            mask = cudf.core.buffer.as_buffer(
+                plc.null_mask.copy_bitmask_from_bitmask(
+                    mask,
+                    self.offset,
+                    mask.size - self.offset,
+                )
+            )
+        out = out.set_mask(mask)
         return out
 
     def copy(self, deep: bool = True) -> Self:
@@ -699,7 +678,6 @@ class CategoricalColumn(column.ColumnBase):
             return type(self)(
                 plc_column=self.plc_column,
                 dtype=dtype,
-                exposed=False,
             )
 
         return self
