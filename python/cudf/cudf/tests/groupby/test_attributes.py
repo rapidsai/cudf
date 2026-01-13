@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import numpy as np
 import pandas as pd
@@ -6,6 +6,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
+from cudf.testing._utils import expect_warning_if
 
 
 def test_groups():
@@ -41,9 +42,16 @@ def test_groupby_groups(by):
     pdg = pdf.groupby(by)
     gdg = gdf.groupby(by)
 
-    for key in pdg.groups:
-        assert key in gdg.groups
-        assert_eq(pdg.groups[key], gdg.groups[key])
+    warns = isinstance(by, list) and len(by) == 1
+
+    with expect_warning_if(warns, pd.errors.Pandas4Warning):
+        pd_groups = pdg.groups
+    with expect_warning_if(warns, FutureWarning):
+        gdf_groups = gdg.groups
+
+    for key in pd_groups:
+        assert key in gdf_groups
+        assert_eq(pd_groups[key], gdf_groups[key])
 
 
 @pytest.mark.parametrize(
@@ -72,9 +80,15 @@ def test_groupby_groups_multi(by):
     pdg = pdf.groupby(by)
     gdg = gdf.groupby(by)
 
-    for key in pdg.groups:
-        assert key in gdg.groups
-        assert_eq(pdg.groups[key], gdg.groups[key])
+    warns = isinstance(by, list) and len(by) == 1
+    with expect_warning_if(warns, pd.errors.Pandas4Warning):
+        pd_groups = pdg.groups
+    with expect_warning_if(warns, FutureWarning):
+        gdf_groups = gdg.groups
+
+    for key in pd_groups:
+        assert key in gdf_groups
+        assert_eq(pd_groups[key], gdf_groups[key])
 
 
 def test_groupby_iterate_groups():
