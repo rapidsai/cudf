@@ -130,6 +130,10 @@ approx_distinct_count<Hasher>::approx_distinct_count(cuda::std::span<cuda::std::
     _null_handling{null_handling},
     _nan_handling{nan_handling}
 {
+  CUDF_EXPECTS(sketch_span.size() == sketch().size(),
+               "Sketch span size does not match expected size for precision",
+               std::invalid_argument);
+
   auto sketch_ref = hll_type::ref_type<>{sketch_span, cuda::std::identity{}};
   _impl.merge_async(sketch_ref, stream);
 }
@@ -192,6 +196,9 @@ void approx_distinct_count<Hasher>::merge(approx_distinct_count const& other,
                                           rmm::cuda_stream_view stream)
 {
   // Validate policies match
+  CUDF_EXPECTS(sketch().size() == other.sketch().size(),
+               "Cannot merge sketches with different sketch sizes",
+               std::invalid_argument);
   CUDF_EXPECTS(_null_handling == other._null_handling,
                "Cannot merge sketches with different null handling policies",
                std::invalid_argument);
@@ -206,6 +213,10 @@ template <template <typename> class Hasher>
 void approx_distinct_count<Hasher>::merge(cuda::std::span<cuda::std::byte> sketch_span,
                                           rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(sketch_span.size() == sketch().size(),
+               "Sketch span size does not match this sketch's size",
+               std::invalid_argument);
+
   auto other_ref = hll_type::ref_type<>{sketch_span, cuda::std::identity{}};
   _impl.merge_async(other_ref, stream);
 }
@@ -232,6 +243,12 @@ template <template <typename> class Hasher>
 nan_policy approx_distinct_count<Hasher>::nan_handling() const noexcept
 {
   return _nan_handling;
+}
+
+template <template <typename> class Hasher>
+std::int32_t approx_distinct_count<Hasher>::precision() const noexcept
+{
+  return static_cast<std::int32_t>(cuda::std::countr_zero(sketch().size()));
 }
 
 // Explicit instantiation for the default hasher to improve build times
@@ -288,5 +305,7 @@ cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept
 null_policy approx_distinct_count::null_handling() const noexcept { return _impl->null_handling(); }
 
 nan_policy approx_distinct_count::nan_handling() const noexcept { return _impl->nan_handling(); }
+
+std::int32_t approx_distinct_count::precision() const noexcept { return _impl->precision(); }
 
 }  // namespace cudf

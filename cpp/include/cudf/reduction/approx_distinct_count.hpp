@@ -122,14 +122,11 @@ class approx_distinct_count {
 
   approx_distinct_count(approx_distinct_count const&)            = delete;
   approx_distinct_count& operator=(approx_distinct_count const&) = delete;
-  /**
-   * @brief Move constructor
-   */
-  approx_distinct_count(approx_distinct_count&&) = default;
+  approx_distinct_count(approx_distinct_count&&) = default;  ///< Default move constructor
   /**
    * @brief Move assignment operator
    *
-   * @return Reference to this object
+   * @return A reference to this object
    */
   approx_distinct_count& operator=(approx_distinct_count&&) = default;
 
@@ -146,6 +143,7 @@ class approx_distinct_count {
    *
    * After merging, this sketch will contain the combined distinct count estimate of both sketches.
    *
+   * @throw std::invalid_argument if the sketches have different precision values
    * @throw std::invalid_argument if the sketches have different null handling policies
    * @throw std::invalid_argument if the sketches have different NaN handling policies
    *
@@ -204,6 +202,13 @@ class approx_distinct_count {
    * @return The NaN policy set at construction
    */
   [[nodiscard]] nan_policy nan_handling() const noexcept;
+
+  /**
+   * @brief Gets the precision parameter for this sketch
+   *
+   * @return The precision value set at construction
+   */
+  [[nodiscard]] std::int32_t precision() const noexcept;
 
  private:
   std::unique_ptr<impl_type> _impl;

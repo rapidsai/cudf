@@ -20,7 +20,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -134,6 +133,13 @@ class approx_distinct_count {
    * @return The NaN policy set at construction
    */
   [[nodiscard]] nan_policy nan_handling() const noexcept;
+
+  /**
+   * @brief Gets the precision parameter for this sketch
+   *
+   * @return The precision value set at construction
+   */
+  [[nodiscard]] std::int32_t precision() const noexcept;
 
  private:
   using hll_type = cuco::hyperloglog<uint64_t,

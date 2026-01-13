@@ -729,3 +729,55 @@ TEST_F(ApproxDistinctCount, StructColumn)
   EXPECT_TRUE(is_reasonable_approximation(approx_count, num_distinct))
     << "Exact: " << num_distinct << ", Approx: " << approx_count;
 }
+
+TEST_F(ApproxDistinctCount, PrecisionGetter)
+{
+  auto data = generate_data<int32_t>(1000, 50);
+  cudf::test::fixed_width_column_wrapper<int32_t> col(data.begin(), data.end());
+  cudf::table_view table({col});
+
+  auto adc10 = cudf::approx_distinct_count(table, 10);
+  auto adc12 = cudf::approx_distinct_count(table, 12);
+  auto adc14 = cudf::approx_distinct_count(table, 14);
+
+  EXPECT_EQ(10, adc10.precision());
+  EXPECT_EQ(12, adc12.precision());
+  EXPECT_EQ(14, adc14.precision());
+}
+
+TEST_F(ApproxDistinctCount, MergeDifferentPrecisionsFails)
+{
+  auto data = generate_data<int32_t>(1000, 50);
+  cudf::test::fixed_width_column_wrapper<int32_t> col(data.begin(), data.end());
+  cudf::table_view table({col});
+
+  auto adc10 = cudf::approx_distinct_count(table, 10);
+  auto adc12 = cudf::approx_distinct_count(table, 12);
+
+  EXPECT_THROW(adc10.merge(adc12), std::invalid_argument);
+}
+
+TEST_F(ApproxDistinctCount, MergeSpanWrongSizeFails)
+{
+  auto data = generate_data<int32_t>(1000, 50);
+  cudf::test::fixed_width_column_wrapper<int32_t> col(data.begin(), data.end());
+  cudf::table_view table({col});
+
+  auto adc10 = cudf::approx_distinct_count(table, 10);
+  auto adc12 = cudf::approx_distinct_count(table, 12);
+
+  auto sketch12 = adc12.sketch();
+  EXPECT_THROW(adc10.merge(sketch12), std::invalid_argument);
+}
+
+TEST_F(ApproxDistinctCount, SpanConstructorWrongSizeFails)
+{
+  auto data = generate_data<int32_t>(1000, 50);
+  cudf::test::fixed_width_column_wrapper<int32_t> col(data.begin(), data.end());
+  cudf::table_view table({col});
+
+  auto adc10    = cudf::approx_distinct_count(table, 10);
+  auto sketch10 = adc10.sketch();
+
+  EXPECT_THROW(cudf::approx_distinct_count(sketch10, 12), std::invalid_argument);
+}
