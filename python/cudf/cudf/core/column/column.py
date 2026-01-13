@@ -14,7 +14,7 @@ from collections.abc import (
 )
 from contextlib import ExitStack
 from decimal import Decimal
-from functools import cached_property
+from functools import cache, cached_property
 from itertools import chain
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
@@ -309,7 +309,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     plc_column: plc.Column
     _dtype: DtypeObj
     _children: tuple[ColumnBase, ...]
-    _distinct_count: dict[bool, int]
     _exposed_buffers: set[Buffer]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -409,7 +408,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return _ColumnAccessContext(self, **kwargs)
 
     def _clear_cache(self) -> None:
-        self._distinct_count.clear()
+        self.distinct_count.cache_clear()
         attrs = (
             "memory_usage",
             "is_monotonic_increasing",
@@ -647,7 +646,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self = cls.__new__(cls)
         plc_column, dtype = self._validate_args(plc_column, dtype)
         self.plc_column = plc_column
-        self._distinct_count = {}
         self._dtype = dtype
         self._children = children
         # The set of exposed buffers associated with this column. These buffers must be
@@ -1782,22 +1780,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ),
             )
 
+    @cache
     def distinct_count(self, dropna: bool = True) -> int:
-        try:
-            return self._distinct_count[dropna]
-        except KeyError:
-            with self.access(mode="read", scope="internal"):
-                result = plc.stream_compaction.distinct_count(
-                    self.plc_column,
-                    plc.types.NullPolicy.EXCLUDE
-                    if dropna
-                    else plc.types.NullPolicy.INCLUDE,
-                    plc.types.NanPolicy.NAN_IS_NULL
-                    if dropna
-                    else plc.types.NanPolicy.NAN_IS_VALID,
-                )
-            self._distinct_count[dropna] = result
-            return self._distinct_count[dropna]
+        with self.access(mode="read", scope="internal"):
+            return plc.stream_compaction.distinct_count(
+                self.plc_column,
+                plc.types.NullPolicy.EXCLUDE
+                if dropna
+                else plc.types.NullPolicy.INCLUDE,
+                plc.types.NanPolicy.NAN_IS_NULL
+                if dropna
+                else plc.types.NanPolicy.NAN_IS_VALID,
+            )
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         raise NotImplementedError()
