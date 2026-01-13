@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
-    dtype_from_pylibcudf_column,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -39,7 +38,6 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
-    from cudf.core.buffer import Buffer
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -96,53 +94,12 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: CategoricalDtype,
-        exposed: bool,
-    ) -> None:
-        if not isinstance(dtype, CategoricalDtype):
-            raise ValueError(
-                f"{dtype=} must be cudf.CategoricalDtype instance."
-            )
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
-        self._codes = self.children[0].set_mask(self.mask)
-
-    @property
-    def base_data(self) -> None:
-        """
-        Categorical columns don't have a data buffer - data is stored
-        in the codes child column instead.
-        """
-        return None
-
-    def _get_children_from_pylibcudf_column(
-        self, plc_column: plc.Column, dtype: DtypeObj, exposed: bool
-    ) -> tuple[ColumnBase]:
-        """
-        This column considers the plc_column (i.e. codes) as children
-        """
-        return (
-            type(self).from_pylibcudf(plc_column, data_ptr_exposed=exposed),
-        )
-
-    @property
-    def base_size(self) -> int:
-        return int(
-            (self.base_children[0].size) / self.base_children[0].dtype.itemsize
-        )
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            self._encode(item)
+            encoded = self._encode(item)
         except ValueError:
             return False
-        return self._encode(item) in self.codes
+        return encoded in self.codes
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -150,43 +107,20 @@ class CategoricalColumn(column.ColumnBase):
         # Convert values to categorical dtype like self
         return self, column.as_column(values, dtype=self.dtype)
 
-    def set_base_mask(self, value: Buffer | None) -> None:
-        super().set_base_mask(value)
-        self._codes = self.children[0].set_mask(self.mask)
-
-    def set_base_children(self, value: tuple[NumericalColumn]) -> None:  # type: ignore[override]
-        super().set_base_children(value)
-        self._codes = value[0].set_mask(self.mask)
-
-    @property
-    def children(self) -> tuple[NumericalColumn]:
-        if self.offset == 0 and self.size == self.base_size:
-            return super().children  # type: ignore[return-value]
-        if self._children is None:
-            # Pass along size, offset, null_count from __init__
-            # which doesn't necessarily match the attributes of plc_column
-            # Use base_children[0]'s plc_column as it has the actual codes data
-            child = cudf.core.column.numerical.NumericalColumn(
-                plc_column=self.base_children[0].plc_column,
-                dtype=dtype_from_pylibcudf_column(
-                    self.base_children[0].plc_column
-                ),
-                exposed=False,
-            )
-            self._children = (child,)
-        return self._children
-
     @property
     def categories(self) -> ColumnBase:
         return self.dtype.categories._column
 
     @property
     def codes(self) -> NumericalColumn:
-        return self._codes
+        return cast(cudf.core.column.NumericalColumn, self.children[0])
 
     @property
     def ordered(self) -> bool | None:
         return self.dtype.ordered
+
+    def to_pylibcudf(self) -> plc.Column:
+        return self.children[0].to_pylibcudf()
 
     def __setitem__(self, key: Any, value: Any) -> None:
         if is_scalar(value) and _is_null_host_scalar(value):
@@ -216,7 +150,7 @@ class CategoricalColumn(column.ColumnBase):
         codes = self.codes
         codes[key] = value
         out = codes._with_type_metadata(self.dtype)
-        self._mimic_inplace(out, inplace=True)
+        self._mimic_inplace(out, inplace=True)  # type: ignore[arg-type]
 
     def _fill(
         self,
@@ -666,7 +600,16 @@ class CategoricalColumn(column.ColumnBase):
             return self.codes
         gather_map = self.codes.astype(SIZE_TYPE_DTYPE).fillna(0)
         out = self.categories.take(gather_map)
-        out = out.set_mask(self.mask)
+        mask = self.mask
+        if self.offset > 0 and mask is not None:
+            mask = cudf.core.buffer.as_buffer(
+                plc.null_mask.copy_bitmask_from_bitmask(
+                    mask,
+                    self.offset,
+                    mask.size - self.offset,
+                )
+            )
+        out = out.set_mask(mask)
         return out
 
     def copy(self, deep: bool = True) -> Self:
@@ -682,14 +625,6 @@ class CategoricalColumn(column.ColumnBase):
     @cached_property
     def memory_usage(self) -> int:
         return self.categories.memory_usage + self.codes.memory_usage
-
-    def _mimic_inplace(
-        self, other_col: ColumnBase, inplace: bool = False
-    ) -> Self | None:
-        out = super()._mimic_inplace(other_col, inplace=inplace)  # type: ignore[arg-type]
-        if inplace and isinstance(other_col, CategoricalColumn):
-            self._codes = other_col.codes
-        return out
 
     @staticmethod
     def _concat(
@@ -724,10 +659,10 @@ class CategoricalColumn(column.ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, CategoricalDtype):
-            return type(self)(
+            return type(self)._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=dtype,
-                exposed=False,
+                children=self.children,
             )
 
         return self

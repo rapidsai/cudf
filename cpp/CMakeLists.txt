@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -41,7 +41,6 @@ option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
-option(CUDF_EXPORT_NVCOMP "Export NVCOMP as a dependency" ON)
 option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
 mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
 option(
@@ -498,6 +497,7 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/cudftable.cpp
   src/io/json/host_tree_algorithms.cu
   src/io/json/json_column.cu
   src/io/json/column_tree_construction.cu
@@ -587,6 +587,7 @@ add_library(
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
+  src/join/key_remapping.cu
   src/join/mixed_join.cu
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu

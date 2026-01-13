@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -17,10 +17,15 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock, as_buffer
+from cudf.core.buffer import as_buffer
 from cudf.core.column.categorical import CategoricalColumn
-from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.column.column import (
+    ColumnBase,
+    as_column,
+    column_empty,
+)
 from cudf.core.column.numerical_base import NumericalBaseColumn
+from cudf.core.column.utils import access_columns
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
@@ -81,12 +86,11 @@ class NumericalColumn(NumericalBaseColumn):
         plc.TypeId.BOOL8,
     }
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: np.dtype,
-        exposed: bool,
-    ) -> None:
+    @classmethod
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: np.dtype
+    ) -> tuple[plc.Column, np.dtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
         if (
             cudf.get_option("mode.pandas_compatible")
             and dtype.kind not in "iufb"
@@ -97,11 +101,7 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError(
                 f"dtype must be a floating, integer or boolean dtype. Got: {dtype}"
             )
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
+        return plc_column, dtype
 
     def _clear_cache(self) -> None:
         super()._clear_cache()
@@ -154,7 +154,7 @@ class NumericalColumn(NumericalBaseColumn):
                 col = col.astype(dtype)  # type: ignore[assignment]
             col = col.fillna(np.nan)
 
-        return cp.asarray(col.data).view(dtype)
+        return cp.asarray(col).view(dtype)
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
         if isinstance(value, (bool, np.bool_)) and self.dtype.kind != "b":
@@ -396,8 +396,21 @@ class NumericalColumn(NumericalBaseColumn):
         # Only floats can contain nan.
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
-        with acquire_spill_lock():
-            mask, _ = plc.transform.nans_to_nulls(self.plc_column)
+        with self.access(mode="read", scope="internal"):
+            # When computing a null mask to set back to the column, since the column may
+            # have been sliced and have an offset, we need to compute the mask of the
+            # equivalent unsliced column so that the mask bits will be appropriately
+            # shifted..
+            shifted_column = plc.Column(
+                self.plc_column.type(),
+                self.plc_column.size() + self.plc_column.offset(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                0,
+                self.plc_column.children(),
+            )
+            mask, _ = plc.transform.nans_to_nulls(shifted_column)
             return self.set_mask(as_buffer(mask))
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
@@ -461,14 +474,17 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             return NotImplemented
 
-    @acquire_spill_lock()
     def int2ip(self) -> StringColumn:
         if self.dtype != np.dtype(np.uint32):
             raise TypeError("Only uint32 type can be converted to ip")
-        plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
-            self.plc_column
-        )
-        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+        with self.access(mode="read", scope="internal"):
+            plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
+                self.plc_column
+            )
+            return cast(
+                cudf.core.column.string.StringColumn,
+                type(self).from_pylibcudf(plc_column),
+            )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         col = self
@@ -506,13 +522,12 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             raise ValueError(f"No string conversion from type {self.dtype}")
 
-        with acquire_spill_lock():
-            return (
+        with col.access(mode="read", scope="internal"):
+            return cast(
+                cudf.core.column.string.StringColumn,
                 type(self)
-                .from_pylibcudf(  # type: ignore[return-value]
-                    conv_func(col.plc_column)
-                )
-                ._with_type_metadata(dtype)
+                .from_pylibcudf(conv_func(col.plc_column))
+                ._with_type_metadata(dtype),
             )
 
     def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
@@ -520,25 +535,27 @@ class NumericalColumn(NumericalBaseColumn):
         return plc.Column(
             data_type=dtype_to_pylibcudf_type(dtype),
             size=self.size,
-            data=self.astype(np.dtype(np.int64)).base_data,
-            mask=self.base_mask,
+            data=self.astype(np.dtype(np.int64)).data,
+            mask=self.mask,
             null_count=self.null_count,
             offset=self.offset,
             children=[],
         )
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        return (
-            type(self)  # type: ignore[return-value]
+        return cast(
+            cudf.core.column.datetime.DatetimeColumn,
+            type(self)
             .from_pylibcudf(self._as_temporal_column(dtype))
-            ._with_type_metadata(dtype)
+            ._with_type_metadata(dtype),
         )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return (
-            type(self)  # type: ignore[return-value]
+        return cast(
+            cudf.core.column.timedelta.TimeDeltaColumn,
+            type(self)
             .from_pylibcudf(self._as_temporal_column(dtype))
-            ._with_type_metadata(dtype)
+            ._with_type_metadata(dtype),
         )
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
@@ -589,7 +606,7 @@ class NumericalColumn(NumericalBaseColumn):
                     # If the dtype is a pandas nullable extension type, we need to
                     # float column doesn't have any NaNs.
                     res = self.nans_to_nulls()
-                    res._dtype = dtype  # type: ignore[has-type]
+                    res._dtype = dtype
                     return res
                 else:
                     self._dtype = dtype
@@ -911,11 +928,12 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
-            codes = cast(NumericalColumn, self.astype(codes_dtype))
-            return CategoricalColumn(
-                plc_column=codes.to_pylibcudf(mode="read"),
-                dtype=dtype,
-                exposed=False,
+            codes = cast(
+                cudf.core.column.numerical.NumericalColumn,
+                self.astype(codes_dtype),
+            )
+            return CategoricalColumn._from_preprocessed(
+                codes.plc_column, dtype, (codes,)
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)
@@ -950,7 +968,6 @@ class NumericalColumn(NumericalBaseColumn):
 
         return super()._reduction_result_dtype(reduction_op)
 
-    @acquire_spill_lock()
     def digitize(self, bins: np.ndarray, right: bool = False) -> Self:
         """Return the indices of the bins to which each value in column belongs.
 
@@ -975,14 +992,23 @@ class NumericalColumn(NumericalBaseColumn):
         if bin_col.nullable:
             raise ValueError("`bins` cannot contain null entries.")
 
-        return type(self).from_pylibcudf(
-            getattr(plc.search, "lower_bound" if right else "upper_bound")(
-                plc.Table([bin_col.plc_column]),
-                plc.Table([self.plc_column]),
-                [plc.types.Order.ASCENDING],
-                [plc.types.NullOrder.BEFORE],
+        with access_columns(bin_col, self, mode="read", scope="internal") as (
+            bin_col,
+            self,
+        ):
+            return cast(
+                Self,
+                type(self).from_pylibcudf(
+                    getattr(
+                        plc.search, "lower_bound" if right else "upper_bound"
+                    )(
+                        plc.Table([bin_col.plc_column]),
+                        plc.Table([self.plc_column]),
+                        [plc.types.Order.ASCENDING],
+                        [plc.types.NullOrder.BEFORE],
+                    )
+                ),
             )
-        )
 
 
 def _normalize_find_and_replace_input(

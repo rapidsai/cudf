@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,12 +14,15 @@
 #include <rmm/resource_ref.hpp>
 
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <variant>
 #include <vector>
 
@@ -474,7 +477,7 @@ struct [[nodiscard]] ast_converter {
    * @param mr Device memory resource used to allocate the returned table's device memory
    */
   ast_converter(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-    : stream_(stream), mr_(mr)
+    : stream_(std::move(stream)), mr_(std::move(mr))
   {
   }
 

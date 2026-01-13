@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -147,8 +147,18 @@ ConfigureNVBench(
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
-  JOIN_NVBENCH join/left_join.cu join/conditional_join.cu join/join.cu join/mixed_join.cu
-  join/distinct_join.cu join/filter_join_indices.cu join/multiplicity_join.cu
+  JOIN_NVBENCH
+  join/left_join.cu
+  join/conditional_join.cu
+  join/join.cu
+  join/mixed_join.cu
+  join/distinct_join.cu
+  join/filter_join_indices.cu
+  join/multiplicity_join.cu
+  join/sort_merge_join.cu
+  join/join_heuristics.cu
+  join/key_remap_build.cu
+  join/join_on_int32.cu
 )
 
 # ##################################################################################################
@@ -304,6 +314,16 @@ target_link_libraries(PARQUET_DELETION_VECTORS_NVBENCH PRIVATE roaring)
 # * parquet multithread reader benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_multithread.cpp)
+
+# ##################################################################################################
+# * cudftable reader benchmark
+# --------------------------------------------------------------------------
+ConfigureNVBench(CUDFTABLE_READER_NVBENCH io/cudftable/cudftable_reader.cpp)
+
+# ##################################################################################################
+# * cudftable writer benchmark
+# --------------------------------------------------------------------------
+ConfigureNVBench(CUDFTABLE_WRITER_NVBENCH io/cudftable/cudftable_writer.cpp)
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
