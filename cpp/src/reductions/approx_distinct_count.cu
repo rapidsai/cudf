@@ -203,12 +203,16 @@ void approx_distinct_count::merge(cuda::std::span<cuda::std::byte> sketch_span,
   _impl.merge_async(other_ref, stream);
 }
 
-cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept { return _impl.sketch(); }
-
 std::size_t approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
 {
   return _impl.estimate(stream);
 }
+
+cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept { return _impl.sketch(); }
+
+null_policy approx_distinct_count::null_handling() const noexcept { return _null_handling; }
+
+nan_policy approx_distinct_count::nan_handling() const noexcept { return _nan_handling; }
 
 }  // namespace detail
 
@@ -248,14 +252,18 @@ void approx_distinct_count::merge(cuda::std::span<cuda::std::byte> sketch_span,
   _impl->merge(sketch_span, stream);
 }
 
+std::size_t approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
+{
+  return _impl->estimate(stream);
+}
+
 cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept
 {
   return _impl->sketch();
 }
 
-std::size_t approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
-{
-  return _impl->estimate(stream);
-}
+null_policy approx_distinct_count::null_handling() const noexcept { return _impl->null_handling(); }
+
+nan_policy approx_distinct_count::nan_handling() const noexcept { return _impl->nan_handling(); }
 
 }  // namespace cudf

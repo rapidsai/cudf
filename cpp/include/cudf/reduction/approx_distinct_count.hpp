@@ -165,6 +165,15 @@ class approx_distinct_count {
              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
+   * @brief Estimates the approximate number of distinct rows in the sketch
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Approximate number of distinct rows
+   */
+  [[nodiscard]] std::size_t estimate(
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
+
+  /**
    * @brief Gets the raw sketch bytes for serialization or external merging
    *
    * The returned span provides access to the internal sketch storage.
@@ -176,13 +185,18 @@ class approx_distinct_count {
   [[nodiscard]] cuda::std::span<cuda::std::byte> sketch() noexcept;
 
   /**
-   * @brief Estimates the approximate number of distinct rows in the sketch
+   * @brief Gets the null handling policy for this sketch
    *
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Approximate number of distinct rows
+   * @return The null policy set at construction
    */
-  [[nodiscard]] std::size_t estimate(
-    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
+  [[nodiscard]] null_policy null_handling() const noexcept;
+
+  /**
+   * @brief Gets the NaN handling policy for this sketch
+   *
+   * @return The NaN policy set at construction
+   */
+  [[nodiscard]] nan_policy nan_handling() const noexcept;
 
  private:
   std::unique_ptr<impl_type> _impl;
