@@ -93,22 +93,6 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
-    @property
-    def base_data(self) -> None:
-        """
-        Categorical columns don't have a data buffer - data is stored
-        in the codes child column instead.
-        """
-        return None
-
-    def _get_children_from_pylibcudf_column(
-        self, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[ColumnBase]:
-        """
-        This column considers the plc_column (i.e. codes) as children
-        """
-        return (type(self).from_pylibcudf(plc_column),)
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
             encoded = self._encode(item)
@@ -665,9 +649,10 @@ class CategoricalColumn(column.ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, CategoricalDtype):
-            return type(self)(
+            return type(self)._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=dtype,
+                children=self.children,
             )
 
         return self
