@@ -540,8 +540,8 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
     from distributed import Client
 
     # Check if we should connect to an existing cluster
-    scheduler_address = getattr(args, "scheduler_address", None)
-    scheduler_file = getattr(args, "scheduler_file", None)
+    scheduler_address = args.scheduler_address
+    scheduler_file = args.scheduler_file
 
     if scheduler_address is not None:
         # Connect to existing cluster via scheduler address
