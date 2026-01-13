@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from cudf_polars.testing.asserts import (
     DEFAULT_RUNTIME,
     assert_gpu_result_equal,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 # TODO: Add multi-partition Sort support to the rapidsmpf runtime.
 # See: https://github.com/rapidsai/cudf/issues/20486
@@ -136,13 +135,10 @@ def test_sort_tail(df, engine):
 def test_sort_slice(df, engine, offset):
     # Slice in the middle, which distributed sorts need to be careful with
     q = df.sort(by=["y", "z"]).slice(offset, 2)
-    if POLARS_VERSION_LT_130:
-        exception = pl.exceptions.ComputeError
-    else:
-        exception = NotImplementedError
+    excpt = NotImplementedError
 
     with pytest.raises(
-        exception,
+        excpt,
         match="Sort does not support a multi-partition slice with an offset.",
     ):
         assert_gpu_result_equal(q, engine=engine)
