@@ -16,7 +16,7 @@ from pylibcudf.libcudf.io.hybrid_scan cimport (
     use_data_page_mask,
 )
 from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
-from rmm.librmm.device_buffer cimport device_buffer
+from pylibcudf.libcudf.utilities.span cimport device_span
 
 
 cdef class FileMetaData:
@@ -30,5 +30,5 @@ cdef class HybridScanReader:
     cdef unique_ptr[cpp_hybrid_scan_reader] c_obj
 
 
-cdef class DeviceBuffer:
-    cdef device_buffer c_obj
+cdef class DeviceSpan:
+    cdef device_span[uint8_t] c_obj
