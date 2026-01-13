@@ -401,7 +401,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return _ColumnAccessContext(self, **kwargs)
 
     def _clear_cache(self) -> None:
-        self.distinct_count.cache_clear()
+        self.distinct_count.cache_clear()  # type: ignore[attr-defined]
         attrs = (
             "memory_usage",
             "is_monotonic_increasing",
@@ -647,6 +647,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # are destroyed, all references to this column will be removed as well,
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers = set()
+        # Create instance-level cache for distinct_count to avoid memory leaks.
+        # Using @cache decorator on instance methods keeps instances alive indefinitely.
+        self.distinct_count = cache(self.distinct_count)  # type: ignore[method-assign]
         return self
 
     @classmethod
@@ -1750,9 +1753,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ),
             )
 
-    @cache
     def distinct_count(self, dropna: bool = True) -> int:
-        """Get the (null-aware) number of distinct values in this column."""
+        """Get the (null-aware) number of distinct values in this column.
+
+        Note: This method is wrapped with functools.cache() at the instance level
+        in _init() to avoid memory leaks. Instance-level caching ensures that when
+        the column is garbage collected, its cache is also collected.
+        """
         with self.access(mode="read", scope="internal"):
             return plc.stream_compaction.distinct_count(
                 self.plc_column,
