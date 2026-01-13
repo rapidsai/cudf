@@ -154,7 +154,7 @@ enum class use_data_page_mask : bool {
  *
  *   // Prune row groups using dictionaries
  *   dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
- *     dictionary_page_buffers_data, current_row_group_indices, options, stream);
+ *     dictionary_page_data, current_row_group_indices, options, stream);
  *
  *   // Update current row group indices to dictionary page filtered row group indices
  *   current_row_group_indices = dictionary_page_filtered_row_group_indices;
@@ -171,7 +171,7 @@ enum class use_data_page_mask : bool {
  *
  *   // Prune row groups using bloom filters
  *   bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
- *     bloom_filter_buffers_data, current_row_group_indices, options, stream);
+ *     bloom_filter_data, current_row_group_indices, options, stream);
  *
  *   // Update current row group indices to bloom filtered row group indices
  *   current_row_group_indices = bloom_filtered_row_group_indices;
@@ -232,7 +232,7 @@ enum class use_data_page_mask : bool {
  * // Materialize the table with only the filter columns
  * auto [filter_table, filter_metadata] =
  *   reader->materialize_filter_columns(current_row_group_indices,
- *                                      filter_column_chunk_buffers_data,
+ *                                      filter_column_chunk_data,
  *                                      row_mask->mutable_view(),
  *                                      use_data_page_mask::YES/NO,
  *                                      options,
@@ -259,7 +259,7 @@ enum class use_data_page_mask : bool {
  * // Materialize the table with only the payload columns
  * auto [payload_table, payload_metadata] =
  *   reader->materialize_payload_columns(current_row_group_indices,
- *                                       payload_column_chunk_buffers_data,
+ *                                       payload_column_chunk_data,
  *                                       row_mask->view(),
  *                                       use_data_page_mask::YES/NO,
  *                                       options,
