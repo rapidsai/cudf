@@ -265,7 +265,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @return Filtered row group indices, if any are filtered
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
-    cudf::host_span<cudf::device_span<uint8_t> const> const& bloom_filter_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> bloom_filter_spans,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<data_type const> output_dtypes,
     cudf::host_span<cudf::size_type const> output_column_schemas,

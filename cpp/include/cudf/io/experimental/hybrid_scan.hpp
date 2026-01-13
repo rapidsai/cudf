@@ -398,7 +398,7 @@ class hybrid_scan_reader {
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<size_type> filter_row_groups_with_dictionary_pages(
-    cudf::host_span<cudf::device_span<uint8_t> const> const& dictionary_page_data,
+    cudf::host_span<cudf::device_span<uint8_t> const> dictionary_page_data,
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
@@ -416,7 +416,7 @@ class hybrid_scan_reader {
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<size_type> filter_row_groups_with_bloom_filters(
-    cudf::host_span<cudf::device_span<uint8_t> const> const& bloom_filter_data,
+    cudf::host_span<cudf::device_span<uint8_t> const> bloom_filter_data,
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
@@ -463,7 +463,7 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
     cudf::host_span<size_type const> row_group_indices,
-    cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans,
     cudf::mutable_column_view& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
@@ -493,7 +493,7 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
     cudf::host_span<size_type const> row_group_indices,
-    cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
@@ -521,7 +521,7 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
     cudf::host_span<size_type const> row_group_indices,
-    cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
   /**
@@ -544,7 +544,7 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
-    cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
@@ -580,7 +580,7 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
-    cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 

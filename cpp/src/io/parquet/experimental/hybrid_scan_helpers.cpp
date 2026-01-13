@@ -523,7 +523,7 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
 
 std::vector<std::vector<cudf::size_type>>
 aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
-  cudf::host_span<cudf::device_span<uint8_t> const> const& bloom_filter_spans,
+  cudf::host_span<cudf::device_span<uint8_t> const> bloom_filter_spans,
   host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<cudf::size_type const> output_column_schemas,
@@ -561,15 +561,14 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
                      reinterpret_cast<cuda::std::byte*>(span.data()), span.size()};
                  });
 
-  auto const bloom_filtered_row_groups = apply_bloom_filters(
-    cudf::host_span<cudf::device_span<cuda::std::byte> const>{transformed_bloom_filter_spans},
-    row_group_indices,
-    literals,
-    total_row_groups,
-    output_dtypes,
-    bloom_filter_col_schemas,
-    filter,
-    stream);
+  auto const bloom_filtered_row_groups = apply_bloom_filters(transformed_bloom_filter_spans,
+                                                             row_group_indices,
+                                                             literals,
+                                                             total_row_groups,
+                                                             output_dtypes,
+                                                             bloom_filter_col_schemas,
+                                                             filter,
+                                                             stream);
 
   return bloom_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
 }
