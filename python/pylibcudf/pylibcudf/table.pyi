@@ -6,7 +6,7 @@ from typing import Any
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
-from pylibcudf._interop_helpers import ArrowLike
+from pylibcudf._interop_helpers import ArrowLike, ColumnMetadata
 from pylibcudf.column import Column
 from pylibcudf.types import DataType
 
@@ -21,7 +21,11 @@ class Table:
         stream: Stream | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Table: ...
-    def to_arrow(self, metadata: list) -> ArrowLike: ...
+    def to_arrow(
+        self,
+        metadata: list[ColumnMetadata | str] | None = None,
+        stream: Stream | None = None,
+    ) -> ArrowLike: ...
     # Private methods below are included because polars is currently using them,
     # but we want to remove stubs for these private methods eventually
     def _to_schema(self, metadata: Any = None) -> Any: ...
