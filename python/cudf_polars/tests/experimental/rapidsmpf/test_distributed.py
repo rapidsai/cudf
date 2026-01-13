@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -60,13 +60,7 @@ def test_simple_query_with_distributed_support(tmp_path, source_format) -> None:
 
     # Simple query: select and filter
     q = lf.select("a", "b").filter(pl.col("a") > 2)
-
-    # Should warn about distributed execution being under construction (if rapidsmpf)
-    if DEFAULT_RUNTIME == "rapidsmpf":
-        with pytest.warns(UserWarning, match="UNDER CONSTRUCTION"):
-            result = q.collect(engine=engine)
-    else:
-        result = q.collect(engine=engine)
+    result = q.collect(engine=engine)
 
     # Check the result is correct
     expected = df.lazy().select("a", "b").filter(pl.col("a") > 2).collect()

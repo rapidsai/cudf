@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -789,16 +789,6 @@ class StreamingExecutor:
         elif self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
-
-        # Warn loudly that multi-GPU execution is under construction
-        # for the rapidsmpf runtime
-        if self.cluster == "distributed" and self.runtime == "rapidsmpf":
-            warnings.warn(
-                "UNDER CONSTRUCTION!!!"
-                "The rapidsmpf runtime does NOT support distributed execution yet. "
-                "Use at your own risk!!!",
-                stacklevel=2,
-            )
 
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:

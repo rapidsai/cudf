@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Dask-based execution with the streaming RapidsMPF runtime."""
 
@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from distributed import get_client
 from rapidsmpf.config import Options, get_environment_variables
-from rapidsmpf.integrations.dask import get_worker_context
+from rapidsmpf.integrations.dask import bootstrap_dask_cluster, get_worker_context
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -87,6 +87,13 @@ def evaluate_pipeline_dask(
     The output DataFrame and metadata collector.
     """
     client = get_dask_client()
+
+    # Make sure the cluster is bootstrapped.
+    # This is a no-op if the cluster is already bootstrapped.
+    # TODO: We can apply configuration options here. However, these
+    # options will be ignored if the cluster is already bootstrapped.
+    bootstrap_dask_cluster(client)
+
     result = client.run(
         _evaluate_pipeline_dask,
         callback,
@@ -151,8 +158,7 @@ def _evaluate_pipeline_dask(
 
     # NOTE: The Dask-CUDA cluster must be bootstrapped
     # ahead of time using bootstrap_dask_cluster
-    # (rapidsmpf.integrations.dask.bootstrap_dask_cluster).
-    # TODO: Automatically bootstrap the cluster if necessary.
+    # (rapidsmpf.integrations.dask.bootstrap_dask_cluster)
     options = Options(
         {"num_streaming_threads": str(max(config_options.executor.max_io_threads, 1))}
         | get_environment_variables()
