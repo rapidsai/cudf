@@ -138,11 +138,11 @@ bool hybrid_scan_reader_impl::setup_column_chunks(
         total_decompressed_size += col_meta.total_uncompressed_size;
       }
 
-      CUDF_EXPECTS(column_chunk_spans[chunk_count].data() != nullptr and
-                     column_chunk_spans[chunk_count].size() > 0,
+      CUDF_EXPECTS(column_chunk_data[chunk_count].data() != nullptr and
+                     column_chunk_data[chunk_count].size() > 0,
                    "Encountered an invalid column chunk data span");
       // Set pointer to compressed data from the device span
-      chunks[chunk_count].compressed_data = column_chunk_spans[chunk_count].data();
+      chunks[chunk_count].compressed_data = column_chunk_data[chunk_count].data();
 
       chunk_count++;
     }
@@ -189,12 +189,12 @@ hybrid_scan_reader_impl::prepare_dictionaries(
     {}, row_group_indices, {}, {}, {}, {}, {}, {}, {}, _stream));
 
   CUDF_EXPECTS(
-    row_groups_info.size() * dictionary_col_schemas.size() == dictionary_page_spans.size(),
+    row_groups_info.size() * dictionary_col_schemas.size() == dictionary_page_data.size(),
     "Dictionary page data size must match the number of row groups times the number of columns "
     "with dictionaries and an (in)equality predicate");
 
   // Number of column chunks
-  auto const total_column_chunks = dictionary_page_spans.size();
+  auto const total_column_chunks = dictionary_page_data.size();
 
   // Boolean to check if any of the column chunnks have compressed data
   auto has_compressed_data = false;
@@ -217,7 +217,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
         _extended_metadata->map_schema_index(col_schema_idx, rg.source_index), rg.source_index);
 
       // dictionary data buffer for this column chunk
-      auto& dict_page_span = dictionary_page_spans[chunk_idx];
+      auto& dict_page_data = dictionary_page_data[chunk_idx];
 
       // Check if the column chunk has compressed data
       has_compressed_data |=
@@ -234,8 +234,8 @@ hybrid_scan_reader_impl::prepare_dictionaries(
                                 : int32_t{0};
 
       // Create a column chunk descriptor - zero/null values for all fields that are not needed
-      chunks[chunk_idx] = ColumnChunkDesc(static_cast<int64_t>(dict_page_span.size()),
-                                          const_cast<uint8_t*>(dict_page_span.data()),
+      chunks[chunk_idx] = ColumnChunkDesc(static_cast<int64_t>(dict_page_data.size()),
+                                          const_cast<uint8_t*>(dict_page_data.data()),
                                           col_meta.num_values,
                                           schema.type,
                                           schema.type_length,
@@ -256,7 +256,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
                                           false,    // strings_to_categorical
                                           rg.source_index);
       // Set the number of dictionary and data pages
-      chunks[chunk_idx].num_dict_pages = static_cast<int32_t>(dict_page_span.size() > 0);
+      chunks[chunk_idx].num_dict_pages = static_cast<int32_t>(dict_page_data.size() > 0);
       chunks[chunk_idx].num_data_pages = 0;  // Always zero at this stage
       chunk_idx++;
     }
