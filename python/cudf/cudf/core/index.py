@@ -1964,6 +1964,10 @@ class Index(SingleColumnFrame):
             name=self.name if name is None else name,
         )
 
+    @_performance_tracking
+    def fillna(self, value) -> Self:
+        return super()._fillna(value)
+
     def append(self, other):
         if is_list_like(other):
             to_concat = [self]

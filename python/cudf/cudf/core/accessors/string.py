@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -4630,7 +4630,7 @@ class StringMethods(BaseAccessor):
         """
         result_col = self._column.character_tokenize().children[1]
         if isinstance(self._parent, cudf.Series):
-            lengths = self.len().fillna(0)  # type: ignore[union-attr]
+            lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)
             return type(self._parent)._from_column(
                 result_col, name=self._parent.name, index=index
