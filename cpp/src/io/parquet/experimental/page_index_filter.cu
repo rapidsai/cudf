@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1092,7 +1092,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   auto tree_levels_data = rmm::device_uvector<bool>(tree_level_offsets.back(), stream, mr);
 
   // Pointers to each Fenwick tree level data
-  auto host_tree_level_ptrs = cudf::detail::make_host_vector<bool*>(num_levels, stream);
+  auto host_tree_level_ptrs = cudf::detail::make_pinned_vector_async<bool*>(num_levels, stream);
   // Zeroth level is just the row mask itself
   host_tree_level_ptrs[0] = const_cast<bool*>(row_mask.template begin<bool>()) + row_mask_offset;
   std::for_each(
@@ -1122,7 +1122,11 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   //  Search the Fenwick tree to see if there's a surviving row in each page's row range
   auto const num_ranges = static_cast<cudf::size_type>(page_row_offsets.size() - 1);
   rmm::device_uvector<bool> device_data_page_mask(num_ranges, stream, mr);
-  auto page_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
+  // Use a pinned bounce buffer to avoid pageable h2d copy
+  auto host_page_offsets =
+    cudf::detail::make_pinned_vector_async<cudf::size_type>(page_row_offsets.size(), stream);
+  std::move(page_row_offsets.begin(), page_row_offsets.end(), host_page_offsets.begin());
+  auto page_offsets = cudf::detail::make_device_uvector_async(host_page_offsets, stream, mr);
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     thrust::counting_iterator(0),
@@ -1131,7 +1135,12 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     search_fenwick_tree_functor{fenwick_tree_level_ptrs.data(), page_offsets.data(), num_ranges});
 
   //  Copy over search results to host
-  auto host_results      = cudf::detail::make_host_vector_async(device_data_page_mask, stream);
+  auto host_results =
+    cudf::detail::make_pinned_vector_async<bool>(device_data_page_mask.size(), stream);
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<bool>(host_results.data(), host_results.size()),
+    cudf::device_span<bool const>(device_data_page_mask.data(), device_data_page_mask.size()),
+    stream);
   auto const total_pages = page_row_offsets.size() - num_columns;
   auto data_page_mask    = thrust::host_vector<bool>(total_pages, stream);
   auto host_results_iter = host_results.begin();

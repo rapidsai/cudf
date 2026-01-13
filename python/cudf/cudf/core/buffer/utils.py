@@ -87,8 +87,12 @@ def as_buffer(
         buffer_class = Buffer
 
     # Handle host memory,
-    if not hasattr(data, "__cuda_array_interface__"):
+    if isinstance(data, memoryview):
         return buffer_class(owner=owner_class.from_host_memory(data))
+    elif not hasattr(data, "__cuda_array_interface__"):
+        raise ValueError(
+            "data must be a Buffer, memoryview, or implement __cuda_array_interface__"
+        )
 
     # Check if `data` is owned by a known class
     owner = get_buffer_owner(data)

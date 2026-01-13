@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -372,6 +372,10 @@ public final class MemoryCleaner {
 
   static void register(HashJoin hashJoin, Cleaner cleaner) {
     all.put(cleaner.id, new CleanerWeakReference(hashJoin, cleaner, collected, true));
+  }
+
+  static void register(KeyRemapping keyRemapping, Cleaner cleaner) {
+    all.put(cleaner.id, new CleanerWeakReference(keyRemapping, cleaner, collected, true));
   }
 
   /**
