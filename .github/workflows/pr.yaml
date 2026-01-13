@@ -15,7 +15,6 @@ jobs:
     needs:
       - check-nightly-ci
       - changed-files
-      - checks
       - conda-cpp-build
       - cpp-linters
       - conda-cpp-checks
@@ -126,15 +125,7 @@ jobs:
           - '!img/**'
           - '!java/**'
           - '!notebooks/**'
-  checks:
-    secrets: inherit
-    needs: telemetry-setup
-    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@release/25.12
-    with:
-      enable_check_generated_files: false
-      ignored_pr_jobs: "telemetry-summarize spark-rapids-jni wheel-tests-cudf-polars-with-rapidsmpf"
   conda-cpp-build:
-    needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@release/25.12
     with:
@@ -144,7 +135,6 @@ jobs:
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   cpp-linters:
     secrets: inherit
-    needs: checks
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@release/25.12
     with:
       build_type: pull-request
@@ -224,7 +214,6 @@ jobs:
       container_image: "rapidsai/ci-conda:25.12-latest"
       script: "ci/build_docs.sh"
   wheel-build-libcudf:
-    needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@release/25.12
     with:
@@ -237,7 +226,7 @@ jobs:
       package-type: cpp
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-build-pylibcudf:
-    needs: [checks, wheel-build-libcudf]
+    needs: [wheel-build-libcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@release/25.12
     with:

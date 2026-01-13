@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -17,6 +17,7 @@ rapids-generate-version > ./python/cudf/cudf/VERSION
 rapids-logger "Begin py build"
 
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
+NUMBA_CUDA_RC_CHANNEL="conda-forge/label/numba_cuda_rc"
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
 export RAPIDS_PACKAGE_VERSION
@@ -27,6 +28,10 @@ source rapids-rattler-channel-string
 rapids-logger "Prepending channel ${CPP_CHANNEL} to RATTLER_CHANNELS"
 
 RATTLER_CHANNELS=("--channel" "${CPP_CHANNEL}" "${RATTLER_CHANNELS[@]}")
+
+rapids-logger "Prepending numba cuda rc channel ${NUMBA_CUDA_RC_CHANNEL} to RATTLER_CHANNELS"
+
+RATTLER_CHANNELS=("--channel" "${NUMBA_CUDA_RC_CHANNEL}" "${RATTLER_CHANNELS[@]}")
 
 sccache --stop-server 2>/dev/null || true
 
