@@ -24,7 +24,7 @@ template <typename T>
 class split_device_span_iterator;
 
 /**
- * @brief A device span consisting of two separate device_data acting as if they were part of a
+ * @brief A device span consisting of two separate device_spans acting as if they were part of a
  * single span. The first head.size() entries are served from the first span, the remaining
  * tail.size() entries are served from the second span.
  *
