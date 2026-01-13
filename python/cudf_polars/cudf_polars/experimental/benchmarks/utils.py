@@ -514,7 +514,8 @@ def print_query_plan(
 
 
 def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
-    """Initialize a Dask distributed cluster.
+    """
+    Initialize a Dask distributed cluster.
 
     This function either creates a new LocalCUDACluster or connects to an
     existing Dask cluster depending on the provided arguments.
