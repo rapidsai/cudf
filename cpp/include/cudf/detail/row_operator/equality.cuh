@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,7 @@
 #include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/structs/structs_column_device_view.cuh>
@@ -163,6 +164,45 @@ class device_row_comparator {
   }
 
   /**
+   * @brief Performs an equality comparison between two elements in dictionary columns
+   */
+  class dictionary_comparator {
+   public:
+    __device__ dictionary_comparator(column_device_view lhs,
+                                     column_device_view rhs,
+                                     PhysicalEqualityComparator comparator = {}) noexcept
+      : lhs{lhs}, rhs{rhs}, comparator{comparator}
+    {
+    }
+
+    template <typename KeyType>
+    __device__ bool operator()(size_type lhs_element_index,
+                               size_type rhs_element_index) const noexcept
+      requires(cudf::is_equality_comparable<KeyType, KeyType>())
+    {
+      auto const lidx = lhs.element<cudf::dictionary32>(lhs_element_index).value();
+      auto const ridx = rhs.element<cudf::dictionary32>(rhs_element_index).value();
+      auto const lh_elem =
+        lhs.child(cudf::dictionary_column_view::keys_column_index).element<KeyType>(lidx);
+      auto const rh_elem =
+        rhs.child(cudf::dictionary_column_view::keys_column_index).element<KeyType>(ridx);
+      return comparator(lh_elem, rh_elem);
+    }
+
+    template <typename KeyType, typename... Args>
+    __device__ bool operator()(Args...) const noexcept
+      requires(not cudf::is_equality_comparable<KeyType, KeyType>())
+    {
+      CUDF_UNREACHABLE("Key types are not comparable");
+    }
+
+   private:
+    column_device_view lhs;
+    column_device_view rhs;
+    PhysicalEqualityComparator comparator;
+  };
+
+  /**
    * @brief Performs an equality comparison between two elements in two columns.
    */
   class element_comparator {
@@ -203,7 +243,8 @@ class device_row_comparator {
     template <typename Element>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
-      requires(cudf::is_equality_comparable<Element, Element>())
+      requires(cudf::is_equality_comparable<Element, Element>() and
+               not cudf::is_dictionary<Element>())
     {
       if (check_nulls) {
         bool const lhs_is_null{lhs.is_null(lhs_element_index)};
@@ -217,6 +258,28 @@ class device_row_comparator {
 
       return comparator(lhs.element<Element>(lhs_element_index),
                         rhs.element<Element>(rhs_element_index));
+    }
+
+    template <typename Element>
+    __device__ bool operator()(size_type const lhs_element_index,
+                               size_type const rhs_element_index) const noexcept
+      requires(cudf::is_dictionary<Element>())
+    {
+      if (check_nulls) {
+        bool const lhs_is_null{lhs.is_null(lhs_element_index)};
+        bool const rhs_is_null{rhs.is_null(rhs_element_index)};
+        if (lhs_is_null and rhs_is_null) {
+          return nulls_are_equal == null_equality::EQUAL;
+        } else if (lhs_is_null != rhs_is_null) {
+          return false;
+        }
+      }
+
+      return cudf::type_dispatcher<dispatch_void_if_nested>(
+        lhs.child(cudf::dictionary_column_view::keys_column_index).type(),
+        dictionary_comparator{lhs, rhs, comparator},
+        lhs_element_index,
+        rhs_element_index);
     }
 
     template <typename Element, typename... Args>
