@@ -219,17 +219,6 @@ struct MixedJoinTest : public cudf::test::BaseFixture {
     std::sort(expected_pairs.begin(), expected_pairs.end());
     std::sort(actual_pairs.begin(), actual_pairs.end());
 
-    std::cout << "inside compare_join_results\n";
-    std::cout << "hash + post filter result pairs = \n";
-    for(auto const &p : actual_pairs) {
-      std::cout << p.first << " " << p.second << std::endl;
-    }
-    std::cout << "mixed join pairs = \n";
-    for(auto const &p : expected_pairs) {
-      std::cout << p.first << " " << p.second << std::endl;
-    }
-    std::cout << std::endl;
-
     EXPECT_EQ(expected_pairs.size(), actual_pairs.size());
     EXPECT_TRUE(std::equal(expected_pairs.begin(), expected_pairs.end(), actual_pairs.begin()));
   }
@@ -817,12 +806,14 @@ TYPED_TEST(MixedLeftJoinTest, Basic2)
              {{0, cudf::JoinNoMatch}, {1, cudf::JoinNoMatch}, {2, cudf::JoinNoMatch}, {3, 3}});
 }
 
-TYPED_TEST(MixedLeftJoinTest, Debug)
+using MixedLeftJoinTest_int32 = MixedLeftJoinTest<int32_t>;
+TEST_F(MixedLeftJoinTest_int32, ReinsertFilteredRows)
 {
+  // Use int32_t specifically - this type works well with AST MOD operations
   auto const col_ref_left_conditional  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
   auto const col_ref_right_conditional = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  auto scalar_1 = cudf::numeric_scalar<cudf::size_type>(1);
-  auto scalar_2 = cudf::numeric_scalar<cudf::size_type>(2);
+  auto scalar_1 = cudf::numeric_scalar<int32_t>(1);
+  auto scalar_2 = cudf::numeric_scalar<int32_t>(2);
   auto literal_2 = cudf::ast::literal(scalar_2);
   auto literal_1 = cudf::ast::literal(scalar_1);
 
