@@ -148,8 +148,8 @@ enum class use_data_page_mask : bool {
  *
  * if (dict_page_byte_ranges.size()) {
  *   // Fetch dictionary page byte ranges into device buffers and create spans
- *   auto dictionary_page_buffers =
- *     fetch_byte_ranges(dict_page_byte_ranges);
+ *   std::vector<rmm::device_buffer> dictionary_page_data =
+ *     fetch_device_buffers(dict_page_byte_ranges);
  *   auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
  *
  *   // Prune row groups using dictionaries
@@ -165,8 +165,8 @@ enum class use_data_page_mask : bool {
  *
  * if (bloom_filter_byte_ranges.size()) {
  *   // Fetch bloom filter byte ranges into device buffers and create spans
- *   auto bloom_filter_buffers =
- *     fetch_byte_ranges(bloom_filter_byte_ranges);
+ *   std::vector<rmm::device_buffer> bloom_filter_data =
+ *     fetch_device_buffers(bloom_filter_byte_ranges, stream, mr);
  *   auto bloom_filter_data = make_device_spans<uint8_t>(bloom_filter_buffers);
  *
  *   // Prune row groups using bloom filters
@@ -225,8 +225,8 @@ enum class use_data_page_mask : bool {
  *   reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
  *
  * // Fetch column chunk data into device buffers and create spans
- * auto [filter_column_chunk_buffers, filter_column_chunk_data] =
- *   fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
+ * std::vector<rmm::device_buffer> filter_column_chunk_buffers =
+ *   fetch_device_buffers(filter_column_chunk_byte_ranges, stream, mr);
  * auto filter_column_chunk_data = make_device_spans<uint8_t>(filter_column_chunk_buffers);
  *
  * // Materialize the table with only the filter columns
@@ -252,8 +252,8 @@ enum class use_data_page_mask : bool {
  *   reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
  *
  * // Fetch column chunk data into device buffers and create spans
- * auto [payload_column_chunk_buffers, payload_column_chunk_buffers_data] =
- *   fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
+ * std::vector<rmm::device_buffer> payload_column_chunk_buffers =
+ *   fetch_device_buffers(payload_column_chunk_byte_ranges, stream, mr);
  * auto payload_column_chunk_data = make_device_spans<uint8_t>(payload_column_chunk_buffers);
  *
  * // Materialize the table with only the payload columns
