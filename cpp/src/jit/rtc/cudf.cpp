@@ -331,7 +331,8 @@ fragment_t const& compile_fragment(char const* name, char const* source_code_cst
   // options.push_back("-time");
   // --fast-compile
   options.push_back("--pch");
-  options.push_back("--pch-dir=/tmp/cudf-rtc-pch"); // [ ] fix; make it consistent (hashing of header contents?)
+  options.push_back(
+    "--pch-dir=/tmp/cudf-rtc-pch");  // [ ] fix; make it consistent (hashing of header contents?)
 
   options.push_back("--device-as-default-execution-space");
 
@@ -347,7 +348,7 @@ fragment_t const& compile_fragment(char const* name, char const* source_code_cst
 
   auto frag = fragment_t::compile(params);
 
-  auto view = frag->get_lto_ir()->view();
+  auto view = frag->get(binary_type::LTO_IR)->view();
 
   auto end = std::chrono::high_resolution_clock::now();
   auto dur = end - begin;
@@ -435,8 +436,8 @@ kernel_ref compile_and_link_udf(char const* name,
 
   auto begin = std::chrono::high_resolution_clock::now();
 
-  blob_view const link_fragments[]          = {library_frag.get_lto_ir()->view(),
-                                               udf_frag.get_lto_ir()->view()};
+  blob_view const link_fragments[]          = {library_frag.get(binary_type::LTO_IR)->view(),
+                                               udf_frag.get(binary_type::LTO_IR)->view()};
   binary_type const fragment_binary_types[] = {binary_type::LTO_IR, binary_type::LTO_IR};
 
   char const* const fragment_names[] = {"cudf_lto_library", "cudf_udf_fragment"};

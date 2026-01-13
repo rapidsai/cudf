@@ -131,9 +131,8 @@ struct [[nodiscard]] fragment_t {
 
   [[nodiscard]] binary_type get_type() const { return type_; }
 
-  [[nodiscard]] blob const& get_lto_ir() const;
-
-  [[nodiscard]] blob const& get_cubin() const;
+  // TODO: lamarrr dumping of the byte code, LTO-IR: NVVM?, PTX: PTX Bytecode
+  [[nodiscard]] blob const& get(binary_type type) const;
 };
 
 struct library_t;

@@ -347,6 +347,8 @@ void cache_t::clear_disk_store()
   errno = 0;  // reset errno before reading
 
   struct dirent* entry_iter = nullptr;
+  std::vector<char> entry_path;
+  entry_path.resize(PATH_MAX + 1);
 
   while (true) {
     entry_iter = readdir(dir);
@@ -360,14 +362,13 @@ void cache_t::clear_disk_store()
     }
 
     struct stat entry_stat;
-    char path[PATH_MAX + 1];
 
-    if (lstat(path, &entry_stat) == -1) {
+    if (lstat(entry_path.data(), &entry_stat) == -1) {
       throw_posix("Failed to get file status for RTC cache clearing", "lstat");
     }
 
     if (S_ISREG(entry_stat.st_mode)) {
-      if (unlink(path) == -1) {
+      if (unlink(entry_path.data()) == -1) {
         throw_posix("Failed to unlink RTC cache file during clearing", "unlink");
       }
     }

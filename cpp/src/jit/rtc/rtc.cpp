@@ -346,15 +346,9 @@ fragment fragment_t::compile(compile_params const& params)
   }
 }
 
-blob const& fragment_t::get_lto_ir() const
+blob const& fragment_t::get(binary_type type) const
 {
-  CUDF_EXPECTS(type_ == binary_type::LTO_IR, "Fragment does not contain LTO IR");
-  return blob_;
-}
-
-blob const& fragment_t::get_cubin() const
-{
-  CUDF_EXPECTS(type_ == binary_type::CUBIN, "Fragment does not contain CUBIN");
+  CUDF_EXPECTS(type_ == type, "Fragment does not contain expected binary type");
   return blob_;
 }
 
