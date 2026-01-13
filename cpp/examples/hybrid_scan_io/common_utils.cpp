@@ -159,18 +159,3 @@ fetch_byte_ranges(cudf::host_span<uint8_t const> host_buffer,
 
   return {std::move(buffers), std::move(spans)};
 }
-
-std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
-                                                rmm::cuda_stream_view stream)
-{
-  if (tables.size() == 1) { return std::move(tables[0]); }
-
-  std::vector<cudf::table_view> table_views;
-  table_views.reserve(tables.size());
-  std::transform(
-    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
-      return tbl->view();
-    });
-  // Construct the final table
-  return cudf::concatenate(table_views, stream);
-}
