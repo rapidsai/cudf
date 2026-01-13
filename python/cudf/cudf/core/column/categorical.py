@@ -38,6 +38,7 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
+    from cudf.core.buffer import Buffer
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -633,43 +634,21 @@ class CategoricalColumn(column.ColumnBase):
         return header, frames
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list) -> Self:
-        """Override deserialize to handle categorical-specific construction."""
+    def _deserialize_plc_column(
+        cls,
+        header: dict,
+        dtype: DtypeObj,
+        data: Buffer | None,
+        mask: Buffer | None,
+        children: list[ColumnBase],
+    ) -> plc.Column:
+        """Construct plc.Column from codes child for categorical columns.
 
-        def unpack(header: dict, frames: list) -> tuple[Any, list]:
-            count = header["frame_count"]
-            obj = cls.device_deserialize(header, frames[:count])
-            return obj, frames[count:]
-
-        assert header["frame_count"] == len(frames), (
-            f"Deserialization expected {header['frame_count']} frames, "
-            f"but received {len(frames)}"
-        )
-        if header["dtype-is-cudf-serialized"]:
-            dtype, frames = unpack(header["dtype"], frames)
-        else:
-            try:
-                dtype = np.dtype(header["dtype"])
-            except TypeError:
-                import pickle
-
-                dtype = pickle.loads(header["dtype"])
-        if "data" in header:
-            _, frames = unpack(header["data"], frames)
-        if "mask" in header:
-            _, frames = unpack(header["mask"], frames)
-        children = []
-        if "subheaders" in header:
-            for h in header["subheaders"]:
-                child, frames = unpack(h, frames)
-                children.append(child)
-        assert len(frames) == 0, "Deserialization did not consume all frames"
-
-        # Categorical-specific deserialization:
-        # The plc_column is constructed from the codes child, not from data/mask/children
-        plc_column = children.pop(0).plc_column
-        result = cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
-        return cast(Self, result)
+        Categorical columns store data as integer codes referencing categories.
+        The plc_column must be constructed from the codes child column, which
+        contains the actual integer data, rather than from the data/mask buffers.
+        """
+        return children.pop(0).plc_column
 
     @staticmethod
     def _concat(

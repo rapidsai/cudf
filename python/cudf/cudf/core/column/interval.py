@@ -18,6 +18,8 @@ from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
+    from cudf._typing import DtypeObj
+    from cudf.core.buffer import Buffer
     from cudf.core.column import ColumnBase
 
 
@@ -77,43 +79,20 @@ class IntervalColumn(StructColumn):
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list) -> Self:
-        """Override deserialize to handle interval-specific dtype conversion."""
+    def _deserialize_plc_column(
+        cls,
+        header: dict,
+        dtype: DtypeObj,
+        data: Buffer | None,
+        mask: Buffer | None,
+        children: list[ColumnBase],
+    ) -> plc.Column:
+        """Construct plc.Column using STRUCT type for interval columns.
 
-        def unpack(header: dict, frames: list) -> tuple[Any, list]:
-            count = header["frame_count"]
-            obj = cls.device_deserialize(header, frames[:count])
-            return obj, frames[count:]
-
-        assert header["frame_count"] == len(frames), (
-            f"Deserialization expected {header['frame_count']} frames, "
-            f"but received {len(frames)}"
-        )
-        if header["dtype-is-cudf-serialized"]:
-            dtype, frames = unpack(header["dtype"], frames)
-        else:
-            try:
-                import numpy as np
-
-                dtype = np.dtype(header["dtype"])
-            except TypeError:
-                import pickle
-
-                dtype = pickle.loads(header["dtype"])
-        if "data" in header:
-            data, frames = unpack(header["data"], frames)
-        else:
-            data = None
-        if "mask" in header:
-            mask, frames = unpack(header["mask"], frames)
-        else:
-            mask = None
-        children = []
-        if "subheaders" in header:
-            for h in header["subheaders"]:
-                child, frames = unpack(h, frames)
-                children.append(child)
-        assert len(frames) == 0, "Deserialization did not consume all frames"
+        Interval columns are internally stored as structs with left/right edges,
+        so we must use STRUCT TypeId for plc_column construction rather than
+        attempting to use IntervalDtype.
+        """
         offset = header.get("offset", 0)
         if mask is None:
             null_count = 0
@@ -122,10 +101,9 @@ class IntervalColumn(StructColumn):
                 mask, offset, header["size"] + offset
             )
 
-        # Interval-specific deserialization:
-        # Use STRUCT type instead of interval type for plc_column construction
+        # Use STRUCT type instead of IntervalDtype for plc_column
         plc_type = plc.DataType(plc.TypeId.STRUCT)
-        plc_column = plc.Column(
+        return plc.Column(
             plc_type,
             header["size"],
             data,
@@ -135,47 +113,19 @@ class IntervalColumn(StructColumn):
             [child.plc_column for child in children],
             validate=False,
         )
-        from typing import cast
-
-        result = cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
-        return cast(Self, result)
 
     def copy(self, deep: bool = True) -> Self:
         return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
-    def reduce(self, reduction_op: str, **kwargs: Any) -> Any:
-        """Override reduce to preserve IntervalDtype metadata."""
-        result_col_dtype = self._reduction_result_dtype(reduction_op)
-
-        # check empty case
-        if len(self) <= self.null_count:
-            if reduction_op == "sum" or reduction_op == "sum_of_squares":
-                return result_col_dtype.type(0)
-            if reduction_op == "product":
-                return result_col_dtype.type(1)
-            if reduction_op == "any":
-                return False
-
-            from cudf.utils.dtypes import _get_nan_for_dtype
-
-            return _get_nan_for_dtype(result_col_dtype)
-
-        from cudf.core._internals import aggregation
-        from cudf.utils.dtypes import dtype_to_pylibcudf_type
-
-        with self.access(mode="read", scope="internal"):
-            plc_scalar = plc.reduce.reduce(
-                self.plc_column,
-                aggregation.make_aggregation(reduction_op, kwargs).plc_obj,
-                dtype_to_pylibcudf_type(result_col_dtype),
-            )
-            result_col = type(self).from_pylibcudf(
-                plc.Column.from_scalar(plc_scalar, 1)
-            )
-            # Apply interval dtype metadata to the result
-            if isinstance(result_col_dtype, IntervalDtype):
-                result_col = result_col._with_type_metadata(result_col_dtype)
-        return result_col.element_indexing(0)
+    def _adjust_reduce_result(
+        self,
+        result_col: ColumnBase,
+        reduction_op: str,
+        col_dtype: DtypeObj,
+        plc_scalar: plc.Scalar,
+    ) -> ColumnBase:
+        """Preserve IntervalDtype metadata on reduction result."""
+        return result_col._with_type_metadata(col_dtype)
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:

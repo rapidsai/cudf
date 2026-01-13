@@ -2099,6 +2099,26 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 child, frames = unpack(h, frames)
                 children.append(child)
         assert len(frames) == 0, "Deserialization did not consume all frames"
+
+        # Construct plc_column - subclasses can override to customize construction
+        plc_column = cls._deserialize_plc_column(
+            header, dtype, data, mask, children
+        )
+        return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
+
+    @classmethod
+    def _deserialize_plc_column(
+        cls,
+        header: dict,
+        dtype: DtypeObj,
+        data: Buffer | None,
+        mask: Buffer | None,
+        children: list[ColumnBase],
+    ) -> plc.Column:
+        """Construct plc.Column from deserialized components.
+
+        Subclasses can override this to customize column construction.
+        """
         offset = header.get("offset", 0)
         if mask is None:
             null_count = 0
@@ -2107,7 +2127,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 mask, offset, header["size"] + offset
             )
         plc_type = dtype_to_pylibcudf_type(dtype)
-        plc_column = plc.Column(
+        return plc.Column(
             plc_type,
             header["size"],
             data,
@@ -2117,7 +2137,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             [child.plc_column for child in children],
             validate=False,
         )
-        return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
         raise TypeError(
@@ -2367,7 +2386,24 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result_col = type(self).from_pylibcudf(
                 plc.Column.from_scalar(plc_scalar, 1)
             )
+            # Allow subclasses to adjust result_col based on reduction_op
+            result_col = self._adjust_reduce_result(
+                result_col, reduction_op, col_dtype, plc_scalar
+            )
         return result_col.element_indexing(0)
+
+    def _adjust_reduce_result(
+        self,
+        result_col: ColumnBase,
+        reduction_op: str,
+        col_dtype: DtypeObj,
+        plc_scalar: plc.Scalar,
+    ) -> ColumnBase:
+        """Hook for subclasses to adjust reduction result.
+
+        Override this to apply type-specific transformations to the result column.
+        """
+        return result_col
 
     def minmax(self) -> tuple[ScalarLike, ScalarLike]:
         with self.access(mode="read", scope="internal"):
