@@ -116,6 +116,13 @@ class StringColumn(ColumnBase, Scannable):
         "cummax",
     }
 
+    @property
+    def _PANDAS_NA_VALUE(self) -> ScalarLike:
+        """String columns return None as NA value in pandas compatibility mode."""
+        if cudf.get_option("mode.pandas_compatible"):
+            return None
+        return pd.NA
+
     @classmethod
     def _validate_args(
         cls, plc_column: plc.Column, dtype: np.dtype

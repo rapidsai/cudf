@@ -86,6 +86,17 @@ class NumericalColumn(NumericalBaseColumn):
         plc.TypeId.BOOL8,
     }
 
+    @property
+    def _PANDAS_NA_VALUE(self) -> ScalarLike:
+        """Float columns return np.nan as NA value in pandas compatibility mode."""
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and self.dtype.kind == "f"
+            and not is_pandas_nullable_extension_dtype(self.dtype)
+        ):
+            return np.nan
+        return super()._PANDAS_NA_VALUE
+
     @classmethod
     def _validate_args(
         cls, plc_column: plc.Column, dtype: np.dtype

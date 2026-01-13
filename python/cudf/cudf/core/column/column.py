@@ -342,21 +342,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
         """Return appropriate NA value based on dtype."""
-        if cudf.get_option("mode.pandas_compatible"):
-            # In pandas compatibility mode, return pd.NA for all
-            # nullable extension dtypes
-            if is_pandas_nullable_extension_dtype(self.dtype):
-                return self.dtype.na_value
-            elif (
-                self.dtype.kind == "f"
-                and not is_pandas_nullable_extension_dtype(self.dtype)
-            ):
-                # For float dtypes, return np.nan
-                return np.nan
-            elif cudf.api.types.is_string_dtype(self.dtype):
-                # numpy string dtype case, may be moved
-                # to `StringColumn` later
-                return None
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and is_pandas_nullable_extension_dtype(self.dtype):
+            return self.dtype.na_value
         return pd.NA
 
     @property
@@ -1801,20 +1790,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result = type(self).from_pylibcudf(
                 plc.unary.cast(self.plc_column, dtype_to_pylibcudf_type(dtype))
             )
-            if isinstance(
-                result.dtype,
-                (
-                    cudf.Decimal128Dtype,
-                    cudf.Decimal64Dtype,
-                    cudf.Decimal32Dtype,
-                ),
-            ):
-                if cudf.get_option(
-                    "mode.pandas_compatible"
-                ) and not isinstance(dtype, DecimalDtype):
-                    result._dtype = dtype
-                else:
-                    result.dtype.precision = dtype.precision  # type: ignore[union-attr]
             if (
                 cudf.get_option("mode.pandas_compatible")
                 and result.dtype != dtype
@@ -2072,8 +2047,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             header["subheaders"] = list(child_headers)
             frames.extend(chain(*child_frames))
-        if isinstance(self.dtype, CategoricalDtype):
-            header["codes_dtype"] = self.codes.dtype.str  # type: ignore[attr-defined]
         header["size"] = self.size
         header["frame_count"] = len(frames)
         header["offset"] = self.offset
