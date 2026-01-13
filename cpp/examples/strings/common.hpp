@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -82,7 +82,7 @@ int main(int argc, char const** argv)
 
   auto const mr_name = std::string{argc > 2 ? std::string(argv[2]) : std::string("cuda")};
   auto resource      = create_memory_resource(mr_name);
-  cudf::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource_ref(resource.get());
 
   auto const csv_file   = std::string{argv[1]};
   auto const csv_result = [csv_file] {

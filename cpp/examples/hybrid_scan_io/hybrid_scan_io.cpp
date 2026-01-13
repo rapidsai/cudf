@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -319,7 +319,7 @@ int main(int argc, char const** argv)
   auto resource               = create_memory_resource(is_pool_used);
   auto stats_mr =
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
-  rmm::mr::set_current_device_resource(&stats_mr);
+  cudf::set_current_device_resource_ref(&stats_mr);
 
   // Create filter expression
   auto const column_reference = cudf::ast::column_name_reference(column_name);

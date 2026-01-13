@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,9 +32,12 @@ inline rmm::device_async_resource_ref get_current_device_resource_ref()
 /**
  * @brief Set the current device memory resource.
  *
+ * @deprecated Use set_current_device_resource_ref() instead.
+ *
  * @param mr The new device memory resource.
  * @return The previous device memory resource.
  */
+[[deprecated("Use set_current_device_resource_ref() instead")]]
 inline rmm::mr::device_memory_resource* set_current_device_resource(
   rmm::mr::device_memory_resource* mr)
 {

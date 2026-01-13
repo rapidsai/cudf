@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -101,7 +101,7 @@ struct nvbench_base_fixture {
     }
 
     mr = create_memory_resource(rmm_mode);
-    cudf::set_current_device_resource(mr.get());
+    cudf::set_current_device_resource_ref(mr.get());
     std::cout << "RMM memory resource = " << rmm_mode << "\n";
 
     cudf::set_pinned_memory_resource(create_cuio_host_memory_resource(cuio_host_mode));

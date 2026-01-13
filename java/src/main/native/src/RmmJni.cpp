@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -903,7 +903,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCurrentDeviceResourceInternal(
   {
     cudf::jni::auto_set_device(env);
     auto mr = reinterpret_cast<rmm::mr::device_memory_resource*>(new_handle);
-    cudf::set_current_device_resource(mr);
+    cudf::set_current_device_resource_ref(mr);
   }
   JNI_CATCH(env, );
 }
