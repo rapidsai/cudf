@@ -544,7 +544,10 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
 
     if scheduler_address is not None:
         # Connect to existing cluster via scheduler address
-        breakpoint()
+        if scheduler_file is not None:
+            raise ValueError(
+                "Cannot specify both --scheduler-address and --scheduler-file."
+            )
         client = Client(address=scheduler_address)
         n_workers = len(client.scheduler_info().get("workers", {}))
         print(
@@ -778,7 +781,7 @@ def parse_args(
         type=str,
         help=textwrap.dedent("""\
             Scheduler address for connecting to an existing Dask cluster.
-            If provided, LocalCUDACluster is not created and worker
+            If provided, a cluster is not created and worker
             configuration options (--n-workers, --rmm-pool-size, etc.)
             are ignored since the workers are assumed to be started separately."""),
     )
@@ -788,7 +791,7 @@ def parse_args(
         type=str,
         help=textwrap.dedent("""\
             Path to a scheduler file for connecting to an existing Dask cluster.
-            If provided, LocalCUDACluster is not created and worker
+            If provided, a cluster is not created and worker
             configuration options (--n-workers, --rmm-pool-size, etc.)
             are ignored since the workers are assumed to be started separately."""),
     )
