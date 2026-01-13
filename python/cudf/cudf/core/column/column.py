@@ -14,7 +14,7 @@ from collections.abc import (
 )
 from contextlib import ExitStack
 from decimal import Decimal
-from functools import cache, cached_property
+from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
@@ -309,6 +309,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     plc_column: plc.Column
     _dtype: DtypeObj
     _children: tuple[ColumnBase, ...]
+    _distinct_count: dict[bool, int]
     _exposed_buffers: set[Buffer]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -401,7 +402,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return _ColumnAccessContext(self, **kwargs)
 
     def _clear_cache(self) -> None:
-        self.distinct_count.cache_clear()  # type: ignore[attr-defined]
+        self._distinct_count.clear()
         attrs = (
             "memory_usage",
             "is_monotonic_increasing",
@@ -641,15 +642,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.plc_column = plc_column
         self._dtype = dtype
         self._children = children
+        self._distinct_count = {}
         # The set of exposed buffers associated with this column. These buffers must be
         # kept alive for the lifetime of this column since anything that accessed the
         # CAI of this column will still be pointing to those buffers. As such objects
         # are destroyed, all references to this column will be removed as well,
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers = set()
-        # Create instance-level cache for distinct_count to avoid memory leaks.
-        # Using @cache decorator on instance methods keeps instances alive indefinitely.
-        self.distinct_count = cache(self.distinct_count)  # type: ignore[method-assign]
         return self
 
     @classmethod
@@ -1754,22 +1753,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
 
     def distinct_count(self, dropna: bool = True) -> int:
-        """Get the (null-aware) number of distinct values in this column.
-
-        Note: This method is wrapped with functools.cache() at the instance level
-        in _init() to avoid memory leaks. Instance-level caching ensures that when
-        the column is garbage collected, its cache is also collected.
-        """
-        with self.access(mode="read", scope="internal"):
-            return plc.stream_compaction.distinct_count(
-                self.plc_column,
-                plc.types.NullPolicy.EXCLUDE
-                if dropna
-                else plc.types.NullPolicy.INCLUDE,
-                plc.types.NanPolicy.NAN_IS_NULL
-                if dropna
-                else plc.types.NanPolicy.NAN_IS_VALID,
-            )
+        """Get the (null-aware) number of distinct values in this column."""
+        try:
+            return self._distinct_count[dropna]
+        except KeyError:
+            with self.access(mode="read", scope="internal"):
+                result = plc.stream_compaction.distinct_count(
+                    self.plc_column,
+                    plc.types.NullPolicy.EXCLUDE
+                    if dropna
+                    else plc.types.NullPolicy.INCLUDE,
+                    plc.types.NanPolicy.NAN_IS_NULL
+                    if dropna
+                    else plc.types.NanPolicy.NAN_IS_VALID,
+                )
+            self._distinct_count[dropna] = result
+            return result
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         raise NotImplementedError()
