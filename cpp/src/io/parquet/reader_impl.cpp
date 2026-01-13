@@ -59,8 +59,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
-  auto col_string_sizes =
-    cudf::detail::make_pinned_vector_async<size_t>(_input_columns.size(), _stream);
+  auto col_string_sizes = cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
   if (has_strings) {
     // Compute column string sizes (using page string offsets) for this output table chunk
     col_string_sizes = calculate_page_string_offsets();

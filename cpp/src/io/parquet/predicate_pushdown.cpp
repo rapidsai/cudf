@@ -431,7 +431,7 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
     if (predicate.nullable()) {
       auto bitmask = cudf::detail::make_pinned_vector_async<bitmask_type>(num_bitmasks, stream);
       cudf::detail::cuda_memcpy(
-        cudf::host_span<bitmask_type>{bitmask.data(), num_bitmasks},
+        cudf::host_span<bitmask_type>{bitmask},
         cudf::device_span<bitmask_type const>{predicate.null_mask(), num_bitmasks},
         stream);
       return bitmask;
