@@ -65,7 +65,7 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
 }
 
 /**
- * @brief Converts a span of device buffers into a vector of correspondingdevice spans
+ * @brief Converts a span of device buffers into a vector of corresponding device spans
  *
  * @tparam T Type of output device spans
  * @param buffers Host span of device buffers
