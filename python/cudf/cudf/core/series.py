@@ -6,7 +6,6 @@ from __future__ import annotations
 import functools
 import inspect
 import textwrap
-import warnings
 from collections.abc import Mapping
 from copy import deepcopy
 from shutil import get_terminal_size
