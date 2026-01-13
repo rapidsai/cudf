@@ -797,10 +797,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         Raises
         ------
-        TypeError
+        NotImplementedError
             If CuPy does not support this column's dtype.
         """
-        raise TypeError(f"CuPy does not support {self.dtype}")
+        raise NotImplementedError(f"CuPy does not support {self.dtype}")
 
     def find_and_replace(
         self,
@@ -1888,40 +1888,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return codes.set_mask(self.mask)._with_type_metadata(dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
-        raise TypeError(
-            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
-            f"to numerical dtype {dtype}"
-        )
+        raise NotImplementedError()
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        raise TypeError(
-            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
-            f"to datetime dtype {dtype}"
-        )
+        raise NotImplementedError()
 
     def as_interval_column(self, dtype: IntervalDtype) -> IntervalColumn:
-        raise TypeError(
-            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
-            f"to interval dtype {dtype}"
-        )
+        raise NotImplementedError()
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        raise TypeError(
-            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
-            f"to timedelta dtype {dtype}"
-        )
+        raise NotImplementedError()
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
-        raise TypeError(
-            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
-            f"to string dtype {dtype}"
-        )
+        raise NotImplementedError()
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
-        raise TypeError(
-            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
-            f"to decimal dtype {dtype}"
-        )
+        raise NotImplementedError()
 
     def apply_boolean_mask(self, mask: ColumnBase) -> ColumnBase:
         if mask.dtype.kind != "b":
