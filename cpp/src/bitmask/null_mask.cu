@@ -469,7 +469,6 @@ std::vector<size_type> batch_count_set_bits(host_span<bitmask_type const* const>
                                             size_type stop,
                                             rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.", std::invalid_argument);
 
   auto const num_bitmasks      = bitmasks.size();
