@@ -627,12 +627,6 @@ class CategoricalColumn(column.ColumnBase):
     def memory_usage(self) -> int:
         return self.categories.memory_usage + self.codes.memory_usage
 
-    def serialize(self) -> tuple[dict, list]:
-        """Override serialize to add categorical-specific metadata."""
-        header, frames = super().serialize()
-        header["codes_dtype"] = self.codes.dtype.str
-        return header, frames
-
     @classmethod
     def _deserialize_plc_column(
         cls,

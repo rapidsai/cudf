@@ -14,7 +14,7 @@ from collections.abc import (
 )
 from contextlib import ExitStack
 from decimal import Decimal
-from functools import cache, cached_property
+from functools import cached_property, lru_cache
 from itertools import chain
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
@@ -1769,7 +1769,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ),
             )
 
-    @cache
+    @lru_cache(maxsize=128)
     def distinct_count(self, dropna: bool = True) -> int:
         with self.access(mode="read", scope="internal"):
             return plc.stream_compaction.distinct_count(
@@ -1790,7 +1790,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result = type(self).from_pylibcudf(
                 plc.unary.cast(self.plc_column, dtype_to_pylibcudf_type(dtype))
             )
-            # Handle decimal precision for any cast that produces a decimal result
+            # Adjust decimal result: in pandas compat mode with non-decimal target,
+            # preserve the target dtype wrapper; otherwise update precision from target
             if isinstance(
                 result.dtype,
                 (
