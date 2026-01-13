@@ -632,6 +632,45 @@ class CategoricalColumn(column.ColumnBase):
         header["codes_dtype"] = self.codes.dtype.str
         return header, frames
 
+    @classmethod
+    def deserialize(cls, header: dict, frames: list) -> Self:
+        """Override deserialize to handle categorical-specific construction."""
+
+        def unpack(header: dict, frames: list) -> tuple[Any, list]:
+            count = header["frame_count"]
+            obj = cls.device_deserialize(header, frames[:count])
+            return obj, frames[count:]
+
+        assert header["frame_count"] == len(frames), (
+            f"Deserialization expected {header['frame_count']} frames, "
+            f"but received {len(frames)}"
+        )
+        if header["dtype-is-cudf-serialized"]:
+            dtype, frames = unpack(header["dtype"], frames)
+        else:
+            try:
+                dtype = np.dtype(header["dtype"])
+            except TypeError:
+                import pickle
+
+                dtype = pickle.loads(header["dtype"])
+        if "data" in header:
+            _, frames = unpack(header["data"], frames)
+        if "mask" in header:
+            _, frames = unpack(header["mask"], frames)
+        children = []
+        if "subheaders" in header:
+            for h in header["subheaders"]:
+                child, frames = unpack(h, frames)
+                children.append(child)
+        assert len(frames) == 0, "Deserialization did not consume all frames"
+
+        # Categorical-specific deserialization:
+        # The plc_column is constructed from the codes child, not from data/mask/children
+        plc_column = children.pop(0).plc_column
+        result = cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
+        return cast(Self, result)
+
     @staticmethod
     def _concat(
         objs: MutableSequence[CategoricalColumn],

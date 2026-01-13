@@ -2099,10 +2099,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 child, frames = unpack(h, frames)
                 children.append(child)
         assert len(frames) == 0, "Deserialization did not consume all frames"
-        if "codes_dtype" in header:
-            codes_dtype = np.dtype(header["codes_dtype"])
-        else:
-            codes_dtype = None
         offset = header.get("offset", 0)
         if mask is None:
             null_count = 0
@@ -2110,26 +2106,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             null_count = plc.null_mask.null_count(
                 mask, offset, header["size"] + offset
             )
-        if isinstance(dtype, IntervalDtype):
-            # TODO: Handle in dtype_to_pylibcudf_type?
-            plc_type = plc.DataType(plc.TypeId.STRUCT)
-        else:
-            plc_type = dtype_to_pylibcudf_type(
-                codes_dtype if codes_dtype is not None else dtype
-            )
-        if isinstance(dtype, CategoricalDtype):
-            plc_column = children.pop(0).plc_column
-        else:
-            plc_column = plc.Column(
-                plc_type,
-                header["size"],
-                data,
-                mask,
-                null_count,
-                offset,
-                [child.plc_column for child in children],
-                validate=False,
-            )
+        plc_type = dtype_to_pylibcudf_type(dtype)
+        plc_column = plc.Column(
+            plc_type,
+            header["size"],
+            data,
+            mask,
+            null_count,
+            offset,
+            [child.plc_column for child in children],
+            validate=False,
+        )
         return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
@@ -2380,34 +2367,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result_col = type(self).from_pylibcudf(
                 plc.Column.from_scalar(plc_scalar, 1)
             )
-            if plc_scalar.type().id() in {
-                plc.TypeId.DECIMAL128,
-                plc.TypeId.DECIMAL64,
-                plc.TypeId.DECIMAL32,
-            }:
-                scale = -plc_scalar.type().scale()
-                # Narrow type for mypy - we know col_dtype is a decimal type from the check above
-                assert isinstance(col_dtype, DecimalDtype)
-                p = col_dtype.precision
-                # https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
-                nrows = len(self)
-                if reduction_op in {"min", "max"}:
-                    new_p = p
-                elif reduction_op == "sum":
-                    new_p = p + nrows - 1
-                elif reduction_op == "product":
-                    new_p = p * nrows + nrows - 1
-                elif reduction_op == "sum_of_squares":
-                    new_p = 2 * p + nrows
-                else:
-                    raise NotImplementedError(
-                        f"{reduction_op} not implemented for decimal types."
-                    )
-                precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)
-                new_dtype = type(col_dtype)(precision, scale)
-                result_col = result_col.astype(new_dtype)
-            elif isinstance(col_dtype, IntervalDtype):
-                result_col = result_col._with_type_metadata(col_dtype)
         return result_col.element_indexing(0)
 
     def minmax(self) -> tuple[ScalarLike, ScalarLike]:

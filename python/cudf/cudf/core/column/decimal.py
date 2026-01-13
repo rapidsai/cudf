@@ -16,7 +16,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core._internals import binaryop
+from cudf.core._internals import aggregation, binaryop
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import (
@@ -32,6 +32,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
 )
@@ -93,6 +94,61 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if cudf.get_option("mode.pandas_compatible"):
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
+
+    def reduce(self, reduction_op: str, **kwargs: Any) -> ScalarLike:
+        """Override reduce to handle decimal precision calculations."""
+        col_dtype = self._reduction_result_dtype(reduction_op)
+
+        # check empty case
+        if len(self) <= self.null_count:
+            if reduction_op == "sum" or reduction_op == "sum_of_squares":
+                return col_dtype.type(0)
+            if reduction_op == "product":
+                return col_dtype.type(1)
+            if reduction_op == "any":
+                return False
+
+            from cudf.utils.dtypes import _get_nan_for_dtype
+
+            return _get_nan_for_dtype(col_dtype)
+
+        with self.access(mode="read", scope="internal"):
+            plc_scalar = plc.reduce.reduce(
+                self.plc_column,
+                aggregation.make_aggregation(reduction_op, kwargs).plc_obj,
+                dtype_to_pylibcudf_type(col_dtype),
+            )
+            result_col = type(self).from_pylibcudf(
+                plc.Column.from_scalar(plc_scalar, 1)
+            )
+            # Handle decimal precision based on reduction operation
+            if plc_scalar.type().id() in {
+                plc.TypeId.DECIMAL128,
+                plc.TypeId.DECIMAL64,
+                plc.TypeId.DECIMAL32,
+            }:
+                scale = -plc_scalar.type().scale()
+                # Narrow type for mypy - we know col_dtype is a decimal type
+                assert isinstance(col_dtype, DecimalDtype)
+                p = col_dtype.precision
+                # https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
+                nrows = len(self)
+                if reduction_op in {"min", "max"}:
+                    new_p = p
+                elif reduction_op == "sum":
+                    new_p = p + nrows - 1
+                elif reduction_op == "product":
+                    new_p = p * nrows + nrows - 1
+                elif reduction_op == "sum_of_squares":
+                    new_p = 2 * p + nrows
+                else:
+                    raise NotImplementedError(
+                        f"{reduction_op} not implemented for decimal types."
+                    )
+                precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)
+                new_dtype = type(col_dtype)(precision, scale)
+                result_col = result_col.astype(new_dtype)
+        return result_col.element_indexing(0)
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
