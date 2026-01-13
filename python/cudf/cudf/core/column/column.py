@@ -263,17 +263,23 @@ class _ColumnAccessContext:
         self._kwargs = kwargs
         self._stack = ExitStack()
 
+    def _enter_plc(self, plc_column: plc.Column) -> None:
+        """Enter context for all child columns."""
+        if (data := plc_column.data()) is not None:
+            self._stack.enter_context(
+                cast("Buffer", data).access(**self._kwargs)
+            )
+        if (mask := plc_column.null_mask()) is not None:
+            self._stack.enter_context(
+                cast("Buffer", mask).access(**self._kwargs)
+            )
+        for child in plc_column.children():
+            self._enter_plc(child)
+
     def __enter__(self) -> ColumnBase:
         """Enter the context, setting up access for all column buffers."""
         # Propagate all kwargs transparently to all buffers
-        if (data := self._column.data) is not None:
-            self._stack.enter_context(data.access(**self._kwargs))
-        if (mask := self._column.mask) is not None:
-            self._stack.enter_context(mask.access(**self._kwargs))
-        # Recursively handle children (important for nested structures)
-        for child in self._column.children:
-            self._stack.enter_context(child.access(**self._kwargs))
-
+        self._enter_plc(self._column.plc_column)
         return self._column
 
     def __exit__(
