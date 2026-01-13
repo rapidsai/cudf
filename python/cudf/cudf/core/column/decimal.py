@@ -32,7 +32,6 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
-    dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
 )
@@ -94,33 +93,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if cudf.get_option("mode.pandas_compatible"):
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
-
-    def cast(self, dtype: DtypeObj) -> ColumnBase:
-        """Override cast to handle decimal precision."""
-        with self.access(mode="read", scope="internal"):
-            result = type(self).from_pylibcudf(
-                plc.unary.cast(self.plc_column, dtype_to_pylibcudf_type(dtype))
-            )
-            if isinstance(
-                result.dtype,
-                (
-                    cudf.Decimal128Dtype,
-                    cudf.Decimal64Dtype,
-                    cudf.Decimal32Dtype,
-                ),
-            ):
-                if cudf.get_option(
-                    "mode.pandas_compatible"
-                ) and not isinstance(dtype, DecimalDtype):
-                    result._dtype = dtype
-                else:
-                    result.dtype.precision = dtype.precision  # type: ignore[union-attr]
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and result.dtype != dtype
-            ):
-                result._dtype = dtype
-            return result
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:

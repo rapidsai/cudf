@@ -1790,6 +1790,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result = type(self).from_pylibcudf(
                 plc.unary.cast(self.plc_column, dtype_to_pylibcudf_type(dtype))
             )
+            # Handle decimal precision for any cast that produces a decimal result
+            if isinstance(
+                result.dtype,
+                (
+                    cudf.Decimal128Dtype,
+                    cudf.Decimal64Dtype,
+                    cudf.Decimal32Dtype,
+                ),
+            ):
+                if cudf.get_option(
+                    "mode.pandas_compatible"
+                ) and not isinstance(dtype, DecimalDtype):
+                    result._dtype = dtype
+                else:
+                    result.dtype.precision = dtype.precision  # type: ignore[union-attr]
             if (
                 cudf.get_option("mode.pandas_compatible")
                 and result.dtype != dtype
