@@ -121,7 +121,7 @@ class CategoricalColumn(column.ColumnBase):
         return self.dtype.ordered
 
     def to_pylibcudf(self) -> plc.Column:
-        return self.children[0].to_pylibcudf()
+        return self.codes.to_pylibcudf()
 
     def __setitem__(self, key: Any, value: Any) -> None:
         if is_scalar(value) and _is_null_host_scalar(value):
