@@ -556,9 +556,9 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
   std::transform(bloom_filter_data.begin(),
                  bloom_filter_data.end(),
                  std::back_inserter(transformed_bloom_filter_data),
-                 [](auto const& data_span) {
+                 [](auto const& data) {
                    return cudf::device_span<cuda::std::byte>{
-                     reinterpret_cast<cuda::std::byte*>(data_span.data()), data_span.size()};
+                     reinterpret_cast<cuda::std::byte*>(data.data()), data.size()};
                  });
 
   auto const bloom_filtered_row_groups = apply_bloom_filters(transformed_bloom_filter_data,

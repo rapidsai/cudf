@@ -513,7 +513,7 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
 }
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
-  cudf::host_span<cudf::device_span<cuda::std::byte> const> const& bloom_filter_data,
+  cudf::host_span<cudf::device_span<cuda::std::byte> const> bloom_filter_data,
   host_span<std::vector<size_type> const> input_row_group_indices,
   host_span<std::vector<ast::literal*> const> literals,
   size_type total_row_groups,
