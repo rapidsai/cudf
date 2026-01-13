@@ -71,9 +71,9 @@ class ListColumn(ColumnBase):
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
-        if idx < 0 or idx >= len(self._children):
+        if idx < 0 or idx >= len(self.plc_column.children()):
             raise IndexError(
-                f"Index {idx} out of range for {len(self._children)} children"
+                f"Index {idx} out of range for {len(self.plc_column.children())} children"
             )
 
         if idx == 1:
