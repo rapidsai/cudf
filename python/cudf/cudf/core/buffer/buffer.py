@@ -51,12 +51,6 @@ class BufferOwner(Serializable):
     the ones used throughout cuDF, can then refer to the same
     `BufferOwner` instance.
 
-    In order to implement copy-on-write and spillable buffers, we need the
-    ability to detect external access to the underlying memory. We say that
-    the buffer has been exposed if the device pointer (integer or void*) has
-    been accessed outside of BufferOwner. In this case, we have no control
-    over knowing if the data is being modified by a third party.
-
     Use `from_device_memory` and `from_host_memory` to create
     a new instance from either device or host memory respectively.
 
@@ -69,8 +63,6 @@ class BufferOwner(Serializable):
     owner
         Python object to which the lifetime of the memory allocation is tied.
         This buffer will keep a reference to `owner`.
-    exposed
-        Pointer to the underlying memory
 
     Raises
     ------
@@ -81,7 +73,6 @@ class BufferOwner(Serializable):
     _ptr: int
     _size: int
     _owner: object
-    _exposed: bool
     # The set of buffers that point to this owner.
     _slices: weakref.WeakSet[Buffer]
 
@@ -98,7 +89,6 @@ class BufferOwner(Serializable):
         self._ptr = ptr
         self._size = size
         self._owner = owner
-        self._exposed = False
         self._slices = weakref.WeakSet()
 
     @classmethod
@@ -133,7 +123,7 @@ class BufferOwner(Serializable):
         return cls(ptr=ptr, size=size, owner=data)
 
     @classmethod
-    def from_host_memory(cls, data: Any) -> Self:
+    def from_host_memory(cls, data: memoryview) -> Self:
         """Create an owner from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -153,23 +143,13 @@ class BufferOwner(Serializable):
         BufferOwner
             BufferOwner wrapping a device copy of `data`.
         """
-
-        # Convert to numpy array, this will not copy data in most cases.
-        ary = numpy.asanyarray(data)
-        # Extract pointer and size
-        ptr, size = get_ptr_and_size(ary.__array_interface__)
-        # Copy to device memory
-        buf = rmm.DeviceBuffer(ptr=ptr, size=size)
-        # Create from device memory
-        return cls.from_device_memory(buf)
+        if not data.c_contiguous:
+            raise ValueError("Buffer data must be C-contiguous")
+        db = rmm.DeviceBuffer.to_device(data.cast("B"))
+        return cls.from_device_memory(db)
 
     @property
     def size(self) -> int:
-        """Size of the buffer in bytes."""
-        return self._size
-
-    @property
-    def nbytes(self) -> int:
         """Size of the buffer in bytes."""
         return self._size
 
@@ -179,29 +159,9 @@ class BufferOwner(Serializable):
         return self._owner
 
     @property
-    def exposed(self) -> bool:
-        """The current exposure status of the buffer
-
-        This is used by copy-on-write to determine when a deep copy
-        is required and by SpillableBuffer to mark the buffer unspillable.
-        """
-        return self._exposed
-
-    @property
     def ptr(self) -> int:
         """Device pointer to the start of the buffer (Span protocol)."""
         return self._ptr
-
-    def mark_exposed(self) -> None:
-        """Mark the buffer as "exposed" permanently
-
-        This is used by copy-on-write to determine when a deep copy
-        is required and by SpillableBuffer to mark the buffer unspillable.
-
-        Notice, once the exposure status becomes True, it will never change
-        back.
-        """
-        self._exposed = True
 
     def memoryview(
         self, *, offset: int = 0, size: int | None = None
@@ -225,18 +185,26 @@ class BufferOwner(Serializable):
 class _BufferAccessContext:
     """Context manager for buffer access mode control."""
 
-    __slots__ = ("_buffer", "_mode")
+    __slots__ = ("_buffer_ref", "_pending_mode")
 
-    def __init__(self, buffer: Buffer, mode: Literal["read", "write"]):
-        self._buffer = buffer
-        self._mode = mode
+    def __init__(self, buffer: Buffer):
+        self._buffer_ref = weakref.ref(buffer)
+        self._pending_mode: Literal["read", "write"] | None = None
 
     def __enter__(self):
-        self._buffer._access_mode_stack.append(self._mode)
-        return self._buffer
+        # Get buffer from weakref
+        buffer = self._buffer_ref()
+        if buffer is None:
+            raise RuntimeError("Buffer has been garbage collected")
+
+        # Push pending mode to stack - nesting naturally supported
+        buffer._access_mode_stack.append(self._pending_mode)
+        return buffer
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._buffer._access_mode_stack.pop()
+        buffer = self._buffer_ref()
+        if buffer is not None:
+            buffer._access_mode_stack.pop()
         return False
 
 
@@ -279,17 +247,13 @@ class Buffer(Serializable):
         self._offset = offset
         self._size = size
         self._access_mode_stack: list[Literal["read", "write"]] = []
+        self._access_context = _BufferAccessContext(self)
         # Track this slice for copy-on-write
         if get_option("copy_on_write"):
             self._owner._slices.add(self)
 
     @property
     def size(self) -> int:
-        """Size of the buffer in bytes."""
-        return self._size
-
-    @property
-    def nbytes(self) -> int:
         """Size of the buffer in bytes."""
         return self._size
 
@@ -315,23 +279,10 @@ class Buffer(Serializable):
 
         Within this context, the buffer's ptr property will respect the
         specified access mode. The **kwargs allows subclasses to extend with additional
-        parameters.
-
-        Parameters
-        ----------
-        mode : {"read", "write"}, default "read"
-            Access mode for the buffer. If copy-on-write is enabled:
-            - "read": ptr access will not trigger copy-on-write
-            - "write": ptr access will trigger copy-on-write if needed
-        **kwargs
-            Additional parameters for subclass implementations.
-
-        Returns
-        -------
-        _BufferAccessContext
-            A context manager that controls the access mode.
+        parameters. The base buffer class supports read/write control for copy-on-write.
         """
-        return _BufferAccessContext(self, mode)
+        self._access_context._pending_mode = mode
+        return self._access_context
 
     def __getitem__(self, key: slice) -> Self:
         """Create a new slice of the buffer."""
@@ -353,12 +304,6 @@ class Buffer(Serializable):
     def copy(self, deep: bool = True) -> Self:
         """Return a copy of Buffer.
 
-        What actually happens when `deep == False` depends on the
-        "copy_on_write" option. When copy-on-write is enabled, a shallow copy
-        becomes a deep copy if the buffer has been exposed. This is because we
-        have no control over knowing if the data is being modified when the
-        buffer has been exposed to third-party.
-
         Parameters
         ----------
         deep : bool, default True
@@ -378,9 +323,6 @@ class Buffer(Serializable):
             `BufferOwner` depending on the expose status of the owner and the
             copy-on-write option (see above).
         """
-        if get_option("copy_on_write"):
-            deep = deep or self._owner.exposed
-
         # When doing a shallow copy, we just return a new slice
         if not deep:
             return self.__class__(
@@ -399,8 +341,6 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> Mapping:
         """Implementation of the CUDA Array Interface."""
-        if get_option("copy_on_write"):
-            self.make_single_owner_inplace()
         with self.access(mode="write"):
             return {
                 "data": (self.ptr, False),
