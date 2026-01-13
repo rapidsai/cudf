@@ -8,7 +8,7 @@ from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
-from pylibcudf._interop_helpers import ArrowLike
+from pylibcudf._interop_helpers import ArrowLike, ColumnMetadata
 from pylibcudf.scalar import Scalar
 from pylibcudf.span import Span
 from pylibcudf.types import DataType
@@ -92,7 +92,9 @@ class Column:
         buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
     ) -> Column: ...
     def to_arrow(
-        self, metadata: list | str | None = None, stream: Stream | None = None
+        self,
+        metadata: ColumnMetadata | str | None = None,
+        stream: Stream | None = None,
     ) -> ArrowLike: ...
     # Private methods below are included because polars is currently using them,
     # but we want to remove stubs for these private methods eventually
