@@ -142,8 +142,9 @@ auto hybrid_scan(io_source const& io_source,
     std::cout << "READER: Filter row groups with dictionary pages...\n";
     timer.reset();
     // Fetch dictionary page buffers and corresponding device spans from the input file buffer
-    auto [dictionary_page_buffers, dictionary_page_data] =
+    auto dictionary_page_buffers =
       fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
+    auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
     dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
       dictionary_page_data, current_row_group_indices, options, stream);
 
@@ -166,8 +167,9 @@ auto hybrid_scan(io_source const& io_source,
       mr, bloom_filter_alignment);
     std::cout << "READER: Filter row groups with bloom filters...\n";
     timer.reset();
-    auto [bloom_filter_buffers, bloom_filter_data] =
+    auto bloom_filter_buffers =
       fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, aligned_mr);
+    auto bloom_filter_data = make_device_spans<uint8_t>(bloom_filter_buffers);
     // Filter row groups with bloom filters
     bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
       bloom_filter_data, current_row_group_indices, options, stream);
@@ -205,8 +207,9 @@ auto hybrid_scan(io_source const& io_source,
   // Get column chunk byte ranges from the reader
   auto const filter_column_chunk_byte_ranges =
     reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
-  auto [filter_column_chunk_buffers, filter_column_chunk_data] =
+  auto filter_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
+  auto filter_column_chunk_data = make_device_spans<uint8_t>(filter_column_chunk_buffers);
 
   // Materialize the table with only the filter columns
   auto row_mask_mutable_view = row_mask->mutable_view();
@@ -237,8 +240,9 @@ auto hybrid_scan(io_source const& io_source,
   // Get column chunk byte ranges from the reader
   auto const payload_column_chunk_byte_ranges =
     reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
-  auto [payload_column_chunk_buffers, payload_column_chunk_data] =
+  auto payload_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
+  auto payload_column_chunk_data = make_device_spans<uint8_t>(payload_column_chunk_buffers);
 
   // Materialize the table with only the payload columns
   auto payload_table =

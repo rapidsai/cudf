@@ -51,31 +51,27 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
     page_index_bytes.size());
 }
 
-std::pair<std::vector<rmm::device_buffer>, std::vector<cudf::device_span<uint8_t>>>
-fetch_byte_ranges(cudf::host_span<uint8_t const> host_buffer,
-                  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-                  rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr)
+std::vector<rmm::device_buffer> fetch_byte_ranges(
+  cudf::host_span<uint8_t const> host_buffer,
+  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   std::vector<rmm::device_buffer> buffers(byte_ranges.size());
-  std::vector<cudf::device_span<uint8_t>> spans(byte_ranges.size());
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(byte_ranges.size()),
-                [&](auto const idx) {
-                  auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
-                  auto const chunk_size   = static_cast<size_t>(byte_ranges[idx].size());
-                  auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-                  cudf::detail::cuda_memcpy_async(
-                    cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
-                    cudf::host_span<uint8_t const>{chunk_offset, chunk_size},
-                    stream);
-                  spans[idx] =
-                    cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size};
-                  buffers[idx] = std::move(buffer);
-                });
+  std::transform(
+    byte_ranges.begin(), byte_ranges.end(), buffers.begin(), [&](auto const& byte_range) {
+      auto const chunk_offset = host_buffer.data() + byte_range.offset();
+      auto const chunk_size   = static_cast<size_t>(byte_range.size());
+      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
+      cudf::detail::cuda_memcpy_async(
+        cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
+        cudf::host_span<uint8_t const>{chunk_offset, chunk_size},
+        stream);
+      return buffer;
+    });
 
-  return {std::move(buffers), std::move(spans)};
+  return buffers;
 }
 
 cudf::test::strings_column_wrapper constant_strings(cudf::size_type value)
@@ -156,8 +152,9 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
   dictionary_page_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (dict_page_byte_ranges.size()) {
     // Fetch dictionary page buffers from the input file buffer
-    auto [dictionary_page_buffers, dictionary_page_data] =
+    auto dictionary_page_buffers =
       fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
+    auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
 
     // Filter row groups with dictionary pages
     dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
@@ -175,8 +172,9 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
     auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::device_async_resource_ref>(
       cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
-    auto [bloom_filter_buffers, bloom_filter_data] =
+    auto bloom_filter_buffers =
       fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, aligned_mr);
+    auto bloom_filter_data = make_device_spans<uint8_t>(bloom_filter_buffers);
 
     // Filter row groups with bloom filters
     bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
@@ -226,8 +224,9 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
     reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
 
   // Fetch column chunk device buffers and spans from the input buffer
-  auto [filter_column_chunk_buffers, filter_column_chunk_data] =
+  auto filter_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
+  auto filter_column_chunk_data = make_device_spans<uint8_t>(filter_column_chunk_buffers);
 
   // Materialize the table with only the filter columns
   auto row_mask_mutable_view = row_mask->mutable_view();
@@ -244,8 +243,9 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
     reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
 
   // Fetch column chunk device buffers and spans from the input buffer
-  auto [payload_column_chunk_buffers, payload_column_chunk_data] =
+  auto payload_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
+  auto payload_column_chunk_data = make_device_spans<uint8_t>(payload_column_chunk_buffers);
 
   // Materialize the table with only the payload columns
   auto [payload_table, payload_metadata] =
@@ -296,8 +296,9 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
       // Get column chunk byte ranges from the reader and fetch device buffers
       auto const filter_column_chunk_byte_ranges =
         reader->filter_column_chunks_byte_ranges(row_group_indices, options);
-      auto [filter_column_chunk_buffers, filter_column_chunk_data] =
+      auto filter_column_chunk_buffers =
         fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
+      auto filter_column_chunk_data = make_device_spans<uint8_t>(filter_column_chunk_buffers);
 
       // Setup chunking for filter columns and materialize the columns
       reader->setup_chunking_for_filter_columns(
@@ -339,8 +340,9 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
       // Get column chunk byte ranges from the reader and fetch device buffers
       auto const payload_column_chunk_byte_ranges =
         reader->payload_column_chunks_byte_ranges(row_group_indices, options);
-      auto [payload_column_chunk_buffers, payload_column_chunk_data] =
+      auto payload_column_chunk_buffers =
         fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
+      auto payload_column_chunk_data = make_device_spans<uint8_t>(payload_column_chunk_buffers);
 
       // Setup chunking for payload columns and materialize the table
       reader->setup_chunking_for_payload_columns(
@@ -404,8 +406,9 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
     reader->all_column_chunks_byte_ranges(current_row_group_indices, options);
 
   // Fetch column chunk device buffers and spans from the input buffer
-  auto [all_column_chunk_buffers, all_column_chunk_data] =
+  auto all_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, all_column_chunk_byte_ranges, stream, mr);
+  auto all_column_chunk_data = make_device_spans<uint8_t>(all_column_chunk_buffers);
 
   // Materialize the table with all columns
   return reader->materialize_all_columns(

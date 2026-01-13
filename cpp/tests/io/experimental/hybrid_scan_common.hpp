@@ -42,21 +42,38 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
   cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes);
 
 /**
- * @brief Fetches a list of byte ranges from a host buffer into device buffers and corresponding
- * device spans
+ * @brief Converts a span of device buffers into a vector of correspondingdevice spans
+ *
+ * @tparam T Type of output device spans
+ * @param buffers Host span of device buffers
+ * @return Device spans corresponding to the input device buffers
+ */
+template <typename T>
+std::vector<cudf::device_span<T>> make_device_spans(
+  cudf::host_span<rmm::device_buffer const> buffers)
+  requires(sizeof(T) == 1)
+{
+  std::vector<cudf::device_span<T>> device_spans(buffers.size());
+  std::transform(buffers.begin(), buffers.end(), device_spans.begin(), [](auto const& buffer) {
+    return cudf::device_span<T>{static_cast<T*>(const_cast<void*>(buffer.data())), buffer.size()};
+  });
+  return device_spans;
+}
+
+/**
+ * @brief Fetches a list of byte ranges from a host buffer into device buffers
  *
  * @param host_buffer Host buffer span
  * @param byte_ranges Byte ranges to fetch
  * @param stream CUDA stream
- * @param mr Device memory resource to create device buffers with
  *
- * @return Pair of device buffers and device spans pointing to them
+ * @return Device buffers
  */
-std::pair<std::vector<rmm::device_buffer>, std::vector<cudf::device_span<uint8_t>>>
-fetch_byte_ranges(cudf::host_span<uint8_t const> host_buffer,
-                  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-                  rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr);
+std::vector<rmm::device_buffer> fetch_byte_ranges(
+  cudf::host_span<uint8_t const> host_buffer,
+  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Creates a strings column with a constant stringified value between 0 and 9999
