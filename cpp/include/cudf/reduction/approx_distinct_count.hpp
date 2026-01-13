@@ -20,9 +20,15 @@
 
 namespace CUDF_EXPORT cudf {
 
-// Forward declaration
+// Forward declarations
+namespace hashing::detail {
+template <typename Key>
+struct XXHash_64;
+}
+
 namespace detail {
-struct approx_distinct_count;
+template <template <typename> class Hasher>
+class approx_distinct_count;
 }
 
 /**
@@ -69,7 +75,8 @@ struct approx_distinct_count;
  */
 class approx_distinct_count {
  public:
-  using impl_type = cudf::detail::approx_distinct_count;  ///< Implementation type
+  using impl_type =
+    cudf::detail::approx_distinct_count<cudf::hashing::detail::XXHash_64>;  ///< Implementation type
 
   /**
    * @brief Constructs an approximate distinct count sketch from a table

@@ -95,13 +95,15 @@ struct check_nans_predicate {
 
 }  // namespace
 
-approx_distinct_count::~approx_distinct_count() = default;
+template <template <typename> class Hasher>
+approx_distinct_count<Hasher>::~approx_distinct_count() = default;
 
-approx_distinct_count::approx_distinct_count(table_view const& input,
-                                             std::int32_t precision,
-                                             null_policy null_handling,
-                                             nan_policy nan_handling,
-                                             rmm::cuda_stream_view stream)
+template <template <typename> class Hasher>
+approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
+                                                     std::int32_t precision,
+                                                     null_policy null_handling,
+                                                     nan_policy nan_handling,
+                                                     rmm::cuda_stream_view stream)
   : _impl{cuco::precision{precision},
           cuda::std::identity{},
           rmm::mr::polymorphic_allocator<cuda::std::byte>{},
@@ -115,11 +117,12 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
   add(input, stream);
 }
 
-approx_distinct_count::approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
-                                             std::int32_t precision,
-                                             null_policy null_handling,
-                                             nan_policy nan_handling,
-                                             rmm::cuda_stream_view stream)
+template <template <typename> class Hasher>
+approx_distinct_count<Hasher>::approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
+                                                     std::int32_t precision,
+                                                     null_policy null_handling,
+                                                     nan_policy nan_handling,
+                                                     rmm::cuda_stream_view stream)
   : _impl{cuco::precision{precision},
           cuda::std::identity{},
           rmm::mr::polymorphic_allocator<cuda::std::byte>{},
@@ -131,7 +134,8 @@ approx_distinct_count::approx_distinct_count(cuda::std::span<cuda::std::byte> sk
   _impl.merge_async(sketch_ref, stream);
 }
 
-void approx_distinct_count::add(table_view const& input, rmm::cuda_stream_view stream)
+template <template <typename> class Hasher>
+void approx_distinct_count<Hasher>::add(table_view const& input, rmm::cuda_stream_view stream)
 {
   auto const num_rows = input.num_rows();
   if (num_rows == 0) { return; }
@@ -140,7 +144,7 @@ void approx_distinct_count::add(table_view const& input, rmm::cuda_stream_view s
   auto const preprocessed_input =
     cudf::detail::row::hash::preprocessed_table::create(input, stream);
   auto const row_hasher = cudf::detail::row::hash::row_hasher(preprocessed_input);
-  auto const hash_key   = row_hasher.device_hasher<cudf::hashing::detail::XXHash_64>(has_nulls);
+  auto const hash_key   = row_hasher.device_hasher<Hasher>(has_nulls);
 
   if (_null_handling == null_policy::INCLUDE) {
     if (_nan_handling == nan_policy::NAN_IS_NULL) {
@@ -183,7 +187,9 @@ void approx_distinct_count::add(table_view const& input, rmm::cuda_stream_view s
   }
 }
 
-void approx_distinct_count::merge(approx_distinct_count const& other, rmm::cuda_stream_view stream)
+template <template <typename> class Hasher>
+void approx_distinct_count<Hasher>::merge(approx_distinct_count const& other,
+                                          rmm::cuda_stream_view stream)
 {
   // Validate policies match
   CUDF_EXPECTS(_null_handling == other._null_handling,
@@ -196,23 +202,40 @@ void approx_distinct_count::merge(approx_distinct_count const& other, rmm::cuda_
   _impl.merge_async(other._impl, stream);
 }
 
-void approx_distinct_count::merge(cuda::std::span<cuda::std::byte> sketch_span,
-                                  rmm::cuda_stream_view stream)
+template <template <typename> class Hasher>
+void approx_distinct_count<Hasher>::merge(cuda::std::span<cuda::std::byte> sketch_span,
+                                          rmm::cuda_stream_view stream)
 {
   auto other_ref = hll_type::ref_type<>{sketch_span, cuda::std::identity{}};
   _impl.merge_async(other_ref, stream);
 }
 
-std::size_t approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
+template <template <typename> class Hasher>
+std::size_t approx_distinct_count<Hasher>::estimate(rmm::cuda_stream_view stream) const
 {
   return _impl.estimate(stream);
 }
 
-cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept { return _impl.sketch(); }
+template <template <typename> class Hasher>
+cuda::std::span<cuda::std::byte> approx_distinct_count<Hasher>::sketch() noexcept
+{
+  return _impl.sketch();
+}
 
-null_policy approx_distinct_count::null_handling() const noexcept { return _null_handling; }
+template <template <typename> class Hasher>
+null_policy approx_distinct_count<Hasher>::null_handling() const noexcept
+{
+  return _null_handling;
+}
 
-nan_policy approx_distinct_count::nan_handling() const noexcept { return _nan_handling; }
+template <template <typename> class Hasher>
+nan_policy approx_distinct_count<Hasher>::nan_handling() const noexcept
+{
+  return _nan_handling;
+}
+
+// Explicit instantiation for the default hasher to improve build times
+template class approx_distinct_count<cudf::hashing::detail::XXHash_64>;
 
 }  // namespace detail
 

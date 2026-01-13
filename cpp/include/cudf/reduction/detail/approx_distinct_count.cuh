@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -25,12 +26,16 @@ namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
- * @brief HyperLogLog-based approximate distinct count sketch for use by the public API.
+ * @brief HyperLogLog-based approximate distinct count sketch for use by the public API
  *
  * This detail implementation provides the core HyperLogLog functionality used by the
- * public `cudf::approx_distinct_count` class. It uses XXHash64 for hashing table rows
- * and maintains a cuco::hyperloglog sketch for cardinality estimation.
+ * public `cudf::approx_distinct_count` class. It maintains a cuco::hyperloglog sketch
+ * for cardinality estimation.
+ *
+ * @tparam Hasher The hash function template to use for hashing table rows. Must be compatible
+ *                with cudf's row_hasher device_hasher interface (a template taking a Key type).
  */
+template <template <typename> class Hasher>
 class approx_distinct_count {
  public:
   /**
