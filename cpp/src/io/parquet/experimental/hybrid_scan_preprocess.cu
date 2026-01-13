@@ -114,7 +114,7 @@ void hybrid_scan_reader_impl::prepare_row_groups(
 }
 
 bool hybrid_scan_reader_impl::setup_column_chunks(
-  cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans)
+  cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_data)
 {
   auto const& row_groups_info = _pass_itm_data->row_groups;
   auto& chunks                = _pass_itm_data->chunks;
@@ -151,7 +151,7 @@ bool hybrid_scan_reader_impl::setup_column_chunks(
 }
 
 void hybrid_scan_reader_impl::setup_compressed_data(
-  cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans)
+  cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_data)
 {
   auto& pass = *_pass_itm_data;
 
@@ -160,7 +160,7 @@ void hybrid_scan_reader_impl::setup_compressed_data(
 
   auto& chunks = pass.chunks;
 
-  pass.has_compressed_data = setup_column_chunks(column_chunk_spans);
+  pass.has_compressed_data = setup_column_chunks(column_chunk_data);
 
   // Process dataset chunk pages into output columns
   auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)

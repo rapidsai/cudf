@@ -380,7 +380,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param column_chunk_data Device spans of buffers containing column chunk data
    */
-  void setup_next_pass(cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans);
+  void setup_next_pass(cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_data);
 
   /**
    * @brief Setup pointers to columns chunks to be processed for this pass.
@@ -390,14 +390,14 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param column_chunk_data Device spans of buffers containing column chunk data
    * @return boolean indicating if compressed chunks were found
    */
-  bool setup_column_chunks(cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans);
+  bool setup_column_chunks(cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_data);
 
   /**
    * @brief Setup compressed column chunks data and decode page headers for the current pass.
    *
    * @param column_chunk_data Device spans of buffers containing column chunk data
    */
-  void setup_compressed_data(cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans);
+  void setup_compressed_data(cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_data);
 
   /**
    * @brief Reset the internal state of the reader.
