@@ -545,10 +545,6 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
 
     if scheduler_address is not None:
         # Connect to existing cluster via scheduler address
-        if scheduler_file is not None:
-            raise ValueError(
-                "Cannot specify both --scheduler-address and --scheduler-file."
-            )
         client = Client(address=scheduler_address)
         n_workers = len(client.scheduler_info().get("workers", {}))
         print(
