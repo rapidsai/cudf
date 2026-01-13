@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -513,7 +513,7 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
 }
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
-  cudf::host_span<rmm::device_buffer> bloom_filter_data,
+  cudf::host_span<cudf::device_span<cuda::std::byte> const> const& bloom_filter_spans,
   host_span<std::vector<size_type> const> input_row_group_indices,
   host_span<std::vector<ast::literal*> const> literals,
   size_type total_row_groups,
@@ -528,23 +528,12 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Get parquet types for the predicate columns
   auto const parquet_types = get_parquet_types(input_row_group_indices, bloom_filter_col_schemas);
 
-  // Create spans from bloom filter bitset buffers to use in cuco::bloom_filter_ref.
-  std::vector<cudf::device_span<cuda::std::byte>> h_bloom_filter_spans;
-  h_bloom_filter_spans.reserve(bloom_filter_data.size());
-  std::transform(bloom_filter_data.begin(),
-                 bloom_filter_data.end(),
-                 std::back_inserter(h_bloom_filter_spans),
-                 [&](auto& buffer) {
-                   return cudf::device_span<cuda::std::byte>{
-                     static_cast<cuda::std::byte*>(buffer.data()), buffer.size()};
-                 });
-
   // Copy bloom filter bitset spans to device
-  auto const bloom_filter_spans = cudf::detail::make_device_uvector_async(
-    h_bloom_filter_spans, stream, cudf::get_current_device_resource_ref());
+  auto const device_bloom_filter_spans = cudf::detail::make_device_uvector_async(
+    bloom_filter_spans, stream, cudf::get_current_device_resource_ref());
 
   // Create a bloom filter query table caster
-  bloom_filter_caster const bloom_filter_col{bloom_filter_spans,
+  bloom_filter_caster const bloom_filter_col{device_bloom_filter_spans,
                                              parquet_types,
                                              static_cast<size_t>(total_row_groups),
                                              bloom_filter_col_schemas.size()};

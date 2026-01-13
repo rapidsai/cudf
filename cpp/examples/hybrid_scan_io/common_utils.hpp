@@ -9,6 +9,7 @@
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -77,20 +78,21 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
   cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes);
 
 /**
- * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
+ * @brief Fetches a list of byte ranges from a host buffer into device buffers and a list of
+ * corresponding device spans
  *
  * @param host_buffer Host buffer span
  * @param byte_ranges Byte ranges to fetch
  * @param stream CUDA stream
  * @param mr Device memory resource to create device buffers with
  *
- * @return Vector of device buffers
+ * @return Pair of device buffers and corresponding device spans
  */
-std::vector<rmm::device_buffer> fetch_byte_ranges(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+std::pair<std::vector<rmm::device_buffer>, std::vector<cudf::device_span<uint8_t>>>
+fetch_byte_ranges(cudf::host_span<uint8_t const> host_buffer,
+                  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Concatenate a vector of tables and return the resultant table

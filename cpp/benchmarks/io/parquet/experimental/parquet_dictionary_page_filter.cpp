@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "cudf/utilities/memory_resource.hpp"
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/io/cuio_common.hpp>
@@ -12,6 +14,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <nvbench/nvbench.cuh>
 
@@ -65,36 +68,39 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
 }
 
 /**
- * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
+ * @brief Fetches a list of byte ranges from a host buffer into device buffers and a list of
+ * corresponding device spans
  *
  * @param host_buffer Host buffer span
  * @param byte_ranges Byte ranges to fetch
  * @param stream CUDA stream
  *
- * @return Vector of device buffers
+ * @return Pair of device buffers and corresponding device spans
  */
-std::vector<rmm::device_buffer> fetch_byte_ranges(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream)
+std::pair<std::vector<rmm::device_buffer>, std::vector<cudf::device_span<uint8_t>>>
+fetch_byte_ranges(cudf::host_span<uint8_t const> host_buffer,
+                  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+                  rmm::cuda_stream_view stream)
 {
-  std::vector<rmm::device_buffer> buffers{};
-  buffers.reserve(byte_ranges.size());
+  std::vector<rmm::device_buffer> buffers(byte_ranges.size());
+  std::vector<cudf::device_span<uint8_t>> spans(byte_ranges.size());
 
-  std::transform(
-    byte_ranges.begin(),
-    byte_ranges.end(),
-    std::back_inserter(buffers),
-    [&](auto const& byte_range) {
-      auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = byte_range.size();
-      auto buffer             = rmm::device_buffer(chunk_size, stream);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
-      return buffer;
+  std::for_each(
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(byte_ranges.size()),
+    [&](auto const idx) {
+      auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
+      auto const chunk_size   = static_cast<size_t>(byte_ranges[idx].size());
+      auto buffer = rmm::device_buffer(chunk_size, stream, cudf::get_current_device_resource_ref());
+      cudf::detail::cuda_memcpy_async(
+        cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
+        cudf::host_span<uint8_t const>{chunk_offset, chunk_size},
+        stream);
+      spans[idx]   = cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size};
+      buffers[idx] = std::move(buffer);
     });
 
-  return buffers;
+  return {std::move(buffers), std::move(spans)};
 }
 
 }  // namespace
@@ -157,8 +163,8 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
   // If we have dictionary page byte ranges, filter row groups with dictionary pages
   CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
 
-  // Fetch dictionary page buffers from the input file buffer
-  std::vector<rmm::device_buffer> dictionary_page_buffers =
+  // Fetch dictionary page buffers and corresponding device spans from the input file buffer
+  auto [dictionary_page_buffers, dictionary_page_spans] =
     fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream);
 
   auto mem_stats_logger = cudf::memory_stats_logger();
@@ -168,7 +174,7 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
                try_drop_l3_cache();
                timer.start();
                std::ignore = reader->filter_row_groups_with_dictionary_pages(
-                 dictionary_page_buffers, input_row_group_indices, read_opts, stream);
+                 dictionary_page_spans, input_row_group_indices, read_opts, stream);
                timer.stop();
              });
 

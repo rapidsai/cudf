@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,7 @@
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <string>
 #include <vector>
@@ -49,30 +50,31 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
     page_index_bytes.size());
 }
 
-std::vector<rmm::device_buffer> fetch_byte_ranges(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::pair<std::vector<rmm::device_buffer>, std::vector<cudf::device_span<uint8_t>>>
+fetch_byte_ranges(cudf::host_span<uint8_t const> host_buffer,
+                  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr)
 {
-  std::vector<rmm::device_buffer> buffers{};
-  buffers.reserve(byte_ranges.size());
+  std::vector<rmm::device_buffer> buffers(byte_ranges.size());
+  std::vector<cudf::device_span<uint8_t>> spans(byte_ranges.size());
 
-  std::transform(
-    byte_ranges.begin(),
-    byte_ranges.end(),
-    std::back_inserter(buffers),
-    [&](auto const& byte_range) {
-      auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = byte_range.size();
-      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
-      return buffer;
-    });
+  std::for_each(thrust::counting_iterator<size_t>(0),
+                thrust::counting_iterator(byte_ranges.size()),
+                [&](auto const idx) {
+                  auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
+                  auto const chunk_size   = static_cast<size_t>(byte_ranges[idx].size());
+                  auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
+                  cudf::detail::cuda_memcpy_async(
+                    cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
+                    cudf::host_span<uint8_t const>{chunk_offset, chunk_size},
+                    stream);
+                  spans[idx] =
+                    cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size};
+                  buffers[idx] = std::move(buffer);
+                });
 
-  stream.synchronize_no_throw();
-  return buffers;
+  return {std::move(buffers), std::move(spans)};
 }
 
 template <typename... UniqPtrs>
@@ -173,14 +175,14 @@ TEST_F(HybridScanTest, DictionaryPageFiltering)
 
   auto const dict_byte_ranges =
     std::get<1>(reader->secondary_filters_byte_ranges(input_row_group_indices, in_opts));
-  std::vector<rmm::device_buffer> dictionary_page_buffers =
+  auto [dictionary_page_buffers, dictionary_page_spans] =
     fetch_byte_ranges(file_buffer_span,
                       dict_byte_ranges,
                       cudf::test::get_default_stream(),
                       cudf::get_current_device_resource_ref());
 
   auto result = reader->filter_row_groups_with_dictionary_pages(
-    dictionary_page_buffers, input_row_group_indices, in_opts, cudf::test::get_default_stream());
+    dictionary_page_spans, input_row_group_indices, in_opts, cudf::test::get_default_stream());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

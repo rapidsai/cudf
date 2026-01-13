@@ -260,7 +260,7 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
 
 std::vector<std::vector<size_type>>
 hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
-  cudf::host_span<rmm::device_buffer> dictionary_page_data,
+  cudf::host_span<cudf::device_span<uint8_t> const> const& dictionary_page_spans,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
@@ -298,7 +298,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
 
   // Prepare dictionary column chunks and decode page headers
   auto [has_compressed_data, chunks, pages] = prepare_dictionaries(
-    row_group_indices, dictionary_page_data, dictionary_col_schemas, options, stream);
+    row_group_indices, dictionary_page_spans, dictionary_col_schemas, options, stream);
 
   // Decompress dictionary pages if needed and store uncompressed buffers here
   auto const mr                          = cudf::get_current_device_resource_ref();
@@ -324,7 +324,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_bloom_filters(
-  cudf::host_span<rmm::device_buffer> bloom_filter_data,
+  cudf::host_span<cudf::device_span<uint8_t> const> const& bloom_filter_spans,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
@@ -339,7 +339,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _extended_metadata->filter_row_groups_with_bloom_filters(
-    bloom_filter_data,
+    bloom_filter_spans,
     row_group_indices,
     output_dtypes,
     _output_column_schemas,
@@ -456,7 +456,7 @@ hybrid_scan_reader_impl::all_column_chunks_byte_ranges(
 
 table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
   cudf::mutable_column_view& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
@@ -482,15 +482,14 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
       row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
   }
 
-  prepare_data(
-    read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+  prepare_data(read_mode::READ_ALL, row_group_indices, column_chunk_spans, data_page_mask);
 
   return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::FILTER_COLUMNS, row_mask);
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
   cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
@@ -512,15 +511,14 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
       row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
   }
 
-  prepare_data(
-    read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+  prepare_data(read_mode::READ_ALL, row_group_indices, column_chunk_spans, data_page_mask);
 
   return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::PAYLOAD_COLUMNS, row_mask);
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_all_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -535,7 +533,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns(
   // Convert the input expression (must be done after column selection)
   _expr_conv = build_converted_expression(options.get_filter());
 
-  prepare_data(read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), {});
+  prepare_data(read_mode::READ_ALL, row_group_indices, column_chunk_spans, {});
 
   // Use the main reader's function
   return reader_impl::read_chunk_internal(read_mode::READ_ALL);
@@ -547,7 +545,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -573,8 +571,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
       row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
   }
 
-  prepare_data(
-    read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+  prepare_data(read_mode::CHUNKED_READ, row_group_indices, column_chunk_spans, data_page_mask);
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns_chunk(
@@ -602,7 +599,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -624,8 +621,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
       row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
   }
 
-  prepare_data(
-    read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+  prepare_data(read_mode::CHUNKED_READ, row_group_indices, column_chunk_spans, data_page_mask);
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns_chunk(
@@ -716,7 +712,7 @@ named_to_reference_converter hybrid_scan_reader_impl::build_converted_expression
 void hybrid_scan_reader_impl::prepare_data(
   read_mode mode,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t> const> const& column_chunk_spans,
   cudf::host_span<bool const> data_page_mask)
 {
   // if we have not preprocessed at the whole-file level, do that now
@@ -731,7 +727,7 @@ void hybrid_scan_reader_impl::prepare_data(
   // handle any chunking work (ratcheting through the subpasses and chunks within
   // our current pass) if in bounds
   if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
-    handle_chunking(mode, std::move(column_chunk_buffers), data_page_mask);
+    handle_chunking(mode, column_chunk_spans, data_page_mask);
   }
 }
 

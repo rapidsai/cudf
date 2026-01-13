@@ -94,13 +94,11 @@ struct hybrid_scan_fn {
 
     auto const all_column_chunk_byte_ranges =
       reader->all_column_chunks_byte_ranges(row_groups_indices, options);
-    auto all_column_chunk_buffers =
+    auto [all_column_chunk_buffers, all_column_chunk_spans] =
       fetch_byte_ranges(file_buffer_span, all_column_chunk_byte_ranges, stream, mr);
-    table.get() =
-      std::move(reader
-                  ->materialize_all_columns(
-                    row_groups_indices, std::move(all_column_chunk_buffers), options, stream)
-                  .tbl);
+    table.get() = std::move(
+      reader->materialize_all_columns(row_groups_indices, all_column_chunk_spans, options, stream)
+        .tbl);
     stream.synchronize_no_throw();
   }
 };

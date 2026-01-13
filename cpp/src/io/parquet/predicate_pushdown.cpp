@@ -255,8 +255,21 @@ aggregate_reader_metadata::filter_row_groups(
             {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
   }
 
+  // Create spans from bloom filter buffers
+  std::vector<cudf::device_span<cuda::std::byte>> bloom_filter_spans_vector;
+  bloom_filter_spans_vector.reserve(bloom_filter_data.size());
+  std::transform(bloom_filter_data.begin(),
+                 bloom_filter_data.end(),
+                 std::back_inserter(bloom_filter_spans_vector),
+                 [](auto& buffer) {
+                   return cudf::device_span<cuda::std::byte>(
+                     static_cast<cuda::std::byte*>(buffer.data()), buffer.size());
+                 });
+  auto bloom_filter_spans =
+    cudf::host_span<cudf::device_span<cuda::std::byte> const>(bloom_filter_spans_vector);
+
   // Apply bloom filtering on the output row groups from stats filter
-  auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_data,
+  auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_spans,
                                                              bloom_filter_input_row_groups,
                                                              equality_literals,
                                                              num_stats_filtered_row_groups,
