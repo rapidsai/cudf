@@ -484,7 +484,7 @@ cdef class HybridScanReader:
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
-        for span in column_chunk_spans:
+        for span in column_chunk_data:
             dev_span = <DeviceSpan>span
             spans_vec.push_back(dev_span.c_obj)
 
@@ -567,7 +567,7 @@ cdef class HybridScanReader:
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
-        for span in column_chunk_spans:
+        for span in column_chunk_data:
             dev_span = <DeviceSpan>span
             spans_vec.push_back(dev_span.c_obj)
 
@@ -626,7 +626,7 @@ cdef class HybridScanReader:
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
-        for span in column_chunk_spans:
+        for span in column_chunk_data:
             dev_span = <DeviceSpan>span
             spans_vec.push_back(dev_span.c_obj)
 
@@ -715,7 +715,7 @@ cdef class HybridScanReader:
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
-        for span in column_chunk_spans:
+        for span in column_chunk_data:
             dev_span = <DeviceSpan>span
             spans_vec.push_back(dev_span.c_obj)
 

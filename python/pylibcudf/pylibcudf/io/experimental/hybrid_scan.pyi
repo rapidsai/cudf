@@ -79,7 +79,7 @@ class HybridScanReader:
     def materialize_filter_columns(
         self,
         row_group_indices: list[int],
-        column_chunk_spans: list[DeviceSpan],
+        column_chunk_data: list[DeviceSpan],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
@@ -91,7 +91,7 @@ class HybridScanReader:
     def materialize_payload_columns(
         self,
         row_group_indices: list[int],
-        column_chunk_spans: list[DeviceSpan],
+        column_chunk_data: list[DeviceSpan],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
@@ -104,7 +104,7 @@ class HybridScanReader:
         row_group_indices: list[int],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
-        column_chunk_spans: list[DeviceSpan],
+        column_chunk_data: list[DeviceSpan],
         options: ParquetReaderOptions,
         stream: Stream | None = None,
     ) -> None: ...
@@ -118,7 +118,7 @@ class HybridScanReader:
         row_group_indices: list[int],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
-        column_chunk_spans: list[DeviceSpan],
+        column_chunk_data: list[DeviceSpan],
         options: ParquetReaderOptions,
         stream: Stream | None = None,
     ) -> None: ...
