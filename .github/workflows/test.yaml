@@ -207,3 +207,14 @@ jobs:
       sha: ${{ inputs.sha }}
       script: "ci/test_python_cudf_cccl.sh"
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
+  wheel-python-cudf-cccl-tests:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
+    with:
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "ci/test_wheel_cudf_cccl.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
