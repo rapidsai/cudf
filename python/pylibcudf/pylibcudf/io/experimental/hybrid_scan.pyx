@@ -320,7 +320,7 @@ cdef class HybridScanReader:
         cdef vector[device_span[uint8_t]] spans_vec
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
-        for span in dictionary_page_spans:
+        for span in dictionary_page_data:
             dev_span = <DeviceSpan>span
             spans_vec.push_back(dev_span.c_obj)
 
@@ -365,7 +365,7 @@ cdef class HybridScanReader:
         cdef vector[device_span[uint8_t]] spans_vec
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
-        for span in bloom_filter_spans:
+        for span in bloom_filter_data:
             dev_span = <DeviceSpan>span
             spans_vec.push_back(dev_span.c_obj)
 
