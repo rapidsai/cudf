@@ -363,12 +363,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto h_aggregated_info =
-    cudf::detail::make_pinned_vector_async<cumulative_page_info>(aggregated_info.size(), stream);
-  cudf::detail::cuda_memcpy(
-    cudf::host_span<cumulative_page_info>{h_aggregated_info.data(), aggregated_info.size()},
-    cudf::device_span<cumulative_page_info const>{aggregated_info.data(), aggregated_info.size()},
-    stream);
+  auto h_aggregated_info = cudf::detail::make_pinned_vector(aggregated_info, stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -420,12 +415,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto h_aggregated_info =
-    cudf::detail::make_pinned_vector_async<cumulative_page_info>(aggregated_info.size(), stream);
-  cudf::detail::cuda_memcpy(
-    cudf::host_span<cumulative_page_info>{h_aggregated_info.data(), aggregated_info.size()},
-    cudf::device_span<cumulative_page_info const>{aggregated_info.data(), aggregated_info.size()},
-    stream);
+  auto h_aggregated_info = cudf::detail::make_pinned_vector(aggregated_info, stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -678,10 +668,8 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
     row_counts_begin, row_counts_end, compacted_row_counts_begin, row_counts_nonzero{}, stream);
   if (compacted_row_counts_end != compacted_row_counts_begin) {
     auto const found_row_count = [&]() {
-      auto found_row_count = cudf::detail::make_pinned_vector_async<size_type>(1, stream);
-      cudf::detail::cuda_memcpy(cudf::host_span<size_type>{found_row_count.data(), 1},
-                                cudf::device_span<size_type const>{compacted_row_counts.data(), 1},
-                                stream);
+      auto found_row_count = cudf::detail::make_pinned_vector(
+        cudf::device_span<size_type const>{compacted_row_counts.data(), 1}, stream);
       return found_row_count.front();
     }();
 
@@ -721,13 +709,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
                                 decomp_sum{});
 
   // retrieve to host so we can get compression scratch sizes
-  auto h_decomp_info =
-    cudf::detail::make_pinned_vector_async<decompression_info>(decomp_info.size(), stream);
-  cudf::detail::cuda_memcpy(
-    cudf::host_span<decompression_info>(h_decomp_info.data(), decomp_info.size()),
-    cudf::device_span<decompression_info const>(decomp_info.data(), decomp_info.size()),
-    stream);
-  auto temp_cost = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
+  auto h_decomp_info = cudf::detail::make_pinned_vector(decomp_info, stream);
+  auto temp_cost     = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
   std::transform(h_decomp_info.begin(), h_decomp_info.end(), temp_cost.begin(), [](auto const& d) {
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
