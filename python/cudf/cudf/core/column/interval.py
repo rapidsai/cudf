@@ -87,12 +87,7 @@ class IntervalColumn(StructColumn):
         mask: Buffer | None,
         children: list[ColumnBase],
     ) -> plc.Column:
-        """Construct plc.Column using STRUCT type for interval columns.
-
-        Interval columns are internally stored as structs with left/right edges,
-        so we must use STRUCT TypeId for plc_column construction rather than
-        attempting to use IntervalDtype.
-        """
+        """Construct plc.Column using STRUCT type for interval columns."""
         offset = header.get("offset", 0)
         if mask is None:
             null_count = 0
@@ -101,7 +96,6 @@ class IntervalColumn(StructColumn):
                 mask, offset, header["size"] + offset
             )
 
-        # Use STRUCT type instead of IntervalDtype for plc_column
         plc_type = plc.DataType(plc.TypeId.STRUCT)
         return plc.Column(
             plc_type,

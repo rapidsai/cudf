@@ -368,17 +368,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def has_nulls(self, include_nan: bool = False) -> bool:
         """Check if column has null values.
 
-        Parameters
-        ----------
-        include_nan : bool, default False
-            If True, NaN values are also considered null. This parameter
-            only has an effect on float columns (NumericalColumn override).
-            For non-float columns, this parameter is ignored.
-
-        Returns
-        -------
-        bool
-            True if column has null values (and optionally NaN values for floats).
+        NaN inclusion is supported for specific dtypes only.
         """
         return int(self.null_count) != 0
 
@@ -793,13 +783,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def values(self) -> cp.ndarray:
-        """Return a CuPy representation of the Column.
-
-        Raises
-        ------
-        NotImplementedError
-            If CuPy does not support this column's dtype.
-        """
+        """Return a CuPy representation of the Column."""
         raise NotImplementedError(f"CuPy does not support {self.dtype}")
 
     def find_and_replace(
@@ -1051,7 +1035,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     self.size, plc.types.MaskState.ALL_VALID
                 )
             )
-            # Set the ALL_VALID mask inplace (null_count = 0)
             self.plc_column = self.plc_column.with_mask(
                 mask, 0, validate=False
             )
@@ -1464,27 +1447,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
 
     def isnan(self) -> ColumnBase:
-        """Identify NaN values in a Column.
-
-        NaN values only exist in float columns. For non-float columns,
-        this always returns False.
-        """
+        """Identify NaN values in a Column."""
         return as_column(False, length=len(self))
 
     def notnan(self) -> ColumnBase:
-        """Identify non-NaN values in a Column.
-
-        NaN values only exist in float columns. For non-float columns,
-        this always returns True.
-        """
+        """Identify non-NaN values in a Column."""
         return as_column(True, length=len(self))
 
     def isnull(self) -> ColumnBase:
-        """Identify missing values in a Column.
-
-        For most column types, only checks for NULL values.
-        Float columns override to also consider NaN as null.
-        """
+        """Identify missing values in a Column."""
         if not self.has_nulls(include_nan=False):
             return as_column(False, length=len(self))
 
@@ -1494,11 +1465,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
 
     def notnull(self) -> ColumnBase:
-        """Identify non-missing values in a Column.
-
-        For most column types, only checks for NULL values.
-        Float columns override to also exclude NaN values.
-        """
+        """Identify non-missing values in a Column."""
         if not self.has_nulls(include_nan=False):
             result = as_column(True, length=len(self))
         else:
@@ -1785,13 +1752,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @cache
     def distinct_count(self, dropna: bool = True) -> int:
-        """
-        Get the number of distinct values in this column.
-
-        Note: @cache is safe here because dropna is boolean (only 2 possible values),
-        so each column instance has at most 2 cache entries. Cache is explicitly
-        cleared via _clear_cache() when the column is modified.
-        """
+        """Get the (null-aware) number of distinct values in this column."""
         with self.access(mode="read", scope="internal"):
             return plc.stream_compaction.distinct_count(
                 self.plc_column,
@@ -1813,14 +1774,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             # Adjust decimal result: in pandas compat mode with non-decimal target,
             # preserve the target dtype wrapper; otherwise update precision from target
-            if isinstance(
-                result.dtype,
-                (
-                    cudf.Decimal128Dtype,
-                    cudf.Decimal64Dtype,
-                    cudf.Decimal32Dtype,
-                ),
-            ):
+            if isinstance(result.dtype, DecimalDtype):
                 if cudf.get_option(
                     "mode.pandas_compatible"
                 ) and not isinstance(dtype, DecimalDtype):
@@ -2122,7 +2076,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 children.append(child)
         assert len(frames) == 0, "Deserialization did not consume all frames"
 
-        # Construct plc_column - subclasses can override to customize construction
         plc_column = cls._deserialize_plc_column(
             header, dtype, data, mask, children
         )
@@ -2137,10 +2090,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         mask: Buffer | None,
         children: list[ColumnBase],
     ) -> plc.Column:
-        """Construct plc.Column from deserialized components.
-
-        Subclasses can override this to customize column construction.
-        """
+        """Construct plc.Column from deserialized components."""
         offset = header.get("offset", 0)
         if mask is None:
             null_count = 0
@@ -2408,7 +2358,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result_col = type(self).from_pylibcudf(
                 plc.Column.from_scalar(plc_scalar, 1)
             )
-            # Allow subclasses to adjust result_col based on reduction_op
             result_col = self._adjust_reduce_result(
                 result_col, reduction_op, col_dtype, plc_scalar
             )
@@ -2421,10 +2370,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         col_dtype: DtypeObj,
         plc_scalar: plc.Scalar,
     ) -> ColumnBase:
-        """Hook for subclasses to adjust reduction result.
-
-        Override this to apply type-specific transformations to the result column.
-        """
+        """Hook for subclasses to adjust reduction result."""
         return result_col
 
     def minmax(self) -> tuple[ScalarLike, ScalarLike]:
