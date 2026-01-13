@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -1152,13 +1152,12 @@ def unstack(df, level, fill_value=None, sort: bool = True):
             return df
     if not isinstance(df.index, cudf.MultiIndex):
         dtype = df._columns[0].dtype
-        for col in df._columns:
-            if not col.dtype == dtype:
-                raise ValueError(
-                    "Calling unstack() on single index dataframe"
-                    " with different column datatype is not supported."
-                )
-        res = df.T.stack(future_stack=False)
+        if any(col_dtype != dtype for _, col_dtype in df._dtypes):
+            raise ValueError(
+                "Calling unstack() on single index dataframe"
+                " with different column datatype is not supported."
+            )
+        res = df.T.stack(future_stack=True)
         # Result's index is a multiindex
         res.index.names = (
             tuple(df._data.to_pandas_index.names) + df.index.names
