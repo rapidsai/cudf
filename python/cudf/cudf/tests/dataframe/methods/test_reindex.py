@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -96,11 +96,9 @@ def test_dataframe_reindex_change_dtype(copy):
     pdf = gdf.to_pandas()
     # Validate reindexes both labels and column names when
     # index=index_labels and columns=column_labels
-    assert_eq(
-        pdf.reindex(index=index, columns=columns, copy=True),
-        gdf.reindex(index=index, columns=columns, copy=copy),
-        check_freq=False,
-    )
+    expected = pdf.reindex(index=index, columns=columns)
+    result = gdf.reindex(index=index, columns=columns, copy=copy)
+    assert_eq(result, expected, check_freq=False)
 
 
 @pytest.mark.parametrize("copy", [True, False])
@@ -123,12 +121,10 @@ def test_series_float_reindex(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
     gdf = cudf.datasets.randomdata(nrows=6, dtypes={"c": float})
     pdf = gdf.to_pandas()
-    assert_eq(pdf["c"].reindex(copy=True), gdf["c"].reindex(copy=copy))
+    assert_eq(pdf["c"].reindex(), gdf["c"].reindex(copy=copy))
+    assert_eq(pdf["c"].reindex(index), gdf["c"].reindex(index, copy=copy))
     assert_eq(
-        pdf["c"].reindex(index, copy=True), gdf["c"].reindex(index, copy=copy)
-    )
-    assert_eq(
-        pdf["c"].reindex(index=index, copy=True),
+        pdf["c"].reindex(index=index),
         gdf["c"].reindex(index=index, copy=copy),
     )
 

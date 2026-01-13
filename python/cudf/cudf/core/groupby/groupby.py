@@ -580,6 +580,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 f"GroupBy.groups() performance scales poorly with "
                 f"number of groups. Got {len(group_names)} groups."
             )
+        if isinstance(self._by, list) and len(self._by) == 1:
+            warnings.warn(
+                "In a future version, the keys of `groups` will be a "
+                f"tuple with a single element, e.g. ({self._by[0]},) , "
+                f"instead of a scalar, e.g. {self._by[0]}, when grouping "
+                "by a list with a single element. Use ``df.groupby(by='a').groups`` "
+                "instead of ``df.groupby(by=['a']).groups`` to avoid this warning",
+                FutureWarning,
+            )
 
         return dict(
             zip(
@@ -1753,7 +1762,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             columns, aggs_per_column = zip(
                 *(
                     (self.obj._data[x[0]], x[1])
-                    if isinstance(x, tuple)
+                    if isinstance(x, (tuple, NamedAgg))
                     else _raise_invalid_type(x)
                     for x in kwargs.values()
                 ),
