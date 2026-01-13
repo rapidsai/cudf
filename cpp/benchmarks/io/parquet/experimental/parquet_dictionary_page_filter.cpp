@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "cudf/utilities/memory_resource.hpp"
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/io/cuio_common.hpp>
@@ -14,7 +12,6 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <nvbench/nvbench.cuh>
 
