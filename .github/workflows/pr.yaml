@@ -128,12 +128,12 @@ jobs:
           - '!notebooks/**'
   checks:
     secrets: inherit
+    continue-on-error: true
     needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@release/25.12
     with:
       enable_check_generated_files: false
       ignored_pr_jobs: "telemetry-summarize spark-rapids-jni wheel-tests-cudf-polars-with-rapidsmpf"
-    continue-on-error: true
   conda-cpp-build:
     needs: checks
     secrets: inherit
