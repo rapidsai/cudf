@@ -23,6 +23,8 @@
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <bit>
+
 namespace cudf {
 namespace detail {
 
@@ -234,6 +236,12 @@ cuda::std::span<cuda::std::byte> approx_distinct_count<Hasher>::sketch() noexcep
 }
 
 template <template <typename> class Hasher>
+cuda::std::span<cuda::std::byte const> approx_distinct_count<Hasher>::sketch() const noexcept
+{
+  return _impl.sketch();
+}
+
+template <template <typename> class Hasher>
 null_policy approx_distinct_count<Hasher>::null_handling() const noexcept
 {
   return _null_handling;
@@ -248,7 +256,9 @@ nan_policy approx_distinct_count<Hasher>::nan_handling() const noexcept
 template <template <typename> class Hasher>
 std::int32_t approx_distinct_count<Hasher>::precision() const noexcept
 {
-  return static_cast<std::int32_t>(cuda::std::countr_zero(sketch().size()));
+  // Sketch size = 2^p * 4 bytes (where p is precision)
+  // So: p = log2(sketch_size) - log2(4) = log2(sketch_size) - 2
+  return static_cast<std::int32_t>(std::countr_zero(sketch().size())) - 2;
 }
 
 // Explicit instantiation for the default hasher to improve build times
@@ -298,6 +308,11 @@ std::size_t approx_distinct_count::estimate(rmm::cuda_stream_view stream) const
 }
 
 cuda::std::span<cuda::std::byte> approx_distinct_count::sketch() noexcept
+{
+  return _impl->sketch();
+}
+
+cuda::std::span<cuda::std::byte const> approx_distinct_count::sketch() const noexcept
 {
   return _impl->sketch();
 }

@@ -121,6 +121,13 @@ class approx_distinct_count {
   [[nodiscard]] cuda::std::span<cuda::std::byte> sketch() noexcept;
 
   /**
+   * @brief Gets the raw sketch bytes (const overload)
+   *
+   * @return A span view of the sketch bytes
+   */
+  [[nodiscard]] cuda::std::span<cuda::std::byte const> sketch() const noexcept;
+
+  /**
    * @brief Gets the null handling policy for this sketch
    *
    * @return The null policy set at construction

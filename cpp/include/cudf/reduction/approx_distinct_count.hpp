@@ -190,6 +190,17 @@ class approx_distinct_count {
   [[nodiscard]] cuda::std::span<cuda::std::byte> sketch() noexcept;
 
   /**
+   * @brief Gets the raw sketch bytes for serialization or external merging (const overload)
+   *
+   * The returned span provides access to the internal sketch storage.
+   * This can be used to serialize the sketch, transfer it between processes,
+   * or merge it with other sketches using the span-based merge API.
+   *
+   * @return A span view of the sketch bytes
+   */
+  [[nodiscard]] cuda::std::span<cuda::std::byte const> sketch() const noexcept;
+
+  /**
    * @brief Gets the null handling policy for this sketch
    *
    * @return The null policy set at construction
