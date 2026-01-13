@@ -128,7 +128,6 @@ jobs:
           - '!notebooks/**'
   checks:
     secrets: inherit
-    continue-on-error: true
     needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@release/25.12
     with:
