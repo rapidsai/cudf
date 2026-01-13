@@ -14,7 +14,7 @@ from collections.abc import (
 )
 from contextlib import ExitStack
 from decimal import Decimal
-from functools import cached_property, lru_cache
+from functools import cache, cached_property
 from itertools import chain
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
@@ -1769,8 +1769,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ),
             )
 
-    @lru_cache(maxsize=128)
+    @cache
     def distinct_count(self, dropna: bool = True) -> int:
+        """
+        Get the number of distinct values in this column.
+
+        Note: @cache is safe here because dropna is boolean (only 2 possible values),
+        so each column instance has at most 2 cache entries. Cache is explicitly
+        cleared via _clear_cache() when the column is modified.
+        """
         with self.access(mode="read", scope="internal"):
             return plc.stream_compaction.distinct_count(
                 self.plc_column,
