@@ -11,7 +11,6 @@
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <string>
 #include <vector>

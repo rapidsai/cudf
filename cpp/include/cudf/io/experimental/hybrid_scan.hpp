@@ -11,7 +11,6 @@
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <thrust/host_vector.h>
 
