@@ -992,16 +992,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             return type(self).from_pylibcudf(plc_column)
 
+    @staticmethod
+    def _plc_memory_usage(col: plc.Column) -> int:
+        n = 0
+        if (data := col.data()) is not None:
+            n += cast("Buffer", data).size
+        if col.null_mask() is not None:
+            n += plc.null_mask.bitmask_allocation_size_bytes(col.size())
+        for child in col.children():
+            n += ColumnBase._plc_memory_usage(child)
+        return n
+
     @cached_property
     def memory_usage(self) -> int:
-        n = 0
-        if self.data is not None:
-            n += self.data.size
-        if self.nullable:
-            n += plc.null_mask.bitmask_allocation_size_bytes(self.size)
-        for child in self.children:
-            n += child.memory_usage
-        return n
+        return self._plc_memory_usage(self.plc_column)
 
     def _fill(
         self,
