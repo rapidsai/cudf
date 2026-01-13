@@ -203,11 +203,6 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return result
         result = result.as_py()
         return self._PD_SCALAR(result)
-        if cudf.get_option("mode.pandas_compatible"):
-            return self._PD_SCALAR(result)
-        elif isinstance(result, self._PD_SCALAR):
-            return result.to_numpy()
-        return self.dtype.type(result).astype(self.dtype, copy=False)
 
     def to_pandas(
         self,
