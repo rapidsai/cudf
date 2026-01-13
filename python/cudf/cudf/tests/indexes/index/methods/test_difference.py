@@ -4,11 +4,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_220,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
@@ -54,27 +49,9 @@ from cudf.testing._utils import (
     "name_data,name_other",
     [("abc", "c"), (None, "abc"), ("abc", pd.NA), ("abc", "abc")],
 )
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_index_difference(data, other, sort, name_data, name_other):
     pd_data = pd.Index(data, name=name_data)
     pd_other = pd.Index(other, name=name_other)
-    if (
-        not PANDAS_GE_220
-        and isinstance(pd_data.dtype, pd.CategoricalDtype)
-        and not isinstance(pd_other.dtype, pd.CategoricalDtype)
-        and pd_other.isnull().any()
-    ):
-        pytest.skip(reason="https://github.com/pandas-dev/pandas/issues/57318")
-
-    if (
-        not PANDAS_GE_220
-        and len(pd_other) == 0
-        and len(pd_data) != len(pd_data.unique())
-    ):
-        pytest.skip(reason="Bug fixed in pandas-2.2+")
 
     gd_data = cudf.from_pandas(pd_data)
     gd_other = cudf.from_pandas(pd_other)

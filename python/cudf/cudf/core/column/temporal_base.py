@@ -1,12 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import datetime
 import functools
-import warnings
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import cupy as cp
 import numpy as np
@@ -107,21 +106,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         self, values: Sequence
     ) -> tuple[ColumnBase, ColumnBase]:
         lhs, rhs = super()._process_values_for_isin(values)
-        if len(rhs) and rhs.dtype.kind == "O":
-            try:
-                rhs = rhs.astype(lhs.dtype)
-            except ValueError:
-                pass
-            else:
-                warnings.warn(
-                    f"The behavior of 'isin' with dtype={lhs.dtype} and "
-                    "castable values (e.g. strings) is deprecated. In a "
-                    "future version, these will not be considered matching "
-                    "by isin. Explicitly cast to the appropriate dtype before "
-                    "calling isin instead.",
-                    FutureWarning,
-                )
-        elif isinstance(rhs, type(self)):
+        if isinstance(rhs, type(self)):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 
@@ -210,7 +195,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
         if self.has_nulls():
             raise ValueError("cupy does not support NaT.")
-        return cp.asarray(self.data).view(dtype)
+        return cp.asarray(self).view(dtype)
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
@@ -255,15 +240,16 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         new_plc_column = plc.Column(
             data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
             size=self.size,
-            data=plc.gpumemoryview(self.base_data),
-            mask=plc.gpumemoryview(self.base_mask)
-            if self.base_mask is not None
-            else None,
+            data=self.data,
+            mask=self.mask,
             null_count=self.null_count,
             offset=self.offset,
             children=[],
         )
-        return type(self).from_pylibcudf(new_plc_column).astype(dtype)  # type:ignore[return-value]
+        return cast(
+            cudf.core.column.numerical.NumericalColumn,
+            type(self).from_pylibcudf(new_plc_column).astype(dtype),
+        )
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 #include "parquet_gpu.cuh"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -1861,6 +1862,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   // for BYTE_STREAM_SPLIT, s->cur now points to the end of the first stream.
   // need it to point to the end of the Nth stream.
   if (is_split_stream and t == 0) { s->cur += (dtype_len_out - 1) * s->page.num_valid; }
+  __syncthreads();
   finish_page_encode<block_size>(
     s, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }
@@ -3422,12 +3424,8 @@ void EncodePages(device_span<EncPage> pages,
   auto num_pages = pages.size();
 
   // determine which kernels to invoke
-  auto mask_iter       = thrust::make_transform_iterator(pages.begin(), mask_tform{});
-  uint32_t kernel_mask = thrust::reduce(rmm::exec_policy(stream),
-                                        mask_iter,
-                                        mask_iter + pages.size(),
-                                        0U,
-                                        cuda::std::bit_or<uint32_t>{});
+  auto kernel_mask = cudf::detail::transform_reduce(
+    pages.begin(), pages.end(), mask_tform{}, uint32_t{0}, cuda::std::bit_or<uint32_t>{}, stream);
 
   // get the number of streams we need from the pool
   int nkernels = std::bitset<32>(kernel_mask).count();

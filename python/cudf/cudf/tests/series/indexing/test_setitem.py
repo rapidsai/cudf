@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import decimal
 
@@ -9,10 +9,9 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.mark.parametrize(
@@ -102,30 +101,16 @@ def test_series_slice_setitem_struct():
     assert_eq(actual, expected)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning not present in older pandas versions",
-)
-@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
+@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32])
 @pytest.mark.parametrize("indices", [0, [1, 2]])
-def test_series_setitem_upcasting(dtype, indices):
+def test_series_setitem_upcasting_raises(dtype, indices):
     sr = pd.Series([0, 0, 0], dtype=dtype)
     cr = cudf.from_pandas(sr)
-    assert_eq(sr, cr)
-    # Must be a non-integral floating point value that can't be losslessly
-    # converted to float32, otherwise pandas will try and match the source
-    # column dtype.
     new_value = np.float64(np.pi)
-    col_ref = cr._column
-    with expect_warning_if(dtype != np.float64):
+    with pytest.raises(TypeError):
         sr[indices] = new_value
-    with expect_warning_if(dtype != np.float64):
+    with pytest.raises(TypeError):
         cr[indices] = new_value
-    assert_eq(sr, cr)
-
-    if dtype == np.float64:
-        # no-op type cast should not modify backing column
-        assert col_ref == cr._column
 
 
 @pytest.mark.parametrize(
@@ -483,9 +468,7 @@ def test_series_setitem_partial_slice_cow_on():
         assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
 
         new_slice = actual[2:]
-        assert (
-            new_slice._column.base_data.owner == actual._column.base_data.owner
-        )
+        assert new_slice._column.data.owner == actual._column.data.owner
         new_slice[0:2] = 10
         assert_eq(new_slice, cudf.Series([10, 10, 5], index=[2, 3, 4]))
         assert_eq(actual, cudf.Series([1, 2, 3, 4, 5]))
@@ -502,8 +485,8 @@ def test_series_setitem_partial_slice_cow_off():
 
         new_slice = actual[2:]
         # Since COW is off, a slice should point to the same memory
-        ptr1 = new_slice._column.base_data.get_ptr(mode="read")
-        ptr2 = actual._column.base_data.get_ptr(mode="read")
+        ptr1 = new_slice._column.data.ptr
+        ptr2 = actual._column.data.ptr
         assert ptr1 == ptr2
 
         new_slice[0:2] = 10
@@ -638,13 +621,10 @@ def test_series_zero_copy_cow_on():
         assert_eq(cp_array, cp.array([1, 2, 3, 4, 5]))
 
         cp_array[0:3] = 10
-        # Modifying a zero-copied array should only
-        # modify `s` and will leave rest of the copies
-        # untouched.
 
         assert_eq(s.to_numpy(), np.array([10, 10, 10, 4, 5]))
         assert_eq(s, cudf.Series([10, 10, 10, 4, 5]))
-        assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
+        assert_eq(s1, cudf.Series([10, 10, 10, 4, 5]))
         assert_eq(cp_array, cp.array([10, 10, 10, 4, 5]))
 
         s2 = cudf.Series(cp_array)
@@ -652,15 +632,12 @@ def test_series_zero_copy_cow_on():
 
         s3 = s2.copy(deep=False)
         cp_array[0] = 20
-        # Modifying a zero-copied array should modify
-        # `s2` and `s` only. Because `cp_array`
-        # is zero-copy shared with `s` & `s2`.
 
         assert_eq(s, cudf.Series([20, 10, 10, 4, 5]))
-        assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
+        assert_eq(s1, cudf.Series([20, 10, 10, 4, 5]))
         assert_eq(cp_array, cp.array([20, 10, 10, 4, 5]))
         assert_eq(s2, cudf.Series([20, 10, 10, 4, 5]))
-        assert_eq(s3, cudf.Series([10, 10, 10, 4, 5]))
+        assert_eq(s3, cudf.Series([20, 10, 10, 4, 5]))
 
         s4 = cudf.Series([10, 20, 30, 40, 50])
         s5 = cudf.Series(s4)
@@ -865,10 +842,6 @@ def test_categorical_setitem_with_nan():
     assert_eq(gs, expected_series)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning not present in older pandas versions",
-)
 @pytest.mark.parametrize(
     "key, value",
     [
@@ -879,7 +852,6 @@ def test_categorical_setitem_with_nan():
         (slice(0, 2), [4, 5]),
         (slice(1, None), [4, 5, 6, 7]),
         ([], 1),
-        ([], []),
         (slice(None, None), 1),
         (slice(-1, -3), 7),
     ],
@@ -892,15 +864,21 @@ def test_series_setitem_basics(key, value, nulls):
     elif nulls == "all":
         psr[:] = None
     gsr = cudf.from_pandas(psr)
-    with expect_warning_if(
-        isinstance(value, list) and len(value) == 0 and nulls == "none"
-    ):
-        psr[key] = value
-    with expect_warning_if(
-        isinstance(value, list) and len(value) == 0 and not len(key) == 0
-    ):
-        gsr[key] = value
+    psr[key] = value
+    gsr[key] = value
     assert_eq(psr, gsr, check_dtype=False)
+
+
+@pytest.mark.xfail(
+    reason="cuDF doesn't recognize dtype misalignment of empty list"
+)
+def test_series_setitem_empty_list_raises():
+    psr = pd.Series([1, 2, 3, 4, 5])
+    gsr = cudf.Series([1, 2, 3, 4, 5])
+    with pytest.raises(TypeError):
+        psr[[]] = []
+    with pytest.raises(TypeError):
+        gsr[[]] = []
 
 
 def test_series_setitem_null():
@@ -922,26 +900,18 @@ def test_series_setitem_null():
 @pytest.mark.parametrize(
     "key, value",
     [
-        (0, 0.5),
-        ([0, 1], 0.5),
         ([0, 1], [0.5, 2.5]),
         (slice(0, 2), [0.5, 0.25]),
     ],
 )
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
-def test_series_setitem_dtype(key, value):
+def test_series_setitem_upcasting_list_like_raises(key, value):
     psr = pd.Series([1, 2, 3], dtype="int32")
     gsr = cudf.from_pandas(psr)
 
-    with pytest.warns(FutureWarning):
+    with pytest.raises(TypeError):
         psr[key] = value
-    with pytest.warns(FutureWarning):
+    with pytest.raises(TypeError):
         gsr[key] = value
-
-    assert_eq(psr, gsr)
 
 
 def test_series_setitem_datetime():

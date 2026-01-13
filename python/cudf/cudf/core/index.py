@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -27,10 +27,8 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting, stream_compaction
 from cudf.core.accessors import StringMethods
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -40,6 +38,7 @@ from cudf.core.column import (
     StringColumn,
     StructColumn,
     TimeDeltaColumn,
+    access_columns,
 )
 from cudf.core.column.column import as_column, column_empty, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
@@ -324,31 +323,25 @@ class Index(SingleColumnFrame):
         return _index_from_data(data, self.name)
 
     @_performance_tracking
-    def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
+    def to_pylibcudf(self) -> tuple[plc.Column, dict]:
         """
         Convert this Index to a pylibcudf.Column.
-
-        Parameters
-        ----------
-        copy : bool
-            Whether or not to generate a new copy of the underlying device data
 
         Returns
         -------
         pylibcudf.Column
-            A new pylibcudf.Column referencing the same data.
+            A pylibcudf.Column referencing the same data.
         dict
             Dict of metadata (includes name)
 
         Notes
         -----
-        User requests to convert to pylibcudf must assume that the
-        data may be modified afterwards.
+        This is always a zero-copy operation. The result is a view of the
+        existing data. Changes to the pylibcudf data will be reflected back
+        to the cudf object and vice versa.
         """
-        if copy:
-            raise NotImplementedError("copy=True is not supported")
         metadata = {"name": self.name}
-        return self._column.to_pylibcudf(mode="write"), metadata
+        return self._column.to_pylibcudf(), metadata
 
     @classmethod
     @_performance_tracking
@@ -387,7 +380,7 @@ class Index(SingleColumnFrame):
                 raise ValueError("Metadata dict must only contain a name")
             name = metadata.get("name")
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True),
+            ColumnBase.from_pylibcudf(col),
             name=name,
         )
 
@@ -421,68 +414,6 @@ class Index(SingleColumnFrame):
         except TypeError:
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
-
-    @classmethod
-    def from_pandas(cls, index: pd.Index, nan_as_null=no_default) -> Index:
-        """
-        Convert from a Pandas Index.
-
-        Parameters
-        ----------
-        index : Pandas Index object
-            A Pandas Index object which has to be converted
-            to cuDF Index.
-        nan_as_null : bool, Default None
-            If ``None``/``True``, converts ``np.nan`` values
-            to ``null`` values.
-            If ``False``, leaves ``np.nan`` values as is.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> import numpy as np
-        >>> data = [10, 20, 30, np.nan]
-        >>> pdi = pd.Index(data)
-        >>> cudf.Index.from_pandas(pdi)
-        Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
-        >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
-        Index([10.0, 20.0, 30.0, nan], dtype='float64')
-        """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Use the Index constructor instead.",
-            FutureWarning,
-        )
-        if nan_as_null is no_default:
-            nan_as_null = (
-                False if cudf.get_option("mode.pandas_compatible") else None
-            )
-
-        if not isinstance(index, pd.Index):
-            raise TypeError("Expected a pandas.Index, got {type(index)}")
-        if isinstance(index, pd.RangeIndex):
-            return cudf.RangeIndex(
-                start=index.start,
-                stop=index.stop,
-                step=index.step,
-                name=index.name,
-            )
-        elif isinstance(index, pd.DatetimeIndex):
-            return cudf.DatetimeIndex._from_data(
-                {None: as_column(index, nan_as_null=nan_as_null)},
-                name=index.name,
-                freq=index.freq.freqstr if index.freq else None,
-            )
-        else:
-            return cudf.Index._from_column(
-                as_column(index, nan_as_null=nan_as_null),
-                name=index.name,
-            )
 
     @cached_property
     def is_monotonic_increasing(self) -> bool:
@@ -774,7 +705,7 @@ class Index(SingleColumnFrame):
 
         MultiIndex case
 
-        >>> idx1 = cudf.MultiIndex.from_pandas(
+        >>> idx1 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
         ...    )
@@ -785,7 +716,7 @@ class Index(SingleColumnFrame):
                     (2,  'Red'),
                     (2, 'Blue')],
                    )
-        >>> idx2 = cudf.MultiIndex.from_pandas(
+        >>> idx2 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[3, 3, 2, 2], ["Red", "Green", "Red", "Green"]]
         ...    )
@@ -902,12 +833,12 @@ class Index(SingleColumnFrame):
 
         MultiIndex case
 
-        >>> idx1 = cudf.MultiIndex.from_pandas(
+        >>> idx1 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[1, 1, 3, 4], ["Red", "Blue", "Red", "Blue"]]
         ...    )
         ... )
-        >>> idx2 = cudf.MultiIndex.from_pandas(
+        >>> idx2 = cudf.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
         ...    )
@@ -966,8 +897,14 @@ class Index(SingleColumnFrame):
 
         res_name = _get_result_name(self.name, other.name)
 
-        if (self._is_boolean() and other._is_numeric()) or (
-            self._is_numeric() and other._is_boolean()
+        if (
+            self.dtype.kind == "b"
+            and is_dtype_obj_numeric(other.dtype, include_decimal=False)
+            and other.dtype.kind != "b"
+        ) or (
+            is_dtype_obj_numeric(self.dtype, include_decimal=False)
+            and self.dtype.kind != "b"
+            and other.dtype.kind == "b"
         ):
             if isinstance(self, cudf.MultiIndex):
                 return self[:0].rename(res_name)
@@ -1402,324 +1339,6 @@ class Index(SingleColumnFrame):
             self._column_names,
         )
 
-    def is_numeric(self):
-        """
-        Check if the Index only consists of numeric data.
-
-        .. deprecated:: 23.04
-           Use `cudf.api.types.is_any_real_numeric_dtype` instead.
-
-        Returns
-        -------
-        bool
-            Whether or not the Index only consists of numeric data.
-
-        See Also
-        --------
-        is_boolean : Check if the Index only consists of booleans.
-        is_integer : Check if the Index only consists of integers.
-        is_floating : Check if the Index is a floating type.
-        is_object : Check if the Index is of the object dtype.
-        is_categorical : Check if the Index holds categorical data.
-        is_interval : Check if the Index holds Interval objects.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([1.0, 2.0, 3.0, 4.0])
-        >>> idx.is_numeric()
-        True
-        >>> idx = cudf.Index([1, 2, 3, 4.0])
-        >>> idx.is_numeric()
-        True
-        >>> idx = cudf.Index([1, 2, 3, 4])
-        >>> idx.is_numeric()
-        True
-        >>> idx = cudf.Index([1, 2, 3, 4.0, np.nan])
-        >>> idx.is_numeric()
-        True
-        >>> idx = cudf.Index(["Apple", "cold"])
-        >>> idx.is_numeric()
-        False
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            f"{type(self).__name__}.is_numeric is deprecated. "
-            "Use cudf.api.types.is_any_real_numeric_dtype instead",
-            FutureWarning,
-        )
-        return self._is_numeric()
-
-    def is_boolean(self):
-        """
-        Check if the Index only consists of booleans.
-
-        .. deprecated:: 23.04
-           Use `cudf.api.types.is_bool_dtype` instead.
-
-        Returns
-        -------
-        bool
-            Whether or not the Index only consists of booleans.
-
-        See Also
-        --------
-        is_integer : Check if the Index only consists of integers.
-        is_floating : Check if the Index is a floating type.
-        is_numeric : Check if the Index only consists of numeric data.
-        is_object : Check if the Index is of the object dtype.
-        is_categorical : Check if the Index holds categorical data.
-        is_interval : Check if the Index holds Interval objects.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([True, False, True])
-        >>> idx.is_boolean()
-        True
-        >>> idx = cudf.Index(["True", "False", "True"])
-        >>> idx.is_boolean()
-        False
-        >>> idx = cudf.Index([1, 2, 3])
-        >>> idx.is_boolean()
-        False
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            f"{type(self).__name__}.is_boolean is deprecated. "
-            "Use cudf.api.types.is_bool_dtype instead",
-            FutureWarning,
-        )
-        return self._is_boolean()
-
-    def is_integer(self):
-        """
-        Check if the Index only consists of integers.
-
-        .. deprecated:: 23.04
-           Use `cudf.api.types.is_integer_dtype` instead.
-
-        Returns
-        -------
-        bool
-            Whether or not the Index only consists of integers.
-
-        See Also
-        --------
-        is_boolean : Check if the Index only consists of booleans.
-        is_floating : Check if the Index is a floating type.
-        is_numeric : Check if the Index only consists of numeric data.
-        is_object : Check if the Index is of the object dtype.
-        is_categorical : Check if the Index holds categorical data.
-        is_interval : Check if the Index holds Interval objects.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([1, 2, 3, 4])
-        >>> idx.is_integer()
-        True
-        >>> idx = cudf.Index([1.0, 2.0, 3.0, 4.0])
-        >>> idx.is_integer()
-        False
-        >>> idx = cudf.Index(["Apple", "Mango", "Watermelon"])
-        >>> idx.is_integer()
-        False
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            f"{type(self).__name__}.is_integer is deprecated. "
-            "Use cudf.api.types.is_integer_dtype instead",
-            FutureWarning,
-        )
-        return self._is_integer()
-
-    def is_floating(self):
-        """
-        Check if the Index is a floating type.
-
-        The Index may consist of only floats, NaNs, or a mix of floats,
-        integers, or NaNs.
-
-        .. deprecated:: 23.04
-           Use `cudf.api.types.is_float_dtype` instead.
-
-        Returns
-        -------
-        bool
-            Whether or not the Index only consists of only consists
-            of floats, NaNs, or a mix of floats, integers, or NaNs.
-
-        See Also
-        --------
-        is_boolean : Check if the Index only consists of booleans.
-        is_integer : Check if the Index only consists of integers.
-        is_numeric : Check if the Index only consists of numeric data.
-        is_object : Check if the Index is of the object dtype.
-        is_categorical : Check if the Index holds categorical data.
-        is_interval : Check if the Index holds Interval objects.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([1.0, 2.0, 3.0, 4.0])
-        >>> idx.is_floating()
-        True
-        >>> idx = cudf.Index([1.0, 2.0, np.nan, 4.0])
-        >>> idx.is_floating()
-        True
-        >>> idx = cudf.Index([1, 2, 3, 4, np.nan], nan_as_null=False)
-        >>> idx.is_floating()
-        True
-        >>> idx = cudf.Index([1, 2, 3, 4])
-        >>> idx.is_floating()
-        False
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            f"{type(self).__name__}.is_floating is deprecated. "
-            "Use cudf.api.types.is_float_dtype instead",
-            FutureWarning,
-        )
-        return self._is_floating()
-
-    def is_object(self):
-        """
-        Check if the Index is of the object dtype.
-
-        .. deprecated:: 23.04
-           Use `cudf.api.types.is_object_dtype` instead.
-
-        Returns
-        -------
-        bool
-            Whether or not the Index is of the object dtype.
-
-        See Also
-        --------
-        is_boolean : Check if the Index only consists of booleans.
-        is_integer : Check if the Index only consists of integers.
-        is_floating : Check if the Index is a floating type.
-        is_numeric : Check if the Index only consists of numeric data.
-        is_categorical : Check if the Index holds categorical data.
-        is_interval : Check if the Index holds Interval objects.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index(["Apple", "Mango", "Watermelon"])
-        >>> idx.is_object()
-        True
-        >>> idx = cudf.Index(["Watermelon", "Orange", "Apple",
-        ...                 "Watermelon"]).astype("category")
-        >>> idx.is_object()
-        False
-        >>> idx = cudf.Index([1.0, 2.0, 3.0, 4.0])
-        >>> idx.is_object()
-        False
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            f"{type(self).__name__}.is_object is deprecated. "
-            "Use cudf.api.types.is_object_dtype instead",
-            FutureWarning,
-        )
-        return self._is_object()
-
-    def is_categorical(self):
-        """
-        Check if the Index holds categorical data.
-
-        .. deprecated:: 23.04
-           Use `cudf.api.types.is_categorical_dtype` instead.
-
-        Returns
-        -------
-        bool
-            True if the Index is categorical.
-
-        See Also
-        --------
-        CategoricalIndex : Index for categorical data.
-        is_boolean : Check if the Index only consists of booleans.
-        is_integer : Check if the Index only consists of integers.
-        is_floating : Check if the Index is a floating type.
-        is_numeric : Check if the Index only consists of numeric data.
-        is_object : Check if the Index is of the object dtype.
-        is_interval : Check if the Index holds Interval objects.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index(["Watermelon", "Orange", "Apple",
-        ...                 "Watermelon"]).astype("category")
-        >>> idx.is_categorical()
-        True
-        >>> idx = cudf.Index([1, 3, 5, 7])
-        >>> idx.is_categorical()
-        False
-        >>> s = cudf.Series(["Peter", "Victor", "Elisabeth", "Mar"])
-        >>> s
-        0        Peter
-        1       Victor
-        2    Elisabeth
-        3          Mar
-        dtype: object
-        >>> s.index.is_categorical()
-        False
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            f"{type(self).__name__}.is_categorical is deprecated. "
-            "Use cudf.api.types.is_categorical_dtype instead",
-            FutureWarning,
-        )
-        return self._is_categorical()
-
-    def is_interval(self):
-        """
-        Check if the Index holds Interval objects.
-
-        .. deprecated:: 23.04
-           Use `cudf.api.types.is_interval_dtype` instead.
-
-        Returns
-        -------
-        bool
-            Whether or not the Index holds Interval objects.
-
-        See Also
-        --------
-        IntervalIndex : Index for Interval objects.
-        is_boolean : Check if the Index only consists of booleans.
-        is_integer : Check if the Index only consists of integers.
-        is_floating : Check if the Index is a floating type.
-        is_numeric : Check if the Index only consists of numeric data.
-        is_object : Check if the Index is of the object dtype.
-        is_categorical : Check if the Index holds categorical data.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> idx = cudf.from_pandas(
-        ...     pd.Index([pd.Interval(left=0, right=5),
-        ...               pd.Interval(left=5, right=10)])
-        ... )
-        >>> idx.is_interval()
-        True
-        >>> idx = cudf.Index([1, 3, 5, 7])
-        >>> idx.is_interval()
-        False
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            f"{type(self).__name__}.is_interval is deprecated. "
-            "Use cudf.api.types.is_interval_dtype instead",
-            FutureWarning,
-        )
-        return self._is_interval()
-
     def _gather(
         self, gather_map, nullify: bool = False, check_bounds: bool = True
     ) -> Self:
@@ -1838,38 +1457,12 @@ class Index(SingleColumnFrame):
     @classmethod
     @_performance_tracking
     def _concat(cls, objs):
-        non_empties = [index for index in objs if len(index)]
-        if len(objs) != len(non_empties):
-            # Do not remove until pandas-3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warning_msg = (
-                "The behavior of array concatenation with empty entries is "
-                "deprecated. In a future version, this will no longer exclude "
-                "empty items when determining the result dtype. "
-                "To retain the old behavior, exclude the empty entries before "
-                "the concat operation."
-            )
-            # Warn only if the type might _actually_ change
-            if len(non_empties) == 0:
-                if not all(objs[0].dtype == index.dtype for index in objs[1:]):
-                    warnings.warn(warning_msg, FutureWarning)
-            else:
-                common_all_type = find_common_type(
-                    [index.dtype for index in objs]
-                )
-                common_non_empty_type = find_common_type(
-                    [index.dtype for index in non_empties]
-                )
-                if common_all_type != common_non_empty_type:
-                    warnings.warn(warning_msg, FutureWarning)
-        if all(isinstance(obj, RangeIndex) for obj in non_empties):
-            result = _concat_range_index(non_empties)
+        if all(isinstance(obj, RangeIndex) for obj in objs):
+            result = _concat_range_index(objs)
         else:
-            data = concat_columns([o._column for o in non_empties])
+            data = concat_columns([o._column for o in objs])
             if cls is IntervalIndex:
-                data = data._with_type_metadata(non_empties[0]._column.dtype)
+                data = data._with_type_metadata(objs[0]._column.dtype)
             result = Index._from_column(data)
 
         names = {obj.name for obj in objs}
@@ -1895,16 +1488,16 @@ class Index(SingleColumnFrame):
         >>> idx.inferred_type
         'integer'
         """
-        if self._is_object():
+        if self.dtype == CUDF_STRING_DTYPE:
             if len(self) == 0:
                 return "empty"
             else:
                 return "string"
-        elif self._is_integer():
+        elif self.dtype.kind in "iu":
             return "integer"
-        elif self._is_floating():
+        elif self.dtype.kind == "f":
             return "floating"
-        elif self._is_boolean():
+        elif self.dtype.kind == "b":
             return "boolean"
         raise NotImplementedError(
             f"inferred_type not implemented for dtype {self.dtype}"
@@ -2037,7 +1630,10 @@ class Index(SingleColumnFrame):
         except ValueError:
             return self._return_get_indexer_result(result.values)
 
-        with acquire_spill_lock():
+        with access_columns(lcol, rcol, mode="read", scope="internal") as (
+            lcol,
+            rcol,
+        ):
             left_plc, right_plc = plc.join.inner_join(
                 plc.Table([lcol.plc_column]),
                 plc.Table([rcol.plc_column]),
@@ -2116,10 +1712,7 @@ class Index(SingleColumnFrame):
         if len(self) > mr and mr != 0:
             top = self[0:mr]
             bottom = self[-1 * mr :]
-
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                preprocess = cudf.concat([top, bottom])
+            preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
 
@@ -2225,30 +1818,6 @@ class Index(SingleColumnFrame):
         return self._column.notnull().values
 
     notnull = notna
-
-    def _is_numeric(self) -> bool:
-        return (
-            is_dtype_obj_numeric(self._column.dtype, include_decimal=False)
-            and self.dtype.kind != "b"
-        )
-
-    def _is_boolean(self) -> bool:
-        return self.dtype.kind == "b"
-
-    def _is_integer(self) -> bool:
-        return self.dtype.kind in "iu"
-
-    def _is_floating(self) -> bool:
-        return self.dtype.kind == "f"
-
-    def _is_object(self) -> bool:
-        return self._column.dtype == CUDF_STRING_DTYPE
-
-    def _is_categorical(self) -> bool:
-        return False
-
-    def _is_interval(self) -> bool:
-        return False
 
     @cached_property
     @_performance_tracking
@@ -2394,6 +1963,10 @@ class Index(SingleColumnFrame):
             index=self.copy(deep=False) if index is None else index,
             name=self.name if name is None else name,
         )
+
+    @_performance_tracking
+    def fillna(self, value) -> Self:
+        return super()._fillna(value)
 
     def append(self, other):
         if is_list_like(other):
@@ -2734,27 +2307,6 @@ class RangeIndex(Index):
     def _pandas_repr_compatible(self) -> Self:
         return self
 
-    def _is_numeric(self) -> bool:
-        return True
-
-    def _is_boolean(self) -> bool:
-        return False
-
-    def _is_integer(self) -> bool:
-        return True
-
-    def _is_floating(self) -> bool:
-        return False
-
-    def _is_object(self) -> bool:
-        return False
-
-    def _is_categorical(self) -> bool:
-        return False
-
-    def _is_interval(self) -> bool:
-        return False
-
     @_performance_tracking
     def __contains__(self, item: Any) -> bool:
         hash(item)
@@ -2796,7 +2348,7 @@ class RangeIndex(Index):
             return self if not copy else self.copy()
         return self._as_int_index().astype(dtype, copy=copy)
 
-    def fillna(self, value, downcast=None) -> Self:
+    def fillna(self, value) -> Self:
         return self.copy()
 
     @_performance_tracking
@@ -3553,8 +3105,6 @@ class DatetimeIndex(Index):
         data=None,
         freq=None,
         tz=None,
-        normalize: bool = False,
-        closed=None,
         ambiguous: Literal["raise"] = "raise",
         dayfirst: bool = False,
         yearfirst: bool = False,
@@ -3573,20 +3123,6 @@ class DatetimeIndex(Index):
 
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
-        if normalize is not False:
-            warnings.warn(
-                "The 'normalize' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("normalize == True is not yet supported")
-        if closed is not None:
-            warnings.warn(
-                "The 'closed' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("closed is not yet supported")
         if ambiguous != "raise":
             raise NotImplementedError("ambiguous is not yet supported")
         if dayfirst is not False:
@@ -4423,9 +3959,6 @@ class DatetimeIndex(Index):
             result.freq = self._freq._maybe_as_fast_pandas_offset()
         return result
 
-    def _is_boolean(self) -> bool:
-        return False
-
     @_performance_tracking
     def ceil(self, freq: str) -> Self:
         """
@@ -4632,13 +4165,9 @@ class TimedeltaIndex(Index):
     ----------
     data : array-like (1-dimensional), optional
         Optional datetime-like data to construct index with.
-    unit : str, optional
-        This is not yet supported
     copy : bool
         Make a copy of input.
     freq : str, optional
-        This is not yet supported
-    closed : str, optional
         This is not yet supported
     dtype : str or :class:`numpy.dtype`, optional
         Data type for the output Index. If not specified, the
@@ -4682,9 +4211,7 @@ class TimedeltaIndex(Index):
     def __init__(
         self,
         data=None,
-        unit=None,
         freq=None,
-        closed=None,
         dtype=None,
         copy: bool = False,
         name=None,
@@ -4692,25 +4219,6 @@ class TimedeltaIndex(Index):
     ):
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
-
-        if closed is not None:
-            warnings.warn(
-                "The 'closed' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("closed is not yet supported")
-
-        if unit is not None:
-            warnings.warn(
-                "The 'unit' keyword is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError(
-                "unit is not yet supported, alternatively "
-                "dtype parameter is supported"
-            )
 
         name = _getdefault_name(data, name=name)
         col = as_column(data)
@@ -4925,9 +4433,6 @@ class TimedeltaIndex(Index):
         """
         raise NotImplementedError("inferred_freq is not yet supported")
 
-    def _is_boolean(self) -> bool:
-        return False
-
 
 class CategoricalIndex(Index):
     """
@@ -5097,12 +4602,6 @@ class CategoricalIndex(Index):
         The categories of this categorical.
         """
         return self.dtype.categories
-
-    def _is_boolean(self) -> bool:
-        return False
-
-    def _is_categorical(self) -> bool:
-        return True
 
     def add_categories(self, new_categories) -> Self:
         """
@@ -5277,11 +4776,7 @@ def interval_range(
         )
 
     if periods is not None and not is_integer(periods):
-        warnings.warn(
-            "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
-            " are deprecated and will raise in a future version.",
-            FutureWarning,
-        )
+        raise TypeError(f"periods must be an integer, got {periods}")
     if start is None:
         start = end - freq * periods
     elif freq is None:
@@ -5317,14 +4812,14 @@ def interval_range(
     pa_start = pa_start.cast(cudf_dtype_to_pa_type(common_dtype))
     pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
-    with acquire_spill_lock():
-        bin_edges = ColumnBase.from_pylibcudf(
-            plc.filling.sequence(
-                size=periods + 1,
-                init=pa_scalar_to_plc_scalar(pa_start),
-                step=pa_scalar_to_plc_scalar(pa_freq),
-            )
+    # No columns to access here - sequence creates new data
+    bin_edges = ColumnBase.from_pylibcudf(
+        plc.filling.sequence(
+            size=periods + 1,
+            init=pa_scalar_to_plc_scalar(pa_start),
+            step=pa_scalar_to_plc_scalar(pa_freq),
         )
+    )
     return IntervalIndex.from_breaks(
         bin_edges.astype(common_dtype), closed=closed, name=name
     )
@@ -5568,9 +5063,6 @@ class IntervalIndex(Index):
 
     def _is_interval(self) -> bool:
         return True
-
-    def _is_boolean(self) -> bool:
-        return False
 
     def _pandas_repr_compatible(self) -> Self:
         return self

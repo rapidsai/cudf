@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -23,12 +23,11 @@ from cudf.api.extensions import no_default
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
 from cudf.api.types import is_dtype_equal, is_scalar, is_string_dtype
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting
 from cudf.core.abc import Serializable
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
+    access_columns,
     as_column,
     deserialize_columns,
     serialize_columns,
@@ -924,138 +923,26 @@ class Frame(BinaryOperand, Scannable, Serializable):
         raise NotImplementedError
 
     @_performance_tracking
-    def fillna(
+    def _fillna(
         self,
         value: None | ScalarLike | Series = None,
-        method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
+        *,
+        method: None | plc.replace.ReplacePolicy = None,
         axis: Axis | None = None,
         inplace: bool = False,
         limit: int | None = None,
+        limit_area: Literal["inside", "outside", None] = None,
     ) -> Self | None:
-        """Fill null values with ``value`` or specified ``method``.
-
-        Parameters
-        ----------
-        value : scalar, Series-like or dict
-            Value to use to fill nulls. If Series-like, null values
-            are filled with values in corresponding indices.
-            A dict can be used to provide different values to fill nulls
-            in different columns. Cannot be used with ``method``.
-        method : {'ffill', 'bfill'}, default None
-            Method to use for filling null values in the dataframe or series.
-            `ffill` propagates the last non-null values forward to the next
-            non-null value. `bfill` propagates backward with the next non-null
-            value. Cannot be used with ``value``.
-
-            .. deprecated:: 24.04
-                `method` is deprecated.
-
-        Returns
-        -------
-        result : DataFrame, Series, or Index
-            Copy with nulls filled.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
-        >>> df
-              a     b
-        0     1     3
-        1     2  <NA>
-        2  <NA>     5
-        >>> df.fillna(4)
-           a  b
-        0  1  3
-        1  2  4
-        2  4  5
-        >>> df.fillna({'a': 3, 'b': 4})
-           a  b
-        0  1  3
-        1  2  4
-        2  3  5
-
-        ``fillna`` on a Series object:
-
-        >>> ser = cudf.Series(['a', 'b', None, 'c'])
-        >>> ser
-        0       a
-        1       b
-        2    <NA>
-        3       c
-        dtype: object
-        >>> ser.fillna('z')
-        0    a
-        1    b
-        2    z
-        3    c
-        dtype: object
-
-        ``fillna`` can also supports inplace operation:
-
-        >>> ser.fillna('z', inplace=True)
-        >>> ser
-        0    a
-        1    b
-        2    z
-        3    c
-        dtype: object
-        >>> df.fillna({'a': 3, 'b': 4}, inplace=True)
-        >>> df
-           a  b
-        0  1  3
-        1  2  4
-        2  3  5
-
-        ``fillna`` specified with fill ``method``
-
-        >>> ser = cudf.Series([1, None, None, 2, 3, None, None])
-        >>> ser.fillna(method='ffill')
-        0    1
-        1    1
-        2    1
-        3    2
-        4    3
-        5    3
-        6    3
-        dtype: int64
-        >>> ser.fillna(method='bfill')
-        0       1
-        1       2
-        2       2
-        3       2
-        4       3
-        5    <NA>
-        6    <NA>
-        dtype: int64
-        """
+        """Helper function for .fillna, .bfill, .ffill."""
         if limit is not None:
             raise NotImplementedError("The limit keyword is not supported")
+        if limit_area is not None:
+            raise NotImplementedError("limit_area is currently not supported.")
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
         if value is not None and method is not None:
             raise ValueError("Cannot specify both 'value' and 'method'.")
-
-        if method:
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                f"{type(self).__name__}.fillna with 'method' is "
-                "deprecated and will raise in a future version. "
-                "Use obj.ffill() or obj.bfill() instead.",
-                FutureWarning,
-            )
-            if method not in {"ffill", "bfill", "pad", "backfill"}:
-                raise NotImplementedError(
-                    f"Fill method {method} is not supported"
-                )
-            if method == "pad":
-                method = "ffill"
-            elif method == "backfill":
-                method = "bfill"
 
         if is_scalar(value):
             value = {name: value for name in self._column_names}
@@ -1727,7 +1614,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
     @_performance_tracking
-    @acquire_spill_lock()
     def _apply_cupy_ufunc_to_operands(
         self, ufunc, cupy_func, operands, **kwargs
     ) -> list[dict[Any, ColumnBase]]:
@@ -1740,29 +1626,39 @@ class Frame(BinaryOperand, Scannable, Serializable):
         # dispatch those (or any other) functions that we could implement
         # without cupy.
 
-        mask = None
-        data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
-        for name, (left, right, _, _) in operands.items():
-            cupy_inputs = []
-            for inp in (left, right) if ufunc.nin == 2 else (left,):
-                if isinstance(inp, ColumnBase) and inp.has_nulls():
-                    new_mask = inp._get_mask_as_column()
-                    mask = new_mask if mask is None else mask & new_mask
+        with access_columns(
+            *(
+                col
+                for left, right, _, _ in operands.values()
+                for col in (left, right)
+                if isinstance(col, ColumnBase)
+            ),
+            mode="read",
+            scope="internal",
+        ):
+            mask = None
+            data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
+            for name, (left, right, _, _) in operands.items():
+                cupy_inputs = []
+                for inp in (left, right) if ufunc.nin == 2 else (left,):
+                    if isinstance(inp, ColumnBase) and inp.has_nulls():
+                        new_mask = inp._get_mask_as_column()
+                        mask = new_mask if mask is None else mask & new_mask
 
-                    # Arbitrarily fill with zeros. For ufuncs, we assume
-                    # that the end result propagates nulls via a bitwise
-                    # and, so these elements are irrelevant.
-                    inp = inp.fillna(0)
-                cupy_inputs.append(cupy.asarray(inp))
+                        # Arbitrarily fill with zeros. For ufuncs, we assume
+                        # that the end result propagates nulls via a bitwise
+                        # and, so these elements are irrelevant.
+                        inp = inp.fillna(0)
+                    cupy_inputs.append(cupy.asarray(inp))
 
-            cp_output = cupy_func(*cupy_inputs, **kwargs)
-            if ufunc.nout == 1:
-                cp_output = (cp_output,)
-            for i, out in enumerate(cp_output):
-                data[i][name] = as_column(out).set_mask(
-                    mask if mask is None else mask.as_mask()
-                )
-        return data
+                cp_output = cupy_func(*cupy_inputs, **kwargs)
+                if ufunc.nout == 1:
+                    cp_output = (cp_output,)
+                for i, out in enumerate(cp_output):
+                    data[i][name] = as_column(out).set_mask(
+                        mask if mask is None else mask.as_mask()
+                    )
+            return data
 
     # Unary logical operators
     @_performance_tracking
@@ -1797,7 +1693,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _reduce(
         self,
         op: str,
-        axis=no_default,
+        axis: Axis | None = 0,
         numeric_only: bool = False,
         **kwargs,
     ) -> ScalarLike:
@@ -1821,7 +1717,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def min(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1872,7 +1768,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def max(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1918,7 +1814,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def all(self, axis: Axis = 0, skipna: bool = True, **kwargs):
+    def all(self, axis: Axis | None = 0, skipna: bool = True, **kwargs):
         """
         Return whether all elements are True in DataFrame.
 
@@ -1971,7 +1867,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def any(self, axis: Axis = 0, skipna: bool = True, **kwargs):
+    def any(self, axis: Axis | None = 0, skipna: bool = True, **kwargs):
         """
         Return whether any elements is True in DataFrame.
 
@@ -2058,13 +1954,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if not is_scalar(repeats):
             repeats = as_column(repeats)
 
-        with acquire_spill_lock():
+        with access_columns(
+            *columns, repeats, mode="read", scope="internal"
+        ) as (*columns, repeats):
             plc_table = plc.Table([col.plc_column for col in columns])
             if isinstance(repeats, ColumnBase):
-                repeats = repeats.plc_column
+                repeats_plc = repeats.plc_column
+            else:
+                repeats_plc = repeats
             return [
                 ColumnBase.from_pylibcudf(col)
-                for col in plc.filling.repeat(plc_table, repeats).columns()
+                for col in plc.filling.repeat(plc_table, repeats_plc).columns()
             ]
 
     @_performance_tracking

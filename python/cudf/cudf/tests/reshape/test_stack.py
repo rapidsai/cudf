@@ -6,15 +6,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_220,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
-from cudf.testing._utils import (
-    expect_warning_if,
-)
 
 
 @pytest.mark.parametrize("nulls", ["none", "some"])
@@ -71,10 +63,6 @@ def test_df_stack_reset_index():
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Need pandas-2.1.0+ to match `stack` api",
-)
 @pytest.mark.parametrize(
     "tuples",
     [
@@ -124,7 +112,7 @@ def test_df_stack_multiindex_column_axis(tuples, index, level, dropna):
 
     with pytest.warns(FutureWarning):
         got = gdf.stack(level=level, dropna=dropna, future_stack=False)
-    with expect_warning_if(PANDAS_GE_220, FutureWarning):
+    with pytest.warns(pd.errors.Pandas4Warning):
         expect = pdf.stack(level=level, dropna=dropna, future_stack=False)
 
     assert_eq(expect, got, check_dtype=False)
@@ -151,10 +139,6 @@ def test_df_stack_mixed_dtypes():
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Need pandas-2.1.0+ to match `stack` api",
-)
 @pytest.mark.parametrize("level", [["animal", "hair_length"], [1, 2]])
 def test_df_stack_multiindex_column_axis_pd_example(level):
     columns = pd.MultiIndex.from_tuples(
@@ -169,7 +153,7 @@ def test_df_stack_multiindex_column_axis_pd_example(level):
     rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(rng.standard_normal(size=(4, 4)), columns=columns)
 
-    with expect_warning_if(PANDAS_GE_220, FutureWarning):
+    with pytest.warns(pd.errors.Pandas4Warning):
         expect = df.stack(level=level, future_stack=False)
     gdf = cudf.from_pandas(df)
     with pytest.warns(FutureWarning):

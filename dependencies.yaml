@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 # Dependency list for https://github.com/rapidsai/dependency-file-generator
@@ -6,7 +6,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["12.9", "13.0"]
+      cuda: ["12.9", "13.1"]
       arch: [x86_64, aarch64]
     includes:
       - build_base
@@ -47,6 +47,7 @@ files:
       - test_python_pylibcudf
       - test_python_cudf_pandas
       - test_python_cudf_polars
+      - test_python_s3
   test_static_build:
     output: none
     includes:
@@ -75,6 +76,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - test_python_s3
       - numpy_run
       - test_python_pylibcudf
       - depends_on_cudf
@@ -102,6 +104,7 @@ files:
       - test_python_cudf_common
       - test_python_pylibcudf
       - test_python_cudf_polars
+      - test_python_s3
       - depends_on_cudf
       - depends_on_dask_cuda
       - depends_on_pylibcudf
@@ -202,6 +205,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - test_python_s3
   py_build_libcudf:
     output: pyproject
     pyproject_dir: python/libcudf
@@ -218,6 +222,7 @@ files:
     includes:
       - build_base
       - build_cpp
+      - cuda
       - depends_on_libkvikio
       - depends_on_libnvcomp
       - depends_on_librmm
@@ -385,6 +390,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_dask_cudf
+      - test_python_s3
   py_build_cudf_kafka:
     output: pyproject
     pyproject_dir: python/cudf_kafka
@@ -520,16 +526,16 @@ dependencies:
           - &rapids_build_backend rapids-build-backend>=0.4.0,<0.5.0
       - output_types: conda
         packages:
-          - scikit-build-core>=0.10.0
+          - scikit-build-core>=0.11.0
       - output_types: [requirements, pyproject]
         packages:
-          - scikit-build-core[pyproject]>=0.10.0
+          - scikit-build-core[pyproject]>=0.11.0
   rapids_build_setuptools:
     common:
       - output_types: [requirements, pyproject]
         packages:
           - *rapids_build_backend
-          - setuptools
+          - setuptools>=77.0.0
           - wheel
   build_python_common:
     common:
@@ -580,6 +586,10 @@ dependencies:
               cuda: "13.0"
             packages:
               - cuda-version=13.0
+          - matrix:
+              cuda: "13.1"
+            packages:
+              - cuda-version=13.1
   cuda:
     common:
       - output_types: [conda]
@@ -587,18 +597,20 @@ dependencies:
           - cuda-cudart-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
+          - libcufile-dev
           - libcurand-dev
           - libnvjitlink-dev
     specific:
-      - output_types: conda
+      - output_types: [requirements, pyproject]
         matrices:
           - matrix:
-              arch: aarch64
+              cuda: "12.*"
             packages:
+              - nvidia-nvjitlink-cu12>=12.9
+          # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
-              arch: x86_64
             packages:
-              - libcufile-dev
+              - nvidia-nvjitlink>=13.0
   develop:
     common:
       - output_types: [conda, requirements]
@@ -682,7 +694,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - pandas>=2.0,<2.4.0
+          - pandas==3.0.0rc1
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -817,7 +829,7 @@ dependencies:
             packages:
               - numba==0.60.0
               - pandas==2.0.*
-              - numba-cuda==0.22.1
+              - numba-cuda==0.22.2
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==2.3.3
@@ -873,7 +885,7 @@ dependencies:
       - output_types: [pyproject, requirements]
         packages:
           - xxhash
-  test_python_cudf:
+  test_python_s3:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
@@ -882,18 +894,24 @@ dependencies:
           - aiobotocore>=2.2.0,<3
           - boto3>=1.21.21
           - botocore>=1.24.21
+          - s3fs>=2022.3.0
+      - output_types: conda
+        packages:
+          - moto>=4.0.8
+  test_python_cudf:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
           - cramjam
           - *fastavro
           - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
-          - s3fs>=2022.3.0
           - scipy
           - zstandard
       - output_types: conda
         packages:
           - msgpack-python
-          - moto>=4.0.8
       - output_types: [pyproject, requirements]
         packages:
           - msgpack
@@ -962,18 +980,18 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - numba-cuda>=0.22.1,<0.23.0
+        - numba-cuda>=0.22.2,<0.23.0
     specific:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - numba-cuda[cu12]>=0.22.1,<0.23.0
+              - numba-cuda[cu12]>=0.22.2,<0.23.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - numba-cuda[cu13]>=0.22.1,<0.23.0
+              - numba-cuda[cu13]>=0.22.2,<0.23.0
   depends_on_pylibcudf:
     common:
       - output_types: conda

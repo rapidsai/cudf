@@ -17,11 +17,10 @@ import cudf
 from cudf import read_csv
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_220,
     PANDAS_VERSION,
 )
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.fixture
@@ -1204,34 +1203,6 @@ def test_csv_reader_prefix():
         assert column_names[col] == prefix_str + str(col)
 
 
-def test_csv_reader_delim_whitespace():
-    buffer = "1    2  3\n4  5 6"
-
-    # with header row
-    with pytest.warns(FutureWarning):
-        cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
-    with expect_warning_if(PANDAS_GE_220):
-        pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
-    assert_eq(pd_df, cu_df)
-
-    # without header row
-    with pytest.warns(FutureWarning):
-        cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
-    with expect_warning_if(PANDAS_GE_220):
-        pd_df = pd.read_csv(
-            StringIO(buffer), delim_whitespace=True, header=None
-        )
-    assert pd_df.shape == cu_df.shape
-
-    # should raise an error if used with delimiter or sep
-    with pytest.raises(ValueError):
-        with pytest.warns(FutureWarning):
-            read_csv(StringIO(buffer), delim_whitespace=True, delimiter=" ")
-    with pytest.raises(ValueError):
-        with pytest.warns(FutureWarning):
-            read_csv(StringIO(buffer), delim_whitespace=True, sep=" ")
-
-
 def test_csv_reader_unnamed_cols():
     # first and last columns are unnamed
     buffer = ",1,2,3,\n4,5,6,7,8"
@@ -2001,8 +1972,8 @@ def test_csv_writer_category(df):
         {"a": "category", "b": "str"},
         {"b": "category"},
         {"a": "category"},
-        {"a": pd.CategoricalDtype([1, 2])},
-        {"b": pd.CategoricalDtype([1, 2, 3])},
+        {"a": pd.CategoricalDtype([1, 2, 3])},
+        {"b": pd.CategoricalDtype(["a", "b", "c"])},
         {"b": pd.CategoricalDtype(["b", "a"]), "a": "str"},
         pd.CategoricalDtype(["a", "b"]),
     ],

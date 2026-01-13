@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import itertools
 
@@ -7,11 +7,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_220,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 
 
@@ -44,9 +39,6 @@ def test_dataframe_empty_sort_index():
 def test_dataframe_sort_index(
     request, index, axis, ascending, inplace, ignore_index, na_position
 ):
-    if not PANDAS_GE_220 and axis in (1, "columns") and ignore_index:
-        pytest.skip(reason="Bug fixed in pandas-2.2")
-
     pdf = pd.DataFrame(
         {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
         index=index,
@@ -92,22 +84,9 @@ def test_dataframe_sort_index(
     ],
 )
 @pytest.mark.parametrize("na_position", ["first", "last"])
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_dataframe_mulitindex_sort_index(
     request, axis, level, ascending, inplace, ignore_index, na_position
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=axis in (1, "columns")
-            and level is None
-            and not ascending
-            and ignore_index,
-            reason="https://github.com/pandas-dev/pandas/issues/57293",
-        )
-    )
     pdf = pd.DataFrame(
         {
             "b": [1.0, 3.0, np.nan],

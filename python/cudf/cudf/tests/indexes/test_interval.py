@@ -139,23 +139,17 @@ def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Does not warn on older versions of pandas",
-)
-def test_interval_range_periods_warnings():
+def test_interval_range_periods_non_integer_raises():
     start_val, end_val, periods_val = 0, 4, 1.0
 
-    with pytest.warns(FutureWarning):
-        pindex = pd.interval_range(
+    with pytest.raises(TypeError):
+        pd.interval_range(
             start=start_val, end=end_val, periods=periods_val, closed="left"
         )
-    with pytest.warns(FutureWarning):
-        gindex = cudf.interval_range(
+    with pytest.raises(TypeError):
+        cudf.interval_range(
             start=start_val, end=end_val, periods=periods_val, closed="left"
         )
-
-    assert_eq(pindex, gindex)
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])

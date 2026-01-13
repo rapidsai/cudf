@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import copy
 import functools
 import itertools
 import textwrap
-import types
 import warnings
 from collections.abc import Mapping
 from functools import cached_property, singledispatch
@@ -19,12 +18,10 @@ import pyarrow as pa
 
 import pylibcudf as plc
 
-from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_scalar
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import access_columns
 from cudf.core.column.column import (
     ColumnBase,
     as_column,
@@ -405,6 +402,53 @@ b 2  1.000000  1.0
 )
 
 
+class _GroupByContextManager:
+    """Context manager for safe access to pylibcudf GroupBy object.
+
+    This context manager creates and holds the pylibcudf GroupBy object,
+    entering access contexts for key columns on each entry and exiting
+    them on exit. The same instance can be safely entered multiple times,
+    including nested entries.
+    """
+
+    __slots__ = (
+        "_grouping",
+        "_plc_groupby",
+        "_stack_list",
+    )
+
+    def __init__(self, grouping, dropna):
+        self._grouping = grouping
+        self._stack_list = []
+
+        # Create pylibcudf GroupBy eagerly
+        with access_columns(
+            *grouping._key_columns, mode="read", scope="internal"
+        ) as key_columns:
+            self._plc_groupby = plc.groupby.GroupBy(
+                plc.Table([col.plc_column for col in key_columns]),
+                plc.types.NullPolicy.EXCLUDE
+                if dropna
+                else plc.types.NullPolicy.INCLUDE,
+            )
+
+    def __enter__(self):
+        stack = access_columns(
+            *self._grouping._key_columns, mode="read", scope="internal"
+        )
+        stack.__enter__()
+        self._stack_list.append(stack)
+
+        # Return the private pylibcudf GroupBy object
+        return self._plc_groupby
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._stack_list:
+            stack = self._stack_list.pop()
+            return stack.__exit__(exc_type, exc_val, exc_tb)
+        return False
+
+
 class GroupBy(Serializable, Reducible, Scannable):
     obj: Series | DataFrame
 
@@ -495,6 +539,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             self.grouping = _Grouping(obj, self._by, level)
 
+        self._groupby_manager = _GroupByContextManager(
+            self.grouping, self._dropna
+        )
+
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, Index):
@@ -519,43 +567,6 @@ class GroupBy(Serializable, Reducible, Scannable):
     def ndim(self) -> int:
         return self.obj.ndim
 
-    @property
-    def dtypes(self):
-        """
-        Return the dtypes in this group.
-
-        .. deprecated:: 24.04
-           Use `.dtypes` on base object instead.
-
-        Returns
-        -------
-        pandas.DataFrame
-            The data type of each column of the group.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 3], 'b': ['x', 'y', 'z', 'a'],
-        ...                      'c':[10, 11, 12, 12]})
-        >>> df.groupby("a").dtypes
-               a       b      c
-        a
-        1  int64  object  int64
-        2  int64  object  int64
-        3  int64  object  int64
-        """
-        warnings.warn(
-            f"{type(self).__name__}.dtypes is deprecated and will be "
-            "removed in a future version. Check the dtypes on the "
-            "base object instead",
-            FutureWarning,
-        )
-        index = self.grouping.keys.unique().sort_values().to_pandas()
-        return pd.DataFrame(
-            {name: [dtype] * len(index) for name, dtype in self.obj._dtypes},
-            index=index,
-        )
-
     @cached_property
     def groups(self):
         """
@@ -568,6 +579,15 @@ class GroupBy(Serializable, Reducible, Scannable):
             warnings.warn(
                 f"GroupBy.groups() performance scales poorly with "
                 f"number of groups. Got {len(group_names)} groups."
+            )
+        if isinstance(self._by, list) and len(self._by) == 1:
+            warnings.warn(
+                "In a future version, the keys of `groups` will be a "
+                f"tuple with a single element, e.g. ({self._by[0]},) , "
+                f"instead of a scalar, e.g. {self._by[0]}, when grouping "
+                "by a list with a single element. Use ``df.groupby(by='a').groups`` "
+                "instead of ``df.groupby(by=['a']).groups`` to avoid this warning",
+                FutureWarning,
             )
 
         return dict(
@@ -617,7 +637,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @_performance_tracking
-    def get_group(self, name, obj=None):
+    def get_group(self, name):
         """
         Construct DataFrame from group with provided name.
 
@@ -625,10 +645,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         ----------
         name : object
             The name of the group to get as a DataFrame.
-        obj : DataFrame, default None
-            The DataFrame to take the DataFrame out of.  If
-            it is None, the object groupby was called on will
-            be used.
 
         Returns
         -------
@@ -649,21 +665,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         0  A  1
         2  A  3
         """
-        if obj is None:
-            obj = self.obj
-        else:
-            warnings.warn(
-                "obj is deprecated and will be removed in a future version. "
-                "Use ``df.iloc[gb.indices.get(name)]`` "
-                "instead of ``gb.get_group(name, obj=df)``.",
-                FutureWarning,
-            )
         if is_list_like(self._by) and len(self._by) == 1:
             if isinstance(name, tuple) and len(name) == 1:
                 name = name[0]
             else:
                 raise KeyError(name)
-        return obj.iloc[self.indices[name]]
+        return self.obj.iloc[self.indices[name]]
 
     @_performance_tracking
     def size(self) -> Series:
@@ -756,36 +763,27 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result
 
-    @cached_property
-    def _groupby(self) -> types.SimpleNamespace:
-        with acquire_spill_lock() as spill_lock:
-            plc_groupby = plc.groupby.GroupBy(
-                plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in self.grouping._key_columns
-                    ]
-                ),
-                plc.types.NullPolicy.EXCLUDE
-                if self._dropna
-                else plc.types.NullPolicy.INCLUDE,
-            )
-            # Do we need this because we just check _spill_locks in test_spillable_df_groupby?
-            return types.SimpleNamespace(
-                plc_groupby=plc_groupby, _spill_locks=spill_lock
-            )
+    @property
+    def _groupby(self):
+        """Returns the cached context manager for safe access to the pylibcudf GroupBy."""
+        return self._groupby_manager
 
     def _groups(
         self, values: Iterable[ColumnBase]
     ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
-        plc_columns = [col.to_pylibcudf(mode="read") for col in values]
-        if not plc_columns:
-            plc_table = None
-        else:
-            plc_table = plc.Table(plc_columns)
-        offsets, grouped_keys, grouped_values = (
-            self._groupby.plc_groupby.get_groups(plc_table)
-        )
+        # Materialize iterator to avoid consuming it during access context setup
+        values_list = list(values)
+        with access_columns(*values_list, mode="read", scope="internal"):
+            plc_columns = [col.plc_column for col in values_list]
+            if not plc_columns:
+                plc_table = None
+            else:
+                plc_table = plc.Table(plc_columns)
+
+            with self._groupby as plc_groupby:
+                offsets, grouped_keys, grouped_values = plc_groupby.get_groups(
+                    plc_table
+                )
 
         return (
             offsets,
@@ -845,7 +843,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             if col_aggregations:
                 requests.append(
                     plc.groupby.GroupByRequest(
-                        col.to_pylibcudf(mode="read"), col_aggregations
+                        col.plc_column, col_aggregations
                     )
                 )
                 column_included.append(i)
@@ -856,11 +854,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "All requested aggregations are unsupported."
             )
 
-        keys, results = (
-            self._groupby.plc_groupby.scan(requests)
-            if _is_all_scan_aggregate(aggregations)
-            else self._groupby.plc_groupby.aggregate(requests)
-        )
+        with access_columns(*values, mode="read", scope="internal"):
+            with self._groupby as plc_groupby:
+                keys, results = (
+                    plc_groupby.scan(requests)
+                    if _is_all_scan_aggregate(aggregations)
+                    else plc_groupby.aggregate(requests)
+                )
 
         for i, result, adjustments_i in zip(
             column_included, results, adjustments, strict=True
@@ -881,32 +881,38 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _shift(
         self, values: tuple[ColumnBase, ...], periods: int, fill_values: list
     ) -> Generator[ColumnBase]:
-        _, shifts = self._groupby.plc_groupby.shift(
-            plc.table.Table([col.to_pylibcudf(mode="read") for col in values]),
-            [periods] * len(values),
-            [
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(val, type=cudf_dtype_to_pa_type(col.dtype))
+        with access_columns(*values, mode="read", scope="internal"):
+            with self._groupby as plc_groupby:
+                _, shifts = plc_groupby.shift(
+                    plc.table.Table([col.plc_column for col in values]),
+                    [periods] * len(values),
+                    [
+                        pa_scalar_to_plc_scalar(
+                            pa.scalar(
+                                val, type=cudf_dtype_to_pa_type(col.dtype)
+                            )
+                        )
+                        for val, col in zip(fill_values, values, strict=True)
+                    ],
                 )
-                for val, col in zip(fill_values, values, strict=True)
-            ],
-        )
-        return (ColumnBase.from_pylibcudf(col) for col in shifts.columns())
+                return (
+                    ColumnBase.from_pylibcudf(col) for col in shifts.columns()
+                )
 
     def _replace_nulls(
-        self, values: tuple[ColumnBase, ...], method: str
+        self, values: tuple[ColumnBase, ...], method: plc.replace.ReplacePolicy
     ) -> Generator[ColumnBase]:
-        _, replaced = self._groupby.plc_groupby.replace_nulls(
-            plc.Table([col.to_pylibcudf(mode="read") for col in values]),
-            [
-                plc.replace.ReplacePolicy.PRECEDING
-                if method == "ffill"
-                else plc.replace.ReplacePolicy.FOLLOWING
-            ]
-            * len(values),
-        )
+        with access_columns(*values, mode="read", scope="internal"):
+            with self._groupby as plc_groupby:
+                _, replaced = plc_groupby.replace_nulls(
+                    plc.Table([col.plc_column for col in values]),
+                    [method] * len(values),
+                )
 
-        return (ColumnBase.from_pylibcudf(col) for col in replaced.columns())
+                return (
+                    ColumnBase.from_pylibcudf(col)
+                    for col in replaced.columns()
+                )
 
     @_performance_tracking
     def agg(self, func=None, *args, engine=None, engine_kwargs=None, **kwargs):
@@ -1108,13 +1114,26 @@ class GroupBy(Serializable, Reducible, Scannable):
                 join_keys = map(list, zip(*join_keys, strict=True))
                 # By construction, left and right keys are related by
                 # a permutation, so we can use an inner join.
-                with acquire_spill_lock():
-                    plc_tables = [
-                        plc.Table(
-                            [col.to_pylibcudf(mode="read") for col in cols]
+                join_keys_list = list(join_keys)
+                # Flatten nested list of columns for access_columns
+                all_cols = [col for cols in join_keys_list for col in cols]
+                with access_columns(
+                    *all_cols, mode="read", scope="internal"
+                ) as all_cols:
+                    # Reconstruct join_keys_list structure from flattened all_cols
+                    idx = 0
+                    plc_tables = []
+                    for cols in join_keys_list:
+                        cols_len = len(cols)
+                        plc_tables.append(
+                            plc.Table(
+                                [
+                                    col.plc_column
+                                    for col in all_cols[idx : idx + cols_len]
+                                ]
+                            )
                         )
-                        for cols in join_keys
-                    ]
+                        idx += cols_len
                     left_plc, right_plc = plc.join.inner_join(
                         plc_tables[0],
                         plc_tables[1],
@@ -1596,13 +1615,20 @@ class GroupBy(Serializable, Reducible, Scannable):
                 keys = cp.random.default_rng(seed=random_state).random(
                     size=nrows
                 )
-                with acquire_spill_lock():
+                indices_col = as_column(indices)
+                keys_col = as_column(keys)
+                group_offsets_col = as_column(group_offsets)
+                with access_columns(
+                    indices_col,
+                    keys_col,
+                    group_offsets_col,
+                    mode="read",
+                    scope="internal",
+                ) as (indices_col, keys_col, group_offsets_col):
                     plc_table = plc.sorting.stable_segmented_sort_by_key(
-                        plc.Table(
-                            [as_column(indices).to_pylibcudf(mode="read")]
-                        ),
-                        plc.Table([as_column(keys).to_pylibcudf(mode="read")]),
-                        as_column(group_offsets).to_pylibcudf(mode="read"),
+                        plc.Table([indices_col.plc_column]),
+                        plc.Table([keys_col.plc_column]),
+                        group_offsets_col.plc_column,
                         [plc.types.Order.ASCENDING],
                         [plc.types.NullOrder.AFTER],
                     )
@@ -1736,7 +1762,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             columns, aggs_per_column = zip(
                 *(
                     (self.obj._data[x[0]], x[1])
-                    if isinstance(x, tuple)
+                    if isinstance(x, (tuple, NamedAgg))
                     else _raise_invalid_type(x)
                     for x in kwargs.values()
                 ),
@@ -1867,9 +1893,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # group is a row-like "Series" where the index labels
             # are the same as the original calling DataFrame
             if _is_row_of(chunk_results[0], self.obj):
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    result = concat(chunk_results, axis=1).T
+                result = concat(chunk_results, axis=1).T
                 result.index = group_names
                 result.index.names = self.grouping.names
             # When the UDF is like df.x + df.y, the result for each
@@ -1878,9 +1902,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 len(self.obj),
                 len(group_names),
             }:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    result = concat(chunk_results)
+                result = concat(chunk_results)
                 if total_rows == len(group_names):
                     result.index = group_names
                     # TODO: Is there a better way to determine what
@@ -1904,9 +1926,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     f"type {type(chunk_results[0])}"
                 )
         else:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                result = concat(chunk_results)
+            result = concat(chunk_results)
             if self._group_keys:
                 index_data = group_keys._data.copy(deep=True)
                 index_data[None] = grouped_values.index._column
@@ -2415,8 +2435,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             struct_column = ColumnBase.from_pylibcudf(
                 plc.Column.struct_from_children(
                     [
-                        self.obj._data[x].to_pylibcudf(mode="read"),
-                        self.obj._data[y].to_pylibcudf(mode="read"),
+                        self.obj._data[x].plc_column,
+                        self.obj._data[y].plc_column,
                     ]
                 )
             ).set_mask(None)
@@ -2451,15 +2471,15 @@ class GroupBy(Serializable, Reducible, Scannable):
         # interleave: combines the correlation or covariance results for each
         # column-pair into a single column
 
-        @acquire_spill_lock()
         def interleave_columns(source_columns):
-            return ColumnBase.from_pylibcudf(
-                plc.reshape.interleave_columns(
-                    plc.Table(
-                        [c.to_pylibcudf(mode="read") for c in source_columns]
+            with access_columns(
+                *source_columns, mode="read", scope="internal"
+            ) as source_columns:
+                return ColumnBase.from_pylibcudf(
+                    plc.reshape.interleave_columns(
+                        plc.Table([c.plc_column for c in source_columns])
                     )
                 )
-            )
 
         res = DataFrame._from_data(
             {
@@ -2623,7 +2643,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         values.index = self.obj.index
         return values - self.shift(periods=periods)
 
-    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+    def _scan_fill(
+        self, method: plc.replace.ReplacePolicy, limit: int | None
+    ) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
         values = self.grouping.values
         result = self.obj._from_data(
@@ -2638,7 +2660,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
 
-    def ffill(self, limit=None):
+    def ffill(self, limit: int | None = None):
         """Forward fill NA values.
 
         Parameters
@@ -2646,13 +2668,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         limit : int, default None
             Unsupported
         """
+        return self._scan_fill(plc.replace.ReplacePolicy.PRECEDING, limit)
 
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        return self._scan_fill("ffill", limit)
-
-    def bfill(self, limit=None):
+    def bfill(self, limit: int | None = None):
         """Backward fill NA values.
 
         Parameters
@@ -2660,76 +2678,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         limit : int, default None
             Unsupported
         """
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        return self._scan_fill("bfill", limit)
-
-    @_performance_tracking
-    def fillna(
-        self,
-        value=None,
-        method=None,
-        axis=0,
-        inplace=False,
-        limit=None,
-        downcast=None,
-    ):
-        """Fill NA values using the specified method.
-
-        Parameters
-        ----------
-        value : scalar, dict
-            Value to use to fill the holes. Cannot be specified with method.
-        method : { 'bfill', 'ffill', None}, default None
-            Method to use for filling holes in reindexed Series
-
-            - ffill: propagate last valid observation forward to next valid
-            - bfill: use next valid observation to fill gap
-        axis : {0 or 'index', 1 or 'columns'}
-            Unsupported
-        inplace : bool, default False
-            If `True`, fill inplace. Note: this will modify other views on this
-            object.
-        limit : int, default None
-            Unsupported
-        downcast : dict, default None
-            Unsupported
-
-        Returns
-        -------
-        DataFrame or Series
-        """
-        warnings.warn(
-            "groupby fillna is deprecated and "
-            "will be removed in a future version. Use groupby ffill "
-            "or groupby bfill for forward or backward filling instead.",
-            FutureWarning,
-        )
-        if inplace:
-            raise NotImplementedError("Does not support inplace yet.")
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-        if downcast is not None:
-            raise NotImplementedError("Does not support downcast yet.")
-        if not axis == 0:
-            raise NotImplementedError("Only support axis == 0.")
-
-        if value is None and method is None:
-            raise ValueError("Must specify a fill 'value' or 'method'.")
-        if value is not None and method is not None:
-            raise ValueError("Cannot specify both 'value' and 'method'.")
-
-        if method is not None:
-            if method not in {"ffill", "bfill"}:
-                raise ValueError("Method can only be of 'ffill', 'bfill'.")
-            return getattr(self, method, limit)()
-
-        values = self.grouping.values
-        values.index = self.obj.index
-        return values.fillna(
-            value=value, inplace=inplace, axis=axis, limit=limit
-        )
+        return self._scan_fill(plc.replace.ReplacePolicy.FOLLOWING, limit)
 
     @_performance_tracking
     def shift(
@@ -2811,10 +2760,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     @_performance_tracking
     def pct_change(
         self,
-        periods=1,
-        fill_method=no_default,
-        axis=0,
-        limit=no_default,
+        periods: int = 1,
+        fill_method: None = None,
         freq=None,
     ):
         """
@@ -2826,17 +2773,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         periods : int, default 1
             Periods to shift for forming percent change.
         fill_method : str, default 'ffill'
-            How to handle NAs before computing percent changes.
-
-            .. deprecated:: 24.04
-                All options of `fill_method` are deprecated
-                except `fill_method=None`.
-        limit : int, optional
-            The number of consecutive NAs to fill before stopping.
-            Not yet implemented.
-
-            .. deprecated:: 24.04
-                `limit` is deprecated.
+            Must be None.
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
@@ -2846,39 +2783,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Percentage changes within each group
         """
-        if not axis == 0:
-            raise NotImplementedError("Only axis=0 is supported.")
-        if limit is not no_default:
-            raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {no_default, None, "ffill", "bfill"}:
-            raise ValueError("fill_method must be one of 'ffill', or'bfill'.")
+        if fill_method is not None:
+            raise ValueError(f"fill_method must be None; got {fill_method=}.")
 
-        if fill_method not in (no_default, None) or limit is not no_default:
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                "The 'fill_method' keyword being not None and the 'limit' "
-                f"keywords in {type(self).__name__}.pct_change are "
-                "deprecated and will be removed in a future version. "
-                "Either fill in any non-leading NA values prior "
-                "to calling pct_change or specify 'fill_method=None' "
-                "to not fill NA values.",
-                FutureWarning,
-            )
-
-        if fill_method in (no_default, None):
-            fill_method = "ffill"
-        if limit is no_default:
-            limit = None
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            filled = self.fillna(method=fill_method, limit=limit)
-
+        filled = self.ffill()
         fill_grp = filled.groupby(self.grouping)
         shifted = fill_grp.shift(periods=periods, freq=freq)
         return (filled / shifted) - 1

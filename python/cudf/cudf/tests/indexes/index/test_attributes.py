@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import re
@@ -130,44 +130,6 @@ def test_index_values_host(data, all_supported_types_as_str, request):
     np.testing.assert_array_equal(gdi.values_host, pdi.values)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 3],
-        ["a", "v", "d"],
-        [234.243, 2432.3, None],
-        [True, False, True],
-        pd.Series(["a", " ", "v"], dtype="category"),
-        pd.IntervalIndex.from_breaks([0, 1, 2, 3]),
-    ],
-)
-@pytest.mark.parametrize(
-    "func",
-    [
-        "is_numeric",
-        "is_boolean",
-        "is_integer",
-        "is_floating",
-        "is_object",
-        "is_categorical",
-        "is_interval",
-    ],
-)
-def test_index_type_methods(data, func):
-    pidx = pd.Index(data)
-    gidx = cudf.from_pandas(pidx)
-
-    with pytest.warns(FutureWarning):
-        expected = getattr(pidx, func)()
-    with pytest.warns(FutureWarning):
-        actual = getattr(gidx, func)()
-
-    if gidx.dtype == np.dtype("bool") and func == "is_object":
-        assert_eq(False, actual)
-    else:
-        assert_eq(expected, actual)
-
-
 def test_index_values():
     gidx = cudf.Index([1, 2, 3])
     pidx = gidx.to_pandas()
@@ -186,12 +148,7 @@ def test_index_null_values():
     "data",
     [
         [1, 2, 3],
-        pytest.param(
-            [np.nan, 10, 15, 16],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/49818"
-            ),
-        ),
+        [np.nan, 10, 15, 16],
         range(0, 10),
         [np.nan, None, 10, 20],
         ["ab", "zx", "pq"],

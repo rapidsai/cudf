@@ -8,20 +8,11 @@ import pytest
 from packaging.version import parse
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_LT_300,
-)
 from cudf.testing import assert_eq
 
 
 def test_ufunc_index(request, numpy_ufunc):
     # Note: This test assumes that all ufuncs are unary or binary.
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=numpy_ufunc == np.matmul and PANDAS_LT_300,
-            reason="Fixed by https://github.com/pandas-dev/pandas/pull/57079",
-        )
-    )
     request.applymarker(
         pytest.mark.xfail(
             condition=numpy_ufunc in {np.ceil, np.floor, np.trunc}

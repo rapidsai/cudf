@@ -1,8 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-import warnings
-from contextlib import contextmanager
 from decimal import Decimal
 
 import numpy as np
@@ -10,29 +8,14 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.fixture(params=["outer", "inner"])
 def join(request):
     return request.param
-
-
-@contextmanager
-def _hide_concat_empty_dtype_warning():
-    with warnings.catch_warnings():
-        # Ignoring warnings in this test as warnings are
-        # being caught and validated in other tests.
-        warnings.filterwarnings(
-            "ignore",
-            "The behavior of array concatenation with empty entries "
-            "is deprecated.",
-            category=FutureWarning,
-        )
-        yield
 
 
 def make_frames(index=None, nulls="none"):
@@ -84,11 +67,8 @@ def test_concat_dataframe(index, nulls, axis_0):
     df_empty1 = gdf_empty1.to_pandas()
 
     # DataFrame
-    with _hide_concat_empty_dtype_warning():
-        res = cudf.concat(
-            [gdf, gdf2, gdf, gdf_empty1], axis=axis_0
-        ).to_pandas()
-        sol = pd.concat([df, df2, df, df_empty1], axis=axis_0)
+    res = cudf.concat([gdf, gdf2, gdf, gdf_empty1], axis=axis_0).to_pandas()
+    sol = pd.concat([df, df2, df, df_empty1], axis=axis_0)
     assert_eq(
         res,
         sol,
@@ -457,84 +437,53 @@ def test_concat_mixed_input():
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
-        pytest.param(
-            [
-                pd.Series([1, 2, 3.0, 1.2], name="abc"),
-                pd.DataFrame({"a": [1, 2]}),
-            ],
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_220,
-                reason="https://github.com/pandas-dev/pandas/pull/56365",
+        [
+            pd.Series([1, 2, 3.0, 1.2], name="abc"),
+            pd.DataFrame({"a": [1, 2]}),
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
             ),
-        ),
-        pytest.param(
-            [
-                pd.Series(
-                    [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
-                ),
-                pd.DataFrame({"a": [1, 2]}),
-            ],
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_220,
-                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            pd.DataFrame({"a": [1, 2]}),
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
             ),
-        ),
-        pytest.param(
-            [
-                pd.Series(
-                    [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
-                ),
-                pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
-            ],
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_220,
-                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2, 8, 100],
+                name="New name",
+                index=["a", "b", "c", "d", "e", "f"],
             ),
-        ),
-        pytest.param(
-            [
-                pd.Series(
-                    [1, 2, 3.0, 1.2, 8, 100],
-                    name="New name",
-                    index=["a", "b", "c", "d", "e", "f"],
-                ),
-                pd.DataFrame(
-                    {"a": [1, 2, 4, 10, 11, 12]},
-                    index=["a", "b", "c", "d", "e", "f"],
-                ),
-            ],
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_220,
-                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            pd.DataFrame(
+                {"a": [1, 2, 4, 10, 11, 12]},
+                index=["a", "b", "c", "d", "e", "f"],
             ),
-        ),
-        pytest.param(
-            [
-                pd.Series(
-                    [1, 2, 3.0, 1.2, 8, 100],
-                    name="New name",
-                    index=["a", "b", "c", "d", "e", "f"],
-                ),
-                pd.DataFrame(
-                    {"a": [1, 2, 4, 10, 11, 12]},
-                    index=["a", "b", "c", "d", "e", "f"],
-                ),
-            ]
-            * 7,
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_220,
-                reason="https://github.com/pandas-dev/pandas/pull/56365",
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2, 8, 100],
+                name="New name",
+                index=["a", "b", "c", "d", "e", "f"],
             ),
-        ),
+            pd.DataFrame(
+                {"a": [1, 2, 4, 10, 11, 12]},
+                index=["a", "b", "c", "d", "e", "f"],
+            ),
+        ]
+        * 7,
     ],
 )
 def test_concat_series_dataframe_input(objs):
     pd_objs = objs
     gd_objs = [cudf.from_pandas(obj) for obj in objs]
 
-    with _hide_concat_empty_dtype_warning():
-        expected = pd.concat(pd_objs)
-        actual = cudf.concat(gd_objs)
+    expected = pd.concat(pd_objs)
+    actual = cudf.concat(gd_objs)
 
     assert_eq(
         expected.fillna(-1),
@@ -869,24 +818,23 @@ def test_concat_join_many_df_and_empty_df(ignore_index, sort, join, axis):
     gdf3 = cudf.from_pandas(pdf3)
     gdf_empty1 = cudf.from_pandas(pdf_empty1)
 
-    with _hide_concat_empty_dtype_warning():
-        assert_eq(
-            pd.concat(
-                [pdf1, pdf2, pdf3, pdf_empty1],
-                sort=sort,
-                join=join,
-                ignore_index=ignore_index,
-                axis=axis,
-            ),
-            cudf.concat(
-                [gdf1, gdf2, gdf3, gdf_empty1],
-                sort=sort,
-                join=join,
-                ignore_index=ignore_index,
-                axis=axis,
-            ),
-            check_index_type=False,
-        )
+    assert_eq(
+        pd.concat(
+            [pdf1, pdf2, pdf3, pdf_empty1],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+        cudf.concat(
+            [gdf1, gdf2, gdf3, gdf_empty1],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+        check_index_type=False,
+    )
 
 
 def test_concat_join_one_df(ignore_index, sort, join, axis):
@@ -969,21 +917,20 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
     gdf6 = cudf.from_pandas(pdf6)
     gdf_empty = cudf.from_pandas(pdf_empty)
 
-    with _hide_concat_empty_dtype_warning():
-        expected = pd.concat(
-            [pdf4, pdf5, pdf6, pdf_empty],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        )
-        actual = cudf.concat(
-            [gdf4, gdf5, gdf6, gdf_empty],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        )
+    expected = pd.concat(
+        [pdf4, pdf5, pdf6, pdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    actual = cudf.concat(
+        [gdf4, gdf5, gdf6, gdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
     assert_eq(
         expected,
         actual,
@@ -1023,14 +970,12 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
             ),
             pd.DataFrame(index=pd.Index([], dtype="str")),
         ],
-        pytest.param(
-            [
-                pd.DataFrame(
-                    {"a": [1, 2, 3], "nb": [10, 11, 12]}, index=["Q", "W", "R"]
-                ),
-                None,
-            ],
-        ),
+        [
+            pd.DataFrame(
+                {"a": [1, 2, 3], "nb": [10, 11, 12]}, index=["Q", "W", "R"]
+            ),
+            None,
+        ],
     ],
 )
 def test_concat_join_no_overlapping_columns_many_and_empty2(
@@ -1038,21 +983,20 @@ def test_concat_join_no_overlapping_columns_many_and_empty2(
 ):
     objs_gd = [cudf.from_pandas(o) if o is not None else o for o in objs]
 
-    with _hide_concat_empty_dtype_warning():
-        expected = pd.concat(
-            objs,
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        )
-        actual = cudf.concat(
-            objs_gd,
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        )
+    expected = pd.concat(
+        objs,
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    actual = cudf.concat(
+        objs_gd,
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
     assert_eq(expected, actual, check_index_type=False)
 
 
@@ -1071,21 +1015,20 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
     gdf6 = cudf.from_pandas(pdf6)
     gdf_empty = cudf.from_pandas(pdf_empty)
 
-    with _hide_concat_empty_dtype_warning():
-        expected = pd.concat(
-            [pdf6, pdf_empty],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        )
-        actual = cudf.concat(
-            [gdf6, gdf_empty],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        )
+    expected = pd.concat(
+        [pdf6, pdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    actual = cudf.concat(
+        [gdf6, gdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
     assert_eq(
         expected,
         actual,
@@ -1112,14 +1055,13 @@ def test_concat_join_series(ignore_index, sort, join, axis):
         ignore_index=ignore_index,
         axis=axis,
     )
-    with expect_warning_if(axis in {1, "columns"}):
-        actual = cudf.concat(
-            [s1, s2, s3, s4],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        )
+    actual = cudf.concat(
+        [s1, s2, s3, s4],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
 
     assert_eq(
         expected,
@@ -1266,21 +1208,20 @@ def test_concat_join_empty_dataframes_axis_1(
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
 
-    with _hide_concat_empty_dtype_warning():
-        expected = pd.concat(
-            other_pd,
-            ignore_index=ignore_index,
-            axis=axis,
-            join=join,
-            sort=sort,
-        )
-        actual = cudf.concat(
-            other_gd,
-            ignore_index=ignore_index,
-            axis=axis,
-            join=join,
-            sort=sort,
-        )
+    expected = pd.concat(
+        other_pd,
+        ignore_index=ignore_index,
+        axis=axis,
+        join=join,
+        sort=sort,
+    )
+    actual = cudf.concat(
+        other_gd,
+        ignore_index=ignore_index,
+        axis=axis,
+        join=join,
+        sort=sort,
+    )
     if expected.shape != df.shape:
         if axis == 0:
             for key, col in actual[actual.columns].items():
@@ -2267,13 +2208,12 @@ def test_dataframe_concat_lists(df, other, sort, ignore_index):
     gdf = cudf.from_pandas(df)
     other_gd = [cudf.from_pandas(o) for o in other_pd]
 
-    with _hide_concat_empty_dtype_warning():
-        expected = pd.concat(
-            [pdf, *other_pd], sort=sort, ignore_index=ignore_index
-        )
-        actual = cudf.concat(
-            [gdf, *other_gd], sort=sort, ignore_index=ignore_index
-        )
+    expected = pd.concat(
+        [pdf, *other_pd], sort=sort, ignore_index=ignore_index
+    )
+    actual = cudf.concat(
+        [gdf, *other_gd], sort=sort, ignore_index=ignore_index
+    )
 
     if expected.shape != df.shape:
         assert_eq(
@@ -2426,13 +2366,12 @@ def test_dataframe_concat_dataframe_lists(df, other, sort, ignore_index):
     gdf = cudf.from_pandas(df)
     other_gd = [cudf.from_pandas(o) for o in other]
 
-    with _hide_concat_empty_dtype_warning():
-        expected = pd.concat(
-            [pdf, *other_pd], sort=sort, ignore_index=ignore_index
-        )
-        actual = cudf.concat(
-            [gdf, *other_gd], sort=sort, ignore_index=ignore_index
-        )
+    expected = pd.concat(
+        [pdf, *other_pd], sort=sort, ignore_index=ignore_index
+    )
+    actual = cudf.concat(
+        [gdf, *other_gd], sort=sort, ignore_index=ignore_index
+    )
 
     # In some cases, Pandas creates an empty Index([], dtype="object") for
     # columns whereas cudf creates a RangeIndex(0, 0).
@@ -2600,13 +2539,8 @@ def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
     gdf = cudf.from_pandas(df)
     other_gd = cudf.from_pandas(other)
 
-    with _hide_concat_empty_dtype_warning():
-        expected = pd.concat(
-            [pdf, other_pd], sort=sort, ignore_index=ignore_index
-        )
-        actual = cudf.concat(
-            [gdf, other_gd], sort=sort, ignore_index=ignore_index
-        )
+    expected = pd.concat([pdf, other_pd], sort=sort, ignore_index=ignore_index)
+    actual = cudf.concat([gdf, other_gd], sort=sort, ignore_index=ignore_index)
 
     # In empty dataframe cases, Pandas & cudf differ in columns
     # creation, pandas creates RangeIndex(0, 0)
@@ -2636,9 +2570,8 @@ def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
 def test_concat_empty_dataframe(df_1_data, df_2_data):
     df_1 = cudf.DataFrame(df_1_data)
     df_2 = cudf.DataFrame(df_2_data)
-    with _hide_concat_empty_dtype_warning():
-        got = cudf.concat([df_1, df_2])
-        expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()], sort=False)
+    got = cudf.concat([df_1, df_2])
+    expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()], sort=False)
 
     # ignoring dtypes as pandas upcasts int to float
     # on concatenation with empty dataframes
@@ -2664,15 +2597,14 @@ def test_concat_empty_dataframe(df_1_data, df_2_data):
     ],
 )
 def test_concat_different_column_dataframe(df1_d, df2_d):
-    with _hide_concat_empty_dtype_warning():
-        got = cudf.concat(
-            [
-                cudf.DataFrame(df1_d),
-                cudf.DataFrame(df2_d),
-                cudf.DataFrame(df1_d),
-            ],
-            sort=False,
-        )
+    got = cudf.concat(
+        [
+            cudf.DataFrame(df1_d),
+            cudf.DataFrame(df2_d),
+            cudf.DataFrame(df1_d),
+        ],
+        sort=False,
+    )
 
     pdf1 = pd.DataFrame(df1_d)
     pdf2 = pd.DataFrame(df2_d)
@@ -2694,9 +2626,8 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
 )
 def test_concat_empty_series(ser_1):
     ser_2 = pd.Series([], dtype="float64")
-    with _hide_concat_empty_dtype_warning():
-        got = cudf.concat([cudf.Series(ser_1), cudf.Series(ser_2)])
-        expect = pd.concat([ser_1, ser_2])
+    got = cudf.concat([cudf.Series(ser_1), cudf.Series(ser_2)])
+    expect = pd.concat([ser_1, ser_2])
 
     assert_eq(got, expect, check_index_type=True)
 

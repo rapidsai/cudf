@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 """Base class for Frame types that have an index."""
 
@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import copy
 import itertools
-import operator
 import textwrap
 import warnings
 from collections import Counter
@@ -38,13 +37,11 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, stream_compaction
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
-    NumericalColumn,
+    access_columns,
     as_column,
     column_empty,
 )
@@ -86,7 +83,6 @@ from cudf.utils.utils import _warn_no_dask_cudf
 
 if TYPE_CHECKING:
     from collections.abc import (
-        Callable,
         Hashable,
         Iterable,
         MutableMapping,
@@ -666,10 +662,9 @@ class IndexedFrame(Frame):
         self,
         to_replace=None,
         value=no_default,
+        *,
         inplace: bool = False,
-        limit=None,
         regex: bool = False,
-        method=no_default,
     ) -> Self | None:
         """Replace values given in ``to_replace`` with ``value``.
 
@@ -861,38 +856,19 @@ class IndexedFrame(Frame):
         .. pandas-compat::
             :meth:`pandas.DataFrame.replace`, :meth:`pandas.Series.replace`
 
-            Parameters that are currently not supported are: `limit`, `regex`,
-            `method`
+            `regex` is not currently supported.
         """
-        if limit is not None:
-            raise NotImplementedError("limit parameter is not implemented yet")
-
         if regex:
             raise NotImplementedError("regex parameter is not implemented yet")
 
-        if method is not no_default:
-            warnings.warn(
-                "The 'method' keyword in "
-                f"{type(self).__name__}.replace is deprecated and "
-                "will be removed in a future version.",
-                FutureWarning,
-            )
-        elif method not in {"pad", None, no_default}:
-            raise NotImplementedError("method parameter is not implemented")
-
-        if (
-            value is no_default
-            and method is no_default
-            and not is_dict_like(to_replace)
-            and regex is False
+        if value is no_default and not (
+            is_dict_like(to_replace) or is_dict_like(regex)
         ):
-            warnings.warn(
-                f"{type(self).__name__}.replace without 'value' and with "
-                "non-dict-like 'to_replace' is deprecated "
-                "and will raise in a future version. "
-                "Explicitly specify the new values instead.",
-                FutureWarning,
+            raise ValueError(
+                f"{type(self).__name__}.replace must specify either 'value', "
+                "a dict-like 'to_replace', or dict-like 'regex'."
             )
+
         if not (to_replace is None and value is no_default):
             (
                 all_na_per_column,
@@ -1352,7 +1328,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def sum(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         min_count: int = 0,
@@ -1404,7 +1380,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def product(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna=True,
         numeric_only=False,
         min_count=0,
@@ -1462,7 +1438,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def mean(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1504,9 +1480,10 @@ class IndexedFrame(Frame):
             **kwargs,
         )
 
+    @_performance_tracking
     def median(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1556,7 +1533,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def std(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         ddof: int = 1,
         numeric_only: bool = False,
@@ -1609,7 +1586,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def var(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         ddof: int = 1,
         numeric_only: bool = False,
@@ -1661,7 +1638,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def kurtosis(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1722,7 +1699,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def skew(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1963,13 +1940,13 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def interpolate(
         self,
-        method="linear",
-        axis=0,
-        limit=None,
+        *,
+        method: str = "linear",
+        axis: Axis = 0,
+        limit: int | None = None,
         inplace: bool = False,
-        limit_direction=None,
-        limit_area=None,
-        downcast=None,
+        limit_direction: Literal["forward", "backward", "both"] | None = None,
+        limit_area: Literal["inside", "outside"] | None = None,
         **kwargs,
     ):
         """
@@ -1997,23 +1974,7 @@ class IndexedFrame(Frame):
             some or all ``NaN`` values
 
         """
-        if method in {"pad", "ffill"} and limit_direction != "forward":
-            raise ValueError(
-                f"`limit_direction` must be 'forward' for method `{method}`"
-            )
-        if method in {"backfill", "bfill"} and limit_direction != "backward":
-            raise ValueError(
-                f"`limit_direction` must be 'backward' for method `{method}`"
-            )
-
-        if method.lower() in {"ffill", "bfill", "pad", "backfill"}:
-            warnings.warn(
-                f"{type(self).__name__}.interpolate with method={method} is "
-                "deprecated and will raise in a future version. "
-                "Use obj.ffill() or obj.bfill() instead.",
-                FutureWarning,
-            )
-        elif method not in {"linear", "values", "index"}:
+        if method not in {"linear", "values", "index"}:
             raise ValueError(f"Interpolation method `{method}` not found")
 
         if not isinstance(inplace, bool):
@@ -2021,17 +1982,14 @@ class IndexedFrame(Frame):
         elif inplace is True:
             raise NotImplementedError("inplace is not supported")
 
-        data = self
-
         if limit is not None:
             raise NotImplementedError("limit is not supported")
         if limit_direction is not None:
             raise NotImplementedError("limit_direction is not supported")
         if limit_area is not None:
             raise NotImplementedError("limit_area is not supported")
-        if downcast is not None:
-            raise NotImplementedError("downcast is not supported")
 
+        data = self
         if not isinstance(data.index, cudf.RangeIndex):
             perm_sort = data.index.argsort()
             data = data._gather(
@@ -2046,21 +2004,11 @@ class IndexedFrame(Frame):
             interp_index = RangeIndex(self._num_rows)
         else:
             interp_index = data.index
-        columns = []
-        for col in data._columns:
-            if col.dtype == CUDF_STRING_DTYPE:
-                warnings.warn(
-                    f"{type(self).__name__}.interpolate with object dtype is "
-                    "deprecated and will raise in a future version.",
-                    FutureWarning,
-                )
-            if col.nullable:
-                col = col.astype(np.dtype(np.float64)).fillna(np.nan)
-
-            columns.append(col.interpolate(index=interp_index))
 
         result = self._from_data_like_self(
-            self._data._from_columns_like_self(columns)
+            self._data._from_columns_like_self(
+                [col.interpolate(index=interp_index) for col in data._columns]
+            )
         )
         result.index = data.index
 
@@ -2932,7 +2880,7 @@ class IndexedFrame(Frame):
                 "Provided seed value has no effect for the hash method "
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
-        with acquire_spill_lock():
+        with access_columns(*self._columns, mode="read", scope="internal"):
             plc_table = plc.Table([c.plc_column for c in self._columns])
             if method == "murmur3":
                 plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
@@ -2975,13 +2923,16 @@ class IndexedFrame(Frame):
         """
         if not gather_map.nullify and len(self) != gather_map.nrows:
             raise IndexError("Gather map is out of bounds")
+        columns_to_gather = (
+            list(itertools.chain(self.index._columns, self._columns))
+            if keep_index
+            else self._columns
+        )
         return self._from_columns_like_self(
             [
                 ColumnBase.from_pylibcudf(col)
                 for col in copying.gather(
-                    itertools.chain(self.index._columns, self._columns)
-                    if keep_index
-                    else self._columns,
+                    columns_to_gather,
                     gather_map.column,
                     nullify=gather_map.nullify,
                 )
@@ -3052,7 +3003,7 @@ class IndexedFrame(Frame):
             return self._gather(
                 GatherMap.from_column_unchecked(
                     cast(
-                        NumericalColumn,
+                        cudf.core.column.numerical.NumericalColumn,
                         as_column(
                             range(start, stop, stride),
                             dtype=SIZE_TYPE_DTYPE,
@@ -3069,11 +3020,13 @@ class IndexedFrame(Frame):
             if keep_index and not has_range_index
             else self._columns
         )
-        with acquire_spill_lock():
+        # Materialize iterator to avoid consuming it during access context setup
+        cols_list = list(columns_to_slice)
+        with access_columns(  # type: ignore[assignment]
+            *cols_list, mode="read", scope="internal"
+        ) as cols_list:
             plc_tables = plc.copying.slice(
-                plc.Table(
-                    [col.to_pylibcudf(mode="read") for col in columns_to_slice]
-                ),
+                plc.Table([col.plc_column for col in cols_list]),
                 [start, stop],
             )
             sliced = [
@@ -3270,7 +3223,7 @@ class IndexedFrame(Frame):
         if (keep_option := _keep_options.get(keep)) is None:
             raise ValueError('keep must be either "first", "last" or False')
 
-        with acquire_spill_lock():
+        with access_columns(*columns, mode="read", scope="internal"):
             plc_column = plc.stream_compaction.distinct_indices(
                 plc.Table([col.plc_column for col in columns]),
                 keep_option,
@@ -3281,7 +3234,7 @@ class IndexedFrame(Frame):
         result = as_column(
             True, length=len(self), dtype=bool
         )._scatter_by_column(
-            distinct,  # type: ignore[arg-type]
+            cast(cudf.core.column.NumericalColumn, distinct),
             pa_scalar_to_plc_scalar(pa.scalar(False)),
             bounds_check=False,
         )
@@ -3291,7 +3244,12 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def _empty_like(self, keep_index: bool = True) -> Self:
-        with acquire_spill_lock():
+        columns_to_access = (
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index
+            else self._columns
+        )
+        with access_columns(*columns_to_access, mode="read", scope="internal"):
             plc_table = plc.copying.empty_like(
                 plc.Table(
                     [
@@ -3320,125 +3278,81 @@ class IndexedFrame(Frame):
         if self._num_rows == 0:
             return []
 
-        columns_split = copying.columns_split(
+        # Materialize the iterator and enter contexts
+        source_columns_list = list(
             itertools.chain(self.index._columns, self._columns)
             if keep_index
-            else self._columns,
-            splits,
+            else self._columns
         )
-
-        @acquire_spill_lock()
-        def split_from_pylibcudf(split: list[plc.Column]) -> list[ColumnBase]:
-            return [ColumnBase.from_pylibcudf(col) for col in split]
-
-        return [
-            self._from_columns_like_self(
-                split_from_pylibcudf(split),
-                self._column_names,
-                self.index.names if keep_index else None,
+        with access_columns(
+            *source_columns_list, mode="read", scope="internal"
+        ):
+            columns_split = copying.columns_split(
+                source_columns_list,
+                splits,
             )
-            for split in columns_split
-        ]
+
+            def split_from_pylibcudf(
+                split: list[plc.Column],
+            ) -> list[ColumnBase]:
+                return [ColumnBase.from_pylibcudf(col) for col in split]
+
+            return [
+                self._from_columns_like_self(
+                    split_from_pylibcudf(split),
+                    self._column_names,
+                    self.index.names if keep_index else None,
+                )
+                for split in columns_split
+            ]
 
     @_performance_tracking
     def bfill(
         self,
-        value=None,
-        axis=None,
+        *,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit=None,
-        limit_area=None,
+        limit: None | int = None,
+        limit_area: Literal["inside", "outside", None] = None,
     ) -> Self | None:
         """
-        Synonym for :meth:`Series.fillna` with ``method='bfill'``.
+        Fill NA/NaN values by using the next valid observation to fill the gap.
 
         Returns
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        if limit_area is not None:
-            raise NotImplementedError("limit_area is currently not supported.")
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            return self.fillna(
-                method="bfill",
-                value=value,
-                axis=axis,
-                inplace=inplace,
-                limit=limit,
-            )
-
-    @_performance_tracking
-    def backfill(
-        self, value=None, axis=None, inplace: bool = False, limit=None
-    ) -> Self | None:
-        """
-        Synonym for :meth:`Series.fillna` with ``method='bfill'``.
-
-        .. deprecated:: 23.06
-           Use `DataFrame.bfill/Series.bfill` instead.
-
-        Returns
-        -------
-            Object with missing values filled or None if ``inplace=True``.
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            "DataFrame.backfill/Series.backfill is deprecated. Use "
-            "DataFrame.bfill/Series.bfill instead",
-            FutureWarning,
+        return self._fillna(
+            method=plc.replace.ReplacePolicy.FOLLOWING,
+            axis=axis,
+            inplace=inplace,
+            limit=limit,
+            limit_area=limit_area,
         )
-        return self.bfill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     @_performance_tracking
     def ffill(
         self,
-        value=None,
-        axis=None,
+        *,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit=None,
+        limit: None | int = None,
         limit_area: Literal["inside", "outside", None] = None,
-    ):
+    ) -> Self | None:
         """
-        Synonym for :meth:`Series.fillna` with ``method='ffill'``.
+        Fill NA/NaN values by propagating the last valid observation to next valid.
 
         Returns
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        if limit_area is not None:
-            raise NotImplementedError("limit_area is currently not supported.")
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            return self.fillna(
-                method="ffill",
-                value=value,
-                axis=axis,
-                inplace=inplace,
-                limit=limit,
-            )
-
-    @_performance_tracking
-    def pad(self, value=None, axis=None, inplace: bool = False, limit=None):
-        """
-        Synonym for :meth:`Series.fillna` with ``method='ffill'``.
-
-        .. deprecated:: 23.06
-           Use `DataFrame.ffill/Series.ffill` instead.
-
-        Returns
-        -------
-            Object with missing values filled or None if ``inplace=True``.
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            "DataFrame.pad/Series.pad is deprecated. Use "
-            "DataFrame.ffill/Series.ffill instead",
-            FutureWarning,
+        return self._fillna(
+            method=plc.replace.ReplacePolicy.PRECEDING,
+            axis=axis,
+            inplace=inplace,
+            limit=limit,
+            limit_area=limit_area,
         )
-        return self.ffill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     def add_prefix(self, prefix, axis=None):
         """
@@ -3559,7 +3473,6 @@ class IndexedFrame(Frame):
         """
         raise NotImplementedError
 
-    @acquire_spill_lock()
     @_performance_tracking
     def _apply(self, func, kernel_class, *args, **kwargs):
         """Apply `func` across the rows of the frame."""
@@ -4090,11 +4003,9 @@ class IndexedFrame(Frame):
     def resample(
         self,
         rule,
-        axis=0,
         closed: Literal["right", "left"] | None = None,
         label: Literal["right", "left"] | None = None,
         convention: Literal["start", "end", "s", "e"] = "start",
-        kind=None,
         on=None,
         level=None,
         origin="start_day",
@@ -4231,26 +4142,7 @@ class IndexedFrame(Frame):
         """
         from cudf.core.resample import DataFrameResampler, SeriesResampler
 
-        if kind is not None:
-            warnings.warn(
-                "The 'kind' keyword in is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("kind is currently not supported.")
-        if axis != 0:
-            warnings.warn(
-                "The 'axis' keyword in is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
-            raise NotImplementedError("axis is currently not supported.")
         if convention != "start":
-            warnings.warn(
-                "The 'convention' keyword in is "
-                "deprecated and will be removed in a future version. ",
-                FutureWarning,
-            )
             raise NotImplementedError("convention is currently not supported.")
         if origin != "start_day":
             raise NotImplementedError("origin is currently not supported.")
@@ -4585,147 +4477,6 @@ class IndexedFrame(Frame):
             index,
         )
 
-    def _first_or_last(
-        self, offset, idx: int, op: Callable, side: str, slice_func: Callable
-    ) -> "IndexedFrame":
-        """Shared code path for ``first`` and ``last``."""
-        if not isinstance(self.index, cudf.DatetimeIndex):
-            raise TypeError("'first' only supports a DatetimeIndex index.")
-        if not isinstance(offset, str):
-            raise NotImplementedError(
-                f"Unsupported offset type {type(offset)}."
-            )
-
-        if len(self) == 0:
-            return self.copy()
-
-        pd_offset = pd.tseries.frequencies.to_offset(offset)
-        to_search = op(
-            pd.Timestamp(self.index._column.element_indexing(idx)), pd_offset
-        )
-        if (
-            idx == 0
-            and not isinstance(pd_offset, pd.tseries.offsets.Tick)
-            and pd_offset.is_on_offset(pd.Timestamp(self.index[0]))
-        ):
-            # Special handle is required when the start time of the index
-            # is on the end of the offset. See pandas gh29623 for detail.
-            to_search = to_search - pd_offset.base
-            return self.loc[:to_search]
-        needle = as_column(to_search, dtype=self.index.dtype)
-        end_point = int(
-            self.index._column.searchsorted(
-                needle, side=side
-            ).element_indexing(0)
-        )
-        return slice_func(end_point)
-
-    def first(self, offset):
-        """Select initial periods of time series data based on a date offset.
-
-        When having a DataFrame with **sorted** dates as index, this function
-        can select the first few rows based on a date offset.
-
-        Parameters
-        ----------
-        offset: str
-            The offset length of the data that will be selected. For instance,
-            '1M' will display all rows having their index within the first
-            month.
-
-        Returns
-        -------
-        Series or DataFrame
-            A subset of the caller.
-
-        Raises
-        ------
-        TypeError
-            If the index is not a ``DatetimeIndex``
-
-        Examples
-        --------
-        >>> i = cudf.date_range('2018-04-09', periods=4, freq='2D')
-        >>> ts = cudf.DataFrame({'A': [1, 2, 3, 4]}, index=i)
-        >>> ts
-                    A
-        2018-04-09  1
-        2018-04-11  2
-        2018-04-13  3
-        2018-04-15  4
-        >>> ts.first('3D')
-                    A
-        2018-04-09  1
-        2018-04-11  2
-        """
-        # Do not remove until pandas 3.0 support is added.
-        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
-        warnings.warn(
-            "first is deprecated and will be removed in a future version. "
-            "Please create a mask and filter using `.loc` instead",
-            FutureWarning,
-        )
-        return self._first_or_last(
-            offset,
-            idx=0,
-            op=operator.__add__,
-            side="left",
-            slice_func=lambda i: self.iloc[:i],
-        )
-
-    def last(self, offset):
-        """Select final periods of time series data based on a date offset.
-
-        When having a DataFrame with **sorted** dates as index, this function
-        can select the last few rows based on a date offset.
-
-        Parameters
-        ----------
-        offset: str
-            The offset length of the data that will be selected. For instance,
-            '3D' will display all rows having their index within the last 3
-            days.
-
-        Returns
-        -------
-        Series or DataFrame
-            A subset of the caller.
-
-        Raises
-        ------
-        TypeError
-            If the index is not a ``DatetimeIndex``
-
-        Examples
-        --------
-        >>> i = cudf.date_range('2018-04-09', periods=4, freq='2D')
-        >>> ts = cudf.DataFrame({'A': [1, 2, 3, 4]}, index=i)
-        >>> ts
-                    A
-        2018-04-09  1
-        2018-04-11  2
-        2018-04-13  3
-        2018-04-15  4
-        >>> ts.last('3D')
-                    A
-        2018-04-13  3
-        2018-04-15  4
-        """
-        # Do not remove until pandas 3.0 support is added.
-        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
-        warnings.warn(
-            "last is deprecated and will be removed in a future version. "
-            "Please create a mask and filter using `.loc` instead",
-            FutureWarning,
-        )
-        return self._first_or_last(
-            offset,
-            idx=-1,
-            op=operator.__sub__,
-            side="right",
-            slice_func=lambda i: self.iloc[i:],
-        )
-
     @_performance_tracking
     def sample(
         self,
@@ -4900,7 +4651,7 @@ class IndexedFrame(Frame):
         try:
             gather_map = GatherMap.from_column_unchecked(
                 cast(
-                    NumericalColumn,
+                    cudf.core.column.numerical.NumericalColumn,
                     as_column(
                         random_state.choice(
                             len(self), size=n, replace=replace, p=weights
@@ -5435,7 +5186,12 @@ class IndexedFrame(Frame):
         # specified nested column. Other columns' corresponding rows are
         # duplicated. If ignore_index is set, the original index is not
         # exploded and will be replaced with a `RangeIndex`.
-        if not isinstance(self._data[explode_column].dtype, ListDtype):
+        dtype = self._data[explode_column].dtype
+        is_list_dtype = isinstance(dtype, ListDtype) or (
+            isinstance(dtype, pd.ArrowDtype)
+            and isinstance(dtype.pyarrow_dtype, pa.ListType)
+        )
+        if not is_list_dtype:
             result = self.copy()
             if ignore_index:
                 result.index = RangeIndex(len(result))
@@ -5447,7 +5203,11 @@ class IndexedFrame(Frame):
         else:
             idx_cols = ()
 
-        with acquire_spill_lock():
+        with access_columns(
+            *itertools.chain(idx_cols, self._columns),
+            mode="read",
+            scope="internal",
+        ):
             plc_table = plc.lists.explode_outer(
                 plc.Table(
                     [
@@ -5539,7 +5299,11 @@ class IndexedFrame(Frame):
         -------
         The indexed frame containing the tiled "rows".
         """
-        with acquire_spill_lock():
+        with access_columns(
+            *itertools.chain(self.index._columns, self._columns),
+            mode="read",
+            scope="internal",
+        ):
             plc_table = plc.reshape.tile(
                 plc.Table(
                     [
@@ -6629,6 +6393,42 @@ class IndexedFrame(Frame):
             return self._from_data_like_self(
                 self._data._from_columns_like_self(cols, verify=False)
             )
+
+    @_performance_tracking
+    def pct_change(
+        self,
+        periods: int = 1,
+        fill_method: None = None,
+        freq=None,
+        **kwargs,
+    ):
+        """
+        Calculates the percent change between sequential elements.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for forming percent change.
+        fill_method : None
+            Must be None.
+        freq : str, optional
+            Increment to use from time series API.
+            Not yet implemented.
+        **kwargs
+            Additional keyword arguments are passed into shift.
+
+        Returns
+        -------
+        Same type as caller.
+        """
+        if freq is not None:
+            raise NotImplementedError("freq parameter not supported yet.")
+        if fill_method is not None:
+            raise ValueError(f"fill_method must be None; got {fill_method=}.")
+
+        return self.diff(periods=periods) / self.shift(  # type: ignore[attr-defined]
+            periods=periods, freq=freq, **kwargs
+        )
 
     @_performance_tracking
     def serialize(self):

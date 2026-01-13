@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 from cudf.api.types import is_integer, is_scalar
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import DatetimeIndex, Index, ensure_index
@@ -686,7 +685,7 @@ class DateOffset:
             for unit, value in self._scalars.items():
                 value = -value if op == "__sub__" else value
                 if unit == "months":
-                    with acquire_spill_lock():
+                    with datetime_col.access(mode="read", scope="internal"):
                         datetime_col = type(datetime_col).from_pylibcudf(
                             plc.datetime.add_calendrical_months(
                                 datetime_col.plc_column,
@@ -877,11 +876,7 @@ def date_range(
         )
 
     if periods is not None and not is_integer(periods):
-        warnings.warn(
-            "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
-            " are deprecated and will raise in a future version.",
-            FutureWarning,
-        )
+        raise TypeError(f"periods must be an integer, got {periods}")
 
     dtype: np.dtype = np.dtype("datetime64[ns]")
     unit, _ = np.datetime_data(dtype)
@@ -977,14 +972,14 @@ def date_range(
         months = offset.kwds.get("years", 0) * 12 + offset.kwds.get(
             "months", 0
         )
-        with acquire_spill_lock():
-            res = ColumnBase.from_pylibcudf(
-                plc.filling.calendrical_month_sequence(
-                    periods,
-                    pa_scalar_to_plc_scalar(pa.scalar(start)),
-                    months,
-                )
+        # No columns to access here - calendrical_month_sequence creates new data
+        res = ColumnBase.from_pylibcudf(
+            plc.filling.calendrical_month_sequence(
+                periods,
+                pa_scalar_to_plc_scalar(pa.scalar(start)),
+                months,
             )
+        )
         if _periods_not_specified:
             # As mentioned in [1], this is a post processing step to trim extra
             # elements when `periods` is an estimated value. Only offset

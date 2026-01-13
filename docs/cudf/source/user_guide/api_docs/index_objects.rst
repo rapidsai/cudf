@@ -51,13 +51,6 @@ Modifying and computations
    Index.drop_duplicates
    Index.equals
    Index.factorize
-   Index.is_boolean
-   Index.is_categorical
-   Index.is_floating
-   Index.is_integer
-   Index.is_interval
-   Index.is_numeric
-   Index.is_object
    Index.min
    Index.max
    Index.rename
@@ -116,7 +109,6 @@ Conversion
    Index.to_dlpack
    Index.to_pylibcudf
    Index.from_pylibcudf
-   Index.from_pandas
    Index.from_arrow
 
 Sorting

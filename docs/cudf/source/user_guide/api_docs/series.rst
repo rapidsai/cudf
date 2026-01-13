@@ -22,7 +22,6 @@ Attributes
    Series.iat
    Series.index
    Series.values
-   Series.data
    Series.dtype
    Series.dtypes
    Series.shape
@@ -176,10 +175,8 @@ Reindexing / selection / label manipulation
    Series.drop_duplicates
    Series.duplicated
    Series.equals
-   Series.first
    Series.head
    Series.isin
-   Series.last
    Series.reindex
    Series.rename
    Series.reset_index
@@ -196,7 +193,6 @@ Missing data handling
 .. autosummary::
    :toctree: api/
 
-   Series.backfill
    Series.bfill
    Series.dropna
    Series.ffill
@@ -207,7 +203,6 @@ Missing data handling
    Series.nans_to_nulls
    Series.notna
    Series.notnull
-   Series.pad
    Series.replace
 
 Reshaping, sorting
@@ -542,7 +537,6 @@ Serialization / IO / conversion
    Series.to_pandas
    Series.to_string
    Series.from_arrow
-   Series.from_pandas
    Series.hash_values
    Series.to_pylibcudf
    Series.from_pylibcudf

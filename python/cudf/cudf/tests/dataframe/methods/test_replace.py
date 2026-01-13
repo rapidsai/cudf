@@ -13,7 +13,6 @@ from cudf.core._compat import (
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
-    expect_warning_if,
 )
 
 
@@ -86,7 +85,7 @@ from cudf.testing._utils import (
         ),
     ],
 )
-def test_dataframe_replace(data, dtype, to_replace, value):
+def test_dataframe_replace(request, data, dtype, to_replace, value):
     gdf = cudf.DataFrame(data, dtype=dtype)
     pdf = gdf.to_pandas()
 
@@ -102,20 +101,24 @@ def test_dataframe_replace(data, dtype, to_replace, value):
     else:
         gd_to_replace = to_replace
 
-    can_warn = (
+    categories_missing = (
         isinstance(gdf["a"].dtype, cudf.CategoricalDtype)
         and isinstance(to_replace, str)
         and to_replace == "two"
         and isinstance(value, str)
         and value == "three"
     )
-    with expect_warning_if(can_warn):
-        if pd_value is None:
-            expected = pdf.replace(to_replace=pd_to_replace)
-        else:
-            expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
-    with expect_warning_if(can_warn):
-        actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
+    request.applymarker(
+        pytest.mark.xfail(
+            categories_missing,
+            reason="cuDF result missing 'two' in dtype.categories",
+        )
+    )
+    if pd_value is None:
+        expected = pdf.replace(to_replace=pd_to_replace)
+    else:
+        expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
+    actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
     expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
     actual_sorted = actual.sort_values(by=list(actual.columns), axis=0)

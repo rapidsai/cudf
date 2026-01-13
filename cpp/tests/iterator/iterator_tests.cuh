@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -83,13 +83,13 @@ struct IteratorTest : public cudf::test::BaseFixture {
     // using a temporary vector and calling transform and all_of separately is
     // equivalent to thrust::equal but compiles ~3x faster
     auto dev_results = rmm::device_uvector<bool>(num_items, cudf::get_default_stream());
-    thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+    thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                       d_in,
                       d_in_last,
                       dev_expected.begin(),
                       dev_results.begin(),
                       cuda::std::equal_to{});
-    auto result = thrust::all_of(rmm::exec_policy(cudf::get_default_stream()),
+    auto result = thrust::all_of(rmm::exec_policy_nosync(cudf::get_default_stream()),
                                  dev_results.begin(),
                                  dev_results.end(),
                                  cuda::std::identity{});

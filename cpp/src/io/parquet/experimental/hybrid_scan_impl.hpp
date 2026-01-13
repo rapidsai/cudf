@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -181,6 +181,27 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::cuda_stream_view stream);
 
   /**
+   * @brief Fetches byte ranges for all (or selected) column chunks
+   *
+   * @param row_group_indices Input row groups indices
+   * @param options Parquet reader options
+   * @return Pair of a vector of byte ranges to column chunks of all (or selected) columns and a
+   * vector of their corresponding input source file indices
+   */
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
+  all_column_chunks_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                parquet_reader_options const& options);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::materialize_all_columns
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream);
+
+  /**
    * @copydoc cudf::io::experimental::hybrid_scan::setup_chunking_for_filter_columns
    */
   void setup_chunking_for_filter_columns(
@@ -242,9 +263,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
  private:
   /**
-   * @brief The enum indicating whether we are reading the filter columns or the payload columns
+   * @brief The enum indicating whether we are reading the filter, payload, or all columns
    */
-  enum class read_columns_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS };
+  enum class read_columns_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS, ALL_COLUMNS };
 
   /**
    * @brief Initialize the necessary options related internal variables for use later on
@@ -256,6 +277,16 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   void initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
                           parquet_reader_options const& options,
                           rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Convert the input filter expression such that all column name references are replaced
+   * with corresponding column references
+   *
+   * @param filter Input filter expression
+   * @return Converted expression
+   */
+  [[nodiscard]] named_to_reference_converter build_converted_expression(
+    std::optional<std::reference_wrapper<const ast::expression>> filter);
 
   /**
    * @brief Set the page mask for the pass pages
@@ -429,6 +460,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   bool _is_filter_columns_selected{false};
   bool _is_payload_columns_selected{false};
+  bool _is_all_columns_selected{false};
 };
 
 }  // namespace cudf::io::parquet::experimental::detail

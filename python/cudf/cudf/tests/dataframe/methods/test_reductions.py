@@ -139,21 +139,19 @@ def test_any_all_axis_none(data, op):
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="Warning not given on older versions of pandas",
 )
-def test_reductions_axis_none_warning(request, reduction_methods):
+def test_reductions_axis_none(request, reduction_methods):
     if reduction_methods == "quantile":
         pytest.skip(f"pandas {reduction_methods} doesn't support axis=None")
+    if reduction_methods in {"std", "var"}:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason=f"cuDF result incorrect for {reduction_methods}"
+            )
+        )
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [10, 2, 3]})
     pdf = df.to_pandas()
-    with expect_warning_if(
-        reduction_methods in {"sum", "product", "std", "var"},
-        FutureWarning,
-    ):
-        actual = getattr(df, reduction_methods)(axis=None)
-    with expect_warning_if(
-        reduction_methods in {"sum", "product", "std", "var"},
-        FutureWarning,
-    ):
-        expected = getattr(pdf, reduction_methods)(axis=None)
+    actual = getattr(df, reduction_methods)(axis=None)
+    expected = getattr(pdf, reduction_methods)(axis=None)
     assert_eq(expected, actual, check_dtype=False)
 
 
