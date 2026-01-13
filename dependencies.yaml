@@ -460,6 +460,7 @@ channels:
   - rapidsai
   - rapidsai-nightly
   - conda-forge
+  - conda-forge/label/numba_cuda_rc
 dependencies:
   build_base:
     common:
