@@ -400,8 +400,8 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   auto h_initial_str_offsets =
     cudf::detail::make_pinned_vector_async<size_t>(initial_str_offsets.size(), _stream);
   cudf::detail::cuda_memcpy_async(
-    cudf::host_span<size_t>(h_initial_str_offsets.data(), initial_str_offsets.size()),
-    cudf::device_span<size_t const>(initial_str_offsets.data(), initial_str_offsets.size()),
+    cudf::host_span<size_t>{h_initial_str_offsets},
+    cudf::device_span<size_t const>{initial_str_offsets.data(), initial_str_offsets.size()},
     _stream);
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
@@ -432,14 +432,14 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
         // the final offset for a list at level N is the size of it's child
         size_type const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-        out_buffers.push_back(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1));
-        final_offsets.push_back(offset);
+        out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1));
+        final_offsets.emplace_back(offset);
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // only if it is not a large strings column
         if (std::cmp_less_equal(col_string_sizes[idx], strings::detail::get_offset64_threshold())) {
-          out_buffers.push_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
-          final_offsets.push_back(static_cast<size_type>(col_string_sizes[idx]));
+          out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
+          final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
         }
         // Nested large strings column
         else if (input_col.nesting_depth() > 0) {
@@ -939,9 +939,9 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   auto page_and_mask_begin =
     thrust::make_zip_iterator(cuda::std::make_tuple(pages.host_begin(), page_mask.begin()));
 
-  auto host_null_masks = std::vector<bitmask_type*>{};
-  auto host_begin_bits = std::vector<cudf::size_type>{};
-  auto host_end_bits   = std::vector<cudf::size_type>{};
+  auto null_masks = std::vector<bitmask_type*>{};
+  auto begin_bits = std::vector<cudf::size_type>{};
+  auto end_bits   = std::vector<cudf::size_type>{};
 
   std::for_each(
     page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
@@ -994,9 +994,9 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
         cols          = &out_buf.children;
         if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
         // Add the nullmask and bit bounds to corresponding lists
-        host_null_masks.emplace_back(out_buf.null_mask());
-        host_begin_bits.emplace_back(start_row);
-        host_end_bits.emplace_back(end_row);
+        null_masks.emplace_back(out_buf.null_mask());
+        begin_bits.emplace_back(start_row);
+        end_bits.emplace_back(end_row);
 
         // Increment the null count by the number of rows in this page
         out_buf.null_count() += page.num_rows;
@@ -1007,26 +1007,27 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   constexpr auto min_nullmasks_for_bulk_update = 32;
 
   // Use a bounce buffer to avoid pageable copies
-  auto null_masks =
-    cudf::detail::make_pinned_vector_async<bitmask_type*>(host_null_masks.size(), _stream);
-  auto begin_bits =
-    cudf::detail::make_pinned_vector_async<cudf::size_type>(host_begin_bits.size(), _stream);
-  auto end_bits =
-    cudf::detail::make_pinned_vector_async<cudf::size_type>(host_end_bits.size(), _stream);
-  std::move(host_null_masks.begin(), host_null_masks.end(), null_masks.begin());
-  std::move(host_begin_bits.begin(), host_begin_bits.end(), begin_bits.begin());
-  std::move(host_end_bits.begin(), host_end_bits.end(), end_bits.begin());
+  auto pinned_null_masks =
+    cudf::detail::make_pinned_vector_async<bitmask_type*>(null_masks.size(), _stream);
+  auto pinned_begin_bits =
+    cudf::detail::make_pinned_vector_async<cudf::size_type>(begin_bits.size(), _stream);
+  auto pinned_end_bits =
+    cudf::detail::make_pinned_vector_async<cudf::size_type>(end_bits.size(), _stream);
+  std::move(null_masks.begin(), null_masks.end(), pinned_null_masks.begin());
+  std::move(begin_bits.begin(), begin_bits.end(), pinned_begin_bits.begin());
+  std::move(end_bits.begin(), end_bits.end(), pinned_end_bits.begin());
 
   // Bulk update the nullmasks if the number of pages is above the threshold
   if (null_masks.size() >= min_nullmasks_for_bulk_update) {
-    auto valids = cudf::detail::make_pinned_vector_async<bool>(null_masks.size(), _stream);
-    std::fill(valids.begin(), valids.end(), false);
-    cudf::set_null_masks_safe(null_masks, begin_bits, end_bits, valids, _stream);
+    auto pinned_valids = cudf::detail::make_pinned_vector_async<bool>(null_masks.size(), _stream);
+    std::fill(pinned_valids.begin(), pinned_valids.end(), false);
+    cudf::set_null_masks_safe(
+      pinned_null_masks, pinned_begin_bits, pinned_end_bits, pinned_valids, _stream);
   }
   // Otherwise, update the nullmasks in a loop
   else {
-    auto nullmask_iter = thrust::make_zip_iterator(
-      cuda::std::make_tuple(null_masks.begin(), begin_bits.begin(), end_bits.begin()));
+    auto nullmask_iter = thrust::make_zip_iterator(cuda::std::make_tuple(
+      pinned_null_masks.begin(), pinned_begin_bits.begin(), pinned_end_bits.begin()));
     std::for_each(
       nullmask_iter, nullmask_iter + null_masks.size(), [&](auto const& nullmask_tuple) {
         cudf::set_null_mask(cuda::std::get<0>(nullmask_tuple),
