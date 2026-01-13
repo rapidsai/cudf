@@ -366,6 +366,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return self.mask is not None
 
     def has_nulls(self, include_nan: bool = False) -> bool:
+        """Check if column has null values.
+
+        Parameters
+        ----------
+        include_nan : bool, default False
+            If True, NaN values are also considered null. This parameter
+            only has an effect on float columns (NumericalColumn override).
+            For non-float columns, this parameter is ignored.
+
+        Returns
+        -------
+        bool
+            True if column has null values (and optionally NaN values for floats).
+        """
         return int(self.null_count) != 0
 
     @property
@@ -779,10 +793,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def values(self) -> cp.ndarray:
+        """Return a CuPy representation of the Column.
+
+        Raises
+        ------
+        TypeError
+            If CuPy does not support this column's dtype.
         """
-        Return a CuPy representation of the Column.
-        """
-        raise NotImplementedError(f"cupy does not support {self.dtype}")
+        raise TypeError(f"CuPy does not support {self.dtype}")
 
     def find_and_replace(
         self,
@@ -1446,52 +1464,48 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
 
     def isnan(self) -> ColumnBase:
-        """Identify NaN values in a Column."""
-        if self.dtype.kind != "f":
-            return as_column(False, length=len(self))
-        with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(plc.unary.is_nan(self.plc_column))
+        """Identify NaN values in a Column.
+
+        NaN values only exist in float columns. For non-float columns,
+        this always returns False.
+        """
+        return as_column(False, length=len(self))
 
     def notnan(self) -> ColumnBase:
-        """Identify non-NaN values in a Column."""
-        if self.dtype.kind != "f":
-            return as_column(True, length=len(self))
-        with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.unary.is_not_nan(self.plc_column)
-            )
+        """Identify non-NaN values in a Column.
+
+        NaN values only exist in float columns. For non-float columns,
+        this always returns True.
+        """
+        return as_column(True, length=len(self))
 
     def isnull(self) -> ColumnBase:
-        """Identify missing values in a Column."""
-        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+        """Identify missing values in a Column.
+
+        For most column types, only checks for NULL values.
+        Float columns override to also consider NaN as null.
+        """
+        if not self.has_nulls(include_nan=False):
             return as_column(False, length=len(self))
 
         with self.access(mode="read", scope="internal"):
-            result = type(self).from_pylibcudf(
+            return type(self).from_pylibcudf(
                 plc.unary.is_null(self.plc_column)
             )
 
-        if self.dtype.kind == "f":
-            # Need to consider `np.nan` values in case
-            # of a float column
-            result = result | self.isnan()
-
-        return result
-
     def notnull(self) -> ColumnBase:
-        """Identify non-missing values in a Column."""
-        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+        """Identify non-missing values in a Column.
+
+        For most column types, only checks for NULL values.
+        Float columns override to also exclude NaN values.
+        """
+        if not self.has_nulls(include_nan=False):
             result = as_column(True, length=len(self))
         else:
             with self.access(mode="read", scope="internal"):
                 result = type(self).from_pylibcudf(
                     plc.unary.is_valid(self.plc_column)
                 )
-
-            if self.dtype.kind == "f":
-                # Need to consider `np.nan` values in case
-                # of a float column
-                result = result & self.notnan()
 
         if cudf.get_option("mode.pandas_compatible"):
             return result
@@ -1874,22 +1888,40 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return codes.set_mask(self.mask)._with_type_metadata(dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
-        raise NotImplementedError
+        raise TypeError(
+            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
+            f"to numerical dtype {dtype}"
+        )
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        raise NotImplementedError
+        raise TypeError(
+            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
+            f"to datetime dtype {dtype}"
+        )
 
     def as_interval_column(self, dtype: IntervalDtype) -> IntervalColumn:
-        raise NotImplementedError
+        raise TypeError(
+            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
+            f"to interval dtype {dtype}"
+        )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        raise NotImplementedError
+        raise TypeError(
+            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
+            f"to timedelta dtype {dtype}"
+        )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
-        raise NotImplementedError
+        raise TypeError(
+            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
+            f"to string dtype {dtype}"
+        )
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
-        raise NotImplementedError
+        raise TypeError(
+            f"Cannot convert {type(self).__name__} with dtype {self.dtype} "
+            f"to decimal dtype {dtype}"
+        )
 
     def apply_boolean_mask(self, mask: ColumnBase) -> ColumnBase:
         if mask.dtype.kind != "b":

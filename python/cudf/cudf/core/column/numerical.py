@@ -187,6 +187,73 @@ class NumericalColumn(NumericalBaseColumn):
             include_nan and bool(self.nan_count != 0)
         )
 
+    def isnan(self) -> ColumnBase:
+        """Identify NaN values in a Column.
+
+        Only meaningful for float dtypes. For integer and boolean columns,
+        returns a column of False values.
+        """
+        if self.dtype.kind != "f":
+            return as_column(False, length=len(self))
+        with self.access(mode="read", scope="internal"):
+            return type(self).from_pylibcudf(plc.unary.is_nan(self.plc_column))
+
+    def notnan(self) -> ColumnBase:
+        """Identify non-NaN values in a Column.
+
+        Only meaningful for float dtypes. For integer and boolean columns,
+        returns a column of True values.
+        """
+        if self.dtype.kind != "f":
+            return as_column(True, length=len(self))
+        with self.access(mode="read", scope="internal"):
+            return type(self).from_pylibcudf(
+                plc.unary.is_not_nan(self.plc_column)
+            )
+
+    def isnull(self) -> ColumnBase:
+        """Identify missing values in a Column.
+
+        For float columns, NaN values are also considered null.
+        """
+        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+            return as_column(False, length=len(self))
+
+        with self.access(mode="read", scope="internal"):
+            result = type(self).from_pylibcudf(
+                plc.unary.is_null(self.plc_column)
+            )
+
+        if self.dtype.kind == "f":
+            # For floats, NaN should be considered null
+            result = result | self.isnan()
+
+        return result
+
+    def notnull(self) -> ColumnBase:
+        """Identify non-missing values in a Column.
+
+        For float columns, NaN values are considered null and excluded.
+        """
+        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+            result = as_column(True, length=len(self))
+        else:
+            with self.access(mode="read", scope="internal"):
+                result = type(self).from_pylibcudf(
+                    plc.unary.is_valid(self.plc_column)
+                )
+
+            if self.dtype.kind == "f":
+                # For floats, NaN should be considered null
+                result = result & self.notnan()
+
+        if cudf.get_option("mode.pandas_compatible"):
+            return result
+
+        return result._with_type_metadata(
+            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+        )
+
     def element_indexing(self, index: int) -> ScalarLike | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
