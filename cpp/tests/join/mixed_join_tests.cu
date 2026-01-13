@@ -1,12 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/type_lists.hpp>
 #include <cudf_test/debug_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
@@ -810,24 +810,24 @@ using MixedLeftJoinTest_int32 = MixedLeftJoinTest<int32_t>;
 TEST_F(MixedLeftJoinTest_int32, ReinsertFilteredRows)
 {
   // Use int32_t specifically - this type works well with AST MOD operations
-  auto const col_ref_left_conditional  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-  auto const col_ref_right_conditional = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  auto scalar_1 = cudf::numeric_scalar<int32_t>(1);
-  auto scalar_2 = cudf::numeric_scalar<int32_t>(2);
+  auto const col_ref_left_conditional =
+    cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_conditional =
+    cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto scalar_1  = cudf::numeric_scalar<int32_t>(1);
+  auto scalar_2  = cudf::numeric_scalar<int32_t>(2);
   auto literal_2 = cudf::ast::literal(scalar_2);
   auto literal_1 = cudf::ast::literal(scalar_1);
 
   // (A.c2 + B.c2)
   auto add_expr = cudf::ast::operation(
-      cudf::ast::ast_operator::ADD, col_ref_left_conditional, col_ref_right_conditional);
+    cudf::ast::ast_operator::ADD, col_ref_left_conditional, col_ref_right_conditional);
 
   // (A.c2 + B.c2) % 2
-  auto mod_expr = cudf::ast::operation(
-      cudf::ast::ast_operator::MOD, add_expr, literal_2);
+  auto mod_expr = cudf::ast::operation(cudf::ast::ast_operator::MOD, add_expr, literal_2);
 
   // (A.c2 + B.c2) % 2 == 1
-  auto predicate = cudf::ast::operation(
-      cudf::ast::ast_operator::EQUAL, mod_expr, literal_1);
+  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, mod_expr, literal_1);
 
   this->test({{0, 1, 2, 3, 4, 5, 6}, {0, 1, 2, 3, 4, 5, 6}},
              {{0, 1, 2, 3, 4, 0, 1}, {111, 113, 115, 117, 119, 121, 123}},
@@ -835,7 +835,14 @@ TEST_F(MixedLeftJoinTest_int32, ReinsertFilteredRows)
              {1},
              predicate,
              {2, 1, 1, 1, 1, 1, 1},
-             {{0, 0}, {0, 5}, {1, cudf::JoinNoMatch}, {2, 2}, {3, cudf::JoinNoMatch}, {4, 4}, {5, cudf::JoinNoMatch}, {6, cudf::JoinNoMatch}});
+             {{0, 0},
+              {0, 5},
+              {1, cudf::JoinNoMatch},
+              {2, 2},
+              {3, cudf::JoinNoMatch},
+              {4, 4},
+              {5, cudf::JoinNoMatch},
+              {6, cudf::JoinNoMatch}});
 }
 
 TYPED_TEST(MixedLeftJoinTest, SizeBasedLeftJoinRegression)
