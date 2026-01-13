@@ -2021,19 +2021,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # some of the attributes from the numba device array
             mask = self.mask
             assert mask is not None
-            # Handle copy-on-write for mask
-            if mask is not None:
-                original_mask_ptr = mask.ptr
-                with mask.access(mode="write", scope="external"):
-                    mask_ptr = mask.ptr
-                # Check if a new buffer was created or if the underlying data was modified
-                if cudf.get_option("copy_on_write") and (
-                    mask_ptr != original_mask_ptr
-                ):
-                    # Update mask to match the new mask buffer
-                    self._set_mask_inplace(self.mask)
-            output["mask"] = mask
-            self._exposed_buffers.add(mask)
+            with mask.access(mode="read", scope="external"):
+                output["mask"] = mask
+                self._exposed_buffers.add(mask)
         return output
 
     def __array_ufunc__(
