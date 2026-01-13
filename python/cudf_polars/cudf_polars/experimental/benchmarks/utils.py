@@ -559,12 +559,12 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                 "oom_protection": str(args.rapidsmpf_oom_protection),
             }
 
-            # Let rapidsmpf handle RMM configuration
+            # Let rapidsmpf handle RMM configuration (supports fractions like "0.5")
             if use_rapidsmpf_rmm:
-                if args.rmm_pool_size:
+                if args.rmm_pool_size is not None:
                     rapidsmpf_options["dask_rmm_pool_size"] = str(args.rmm_pool_size)
                 rapidsmpf_options["dask_rmm_async"] = str(args.rmm_async).lower()
-                if args.rmm_release_threshold:
+                if args.rmm_release_threshold is not None:
                     rapidsmpf_options["dask_rmm_release_threshold"] = str(
                         args.rmm_release_threshold
                     )
