@@ -58,11 +58,11 @@ build_example() {
   fi
 }
 
-build_example basic
+#build_example basic
 build_example hybrid_scan_io
-build_example strings
-build_example string_transforms
-build_example nested_types
-build_example parquet_inspect
-build_example parquet_io
-build_example billion_rows
+#build_example strings
+#build_example string_transforms
+#build_example nested_types
+#build_example parquet_inspect
+#build_example parquet_io
+#build_example billion_rows
