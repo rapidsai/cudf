@@ -136,8 +136,6 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
   static std::mutex mutex;
 
   std::vector<rmm::device_buffer> buffers(byte_ranges.size());
-  std::vector<cudf::device_span<uint8_t>> spans(byte_ranges.size());
-
   {
     std::lock_guard<std::mutex> lock(mutex);
 
