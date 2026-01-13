@@ -148,12 +148,12 @@ enum class use_data_page_mask : bool {
  *
  * if (dict_page_byte_ranges.size()) {
  *   // Fetch dictionary page byte ranges into device buffers and create spans
- *   auto [dictionary_page_buffers, dictionary_page_buffers_spans] =
+ *   auto [dictionary_page_buffers, dictionary_page_buffers_data] =
  *     fetch_byte_ranges(dict_page_byte_ranges);
  *
  *   // Prune row groups using dictionaries
  *   dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
- *     dictionary_page_buffers_spans, current_row_group_indices, options, stream);
+ *     dictionary_page_buffers_data, current_row_group_indices, options, stream);
  *
  *   // Update current row group indices to dictionary page filtered row group indices
  *   current_row_group_indices = dictionary_page_filtered_row_group_indices;
@@ -164,12 +164,12 @@ enum class use_data_page_mask : bool {
  *
  * if (bloom_filter_byte_ranges.size()) {
  *   // Fetch bloom filter byte ranges into device buffers and create spans
- *   auto [bloom_filter_buffers, bloom_filter_buffers_spans] =
+ *   auto [bloom_filter_buffers, bloom_filter_buffers_data] =
  *     fetch_byte_ranges(bloom_filter_byte_ranges);
  *
  *   // Prune row groups using bloom filters
  *   bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
- *     bloom_filter_buffers_spans, current_row_group_indices, options, stream);
+ *     bloom_filter_buffers_data, current_row_group_indices, options, stream);
  *
  *   // Update current row group indices to bloom filtered row group indices
  *   current_row_group_indices = bloom_filtered_row_group_indices;
@@ -223,13 +223,13 @@ enum class use_data_page_mask : bool {
  *   reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
  *
  * // Fetch column chunk data into device buffers and create spans
- * auto [filter_column_chunk_buffers, filter_column_chunk_buffers_spans] =
+ * auto [filter_column_chunk_buffers, filter_column_chunk_buffers_data] =
  *   fetch_byte_ranges(filter_column_chunk_byte_ranges);
  *
  * // Materialize the table with only the filter columns
  * auto [filter_table, filter_metadata] =
  *   reader->materialize_filter_columns(current_row_group_indices,
- *                                      filter_column_chunk_buffers_spans,
+ *                                      filter_column_chunk_buffers_data,
  *                                      row_mask->mutable_view(),
  *                                      use_data_page_mask::YES/NO,
  *                                      options,
@@ -249,13 +249,13 @@ enum class use_data_page_mask : bool {
  *   reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
  *
  * // Fetch column chunk data into device buffers and create spans
- * auto [payload_column_chunk_buffers, payload_column_chunk_buffers_spans] =
+ * auto [payload_column_chunk_buffers, payload_column_chunk_buffers_data] =
  *   fetch_byte_ranges(payload_column_chunk_byte_ranges);
  *
  * // Materialize the table with only the payload columns
  * auto [payload_table, payload_metadata] =
  *   reader->materialize_payload_columns(current_row_group_indices,
- *                                       payload_column_chunk_buffers_spans,
+ *                                       payload_column_chunk_buffers_data,
  *                                       row_mask->view(),
  *                                       use_data_page_mask::YES/NO,
  *                                       options,
@@ -453,7 +453,7 @@ class hybrid_scan_reader {
    *        that exist in the output table
    *
    * @param row_group_indices Input row groups indices
-   * @param column_chunk_spans Device spans of column chunk data of filter columns
+   * @param column_chunk_data Device spans of column chunk data of filter columns
    * @param[in,out] row_mask Mutable boolean column indicating surviving rows from page pruning
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
@@ -462,7 +462,7 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
     cudf::host_span<size_type const> row_group_indices,
-    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_data,
     cudf::mutable_column_view& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
@@ -483,7 +483,7 @@ class hybrid_scan_reader {
    * @brief Materialize payload columns and applies the row mask to the output table
    *
    * @param row_group_indices Input row groups indices
-   * @param column_chunk_spans Device spans of column chunk data of payload columns
+   * @param column_chunk_data Device spans of column chunk data of payload columns
    * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
@@ -492,7 +492,7 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
     cudf::host_span<size_type const> row_group_indices,
-    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_data,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
@@ -513,14 +513,14 @@ class hybrid_scan_reader {
    * @brief Materializes all (or selected) columns and returns the final output table
    *
    * @param row_group_indices Input row groups indices
-   * @param column_chunk_spans Device spans of column chunk data of all columns
+   * @param column_chunk_data Device spans of column chunk data of all columns
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Table of all materialized columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
     cudf::host_span<size_type const> row_group_indices,
-    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_data,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
   /**
@@ -533,7 +533,7 @@ class hybrid_scan_reader {
    * @param row_group_indices Input row groups indices
    * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
-   * @param column_chunk_spans Device spans of column chunk data of filter columns
+   * @param column_chunk_data Device spans of column chunk data of filter columns
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
@@ -543,7 +543,7 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
-    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_data,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
@@ -569,7 +569,7 @@ class hybrid_scan_reader {
    * @param row_group_indices Input row groups indices
    * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
-   * @param column_chunk_spans Device spans of column chunk data of payload columns
+   * @param column_chunk_data Device spans of column chunk data of payload columns
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
@@ -579,7 +579,7 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
-    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_spans,
+    cudf::host_span<cudf::device_span<uint8_t> const> column_chunk_data,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 

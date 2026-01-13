@@ -174,14 +174,14 @@ TEST_F(HybridScanTest, DictionaryPageFiltering)
 
   auto const dict_byte_ranges =
     std::get<1>(reader->secondary_filters_byte_ranges(input_row_group_indices, in_opts));
-  auto [dictionary_page_buffers, dictionary_page_spans] =
+  auto [dictionary_page_buffers, dictionary_page_data] =
     fetch_byte_ranges(file_buffer_span,
                       dict_byte_ranges,
                       cudf::test::get_default_stream(),
                       cudf::get_current_device_resource_ref());
 
   auto result = reader->filter_row_groups_with_dictionary_pages(
-    dictionary_page_spans, input_row_group_indices, in_opts, cudf::test::get_default_stream());
+    dictionary_page_data, input_row_group_indices, in_opts, cudf::test::get_default_stream());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

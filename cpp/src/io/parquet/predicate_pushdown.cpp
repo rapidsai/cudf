@@ -242,32 +242,32 @@ aggregate_reader_metadata::filter_row_groups(
 
   // Read a vector of bloom filter bitset device buffers for all columns with equality
   // predicate(s) across all row groups
-  auto bloom_filter_data = read_bloom_filters(sources,
-                                              bloom_filter_input_row_groups,
-                                              equality_col_schemas,
-                                              num_stats_filtered_row_groups,
-                                              stream,
-                                              aligned_mr);
+  auto bloom_filter_buffers = read_bloom_filters(sources,
+                                                 bloom_filter_input_row_groups,
+                                                 equality_col_schemas,
+                                                 num_stats_filtered_row_groups,
+                                                 stream,
+                                                 aligned_mr);
 
   // No bloom filter buffers, return early
-  if (bloom_filter_data.empty()) {
+  if (bloom_filter_buffers.empty()) {
     return {stats_filtered_row_groups,
             {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
   }
 
   // Create spans from bloom filter buffers
-  std::vector<cudf::device_span<cuda::std::byte>> bloom_filter_spans;
-  bloom_filter_spans.reserve(bloom_filter_data.size());
-  std::transform(bloom_filter_data.begin(),
-                 bloom_filter_data.end(),
-                 std::back_inserter(bloom_filter_spans),
+  std::vector<cudf::device_span<cuda::std::byte>> bloom_filter_data;
+  bloom_filter_data.reserve(bloom_filter_buffers.size());
+  std::transform(bloom_filter_buffers.begin(),
+                 bloom_filter_buffers.end(),
+                 std::back_inserter(bloom_filter_data),
                  [](auto& buffer) {
                    return cudf::device_span<cuda::std::byte>(
                      static_cast<cuda::std::byte*>(buffer.data()), buffer.size());
                  });
 
   // Apply bloom filtering on the output row groups from stats filter
-  auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_spans,
+  auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_data,
                                                              bloom_filter_input_row_groups,
                                                              equality_literals,
                                                              num_stats_filtered_row_groups,

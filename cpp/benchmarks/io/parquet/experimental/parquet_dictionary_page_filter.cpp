@@ -161,7 +161,7 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
   CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
 
   // Fetch dictionary page buffers and corresponding device spans from the input file buffer
-  auto [dictionary_page_buffers, dictionary_page_spans] =
+  auto [dictionary_page_buffers, dictionary_page_data] =
     fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream);
 
   auto mem_stats_logger = cudf::memory_stats_logger();
@@ -171,7 +171,7 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
                try_drop_l3_cache();
                timer.start();
                std::ignore = reader->filter_row_groups_with_dictionary_pages(
-                 dictionary_page_spans, input_row_group_indices, read_opts, stream);
+                 dictionary_page_data, input_row_group_indices, read_opts, stream);
                timer.stop();
              });
 

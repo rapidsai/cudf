@@ -179,7 +179,7 @@ std::tuple<bool,
            cudf::detail::hostdevice_vector<PageInfo>>
 hybrid_scan_reader_impl::prepare_dictionaries(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::host_span<cudf::device_span<uint8_t> const> dictionary_page_spans,
+  cudf::host_span<cudf::device_span<uint8_t> const> dictionary_page_data,
   cudf::host_span<int const> dictionary_col_schemas,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)

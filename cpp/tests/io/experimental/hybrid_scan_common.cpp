@@ -156,12 +156,12 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
   dictionary_page_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (dict_page_byte_ranges.size()) {
     // Fetch dictionary page buffers from the input file buffer
-    auto [dictionary_page_buffers, dictionary_page_spans] =
+    auto [dictionary_page_buffers, dictionary_page_data] =
       fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
 
     // Filter row groups with dictionary pages
     dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
-      dictionary_page_spans, current_row_group_indices, options, stream);
+      dictionary_page_data, current_row_group_indices, options, stream);
 
     // Update current row group indices
     current_row_group_indices = dictionary_page_filtered_row_group_indices;
@@ -175,12 +175,12 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
     auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::device_async_resource_ref>(
       cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
-    auto [bloom_filter_buffers, bloom_filter_spans] =
+    auto [bloom_filter_buffers, bloom_filter_data] =
       fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, aligned_mr);
 
     // Filter row groups with bloom filters
     bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
-      bloom_filter_spans, current_row_group_indices, options, stream);
+      bloom_filter_data, current_row_group_indices, options, stream);
 
     // Update current row group indices
     current_row_group_indices = bloom_filtered_row_group_indices;
@@ -226,14 +226,14 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
     reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
 
   // Fetch column chunk device buffers and spans from the input buffer
-  auto [filter_column_chunk_buffers, filter_column_chunk_spans] =
+  auto [filter_column_chunk_buffers, filter_column_chunk_data] =
     fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the filter columns
   auto row_mask_mutable_view = row_mask->mutable_view();
   auto [filter_table, filter_metadata] =
     reader->materialize_filter_columns(current_row_group_indices,
-                                       filter_column_chunk_spans,
+                                       filter_column_chunk_data,
                                        row_mask_mutable_view,
                                        cudf::io::parquet::experimental::use_data_page_mask::YES,
                                        options,
@@ -244,13 +244,13 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
     reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
 
   // Fetch column chunk device buffers and spans from the input buffer
-  auto [payload_column_chunk_buffers, payload_column_chunk_spans] =
+  auto [payload_column_chunk_buffers, payload_column_chunk_data] =
     fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the payload columns
   auto [payload_table, payload_metadata] =
     reader->materialize_payload_columns(current_row_group_indices,
-                                        payload_column_chunk_spans,
+                                        payload_column_chunk_data,
                                         row_mask->view(),
                                         cudf::io::parquet::experimental::use_data_page_mask::YES,
                                         options,
@@ -296,7 +296,7 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
       // Get column chunk byte ranges from the reader and fetch device buffers
       auto const filter_column_chunk_byte_ranges =
         reader->filter_column_chunks_byte_ranges(row_group_indices, options);
-      auto [filter_column_chunk_buffers, filter_column_chunk_spans] =
+      auto [filter_column_chunk_buffers, filter_column_chunk_data] =
         fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
 
       // Setup chunking for filter columns and materialize the columns
@@ -306,7 +306,7 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
         row_group_indices,
         row_mask->view(),
         cudf::io::parquet::experimental::use_data_page_mask::YES,
-        filter_column_chunk_spans,
+        filter_column_chunk_data,
         options,
         stream);
 
@@ -339,7 +339,7 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
       // Get column chunk byte ranges from the reader and fetch device buffers
       auto const payload_column_chunk_byte_ranges =
         reader->payload_column_chunks_byte_ranges(row_group_indices, options);
-      auto [payload_column_chunk_buffers, payload_column_chunk_spans] =
+      auto [payload_column_chunk_buffers, payload_column_chunk_data] =
         fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
 
       // Setup chunking for payload columns and materialize the table
@@ -349,7 +349,7 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
         row_group_indices,
         row_mask->view(),
         cudf::io::parquet::experimental::use_data_page_mask::YES,
-        payload_column_chunk_spans,
+        payload_column_chunk_data,
         options,
         stream);
 
@@ -404,10 +404,10 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
     reader->all_column_chunks_byte_ranges(current_row_group_indices, options);
 
   // Fetch column chunk device buffers and spans from the input buffer
-  auto [all_column_chunk_buffers, all_column_chunk_spans] =
+  auto [all_column_chunk_buffers, all_column_chunk_data] =
     fetch_byte_ranges(file_buffer_span, all_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with all columns
   return reader->materialize_all_columns(
-    current_row_group_indices, all_column_chunk_spans, options, stream);
+    current_row_group_indices, all_column_chunk_data, options, stream);
 }

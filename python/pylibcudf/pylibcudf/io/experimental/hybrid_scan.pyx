@@ -294,7 +294,7 @@ cdef class HybridScanReader:
 
     def filter_row_groups_with_dictionary_pages(
         self,
-        list dictionary_page_spans,
+        list dictionary_page_data,
         list row_group_indices,
         ParquetReaderOptions options,
         Stream stream=None
@@ -303,7 +303,7 @@ cdef class HybridScanReader:
 
         Parameters
         ----------
-        dictionary_page_spans : list[DeviceSpan]
+        dictionary_page_data : list[DeviceSpan]
             Device spans of buffers containing dictionary page data
         row_group_indices : list[int]
             Input row group indices
@@ -339,7 +339,7 @@ cdef class HybridScanReader:
 
     def filter_row_groups_with_bloom_filters(
         self,
-        list bloom_filter_spans,
+        list bloom_filter_data,
         list row_group_indices,
         ParquetReaderOptions options,
         Stream stream=None
@@ -348,7 +348,7 @@ cdef class HybridScanReader:
 
         Parameters
         ----------
-        bloom_filter_spans : list[DeviceSpan]
+        bloom_filter_data : list[DeviceSpan]
             Device spans of buffers containing bloom filter data
         row_group_indices : list[int]
             Input row group indices
@@ -449,7 +449,7 @@ cdef class HybridScanReader:
     def materialize_filter_columns(
         self,
         list row_group_indices,
-        list column_chunk_spans,
+        list column_chunk_data,
         Column row_mask,
         cpp_use_data_page_mask mask_data_pages,
         ParquetReaderOptions options,
@@ -462,7 +462,7 @@ cdef class HybridScanReader:
         ----------
         row_group_indices : list[int]
             Input row group indices
-        column_chunk_spans : list[DeviceSpan]
+        column_chunk_data : list[DeviceSpan]
             Device spans of buffers containing column chunk data of filter columns
         row_mask : Column
             Mutable boolean column indicating surviving rows
@@ -532,7 +532,7 @@ cdef class HybridScanReader:
     def materialize_payload_columns(
         self,
         list row_group_indices,
-        list column_chunk_spans,
+        list column_chunk_data,
         Column row_mask,
         cpp_use_data_page_mask mask_data_pages,
         ParquetReaderOptions options,
@@ -545,7 +545,7 @@ cdef class HybridScanReader:
         ----------
         row_group_indices : list[int]
             Input row group indices
-        column_chunk_spans : list[DeviceSpan]
+        column_chunk_data : list[DeviceSpan]
             Device spans of buffers containing column chunk data of payload columns
         row_mask : Column
             Boolean column indicating surviving rows
@@ -592,7 +592,7 @@ cdef class HybridScanReader:
         list row_group_indices,
         Column row_mask,
         cpp_use_data_page_mask mask_data_pages,
-        list column_chunk_spans,
+        list column_chunk_data,
         ParquetReaderOptions options,
         Stream stream=None,
         DeviceMemoryResource mr=None
@@ -611,7 +611,7 @@ cdef class HybridScanReader:
             Boolean column indicating surviving rows
         mask_data_pages : UseDataPageMask
             Whether to use a data page mask
-        column_chunk_spans : list[DeviceSpan]
+        column_chunk_data : list[DeviceSpan]
             Device spans of buffers containing column chunk data of filter columns
         options : ParquetReaderOptions
             Parquet reader options
@@ -681,7 +681,7 @@ cdef class HybridScanReader:
         list row_group_indices,
         Column row_mask,
         cpp_use_data_page_mask mask_data_pages,
-        list column_chunk_spans,
+        list column_chunk_data,
         ParquetReaderOptions options,
         Stream stream=None,
         DeviceMemoryResource mr=None
@@ -700,7 +700,7 @@ cdef class HybridScanReader:
             Boolean column indicating surviving rows
         mask_data_pages : UseDataPageMask
             Whether to use a data page mask
-        column_chunk_spans : list[DeviceSpan]
+        column_chunk_data : list[DeviceSpan]
             Device spans of buffers containing column chunk data of payload columns
         options : ParquetReaderOptions
             Parquet reader options
