@@ -6,7 +6,6 @@ from __future__ import annotations
 import itertools
 import numbers
 import operator
-import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
