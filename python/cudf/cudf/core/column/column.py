@@ -408,56 +408,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         return _ColumnAccessContext(self, **kwargs)
 
-    def _set_mask_inplace(self, value: None | Buffer) -> None:
-        """
-        Replaces the mask buffer of the column inplace. This does not
-        modify size or offset in any way, so the passed mask is expected to be
-        compatible with the current offset.
-        """
-        if value is not None and not isinstance(value, Buffer):
-            raise TypeError(
-                "Expected a Buffer or None for mask, "
-                f"got {type(value).__name__}"
-            )
-
-        if value is not None:
-            # bitmask size must be relative to offset = 0 data.
-            required_size = plc.null_mask.bitmask_allocation_size_bytes(
-                self.size
-            )
-            if value.size < required_size:
-                error_msg = (
-                    "The Buffer for mask is smaller than expected, "
-                    f"got {value.size} bytes, expected {required_size} bytes."
-                )
-                if self.offset > 0:
-                    error_msg += (
-                        "\n\nNote: The mask is expected to be sized according "
-                        "to the base allocation as opposed to the offsetted or"
-                        " sized allocation."
-                    )
-                raise ValueError(error_msg)
-
-        # Update plc_column with the new mask and compute null_count eagerly
-        if value is not None:
-            new_null_count = plc.null_mask.null_count(
-                value,
-                self.offset,
-                self.offset + self.size,
-            )
-            new_mask = value
-        else:
-            new_mask = None
-            new_null_count = 0
-
-        self.plc_column = self.plc_column.with_mask(
-            new_mask,
-            new_null_count,
-            validate=False,
-        )
-
-        self._clear_cache()
-
     def _clear_cache(self) -> None:
         self._distinct_count.clear()
         attrs = (
@@ -1096,7 +1046,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     self.size, plc.types.MaskState.ALL_VALID
                 )
             )
-            self._set_mask_inplace(mask)
+            # Set the ALL_VALID mask inplace (null_count = 0)
+            self.plc_column = self.plc_column.with_mask(
+                mask, 0, validate=False
+            )
+            self._clear_cache()
 
         with self.access(mode="read", scope="internal"):
             with self.access(mode="write"):
