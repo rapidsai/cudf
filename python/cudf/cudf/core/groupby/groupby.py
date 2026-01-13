@@ -1753,7 +1753,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             columns, aggs_per_column = zip(
                 *(
                     (self.obj._data[x[0]], x[1])
-                    if isinstance(x, tuple)
+                    if isinstance(x, (tuple, NamedAgg))
                     else _raise_invalid_type(x)
                     for x in kwargs.values()
                 ),
