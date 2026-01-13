@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from decimal import Decimal
@@ -10,7 +10,7 @@ import pytest
 import cudf
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.fixture(params=["outer", "inner"])
@@ -1055,14 +1055,13 @@ def test_concat_join_series(ignore_index, sort, join, axis):
         ignore_index=ignore_index,
         axis=axis,
     )
-    with expect_warning_if(axis in {1, "columns"}):
-        actual = cudf.concat(
-            [s1, s2, s3, s4],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        )
+    actual = cudf.concat(
+        [s1, s2, s3, s4],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
 
     assert_eq(
         expected,
