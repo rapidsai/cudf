@@ -71,11 +71,11 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
       // Step 1: Build key remapping (with metrics disabled, the metrics need to be calculated
       //  for the join type selection heuristic, either way)
       cudf::join_factorizer remap(
-        build_keys, NullEquality, cudf::factorizer_metrics::DISABLE, cudf::get_default_stream());
+        build_keys, NullEquality, cudf::compute_metrics::NO, cudf::get_default_stream());
 
       // Step 2: Remap build and probe keys to integers
-      auto remapped_build = remap.factorize_build_keys();
-      auto remapped_probe = remap.factorize_probe_keys(probe_keys);
+      auto remapped_build = remap.factorize_right_keys();
+      auto remapped_probe = remap.factorize_left_keys(probe_keys);
 
       // Step 3: Create table views from remapped columns
       cudf::table_view remapped_build_view({remapped_build->view()});

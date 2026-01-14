@@ -75,7 +75,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_JoinFactorizer_factorizeBuildKeys(JN
   {
     cudf::jni::auto_set_device(env);
     auto factorizer_ptr = reinterpret_cast<cudf::join_factorizer*>(j_handle);
-    auto result         = factorizer_ptr->factorize_build_keys();
+    auto result         = factorizer_ptr->factorize_right_keys();
     return cudf::jni::release_as_jlong(result);
   }
   JNI_CATCH(env, 0);
@@ -93,7 +93,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_JoinFactorizer_factorizeProbeKeys(JN
     cudf::jni::auto_set_device(env);
     auto factorizer_ptr = reinterpret_cast<cudf::join_factorizer*>(j_handle);
     auto keys_view      = reinterpret_cast<cudf::table_view const*>(j_keys_table);
-    auto result         = factorizer_ptr->factorize_probe_keys(*keys_view);
+    auto result         = factorizer_ptr->factorize_left_keys(*keys_view);
     return cudf::jni::release_as_jlong(result);
   }
   JNI_CATCH(env, 0);

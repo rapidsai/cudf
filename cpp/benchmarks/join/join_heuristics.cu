@@ -163,10 +163,8 @@ void nvbench_join_heuristics(nvbench::state& state,
                      counts_column->type());
     } else if constexpr (Method == heuristic_method::JOINT_FACTORIZER) {
       // Approach 3: join_factorizer with metrics
-      cudf::join_factorizer remap(keys,
-                                  cudf::null_equality::EQUAL,
-                                  cudf::factorizer_metrics::ENABLE,
-                                  cudf::get_default_stream());
+      cudf::join_factorizer remap(
+        keys, cudf::null_equality::EQUAL, cudf::compute_metrics::YES, cudf::get_default_stream());
 
       // Get both metrics
       [[maybe_unused]] auto distinct_count = remap.get_distinct_count();

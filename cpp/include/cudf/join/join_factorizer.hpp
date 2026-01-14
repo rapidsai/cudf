@@ -37,7 +37,7 @@ class join_factorizer_impl;
 }  // namespace detail
 
 /**
- * @brief Sentinel value for probe-side keys not found in build table
+ * @brief Sentinel value for left-side keys not found in right table
  *
  * This constant is exposed primarily for testing purposes.
  * Application code should check for negative values rather than relying on specific sentinel
@@ -46,28 +46,29 @@ class join_factorizer_impl;
 constexpr size_type FACTORIZE_NOT_FOUND = -1;
 
 /**
- * @brief Sentinel value for build-side rows with null keys (when nulls are not equal)
+ * @brief Sentinel value for right-side rows with null keys (when nulls are not equal)
  *
  * This constant is exposed primarily for testing purposes.
  * Application code should check for negative values rather than relying on specific sentinel
  * values.
  */
-constexpr size_type FACTORIZE_BUILD_NULL = -2;
+constexpr size_type FACTORIZE_RIGHT_NULL = -2;
 
 /**
  * @brief Factorizes keys from two tables into unique integer IDs with cardinality metadata
  *
- * This class performs factorization of keys from a build table and optional probe table(s)
- * for join operations. Each distinct key in the build table is assigned a unique non-negative
+ * This class performs factorization of keys from a right table and optional left table(s)
+ * for join operations. Each distinct key in the right table is assigned a unique non-negative
  * integer ID (factor). Rows with equal keys will map to the same ID. Keys that cannot be mapped
- * (e.g., not found in probe, or null keys when nulls are unequal) receive negative sentinel values.
- * The specific ID values are stable for the lifetime of this object but are otherwise unspecified.
+ * (e.g., not found in left table, or null keys when nulls are unequal) receive negative sentinel
+ * values. The specific ID values are stable for the lifetime of this object but are otherwise
+ * unspecified.
  *
  * In addition to key factorization, this class tracks important cardinality metadata:
- * - Distinct count: number of unique keys in the build table
+ * - Distinct count: number of unique keys in the right table
  * - Max duplicate count: maximum frequency of any single key
  *
- * @note The build table must remain valid for the lifetime of this object,
+ * @note The right table must remain valid for the lifetime of this object,
  *       as the hash table references it directly without copying.
  * @note All NaNs are considered equal
  */
@@ -81,32 +82,35 @@ class join_factorizer {
   join_factorizer& operator=(join_factorizer&&)      = delete;
 
   /**
-   * @brief Constructs a join factorizer from the given build keys.
+   * @brief Constructs a join factorizer from the given right keys.
    *
-   * @throw cudf::logic_error if the build table has no columns
+   * The constructor builds a deduplicating hash table and optionally computes factorization
+   * metrics (distinct count and max duplicate count).
    *
-   * @param build The build table containing the keys to factorize
+   * @throw cudf::logic_error if the right table has no columns
+   *
+   * @param right The right table containing the keys to factorize
    * @param compare_nulls Controls whether null key values should match or not.
    *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
    *        When UNEQUAL, rows with null keys receive a negative sentinel value.
    * @param metrics Controls whether to compute distinct_count and max_duplicate_count.
-   *        If ENABLE (default), compute metrics for later retrieval via get_distinct_count()
-   *        and get_max_duplicate_count(). If DISABLE, skip metrics computation for better
-   * performance; calling get_distinct_count() or get_max_duplicate_count() will throw.
+   *        If YES (default), compute metrics for later retrieval via get_distinct_count()
+   *        and get_max_duplicate_count(). If NO, skip metrics computation for better
+   *        performance; calling get_distinct_count() or get_max_duplicate_count() will throw.
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  join_factorizer(cudf::table_view const& build,
-                  null_equality compare_nulls      = null_equality::EQUAL,
-                  cudf::factorizer_metrics metrics = cudf::factorizer_metrics::ENABLE,
-                  rmm::cuda_stream_view stream     = cudf::get_default_stream());
+  join_factorizer(cudf::table_view const& right,
+                  null_equality compare_nulls   = null_equality::EQUAL,
+                  cudf::compute_metrics metrics = cudf::compute_metrics::YES,
+                  rmm::cuda_stream_view stream  = cudf::get_default_stream());
 
   /**
-   * @brief Factorize build keys to integer IDs.
+   * @brief Factorize right keys to integer IDs.
    *
-   * Computes the factorized build table from the cached build keys. This does not cache
+   * Computes the factorized right table from the cached right keys. This does not cache
    * the factorized table; each call will recompute it from the internal hash table.
    *
-   * For each row in the cached build table, returns the integer ID (factor) assigned to that key.
+   * For each row in the cached right table, returns the integer ID (factor) assigned to that key.
    * Non-negative integers represent valid factorized keys, while negative values represent
    * keys that cannot be factorized (e.g., null keys when nulls are unequal).
    *
@@ -115,28 +119,28 @@ class join_factorizer {
    *
    * @return A column of INT32 values with the factorized key IDs
    */
-  [[nodiscard]] std::unique_ptr<cudf::column> factorize_build_keys(
+  [[nodiscard]] std::unique_ptr<cudf::column> factorize_right_keys(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
-   * @brief Factorize probe keys to integer IDs.
+   * @brief Factorize left keys to integer IDs.
    *
    * For each row in the input, returns the integer ID (factor) assigned to that key.
-   * Non-negative integers represent keys found in the build table, while negative values
+   * Non-negative integers represent keys found in the right table, while negative values
    * represent keys that were not found or cannot be matched (e.g., null keys when nulls
-   * are unequal, or keys not present in the build table).
+   * are unequal, or keys not present in the right table).
    *
-   * @throw std::invalid_argument if keys has different number of columns than build table
-   * @throw cudf::data_type_error if keys has different column types than build table
+   * @throw std::invalid_argument if keys has different number of columns than right table
+   * @throw cudf::data_type_error if keys has different column types than right table
    *
-   * @param keys The probe keys to factorize (must have same schema as build table)
+   * @param keys The left keys to factorize (must have same schema as right table)
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
    *
    * @return A column of INT32 values with the factorized key IDs
    */
-  [[nodiscard]] std::unique_ptr<cudf::column> factorize_probe_keys(
+  [[nodiscard]] std::unique_ptr<cudf::column> factorize_left_keys(
     cudf::table_view const& keys,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
@@ -149,11 +153,11 @@ class join_factorizer {
   [[nodiscard]] bool has_metrics() const;
 
   /**
-   * @brief Get the number of distinct keys in the build table
+   * @brief Get the number of distinct keys in the right table
    *
    * @throw cudf::logic_error if metrics was NO during construction
    *
-   * @return The count of unique key combinations found during build
+   * @return The count of unique key combinations in the right table
    */
   [[nodiscard]] size_type get_distinct_count() const;
 

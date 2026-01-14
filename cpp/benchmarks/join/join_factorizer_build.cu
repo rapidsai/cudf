@@ -13,7 +13,7 @@
 #include <nvbench/nvbench.cuh>
 
 /**
- * @brief Benchmark for join_factorizer build phase with metrics computation.
+ * @brief Benchmark for join_factorizer construction with metrics computation.
  *
  * This benchmark isolates the join_factorizer construction time (including metrics)
  * to measure performance across various data types and distributions.
@@ -98,10 +98,8 @@ void nvbench_join_factorizer_build(nvbench::state& state,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    cudf::join_factorizer remap(keys,
-                                cudf::null_equality::EQUAL,
-                                cudf::factorizer_metrics::ENABLE,
-                                cudf::get_default_stream());
+    cudf::join_factorizer remap(
+      keys, cudf::null_equality::EQUAL, cudf::compute_metrics::YES, cudf::get_default_stream());
     // Access metrics to ensure they're computed
     [[maybe_unused]] auto dc = remap.get_distinct_count();
     [[maybe_unused]] auto mc = remap.get_max_duplicate_count();

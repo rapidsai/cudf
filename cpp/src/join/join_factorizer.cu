@@ -115,7 +115,7 @@ struct extract_row_index {
 };
 
 /**
- * @brief Comparator adapter for probe-time comparison (two-table).
+ * @brief Comparator adapter for left table lookup comparison (two-table).
  */
 template <typename Equal, bool CastToSizeType = false>
 struct two_table_equality_comparator {
@@ -139,7 +139,7 @@ struct two_table_equality_comparator {
 };
 
 /**
- * @brief Comparator adapter for build-time self-comparison (deduplication).
+ * @brief Comparator adapter for right table self-comparison (deduplication).
  */
 template <typename RowEqual>
 struct self_table_equality_comparator {
@@ -236,7 +236,7 @@ class hash_table_base {
   virtual ~hash_table_base() = default;
 
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> lookup_keys(
-    cudf::table_view const& probe_keys,
+    cudf::table_view const& left_keys,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const = 0;
 
@@ -270,18 +270,18 @@ class deduplicating_hash_table : public hash_table_base {
 
   template <typename RowHasher>
   deduplicating_hash_table(
-    cudf::table_view const& build,
-    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_build,
+    cudf::table_view const& right,
+    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_right,
     Comparator const& comparator,
     RowHasher const& row_hasher,
     cudf::null_equality compare_nulls,
     bool compute_metrics,
     rmm::cuda_stream_view stream)
-    : _build_has_nested_columns{cudf::has_nested_columns(build)},
+    : _right_has_nested_columns{cudf::has_nested_columns(right)},
       _compare_nulls{compare_nulls},
-      _build{build},
-      _preprocessed_build{std::move(preprocessed_build)},
-      _hash_table{cuco::extent{static_cast<std::size_t>(build.num_rows())},
+      _right{right},
+      _preprocessed_right{std::move(preprocessed_right)},
+      _hash_table{cuco::extent{static_cast<std::size_t>(right.num_rows())},
                   HASH_TABLE_LOAD_FACTOR,
                   cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
                                              rhs_index_type{cudf::JoinNoMatch}}},
@@ -296,32 +296,32 @@ class deduplicating_hash_table : public hash_table_base {
       _max_duplicate_count{0}
   {
     CUDF_FUNC_RANGE();
-    CUDF_EXPECTS(0 != this->_build.num_columns(), "Factorizer build table is empty");
+    CUDF_EXPECTS(0 != this->_right.num_columns(), "Factorizer right table is empty");
 
-    cudf::size_type const build_num_rows{_build.num_rows()};
-    if (build_num_rows == 0) { return; }
+    cudf::size_type const right_num_rows{_right.num_rows()};
+    if (right_num_rows == 0) { return; }
 
     auto const key_pair_iterator = cudf::detail::make_counting_transform_iterator(
       0, hash_index_pair_functor<rhs_index_type, RowHasher>{row_hasher});
 
     bool const skip_nulls =
-      (_compare_nulls == cudf::null_equality::UNEQUAL) && cudf::nullable(build);
+      (_compare_nulls == cudf::null_equality::UNEQUAL) && cudf::nullable(right);
 
     auto const row_validity_bitmask =
       skip_nulls
-        ? cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref()).first
+        ? cudf::detail::bitmask_and(_right, stream, cudf::get_current_device_resource_ref()).first
         : rmm::device_buffer{};
     auto const validity_mask_ptr =
       skip_nulls ? reinterpret_cast<cudf::bitmask_type const*>(row_validity_bitmask.data())
                  : nullptr;
 
     if (compute_metrics) {
-      build_with_metrics(build_num_rows, key_pair_iterator, validity_mask_ptr, stream);
+      factorize_with_metrics(right_num_rows, key_pair_iterator, validity_mask_ptr, stream);
     } else {
       auto hash_table_ref = _hash_table.ref(cuco::op::insert);
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
                          thrust::make_counting_iterator<cudf::size_type>(0),
-                         build_num_rows,
+                         right_num_rows,
                          key_inserter<decltype(hash_table_ref), decltype(key_pair_iterator)>{
                            hash_table_ref, key_pair_iterator, validity_mask_ptr});
     }
@@ -329,22 +329,22 @@ class deduplicating_hash_table : public hash_table_base {
 
  private:
   template <typename KeyIter>
-  void build_with_metrics(cudf::size_type build_num_rows,
-                          KeyIter key_pair_iterator,
-                          cudf::bitmask_type const* validity_mask_ptr,
-                          rmm::cuda_stream_view stream)
+  void factorize_with_metrics(cudf::size_type right_num_rows,
+                              KeyIter key_pair_iterator,
+                              cudf::bitmask_type const* validity_mask_ptr,
+                              rmm::cuda_stream_view stream)
   {
-    rmm::device_uvector<cudf::size_type> counts(build_num_rows, stream);
+    rmm::device_uvector<cudf::size_type> counts(right_num_rows, stream);
     thrust::fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
 
     cudf::detail::device_scalar<cudf::size_type> d_distinct_count{0, stream};
 
     auto hash_table_ref = _hash_table.ref(cuco::op::insert_and_find);
 
-    cudf::detail::grid_1d grid{build_num_rows, FACTORIZE_BLOCK_SIZE};
+    cudf::detail::grid_1d grid{right_num_rows, FACTORIZE_BLOCK_SIZE};
 
     insert_and_count_kernel<<<grid.num_blocks, FACTORIZE_BLOCK_SIZE, 0, stream.value()>>>(
-      build_num_rows,
+      right_num_rows,
       hash_table_ref,
       key_pair_iterator,
       counts.data(),
@@ -362,41 +362,40 @@ class deduplicating_hash_table : public hash_table_base {
 
  public:
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> lookup_keys(
-    cudf::table_view const& probe_keys,
+    cudf::table_view const& left_keys,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const override
   {
     CUDF_FUNC_RANGE();
 
-    cudf::size_type const probe_num_rows{probe_keys.num_rows()};
+    cudf::size_type const left_num_rows{left_keys.num_rows()};
 
-    if (probe_num_rows == 0) {
+    if (left_num_rows == 0) {
       return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream, mr);
     }
 
-    if (this->_build.num_rows() == 0) {
+    if (this->_right.num_rows() == 0) {
       auto result =
-        std::make_unique<rmm::device_uvector<cudf::size_type>>(probe_num_rows, stream, mr);
+        std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
       thrust::fill(
         rmm::exec_policy_nosync(stream), result->begin(), result->end(), cudf::JoinNoMatch);
       return result;
     }
 
-    auto result =
-      std::make_unique<rmm::device_uvector<cudf::size_type>>(probe_num_rows, stream, mr);
+    auto result = std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
     auto const output_iterator =
       thrust::make_transform_output_iterator(result->begin(), extract_row_index{});
 
-    auto preprocessed_probe =
-      cudf::detail::row::equality::preprocessed_table::create(probe_keys, stream);
+    auto preprocessed_left =
+      cudf::detail::row::equality::preprocessed_table::create(left_keys, stream);
 
-    if (cudf::detail::is_primitive_row_op_compatible(_build)) {
+    if (cudf::detail::is_primitive_row_op_compatible(_right)) {
       auto const d_hasher = cudf::detail::row::primitive::row_hasher{
-        cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT}, preprocessed_probe};
+        cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT}, preprocessed_left};
       auto const d_equal = cudf::detail::row::primitive::row_equality_comparator{
         cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT},
-        preprocessed_probe,
-        _preprocessed_build,
+        preprocessed_left,
+        _preprocessed_right,
         _compare_nulls};
 
       auto const key_pair_iterator = cudf::detail::make_counting_transform_iterator(
@@ -404,25 +403,25 @@ class deduplicating_hash_table : public hash_table_base {
 
       find_matching_keys(key_pair_iterator,
                          two_table_equality_comparator<decltype(d_equal), true>{d_equal},
-                         probe_keys,
+                         left_keys,
                          output_iterator,
                          stream);
     } else {
       auto const two_table_equal =
-        cudf::detail::row::equality::two_table_comparator(preprocessed_probe, _preprocessed_build);
+        cudf::detail::row::equality::two_table_comparator(preprocessed_left, _preprocessed_right);
 
-      auto const probe_row_hasher = cudf::detail::row::hash::row_hasher{preprocessed_probe};
-      auto const d_probe_hasher =
-        probe_row_hasher.device_hasher(cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT});
+      auto const left_row_hasher = cudf::detail::row::hash::row_hasher{preprocessed_left};
+      auto const d_left_hasher =
+        left_row_hasher.device_hasher(cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT});
       auto const key_pair_iterator = cudf::detail::make_counting_transform_iterator(
-        0, hash_index_pair_functor<lhs_index_type, decltype(d_probe_hasher)>{d_probe_hasher});
+        0, hash_index_pair_functor<lhs_index_type, decltype(d_left_hasher)>{d_left_hasher});
 
-      if (_build_has_nested_columns) {
+      if (_right_has_nested_columns) {
         auto const device_comparator = two_table_equal.equal_to<true>(
           cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT}, _compare_nulls);
         find_matching_keys(key_pair_iterator,
                            two_table_equality_comparator{device_comparator},
-                           probe_keys,
+                           left_keys,
                            output_iterator,
                            stream);
       } else {
@@ -430,7 +429,7 @@ class deduplicating_hash_table : public hash_table_base {
           cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT}, _compare_nulls);
         find_matching_keys(key_pair_iterator,
                            two_table_equality_comparator{device_comparator},
-                           probe_keys,
+                           left_keys,
                            output_iterator,
                            stream);
       }
@@ -456,16 +455,16 @@ class deduplicating_hash_table : public hash_table_base {
   template <typename IterType, typename EqualType, typename FoundIterator>
   void find_matching_keys(IterType key_pair_iterator,
                           EqualType const& d_equal,
-                          cudf::table_view const& probe_keys,
+                          cudf::table_view const& left_keys,
                           FoundIterator output_iterator,
                           rmm::cuda_stream_view stream) const
   {
     CUDF_FUNC_RANGE();
-    auto const probe_num_rows = probe_keys.num_rows();
+    auto const left_num_rows = left_keys.num_rows();
 
-    if (_compare_nulls == cudf::null_equality::EQUAL or (not cudf::nullable(probe_keys))) {
+    if (_compare_nulls == cudf::null_equality::EQUAL or (not cudf::nullable(left_keys))) {
       _hash_table.find_async(key_pair_iterator,
-                             key_pair_iterator + probe_num_rows,
+                             key_pair_iterator + left_num_rows,
                              d_equal,
                              key_hasher{},
                              output_iterator,
@@ -473,13 +472,12 @@ class deduplicating_hash_table : public hash_table_base {
     } else {
       auto stencil = thrust::counting_iterator<cudf::size_type>{0};
       auto const row_validity_bitmask =
-        cudf::detail::bitmask_and(probe_keys, stream, cudf::get_current_device_resource_ref())
-          .first;
+        cudf::detail::bitmask_and(left_keys, stream, cudf::get_current_device_resource_ref()).first;
       auto const validity_checker = row_validity_checker{
         reinterpret_cast<cudf::bitmask_type const*>(row_validity_bitmask.data())};
 
       _hash_table.find_if_async(key_pair_iterator,
-                                key_pair_iterator + probe_num_rows,
+                                key_pair_iterator + left_num_rows,
                                 stencil,
                                 validity_checker,
                                 d_equal,
@@ -489,10 +487,10 @@ class deduplicating_hash_table : public hash_table_base {
     }
   }
 
-  bool _build_has_nested_columns;
+  bool _right_has_nested_columns;
   cudf::null_equality _compare_nulls;
-  cudf::table_view _build;
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> _preprocessed_build;
+  cudf::table_view _right;
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> _preprocessed_right;
   hash_table_type _hash_table;
   bool _has_metrics;
   cudf::size_type _distinct_count;
@@ -502,29 +500,29 @@ class deduplicating_hash_table : public hash_table_base {
 /**
  * @brief Factory function to create a deduplicating hash table.
  */
-std::unique_ptr<hash_table_base> make_deduplicating_hash_table(cudf::table_view const& build,
+std::unique_ptr<hash_table_base> make_deduplicating_hash_table(cudf::table_view const& right,
                                                                cudf::null_equality compare_nulls,
                                                                bool compute_metrics,
                                                                rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
-  if (build.num_rows() == 0 || build.num_columns() == 0) { return nullptr; }
+  if (right.num_rows() == 0 || right.num_columns() == 0) { return nullptr; }
 
-  auto preprocessed_build = cudf::detail::row::equality::preprocessed_table::create(build, stream);
+  auto preprocessed_right = cudf::detail::row::equality::preprocessed_table::create(right, stream);
 
-  if (cudf::detail::is_primitive_row_op_compatible(build)) {
+  if (cudf::detail::is_primitive_row_op_compatible(right)) {
     auto const d_hasher = cudf::detail::row::primitive::row_hasher{
-      cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT}, preprocessed_build};
+      cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT}, preprocessed_right};
     auto const d_equal = cudf::detail::row::primitive::row_equality_comparator{
       cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT},
-      preprocessed_build,
-      preprocessed_build,
+      preprocessed_right,
+      preprocessed_right,
       compare_nulls};
 
     using comparator_type = self_table_equality_comparator<decltype(d_equal)>;
-    return std::make_unique<deduplicating_hash_table<comparator_type>>(build,
-                                                                       preprocessed_build,
+    return std::make_unique<deduplicating_hash_table<comparator_type>>(right,
+                                                                       preprocessed_right,
                                                                        comparator_type{d_equal},
                                                                        d_hasher,
                                                                        compare_nulls,
@@ -532,9 +530,9 @@ std::unique_ptr<hash_table_base> make_deduplicating_hash_table(cudf::table_view 
                                                                        stream);
   }
 
-  auto const has_nested = cudf::has_nested_columns(build);
-  auto const self_equal = cudf::detail::row::equality::self_comparator(preprocessed_build);
-  auto const row_hasher = cudf::detail::row::hash::row_hasher{preprocessed_build};
+  auto const has_nested = cudf::has_nested_columns(right);
+  auto const self_equal = cudf::detail::row::equality::self_comparator(preprocessed_right);
+  auto const row_hasher = cudf::detail::row::hash::row_hasher{preprocessed_right};
   auto const d_hasher   = row_hasher.device_hasher(cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT});
 
   if (has_nested) {
@@ -542,8 +540,8 @@ std::unique_ptr<hash_table_base> make_deduplicating_hash_table(cudf::table_view 
       self_equal.equal_to<true>(cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT}, compare_nulls);
 
     using comparator_type = self_table_equality_comparator<decltype(d_equal)>;
-    return std::make_unique<deduplicating_hash_table<comparator_type>>(build,
-                                                                       preprocessed_build,
+    return std::make_unique<deduplicating_hash_table<comparator_type>>(right,
+                                                                       preprocessed_right,
                                                                        comparator_type{d_equal},
                                                                        d_hasher,
                                                                        compare_nulls,
@@ -554,8 +552,8 @@ std::unique_ptr<hash_table_base> make_deduplicating_hash_table(cudf::table_view 
       self_equal.equal_to<false>(cudf::nullate::DYNAMIC{ASSUME_NULLS_PRESENT}, compare_nulls);
 
     using comparator_type = self_table_equality_comparator<decltype(d_equal)>;
-    return std::make_unique<deduplicating_hash_table<comparator_type>>(build,
-                                                                       preprocessed_build,
+    return std::make_unique<deduplicating_hash_table<comparator_type>>(right,
+                                                                       preprocessed_right,
                                                                        comparator_type{d_equal},
                                                                        d_hasher,
                                                                        compare_nulls,
@@ -573,14 +571,14 @@ class join_factorizer_impl {
   friend class cudf::join_factorizer;
 
  public:
-  join_factorizer_impl(cudf::table_view const& build,
+  join_factorizer_impl(cudf::table_view const& right,
                        cudf::null_equality compare_nulls,
                        bool compute_metrics,
                        rmm::cuda_stream_view stream)
-    : _build{build},
+    : _right{right},
       _compare_nulls{compare_nulls},
       _compute_metrics{compute_metrics},
-      _hash_table{make_deduplicating_hash_table(build, compare_nulls, compute_metrics, stream)}
+      _hash_table{make_deduplicating_hash_table(right, compare_nulls, compute_metrics, stream)}
   {
   }
 
@@ -589,7 +587,7 @@ class join_factorizer_impl {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
   {
-    CUDF_EXPECTS(keys.num_columns() == _build.num_columns(),
+    CUDF_EXPECTS(keys.num_columns() == _right.num_columns(),
                  "Mismatch in number of columns to be joined on",
                  std::invalid_argument);
 
@@ -597,7 +595,7 @@ class join_factorizer_impl {
       return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream, mr);
     }
 
-    CUDF_EXPECTS(cudf::have_same_types(_build, keys),
+    CUDF_EXPECTS(cudf::have_same_types(_right, keys),
                  "Mismatch in joining column data types",
                  cudf::data_type_error);
 
@@ -630,9 +628,9 @@ class join_factorizer_impl {
   cudf::null_equality get_compare_nulls() const { return _compare_nulls; }
 
  private:
-  cudf::table_view const& get_build() const { return _build; }
+  cudf::table_view const& get_right() const { return _right; }
 
-  cudf::table_view _build;
+  cudf::table_view _right;
   cudf::null_equality _compare_nulls;
   bool _compute_metrics;
   std::unique_ptr<hash_table_base> _hash_table;
@@ -642,14 +640,14 @@ class join_factorizer_impl {
 
 // Public API implementation
 
-join_factorizer::join_factorizer(cudf::table_view const& build,
+join_factorizer::join_factorizer(cudf::table_view const& right,
                                  null_equality compare_nulls,
-                                 cudf::factorizer_metrics metrics,
+                                 cudf::compute_metrics metrics,
                                  rmm::cuda_stream_view stream)
   : _impl{std::make_unique<detail::join_factorizer_impl>(
-      build, compare_nulls, static_cast<bool>(metrics), stream)}
+      right, compare_nulls, static_cast<bool>(metrics), stream)}
 {
-  CUDF_EXPECTS(build.num_columns() > 0, "Build table must have at least one column");
+  CUDF_EXPECTS(right.num_columns() > 0, "Right table must have at least one column");
 }
 
 join_factorizer::~join_factorizer() = default;
@@ -677,14 +675,14 @@ std::unique_ptr<cudf::column> factorize_keys_impl(detail::join_factorizer_impl c
 }
 }  // namespace
 
-std::unique_ptr<cudf::column> join_factorizer::factorize_build_keys(
+std::unique_ptr<cudf::column> join_factorizer::factorize_right_keys(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
 {
   CUDF_FUNC_RANGE();
-  return factorize_keys_impl(*_impl, _impl->get_build(), FACTORIZE_BUILD_NULL, stream, mr);
+  return factorize_keys_impl(*_impl, _impl->get_right(), FACTORIZE_RIGHT_NULL, stream, mr);
 }
 
-std::unique_ptr<cudf::column> join_factorizer::factorize_probe_keys(
+std::unique_ptr<cudf::column> join_factorizer::factorize_left_keys(
   cudf::table_view const& keys,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
