@@ -38,6 +38,7 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
+    from cudf.core.buffer import Buffer
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -625,6 +626,23 @@ class CategoricalColumn(column.ColumnBase):
     @cached_property
     def memory_usage(self) -> int:
         return self.categories.memory_usage + self.codes.memory_usage
+
+    @classmethod
+    def _deserialize_plc_column(
+        cls,
+        header: dict,
+        dtype: DtypeObj,
+        data: Buffer | None,
+        mask: Buffer | None,
+        children: list[ColumnBase],
+    ) -> plc.Column:
+        """Construct plc.Column from codes child for categorical columns.
+
+        Categorical columns store data as integer codes referencing categories.
+        The plc_column must be constructed from the codes child column, which
+        contains the actual integer data, rather than from the data/mask buffers.
+        """
+        return children.pop(0).plc_column
 
     @staticmethod
     def _concat(
