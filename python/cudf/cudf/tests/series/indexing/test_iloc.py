@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
@@ -93,7 +93,7 @@ def test_string_bool_mask(data, bool_, box):
     expect = ps[item]
     if isinstance(expect, pd.Series):
         expect = pa.Array.from_pandas(expect)
-        pa.Array.equals(expect, got)
+        expect.equals(got)
     else:
         assert expect == got
 

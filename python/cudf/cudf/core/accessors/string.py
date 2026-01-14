@@ -3713,7 +3713,7 @@ class StringMethods(BaseAccessor):
                 "patterns should be an array-like or a Series object, "
                 f"found {type(patterns)}"
             )
-        # import pdb;pdb.set_trace()
+
         if not is_string_dtype(patterns_column.dtype):
             raise TypeError(
                 "patterns can only be of 'string' dtype, "

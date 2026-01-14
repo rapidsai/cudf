@@ -47,7 +47,6 @@ def index(request):
 
 @pytest.fixture
 def ps_gs(data, index):
-    # import pdb;pdb.set_trace()
     ps = pd.Series(data, index=index, dtype="str", name="nice name")
     gs = cudf.Series(data, index=index, dtype="str", name="nice name")
     return (ps, gs)
@@ -2819,7 +2818,7 @@ def test_string_len(ps_gs):
     # Pandas will return as a float64 so need to typecast to int32
     expect = pa.array(expect, from_pandas=True).cast(pa.int64())
     got = got.to_arrow()
-    # import pdb;pdb.set_trace()
+
     assert pa.Array.equals(expect, got)
 
 

@@ -183,6 +183,8 @@ class StringColumn(ColumnBase, Scannable):
         # the call to super().to_arrow().
         # TODO: Investigate if the above is a bug in libcudf and fix it there.
         if len(self.children) == 0 or self.null_count == len(self):
+            if len(self) == 0:
+                return pa.chunked_array([], type=pa.large_string())  # type: ignore[return-value]
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )
