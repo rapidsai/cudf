@@ -131,7 +131,7 @@ static void bench_multibyte_split(nvbench::state& state,
   }
   if (source_type == data_chunk_source_type::host_pinned) {
     host_pinned_input =
-      cudf::detail::make_pinned_vector<char>(device_input, cudf::get_default_stream());
+      cudf::detail::make_pinned_vector(cudf::device_span<char const>{device_input.data(), static_cast<std::size_t>(device_input.size())}, cudf::get_default_stream());
   }
 
   auto source = [&] {
