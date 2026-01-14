@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -632,3 +632,13 @@ polars"""
     fle.write_text(data)
     q = pl.scan_csv(fle)
     assert_gpu_result_equal(q)
+
+
+def test_hits_scan_row_index_duplicate(tmp_path):
+    pl.DataFrame({"col": [1, 2, 3]}).write_parquet(tmp_path / "a.parquet")
+
+    q = pl.scan_parquet(tmp_path / "*.parquet", row_index_name="index").with_row_index(
+        "index"
+    )
+
+    assert_ir_translation_raises(q, NotImplementedError)

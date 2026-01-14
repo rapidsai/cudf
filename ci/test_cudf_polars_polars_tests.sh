@@ -37,9 +37,8 @@ sed -i 's/^deltalake>=1.1.4/deltalake>=1.1.4,<1.2.0/' polars/py-polars/requireme
 # pyiceberg depends on a non-documented attribute of pydantic.
 # AttributeError: 'pydantic_core._pydantic_core.ValidationInfo' object has no attribute 'current_schema_id'
 sed -i 's/^pydantic>=2.0.0.*/pydantic>=2.0.0,<2.12.0/' polars/py-polars/requirements-dev.txt
-# Restrict pyiceberg to <0.10.0. See https://github.com/apache/iceberg-python/issues/2648
-# TODO: Remove once we depend on polars 1.37.
-sed -i 's/^pyiceberg.*/pyiceberg<0.10.0/' polars/py-polars/requirements-dev.txt
+# Remove the reference to the non-existent Pydantic 2.12 warning
+sed -i 's/warnings.simplefilter.*PydanticDeprecatedSince212/# &/' polars/py-polars/tests/unit/io/test_iceberg.py
 
 # https://github.com/pola-rs/polars/issues/25772
 # Remove upper bound on aiosqlite once we support polars >1.36.1

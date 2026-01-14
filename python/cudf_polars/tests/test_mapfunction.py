@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -111,18 +111,3 @@ def test_unique_hash():
     ir_b = Translator(b._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     assert hash(ir_a) != hash(ir_b)
-
-
-def test_with_row_index_duplicate_raises():
-    lf = pl.LazyFrame(
-        {
-            "a": [1, 3, 5],
-            "b": [2, 4, 6],
-        }
-    )
-    q = lf.with_row_index().with_row_index()
-
-    with pytest.raises(
-        pl.exceptions.DuplicateError, match="'index' has more than one occurrence"
-    ):
-        assert_gpu_result_equal(q)
