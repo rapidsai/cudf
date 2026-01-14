@@ -93,10 +93,10 @@ class join_factorizer {
    * @param compare_nulls Controls whether null key values should match or not.
    *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
    *        When UNEQUAL, rows with null keys receive a negative sentinel value.
-   * @param statistics Controls whether to compute distinct_count and max_duplicate_count.
+   * @param statistics Controls whether to compute distinct_count and max_multiplicity.
    *        If COMPUTE (default), compute statistics for later retrieval via distinct_count()
-   *        and max_duplicate_count(). If SKIP, skip statistics computation for better
-   *        performance; calling distinct_count() or max_duplicate_count() will throw.
+   *        and max_multiplicity(). If SKIP, skip statistics computation for better
+   *        performance; calling distinct_count() or max_multiplicity() will throw.
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   join_factorizer(cudf::table_view const& right,
@@ -146,7 +146,7 @@ class join_factorizer {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
-   * @brief Check if statistics (distinct_count, max_duplicate_count) were computed.
+   * @brief Check if statistics (distinct_count, max_multiplicity) were computed.
    *
    * @return true if statistics are available, false if statistics was SKIP during construction
    */
@@ -166,9 +166,9 @@ class join_factorizer {
    *
    * @throw cudf::logic_error if statistics was SKIP during construction
    *
-   * @return The maximum duplicate count across all distinct keys
+   * @return The maximum multiplicity across all distinct keys
    */
-  [[nodiscard]] size_type max_duplicate_count() const;
+  [[nodiscard]] size_type max_multiplicity() const;
 
  private:
   using impl_type = cudf::detail::join_factorizer_impl;

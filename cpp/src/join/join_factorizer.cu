@@ -240,9 +240,9 @@ class hash_table_base {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const = 0;
 
-  virtual bool has_statistics() const                 = 0;
-  virtual cudf::size_type distinct_count() const      = 0;
-  virtual cudf::size_type max_duplicate_count() const = 0;
+  virtual bool has_statistics() const              = 0;
+  virtual cudf::size_type distinct_count() const   = 0;
+  virtual cudf::size_type max_multiplicity() const = 0;
 };
 
 /**
@@ -293,7 +293,7 @@ class deduplicating_hash_table : public hash_table_base {
                   stream.value()},
       _has_statistics{compute_statistics},
       _distinct_count{0},
-      _max_duplicate_count{0}
+      _max_multiplicity{0}
   {
     CUDF_FUNC_RANGE();
     CUDF_EXPECTS(0 != this->_right.num_columns(), "Factorizer right table is empty");
@@ -353,11 +353,11 @@ class deduplicating_hash_table : public hash_table_base {
 
     _distinct_count = d_distinct_count.value(stream);
 
-    _max_duplicate_count = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                          counts.begin(),
-                                          counts.end(),
-                                          cudf::size_type{0},
-                                          cuda::maximum<cudf::size_type>{});
+    _max_multiplicity = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                       counts.begin(),
+                                       counts.end(),
+                                       cudf::size_type{0},
+                                       cuda::maximum<cudf::size_type>{});
   }
 
  public:
@@ -445,10 +445,10 @@ class deduplicating_hash_table : public hash_table_base {
     return _distinct_count;
   }
 
-  cudf::size_type max_duplicate_count() const override
+  cudf::size_type max_multiplicity() const override
   {
     CUDF_EXPECTS(_has_statistics, "Statistics were not computed during construction");
-    return _max_duplicate_count;
+    return _max_multiplicity;
   }
 
  private:
@@ -494,7 +494,7 @@ class deduplicating_hash_table : public hash_table_base {
   hash_table_type _hash_table;
   bool _has_statistics;
   cudf::size_type _distinct_count;
-  cudf::size_type _max_duplicate_count;
+  cudf::size_type _max_multiplicity;
 };
 
 /**
@@ -621,9 +621,9 @@ class join_factorizer_impl {
     return 0;
   }
 
-  cudf::size_type max_duplicate_count() const
+  cudf::size_type max_multiplicity() const
   {
-    if (_hash_table) { return _hash_table->max_duplicate_count(); }
+    if (_hash_table) { return _hash_table->max_multiplicity(); }
     CUDF_EXPECTS(_compute_statistics, "Statistics were not computed during construction");
     return 0;
   }
@@ -698,6 +698,6 @@ bool join_factorizer::has_statistics() const { return _impl->has_statistics(); }
 
 size_type join_factorizer::distinct_count() const { return _impl->distinct_count(); }
 
-size_type join_factorizer::max_duplicate_count() const { return _impl->max_duplicate_count(); }
+size_type join_factorizer::max_multiplicity() const { return _impl->max_multiplicity(); }
 
 }  // namespace cudf

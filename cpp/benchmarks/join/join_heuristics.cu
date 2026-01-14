@@ -31,7 +31,7 @@
  *
  * The metrics help decide:
  * - distinct_count: Whether to use a distinct join optimization
- * - max_duplicate_count: Whether hash join will suffer from key collisions
+ * - max_multiplicity: Whether hash join will suffer from key collisions
  */
 
 enum class heuristic_method : int32_t {
@@ -170,7 +170,7 @@ void nvbench_join_heuristics(nvbench::state& state,
 
       // Get both metrics
       [[maybe_unused]] auto distinct_count = remap.distinct_count();
-      [[maybe_unused]] auto max_dup_count  = remap.max_duplicate_count();
+      [[maybe_unused]] auto max_dup_count  = remap.max_multiplicity();
     }
   });
 

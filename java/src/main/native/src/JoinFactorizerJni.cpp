@@ -53,16 +53,16 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_JoinFactorizer_getDistinctCount(JNIEn
   JNI_CATCH(env, 0);
 }
 
-JNIEXPORT jint JNICALL Java_ai_rapids_cudf_JoinFactorizer_getMaxDuplicateCount(JNIEnv* env,
-                                                                               jclass,
-                                                                               jlong j_handle)
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_JoinFactorizer_getMaxMultiplicity(JNIEnv* env,
+                                                                             jclass,
+                                                                             jlong j_handle)
 {
   JNI_NULL_CHECK(env, j_handle, "handle is null", 0);
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
     auto factorizer_ptr = reinterpret_cast<cudf::join_factorizer*>(j_handle);
-    return static_cast<jint>(factorizer_ptr->max_duplicate_count());
+    return static_cast<jint>(factorizer_ptr->max_multiplicity());
   }
   JNI_CATCH(env, 0);
 }

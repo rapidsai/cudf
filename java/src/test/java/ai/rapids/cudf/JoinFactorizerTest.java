@@ -25,7 +25,7 @@ public class JoinFactorizerTest extends CudfTestBase {
 
       // Verify counts
       assertEquals(3, remap.getDistinctCount());
-      assertEquals(2, remap.getMaxDuplicateCount());
+      assertEquals(2, remap.getMaxMultiplicity());
 
       // Verify we can remap and get non-negative IDs
       try (ColumnVector result = remap.factorizeRightKeys();
@@ -48,7 +48,7 @@ public class JoinFactorizerTest extends CudfTestBase {
       // Distinct keys: "apple", "banana", null, "cherry" = 4 (with default EQUAL null handling)
       assertEquals(4, remap.getDistinctCount());
       // "banana" appears twice, null appears twice = max duplicate count 2
-      assertEquals(2, remap.getMaxDuplicateCount());
+      assertEquals(2, remap.getMaxMultiplicity());
 
       try (ColumnVector result = remap.factorizeRightKeys();
            HostColumnVector hostResult = result.copyToHost()) {
@@ -128,7 +128,7 @@ public class JoinFactorizerTest extends CudfTestBase {
          JoinFactorizer remap = new JoinFactorizer(rightTable)) {
 
       assertEquals(0, remap.getDistinctCount());
-      assertEquals(0, remap.getMaxDuplicateCount());
+      assertEquals(0, remap.getMaxMultiplicity());
     }
   }
 

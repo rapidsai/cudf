@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * In addition to key factorization, this class tracks important cardinality metadata:
  * <ul>
  *   <li>Distinct count: number of unique keys in the right table</li>
- *   <li>Max duplicate count: maximum frequency of any single key</li>
+ *   <li>Max multiplicity: maximum frequency of any single key</li>
  * </ul>
  * </p>
  * <p>
@@ -133,9 +133,9 @@ public class JoinFactorizer implements AutoCloseable {
    * @param nullEquality how null key values should be compared.
    *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
    *        When UNEQUAL, rows with null keys receive a negative sentinel value.
-   * @param computeMetrics if true, compute distinctCount and maxDuplicateCount.
-   *        If false, skip metrics computation for better performance; calling
-   *        {@link #getDistinctCount()} or {@link #getMaxDuplicateCount()} will throw.
+   * @param computeMetrics if true, compute distinctCount and maxMultiplicity.
+   *        If false, skip statistics computation for better performance; calling
+   *        {@link #getDistinctCount()} or {@link #getMaxMultiplicity()} will throw.
    */
   public JoinFactorizer(Table rightKeys, NullEquality nullEquality, boolean computeMetrics) {
     this.nullEquality = nullEquality;
@@ -156,7 +156,7 @@ public class JoinFactorizer implements AutoCloseable {
   }
 
   /**
-   * Construct a joint factorizer from right keys with metrics computation enabled.
+   * Construct a joint factorizer from right keys with statistics computation enabled.
    *
    * @param rightKeys table containing the keys to factorize
    * @param nullEquality how null key values should be compared
@@ -167,7 +167,7 @@ public class JoinFactorizer implements AutoCloseable {
 
   /**
    * Construct a joint factorizer from right keys with nulls comparing equal
-   * and metrics computation enabled.
+   * and statistics computation enabled.
    *
    * @param rightKeys table containing the keys to factorize
    */
@@ -207,11 +207,11 @@ public class JoinFactorizer implements AutoCloseable {
   }
 
   /**
-   * Check if metrics (distinctCount, maxDuplicateCount) were computed.
+   * Check if statistics (distinctCount, maxMultiplicity) were computed.
    *
-   * @return true if metrics are available, false if computeMetrics was false during construction
+   * @return true if statistics are available, false if computeMetrics was false during construction
    */
-  public boolean hasMetrics() {
+  public boolean hasStatistics() {
     return computeMetrics;
   }
 
@@ -231,14 +231,14 @@ public class JoinFactorizer implements AutoCloseable {
   /**
    * Get the maximum number of times any single key appears in the right table.
    *
-   * @return The maximum duplicate count across all distinct keys
+   * @return The maximum multiplicity across all distinct keys
    * @throws IllegalStateException if computeMetrics was false during construction
    */
-  public int getMaxDuplicateCount() {
+  public int getMaxMultiplicity() {
     if (isClosed) {
       throw new IllegalStateException("JoinFactorizer is already closed");
     }
-    return getMaxDuplicateCount(cleaner.nativeHandle);
+    return getMaxMultiplicity(cleaner.nativeHandle);
   }
 
   /**
@@ -338,7 +338,7 @@ public class JoinFactorizer implements AutoCloseable {
   private static native long create(long tableView, boolean compareNulls, boolean computeMetrics);
   private static native void destroy(long handle);
   private static native int getDistinctCount(long handle);
-  private static native int getMaxDuplicateCount(long handle);
+  private static native int getMaxMultiplicity(long handle);
   private static native long factorizeRightKeys(long handle);
   private static native long factorizeLeftKeys(long handle, long keysTableView);
 }
