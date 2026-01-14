@@ -120,6 +120,8 @@ class StringColumn(ColumnBase, Scannable):
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
         """String columns return None as NA value in pandas compatibility mode."""
         if cudf.get_option("mode.pandas_compatible"):
+            if is_pandas_nullable_extension_dtype(self.dtype):
+                return self.dtype.na_value
             return None
         return pd.NA
 
