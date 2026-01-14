@@ -649,7 +649,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s = cudf.Series(cudf.date_range(
         ...   start='2001-02-03 12:00:00',
         ...   end='2001-02-03 14:00:00',
-        ...   freq='1H'))
+        ...   freq='1h'))
         >>> s.dt.hour
         0    12
         1    13
