@@ -1364,11 +1364,25 @@ def recursively_update_struct_names(
     dtype: DtypeObj, child_names: Mapping[Any, Any]
 ) -> DtypeObj:
     """
-    Update dtype's field names (namely StructDtype) recursively with child_names.
+    Update dtype's field names (namely StructDtype and IntervalDtype) recursively with child_names.
 
     Needed for nested types that come from libcudf which do not carry struct field names.
     """
-    if isinstance(dtype, StructDtype):
+    if isinstance(dtype, IntervalDtype):
+        # For IntervalDtype, child_names should have "left" and "right" keys
+        # But we need to recursively update the subtype if it's nested
+        if dtype.subtype is None:
+            return dtype
+        # child_names should be {"left": {...}, "right": {...}}
+        left_names = child_names.get("left", {})
+        # Since left and right have the same dtype, we only need one of them
+        if isinstance(dtype.subtype, (StructDtype, ListDtype)):
+            new_subtype = recursively_update_struct_names(
+                dtype.subtype, left_names
+            )
+            return IntervalDtype(subtype=new_subtype, closed=dtype.closed)
+        return dtype
+    elif isinstance(dtype, StructDtype):
         return StructDtype(
             {
                 new_name: recursively_update_struct_names(
@@ -1394,7 +1408,12 @@ def recursively_update_struct_names(
 def _dtype_to_metadata(dtype: DtypeObj) -> plc.interop.ColumnMetadata:
     # Convert a cudf or pandas dtype to pylibcudf ColumnMetadata for arrow conversion
     cm = plc.interop.ColumnMetadata()
-    if isinstance(dtype, StructDtype):
+    if isinstance(dtype, IntervalDtype):
+        # IntervalDtype is stored as a struct with "left" and "right" fields
+        for name, field_dtype in dtype.fields.items():
+            cm.children_meta.append(_dtype_to_metadata(field_dtype))
+            cm.children_meta[-1].name = name
+    elif isinstance(dtype, StructDtype):
         for name, dtype in dtype.fields.items():
             cm.children_meta.append(_dtype_to_metadata(dtype))
             cm.children_meta[-1].name = name
