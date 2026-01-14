@@ -709,8 +709,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
                                 decomp_sum{});
 
   // retrieve to host so we can get compression scratch sizes
-  auto h_decomp_info = cudf::detail::make_pinned_vector(decomp_info, stream);
   auto temp_cost     = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
+  auto h_decomp_info = cudf::detail::make_pinned_vector(decomp_info, stream);
   std::transform(h_decomp_info.begin(), h_decomp_info.end(), temp_cost.begin(), [](auto const& d) {
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
