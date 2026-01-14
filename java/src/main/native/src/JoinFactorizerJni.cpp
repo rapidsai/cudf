@@ -18,7 +18,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_JoinFactorizer_create(
     cudf::jni::auto_set_device(env);
     auto tview   = reinterpret_cast<cudf::table_view const*>(j_table);
     auto nulleq  = j_compare_nulls ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    auto metrics = j_compute_metrics ? cudf::compute_metrics::YES : cudf::compute_metrics::NO;
+    auto metrics = j_compute_metrics ? cudf::join_statistics::COMPUTE : cudf::join_statistics::SKIP;
     auto factorizer_ptr = new cudf::join_factorizer(*tview, nulleq, metrics);
     return reinterpret_cast<jlong>(factorizer_ptr);
   }
@@ -47,7 +47,7 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_JoinFactorizer_getDistinctCount(JNIEn
   {
     cudf::jni::auto_set_device(env);
     auto factorizer_ptr = reinterpret_cast<cudf::join_factorizer*>(j_handle);
-    return static_cast<jint>(factorizer_ptr->get_distinct_count());
+    return static_cast<jint>(factorizer_ptr->distinct_count());
   }
   JNI_CATCH(env, 0);
 }
@@ -61,7 +61,7 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_JoinFactorizer_getMaxDuplicateCount(J
   {
     cudf::jni::auto_set_device(env);
     auto factorizer_ptr = reinterpret_cast<cudf::join_factorizer*>(j_handle);
-    return static_cast<jint>(factorizer_ptr->get_max_duplicate_count());
+    return static_cast<jint>(factorizer_ptr->max_duplicate_count());
   }
   JNI_CATCH(env, 0);
 }

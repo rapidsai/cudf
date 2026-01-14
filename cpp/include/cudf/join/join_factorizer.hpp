@@ -27,7 +27,7 @@ namespace CUDF_EXPORT cudf {
 /**
  * @brief Enum to control whether factorization metrics should be computed
  */
-enum class compute_metrics : bool { NO = false, YES = true };
+enum class join_statistics : bool { SKIP = false, COMPUTE = true };
 
 namespace detail {
 /**
@@ -94,14 +94,14 @@ class join_factorizer {
    *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
    *        When UNEQUAL, rows with null keys receive a negative sentinel value.
    * @param metrics Controls whether to compute distinct_count and max_duplicate_count.
-   *        If YES (default), compute metrics for later retrieval via get_distinct_count()
-   *        and get_max_duplicate_count(). If NO, skip metrics computation for better
-   *        performance; calling get_distinct_count() or get_max_duplicate_count() will throw.
+   *        If COMPUTE (default), compute metrics for later retrieval via distinct_count()
+   *        and max_duplicate_count(). If SKIP, skip metrics computation for better
+   *        performance; calling distinct_count() or max_duplicate_count() will throw.
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   join_factorizer(cudf::table_view const& right,
                   null_equality compare_nulls   = null_equality::EQUAL,
-                  cudf::compute_metrics metrics = cudf::compute_metrics::YES,
+                  cudf::join_statistics metrics = cudf::join_statistics::COMPUTE,
                   rmm::cuda_stream_view stream  = cudf::get_default_stream());
 
   /**
@@ -148,27 +148,27 @@ class join_factorizer {
   /**
    * @brief Check if metrics (distinct_count, max_duplicate_count) were computed.
    *
-   * @return true if metrics are available, false if metrics was NO during construction
+   * @return true if metrics are available, false if metrics was SKIP during construction
    */
   [[nodiscard]] bool has_metrics() const;
 
   /**
    * @brief Get the number of distinct keys in the right table
    *
-   * @throw cudf::logic_error if metrics was NO during construction
+   * @throw cudf::logic_error if metrics was SKIP during construction
    *
    * @return The count of unique key combinations in the right table
    */
-  [[nodiscard]] size_type get_distinct_count() const;
+  [[nodiscard]] size_type distinct_count() const;
 
   /**
    * @brief Get the maximum number of times any single key appears
    *
-   * @throw cudf::logic_error if metrics was NO during construction
+   * @throw cudf::logic_error if metrics was SKIP during construction
    *
    * @return The maximum duplicate count across all distinct keys
    */
-  [[nodiscard]] size_type get_max_duplicate_count() const;
+  [[nodiscard]] size_type max_duplicate_count() const;
 
  private:
   using impl_type = cudf::detail::join_factorizer_impl;

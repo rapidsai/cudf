@@ -99,10 +99,10 @@ void nvbench_join_factorizer_build(nvbench::state& state,
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     cudf::join_factorizer remap(
-      keys, cudf::null_equality::EQUAL, cudf::compute_metrics::YES, cudf::get_default_stream());
+      keys, cudf::null_equality::EQUAL, cudf::join_statistics::COMPUTE, cudf::get_default_stream());
     // Access metrics to ensure they're computed
-    [[maybe_unused]] auto dc = remap.get_distinct_count();
-    [[maybe_unused]] auto mc = remap.get_max_duplicate_count();
+    [[maybe_unused]] auto dc = remap.distinct_count();
+    [[maybe_unused]] auto mc = remap.max_duplicate_count();
   });
 }
 

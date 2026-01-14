@@ -240,9 +240,9 @@ class hash_table_base {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const = 0;
 
-  virtual bool has_metrics() const                        = 0;
-  virtual cudf::size_type get_distinct_count() const      = 0;
-  virtual cudf::size_type get_max_duplicate_count() const = 0;
+  virtual bool has_metrics() const                    = 0;
+  virtual cudf::size_type distinct_count() const      = 0;
+  virtual cudf::size_type max_duplicate_count() const = 0;
 };
 
 /**
@@ -439,13 +439,13 @@ class deduplicating_hash_table : public hash_table_base {
 
   bool has_metrics() const override { return _has_metrics; }
 
-  cudf::size_type get_distinct_count() const override
+  cudf::size_type distinct_count() const override
   {
     CUDF_EXPECTS(_has_metrics, "Metrics were not computed during construction");
     return _distinct_count;
   }
 
-  cudf::size_type get_max_duplicate_count() const override
+  cudf::size_type max_duplicate_count() const override
   {
     CUDF_EXPECTS(_has_metrics, "Metrics were not computed during construction");
     return _max_duplicate_count;
@@ -611,16 +611,16 @@ class join_factorizer_impl {
 
   bool has_metrics() const { return _hash_table ? _hash_table->has_metrics() : _compute_metrics; }
 
-  cudf::size_type get_distinct_count() const
+  cudf::size_type distinct_count() const
   {
-    if (_hash_table) { return _hash_table->get_distinct_count(); }
+    if (_hash_table) { return _hash_table->distinct_count(); }
     CUDF_EXPECTS(_compute_metrics, "Metrics were not computed during construction");
     return 0;
   }
 
-  cudf::size_type get_max_duplicate_count() const
+  cudf::size_type max_duplicate_count() const
   {
-    if (_hash_table) { return _hash_table->get_max_duplicate_count(); }
+    if (_hash_table) { return _hash_table->max_duplicate_count(); }
     CUDF_EXPECTS(_compute_metrics, "Metrics were not computed during construction");
     return 0;
   }
@@ -642,7 +642,7 @@ class join_factorizer_impl {
 
 join_factorizer::join_factorizer(cudf::table_view const& right,
                                  null_equality compare_nulls,
-                                 cudf::compute_metrics metrics,
+                                 cudf::join_statistics metrics,
                                  rmm::cuda_stream_view stream)
   : _impl{std::make_unique<detail::join_factorizer_impl>(
       right, compare_nulls, static_cast<bool>(metrics), stream)}
@@ -693,11 +693,8 @@ std::unique_ptr<cudf::column> join_factorizer::factorize_left_keys(
 
 bool join_factorizer::has_metrics() const { return _impl->has_metrics(); }
 
-size_type join_factorizer::get_distinct_count() const { return _impl->get_distinct_count(); }
+size_type join_factorizer::distinct_count() const { return _impl->distinct_count(); }
 
-size_type join_factorizer::get_max_duplicate_count() const
-{
-  return _impl->get_max_duplicate_count();
-}
+size_type join_factorizer::max_duplicate_count() const { return _impl->max_duplicate_count(); }
 
 }  // namespace cudf

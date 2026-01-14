@@ -151,10 +151,10 @@ TEST_F(JoinFactorizerTest, BasicIntegerKeys)
   cudf::join_factorizer remap{right_table};
 
   // Check distinct count (should be 3: values 1, 2, 3)
-  EXPECT_EQ(remap.get_distinct_count(), 3);
+  EXPECT_EQ(remap.distinct_count(), 3);
 
   // Check max duplicate count (value 1 and 2 both appear twice)
-  EXPECT_EQ(remap.get_max_duplicate_count(), 2);
+  EXPECT_EQ(remap.max_duplicate_count(), 2);
 
   // Remap right keys
   auto right_result = remap.factorize_right_keys();
@@ -211,8 +211,8 @@ TEST_F(JoinFactorizerTest, StringKeys)
 
   cudf::join_factorizer remap{right_table};
 
-  EXPECT_EQ(remap.get_distinct_count(), 3);
-  EXPECT_EQ(remap.get_max_duplicate_count(), 2);  // "banana" appears twice
+  EXPECT_EQ(remap.distinct_count(), 3);
+  EXPECT_EQ(remap.max_duplicate_count(), 2);  // "banana" appears twice
 
   auto right_result = remap.factorize_right_keys();
   verify_remapping_contract(right_table, *right_result, 3);
@@ -246,8 +246,8 @@ TEST_F(JoinFactorizerTest, MultiColumnKeys)
   cudf::join_factorizer remap{right_table};
 
   // Distinct keys: (1,"a"), (1,"b"), (2,"a") = 3 distinct
-  EXPECT_EQ(remap.get_distinct_count(), 3);
-  EXPECT_EQ(remap.get_max_duplicate_count(), 2);  // (1,"a") appears twice
+  EXPECT_EQ(remap.distinct_count(), 3);
+  EXPECT_EQ(remap.max_duplicate_count(), 2);  // (1,"a") appears twice
 
   auto right_result = remap.factorize_right_keys();
   verify_remapping_contract(right_table, *right_result, 3);
@@ -282,7 +282,7 @@ TEST_F(JoinFactorizerTest, NullsEqual)
   cudf::join_factorizer remap{right_table, cudf::null_equality::EQUAL};
 
   // Distinct: 1, 2, null = 3
-  EXPECT_EQ(remap.get_distinct_count(), 3);
+  EXPECT_EQ(remap.distinct_count(), 3);
 
   auto right_result = remap.factorize_right_keys();
   verify_remapping_contract(right_table, *right_result, 3);
@@ -317,7 +317,7 @@ TEST_F(JoinFactorizerTest, NullsUnequal)
   cudf::join_factorizer remap{right_table, cudf::null_equality::UNEQUAL};
 
   // Distinct: 1, 2 = 2 (null is skipped)
-  EXPECT_EQ(remap.get_distinct_count(), 2);
+  EXPECT_EQ(remap.distinct_count(), 2);
 
   auto right_result = remap.factorize_right_keys();
   auto host_ids     = to_host<int32_t>(*right_result);
@@ -350,8 +350,8 @@ TEST_F(JoinFactorizerTest, EmptyRightTable)
 
   cudf::join_factorizer remap{right_table};
 
-  EXPECT_EQ(remap.get_distinct_count(), 0);
-  EXPECT_EQ(remap.get_max_duplicate_count(), 0);
+  EXPECT_EQ(remap.distinct_count(), 0);
+  EXPECT_EQ(remap.max_duplicate_count(), 0);
 
   // Left should return all NOT_FOUND
   column_wrapper<int32_t> left_col{1, 2, 3};
@@ -387,8 +387,8 @@ TEST_F(JoinFactorizerTest, AllDuplicates)
 
   cudf::join_factorizer remap{right_table};
 
-  EXPECT_EQ(remap.get_distinct_count(), 1);
-  EXPECT_EQ(remap.get_max_duplicate_count(), 5);
+  EXPECT_EQ(remap.distinct_count(), 1);
+  EXPECT_EQ(remap.max_duplicate_count(), 5);
 
   auto right_result = remap.factorize_right_keys();
   auto host_ids     = to_host<int32_t>(*right_result);
@@ -408,8 +408,8 @@ TEST_F(JoinFactorizerTest, AllUnique)
 
   cudf::join_factorizer remap{right_table};
 
-  EXPECT_EQ(remap.get_distinct_count(), 5);
-  EXPECT_EQ(remap.get_max_duplicate_count(), 1);
+  EXPECT_EQ(remap.distinct_count(), 5);
+  EXPECT_EQ(remap.max_duplicate_count(), 1);
 
   auto right_result = remap.factorize_right_keys();
   auto host_ids     = to_host<int32_t>(*right_result);
@@ -435,8 +435,8 @@ TEST_F(JoinFactorizerTest, LargeTable)
 
   cudf::join_factorizer remap{right_table};
 
-  EXPECT_EQ(remap.get_distinct_count(), 100);
-  EXPECT_EQ(remap.get_max_duplicate_count(), 100);
+  EXPECT_EQ(remap.distinct_count(), 100);
+  EXPECT_EQ(remap.max_duplicate_count(), 100);
 
   auto right_result = remap.factorize_right_keys();
   verify_remapping_contract(right_table, *right_result, 100);
@@ -489,8 +489,8 @@ TEST_F(JoinFactorizerTest, StructKeys)
   cudf::join_factorizer remap{right_table};
 
   // Distinct structs: {1,"a"}, {1,"b"}, {2,"a"} = 3
-  EXPECT_EQ(remap.get_distinct_count(), 3);
-  EXPECT_EQ(remap.get_max_duplicate_count(), 2);
+  EXPECT_EQ(remap.distinct_count(), 3);
+  EXPECT_EQ(remap.max_duplicate_count(), 2);
 
   auto right_result = remap.factorize_right_keys();
   verify_remapping_contract(right_table, *right_result, 3);
@@ -513,8 +513,8 @@ TEST_F(JoinFactorizerTest, FloatKeys)
   cudf::join_factorizer remap{right_table};
 
   // Distinct: 1.5, 2.5, 3.5 = 3
-  EXPECT_EQ(remap.get_distinct_count(), 3);
-  EXPECT_EQ(remap.get_max_duplicate_count(), 2);
+  EXPECT_EQ(remap.distinct_count(), 3);
+  EXPECT_EQ(remap.max_duplicate_count(), 2);
 
   auto right_result = remap.factorize_right_keys();
   verify_remapping_contract(right_table, *right_result, 3);
@@ -552,8 +552,8 @@ TEST_F(JoinFactorizerTest, DoubleKeys)
   cudf::join_factorizer remap{right_table};
 
   // Distinct: 3 values (the second 2.987654321 is a duplicate)
-  EXPECT_EQ(remap.get_distinct_count(), 3);
-  EXPECT_EQ(remap.get_max_duplicate_count(), 2);
+  EXPECT_EQ(remap.distinct_count(), 3);
+  EXPECT_EQ(remap.max_duplicate_count(), 2);
 
   auto right_result = remap.factorize_right_keys();
   verify_remapping_contract(right_table, *right_result, 3);
@@ -589,7 +589,7 @@ TEST_F(JoinFactorizerTest, FloatWithNulls)
   cudf::join_factorizer remap{right_table, cudf::null_equality::EQUAL};
 
   // Distinct: 1.5, 2.5, null = 3
-  EXPECT_EQ(remap.get_distinct_count(), 3);
+  EXPECT_EQ(remap.distinct_count(), 3);
 
   auto right_result = remap.factorize_right_keys();
   verify_remapping_contract(right_table, *right_result, 3);
@@ -606,7 +606,7 @@ TEST_F(JoinFactorizerTest, FloatWithNulls)
   cudf::join_factorizer remap_unequal{right_table, cudf::null_equality::UNEQUAL};
 
   // Distinct: 1.5, 2.5 = 2 (null skipped)
-  EXPECT_EQ(remap_unequal.get_distinct_count(), 2);
+  EXPECT_EQ(remap_unequal.distinct_count(), 2);
 
   auto build_result_unequal = remap_unequal.factorize_right_keys();
   auto host_ids_unequal     = to_host<int32_t>(*build_result_unequal);
@@ -624,7 +624,7 @@ TEST_F(JoinFactorizerTest, DoubleWithNulls)
   cudf::join_factorizer remap{right_table, cudf::null_equality::EQUAL};
 
   // Distinct: 1.0, 2.0, null = 3
-  EXPECT_EQ(remap.get_distinct_count(), 3);
+  EXPECT_EQ(remap.distinct_count(), 3);
 
   auto right_result = remap.factorize_right_keys();
   auto host_ids     = to_host<int32_t>(*right_result);
@@ -640,7 +640,7 @@ TEST_F(JoinFactorizerTest, DoubleWithNulls)
   cudf::join_factorizer remap_unequal{right_table, cudf::null_equality::UNEQUAL};
 
   // Distinct: 1.0, 2.0 = 2 (null skipped)
-  EXPECT_EQ(remap_unequal.get_distinct_count(), 2);
+  EXPECT_EQ(remap_unequal.distinct_count(), 2);
 
   auto build_result_unequal = remap_unequal.factorize_right_keys();
   auto host_ids_unequal     = to_host<int32_t>(*build_result_unequal);
@@ -750,8 +750,8 @@ TEST_F(JoinFactorizerTest, MetricsEnabled)
   cudf::join_factorizer remap{right_table};
 
   EXPECT_TRUE(remap.has_metrics());
-  EXPECT_EQ(remap.get_distinct_count(), 3);
-  EXPECT_EQ(remap.get_max_duplicate_count(), 3);
+  EXPECT_EQ(remap.distinct_count(), 3);
+  EXPECT_EQ(remap.max_duplicate_count(), 3);
 }
 
 TEST_F(JoinFactorizerTest, MetricsDisabled)
@@ -760,11 +760,11 @@ TEST_F(JoinFactorizerTest, MetricsDisabled)
   auto right_table = cudf::table_view{{right_col}};
 
   // Explicitly disable metrics
-  cudf::join_factorizer remap{right_table, cudf::null_equality::EQUAL, cudf::compute_metrics::NO};
+  cudf::join_factorizer remap{right_table, cudf::null_equality::EQUAL, cudf::join_statistics::SKIP};
 
   EXPECT_FALSE(remap.has_metrics());
-  EXPECT_THROW((void)remap.get_distinct_count(), cudf::logic_error);
-  EXPECT_THROW((void)remap.get_max_duplicate_count(), cudf::logic_error);
+  EXPECT_THROW((void)remap.distinct_count(), cudf::logic_error);
+  EXPECT_THROW((void)remap.max_duplicate_count(), cudf::logic_error);
 }
 
 TEST_F(JoinFactorizerTest, MetricsDisabledRemapStillWorks)
@@ -773,7 +773,7 @@ TEST_F(JoinFactorizerTest, MetricsDisabledRemapStillWorks)
   auto right_table = cudf::table_view{{right_col}};
 
   // Disable metrics but remapping should still work
-  cudf::join_factorizer remap{right_table, cudf::null_equality::EQUAL, cudf::compute_metrics::NO};
+  cudf::join_factorizer remap{right_table, cudf::null_equality::EQUAL, cudf::join_statistics::SKIP};
 
   // Remap right keys
   auto right_result = remap.factorize_right_keys();
