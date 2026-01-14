@@ -188,16 +188,20 @@ def make_lowering_wrapper(
         node: IR, rec: LowerIRTransformer
     ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
         new_node, partition_info = lower_fn(node, rec)
-        _node = new_node
-        while True:
-            rec.state["stats"].copy_row_count(node, _node)
-            if (
-                len(_node.children) == 1
-                and _node.children[0] not in rec.state["stats"].row_count
-            ):
-                _node = _node.children[0]
-            else:
-                break
+        # Propagate row_count through single-child descendants.
+        # lower_fn may replace `node` with a chain of new IR nodes.
+        # For now, we just assume all new nodes have the same
+        # row_count as the original node (not always true).
+        stats = rec.state["stats"]
+        _node: IR | None = new_node
+        while _node is not None:
+            stats.copy_row_count(node, _node)
+            children = _node.children
+            _node = (
+                children[0]
+                if len(children) == 1 and children[0] not in stats.row_count
+                else None
+            )
         return new_node, partition_info
 
     return _lower_with_stats

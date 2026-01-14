@@ -499,10 +499,7 @@ def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
 
 @pytest.mark.parametrize("use_reduction_planning", [True, False])
 def test_physical_plan_row_counts(tmp_path, df, use_reduction_planning):
-    """
-    Test that row-count statistics are shown in the physical plan
-    regardless of whether use_reduction_planning is enabled.
-    """
+    # Test that row-count statistics are shown in the physical plan
     make_partitioned_source(df, tmp_path, fmt="parquet", n_files=2)
 
     engine = pl.GPUEngine(
