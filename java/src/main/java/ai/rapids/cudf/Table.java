@@ -2173,7 +2173,7 @@ public final class Table implements AutoCloseable {
     return new PartitionedTable(new Table(partition(
         getNativeView(),
         partitionMap.getNativeView(),
-        partitionOffsets.length,
+        numberOfPartitions,
         partitionOffsets)), partitionOffsets);
   }
 
