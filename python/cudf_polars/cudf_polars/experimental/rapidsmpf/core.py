@@ -130,14 +130,15 @@ def evaluate_logical_plan(
                 collect_metadata=collect_metadata,
             )
 
-    # TODO: Use config to determine whether to print profiler output
-    if profiler is not None:
+    # Write profiler output if configured
+    profile_output = config_options.executor.profile_output
+    if profile_output is not None and profiler is not None:
+        from pathlib import Path
+
         from cudf_polars.experimental.explain import _repr_ir_tree
 
-        profiler_repr = _repr_ir_tree(
-            ir, partition_info, stats=stats, profiler=profiler
-        )
-        print(f"row count sampler:\n{profiler_repr}", flush=True)
+        profile_repr = _repr_ir_tree(ir, partition_info, stats=stats, profiler=profiler)
+        Path(profile_output).write_text(profile_repr)
 
     return result, metadata_collector
 
@@ -232,7 +233,9 @@ def evaluate_pipeline(
     # Generate network nodes
     assert rmpf_context is not None, "RapidsMPF context must defined."
     metadata_collector: list[Metadata] | None = [] if collect_metadata else None
-    profiler: Profiler | None = Profiler()
+    profiler: Profiler | None = (
+        Profiler() if config_options.executor.profile_output else None
+    )
     nodes, output = generate_network(
         rmpf_context,
         ir,

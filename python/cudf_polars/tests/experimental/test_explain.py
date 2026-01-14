@@ -521,3 +521,51 @@ def test_physical_plan_row_counts(tmp_path, df, use_reduction_planning):
     assert re.search(rf"row_count=\'~{row_count}\'", repr), (
         f"Expected row_count='~{row_count}' in physical plan, got:\n{repr}"
     )
+
+
+@pytest.mark.skipif(
+    DEFAULT_RUNTIME != "rapidsmpf", reason="Requires 'rapidsmpf' runtime."
+)
+def test_profile_output(tmp_path, df):
+    """Test that profile_output writes a profile file after execution."""
+    # Create parquet source
+    source_path = tmp_path / "data"
+    source_path.mkdir(parents=True, exist_ok=True)
+    make_partitioned_source(df, source_path, fmt="parquet", n_files=2)
+
+    # Configure profile output path
+    profile_path = tmp_path / "profile.txt"
+
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "target_partition_size": 10_000,
+            "profile_output": str(profile_path),
+        },
+    )
+
+    # Execute a query
+    q = pl.scan_parquet(source_path).group_by("y").agg(pl.col("x").sum().alias("x_sum"))
+    result = q.collect(engine=engine)
+
+    # Verify the profile file was written
+    assert profile_path.exists(), "Profile file was not written"
+
+    # Read and verify content
+    profile_content = profile_path.read_text()
+
+    # Should contain row_count estimates (from parquet metadata)
+    assert "row_count=" in profile_content, (
+        f"Expected row_count in profile, got:\n{profile_content}"
+    )
+
+    # Should contain actual counts (from profiler)
+    assert "[actual=" in profile_content, (
+        f"Expected [actual=...] in profile, got:\n{profile_content}"
+    )
+
+    # Verify query executed correctly
+    assert result.height == 2  # 'cat' and 'dog'

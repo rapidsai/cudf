@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utility functions/classes for running the PDS-H and PDS-DS benchmarks."""
@@ -258,6 +258,7 @@ class RunConfig:
     stats_planning: bool
     max_io_threads: int
     native_parquet: bool
+    profile_output_dir: str | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -375,6 +376,7 @@ class RunConfig:
             stats_planning=args.stats_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
+            profile_output_dir=args.profile_output,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -892,6 +894,15 @@ def parse_args(
         help="Enable statistics planning.",
     )
     parser.add_argument(
+        "--profile-output",
+        type=str,
+        default=None,
+        help=textwrap.dedent("""\
+            Directory to write post-execution profiles showing estimated vs
+            actual row counts. Creates files named q{query_id}_iter{iteration}.txt.
+            Only supported with rapidsmpf runtime."""),
+    )
+    parser.add_argument(
         "--max-io-threads",
         default=2,
         type=int,
@@ -929,23 +940,53 @@ def run_polars(
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
     engine: pl.GPUEngine | None = None
+    base_executor_options: dict[str, Any] = {}
+    parquet_options: dict[str, Any] = {}
 
     if run_config.executor != "cpu":
-        executor_options = get_executor_options(run_config, benchmark=benchmark)
+        base_executor_options = get_executor_options(run_config, benchmark=benchmark)
         if run_config.runtime == "rapidsmpf":
-            parquet_options = {
-                "use_rapidsmpf_native": run_config.native_parquet,
-            }
-        else:
-            parquet_options = {}
-        engine = pl.GPUEngine(
+            parquet_options = {"use_rapidsmpf_native": run_config.native_parquet}
+
+        # Create profile output directory if specified
+        if run_config.profile_output_dir:
+            Path(run_config.profile_output_dir).mkdir(parents=True, exist_ok=True)
+
+        # Create base engine (used when not profiling per-iteration)
+        if not run_config.profile_output_dir:
+            engine = pl.GPUEngine(
+                raise_on_fail=True,
+                memory_resource=rmm.mr.CudaAsyncMemoryResource()
+                if run_config.rmm_async
+                else None,
+                cuda_stream_policy=run_config.stream_policy,
+                executor=run_config.executor,
+                executor_options=base_executor_options,
+                parquet_options=parquet_options,
+            )
+
+    def get_engine(q_id: int, iteration: int) -> pl.GPUEngine | None:
+        """Get engine for a specific query/iteration (with profile output if enabled)."""
+        if run_config.executor == "cpu":
+            return None
+        if not run_config.profile_output_dir:
+            return engine
+        # Create engine with unique profile output path for this query/iteration
+        profile_path = (
+            Path(run_config.profile_output_dir) / f"q{q_id}_iter{iteration}.txt"
+        )
+        iter_executor_options = {
+            **base_executor_options,
+            "profile_output": str(profile_path),
+        }
+        return pl.GPUEngine(
             raise_on_fail=True,
             memory_resource=rmm.mr.CudaAsyncMemoryResource()
             if run_config.rmm_async
             else None,
             cuda_stream_policy=run_config.stream_policy,
             executor=run_config.executor,
-            executor_options=executor_options,
+            executor_options=iter_executor_options,
             parquet_options=parquet_options,
         )
 
@@ -955,10 +996,14 @@ def run_polars(
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
-        print_query_plan(q_id, q, args, run_config, engine)
+        # Use base engine (without profiling) for printing query plan
+        print_query_plan(q_id, q, args, run_config, engine or get_engine(q_id, 0))
 
         records[q_id] = []
         for i in range(args.iterations):
+            # Get engine for this iteration (may have unique profile_output)
+            iter_engine = get_engine(q_id, i)
+
             if _HAS_STRUCTLOG and run_config.collect_traces:
                 setup_logging(q_id, i)
                 if client is not None:
@@ -967,7 +1012,7 @@ def run_polars(
             t0 = time.monotonic()
 
             try:
-                result = execute_query(q_id, i, q, run_config, args, engine)
+                result = execute_query(q_id, i, q, run_config, args, iter_engine)
             except Exception:
                 print(f"❌ query={q_id} iteration={i} failed!")
                 print(traceback.format_exc())
@@ -988,7 +1033,7 @@ def run_polars(
                 try:
                     assert_gpu_result_equal(
                         q,
-                        engine=engine,
+                        engine=iter_engine,
                         executor=run_config.executor,
                         check_exact=False,
                     )
