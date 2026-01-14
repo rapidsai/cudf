@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <tests/iterator/pair_iterator_test.cuh>
@@ -105,7 +105,7 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   // GPU test
   auto it_dev         = d_col->pair_begin<T, true>();
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-  auto result         = thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
+  auto result         = thrust::reduce(rmm::exec_policy_nosync(cudf::get_default_stream()),
                                it_dev_squared,
                                it_dev_squared + d_col->size(),
                                cuda::std::make_pair(T_output{}, true),

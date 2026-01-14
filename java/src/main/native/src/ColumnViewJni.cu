@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -46,7 +46,7 @@ std::unique_ptr<cudf::column> generate_list_offsets(cudf::column_view const& lis
   auto offsets_view = offsets_column->mutable_view();
   auto d_offsets    = offsets_view.template begin<int32_t>();
 
-  thrust::inclusive_scan(rmm::exec_policy(stream), begin_iter, end_iter, d_offsets + 1);
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream), begin_iter, end_iter, d_offsets + 1);
   CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream));
 
   return offsets_column;
@@ -88,7 +88,7 @@ void post_process_list_overlap(cudf::column_view const& lhs,
   // Create a new bitmask to satisfy Spark's arrays_overlap's special behavior.
   auto validity = rmm::device_uvector<bool>(overlap_cv.size(), stream);
   thrust::tabulate(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     validity.begin(),
     validity.end(),
     [lhs            = cudf::detail::lists_column_device_view{*lhs_cdv_ptr},
