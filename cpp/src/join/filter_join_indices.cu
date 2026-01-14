@@ -7,6 +7,7 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -193,6 +194,7 @@ filter_join_indices(cudf::table_view const& left,
                        cuco::double_hashing<1, cuco::default_hash_function<size_type>>,
                        rmm::mr::polymorphic_allocator<char>>;
     SetType filter_passing_indices{cuco::extent{static_cast<std::size_t>(left.num_rows())},
+                                   cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
                                    cuco::empty_key{-1},
                                    {},
                                    {},
