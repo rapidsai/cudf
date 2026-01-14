@@ -25,7 +25,7 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
- * @brief Enum to control whether factorization metrics should be computed
+ * @brief Enum to control whether factorization statistics should be computed
  */
 enum class join_statistics : bool { SKIP = false, COMPUTE = true };
 
@@ -85,7 +85,7 @@ class join_factorizer {
    * @brief Constructs a join factorizer from the given right keys.
    *
    * The constructor builds a deduplicating hash table and optionally computes factorization
-   * metrics (distinct count and max duplicate count).
+   * statistics (distinct count and max duplicate count).
    *
    * @throw cudf::logic_error if the right table has no columns
    *
@@ -93,16 +93,16 @@ class join_factorizer {
    * @param compare_nulls Controls whether null key values should match or not.
    *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
    *        When UNEQUAL, rows with null keys receive a negative sentinel value.
-   * @param metrics Controls whether to compute distinct_count and max_duplicate_count.
-   *        If COMPUTE (default), compute metrics for later retrieval via distinct_count()
-   *        and max_duplicate_count(). If SKIP, skip metrics computation for better
+   * @param statistics Controls whether to compute distinct_count and max_duplicate_count.
+   *        If COMPUTE (default), compute statistics for later retrieval via distinct_count()
+   *        and max_duplicate_count(). If SKIP, skip statistics computation for better
    *        performance; calling distinct_count() or max_duplicate_count() will throw.
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   join_factorizer(cudf::table_view const& right,
-                  null_equality compare_nulls   = null_equality::EQUAL,
-                  cudf::join_statistics metrics = cudf::join_statistics::COMPUTE,
-                  rmm::cuda_stream_view stream  = cudf::get_default_stream());
+                  null_equality compare_nulls      = null_equality::EQUAL,
+                  cudf::join_statistics statistics = cudf::join_statistics::COMPUTE,
+                  rmm::cuda_stream_view stream     = cudf::get_default_stream());
 
   /**
    * @brief Factorize right keys to integer IDs.
@@ -146,16 +146,16 @@ class join_factorizer {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
-   * @brief Check if metrics (distinct_count, max_duplicate_count) were computed.
+   * @brief Check if statistics (distinct_count, max_duplicate_count) were computed.
    *
-   * @return true if metrics are available, false if metrics was SKIP during construction
+   * @return true if statistics are available, false if statistics was SKIP during construction
    */
-  [[nodiscard]] bool has_metrics() const;
+  [[nodiscard]] bool has_statistics() const;
 
   /**
    * @brief Get the number of distinct keys in the right table
    *
-   * @throw cudf::logic_error if metrics was SKIP during construction
+   * @throw cudf::logic_error if statistics was SKIP during construction
    *
    * @return The count of unique key combinations in the right table
    */
@@ -164,7 +164,7 @@ class join_factorizer {
   /**
    * @brief Get the maximum number of times any single key appears
    *
-   * @throw cudf::logic_error if metrics was SKIP during construction
+   * @throw cudf::logic_error if statistics was SKIP during construction
    *
    * @return The maximum duplicate count across all distinct keys
    */

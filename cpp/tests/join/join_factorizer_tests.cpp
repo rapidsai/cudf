@@ -739,40 +739,40 @@ TEST_F(JoinFactorizerTest, EmptyLeftSchemaMismatchColumnCount)
   EXPECT_THROW((void)remap.factorize_left_keys(left_table), std::invalid_argument);
 }
 
-// Tests for optional metrics computation
+// Tests for optional statistics computation
 
-TEST_F(JoinFactorizerTest, MetricsEnabled)
+TEST_F(JoinFactorizerTest, StatisticsEnabled)
 {
   column_wrapper<int32_t> right_col{1, 2, 2, 3, 3, 3};
   auto right_table = cudf::table_view{{right_col}};
 
-  // Default: metrics enabled
+  // Default: statistics enabled
   cudf::join_factorizer remap{right_table};
 
-  EXPECT_TRUE(remap.has_metrics());
+  EXPECT_TRUE(remap.has_statistics());
   EXPECT_EQ(remap.distinct_count(), 3);
   EXPECT_EQ(remap.max_duplicate_count(), 3);
 }
 
-TEST_F(JoinFactorizerTest, MetricsDisabled)
+TEST_F(JoinFactorizerTest, StatisticsDisabled)
 {
   column_wrapper<int32_t> right_col{1, 2, 2, 3, 3, 3};
   auto right_table = cudf::table_view{{right_col}};
 
-  // Explicitly disable metrics
+  // Explicitly disable statistics
   cudf::join_factorizer remap{right_table, cudf::null_equality::EQUAL, cudf::join_statistics::SKIP};
 
-  EXPECT_FALSE(remap.has_metrics());
+  EXPECT_FALSE(remap.has_statistics());
   EXPECT_THROW((void)remap.distinct_count(), cudf::logic_error);
   EXPECT_THROW((void)remap.max_duplicate_count(), cudf::logic_error);
 }
 
-TEST_F(JoinFactorizerTest, MetricsDisabledRemapStillWorks)
+TEST_F(JoinFactorizerTest, StatisticsDisabledRemapStillWorks)
 {
   column_wrapper<int32_t> right_col{10, 20, 20, 30};
   auto right_table = cudf::table_view{{right_col}};
 
-  // Disable metrics but remapping should still work
+  // Disable statistics but remapping should still work
   cudf::join_factorizer remap{right_table, cudf::null_equality::EQUAL, cudf::join_statistics::SKIP};
 
   // Remap right keys

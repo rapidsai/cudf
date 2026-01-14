@@ -159,7 +159,7 @@ struct self_table_equality_comparator {
 };
 
 // ============================================================================
-// Hash-based metrics computation helpers
+// Hash-based statistics computation helpers
 // ============================================================================
 
 CUDF_HOST_DEVICE auto constexpr FACTORIZE_BLOCK_SIZE = 128;
@@ -212,7 +212,7 @@ CUDF_KERNEL void insert_and_count_kernel(cudf::size_type num_rows,
 }
 
 /**
- * @brief Functor for inserting keys without tracking metrics.
+ * @brief Functor for inserting keys without tracking statistics.
  */
 template <typename SetRef, typename KeyIter>
 struct key_inserter {
@@ -240,7 +240,7 @@ class hash_table_base {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const = 0;
 
-  virtual bool has_metrics() const                    = 0;
+  virtual bool has_statistics() const                 = 0;
   virtual cudf::size_type distinct_count() const      = 0;
   virtual cudf::size_type max_duplicate_count() const = 0;
 };
@@ -275,7 +275,7 @@ class deduplicating_hash_table : public hash_table_base {
     Comparator const& comparator,
     RowHasher const& row_hasher,
     cudf::null_equality compare_nulls,
-    bool compute_metrics,
+    bool compute_statistics,
     rmm::cuda_stream_view stream)
     : _right_has_nested_columns{cudf::has_nested_columns(right)},
       _compare_nulls{compare_nulls},
@@ -291,7 +291,7 @@ class deduplicating_hash_table : public hash_table_base {
                   cuco_storage_type{},
                   rmm::mr::polymorphic_allocator<char>{},
                   stream.value()},
-      _has_metrics{compute_metrics},
+      _has_statistics{compute_statistics},
       _distinct_count{0},
       _max_duplicate_count{0}
   {
@@ -315,8 +315,8 @@ class deduplicating_hash_table : public hash_table_base {
       skip_nulls ? reinterpret_cast<cudf::bitmask_type const*>(row_validity_bitmask.data())
                  : nullptr;
 
-    if (compute_metrics) {
-      factorize_with_metrics(right_num_rows, key_pair_iterator, validity_mask_ptr, stream);
+    if (compute_statistics) {
+      factorize_with_statistics(right_num_rows, key_pair_iterator, validity_mask_ptr, stream);
     } else {
       auto hash_table_ref = _hash_table.ref(cuco::op::insert);
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
@@ -329,10 +329,10 @@ class deduplicating_hash_table : public hash_table_base {
 
  private:
   template <typename KeyIter>
-  void factorize_with_metrics(cudf::size_type right_num_rows,
-                              KeyIter key_pair_iterator,
-                              cudf::bitmask_type const* validity_mask_ptr,
-                              rmm::cuda_stream_view stream)
+  void factorize_with_statistics(cudf::size_type right_num_rows,
+                                 KeyIter key_pair_iterator,
+                                 cudf::bitmask_type const* validity_mask_ptr,
+                                 rmm::cuda_stream_view stream)
   {
     rmm::device_uvector<cudf::size_type> counts(right_num_rows, stream);
     thrust::fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
@@ -437,17 +437,17 @@ class deduplicating_hash_table : public hash_table_base {
     return result;
   }
 
-  bool has_metrics() const override { return _has_metrics; }
+  bool has_statistics() const override { return _has_statistics; }
 
   cudf::size_type distinct_count() const override
   {
-    CUDF_EXPECTS(_has_metrics, "Metrics were not computed during construction");
+    CUDF_EXPECTS(_has_statistics, "Statistics were not computed during construction");
     return _distinct_count;
   }
 
   cudf::size_type max_duplicate_count() const override
   {
-    CUDF_EXPECTS(_has_metrics, "Metrics were not computed during construction");
+    CUDF_EXPECTS(_has_statistics, "Statistics were not computed during construction");
     return _max_duplicate_count;
   }
 
@@ -492,7 +492,7 @@ class deduplicating_hash_table : public hash_table_base {
   cudf::table_view _right;
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> _preprocessed_right;
   hash_table_type _hash_table;
-  bool _has_metrics;
+  bool _has_statistics;
   cudf::size_type _distinct_count;
   cudf::size_type _max_duplicate_count;
 };
@@ -502,7 +502,7 @@ class deduplicating_hash_table : public hash_table_base {
  */
 std::unique_ptr<hash_table_base> make_deduplicating_hash_table(cudf::table_view const& right,
                                                                cudf::null_equality compare_nulls,
-                                                               bool compute_metrics,
+                                                               bool compute_statistics,
                                                                rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -526,7 +526,7 @@ std::unique_ptr<hash_table_base> make_deduplicating_hash_table(cudf::table_view 
                                                                        comparator_type{d_equal},
                                                                        d_hasher,
                                                                        compare_nulls,
-                                                                       compute_metrics,
+                                                                       compute_statistics,
                                                                        stream);
   }
 
@@ -545,7 +545,7 @@ std::unique_ptr<hash_table_base> make_deduplicating_hash_table(cudf::table_view 
                                                                        comparator_type{d_equal},
                                                                        d_hasher,
                                                                        compare_nulls,
-                                                                       compute_metrics,
+                                                                       compute_statistics,
                                                                        stream);
   } else {
     auto const d_equal =
@@ -557,7 +557,7 @@ std::unique_ptr<hash_table_base> make_deduplicating_hash_table(cudf::table_view 
                                                                        comparator_type{d_equal},
                                                                        d_hasher,
                                                                        compare_nulls,
-                                                                       compute_metrics,
+                                                                       compute_statistics,
                                                                        stream);
   }
 }
@@ -573,12 +573,12 @@ class join_factorizer_impl {
  public:
   join_factorizer_impl(cudf::table_view const& right,
                        cudf::null_equality compare_nulls,
-                       bool compute_metrics,
+                       bool compute_statistics,
                        rmm::cuda_stream_view stream)
     : _right{right},
       _compare_nulls{compare_nulls},
-      _compute_metrics{compute_metrics},
-      _hash_table{make_deduplicating_hash_table(right, compare_nulls, compute_metrics, stream)}
+      _compute_statistics{compute_statistics},
+      _hash_table{make_deduplicating_hash_table(right, compare_nulls, compute_statistics, stream)}
   {
   }
 
@@ -609,19 +609,22 @@ class join_factorizer_impl {
     return _hash_table->lookup_keys(keys, stream, mr);
   }
 
-  bool has_metrics() const { return _hash_table ? _hash_table->has_metrics() : _compute_metrics; }
+  bool has_statistics() const
+  {
+    return _hash_table ? _hash_table->has_statistics() : _compute_statistics;
+  }
 
   cudf::size_type distinct_count() const
   {
     if (_hash_table) { return _hash_table->distinct_count(); }
-    CUDF_EXPECTS(_compute_metrics, "Metrics were not computed during construction");
+    CUDF_EXPECTS(_compute_statistics, "Statistics were not computed during construction");
     return 0;
   }
 
   cudf::size_type max_duplicate_count() const
   {
     if (_hash_table) { return _hash_table->max_duplicate_count(); }
-    CUDF_EXPECTS(_compute_metrics, "Metrics were not computed during construction");
+    CUDF_EXPECTS(_compute_statistics, "Statistics were not computed during construction");
     return 0;
   }
 
@@ -632,7 +635,7 @@ class join_factorizer_impl {
 
   cudf::table_view _right;
   cudf::null_equality _compare_nulls;
-  bool _compute_metrics;
+  bool _compute_statistics;
   std::unique_ptr<hash_table_base> _hash_table;
 };
 
@@ -642,10 +645,10 @@ class join_factorizer_impl {
 
 join_factorizer::join_factorizer(cudf::table_view const& right,
                                  null_equality compare_nulls,
-                                 cudf::join_statistics metrics,
+                                 cudf::join_statistics statistics,
                                  rmm::cuda_stream_view stream)
   : _impl{std::make_unique<detail::join_factorizer_impl>(
-      right, compare_nulls, static_cast<bool>(metrics), stream)}
+      right, compare_nulls, static_cast<bool>(statistics), stream)}
 {
   CUDF_EXPECTS(right.num_columns() > 0, "Right table must have at least one column");
 }
@@ -691,7 +694,7 @@ std::unique_ptr<cudf::column> join_factorizer::factorize_left_keys(
   return factorize_keys_impl(*_impl, keys, FACTORIZE_NOT_FOUND, stream, mr);
 }
 
-bool join_factorizer::has_metrics() const { return _impl->has_metrics(); }
+bool join_factorizer::has_statistics() const { return _impl->has_statistics(); }
 
 size_type join_factorizer::distinct_count() const { return _impl->distinct_count(); }
 

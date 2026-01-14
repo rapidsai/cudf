@@ -16,10 +16,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_JoinFactorizer_create(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto tview   = reinterpret_cast<cudf::table_view const*>(j_table);
-    auto nulleq  = j_compare_nulls ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    auto metrics = j_compute_metrics ? cudf::join_statistics::COMPUTE : cudf::join_statistics::SKIP;
-    auto factorizer_ptr = new cudf::join_factorizer(*tview, nulleq, metrics);
+    auto tview  = reinterpret_cast<cudf::table_view const*>(j_table);
+    auto nulleq = j_compare_nulls ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto statistics =
+      j_compute_metrics ? cudf::join_statistics::COMPUTE : cudf::join_statistics::SKIP;
+    auto factorizer_ptr = new cudf::join_factorizer(*tview, nulleq, statistics);
     return reinterpret_cast<jlong>(factorizer_ptr);
   }
   JNI_CATCH(env, 0);
