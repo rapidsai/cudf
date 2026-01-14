@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -969,7 +969,7 @@ class Decimal128Dtype(DecimalDtype):
     ITEMSIZE = 16
 
 
-class IntervalDtype(StructDtype):
+class IntervalDtype(_BaseDtype):
     """
     A data type for Interval data.
 
@@ -997,7 +997,7 @@ class IntervalDtype(StructDtype):
             raise ValueError(f"{closed=} is not valid")
         if subtype is None:
             self._subtype = None
-            dtypes = {}
+            self._fields = {}
         else:
             self._subtype = cudf.dtype(subtype)
             if isinstance(
@@ -1007,12 +1007,32 @@ class IntervalDtype(StructDtype):
                     "category, object, and string subtypes are not supported "
                     "for IntervalDtype"
                 )
-            dtypes = {"left": self._subtype, "right": self._subtype}
-        super().__init__(dtypes)
+            self._fields = {"left": self._subtype, "right": self._subtype}
 
     @property
     def subtype(self) -> DtypeObj | None:
         return self._subtype
+
+    @property
+    def fields(self) -> dict[str, DtypeObj]:
+        """
+        Returns an ordered dict of column name and dtype key-value.
+
+        For IntervalDtype, this always returns {"left": subtype, "right": subtype}.
+        """
+        return self._fields
+
+    @property
+    def type(self):
+        # TODO: we should change this to return something like an
+        # IntervalDtypeType, once we figure out what that should look like
+        return pd.Interval
+
+    @cached_property
+    def itemsize(self) -> int:
+        if self._subtype is None:
+            return 0
+        return sum(field.itemsize for field in self.fields.values())
 
     def __repr__(self) -> str:
         if self.subtype is None:
@@ -1046,7 +1066,6 @@ class IntervalDtype(StructDtype):
             # This means equality isn't transitive but mimics pandas
             return other in (self.name, str(self))
         elif type(self) is not type(other):
-            # Avoid isinstance because this subclasses StructDtype
             return False
         elif other.subtype is None:
             # Equivalent to the string "interval"
