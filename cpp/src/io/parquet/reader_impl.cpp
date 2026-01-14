@@ -446,10 +446,10 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     }
   }
   // Write the final offsets for list and string columns in a batched manner
-  auto pinned_final_offsets = cudf::detail::make_pinned_vector_async(
+  auto pinned_final_offsets = cudf::detail::make_pinned_vector(
     cudf::host_span<cudf::size_type const>{final_offsets}, _stream);
-  auto pinned_out_buffers = cudf::detail::make_pinned_vector_async(
-    cudf::host_span<cudf::size_type* const>{out_buffers}, _stream);
+  auto pinned_out_buffers =
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type* const>{out_buffers}, _stream);
   write_final_offsets(pinned_final_offsets, pinned_out_buffers, _stream);
 
   // update null counts in the final column buffers
@@ -1000,15 +1000,18 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   constexpr auto min_nullmasks_for_bulk_update = 32;
 
   // Use a bounce buffer to avoid pageable copies
-  auto pinned_null_masks = cudf::detail::make_pinned_vector_async(
-    cudf::host_span<bitmask_type* const>{null_masks}, _stream);
-  auto pinned_begin_bits = cudf::detail::make_pinned_vector_async(
-    cudf::host_span<cudf::size_type const>{begin_bits}, _stream);
-  auto pinned_end_bits = cudf::detail::make_pinned_vector_async(
-    cudf::host_span<cudf::size_type const>{end_bits}, _stream);
+  auto pinned_null_masks =
+    cudf::detail::make_pinned_vector(cudf::host_span<bitmask_type* const>{null_masks}, _stream);
+  auto pinned_begin_bits =
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type const>{begin_bits}, _stream);
+  auto pinned_end_bits =
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type const>{end_bits}, _stream);
 
   // Bulk update the nullmasks if the number of pages is above the threshold
   if (pinned_null_masks.size() >= min_nullmasks_for_bulk_update) {
+    // Note: This works because `make_pinned_vector_async` synchronizes the stream and initializes
+    // the vector with zeros. Should that change, we would need to manually synchronize the stream
+    // before we do std::fill.
     auto pinned_valids =
       cudf::detail::make_pinned_vector_async<bool>(pinned_null_masks.size(), _stream);
     std::fill(pinned_valids.begin(), pinned_valids.end(), false);

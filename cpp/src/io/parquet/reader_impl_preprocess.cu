@@ -1008,7 +1008,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   }
 
   // Need to set null mask bufs to all high bits
-  auto pinned_nullmask_bufs = cudf::detail::make_pinned_vector_async(
+  auto pinned_nullmask_bufs = cudf::detail::make_pinned_vector(
     cudf::host_span<cudf::device_span<cudf::bitmask_type> const>{nullmask_bufs}, _stream);
   cudf::detail::batched_memset<cudf::bitmask_type>(
     pinned_nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);

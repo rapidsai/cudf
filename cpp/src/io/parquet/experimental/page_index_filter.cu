@@ -1123,7 +1123,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   auto const num_ranges = static_cast<cudf::size_type>(page_row_offsets.size() - 1);
   rmm::device_uvector<bool> device_data_page_mask(num_ranges, stream, mr);
   // Use a pinned bounce buffer to avoid pageable h2d copy
-  auto pinned_page_offsets = cudf::detail::make_pinned_vector_async(
+  auto pinned_page_offsets = cudf::detail::make_pinned_vector(
     cudf::host_span<cudf::size_type const>{page_row_offsets}, stream);
   auto page_offsets = cudf::detail::make_device_uvector_async(pinned_page_offsets, stream, mr);
   thrust::transform(
