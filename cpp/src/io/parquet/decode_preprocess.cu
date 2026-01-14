@@ -23,13 +23,11 @@ namespace {
 
 // # of threads we're decoding with
 constexpr int preprocess_block_size = 512;
+constexpr int level_decode_block_size = 128;
 
 // the required number of runs in shared memory we will need to provide the
 // rle_stream object
-constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<preprocess_block_size>();
-
-// the size of the rolling batch buffer
-constexpr int rolling_buf_size = LEVEL_DECODE_BUF_SIZE;
+constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<level_decode_block_size>();
 
 using unused_state_buf = page_state_buffers_s<0, 0, 0>;
 
@@ -84,7 +82,7 @@ __device__ void update_page_sizes(page_state_s* s,
 
     // start/end depth
     int start_depth, end_depth, d;
-    get_nesting_bounds<rolling_buf_size, level_t>(
+    get_nesting_bounds<0, level_t>(
       start_depth, end_depth, d, s, rep, def, value_count, value_count + batch_size, t);
 
     // is this thread within row bounds? in the non skip_rows/num_rows case this will always
@@ -157,6 +155,8 @@ __device__ void update_page_sizes(page_state_s* s,
     s->input_leaf_count = leaf_count;
     s->input_row_count  = row_count;
   }
+
+  block.sync();
 }
 
 /**
@@ -258,12 +258,6 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // whether or not we have repetition levels (lists)
   bool has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
-  // the level stream decoders
-  __shared__ rle_run def_runs[rle_run_buffer_size];
-  __shared__ rle_run rep_runs[rle_run_buffer_size];
-  rle_stream<level_t, preprocess_block_size, rolling_buf_size>
-    decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
-
   // setup page info
   if (!setup_local_page_info(
         s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
@@ -274,41 +268,6 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   if (not page_mask.empty() and not page_mask[page_idx]) {
     return compute_page_sizes_for_pruned_pages(pp, s, has_repetition, is_base_pass, block);
   }
-
-  // initialize the stream decoders (requires values computed in setup_local_page_info)
-  // the size of the rolling batch buffer
-  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
-  level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
-                                        s->abs_lvl_start[level_type::DEFINITION],
-                                        s->abs_lvl_end[level_type::DEFINITION],
-                                        def,
-                                        s->page.num_input_values);
-  if (has_repetition) {
-    decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
-                                          s->abs_lvl_start[level_type::REPETITION],
-                                          s->abs_lvl_end[level_type::REPETITION],
-                                          rep,
-                                          s->page.num_input_values);
-  }
-  block.sync();
-
-  if (!t) {
-    s->page.skipped_values      = -1;
-    s->page.skipped_leaf_values = 0;
-    s->input_row_count          = 0;
-    s->input_value_count        = 0;
-
-    // in the base pass, we're computing the number of rows, make sure we visit absolutely
-    // everything
-    if (is_base_pass) {
-      s->first_row             = 0;
-      s->num_rows              = std::numeric_limits<int32_t>::max();
-      s->row_index_lower_bound = -1;
-    }
-  }
-
-  // early out optimizations:
 
   // - if this is a flat hierarchy (no lists), we don't need
   // to do the expensive work of traversing the level data to determine sizes.  we can just compute
@@ -325,6 +284,11 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     }
     return;
   }
+
+  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  bool const should_process_def = is_nullable(s) && maybe_has_nulls(s);
+  level_t* const def = !should_process_def ? nullptr : 
+    reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
 
   // in the trim pass, for anything with lists, we only need to fully process bounding pages (those
   // at the beginning or the end of the row bounds)
@@ -354,27 +318,26 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     }
     depth += blockDim.x;
   }
+
+  if (!t) {
+    s->page.skipped_values      = -1;
+    s->page.skipped_leaf_values = 0;
+    s->input_row_count          = 0;
+    s->input_value_count        = 0;
+
+    // in the base pass, we're computing the number of rows, make sure we visit absolutely
+    // everything
+    if (is_base_pass) {
+      s->first_row             = 0;
+      s->num_rows              = std::numeric_limits<int32_t>::max();
+      s->row_index_lower_bound = -1;
+    }
+  }
+
   block.sync();
 
-  // the core loop. decode batches of level stream data using rle_stream objects
-  // and pass the results to update_page_sizes
-  int processed = 0;
-  while (processed < s->page.num_input_values) {
-    // TODO:  it would not take much more work to make it so that we could run both of these
-    // decodes concurrently. there are a couple of shared variables internally that would have to
-    // get dealt with but that's about it.
-    if (has_repetition) {
-      decoders[level_type::REPETITION].decode_next(t);
-      block.sync();
-    }
-    // the # of rep/def levels will always be the same size
-    processed += decoders[level_type::DEFINITION].decode_next(t);
-    block.sync();
-
-    // update page sizes
-    update_page_sizes<level_t>(s, processed, rep, def, !is_base_pass, block);
-    block.sync();
-  }
+  // update_page_sizes
+  update_page_sizes<level_t>(s, s->page.num_input_values, rep, def, !is_base_pass, block);
 
   // update output results:
   // - real number of rows for the whole page
@@ -399,6 +362,109 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   if (!t) {
     pp->skipped_values      = s->page.skipped_values;
     pp->skipped_leaf_values = s->page.skipped_leaf_values;
+  }
+}
+
+/**
+ * @brief Kernel for preprocessing definition and repetition levels
+ *
+ * This kernel decodes definition and repetition levels for all pages in advance,
+ * storing them in the pre-allocated level decode buffers. This allows the main
+ * decode kernel to skip RLE decoding and directly access the decoded levels.
+ *
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ */
+template <typename level_t, int level_decode_block_size>
+CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
+  preprocess_levels_kernel(PageInfo* pages, device_span<ColumnChunkDesc const> chunks, cudf::device_span<bool const> page_mask,
+    size_t min_row, size_t num_rows)
+{
+  __shared__ __align__(16) page_state_s state_g;
+
+  page_state_s* const s = &state_g;
+  auto const block      = cg::this_thread_block();
+  int const page_idx    = cg::this_grid().block_rank();
+  int const t           = block.thread_rank();
+  PageInfo* pp          = &pages[page_idx];
+
+  // Return early if this page is pruned
+  if (not page_mask.empty() and not page_mask[page_idx]) {
+    return;
+  }
+
+  // setup page info - use all_types_filter since we need to preprocess levels for all page types
+  if (!setup_local_page_info(s,
+                             pp,
+                             chunks,
+                             min_row, 
+                             num_rows,
+                             all_types_filter{},
+                             page_processing_stage::PREPROCESS)) {
+    return;
+  }
+
+  // whether or not we have repetition levels (lists)
+  bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+
+  // the level stream decoders
+  __shared__ rle_run def_runs[rle_run_buffer_size];
+  __shared__ rle_run rep_runs[rle_run_buffer_size];
+  static constexpr int max_output_values = std::numeric_limits<int>::max();
+  rle_stream<level_t, level_decode_block_size, max_output_values>
+    decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
+
+  // Get the level decode buffers for this page
+  level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+
+  // Determine how many values need to be decoded
+  size_t num_values_to_decode = 0;    
+  if (has_repetition) {
+    // Must decode all values in all pages because we don't know the row boundaries for the pages
+    // until we decode the levels.
+    num_values_to_decode = pp->num_input_values;
+  } else {
+    size_t const page_start_row = chunks[pp->chunk_idx].start_row + pp->chunk_row;
+    size_t const page_end_row   = page_start_row + pp->num_rows;
+    size_t const pass_end_row   = min_row + num_rows;
+  
+    // if we are totally outside the range of the input, do nothing
+    if ((page_start_row >= pass_end_row) || (page_end_row <= min_row)) {
+      num_values_to_decode = 0;
+    } else {
+      // For non-list pages: must still decode the first rows because we need to count nulls.
+      num_values_to_decode = std::min(static_cast<size_t>(pp->num_rows), pass_end_row - page_start_row);
+    }
+  }
+
+  // Initialize the stream decoders
+  bool const should_process_def = is_nullable(s) && maybe_has_nulls(s);
+  if (should_process_def) {
+    decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
+                                          s->abs_lvl_start[level_type::DEFINITION],
+                                          s->abs_lvl_end[level_type::DEFINITION],
+                                          def,
+                                          num_values_to_decode);
+  }
+  if (has_repetition) {
+    decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
+                                          s->abs_lvl_start[level_type::REPETITION],
+                                          s->abs_lvl_end[level_type::REPETITION],
+                                          rep,
+                                          num_values_to_decode);
+  }
+  block.sync();
+
+  // Decode levels for this page up to the last row needed. 
+  // If skipping the first rows, we still need to decode their levels. 
+  // This is because we need to determine the number of non-null values we skipped. 
+  // Note that for lists we haven't computed skipped_leaf_values yet; this is used as input for that. 
+  if (has_repetition) {
+    decoders[level_type::REPETITION].decode_next(t, num_values_to_decode);
+  }
+  if (should_process_def) {
+    decoders[level_type::DEFINITION].decode_next(t, num_values_to_decode);
   }
 }
 
@@ -432,6 +498,35 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
   } else {
     compute_page_sizes_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, page_mask, min_row, num_rows, compute_num_rows);
+  }
+}
+
+/**
+ * @copydoc cudf::io::parquet::detail::preprocess_levels
+ */
+void preprocess_levels(cudf::detail::hostdevice_span<PageInfo> pages,
+                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                       cudf::device_span<bool const> page_mask,
+                       size_t min_row,
+                       size_t num_rows,
+                       int level_type_size,
+                       rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+
+  if (pages.size() == 0) { return; }
+
+  dim3 dim_block(level_decode_block_size, 1);
+  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+
+  if (level_type_size == 1) {
+    preprocess_levels_kernel<uint8_t, level_decode_block_size>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(
+        pages.device_ptr(), chunks, page_mask, min_row, num_rows);
+  } else {
+    preprocess_levels_kernel<uint16_t, level_decode_block_size>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(
+        pages.device_ptr(), chunks, page_mask, min_row, num_rows);
   }
 }
 

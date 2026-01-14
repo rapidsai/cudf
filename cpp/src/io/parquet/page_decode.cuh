@@ -112,6 +112,49 @@ struct null_count_back_copier {
 };
 
 /**
+ * @brief Check if the page is marked nullable or not
+ *
+ * @param s Page state
+ * @return True if the page is nullable (max definition level > 0)
+ */
+ __device__ inline bool is_nullable(page_state_s* s)
+ {
+   auto const lvl           = level_type::DEFINITION;
+   auto const max_def_level = s->col.max_level[lvl];
+   return max_def_level > 0;
+ }
+ 
+ /**
+  * @brief For a nullable page, check if it could have nulls
+  *
+  * This function performs a quick check based on the initial RLE run to determine
+  * if the page could potentially contain null values. It returns true if:
+  * - The initial run is a literal run (could contain mixed values)
+  * - The repeated run count doesn't match the page's input value count
+  * - The repeated run value indicates nulls (not equal to max definition level)
+  *
+  * @param s Page state
+  * @return True if the page could contain null values
+  */
+ __device__ inline bool maybe_has_nulls(page_state_s* s)
+ {
+   auto const lvl      = level_type::DEFINITION;
+   auto const init_run = s->initial_rle_run[lvl];
+   // literal runs, lets assume they could hold nulls
+   if (is_literal_run(init_run)) { return true; }
+ 
+   // repeated run with number of items in the run not equal
+   // to the rows in the page, assume that means we could have nulls
+   if (s->page.num_input_values != (init_run >> 1)) { return true; }
+ 
+   auto const lvl_bits = s->col.level_bits[lvl];
+   auto const run_val  = lvl_bits == 0 ? 0 : s->initial_rle_value[lvl];
+ 
+   // the encoded repeated value isn't valid, we have (all) nulls
+   return run_val != s->col.max_level[lvl];
+ }
+ 
+/**
  * @brief Test if the given page is in a string column
  */
 __device__ constexpr bool is_string_col(PageInfo const& page,
@@ -694,8 +737,9 @@ inline __device__ void get_nesting_bounds(int& start_depth,
   end_depth   = -1;
   d           = -1;
   if (input_value_count + t < target_input_value_count) {
-    int const index = rolling_index<rolling_buf_size>(input_value_count + t);
-    d               = static_cast<int>(def[index]);
+    int const index = (rolling_buf_size > 0) ? rolling_index<rolling_buf_size>(input_value_count + t) : input_value_count + t;
+    d = (def != nullptr) ? static_cast<int>(def[index]) : s->col.max_level[level_type::DEFINITION];
+
     // if we have repetition (there are list columns involved) we have to
     // bound what nesting levels we apply values to
     if (s->col.max_level[level_type::REPETITION] > 0) {

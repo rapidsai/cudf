@@ -27,6 +27,7 @@
 
 #include <limits>
 #include <numeric>
+#include <vector>
 
 namespace cudf::io::parquet::detail {
 
@@ -261,24 +262,82 @@ void reader_impl::allocate_level_decode_space()
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
-  auto& pages = subpass.pages;
+  auto const num_pages = subpass.pages.size();
+  if (num_pages == 0) { return; }
 
-  // TODO: this could be made smaller if we ignored dictionary pages and pages with no
-  // repetition data.
-  size_t const per_page_decode_buf_size = LEVEL_DECODE_BUF_SIZE * 2 * pass.level_type_size;
-  auto const decode_buf_size            = per_page_decode_buf_size * pages.size();
+  auto const pass_end_row = pass.skip_rows + pass.num_rows;
+
+  // Allocate CPU vector for sizes (only needed for first pass to compute totals)
+  std::vector<size_t> def_level_sizes(num_pages);
+  std::vector<size_t> rep_level_sizes(num_pages);
+
+  // Loop over pages to compute sizes
+  size_t total_memory_size = 0;
+  for (size_t idx = 0; idx < num_pages; idx++) {
+    auto const& p     = subpass.pages[idx];
+    auto const& chunk = pass.chunks[p.chunk_idx];
+
+    // Skip dictionary pages - they don't have levels to decode
+    if (p.flags & PAGEINFO_FLAGS_DICTIONARY) {
+      def_level_sizes[idx] = 0;
+      rep_level_sizes[idx] = 0;
+      continue;
+    }
+
+    // Check if this page has lists (repetition levels)
+    bool const has_repetition = chunk.max_level[level_type::REPETITION] > 0;
+    bool const has_definition = chunk.max_level[level_type::DEFINITION] > 0;
+
+    // Determine how many values need to be decoded
+    size_t num_values_to_decode = 0;    
+    if (has_repetition) {
+      // Must decode all values in all pages because we don't know the row boundaries for the pages
+      // until we decode the levels.
+      num_values_to_decode = p.num_input_values;
+    } else {
+      size_t const page_start_row = chunk.start_row + p.chunk_row;
+      size_t const page_end_row   = page_start_row + p.num_rows;
+
+      // if we are totally outside the range of the input, do nothing
+      if ((page_start_row >= pass_end_row) || (page_end_row <= pass.skip_rows)) {
+        num_values_to_decode = 0;
+      } else {
+        // For non-list pages: must still decode the first rows because we need to count nulls.
+        num_values_to_decode = std::min(static_cast<size_t>(p.num_rows), pass_end_row - page_start_row);
+      }
+    }
+    
+    // Allocate space for definition levels (if column is nullable)
+    def_level_sizes[idx] =
+      (has_definition && num_values_to_decode > 0) ? num_values_to_decode * pass.level_type_size : 0;
+
+    // Allocate space for repetition levels (only for list pages)
+    rep_level_sizes[idx] =
+      (has_repetition && num_values_to_decode > 0) ? num_values_to_decode * pass.level_type_size : 0;
+
+    total_memory_size += def_level_sizes[idx] + rep_level_sizes[idx];
+  }
+
+  // Allocate the total buffer
   subpass.level_decode_data =
-    rmm::device_buffer(decode_buf_size, _stream, cudf::get_current_device_resource_ref());
+    rmm::device_buffer(total_memory_size, _stream, cudf::get_current_device_resource_ref());
 
-  // distribute the buffers
-  auto* buf = static_cast<uint8_t*>(subpass.level_decode_data.data());
-  for (size_t idx = 0; idx < pages.size(); idx++) {
-    auto& p = pages[idx];
+  // Set buffer pointers for each page using running offsets
+  auto* current_ptr = static_cast<uint8_t*>(subpass.level_decode_data.data());
+  for (size_t idx = 0; idx < num_pages; idx++) {
+    if (def_level_sizes[idx] == 0) {
+      subpass.pages[idx].lvl_decode_buf[level_type::DEFINITION] = nullptr;
+    } else {
+      subpass.pages[idx].lvl_decode_buf[level_type::DEFINITION] = current_ptr;
+      current_ptr += def_level_sizes[idx];
+    }
 
-    p.lvl_decode_buf[level_type::DEFINITION] = buf;
-    buf += (LEVEL_DECODE_BUF_SIZE * pass.level_type_size);
-    p.lvl_decode_buf[level_type::REPETITION] = buf;
-    buf += (LEVEL_DECODE_BUF_SIZE * pass.level_type_size);
+    if (rep_level_sizes[idx] == 0) {
+      subpass.pages[idx].lvl_decode_buf[level_type::REPETITION] = nullptr;
+    } else {
+      subpass.pages[idx].lvl_decode_buf[level_type::REPETITION] = current_ptr;
+      current_ptr += rep_level_sizes[idx];
+    }
   }
 }
 
@@ -657,6 +716,13 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
 
   // figure out which kernels to run
   subpass.kernel_mask = get_aggregated_decode_kernel_mask(subpass.pages, _stream);
+
+  // Preprocess definition and repetition levels for all subpass pages
+  // This decodes all RLE levels in advance so they're available to compute_page_sizes and decode kernels
+  // We haven't determined subpass skip_rows & num_rows yet, so we use the pass values. 
+  detail::preprocess_levels(
+    subpass.pages, pass.chunks, _subpass_page_mask, pass.skip_rows, pass.num_rows, 
+    pass.level_type_size, _stream);
 
   // iterate over all input columns and determine if they contain lists.
   // TODO: we could do this once at the file level instead of every time we get in here. the set of
