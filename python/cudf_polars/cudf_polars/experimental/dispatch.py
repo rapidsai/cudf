@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
 from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from cudf_polars.dsl import ir
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -163,8 +163,10 @@ def update_column_stats(
 
 
 def make_lowering_wrapper(
-    lower_fn: Any,
-) -> Any:
+    lower_fn: Callable[
+        [IR, LowerIRTransformer], tuple[IR, MutableMapping[IR, PartitionInfo]]
+    ],
+) -> Callable[[IR, LowerIRTransformer], tuple[IR, MutableMapping[IR, PartitionInfo]]]:
     """
     Create a lowering wrapper that propagates row_count stats.
 
@@ -175,7 +177,7 @@ def make_lowering_wrapper(
     Parameters
     ----------
     lower_fn
-        The lowering function to wrap (typically a singledispatch function).
+        The lowering function to wrap.
 
     Returns
     -------
