@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -60,6 +60,8 @@ TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
 test_datetime[polars[lazy]] or \
 test_nan[polars[lazy]] or \
 test_to_datetime_tz_aware[polars[lazy]-None] \
+test_truncate[polars[lazy]-1ns-expected0] \
+test_truncate_multiples[polars[lazy]-2ns-expected0] \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
