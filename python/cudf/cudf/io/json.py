@@ -31,6 +31,8 @@ from cudf.utils.dtypes import (
 if TYPE_CHECKING:
     from collections.abc import Hashable
 
+    from cudf._typing import DtypeObj
+
 
 def _get_cudf_schema_element_from_dtype(
     dtype,
@@ -305,14 +307,14 @@ def _maybe_return_nullable_pd_obj(
         return cudf_obj.to_pandas(nullable=False)
 
 
-def _dtype_to_names_list(col: ColumnBase) -> list[tuple[Hashable, Any]]:
-    if isinstance(col.dtype, StructDtype):
+def _dtype_to_names_list(dtype: DtypeObj) -> list[tuple[Hashable, Any]]:
+    if isinstance(dtype, StructDtype):
         return [
-            (name, _dtype_to_names_list(child))
-            for name, child in zip(col.dtype.fields, col.children, strict=True)
+            (name, _dtype_to_names_list(field_dtype))
+            for name, field_dtype in dtype.fields.items()
         ]
-    elif isinstance(col.dtype, ListDtype):
-        return [("", _dtype_to_names_list(child)) for child in col.children]
+    elif isinstance(dtype, ListDtype):
+        return [("", _dtype_to_names_list(dtype.element_type))]
     return []
 
 
@@ -394,7 +396,7 @@ def to_json(
             return_as_string = False
 
         colnames = [
-            (name, _dtype_to_names_list(col))
+            (name, _dtype_to_names_list(col.dtype))
             for name, col in cudf_val._column_labels_and_values
         ]
 
