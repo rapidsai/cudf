@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from pylibcudf.exception_handler cimport libcudf_exception_handler
@@ -16,7 +17,7 @@ cdef extern from "nvtext/normalize.hpp" namespace "nvtext" nogil:
         device_memory_resource* mr
     ) except +libcudf_exception_handler
 
-    cdef struct character_normalizer "nvtext::character_normalizer":
+    cdef struct character_normalizer:
         pass
 
     cdef unique_ptr[character_normalizer] create_character_normalizer(

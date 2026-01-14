@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import codecs
 import gzip
@@ -2000,8 +2001,8 @@ def test_csv_writer_category(df):
         {"a": "category", "b": "str"},
         {"b": "category"},
         {"a": "category"},
-        {"a": pd.CategoricalDtype([1, 2])},
-        {"b": pd.CategoricalDtype([1, 2, 3])},
+        {"a": pd.CategoricalDtype([1, 2, 3])},
+        {"b": pd.CategoricalDtype(["a", "b", "c"])},
         {"b": pd.CategoricalDtype(["b", "a"]), "a": "str"},
         pd.CategoricalDtype(["a", "b"]),
     ],

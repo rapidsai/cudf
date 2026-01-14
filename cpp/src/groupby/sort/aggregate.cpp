@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "groupby/common/utils.hpp"
@@ -813,6 +802,19 @@ void aggregate_result_functor::operator()<aggregation::BITWISE_AGG>(aggregation 
   cache.add_result(values, agg, std::move(result));
 }
 
+template <>
+void aggregate_result_functor::operator()<aggregation::TOP_K>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const k          = dynamic_cast<cudf::detail::top_k_aggregation const&>(agg).k;
+  auto const topk_order = dynamic_cast<cudf::detail::top_k_aggregation const&>(agg).topk_order;
+
+  auto result = detail::group_top_k(
+    k, topk_order, get_grouped_values(), helper.group_offsets(stream), stream, mr);
+  cache.add_result(values, agg, std::move(result));
+}
+
 // Note: the definition for HOST_UDF specialization needs to be at last.
 // This is because it calls to `aggregation_dispatcher` which requires to see all other function
 // specializations defined before this.
@@ -875,6 +877,11 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
     auto store_functor =
       detail::aggregate_result_functor(request.values, helper(), cache, stream, mr);
     for (auto const& agg : request.aggregations) {
+      // SUM_WITH_OVERFLOW is only supported with hash-based groupby, not sort-based
+      CUDF_EXPECTS(agg->kind != aggregation::SUM_WITH_OVERFLOW,
+                   "SUM_WITH_OVERFLOW aggregation is only supported with hash-based groupby, not "
+                   "sort-based groupby");
+
       // TODO (dm): single pass compute all supported reductions
       cudf::detail::aggregation_dispatcher(agg->kind, store_functor, *agg);
     }

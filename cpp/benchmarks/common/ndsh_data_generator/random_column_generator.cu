@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "random_column_generator.hpp"
@@ -27,6 +16,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
 #include <thrust/transform.h>
@@ -45,10 +35,10 @@ struct random_string_generator {
 
   CUDF_HOST_DEVICE random_string_generator(char* c) : chars(c), char_dist(44, 122) {}
 
-  __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
+  __device__ void operator()(cuda::std::tuple<int64_t, int64_t> str_begin_end)
   {
-    auto begin = thrust::get<0>(str_begin_end);
-    auto end   = thrust::get<1>(str_begin_end);
+    auto begin = cuda::std::get<0>(str_begin_end);
+    auto end   = cuda::std::get<1>(str_begin_end);
     engine.discard(begin);
     for (auto i = begin; i < end; ++i) {
       auto ch = char_dist(engine);
@@ -104,8 +94,8 @@ std::unique_ptr<cudf::column> generate_random_string_column(cudf::size_type lowe
 
   // We generate the strings in parallel into the `chars` vector using the
   // offsets vector generated above.
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_zip_iterator(offset_itr, offset_itr + 1),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::make_zip_iterator(cuda::std::make_tuple(offset_itr, offset_itr + 1)),
                      num_rows,
                      random_string_generator(chars.data()));
 
@@ -125,7 +115,7 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(T lower,
     cudf::data_type{cudf::type_to_id<T>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
   cudf::size_type begin = 0;
   cudf::size_type end   = num_rows;
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator(begin),
                     thrust::make_counting_iterator(end),
                     col->mutable_view().begin<T>(),

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -19,10 +8,19 @@
 
 namespace CUDF_EXPORT cudf {
 namespace io {
+//! `KvikIO`
 namespace kvikio_integration {
 
 /**
- * @brief Set KvikIO parameters, including:
+ * @addtogroup io_configuration
+ * @{
+ * @file
+ */
+
+/**
+ * @brief Set KvikIO parameters
+ *
+ * Parameters include:
  * - Compatibility mode, according to the environment variable KVIKIO_COMPAT_MODE. If
  *   KVIKIO_COMPAT_MODE is not set, enable it by default, which enforces the use of POSIX I/O.
  * - Thread pool size, according to the environment variable KVIKIO_NTHREADS. If KVIKIO_NTHREADS is
@@ -32,18 +30,42 @@ void set_up_kvikio();
 
 }  // namespace kvikio_integration
 
+//! `nvCOMP`
 namespace nvcomp_integration {
 
 /**
- * @brief Returns true if all nvCOMP uses are enabled.
+ * @brief Returns true if all nvCOMP uses are enabled
+ *
+ * @return true if all nvCOMP uses are enabled
  */
-bool is_all_enabled();
+[[nodiscard]] bool is_all_enabled();
 
 /**
- * @brief Returns true if stable nvCOMP use is enabled.
+ * @brief Returns true if stable nvCOMP use is enabled
+ *
+ * @return true true if stable nvCOMP use is enabled
  */
-bool is_stable_enabled();
+[[nodiscard]] bool is_stable_enabled();
 
 }  // namespace nvcomp_integration
+
+//! IO Integrated Memory Optimization
+namespace integrated_memory_optimization {
+
+/**
+ * @brief Returns true if integrated memory optimizations are enabled
+ *
+ * Controlled by the LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION environment variable.
+ * Valid values: "AUTO" (default), "ON", "OFF"
+ * - AUTO: Use hardware detection (cudaDevAttrIntegrated)
+ * - ON: Always enable optimization
+ * - OFF: Always disable optimization
+ *
+ * @return true if integrated memory optimizations are enabled
+ */
+[[nodiscard]] bool is_enabled();
+
+/** @} */  // end of group
+}  // namespace integrated_memory_optimization
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf

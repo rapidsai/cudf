@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/aggregation/host_udf.hpp>
@@ -21,8 +10,6 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/quantiles.hpp>
-#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction.hpp>
@@ -30,7 +17,6 @@
 #include <cudf/reduction/detail/reduction_functions.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -61,7 +47,7 @@ struct reduction_parameters {
                        std::optional<std::reference_wrapper<scalar const>> init,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr)
-    : agg(agg), col(col), output_dtype(output_dtype), init(init), stream(stream), mr(mr)
+    : agg(agg), col(col), output_dtype(output_dtype), init(init), stream(stream), mr(std::move(mr))
   {
   }
 };
@@ -147,6 +133,28 @@ struct reduction_function<Source, cudf::aggregation::MAX> : public base_reductio
   [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return max(params.col, params.output_dtype, params.init, params.stream, params.mr);
+  }
+};
+
+template <typename Source>
+struct reduction_function<Source, cudf::aggregation::ARGMIN> : public base_reduction_function {
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  {
+    CUDF_EXPECTS(params.output_dtype.id() == type_to_id<size_type>(),
+                 "ARGMIN aggregation expects output type to be cudf::size_type",
+                 cudf::data_type_error);
+    return argmin(params.col, params.stream, params.mr);
+  }
+};
+
+template <typename Source>
+struct reduction_function<Source, cudf::aggregation::ARGMAX> : public base_reduction_function {
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  {
+    CUDF_EXPECTS(params.output_dtype.id() == type_to_id<size_type>(),
+                 "ARGMAX aggregation expects output type to be cudf::size_type",
+                 cudf::data_type_error);
+    return argmax(params.col, params.stream, params.mr);
   }
 };
 

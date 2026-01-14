@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
@@ -40,7 +41,7 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
 rapids-logger "pytest dask_cudf"
 pushd python/dask_cudf/dask_cudf
-python -m pytest \
+timeout 15m python -m pytest \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \

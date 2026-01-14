@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_helpers.hpp"
@@ -27,7 +16,6 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -35,7 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/extent.cuh>
 #include <cuco/static_set.cuh>
@@ -97,7 +85,7 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 using storage_type     = cuco::bucket_storage<slot_type,
                                               BUCKET_SIZE,
                                               cuco::extent<std::size_t>,
-                                              cudf::detail::cuco_allocator<char>>;
+                                              rmm::mr::polymorphic_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
@@ -266,8 +254,8 @@ __device__ __forceinline__ void decode_int96timestamp(uint8_t const* int96_ptr,
   // Note: This function has been modified from the original at
   // https://github.com/rapidsai/cudf/blob/c89c83c00c729a86c56570693b627f31408bc2c9/cpp/src/io/parquet/page_data.cuh#L133-L198
 
-  int64_t nanos = cudf::io::unaligned_load64(int96_ptr);
-  int64_t days  = cudf::io::unaligned_load32(int96_ptr + sizeof(int64_t));
+  int64_t nanos = cudf::io::unaligned_load<uint64_t>(int96_ptr);
+  int64_t days  = cudf::io::unaligned_load<uint32_t>(int96_ptr + sizeof(int64_t));
 
   // Convert from Julian day at noon to UTC seconds
   cudf::duration_D duration_days{
@@ -501,7 +489,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       // Handle timestamps
       if constexpr (cudf::is_timestamp<T>()) {
         auto const timestamp =
-          cudf::io::unaligned_load32(page_data + (value_idx * sizeof(uint32_t)));
+          cudf::io::unaligned_load<uint32_t>(page_data + (value_idx * sizeof(uint32_t)));
         if (timestamp_scale != 0) {
           decoded_value = T{typename T::duration(static_cast<typename T::rep>(timestamp))};
         } else {
@@ -525,7 +513,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
         }
 
         auto const duration =
-          cudf::io::unaligned_load32(page_data + (value_idx * sizeof(uint32_t)));
+          cudf::io::unaligned_load<uint32_t>(page_data + (value_idx * sizeof(uint32_t)));
         decoded_value = T{static_cast<typename T::rep>(duration)};
       }
       // Handle other int32 encoded values including smaller bitwidths and decimal32
@@ -535,8 +523,8 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
           set_error(error, decode_error::INVALID_DATA_TYPE);
           return {};
         }
-        decoded_value =
-          static_cast<T>(cudf::io::unaligned_load32(page_data + (value_idx * sizeof(uint32_t))));
+        decoded_value = static_cast<T>(
+          cudf::io::unaligned_load<uint32_t>(page_data + (value_idx * sizeof(uint32_t))));
       }
       break;
     }
@@ -550,7 +538,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       // Handle timestamps
       if constexpr (cudf::is_timestamp<T>()) {
         int64_t const timestamp =
-          cudf::io::unaligned_load64(page_data + (value_idx * sizeof(int64_t)));
+          cudf::io::unaligned_load<uint64_t>(page_data + (value_idx * sizeof(int64_t)));
         if (timestamp_scale != 0) {
           decoded_value = T{typename T::duration(
             static_cast<typename T::rep>(convert_to_timestamp64(timestamp, timestamp_scale)))};
@@ -560,8 +548,8 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       }
       // Handle durations and other int64 encoded values including decimal64
       else {
-        decoded_value =
-          static_cast<T>(cudf::io::unaligned_load64(page_data + (value_idx * sizeof(uint64_t))));
+        decoded_value = static_cast<T>(
+          cudf::io::unaligned_load<uint64_t>(page_data + (value_idx * sizeof(uint64_t))));
       }
       break;
     }
@@ -1105,9 +1093,8 @@ struct dictionary_caster {
     auto const total_num_literals     = static_cast<cudf::size_type>(literals.size());
 
     // Create a single bulk storage used by all cuco hash sets
-    auto set_storage = storage_type{
-      total_set_storage_size,
-      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+    auto set_storage =
+      storage_type{total_set_storage_size, rmm::mr::polymorphic_allocator<char>{}, stream.value()};
 
     // Initialize storage with the empty key sentinel
     set_storage.initialize_async(EMPTY_KEY_SENTINEL, {stream.value()});
@@ -1366,8 +1353,11 @@ class dictionary_expression_converter : public equality_literals_collector {
  public:
   dictionary_expression_converter(ast::expression const& expr,
                                   size_type num_input_columns,
-                                  cudf::host_span<std::vector<ast::literal*> const> literals)
-    : _literals{literals}
+                                  cudf::host_span<std::vector<ast::literal*> const> literals,
+                                  rmm::cuda_stream_view stream)
+    : _literals{literals},
+      _always_true_scalar{std::make_unique<cudf::numeric_scalar<bool>>(true, true, stream)},
+      _always_true{std::make_unique<ast::literal>(*_always_true_scalar)}
   {
     // Set the num columns
     _num_input_columns = num_input_columns;
@@ -1403,16 +1393,24 @@ class dictionary_expression_converter : public equality_literals_collector {
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
   {
     using cudf::ast::ast_operator;
-    auto const operands = expr.get_operands();
-    auto const op       = expr.get_operator();
+    auto const operands       = expr.get_operands();
+    auto const op             = expr.get_operator();
+    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
 
     if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-      // First operand should be column reference, second should be literal.
-      CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                   "Only binary operations are supported on column reference");
-      CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-                   "Second operand of binary operation with column reference must be a literal");
+      // First operand should be column reference, second (if binary operation) should be literal.
+      CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
+                   "Only unary and binary operations are supported on column reference");
+      CUDF_EXPECTS(
+        operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+        "Second operand of binary operation with column reference must be a literal");
       v->accept(*this);
+
+      // Propagate the `_always_true` as expression to its unary operator parent
+      if (operator_arity == 1) {
+        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+        return *_always_true;
+      }
 
       if (op == ast_operator::EQUAL or op == ast::ast_operator::NOT_EQUAL) {
         // Search the literal in this input column's equality literals list and add to
@@ -1440,16 +1438,22 @@ class dictionary_expression_converter : public equality_literals_collector {
           _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, value});
         }
       }
-      // For all other expressions, push the `always true` expression
+      // For all other expressions, push the `_always_true` expression
       else {
-        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
       }
     } else {
       auto new_operands = visit_operands(operands);
-      if (cudf::ast::detail::ast_operator_arity(op) == 2) {
+      if (operator_arity == 2) {
         _dictionary_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
-      } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-        _dictionary_expr.push(ast::operation{op, new_operands.front()});
+      } else if (operator_arity == 1) {
+        // If the new_operands is just a `_always_true` literal, propagate it here
+        if (&new_operands.front().get() == _always_true.get()) {
+          _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _dictionary_expr.back()});
+          return *_always_true;
+        } else {
+          _dictionary_expr.push(ast::operation{op, new_operands.front()});
+        }
       }
     }
     return _dictionary_expr.back();
@@ -1469,8 +1473,8 @@ class dictionary_expression_converter : public equality_literals_collector {
   std::vector<cudf::size_type> _col_literals_offsets;
   cudf::host_span<std::vector<ast::literal*> const> _literals;
   ast::tree _dictionary_expr;
-  cudf::numeric_scalar<bool> _always_true_scalar{true};
-  ast::literal const _always_true{_always_true_scalar};
+  std::unique_ptr<cudf::numeric_scalar<bool>> _always_true_scalar;
+  std::unique_ptr<ast::literal> _always_true;
 };
 
 }  // namespace
@@ -1508,8 +1512,8 @@ aggregate_reader_metadata::apply_dictionary_filter(
 
   // For each input column
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(output_dtypes.size()),
+    thrust::counting_iterator(0),
+    thrust::counting_iterator(num_input_columns),
     [&](auto input_col_idx) {
       auto const& dtype = output_dtypes[input_col_idx];
 
@@ -1552,7 +1556,8 @@ aggregate_reader_metadata::apply_dictionary_filter(
 
   // Convert AST to DictionaryAST expression with reference to dictionary membership
   // in above `dictionary_membership_table`
-  dictionary_expression_converter dictionary_expr{filter.get(), num_input_columns, literals};
+  dictionary_expression_converter dictionary_expr{
+    filter.get(), num_input_columns, literals, stream};
 
   // Filter dictionary membership table with the DictionaryAST expression and collect
   // filtered row group indices
@@ -1579,18 +1584,23 @@ std::reference_wrapper<ast::expression const> dictionary_literals_collector::vis
   auto const op       = expr.get_operator();
 
   if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second should be literal.
-    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                 "Only binary operations are supported on column reference");
-    auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
-    CUDF_EXPECTS(literal_ptr != nullptr,
-                 "Second operand of binary operation with column reference must be a literal");
+    // First operand should be column reference, second (if binary operation) should be literal.
+    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
+    CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
+                 "Only unary and binary operations are supported on column reference");
+    CUDF_EXPECTS(
+      operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+      "Second operand of binary operation with column reference must be a literal");
     v->accept(*this);
+
+    // Return early if this is a unary operation
+    if (operator_arity == 1) { return expr; }
 
     // Push to the corresponding column's literals and operators list iff EQUAL or NOT_EQUAL
     // operator is seen
     if (op == ast_operator::EQUAL or op == ast::ast_operator::NOT_EQUAL) {
-      auto const col_idx = v->get_column_index();
+      auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
+      auto const col_idx     = v->get_column_index();
       _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
       _operators[col_idx].emplace_back(op);
     }

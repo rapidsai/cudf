@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_impl.hpp"
@@ -83,6 +72,18 @@ size_type hybrid_scan_reader::total_rows_in_row_groups(
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
   return _impl->total_rows_in_row_groups(input_row_group_indices);
+}
+
+std::vector<size_type> hybrid_scan_reader::filter_row_groups_with_byte_range(
+  cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
+{
+  CUDF_FUNC_RANGE();
+
+  // Temporary vector with row group indices from the first source
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+
+  return _impl->filter_row_groups_with_byte_range(input_row_group_indices, options).front();
 }
 
 std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_stats(
@@ -229,6 +230,33 @@ table_with_metadata hybrid_scan_reader::materialize_payload_columns(
                                             mask_data_pages,
                                             options,
                                             stream);
+}
+
+std::vector<byte_range_info> hybrid_scan_reader::all_column_chunks_byte_ranges(
+  cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
+{
+  CUDF_FUNC_RANGE();
+
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+
+  return _impl->all_column_chunks_byte_ranges(input_row_group_indices, options).first;
+}
+
+table_with_metadata hybrid_scan_reader::materialize_all_columns(
+  cudf::host_span<size_type const> row_group_indices,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream) const
+{
+  CUDF_FUNC_RANGE();
+
+  // Temporary vector with row group indices from the first source
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+
+  return _impl->materialize_all_columns(
+    input_row_group_indices, std::move(column_chunk_buffers), options, stream);
 }
 
 void hybrid_scan_reader::setup_chunking_for_filter_columns(

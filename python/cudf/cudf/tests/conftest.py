@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import itertools
 import math
@@ -60,6 +61,17 @@ def default_integer_bitwidth(request):
 def default_float_bitwidth(request):
     with cudf.option_context("default_float_bitwidth", request.param):
         yield request.param
+
+
+@pytest.fixture(autouse=True)
+def set_copy_on_write_option(request):
+    if os.environ.get(
+        "CUDF_TEST_COPY_ON_WRITE"
+    ) == "1" and not request.node.get_closest_marker("no_copy_on_write"):
+        with cudf.option_context("copy_on_write", True):
+            yield
+    else:
+        yield
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)

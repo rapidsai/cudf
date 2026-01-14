@@ -1,6 +1,10 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
+ * SPDX-FileCopyrightText: Copyright 2018-2019 BlazingDB, Inc.
+ * SPDX-FileCopyrightText: Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
  *
@@ -614,6 +618,28 @@ __device__ void transform(void* user_data, cudf::size_type row,
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TEST_F(StringOperationTest, EmptyInput)
+{
+  std::string rtn_bool = R"***(
+  __device__ void transform(bool * out, cudf::string_view a, cudf::string_view b){
+    *out =  a.find(b) != cudf::string_view::npos;
+  }
+  )***";
+
+  auto empty = cudf::test::strings_column_wrapper();
+  auto result =
+    cudf::transform({empty, empty}, rtn_bool, cudf::data_type(cudf::type_id::BOOL8), false);
+  EXPECT_EQ(0, result->size());
+
+  std::string rtn_str = R"***(
+  __device__ void transform(cudf::string_view * out, cudf::string_view a, cudf::string_view b){
+    *out =  (a==b ? a : cudf::string_view{});
+  }
+  )***";
+  result = cudf::transform({empty, empty}, rtn_str, cudf::data_type(cudf::type_id::STRING), false);
+  EXPECT_EQ(0, result->size());
+}
+
 struct NullTest : public cudf::test::BaseFixture {
  protected:
   char const* const cuda =
@@ -803,7 +829,7 @@ TEST_F(NullTest, ColumnNulls_And_ScalarNull)
 TEST_F(NullTest, IsNull)
 {
   auto udf = R"***(
-  __device__ inline void is_null(bool * output, cuda::std::optional<float> input)
+  __device__ inline void is_null(cuda::std::optional<bool>* output, cuda::std::optional<float> input)
   {
     *output = !input.has_value();
   }
@@ -820,7 +846,8 @@ TEST_F(NullTest, IsNull)
                                 cudf::data_type(cudf::type_id::BOOL8),
                                 false,
                                 std::nullopt,
-                                cudf::null_aware::YES);
+                                cudf::null_aware::YES,
+                                cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
@@ -829,7 +856,7 @@ TEST_F(NullTest, NullProject)
 {
   auto udf = R"***(
 __device__ inline void null_lerp(
-       float* output,
+       cuda::std::optional<float>* output,
        cuda::std::optional<float> low,
        cuda::std::optional<float> high,
        cuda::std::optional<float> t
@@ -864,7 +891,8 @@ return l - t * l + t * h;
                                      cudf::data_type(cudf::type_id::FLOAT32),
                                      false,
                                      std::nullopt,
-                                     cudf::null_aware::YES);
+                                     cudf::null_aware::YES,
+                                     cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 }

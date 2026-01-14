@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
@@ -93,13 +94,6 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
         size_type null_count,
         cuda_stream_view stream,
         device_memory_resource* mr) except +libcudf_exception_handler
-
-    cdef unique_ptr[column] make_column_from_scalar(
-        const scalar& s,
-        size_type size,
-        cuda_stream_view stream,
-        device_memory_resource* mr
-    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] make_column_from_scalar(
         const scalar& s,

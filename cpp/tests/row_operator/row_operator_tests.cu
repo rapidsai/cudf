@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "row_operator_tests_utilities.hpp"
@@ -21,9 +10,18 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
+#include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/hashing/detail/xxhash_64.cuh>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 template <typename T>
 struct TypedTableViewTest : public cudf::test::BaseFixture {};
@@ -287,4 +285,179 @@ TYPED_TEST(NaNTableViewTest, TestEqualityComparatorTwoTableNaNCase)
   auto const nan_equal_got      = two_table_equality(
     lhs, rhs, column_order, cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(nan_equal_expected, nan_equal_got->view());
+}
+
+struct RowOperatorTest : public cudf::test::BaseFixture {};
+
+TEST_F(RowOperatorTest, TestTwoTableComparatorColumnCountCheck)
+{
+  rmm::cuda_stream_view stream{cudf::get_default_stream()};
+
+  auto left_col1         = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto left_col2         = cudf::test::fixed_width_column_wrapper<int32_t>{{3, 4}};
+  auto const left_table  = cudf::table_view{{left_col1, left_col2}};
+  auto right_col         = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto const right_table = cudf::table_view{{right_col}};
+
+  auto left_preprocessed =
+    cudf::detail::row::equality::preprocessed_table::create(left_table, stream);
+  auto right_preprocessed =
+    cudf::detail::row::equality::preprocessed_table::create(right_table, stream);
+
+  EXPECT_THROW(
+    cudf::detail::row::equality::two_table_comparator(left_preprocessed, right_preprocessed),
+    std::invalid_argument);
+}
+
+TEST_F(RowOperatorTest, TestCheckShapeCompatibility)
+{
+  rmm::cuda_stream_view stream{cudf::get_default_stream()};
+
+  auto left_col1_2       = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto left_col2_2       = cudf::test::fixed_width_column_wrapper<int32_t>{{3, 4}};
+  auto const left_table  = cudf::table_view{{left_col1_2, left_col2_2}};
+  auto right_col_2       = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto const right_table = cudf::table_view{{right_col_2}};
+
+  EXPECT_THROW(cudf::detail::row::equality::two_table_comparator(left_table, right_table, stream),
+               std::invalid_argument);
+
+  auto int_col           = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto const int_table   = cudf::table_view{{int_col}};
+  auto float_col         = cudf::test::fixed_width_column_wrapper<float>{{1.0f, 2.0f}};
+  auto const float_table = cudf::table_view{{float_col}};
+
+  EXPECT_THROW(cudf::detail::row::equality::two_table_comparator(int_table, float_table, stream),
+               std::invalid_argument);
+
+  auto str_col             = cudf::test::strings_column_wrapper({"hello", "world"});
+  auto const string_table  = cudf::table_view{{str_col}};
+  auto num_col             = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2});
+  auto const numeric_table = cudf::table_view{{num_col}};
+
+  EXPECT_THROW(
+    cudf::detail::row::equality::two_table_comparator(string_table, numeric_table, stream),
+    std::invalid_argument);
+}
+
+TEST_F(RowOperatorTest, TestRowHasher64BitHash)
+{
+  auto const col   = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 42, 123456789}};
+  auto const input = cudf::table_view{{col}};
+
+  auto const stream       = cudf::get_default_stream();
+  auto const preprocessed = cudf::detail::row::hash::preprocessed_table::create(input, stream);
+  auto const row_hasher   = cudf::detail::row::hash::row_hasher{preprocessed};
+  auto const hasher =
+    row_hasher.device_hasher<cudf::hashing::detail::XXHash_64>(cudf::nullate::DYNAMIC{false});
+
+  auto results = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0}};
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>{0},
+                    thrust::counting_iterator<cudf::size_type>{3},
+                    cudf::mutable_column_view{results}.begin<std::uint64_t>(),
+                    hasher);
+
+  // Expected values match cuCollections xxhash_64 reference implementation
+  // https://github.com/NVIDIA/cuCollections/blob/4f03dcccb3a944594c693aa8cebc89302bbd8e20/tests/utility/hash_test.cu#L134-L137
+  auto const expected = cudf::test::fixed_width_column_wrapper<std::uint64_t>{
+    {4246796580750024372ul, 15516826743637085169ul, 9462334144942111946ul}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results, expected);
+}
+
+TEST_F(RowOperatorTest, TestPrimitiveRowHasher64BitHash)
+{
+  auto const col   = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 42, 123456789}};
+  auto const input = cudf::table_view{{col}};
+
+  auto const stream  = cudf::get_default_stream();
+  auto const d_input = cudf::table_device_view::create(input, stream);
+
+  auto const hasher = cudf::detail::row::primitive::row_hasher<cudf::hashing::detail::XXHash_64>(
+    cudf::nullate::DYNAMIC{false}, *d_input, static_cast<std::uint64_t>(cudf::DEFAULT_HASH_SEED));
+
+  auto results = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0}};
+
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>{0},
+                    thrust::counting_iterator<cudf::size_type>{3},
+                    cudf::mutable_column_view{results}.begin<std::uint64_t>(),
+                    hasher);
+
+  // Expected values match cuCollections xxhash_64 reference implementation
+  // https://github.com/NVIDIA/cuCollections/blob/4f03dcccb3a944594c693aa8cebc89302bbd8e20/tests/utility/hash_test.cu#L134-L137
+  auto const expected = cudf::test::fixed_width_column_wrapper<std::uint64_t>{
+    {4246796580750024372ul, 15516826743637085169ul, 9462334144942111946ul}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results, expected);
+}
+
+TEST_F(RowOperatorTest, TestRowHasherDictionaryColumn)
+{
+  // Dictionary and equivalent string column should produce identical hashes.
+  // This also verifies same logical values get same hashes (e.g., "baz" at rows 0 and 2).
+  auto const dict_col =
+    cudf::test::dictionary_column_wrapper<std::string>({"baz", "foo", "baz", "bar", "foo"});
+  auto const str_col = cudf::test::strings_column_wrapper({"baz", "foo", "baz", "bar", "foo"});
+
+  auto const stream = cudf::get_default_stream();
+  auto const dict_row_hasher =
+    cudf::detail::row::hash::row_hasher(cudf::table_view{{dict_col}}, stream);
+  auto const str_row_hasher =
+    cudf::detail::row::hash::row_hasher(cudf::table_view{{str_col}}, stream);
+
+  auto const dict_hasher =
+    dict_row_hasher.device_hasher<cudf::hashing::detail::XXHash_64>(cudf::nullate::DYNAMIC{false});
+  auto const str_hasher =
+    str_row_hasher.device_hasher<cudf::hashing::detail::XXHash_64>(cudf::nullate::DYNAMIC{false});
+
+  auto dict_results = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0, 0, 0}};
+  auto str_results  = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0, 0, 0}};
+
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>{0},
+                    thrust::counting_iterator<cudf::size_type>{5},
+                    cudf::mutable_column_view{dict_results}.begin<std::uint64_t>(),
+                    dict_hasher);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>{0},
+                    thrust::counting_iterator<cudf::size_type>{5},
+                    cudf::mutable_column_view{str_results}.begin<std::uint64_t>(),
+                    str_hasher);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(dict_results, str_results);
+}
+
+TEST_F(RowOperatorTest, TestRowHasherDictionaryColumnWithNulls)
+{
+  auto const dict_col =
+    cudf::test::dictionary_column_wrapper<int64_t>({100, 200, 300, 100, 200}, {1, 0, 1, 0, 1});
+  auto const int_col =
+    cudf::test::fixed_width_column_wrapper<int64_t>({100, 200, 300, 100, 200}, {1, 0, 1, 0, 1});
+
+  auto const stream = cudf::get_default_stream();
+  auto const dict_row_hasher =
+    cudf::detail::row::hash::row_hasher(cudf::table_view{{dict_col}}, stream);
+  auto const int_row_hasher =
+    cudf::detail::row::hash::row_hasher(cudf::table_view{{int_col}}, stream);
+
+  auto const dict_hasher =
+    dict_row_hasher.device_hasher<cudf::hashing::detail::XXHash_64>(cudf::nullate::DYNAMIC{true});
+  auto const int_hasher =
+    int_row_hasher.device_hasher<cudf::hashing::detail::XXHash_64>(cudf::nullate::DYNAMIC{true});
+
+  auto dict_results = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0, 0, 0}};
+  auto int_results  = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0, 0, 0}};
+
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>{0},
+                    thrust::counting_iterator<cudf::size_type>{5},
+                    cudf::mutable_column_view{dict_results}.begin<std::uint64_t>(),
+                    dict_hasher);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>{0},
+                    thrust::counting_iterator<cudf::size_type>{5},
+                    cudf::mutable_column_view{int_results}.begin<std::uint64_t>(),
+                    int_hasher);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(dict_results, int_results);
 }

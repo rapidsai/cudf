@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 schema_version: 1
 
 context:
@@ -39,19 +40,32 @@ cache:
         - AWS_ACCESS_KEY_ID
         - AWS_SECRET_ACCESS_KEY
         - AWS_SESSION_TOKEN
+        - SCCACHE_DIST_AUTH_TOKEN
       env:
         CMAKE_C_COMPILER_LAUNCHER: ${{ env.get("CMAKE_C_COMPILER_LAUNCHER") }}
         CMAKE_CUDA_COMPILER_LAUNCHER: ${{ env.get("CMAKE_CUDA_COMPILER_LAUNCHER") }}
         CMAKE_CXX_COMPILER_LAUNCHER: ${{ env.get("CMAKE_CXX_COMPILER_LAUNCHER") }}
         CMAKE_GENERATOR: ${{ env.get("CMAKE_GENERATOR") }}
-        PARALLEL_LEVEL: ${{ env.get("PARALLEL_LEVEL") }}
-        RAPIDS_ARTIFACTS_DIR: ${{ env.get("RAPIDS_ARTIFACTS_DIR") }}
-        SCCACHE_BUCKET: ${{ env.get("SCCACHE_BUCKET") }}
-        SCCACHE_IDLE_TIMEOUT: ${{ env.get("SCCACHE_IDLE_TIMEOUT") }}
-        SCCACHE_REGION: ${{ env.get("SCCACHE_REGION") }}
-        SCCACHE_S3_USE_SSL: ${{ env.get("SCCACHE_S3_USE_SSL") }}
-        SCCACHE_S3_NO_CREDENTIALS: ${{ env.get("SCCACHE_S3_NO_CREDENTIALS") }}
+        NVCC_APPEND_FLAGS: ${{ env.get("NVCC_APPEND_FLAGS", default="") }}
+        PARALLEL_LEVEL: ${{ env.get("PARALLEL_LEVEL", default="8") }}
+        RAPIDS_ARTIFACTS_DIR: ${{ env.get("RAPIDS_ARTIFACTS_DIR", default="") }}
+        SCCACHE_BUCKET: ${{ env.get("SCCACHE_BUCKET", default="") }}
+        SCCACHE_DIST_AUTH_TYPE: ${{ env.get("SCCACHE_DIST_AUTH_TYPE", default="token") }}
+        SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE: ${{ env.get("SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE", default="false") }}
+        SCCACHE_DIST_MAX_RETRIES: ${{ env.get("SCCACHE_DIST_MAX_RETRIES", default="inf") }}
+        SCCACHE_DIST_REQUEST_TIMEOUT: ${{ env.get("SCCACHE_DIST_REQUEST_TIMEOUT", default="7140") }}
+        SCCACHE_DIST_SCHEDULER_URL: ${{ env.get("SCCACHE_DIST_SCHEDULER_URL", default="") }}
+        SCCACHE_ERROR_LOG: ${{ env.get("SCCACHE_ERROR_LOG", default="/tmp/sccache.log") }}
+        SCCACHE_IDLE_TIMEOUT: ${{ env.get("SCCACHE_IDLE_TIMEOUT", default="0") }}
+        SCCACHE_NO_CACHE: ${{ env.get("SCCACHE_NO_CACHE", default="") }}
+        SCCACHE_RECACHE: ${{ env.get("SCCACHE_RECACHE", default="") }}
+        SCCACHE_REGION: ${{ env.get("SCCACHE_REGION", default="") }}
         SCCACHE_S3_KEY_PREFIX: libcudf-${{ env.get("RAPIDS_CONDA_ARCH") }}
+        SCCACHE_S3_NO_CREDENTIALS: ${{ env.get("SCCACHE_S3_NO_CREDENTIALS", default="false") }}
+        SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX: libcudf-${{ env.get("RAPIDS_CONDA_ARCH") }}-cuda${{ cuda_major }}-conda-preprocessor-cache
+        SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE: ${{ env.get("SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE", default="true") }}
+        SCCACHE_S3_USE_SSL: ${{ env.get("SCCACHE_S3_USE_SSL", default="true") }}
+        SCCACHE_SERVER_LOG: ${{ env.get("SCCACHE_SERVER_LOG", default="sccache=debug") }}
 
   requirements:
     build:
@@ -108,12 +122,14 @@ outputs:
         - libkvikio =${{ minor_version }}
         - librmm =${{ minor_version }}
         - libnvcomp-dev ${{ nvcomp_version }}
+        - libnvjitlink-dev
         - rapids-logger =0.2
         - zlib ${{ zlib_version }}
         - cuda-cudart-dev
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - cuda-nvrtc
+        - libnvjitlink >=${{ cuda_version }}
         - if: linux and x86_64
           then:
             - libcufile
@@ -138,6 +154,7 @@ outputs:
           - libcufile
           - libcurand
           - libkvikio
+          - libnvjitlink
           - librdkafka
           - libzlib
           - librmm
@@ -146,7 +163,7 @@ outputs:
         - test -f $PREFIX/include/cudf/column/column.hpp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
-      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license }}
       summary: ${{ load_from_file("python/libcudf/pyproject.toml").project.description }}
 
   - package:
@@ -207,15 +224,27 @@ outputs:
           CMAKE_CUDA_COMPILER_LAUNCHER: ${{ env.get("CMAKE_CUDA_COMPILER_LAUNCHER") }}
           CMAKE_CXX_COMPILER_LAUNCHER: ${{ env.get("CMAKE_CXX_COMPILER_LAUNCHER") }}
           CMAKE_GENERATOR: ${{ env.get("CMAKE_GENERATOR") }}
-          PARALLEL_LEVEL: ${{ env.get("PARALLEL_LEVEL") }}
-          RAPIDS_ARTIFACTS_DIR: ${{ env.get("RAPIDS_ARTIFACTS_DIR") }}
-          SCCACHE_BUCKET: ${{ env.get("SCCACHE_BUCKET") }}
-          SCCACHE_IDLE_TIMEOUT: ${{ env.get("SCCACHE_IDLE_TIMEOUT") }}
-          SCCACHE_REGION: ${{ env.get("SCCACHE_REGION") }}
-          SCCACHE_S3_USE_SSL: ${{ env.get("SCCACHE_S3_USE_SSL") }}
-          SCCACHE_S3_NO_CREDENTIALS: ${{ env.get("SCCACHE_S3_NO_CREDENTIALS") }}
+          NVCC_APPEND_FLAGS: ${{ env.get("NVCC_APPEND_FLAGS", default="") }}
+          PARALLEL_LEVEL: ${{ env.get("PARALLEL_LEVEL", default="8") }}
+          RAPIDS_ARTIFACTS_DIR: ${{ env.get("RAPIDS_ARTIFACTS_DIR", default="") }}
+          SCCACHE_BUCKET: ${{ env.get("SCCACHE_BUCKET", default="") }}
+          SCCACHE_DIST_AUTH_TYPE: ${{ env.get("SCCACHE_DIST_AUTH_TYPE", default="token") }}
+          SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE: ${{ env.get("SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE", default="false") }}
+          SCCACHE_DIST_MAX_RETRIES: ${{ env.get("SCCACHE_DIST_MAX_RETRIES", default="inf") }}
+          SCCACHE_DIST_REQUEST_TIMEOUT: ${{ env.get("SCCACHE_DIST_REQUEST_TIMEOUT", default="7140") }}
+          SCCACHE_DIST_SCHEDULER_URL: ${{ env.get("SCCACHE_DIST_SCHEDULER_URL", default="") }}
+          SCCACHE_ERROR_LOG: ${{ env.get("SCCACHE_ERROR_LOG", default="/tmp/sccache.log") }}
+          SCCACHE_IDLE_TIMEOUT: ${{ env.get("SCCACHE_IDLE_TIMEOUT", default="0") }}
+          SCCACHE_NO_CACHE: ${{ env.get("SCCACHE_NO_CACHE", default="") }}
+          SCCACHE_RECACHE: ${{ env.get("SCCACHE_RECACHE", default="") }}
+          SCCACHE_REGION: ${{ env.get("SCCACHE_REGION", default="") }}
           SCCACHE_S3_KEY_PREFIX: libcudf-${{ env.get("RAPIDS_CONDA_ARCH") }}
-      string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+          SCCACHE_S3_NO_CREDENTIALS: ${{ env.get("SCCACHE_S3_NO_CREDENTIALS", default="false") }}
+          SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX: libcudf-${{ env.get("RAPIDS_CONDA_ARCH") }}-cuda${{ cuda_major }}-conda-preprocessor-cache
+          SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE: ${{ env.get("SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE", default="true") }}
+          SCCACHE_S3_USE_SSL: ${{ env.get("SCCACHE_S3_USE_SSL", default="true") }}
+          SCCACHE_SERVER_LOG: ${{ env.get("SCCACHE_SERVER_LOG", default="sccache=debug") }}
+          string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
       dynamic_linking:
         overlinking_behavior: "error"
     requirements:
@@ -254,7 +283,7 @@ outputs:
           - libnvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
-      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license }}
       summary: libcudf example executables
 
   - package:
@@ -303,5 +332,5 @@ outputs:
           - libnvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
-      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license }}
       summary: libcudf test & benchmark executables

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "parquet_common.hpp"
@@ -32,6 +21,8 @@
 
 #include <roaring/roaring.h>
 #include <roaring/roaring64.h>
+
+#include <utility>
 
 namespace {
 
@@ -119,9 +110,14 @@ auto serialize_deletion_vector(roaring::api::roaring64_bitmap_t const* deletion_
 {
   auto const num_bytes = roaring::api::roaring64_bitmap_portable_size_in_bytes(deletion_vector);
   EXPECT_GT(num_bytes, 0);
-  auto serialized_bitmap = thrust::host_vector<cuda::std::byte>(num_bytes);
-  std::ignore            = roaring::api::roaring64_bitmap_portable_serialize(
+  auto serialized_bitmap   = thrust::host_vector<cuda::std::byte>(num_bytes);
+  auto const bytes_written = roaring::api::roaring64_bitmap_portable_serialize(
     deletion_vector, reinterpret_cast<char*>(serialized_bitmap.data()));
+  EXPECT_EQ(bytes_written, num_bytes);
+  auto num_buckets = uint64_t{0};
+  std::memcpy(
+    &num_buckets, reinterpret_cast<uint64_t*>(serialized_bitmap.data()), sizeof(uint64_t));
+  EXPECT_LT(num_buckets, std::numeric_limits<cudf::size_type>::max());
   return serialized_bitmap;
 }
 
@@ -167,11 +163,11 @@ auto build_deletion_vector_and_expected_row_mask(cudf::size_type num_rows,
                   }
                 });
 
-  auto serialized_deletion_vector = serialize_deletion_vector(deletion_vector);
+  auto serialized_roaring_bitmap = serialize_deletion_vector(deletion_vector);
   roaring::api::roaring64_bitmap_free(deletion_vector);
 
   return std::make_pair(
-    std::move(serialized_deletion_vector),
+    std::move(serialized_roaring_bitmap),
     build_column_from_host_data<bool>(expected_row_mask, cudf::type_id::BOOL8, stream, mr));
 }
 
@@ -213,10 +209,11 @@ std::unique_ptr<cudf::table> build_expected_table(
 
 /**
  * @brief Constructs a resultant table by applying the specified deletion vector to the input table
- * and compares it to the table read via the `read_parquet_and_apply_deletion_vector` API
+ * and compares it to the table read via the `cudf::io::parquet::experimental::read_parquet` API as
+ * well as the `cudf::io::parquet::experimental::chunked_parquet_reader`
  *
  * @param parquet_buffer Span of host buffer containing Parquet data
- * @param deletion_vector Pointer to roaring64 bitmap deletion vector
+ * @param serialized_roaring_bitmap Span of `portable` serialized 64-bit roaring bitmap
  * @param row_group_offsets Host span of input row group offsets
  * @param row_group_num_rows Host span of input row group row counts
  * @param input_table_view Input table view
@@ -225,9 +222,10 @@ std::unique_ptr<cudf::table> build_expected_table(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory for the returned table
  */
+template <cudf::size_type num_concat = 1>
 void test_read_parquet_and_apply_deletion_vector(
   cudf::host_span<char const> parquet_buffer,
-  cudf::host_span<cuda::std::byte const> serialized_deletion_vector,
+  cudf::host_span<cuda::std::byte const> serialized_roaring_bitmap,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<cudf::size_type const> row_group_num_rows,
   cudf::table_view const& input_table_view,
@@ -236,22 +234,128 @@ void test_read_parquet_and_apply_deletion_vector(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto expected_table = build_expected_table(
-    input_table_view, expected_row_index_column, expected_row_mask_column, stream, mr);
+  static_assert(std::cmp_greater_equal(num_concat, 1),
+                "num_concat must be greater than or equal to 1");
+
+  auto const num_input_rows = input_table_view.num_rows();
+
+  auto input_buffers              = std::vector<cudf::host_span<char const>>{};
+  auto row_group_row_offsets      = std::vector<size_t>{};
+  auto row_group_num_counts       = std::vector<cudf::size_type>{};
+  auto deletion_vector_row_counts = std::vector<cudf::size_type>{};
+  input_buffers.reserve(num_concat);
+  row_group_row_offsets.reserve(num_concat * row_group_offsets.size());
+  row_group_num_counts.reserve(num_concat * row_group_num_rows.size());
+  deletion_vector_row_counts.reserve(num_concat);
+
+  for (auto i = 0; i < num_concat; ++i) {
+    input_buffers.emplace_back(parquet_buffer.data(), parquet_buffer.size());
+    row_group_row_offsets.insert(
+      row_group_row_offsets.end(), row_group_offsets.begin(), row_group_offsets.end());
+    row_group_num_counts.insert(
+      row_group_num_counts.end(), row_group_num_rows.begin(), row_group_num_rows.end());
+    deletion_vector_row_counts.emplace_back(num_input_rows);
+  }
+
+  // Vector to store serialized roaring bitmap data and spans
+  auto serialized_roaring_bitmaps_data = std::vector<thrust::host_vector<cuda::std::byte>>{};
+  auto serialized_roaring_bitmaps      = std::vector<cudf::host_span<cuda::std::byte const>>{};
+  serialized_roaring_bitmaps_data.reserve(num_concat - 1);
+  serialized_roaring_bitmaps.reserve(num_concat);
+  // Insert the first serialized roaring bitmap span
+  serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmap);
+
+  // Build the expected table
+  auto expected_table = [&]() {
+    auto tables      = std::vector<std::unique_ptr<cudf::table>>{};
+    auto table_views = std::vector<cudf::table_view>{};
+    tables.reserve(num_concat);
+    table_views.reserve(num_concat);
+    // Insert the first table
+    tables.emplace_back(build_expected_table(
+      input_table_view, expected_row_index_column, expected_row_mask_column, stream, mr));
+    table_views.emplace_back(tables.back()->view());
+
+    if constexpr (num_concat == 1) {
+      return std::move(tables.back());
+    } else {
+      constexpr auto deletion_probability = 0.45;
+
+      for (auto i = 0; i < num_concat - 1; ++i) {
+        // Build deletion vector and the expected row mask column
+        auto local_expected_row_indices =
+          build_expected_row_indices(row_group_offsets, row_group_num_rows, num_input_rows);
+
+        auto local_expected_row_index_column = build_column_from_host_data<size_t>(
+          local_expected_row_indices, cudf::type_id::UINT64, stream, mr);
+
+        auto [local_deletion_vector, local_expected_row_mask_column] =
+          build_deletion_vector_and_expected_row_mask(
+            num_input_rows, deletion_probability, local_expected_row_indices, stream, mr);
+        tables.emplace_back(build_expected_table(input_table_view,
+                                                 local_expected_row_index_column->view(),
+                                                 local_expected_row_mask_column->view(),
+                                                 stream,
+                                                 mr));
+        table_views.emplace_back(tables.back()->view());
+        serialized_roaring_bitmaps_data.emplace_back(std::move(local_deletion_vector));
+        serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmaps_data.back());
+      }
+
+      return cudf::concatenate(table_views, stream, mr);
+    }
+  }();
 
   // Read parquet and apply deletion vector
-  auto in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{cudf::host_span<char const>(
-                                                parquet_buffer.data(), parquet_buffer.size())})
+  auto const in_opts =
+    cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<cudf::host_span<char const>>{input_buffers}})
       .build();
 
-  auto const read_table_with_deletion_vector =
-    cudf::io::parquet::experimental::read_parquet_and_apply_deletion_vector(
-      in_opts, serialized_deletion_vector, row_group_offsets, row_group_num_rows, stream, mr)
+  auto const table_with_deletion_vector =
+    cudf::io::parquet::experimental::read_parquet(in_opts,
+                                                  serialized_roaring_bitmaps,
+                                                  deletion_vector_row_counts,
+                                                  row_group_row_offsets,
+                                                  row_group_num_counts,
+                                                  stream,
+                                                  mr)
       .tbl;
 
-  // Compare
-  CUDF_TEST_EXPECT_TABLES_EQUAL(read_table_with_deletion_vector->view(), expected_table->view());
+  // Check
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_with_deletion_vector->view(), expected_table->view());
+
+  // Read using the chunked reader
+  auto const test_chunked_table_with_deletion_vector = [&](size_t chunk_read_limit,
+                                                           size_t pass_read_limit) {
+    auto const reader = std::make_unique<cudf::io::parquet::experimental::chunked_parquet_reader>(
+      chunk_read_limit,
+      pass_read_limit,
+      in_opts,
+      serialized_roaring_bitmaps,
+      deletion_vector_row_counts,
+      row_group_row_offsets,
+      row_group_num_counts,
+      stream,
+      mr);
+
+    auto table_chunks      = std::vector<std::unique_ptr<cudf::table>>{};
+    auto table_chunk_views = std::vector<cudf::table_view>{};
+    while (reader->has_next()) {
+      table_chunks.emplace_back(reader->read_chunk().tbl);
+      table_chunk_views.emplace_back(table_chunks.back()->view());
+    }
+    auto chunked_table_with_deletion_vector = cudf::concatenate(table_chunk_views, stream, mr);
+    // Check
+    CUDF_TEST_EXPECT_TABLES_EQUAL(chunked_table_with_deletion_vector->view(),
+                                  expected_table->view());
+  };
+
+  test_chunked_table_with_deletion_vector(512, 2048);
+  test_chunked_table_with_deletion_vector(1024, 10240);
+  test_chunked_table_with_deletion_vector(10240, 102400);
+  test_chunked_table_with_deletion_vector(102400, 0);
+  test_chunked_table_with_deletion_vector(0, 0);
 }
 
 }  // namespace
@@ -386,22 +490,25 @@ TEST_F(ParquetDeletionVectorsTest, NoRowIndexColumn)
   auto [deletion_vector, expected_row_mask_column] = build_deletion_vector_and_expected_row_mask(
     num_rows, deletion_probability, expected_row_indices, stream, mr);
 
-  test_read_parquet_and_apply_deletion_vector(parquet_buffer,
-                                              deletion_vector,
-                                              {},
-                                              {},
-                                              input_table->view(),
-                                              expected_row_mask_column->view(),
-                                              expected_row_index_column->view(),
-                                              stream,
-                                              mr);
+  // Use num_concat = 1 here since the row index column is simply a sequence and input table
+  // concatenation won't properly reset it.
+  auto constexpr num_concat = 1;
+  test_read_parquet_and_apply_deletion_vector<num_concat>(parquet_buffer,
+                                                          deletion_vector,
+                                                          {},
+                                                          {},
+                                                          input_table->view(),
+                                                          expected_row_mask_column->view(),
+                                                          expected_row_index_column->view(),
+                                                          stream,
+                                                          mr);
 }
 
 TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
 {
-  auto constexpr num_rows             = 50'000;
+  auto constexpr num_rows             = 25'000;
   auto constexpr num_row_groups       = 5;
-  auto constexpr num_columns          = 8;
+  auto constexpr num_columns          = 4;
   auto constexpr include_validity     = false;
   auto constexpr deletion_probability = 0.4;  ///< 40% of the rows are deleted
   auto constexpr rows_per_row_group   = num_rows / num_row_groups;
@@ -466,13 +573,36 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
   auto [deletion_vector, expected_row_mask_column] = build_deletion_vector_and_expected_row_mask(
     num_rows, deletion_probability, expected_row_indices, stream, mr);
 
-  test_read_parquet_and_apply_deletion_vector(parquet_buffer,
-                                              deletion_vector,
-                                              row_group_offsets,
-                                              row_group_num_rows,
-                                              input_table->view(),
-                                              expected_row_mask_column->view(),
-                                              expected_row_index_column->view(),
-                                              stream,
-                                              mr);
+  // Don't concatenate the input table and test with single deletion vector
+  test_read_parquet_and_apply_deletion_vector<1>(parquet_buffer,
+                                                 deletion_vector,
+                                                 row_group_offsets,
+                                                 row_group_num_rows,
+                                                 input_table->view(),
+                                                 expected_row_mask_column->view(),
+                                                 expected_row_index_column->view(),
+                                                 stream,
+                                                 mr);
+
+  // Concatenate input table and test with multiple deletion vectors
+  test_read_parquet_and_apply_deletion_vector<4>(parquet_buffer,
+                                                 deletion_vector,
+                                                 row_group_offsets,
+                                                 row_group_num_rows,
+                                                 input_table->view(),
+                                                 expected_row_mask_column->view(),
+                                                 expected_row_index_column->view(),
+                                                 stream,
+                                                 mr);
+
+  // Concatenate input table and test with many deletion vectors (>= stream fork threshold of 8)
+  test_read_parquet_and_apply_deletion_vector<8>(parquet_buffer,
+                                                 deletion_vector,
+                                                 row_group_offsets,
+                                                 row_group_num_rows,
+                                                 input_table->view(),
+                                                 expected_row_mask_column->view(),
+                                                 expected_row_index_column->view(),
+                                                 stream,
+                                                 mr);
 }

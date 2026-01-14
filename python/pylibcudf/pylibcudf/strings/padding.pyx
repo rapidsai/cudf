@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -23,7 +24,7 @@ cpdef Column pad(
     """
     Add padding to each string using a provided character.
 
-    For details, see :cpp:func:`cudf::strings::pad`.
+    For details, see :cpp:func:`pad`.
 
     Parameters
     ----------
@@ -66,7 +67,7 @@ cpdef Column zfill(
     """
     Add '0' as padding to the left of each string.
 
-    For details, see :cpp:func:`cudf::strings::zfill`.
+    For details, see :cpp:func:`zfill`.
 
     Parameters
     ----------
@@ -102,7 +103,7 @@ cpdef Column zfill_by_widths(
     """
     Add '0' as padding to the left of each string.
 
-    For details, see :cpp:func:`cudf::strings::zfill_by_widths`.
+    For details, see :cpp:func:`zfill_by_widths`.
 
     Parameters
     ----------

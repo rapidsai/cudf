@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pytest
@@ -48,8 +49,14 @@ def _build_orc_reader_options(
 
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("source_strategy", ["inline", "set_source"])
 def test_read_orc_basic(
-    table_data, binary_source_or_sink, nrows_skiprows, columns, stream
+    table_data,
+    binary_source_or_sink,
+    nrows_skiprows,
+    columns,
+    stream,
+    source_strategy,
 ):
     _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
@@ -60,12 +67,18 @@ def test_read_orc_basic(
     source = make_source(
         binary_source_or_sink, pa_table, **_COMMON_ORC_SOURCE_KWARGS
     )
+    source_info = plc.io.types.SourceInfo([source])
     options = _build_orc_reader_options(
-        plc.io.types.SourceInfo([source]),
+        source_info
+        if source_strategy == "inline"
+        else plc.io.types.SourceInfo([]),
         nrows=nrows,
         skiprows=skiprows,
         columns=columns,
     )
+
+    if source_strategy == "set_source":
+        options.set_source(source_info)
 
     res = plc.io.orc.read_orc(options, stream)
 
@@ -90,7 +103,9 @@ def test_read_orc_from_device_buffers(
 
     source = make_source(binary_source_or_sink, pa_table, format="orc")
 
-    buf = DeviceBuffer.to_device(get_bytes_from_source(source))
+    buf = DeviceBuffer.to_device(
+        get_bytes_from_source(source), plc.utils._get_stream(stream)
+    )
 
     options = plc.io.orc.OrcReaderOptions.builder(
         plc.io.types.SourceInfo([buf] * num_buffers)

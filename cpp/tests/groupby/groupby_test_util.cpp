@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "groupby_test_util.hpp"
@@ -38,8 +27,12 @@ void test_single_agg(cudf::column_view const& keys,
                      cudf::sorted keys_are_sorted,
                      std::vector<cudf::order> const& column_order,
                      std::vector<cudf::null_order> const& null_precedence,
-                     cudf::sorted reference_keys_are_sorted)
+                     cudf::sorted reference_keys_are_sorted,
+                     std::source_location const& location)
 {
+  SCOPED_TRACE("Original failure location: " + std::string{location.file_name()} + ":" +
+               std::to_string(location.line()));
+
   auto const [sorted_expect_keys, sorted_expect_vals] = [&]() {
     if (reference_keys_are_sorted == cudf::sorted::NO) {
       auto const sort_expect_order =
@@ -97,7 +90,8 @@ void test_single_agg(cudf::column_view const& keys,
 void test_sum_agg(cudf::column_view const& keys,
                   cudf::column_view const& values,
                   cudf::column_view const& expected_keys,
-                  cudf::column_view const& expected_values)
+                  cudf::column_view const& expected_values,
+                  std::source_location const& location)
 {
   auto const do_test = [&](auto const use_sort_option) {
     test_single_agg(keys,
@@ -106,7 +100,12 @@ void test_sum_agg(cudf::column_view const& keys,
                     expected_values,
                     cudf::make_sum_aggregation<cudf::groupby_aggregation>(),
                     use_sort_option,
-                    cudf::null_policy::INCLUDE);
+                    cudf::null_policy::INCLUDE,
+                    cudf::sorted::NO,
+                    {},
+                    {},
+                    cudf::sorted::NO,
+                    location);
   };
   do_test(force_use_sort_impl::YES);
   do_test(force_use_sort_impl::NO);
@@ -120,12 +119,15 @@ void test_single_scan(cudf::column_view const& keys,
                       cudf::null_policy include_null_keys,
                       cudf::sorted keys_are_sorted,
                       std::vector<cudf::order> const& column_order,
-                      std::vector<cudf::null_order> const& null_precedence)
+                      std::vector<cudf::null_order> const& null_precedence,
+                      std::source_location const& location)
 {
+  SCOPED_TRACE("Original failure location: " + std::string{location.file_name()} + ":" +
+               std::to_string(location.line()));
+
   std::vector<cudf::groupby::scan_request> requests;
   requests.emplace_back();
   requests[0].values = values;
-
   requests[0].aggregations.push_back(std::move(agg));
 
   cudf::groupby::groupby gb_obj(

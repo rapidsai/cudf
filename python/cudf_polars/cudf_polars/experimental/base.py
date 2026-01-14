@@ -5,7 +5,9 @@
 from __future__ import annotations
 
 import dataclasses
+import enum
 from collections import defaultdict
+from enum import IntEnum
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 
@@ -20,19 +22,24 @@ if TYPE_CHECKING:
 class PartitionInfo:
     """Partitioning information."""
 
-    __slots__ = ("count", "partitioned_on")
+    __slots__ = ("count", "io_plan", "partitioned_on")
     count: int
     """Partition count."""
     partitioned_on: tuple[NamedExpr, ...]
     """Columns the data is hash-partitioned on."""
+    io_plan: IOPartitionPlan | None
+    """IO partitioning plan (Scan nodes only)."""
 
     def __init__(
         self,
         count: int,
+        *,
         partitioned_on: tuple[NamedExpr, ...] = (),
+        io_plan: IOPartitionPlan | None = None,
     ):
         self.count = count
         self.partitioned_on = partitioned_on
+        self.io_plan = io_plan
 
     def keys(self, node: Node) -> Iterator[tuple[str, int]]:
         """Return the partitioned keys for a given node."""
@@ -108,13 +115,17 @@ class DataSourceInfo:
     """
 
     _unique_stats_columns: set[str]
+    _read_columns: set[str]
 
     @property
     def row_count(self) -> ColumnStat[int]:  # pragma: no cover
         """Data source row-count estimate."""
         raise NotImplementedError("Sub-class must implement row_count.")
 
-    def unique_stats(self, column: str) -> UniqueStats:  # pragma: no cover
+    def unique_stats(
+        self,
+        column: str,
+    ) -> UniqueStats:  # pragma: no cover
         """Return unique-value statistics for a column."""
         raise NotImplementedError("Sub-class must implement unique_stats.")
 
@@ -130,6 +141,10 @@ class DataSourceInfo:
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""
         self._unique_stats_columns.add(column)
+
+    def add_read_column(self, column: str) -> None:
+        """Add a column needing to be read."""
+        self._read_columns.add(column)
 
 
 class DataSourcePair(NamedTuple):
@@ -229,6 +244,11 @@ class ColumnSourceInfo:
         # We must call add_unique_stats_column for ALL table sources.
         for table_source, column_name in self.table_source_pairs:
             table_source.add_unique_stats_column(column or column_name)
+
+    def add_read_column(self, column: str | None = None) -> None:
+        """Add a column needing to be read."""
+        for table_source, column_name in self.table_source_pairs:
+            table_source.add_read_column(column or column_name)
 
 
 class ColumnStats:
@@ -384,3 +404,36 @@ class StatsCollector:
         self.row_count: dict[IR, ColumnStat[int]] = {}
         self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
         self.join_info = JoinInfo()
+
+
+class IOPartitionFlavor(IntEnum):
+    """Flavor of IO partitioning."""
+
+    SINGLE_FILE = enum.auto()  # 1:1 mapping between files and partitions
+    SPLIT_FILES = enum.auto()  # Split each file into >1 partition
+    FUSED_FILES = enum.auto()  # Fuse multiple files into each partition
+    SINGLE_READ = enum.auto()  # One worker/task reads everything
+
+
+class IOPartitionPlan:
+    """
+    IO partitioning plan.
+
+    Notes
+    -----
+    The meaning of `factor` depends on the value of `flavor`:
+      - SINGLE_FILE: `factor` must be `1`.
+      - SPLIT_FILES: `factor` is the number of partitions per file.
+      - FUSED_FILES: `factor` is the number of files per partition.
+      - SINGLE_READ: `factor` is the total number of files.
+    """
+
+    __slots__ = ("factor", "flavor")
+    factor: int
+    flavor: IOPartitionFlavor
+
+    def __init__(self, factor: int, flavor: IOPartitionFlavor) -> None:
+        if flavor == IOPartitionFlavor.SINGLE_FILE and factor != 1:  # pragma: no cover
+            raise ValueError(f"Expected factor == 1 for {flavor}, got: {factor}")
+        self.factor = factor
+        self.flavor = flavor

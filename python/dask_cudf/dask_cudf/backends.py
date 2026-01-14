@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import warnings
 from collections.abc import Iterator
@@ -128,9 +129,7 @@ def _get_non_empty_data(
         date_data = cudf.date_range("2001-01-01", periods=2, freq=s.time_unit)  # type: ignore[attr-defined]
         return date_data.tz_localize(str(s.dtype.tz))._column
     elif s.dtype.kind in "fiubmM":
-        return cudf.core.column.as_column(
-            np.arange(start=0, stop=2, dtype=s.dtype)
-        )
+        return cudf.core.column.as_column(np.arange(0, 2, dtype=s.dtype))
     elif isinstance(s.dtype, cudf.core.dtypes.DecimalDtype):
         return cudf.core.column.as_column(range(2), dtype=s.dtype)
     else:

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -271,7 +260,7 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
   auto const h_span = host_span<int8_t const>{h_buffer}.subspan(
     static_cast<int8_t const*>(h_ptr) - h_buffer.data(), views_size_bytes);
   auto const d_span = device_span<int8_t>{static_cast<int8_t*>(d_ptr), views_size_bytes};
-  cudf::detail::cuda_memcpy(d_span, h_span, stream);
+  cudf::detail::cuda_memcpy_async(d_span, h_span, stream);
   return std::make_tuple(std::move(descendant_storage), d_columns);
 }
 

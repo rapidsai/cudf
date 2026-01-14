@@ -1,49 +1,34 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
+#include "mixed_filter_join_common_utils.cuh"
 #include "mixed_join_kernels_semi.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuda/std/iterator>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
 
 #include <optional>
-#include <utility>
 
 namespace cudf {
 namespace detail {
@@ -153,15 +138,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const equality_build_conditional =
     row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
 
-  hash_set_type row_set{
-    {compute_hash_table_size(build.num_rows())},
-    cuco::empty_key{JoinNoneValue},
-    {equality_build_equality, equality_build_conditional},
-    {row_hash_build.device_hasher(build_nulls)},
-    {},
-    {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    {stream.value()}};
+  hash_set_type row_set{{static_cast<std::size_t>(build.num_rows())},
+                        cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                        cuco::empty_key{JoinNoMatch},
+                        {equality_build_equality, equality_build_conditional},
+                        {row_hash_build.device_hasher(build_nulls)},
+                        {},
+                        {},
+                        rmm::mr::polymorphic_allocator<char>{},
+                        {stream.value()}};
 
   auto iter = thrust::make_counting_iterator(0);
 
@@ -209,13 +194,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(probe.num_rows()),
                     left_table_keep_mask.begin(),
                     gather_map->begin(),
                     [join_type] __device__(bool keep_row) {
-                      return keep_row == (join_type == detail::join_kind::LEFT_SEMI_JOIN);
+                      return keep_row == (join_type == join_kind::LEFT_SEMI_JOIN);
                     });
 
   gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
@@ -241,7 +226,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
                                  right_conditional,
                                  binary_predicate,
                                  compare_nulls,
-                                 detail::join_kind::LEFT_SEMI_JOIN,
+                                 join_kind::LEFT_SEMI_JOIN,
                                  stream,
                                  mr);
 }
@@ -263,7 +248,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
                                  right_conditional,
                                  binary_predicate,
                                  compare_nulls,
-                                 detail::join_kind::LEFT_ANTI_JOIN,
+                                 join_kind::LEFT_ANTI_JOIN,
                                  stream,
                                  mr);
 }

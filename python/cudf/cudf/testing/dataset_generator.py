@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 # This module is for generating "synthetic" datasets. It was originally
 # designed for testing filtered reading. Generally, it should be useful
@@ -6,7 +7,6 @@
 # are exaggerated.
 
 import copy
-import random
 import string
 import uuid
 from multiprocessing import Pool
@@ -314,9 +314,7 @@ def get_dataframe(parameters, use_threads):
     return tbl
 
 
-def rand_dataframe(
-    dtypes_meta, rows, seed=random.randint(0, 2**32 - 1), use_threads=True
-):
+def rand_dataframe(dtypes_meta, rows, seed=0, use_threads=True):
     """
     Generates a random table.
 
@@ -343,7 +341,6 @@ def rand_dataframe(
         A Table with columns of corresponding dtypes mentioned in `dtypes_meta`
     """
     # Apply seed
-    random.seed(seed)
     rng = np.random.default_rng(seed=seed)
 
     column_params = []

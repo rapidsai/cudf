@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint8_t
 from libc.stddef cimport size_t
@@ -27,10 +28,16 @@ cdef class HostBuffer:
 
 cdef class PackedColumns:
     cdef unique_ptr[packed_columns] c_obj
+    cdef Stream stream
+    cdef DeviceMemoryResource mr
 
     @staticmethod
-    cdef PackedColumns from_libcudf(unique_ptr[packed_columns] data)
-    cpdef tuple release(self, Stream stream=*)
+    cdef PackedColumns from_libcudf(
+        unique_ptr[packed_columns] data,
+        Stream stream,
+        DeviceMemoryResource mr
+    )
+    cpdef tuple release(self)
 
 cdef class ChunkedPack:
     cdef unique_ptr[chunked_pack] c_obj
@@ -47,8 +54,10 @@ cdef class ChunkedPack:
 
 cpdef PackedColumns pack(Table input)
 
-cpdef Table unpack(PackedColumns input, DeviceMemoryResource mr=*)
+cpdef Table unpack(PackedColumns input, Stream stream=*)
 
 cpdef Table unpack_from_memoryviews(
-    memoryview metadata, gpumemoryview gpu_data, DeviceMemoryResource mr=*
+    memoryview metadata,
+    gpumemoryview gpu_data,
+    Stream stream=*,
 )

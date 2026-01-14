@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -111,30 +100,6 @@ void set_null_mask(bitmask_type* bitmask,
                    size_type end_bit,
                    bool valid,
                    rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-/**
- * @brief Sets a vector of non-overlapping pre-allocated bitmask buffers to given states in the
- * corresponding non-aliasing ranges in bulk
- *
- * Sets bit ranges `[begin_bit, end_bit)` of given bitmasks to specified valid states. The bitmask
- * bit ranges must be non-overlapping and non-aliasing. i.e., attempting to concurrently set bits
- * within the same physical word across bitmasks will result in undefined behavior. This utility is
- * optimized for bulk operation on 16 or more bitmasks sized 2^24 bits or less.
- *
- * @deprecated in 25.08 and to be removed in a future release. Use `cudf::set_null_masks_unsafe`
- * instead.
- *
- * @param bitmasks Pointers to bitmasks (e.g. returned by `column_view::null_mask()`)
- * @param begin_bits Indices of the first bits to set (inclusive)
- * @param end_bits Indices of the last bits to set (exclusive)
- * @param valids Booleans indicating if the corresponding bitmasks should be set to valid or null
- * @param stream CUDA stream used for device memory operations and kernel launches
- */
-[[deprecated]] void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
-                                   cudf::host_span<size_type const> begin_bits,
-                                   cudf::host_span<size_type const> end_bits,
-                                   cudf::host_span<bool const> valids,
-                                   rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Sets a vector of non-overlapping pre-allocated bitmask buffers to given states in the
@@ -277,23 +242,46 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
 
 /**
  * @brief Given a validity bitmask, counts the number of null elements (unset bits)
- * in the range `[start, stop)`
+ * in the range `[start, stop)`.
  *
  * If `bitmask == nullptr`, all elements are assumed to be valid and the
- * function returns ``.
+ * function returns `0`.
  *
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
+ * @throws std::invalid_argument if `start > stop`
+ * @throws std::invalid_argument if `start < 0`
  *
- * @param bitmask Validity bitmask residing in device memory.
- * @param start Index of the first bit to count (inclusive).
- * @param stop Index of the last bit to count (exclusive).
+ * @param bitmask Validity bitmask residing in device memory
+ * @param start Index of the first bit to count (inclusive)
+ * @param stop Index of the last bit to count (exclusive)
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return The number of null elements in the specified range.
+ * @return The number of null elements in the specified range
  */
-cudf::size_type null_count(bitmask_type const* bitmask,
-                           size_type start,
-                           size_type stop,
-                           rmm::cuda_stream_view stream = cudf::get_default_stream());
+size_type null_count(bitmask_type const* bitmask,
+                     size_type start,
+                     size_type stop,
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
+ * @brief Given a list of validity bitmasks, counts the number of null elements (unset bits) in the
+ * range `[start, stop)` for each bitmask.
+ *
+ * The same bit range `[start, stop)` is used for all bitmasks.
+ * If a bitmask pointer is `nullptr`, all elements corresponding to that bitmask are assumed to be
+ * valid and the null count is `0`.
+ *
+ * @throws std::invalid_argument if `start > stop`
+ * @throws std::invalid_argument if `start < 0`
+ *
+ * @param bitmasks Validity bitmasks residing in device memory
+ * @param start Index of the first bit to count (inclusive)
+ * @param stop Index of the last bit to count (exclusive)
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A vector of null counts for each bitmask
+ */
+std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bitmasks,
+                                        size_type start,
+                                        size_type stop,
+                                        rmm::cuda_stream_view stream = cudf::get_default_stream());
+
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

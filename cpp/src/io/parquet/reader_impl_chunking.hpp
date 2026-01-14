@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -27,6 +16,13 @@ namespace cudf::io::parquet::detail {
  * all passes/chunks in the file.
  */
 struct file_intermediate_data {
+  file_intermediate_data() = default;
+
+  file_intermediate_data(file_intermediate_data const&)            = delete;
+  file_intermediate_data& operator=(file_intermediate_data const&) = delete;
+  file_intermediate_data(file_intermediate_data&&)                 = default;
+  file_intermediate_data& operator=(file_intermediate_data&&)      = default;
+
   // all row groups to read
   std::vector<row_group_info> row_groups{};
 
@@ -77,20 +73,36 @@ struct row_range {
  * @brief Passes are broken down into subpasses based on temporary memory constraints.
  */
 struct subpass_intermediate_data {
+  subpass_intermediate_data() = default;
+
+  subpass_intermediate_data(subpass_intermediate_data const&)            = delete;
+  subpass_intermediate_data& operator=(subpass_intermediate_data const&) = delete;
+  subpass_intermediate_data(subpass_intermediate_data&&)                 = default;
+  subpass_intermediate_data& operator=(subpass_intermediate_data&&)      = default;
+
   rmm::device_buffer decomp_page_data;
 
   rmm::device_buffer level_decode_data{};
   cudf::detail::hostdevice_span<PageInfo> pages{};
 
-  // optimization. if the single_subpass flag is set, it means we will only be doing
-  // one subpass for the entire pass. this allows us to skip various pieces of work
-  // during processing. notably, page_buf will not be allocated to hold a compacted
-  // copy of the pages specific to the subpass.
-  bool single_subpass{false};
   cudf::detail::hostdevice_vector<PageInfo> page_buf{};
 
   // for each page in the subpass, the index of our source page in the pass
   rmm::device_uvector<size_t> page_src_index{0, cudf::get_default_stream()};
+
+  // For each page, the index into the column's string offset buffer
+  // Used for non-dictionary, non-FLBA string columns
+  rmm::device_uvector<size_t> page_string_offset_indices{0, cudf::get_default_stream()};
+
+  // String offset buffer for non-dictionary, non-FLBA string columns
+  // Contains pre-computed offsets into the string data. Allocated once per subpass
+  // in preprocess_subpass_pages() and reused across all output chunks in the subpass.
+  rmm::device_uvector<uint32_t> string_offset_buffer{0, cudf::get_default_stream()};
+
+  // temporary space for DELTA_BYTE_ARRAY decoding. this only needs to live until
+  // gpu::DecodeDeltaByteArray returns.
+  rmm::device_uvector<uint8_t> delta_temp_buf{0, cudf::get_default_stream()};
+
   // for each column in the file (indexed by _input_columns.size())
   // the number of associated pages for this subpass
   std::vector<size_t> column_page_count;
@@ -98,17 +110,19 @@ struct subpass_intermediate_data {
   cudf::detail::hostdevice_vector<PageNestingDecodeInfo> page_nesting_decode_info{};
 
   std::vector<row_range> output_chunk_read_info;
-  std::size_t current_output_chunk{0};
-
-  // temporary space for DELTA_BYTE_ARRAY decoding. this only needs to live until
-  // gpu::DecodeDeltaByteArray returns.
-  rmm::device_uvector<uint8_t> delta_temp_buf{0, cudf::get_default_stream()};
-
-  uint32_t kernel_mask{0};
 
   // skip_rows and num_rows values for this particular subpass. in absolute row indices.
   size_t skip_rows;
   size_t num_rows;
+  size_t current_output_chunk{0};
+
+  uint32_t kernel_mask{0};
+
+  // optimization. if the single_subpass flag is set, it means we will only be doing
+  // one subpass for the entire pass. this allows us to skip various pieces of work
+  // during processing. notably, page_buf will not be allocated to hold a compacted
+  // copy of the pages specific to the subpass.
+  bool single_subpass{false};
 };
 
 /**
@@ -118,17 +132,19 @@ struct subpass_intermediate_data {
  * rowgroups may represent less than all of the rowgroups to be read for the file.
  */
 struct pass_intermediate_data {
+  pass_intermediate_data() = default;
+
+  pass_intermediate_data(pass_intermediate_data const&)            = delete;
+  pass_intermediate_data& operator=(pass_intermediate_data const&) = delete;
+  pass_intermediate_data(pass_intermediate_data&&)                 = default;
+  pass_intermediate_data& operator=(pass_intermediate_data&&)      = default;
+
   std::vector<rmm::device_buffer> raw_page_data;
 
   // rowgroup, chunk and page information for the current pass.
-  bool has_compressed_data{false};
   std::vector<row_group_info> row_groups{};
   cudf::detail::hostdevice_vector<ColumnChunkDesc> chunks{};
   cudf::detail::hostdevice_vector<PageInfo> pages{};
-
-  // base memory used for the pass itself (compressed data in the loaded chunks and any
-  // decompressed dictionary pages)
-  size_t base_mem_size{0};
 
   // offsets to each group of input pages (by column/schema, indexed by _input_columns.size())
   // so if we had 2 columns/schemas, with page keys
@@ -140,9 +156,15 @@ struct pass_intermediate_data {
 
   rmm::device_buffer decomp_dict_data{0, cudf::get_default_stream()};
   rmm::device_uvector<size_t> decomp_scratch_sizes{0, cudf::get_default_stream()};
+  rmm::device_uvector<size_t> string_offset_sizes{0, cudf::get_default_stream()};
   rmm::device_uvector<string_index_pair> str_dict_index{0, cudf::get_default_stream()};
 
-  int level_type_size{0};
+  // currently active subpass
+  std::unique_ptr<subpass_intermediate_data> subpass{};
+
+  // base memory used for the pass itself (compressed data in the loaded chunks and any
+  // decompressed dictionary pages)
+  size_t base_mem_size{0};
 
   // skip_rows / num_rows for this pass.
   // NOTE: skip_rows is the absolute row index in the file.
@@ -153,8 +175,9 @@ struct pass_intermediate_data {
   // subpass. it does not get updated as a subpass iterates through output chunks.
   size_t processed_rows{0};
 
-  // currently active subpass
-  std::unique_ptr<subpass_intermediate_data> subpass{};
+  int level_type_size{0};
+
+  bool has_compressed_data{false};
 };
 
 }  // namespace cudf::io::parquet::detail

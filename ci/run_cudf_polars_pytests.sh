@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
@@ -20,5 +21,5 @@ python -m pytest --cache-clear "$@" tests --executor streaming --blocksize-mode 
 # Run experimental tests with Distributed cluster
 python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \
-    --scheduler distributed \
+    --cluster distributed \
     --cov-fail-under=0  # No code-coverage requirement for these tests.

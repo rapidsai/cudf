@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import datetime
 import decimal
@@ -7,13 +8,11 @@ import hashlib
 import math
 import os
 import pathlib
-import random
 import string
 from contextlib import contextmanager
 from io import BytesIO
 from string import ascii_letters
 
-import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -27,6 +26,8 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
+    is_supported_read_parquet,
+    is_supported_write_parquet,
     merge_parquet_filemetadata,
 )
 from cudf.testing import (
@@ -408,6 +409,7 @@ def test_parquet_read_metadata(tmp_path, pdf):
 def test_parquet_read_filtered(set_decomp_env_vars, tmp_path):
     # Generate data
     fname = tmp_path / "filtered.parquet"
+    rng = np.random.default_rng(0)
     dg.generate(
         fname,
         dg.Parameters(
@@ -417,11 +419,7 @@ def test_parquet_read_filtered(set_decomp_env_vars, tmp_path):
                     cardinality=40,
                     null_frequency=0.05,
                     generator=lambda: [
-                        "".join(
-                            random.sample(
-                                string.ascii_letters, random.randint(4, 8)
-                            )
-                        )
+                        "".join(rng.choice(list(string.ascii_letters), 5))
                         for _ in range(10)
                     ],
                     is_sorted=False,
@@ -429,9 +427,7 @@ def test_parquet_read_filtered(set_decomp_env_vars, tmp_path):
                 dg.ColumnParameters(
                     40,
                     0.2,
-                    lambda: np.random.default_rng(seed=0).integers(
-                        0, 100, size=10
-                    ),
+                    lambda: rng.integers(0, 100, size=10),
                     True,
                 ),
             ],
@@ -635,6 +631,38 @@ def test_parquet_reader_select_columns(datadir):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("ignore_missing_columns", [True, False])
+def test_parquet_reader_select_nonexistent_columns(ignore_missing_columns):
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "c": ["a", "b", "c", "d", "e", "f"],
+        }
+    )
+    buf = BytesIO()
+    df.to_parquet(buf)
+
+    if ignore_missing_columns:
+        expect = cudf.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
+        got = cudf.read_parquet(
+            buf,
+            columns=["a", "d"],
+            ignore_missing_columns=ignore_missing_columns,
+        )
+        assert_eq(expect, got)
+    else:
+        with pytest.raises(
+            ValueError,
+            match="Encountered non-existent column in selected path",
+        ):
+            cudf.read_parquet(
+                buf,
+                columns=["a", "d"],
+                ignore_missing_columns=ignore_missing_columns,
+            )
+
+
 def test_parquet_reader_invalids(tmp_path):
     test_pdf = cudf.DataFrame(
         {"a": np.array([1, np.nan, np.nan, 2])}, index=cudf.Index([0, 1, 2, 3])
@@ -733,6 +761,20 @@ def test_parquet_reader_multiple_files(tmp_path, src):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("empty_df_indices", [[0], [0, 1], [2, 3]])
+def test_parquet_reader_multiple_files_some_empty(tmp_path, empty_df_indices):
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    for idx in range(5):
+        if idx in empty_df_indices:
+            df = df.iloc[:0]
+        df.to_parquet(tmp_path / f"df_{idx}.parquet")
+
+    got = cudf.read_parquet([tmp_path])
+    expected = pd.read_parquet(tmp_path)
+
+    assert_eq(expected, got)
+
+
 def test_parquet_reader_reordered_columns(tmp_path):
     src = pd.DataFrame(
         {"name": ["cow", None, "duck", "fish", None], "id": [0, 1, 2, 3, 4]}
@@ -818,7 +860,7 @@ def test_parquet_reader_list_table(tmp_path):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert pa.Table.from_pandas(expect).equals(got.to_arrow())
+    assert_arrow_table_equal(pa.Table.from_pandas(expect), got.to_arrow())
 
 
 def int_gen(first_val, i):
@@ -976,7 +1018,7 @@ def test_parquet_reader_list_large_mixed(tmp_path):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert pa.Table.from_pandas(expect).equals(got.to_arrow())
+    assert_arrow_table_equal(pa.Table.from_pandas(expect), got.to_arrow())
 
 
 def test_parquet_reader_list_large_multi_rowgroup(tmp_path):
@@ -986,13 +1028,13 @@ def test_parquet_reader_list_large_multi_rowgroup(tmp_path):
     num_categories = 100
     row_group_size = 100
 
-    cupy.random.seed(0)
+    rng = np.random.default_rng(0)
 
     # generate a random pairing of doc: category
     documents = cudf.DataFrame(
         {
-            "document_id": cupy.random.randint(num_docs, size=num_rows),
-            "category_id": cupy.random.randint(num_categories, size=num_rows),
+            "document_id": rng.integers(num_docs, size=num_rows),
+            "category_id": rng.integers(num_categories, size=num_rows),
         }
     )
 
@@ -1193,6 +1235,63 @@ def test_parquet_reader_struct_select_columns(data, columns):
     expect = pq.ParquetFile(buff).read(columns=columns)
     got = cudf.read_parquet(buff, columns=columns)
     assert_arrow_table_equal(expect, got.to_arrow())
+
+
+def nonexistent_select_columns_params():
+    dfs = [
+        # columns that don't exist
+        (
+            [
+                {"a": 1, "b": 2},
+                {"a": 10, "b": 20},
+                {"a": None, "b": 22},
+                {"a": None, "b": None},
+                {"a": 15, "b": None},
+            ],
+            [["c"]],  # top-level missing
+        ),
+        (
+            [
+                {"a": 1, "b": 2, "c": [1, 2, 3]},
+                {"a": 10, "b": 20, "c": [4, 5]},
+                {"a": None, "b": 22, "c": [6]},
+                {"a": None, "b": None, "c": None},
+                {"a": 15, "b": None, "c": [-1, -2]},
+                None,
+                {"a": 100, "b": 200, "c": [-10, None, -20]},
+            ],
+            [
+                ["struct.b", "struct.d", "struct.c"],  # 'struct.d' missing
+            ],
+        ),
+        (
+            [
+                [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+                None,
+                [{"a": 10, "b": 20}],
+                [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+            ],
+            [
+                ["struct.list.element.c"],  # subfield 'c' missing
+            ],
+        ),
+    ]
+
+    for df_col_pair in dfs:
+        for cols in df_col_pair[1]:
+            yield df_col_pair[0], cols
+
+
+@pytest.mark.parametrize("data, columns", nonexistent_select_columns_params())
+def test_parquet_reader_struct_select_columns_nonexistent_error(data, columns):
+    table = pa.Table.from_pydict({"struct": data})
+    buff = BytesIO()
+    pa.parquet.write_table(table, buff)
+
+    with pytest.raises(
+        ValueError, match="Encountered non-existent column in selected path"
+    ):
+        cudf.read_parquet(buff, columns=columns, ignore_missing_columns=False)
 
 
 def test_parquet_reader_struct_los_large(tmp_path):
@@ -2351,7 +2450,7 @@ def test_parquet_writer_list_large(tmp_path):
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
-    assert gdf.to_arrow().equals(pa.Table.from_pandas(got))
+    assert_arrow_table_equal(gdf.to_arrow(), pa.Table.from_pandas(got))
 
 
 def test_parquet_writer_list_large_mixed(tmp_path):
@@ -2778,8 +2877,9 @@ def test_parquet_writer_nulls_pandas_read(tmp_path, pdf):
     num_rows = len(gdf)
 
     if num_rows > 0:
-        for col in gdf.columns:
-            gdf[col][random.randint(0, num_rows - 1)] = None
+        rng = np.random.default_rng(0)
+        mask = rng.choice([True, False], size=num_rows)
+        gdf.loc[mask, :] = None
 
     fname = tmp_path / "test_parquet_writer_nulls_pandas_read.parquet"
     gdf.to_parquet(fname)
@@ -3286,23 +3386,24 @@ def test_parquet_writer_time_delta_physical_type(store_schema):
 
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_roundtrip_time_delta(store_schema):
-    num_rows = 12345
+    num_rows = 123
+    rng = np.random.default_rng(0)
     df = cudf.DataFrame(
         {
             "s": cudf.Series(
-                random.sample(range(0, 200000), num_rows),
+                rng.integers(0, 200000, size=num_rows),
                 dtype="timedelta64[s]",
             ),
             "ms": cudf.Series(
-                random.sample(range(0, 200000), num_rows),
+                rng.integers(0, 200000, size=num_rows),
                 dtype="timedelta64[ms]",
             ),
             "us": cudf.Series(
-                random.sample(range(0, 200000), num_rows),
+                rng.integers(0, 200000, size=num_rows),
                 dtype="timedelta64[us]",
             ),
             "ns": cudf.Series(
-                random.sample(range(0, 200000), num_rows),
+                rng.integers(0, 200000, size=num_rows),
                 dtype="timedelta64[ns]",
             ),
         }
@@ -3396,17 +3497,26 @@ def test_parquet_reader_engine_error():
         cudf.read_parquet(BytesIO(), engine="abc")
 
 
-def test_reader_lz4():
-    pdf = pd.DataFrame({"ints": [1, 2] * 5001})
+@pytest.mark.skipif(
+    not is_supported_read_parquet("LZ4")
+    or not is_supported_write_parquet("LZ4"),
+    reason="LZ4 compression not supported for Parquet",
+)
+def test_parquet_roundtrip_lz4():
+    gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
 
     buffer = BytesIO()
-    pdf.to_parquet(buffer, compression="LZ4")
+    gdf.to_parquet(buffer, compression="LZ4")
 
     got = cudf.read_parquet(buffer)
-    assert_eq(pdf, got)
+    assert_eq(gdf, got)
 
 
-def test_writer_lz4():
+@pytest.mark.skipif(
+    not is_supported_write_parquet("LZ4"),
+    reason="LZ4 compression not supported for Parquet writing",
+)
+def test_parquet_write_lz4():
     gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
 
     buffer = BytesIO()
@@ -4560,6 +4670,12 @@ def test_parquet_reader_empty_compressed_page(datadir):
 def test_parquet_decompression(
     set_decomp_env_vars, pdf_day_timestamps, compression
 ):
+    # Skip if the compression type is not supported for reading
+    if not is_supported_read_parquet(compression.upper()):
+        pytest.skip(
+            f"{compression} compression not supported for Parquet reading in this configuration"
+        )
+
     # PANDAS returns category objects whereas cuDF returns hashes
     expect = pdf_day_timestamps.drop(columns=["col_category"])
 
@@ -4620,7 +4736,7 @@ def test_parquet_long_list(tmp_path):
     # Make sure that the cudf reader matches the pandas reader for this data
     actual = cudf.read_parquet(file_name)
     expected = pd.read_parquet(file_name)
-    assert actual.to_arrow().equals(pa.Table.from_pandas(expected))
+    assert_arrow_table_equal(pa.Table.from_pandas(expected), actual.to_arrow())
 
 
 @pytest.mark.parametrize(
@@ -4652,3 +4768,16 @@ def test_dataframe_parquet_roundtrip(index, write_index, empty):
     gpu_read = cudf.read_parquet(gpu_buf)
     cpu_read = cudf.read_parquet(cpu_buf)
     assert_eq(gpu_read, cpu_read)
+
+
+def test_read_many_colchunks_with_threadpool():
+    nrows = 1000
+    ncols = 100
+    table_data = {}
+    for i in range(ncols):
+        table_data[f"col_{i:04d}"] = [f"row_{j}" for j in range(nrows)]
+    expected = pa.table(table_data)
+    buffer = BytesIO()
+    pq.write_table(expected, buffer, row_group_size=100, write_page_index=True)
+
+    assert_eq(expected, cudf.read_parquet(buffer))

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/aggregation.hpp>
@@ -60,14 +49,14 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
                                         return static_cast<size_type>(b);
                                       }));
 
-    thrust::reduce_by_key(rmm::exec_policy(stream),
+    thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                           group_labels.begin(),
                           group_labels.end(),
                           bitmask_iterator,
                           thrust::make_discard_iterator(),
                           result->mutable_view().begin<size_type>());
   } else {
-    thrust::reduce_by_key(rmm::exec_policy(stream),
+    thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                           group_labels.begin(),
                           group_labels.end(),
                           thrust::make_constant_iterator(1),
@@ -90,7 +79,7 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
 
   if (num_groups == 0) { return result; }
 
-  thrust::adjacent_difference(rmm::exec_policy(stream),
+  thrust::adjacent_difference(rmm::exec_policy_nosync(stream),
                               group_offsets.begin() + 1,
                               group_offsets.end(),
                               result->mutable_view().begin<size_type>());

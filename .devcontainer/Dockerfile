@@ -40,8 +40,8 @@ ENV LIBCUDF_KERNEL_CACHE_PATH="/home/coder/cudf/cpp/build/${PYTHON_PACKAGE_MANAG
 ENV AWS_ROLE_ARN="arn:aws:iam::279114543810:role/nv-gha-token-sccache-devs"
 ENV SCCACHE_REGION="us-east-2"
 ENV SCCACHE_BUCKET="rapids-sccache-devs"
-# 2hr (1 minute longer than sccache-dist request timeout)
-ENV SCCACHE_IDLE_TIMEOUT=7200
+ENV SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE=true
+ENV SCCACHE_IDLE_TIMEOUT=0
 
 ###
 # sccache-dist configuration
@@ -52,13 +52,8 @@ ENV DEVCONTAINER_UTILS_ENABLE_SCCACHE_DIST=1
 ENV SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE=true
 # Retry transient errors 4 times (for a total of 5 attempts)
 ENV SCCACHE_DIST_MAX_RETRIES=4
-ENV SCCACHE_DIST_CONNECT_TIMEOUT=30
-ENV SCCACHE_DIST_CONNECTION_POOL=false
 # 1hr 59min (to accommodate debug builds)
 ENV SCCACHE_DIST_REQUEST_TIMEOUT=7140
-ENV SCCACHE_DIST_KEEPALIVE_ENABLED=true
-ENV SCCACHE_DIST_KEEPALIVE_INTERVAL=20
-ENV SCCACHE_DIST_KEEPALIVE_TIMEOUT=600
 ENV SCCACHE_DIST_URL="https://${TARGETARCH}.linux.sccache.rapids.nvidia.com"
 
 # Build as much in parallel as possible

@@ -1,15 +1,8 @@
 # =============================================================================
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License. You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software distributed under the License
-# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-# or implied. See the License for the specific language governing permissions and limitations under
-# the License.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 # ##################################################################################################
@@ -162,7 +155,9 @@ ConfigureTest(
   groupby/sum_of_squares_tests.cpp
   groupby/sum_scan_tests.cpp
   groupby/sum_tests.cpp
-  groupby/tdigest_tests.cu
+  groupby/sum_with_overflow_tests.cpp
+  groupby/tdigest_tests.cpp
+  groupby/topk_tests.cpp
   groupby/var_tests.cpp
   GPUS 1
   PERCENT 100
@@ -171,8 +166,16 @@ ConfigureTest(
 # ##################################################################################################
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu join/distinct_join_tests.cpp
+  JOIN_TEST
+  join/join_tests.cpp
+  join/conditional_join_tests.cu
+  join/cross_join_tests.cpp
+  join/semi_anti_join_tests.cpp
+  join/mixed_join_tests.cu
+  join/distinct_join_tests.cpp
+  join/key_remapping_tests.cpp
+  GPUS 1
+  PERCENT 100
 )
 
 # ##################################################################################################
@@ -230,7 +233,7 @@ ConfigureTest(
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
-  reductions/tdigest_tests.cu
+  reductions/tdigest_tests.cpp
   GPUS 1
   PERCENT 70
 )
@@ -301,7 +304,7 @@ ConfigureTest(
   interop/from_arrow_stream_test.cpp
   interop/dlpack_test.cpp
   EXTRA_LIBS
-  nanoarrow
+  nanoarrow::nanoarrow
   ${ARROW_LIBRARIES}
 )
 
@@ -332,7 +335,7 @@ ConfigureTest(
   io/parquet_v2_test.cpp
   io/parquet_writer_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 ConfigureTest(
   HYBRID_SCAN_TEST
@@ -356,17 +359,17 @@ ConfigureTest(
   CROARING_COMPILER_SUPPORTS_AVX512=0
 )
 ConfigureTest(
-  JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
+  JSON_TEST io/json/json_chunked_reader.cpp io/json/json_test.cpp io/json/json_type_cast_test.cpp
+  io/json/json_utils.cu
   GPUS 1
   PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
 )
 ConfigureTest(JSON_WRITER_TEST io/json/json_writer.cpp)
-ConfigureTest(JSON_TYPE_CAST_TEST io/json/json_type_cast_test.cu)
 ConfigureTest(NESTED_JSON_TEST io/json/nested_json_test.cpp io/json/json_tree.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
-ConfigureTest(JSON_QUOTE_NORMALIZATION io/json/json_quote_normalization_test.cpp)
-ConfigureTest(JSON_WHITESPACE_NORMALIZATION io/json/json_whitespace_normalization_test.cu)
-ConfigureTest(JSON_TREE_CSR io/json/json_tree_csr.cu)
+ConfigureTest(JSON_QUOTE_NORMALIZATION_TEST io/json/json_quote_normalization_test.cpp)
+ConfigureTest(JSON_WHITESPACE_NORMALIZATION_TEST io/json/json_whitespace_normalization_test.cpp)
+ConfigureTest(JSON_TREE_CSR_TEST io/json/json_tree_csr.cu)
 ConfigureTest(
   DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
   GPUS 1
@@ -375,7 +378,8 @@ ConfigureTest(
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
-ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
+ConfigureTest(CUDFTABLE_TEST io/cudftable_test.cpp)
+ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cpp)
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
@@ -427,6 +431,7 @@ ConfigureTest(
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/context_tests.cpp
   utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
@@ -617,13 +622,14 @@ ConfigureTest(
   LARGE_STRINGS_TEST
   large_strings/concatenate_tests.cpp
   large_strings/case_tests.cpp
-  large_strings/json_tests.cu
+  large_strings/json_tests.cpp
   large_strings/large_strings_fixture.cpp
   large_strings/merge_tests.cpp
   large_strings/parquet_tests.cpp
   large_strings/replace_tests.cpp
   large_strings/reshape_tests.cpp
   large_strings/split_strings_tests.cpp
+  io/json/json_utils.cu
   GPUS 1
   PERCENT 100
 )
@@ -745,6 +751,9 @@ ConfigureTest(
 )
 ConfigureTest(STREAM_IO_ORC_TEST streams/io/orc_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_IO_PARQUET_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_IO_HYBRID_SCAN_TEST streams/io/experimental/hybrid_scan_test.cpp STREAM_MODE testing
+)
 ConfigureTest(STREAM_JOIN_TEST streams/join_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)

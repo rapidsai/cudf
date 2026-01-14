@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "common_utils.cuh"
@@ -25,7 +14,7 @@
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
@@ -159,8 +148,8 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
     auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
     auto const ufn    = cudf::detail::unique_copy_fn<decltype(itr), decltype(row_eq)>{
       itr, duplicate_keep_option::KEEP_FIRST, row_eq, size - 1};
-    thrust::transform(rmm::exec_policy(stream), itr, itr + size, result.begin(), ufn);
-    result_end = thrust::copy_if(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream), itr, itr + size, result.begin(), ufn);
+    result_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
                                  itr,
                                  itr + size,
                                  result.begin(),
@@ -169,7 +158,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   } else {
     auto const d_key_equal = comparator.equal_to<false>(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
-    result_end = thrust::unique_copy(rmm::exec_policy(stream),
+    result_end = thrust::unique_copy(rmm::exec_policy_nosync(stream),
                                      thrust::counting_iterator<size_type>(0),
                                      thrust::counting_iterator<size_type>(size),
                                      group_offsets->begin(),

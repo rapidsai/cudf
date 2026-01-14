@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -21,6 +10,7 @@
 
 #pragma once
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -273,12 +263,24 @@ class parquet_metadata {
  *
  * @ingroup io_readers
  *
- * @param src_info Dataset source
+ * @param src_info Dataset source information
  *
  * @return parquet_metadata with parquet schema, number of rows, number of row groups and key-value
  * metadata
  */
 parquet_metadata read_parquet_metadata(source_info const& src_info);
+
+/**
+ * @brief Constructs FileMetaData objects from parquet dataset
+ *
+ * @ingroup io_readers
+ *
+ * @param sources Input `datasource` objects to read the dataset from
+ *
+ * @return List of FileMetaData objects, one per parquet source
+ */
+std::vector<parquet::FileMetaData> read_parquet_footers(
+  cudf::host_span<std::unique_ptr<cudf::io::datasource> const> sources);
 
 /** @} */  // end of group
 }  // namespace io

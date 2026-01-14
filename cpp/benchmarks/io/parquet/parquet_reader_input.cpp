@@ -1,21 +1,10 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -398,6 +387,60 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
   parquet_read_common(num_rows_written, n_col, source_sink, state);
 }
 
+void BM_parquet_read_file_shape(nvbench::state& state)
+{
+  // Currently the parquet reader only reads the page index if there are string columns
+  auto constexpr d_type = cudf::type_id::STRING;
+
+  auto const source_type    = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const num_rows       = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_row_groups = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
+  auto const num_pages_per_row_group =
+    static_cast<cudf::size_type>(state.get_int64("pages_per_row_group"));
+  auto const has_page_idx = static_cast<bool>(state.get_int64("has_page_idx"));
+
+  cuio_source_sink_pair source_sink(source_type);
+
+  auto const tbl =
+    create_random_table({d_type},
+                        row_count{num_rows},
+                        data_profile_builder().cardinality(num_rows / 10).avg_run_length(4));
+  auto const view = tbl->view();
+
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+      .compression(cudf::io::compression_type::NONE)
+      .row_group_size_rows(num_rows / num_row_groups)
+      .max_page_size_rows(num_rows / (num_row_groups * num_pages_per_row_group))
+      // Write page index by setting stats_level to STATISTICS_COLUMN
+      .stats_level(has_page_idx ? cudf::io::statistics_freq::STATISTICS_COLUMN
+                                : cudf::io::statistics_freq::STATISTICS_ROWGROUP);
+  cudf::io::write_parquet(write_opts);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
+
+  auto mem_stats_logger = cudf::memory_stats_logger();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
+             [&](nvbench::launch& launch, auto& timer) {
+               try_drop_l3_cache();
+
+               timer.start();
+               auto const result = cudf::io::read_parquet(read_opts);
+               timer.stop();
+
+               CUDF_EXPECTS(result.tbl->num_columns() == 1, "Unexpected number of columns");
+               CUDF_EXPECTS(result.tbl->num_rows() == num_rows, "Unexpected number of rows");
+             });
+
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count(static_cast<double>(num_rows) / time, "rows_per_sec");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
+}
+
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::FLOAT,
                                             data_type::BOOL8,
@@ -459,7 +502,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
   .set_name("parquet_read_wide_tables")
   .set_min_samples(4)
   .set_type_axes_names({"data_type"})
-  .add_int64_axis("data_size", {1024 << 20, 2048 << 20})
+  .add_int64_axis("data_size", {1024L << 20, 2048L << 20})
   .add_int64_axis("num_cols", {256, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
@@ -467,7 +510,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
 NVBENCH_BENCH(BM_parquet_read_wide_tables_mixed)
   .set_name("parquet_read_wide_tables_mixed")
   .set_min_samples(4)
-  .add_int64_axis("data_size", {1024 << 20, 2048 << 20})
+  .add_int64_axis("data_size", {1024L << 20, 2048L << 20})
   .add_int64_axis("num_cols", {256, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
@@ -491,3 +534,12 @@ NVBENCH_BENCH(BM_parquet_read_long_strings)
   .add_int64_axis("data_size", {512 << 20})
   .add_int64_power_of_two_axis("avg_string_length",
                                nvbench::range(4, 16, 2));  // 16, 64, ... -> 64k
+
+NVBENCH_BENCH(BM_parquet_read_file_shape)
+  .set_name("parquet_read_file_shape")
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .set_min_samples(4)
+  .add_int64_axis("num_rows", {10'000'000, 100'000'000})
+  .add_int64_axis("num_row_groups", {1, 10})
+  .add_int64_axis("pages_per_row_group", {1'000, 10'000})
+  .add_int64_axis("has_page_idx", {true, false});

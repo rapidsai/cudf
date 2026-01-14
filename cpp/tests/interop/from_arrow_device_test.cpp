@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -414,9 +403,9 @@ TEST_F(FromArrowDeviceTest, DictionaryIndicesType)
 {
   std::vector<std::unique_ptr<cudf::column>> columns;
   auto col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
-  columns.emplace_back(cudf::dictionary::encode(col));
-  columns.emplace_back(cudf::dictionary::encode(col));
-  columns.emplace_back(cudf::dictionary::encode(col));
+  columns.emplace_back(cudf::dictionary::encode(col, cudf::data_type(cudf::type_id::INT8)));
+  columns.emplace_back(cudf::dictionary::encode(col, cudf::data_type(cudf::type_id::INT16)));
+  columns.emplace_back(cudf::dictionary::encode(col, cudf::data_type(cudf::type_id::INT64)));
 
   cudf::table expected_table(std::move(columns));
   cudf::table_view expected_table_view = expected_table.view();
@@ -448,21 +437,21 @@ TEST_F(FromArrowDeviceTest, DictionaryIndicesType)
   input_array->length     = expected_table.num_rows();
   input_array->null_count = 0;
 
-  auto col1_indices =
-    cudf::test::fixed_width_column_wrapper<int8_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
-  populate_from_col<int8_t>(input_array->children[0], col1_indices);
+  populate_from_col<int8_t>(
+    input_array->children[0],
+    cudf::dictionary_column_view{expected_table_view.column(0)}.get_indices_annotated());
   populate_from_col<int64_t>(input_array->children[0]->dictionary,
                              cudf::dictionary_column_view{expected_table_view.column(0)}.keys());
 
-  auto col2_indices =
-    cudf::test::fixed_width_column_wrapper<int16_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
-  populate_from_col<int16_t>(input_array->children[1], col2_indices);
+  populate_from_col<int16_t>(
+    input_array->children[1],
+    cudf::dictionary_column_view{expected_table_view.column(1)}.get_indices_annotated());
   populate_from_col<int64_t>(input_array->children[1]->dictionary,
                              cudf::dictionary_column_view{expected_table_view.column(1)}.keys());
 
-  auto col3_indices =
-    cudf::test::fixed_width_column_wrapper<int64_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
-  populate_from_col<int64_t>(input_array->children[2], col3_indices);
+  populate_from_col<int64_t>(
+    input_array->children[2],
+    cudf::dictionary_column_view{expected_table_view.column(2)}.get_indices_annotated());
   populate_from_col<int64_t>(input_array->children[2]->dictionary,
                              cudf::dictionary_column_view{expected_table_view.column(2)}.keys());
 

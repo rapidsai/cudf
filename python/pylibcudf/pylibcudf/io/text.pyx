@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 from libc.stdint cimport uint64_t
@@ -14,6 +15,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.io cimport text as cpp_text
 
 __all__ = [
+    "ByteRangeInfo",
     "DataChunkSource",
     "ParseOptions",
     "make_source",
@@ -21,6 +23,34 @@ __all__ = [
     "make_source_from_file",
     "multibyte_split",
 ]
+
+
+cdef class ByteRangeInfo:
+    """Information about a byte range in a file.
+
+    For details, see :cpp:class:`cudf::io::text::byte_range_info`
+
+    Parameters
+    ----------
+    offset : int
+        Offset in bytes from the start of the file
+    size : int
+        Size of the range in bytes
+    """
+
+    def __init__(self, size_t offset, size_t size):
+        self.c_obj = byte_range_info(offset, size)
+
+    @property
+    def offset(self):
+        """Get the offset in bytes."""
+        return self.c_obj.offset()
+
+    @property
+    def size(self):
+        """Get the size in bytes."""
+        return self.c_obj.size()
+
 
 cdef class ParseOptions:
     """
@@ -169,7 +199,7 @@ cpdef Column multibyte_split(
     """
     Splits the source text into a strings column using a multiple byte delimiter.
 
-    For details, see :cpp:func:`cudf::io::text::multibyte_split`
+    For details, see :cpp:func:`multibyte_split`
 
     Parameters
     ----------

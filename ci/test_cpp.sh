@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
@@ -16,18 +17,18 @@ set +e
 export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
 
 rapids-logger "Run libcudf gtests"
-./ci/run_cudf_ctests.sh -j20
+timeout 30m ./ci/run_cudf_ctests.sh -j20
 SUITEERROR=$?
 
 if (( SUITEERROR == 0 )); then
     rapids-logger "Run libcudf examples"
-    ./ci/run_cudf_examples.sh
+    timeout 30m ./ci/run_cudf_examples.sh
     SUITEERROR=$?
 fi
 
 if (( SUITEERROR == 0 )); then
     rapids-logger "Run libcudf_kafka gtests"
-    ./ci/run_cudf_kafka_ctests.sh -j20
+    timeout 30m ./ci/run_cudf_kafka_ctests.sh -j20
     SUITEERROR=$?
 fi
 
@@ -35,7 +36,7 @@ fi
 rapids-logger "Run tests of libcudf benchmarks"
 
 if (( SUITEERROR == 0 )); then
-    ./ci/run_cudf_benchmark_smoketests.sh
+    timeout 30m ./ci/run_cudf_benchmark_smoketests.sh
     SUITEERROR=$?
 fi
 

@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.vector cimport vector
@@ -40,6 +41,7 @@ cdef class JsonReaderOptions:
     cpdef void set_byte_range_offset(self, size_t offset)
     cpdef void set_byte_range_size(self, size_t size)
     cpdef void enable_lines(self, bool val)
+    cpdef void set_source(self, SourceInfo src)
     # These hidden options are subjected to change without deprecation cycle.
     # These are used to test libcudf JSON reader features, not used in cuDF.
     cpdef void set_delimiter(self, str val)
@@ -52,6 +54,7 @@ cdef class JsonReaderOptions:
     cpdef void allow_numeric_leading_zeros(self, bool val)
     cpdef void allow_nonnumeric_numbers(self, bool val)
     cpdef void set_na_values(self, list vals)
+
 
 cdef class JsonReaderOptionsBuilder:
     cdef json_reader_options_builder c_obj

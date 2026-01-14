@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -68,7 +57,7 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
   // But if min_periods=3, rows at indices 0 and 4 have too few observations, and must return
   // null. The sizes at these positions must be 0, i.e.
   //  prec + foll = [0,3,3,3,0]
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     preceding_begin,
                     preceding_begin + input_size,
                     following_begin,
@@ -114,7 +103,7 @@ std::unique_ptr<column> create_collect_gather_map(column_view const& child_offse
   auto gather_map = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, per_row_mapping.size(), mask_state::UNALLOCATED, stream);
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(per_row_mapping.size()),
     gather_map->mutable_view().template begin<size_type>(),

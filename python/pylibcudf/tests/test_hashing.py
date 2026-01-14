@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import hashlib
 import struct
@@ -45,8 +46,7 @@ def uint_hash_combine_32(lhs, rhs):
 
 def libcudf_mmh3_x86_32(binary):
     seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
-    hashval = mmh3.hash(binary, seed)
-    return hash_combine_32(seed, hashval)
+    return mmh3.hash(binary, seed, signed=False)
 
 
 @pytest.fixture(params=[pa.int64(), pa.float64(), pa.string(), pa.bool_()])
@@ -190,10 +190,7 @@ def test_murmurhash3_x86_32_list():
                 ),
             )
 
-        final = uint_hash_combine_32(
-            plc.hashing.LIBCUDF_DEFAULT_HASH_SEED, hash_value
-        )
-        return final
+        return hash_value
 
     expect = pa.array(
         [hash_list(val) for val in pa_tbl["list"].to_pylist()],
@@ -232,7 +229,6 @@ def test_murmurhash3_x86_32_struct():
 
         combined_hash = hash_single_uint32(s[keys[0]], seed=seed)
         combined_hash = uint_hash_combine_32(0, combined_hash)
-        combined_hash = uint_hash_combine_32(seed, combined_hash)
 
         for key in keys[1:]:
             current_hash = hash_single_uint32(s[key], seed=seed)

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_helpers.hpp"
@@ -21,8 +10,6 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/batched_memset.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -32,7 +19,7 @@
 
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/reduce.h>
+#include <thrust/sequence.h>
 
 #include <numeric>
 
@@ -57,38 +44,16 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
 {
   CUDF_FUNC_RANGE();
 
-  std::vector<size_t> host_chunk_page_counts(chunks.size() + 1);
-  std::transform(
-    chunks.host_begin(), chunks.host_end(), host_chunk_page_counts.begin(), [](auto const& chunk) {
-      return chunk.num_dict_pages;
-    });
-  host_chunk_page_counts[chunks.size()] = 0;
-
-  auto chunk_page_counts = cudf::detail::make_device_uvector_async(
-    host_chunk_page_counts, stream, cudf::get_current_device_resource_ref());
-
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
-                         chunk_page_counts.begin(),
-                         chunk_page_counts.end(),
-                         chunk_page_counts.begin(),
-                         size_t{0},
-                         cuda::std::plus<size_t>{});
-
-  rmm::device_uvector<chunk_page_info> d_chunk_page_info(chunks.size(), stream);
-
+  rmm::device_uvector<chunk_page_info> chunk_page_info(chunks.size(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    thrust::counting_iterator<cuda::std::size_t>(0),
                    thrust::counting_iterator(chunks.size()),
-                   [cpi               = d_chunk_page_info.begin(),
-                    chunk_page_counts = chunk_page_counts.begin(),
-                    pages             = pages.device_begin()] __device__(size_t i) {
-                     cpi[i].pages = &pages[chunk_page_counts[i]];
-                   });
+                   [cpi = chunk_page_info.begin(), pages = pages.device_begin()] __device__(
+                     auto page_idx) { cpi[page_idx].pages = &pages[page_idx]; });
 
   parquet::kernel_error error_code(stream);
 
-  parquet::detail::decode_page_headers(
-    chunks.device_begin(), d_chunk_page_info.begin(), chunks.size(), error_code.data(), stream);
+  parquet::detail::decode_page_headers(chunks, chunk_page_info.begin(), error_code.data(), stream);
 
   if (auto const error = error_code.value_sync(stream); error != 0) {
     CUDF_FAIL("Parquet header parsing failed with code(s) " +
@@ -183,7 +148,7 @@ bool hybrid_scan_reader_impl::setup_column_chunks()
 }
 
 void hybrid_scan_reader_impl::setup_compressed_data(
-  std::vector<rmm::device_buffer> column_chunk_buffers)
+  std::vector<rmm::device_buffer>&& column_chunk_buffers)
 {
   auto& pass = *_pass_itm_data;
 
@@ -223,12 +188,11 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   auto const row_groups_info = std::get<2>(_extended_metadata->select_row_groups(
     {}, row_group_indices, {}, {}, {}, {}, {}, {}, {}, _stream));
 
-  CUDF_EXPECTS(row_groups_info.size() * _input_columns.size() == dictionary_page_data.size(),
-               "Dictionary page data size must match the number of row groups times the number of "
-               "input columns");
+  CUDF_EXPECTS(
+    row_groups_info.size() * dictionary_col_schemas.size() == dictionary_page_data.size(),
+    "Dictionary page data size must match the number of row groups times the number of columns "
+    "with dictionaries and an (in)equality predicate");
 
-  // Number of input columns
-  auto const num_input_columns = _input_columns.size();
   // Number of column chunks
   auto const total_column_chunks = dictionary_page_data.size();
 

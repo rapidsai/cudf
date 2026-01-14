@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import operator
+from functools import partial
 from typing import TYPE_CHECKING, Any, Concatenate, Literal, TypeVar, TypedDict
 
 import pylibcudf as plc
@@ -17,12 +18,15 @@ from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.utils import _concat
+from cudf_polars.utils.config import ShufflerInsertionMethod
+from cudf_polars.utils.cuda_stream import get_dask_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping, Sequence
 
     from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
@@ -40,6 +44,7 @@ class ShuffleOptions(TypedDict):
     column_names: Sequence[str]
     dtypes: Sequence[DataType]
     cluster_kind: Literal["dask", "single"]
+    shuffler_insertion_method: ShufflerInsertionMethod
 
 
 # Experimental rapidsmpf shuffler integration
@@ -77,7 +82,14 @@ class RMPFIntegration:  # pragma: no cover
             br=context.br,
             stream=DEFAULT_STREAM,
         )
-        shuffler.insert_chunks(packed_inputs)
+
+        if (
+            options["shuffler_insertion_method"]
+            == ShufflerInsertionMethod.CONCAT_INSERT
+        ):
+            shuffler.concat_insert(packed_inputs)
+        else:
+            shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
     @nvtx_annotate_cudf_polars(message="RMPFIntegration.extract_partition")
@@ -116,6 +128,7 @@ class RMPFIntegration:  # pragma: no cover
             ),
             column_names,
             dtypes,
+            get_dask_cuda_stream(),
         )
 
 
@@ -129,24 +142,28 @@ class Shuffle(IR):
     `ShuffleSorted` for sorting-based shuffling.
     """
 
-    __slots__ = ("keys", "shuffle_method")
-    _non_child = ("schema", "keys", "shuffle_method")
+    __slots__ = ("keys", "shuffle_method", "shuffler_insertion_method")
+    _non_child = ("schema", "keys", "shuffle_method", "shuffler_insertion_method")
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
     shuffle_method: ShuffleMethod
     """Shuffle method to use."""
+    shuffler_insertion_method: ShufflerInsertionMethod
+    """Insertion method for rapidsmpf shuffler."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
         shuffle_method: ShuffleMethod,
+        shuffler_insertion_method: ShufflerInsertionMethod,
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
         self.shuffle_method = shuffle_method
-        self._non_child_args = (schema, keys, shuffle_method)
+        self.shuffler_insertion_method = shuffler_insertion_method
+        self._non_child_args = (schema, keys, shuffle_method, shuffler_insertion_method)
         self.children = (df,)
 
     # the type-ignore is for
@@ -161,6 +178,8 @@ class Shuffle(IR):
         keys: tuple[NamedExpr, ...],
         shuffle_method: ShuffleMethod,
         df: DataFrame,
+        *,
+        context: IRExecutionContext,
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
         # Single-partition Shuffle evaluation is a no-op
@@ -206,11 +225,15 @@ def _hash_partition_dataframe(
     # partition for each row
     partition_map = plc.binaryop.binary_operation(
         plc.hashing.murmurhash3_x86_32(
-            DataFrame([expr.evaluate(df) for expr in on]).table
+            DataFrame([expr.evaluate(df) for expr in on], stream=df.stream).table,
+            stream=df.stream,
         ),
-        plc.Scalar.from_py(partition_count, plc.DataType(plc.TypeId.UINT32)),
+        plc.Scalar.from_py(
+            partition_count, plc.DataType(plc.TypeId.UINT32), stream=df.stream
+        ),
         plc.binaryop.BinaryOperator.PYMOD,
         plc.types.DataType(plc.types.TypeId.UINT32),
+        stream=df.stream,
     )
 
     # Apply partitioning
@@ -218,6 +241,7 @@ def _hash_partition_dataframe(
         df.table,
         partition_map,
         partition_count,
+        stream=df.stream,
     )
     splits = offsets[1:-1]
 
@@ -227,8 +251,9 @@ def _hash_partition_dataframe(
             split,
             df.column_names,
             df.dtypes,
+            df.stream,
         )
-        for i, split in enumerate(plc.copying.split(t, splits))
+        for i, split in enumerate(plc.copying.split(t, splits, stream=df.stream))
     }
 
 
@@ -247,6 +272,7 @@ def _simple_shuffle_graph(
     ],
     options: OPT_T,
     *other: Any,
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """Make a simple all-to-all shuffle graph."""
     split_name = f"split-{name_out}"
@@ -270,7 +296,7 @@ def _simple_shuffle_graph(
                 (split_name, part_in),
                 part_out,
             )
-        graph[(name_out, part_out)] = (_concat, *_concat_list)
+        graph[(name_out, part_out)] = (partial(_concat, context=context), *_concat_list)
     return graph
 
 
@@ -301,7 +327,9 @@ def _(
 
 @generate_ir_tasks.register(Shuffle)
 def _(
-    ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: Shuffle,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
     shuffle_method = ir.shuffle_method
@@ -336,6 +364,7 @@ def _(
                     "column_names": list(ir.schema.keys()),
                     "dtypes": list(ir.schema.values()),
                     "cluster_kind": cluster_kind,
+                    "shuffler_insertion_method": ir.shuffler_insertion_method,
                 },
             )
         except ValueError as err:
@@ -348,7 +377,7 @@ def _(
                 ) from err
 
     # Simple task-based fall-back
-    return _simple_shuffle_graph(
+    return partial(_simple_shuffle_graph, context=context)(
         get_key_name(ir.children[0]),
         get_key_name(ir),
         partition_info[ir.children[0]].count,

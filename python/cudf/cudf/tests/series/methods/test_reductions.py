@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import re
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
@@ -337,7 +338,7 @@ def test_nans_stats(data, reduction_methods, skipna, request):
     )
 
     psr = pd.Series(data, dtype="float64" if len(data) == 0 else None)
-    gsr = cudf.from_pandas(psr)
+    gsr = cudf.from_pandas(psr, nan_as_null=False)
 
     assert_eq(
         getattr(psr, reduction_methods)(skipna=skipna),

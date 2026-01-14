@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from copy import copy, deepcopy
 
 import cupy as cp
@@ -113,6 +114,8 @@ def test_deep_copy_write_in_place():
     assert_neq(gdf, cdf)
 
 
+# This behavior is explicitly changed by the copy-on-write feature.
+@pytest.mark.no_copy_on_write
 def test_shallow_copy_write_in_place():
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]

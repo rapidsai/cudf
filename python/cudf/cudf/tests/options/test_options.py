@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from contextlib import redirect_stdout
 from io import StringIO
@@ -45,6 +46,9 @@ def even_option(empty_option_environment):
     del cudf.options._OPTIONS["even_option"]
 
 
+# These tests overwrite existing options so the copy_on_write option will not be valid
+# to set during the lifetime of these tests.
+@pytest.mark.no_copy_on_write
 @pytest.mark.usefixtures("odd_option", "even_option")
 class TestCleanOptions:
     def test_option_get_set(odd_option):

@@ -1,21 +1,7 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
-
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -33,17 +19,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
-#include <random>
-
-template <typename T>
-T random_int(T min, T max)
-{
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
-  static std::uniform_int_distribution<T> uniform{min, max};
-
-  return uniform(engine);
-}
+#include <nvbench/nvbench.cuh>
 
 // -----------------------------------------------------------------------------
 template <typename InputIterator, typename OutputIterator, typename T>
@@ -125,54 +101,115 @@ void iterator_bench_thrust(cudf::column_view& col, rmm::device_uvector<T>& resul
 }
 
 // -----------------------------------------------------------------------------
-class Iterator : public cudf::benchmark {};
 
-template <class TypeParam, bool cub_or_thrust, bool raw_or_iterator>
-void BM_iterator(benchmark::State& state)
+void bench_iterator_cub_raw(nvbench::state& state)
 {
-  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
-  using T      = TypeParam;
-  auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
+  using T                = double;
+  auto const column_size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto num_gen           = thrust::counting_iterator<cudf::size_type>(0);
 
   cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
   cudf::column_view hasnull_F = wrap_hasnull_F;
 
-  // Initialize dev_result to false
-  auto dev_result = cudf::detail::make_zeroed_device_uvector<TypeParam>(
+  // Initialize dev_result
+  auto dev_result = cudf::detail::make_zeroed_device_uvector<T>(
     1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    if (cub_or_thrust) {
-      if (raw_or_iterator) {
-        raw_stream_bench_cub<T>(hasnull_F, dev_result);  // driven by raw pointer
-      } else {
-        iterator_bench_cub<T, false>(hasnull_F, dev_result);  // driven by riterator without nulls
-      }
-    } else {
-      if (raw_or_iterator) {
-        raw_stream_bench_thrust<T>(hasnull_F, dev_result);  // driven by raw pointer
-      } else {
-        iterator_bench_thrust<T, false>(hasnull_F,
-                                        dev_result);  // driven by riterator without nulls
-      }
-    }
-  }
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * column_size *
-                          sizeof(TypeParam));
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  auto const data_size = column_size * sizeof(T);
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
+  state.add_global_memory_writes<nvbench::int8_t>(data_size);
+
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { raw_stream_bench_cub<T>(hasnull_F, dev_result); });
 }
 
-#define ITER_BM_BENCHMARK_DEFINE(name, type, cub_or_thrust, raw_or_iterator) \
-  BENCHMARK_DEFINE_F(Iterator, name)(::benchmark::State & state)             \
-  {                                                                          \
-    BM_iterator<type, cub_or_thrust, raw_or_iterator>(state);                \
-  }                                                                          \
-  BENCHMARK_REGISTER_F(Iterator, name)                                       \
-    ->RangeMultiplier(10)                                                    \
-    ->Range(1000, 10000000)                                                  \
-    ->UseManualTime()                                                        \
-    ->Unit(benchmark::kMillisecond);
+void bench_iterator_cub_iter(nvbench::state& state)
+{
+  using T                = double;
+  auto const column_size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto num_gen           = thrust::counting_iterator<cudf::size_type>(0);
 
-ITER_BM_BENCHMARK_DEFINE(double_cub_raw, double, true, true);
-ITER_BM_BENCHMARK_DEFINE(double_cub_iter, double, true, false);
-ITER_BM_BENCHMARK_DEFINE(double_thrust_raw, double, false, true);
-ITER_BM_BENCHMARK_DEFINE(double_thrust_iter, double, false, false);
+  cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
+  cudf::column_view hasnull_F = wrap_hasnull_F;
+
+  // Initialize dev_result
+  auto dev_result = cudf::detail::make_zeroed_device_uvector<T>(
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  auto const data_size = column_size * sizeof(T);
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
+  state.add_global_memory_writes<nvbench::int8_t>(data_size);
+
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { iterator_bench_cub<T, false>(hasnull_F, dev_result); });
+}
+
+void bench_iterator_thrust_raw(nvbench::state& state)
+{
+  using T                = double;
+  auto const column_size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto num_gen           = thrust::counting_iterator<cudf::size_type>(0);
+
+  cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
+  cudf::column_view hasnull_F = wrap_hasnull_F;
+
+  // Initialize dev_result
+  auto dev_result = cudf::detail::make_zeroed_device_uvector<T>(
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  auto const data_size = column_size * sizeof(T);
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
+  state.add_global_memory_writes<nvbench::int8_t>(data_size);
+
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { raw_stream_bench_thrust<T>(hasnull_F, dev_result); });
+}
+
+void bench_iterator_thrust_iter(nvbench::state& state)
+{
+  using T                = double;
+  auto const column_size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto num_gen           = thrust::counting_iterator<cudf::size_type>(0);
+
+  cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
+  cudf::column_view hasnull_F = wrap_hasnull_F;
+
+  // Initialize dev_result
+  auto dev_result = cudf::detail::make_zeroed_device_uvector<T>(
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  auto const data_size = column_size * sizeof(T);
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
+  state.add_global_memory_writes<nvbench::int8_t>(data_size);
+
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { iterator_bench_thrust<T, false>(hasnull_F, dev_result); });
+}
+
+NVBENCH_BENCH(bench_iterator_cub_raw)
+  .set_name("iterator_cub_raw")
+  .add_int64_axis("num_rows", {1000, 10000, 100000, 1000000, 10000000});
+
+NVBENCH_BENCH(bench_iterator_cub_iter)
+  .set_name("iterator_cub_iter")
+  .add_int64_axis("num_rows", {1000, 10000, 100000, 1000000, 10000000});
+
+NVBENCH_BENCH(bench_iterator_thrust_raw)
+  .set_name("iterator_thrust_raw")
+  .add_int64_axis("num_rows", {1000, 10000, 100000, 1000000, 10000000});
+
+NVBENCH_BENCH(bench_iterator_thrust_iter)
+  .set_name("iterator_thrust_iter")
+  .add_int64_axis("num_rows", {1000, 10000, 100000, 1000000, 10000000});

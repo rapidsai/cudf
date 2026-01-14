@@ -1,15 +1,18 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import datetime
 import io
 import itertools
+import json
 import math
 import operator
 import shutil
 import tempfile
 import warnings
 from collections import defaultdict
+from collections.abc import Hashable, Sequence
 from contextlib import ExitStack
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, Literal
@@ -22,8 +25,12 @@ import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
 
 from cudf.api.types import is_list_like
-from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column, column_empty
+from cudf.core.column import (
+    ColumnBase,
+    access_columns,
+    as_column,
+    column_empty,
+)
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -38,13 +45,8 @@ from cudf.options import get_option
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
 
-try:
-    import ujson as json  # type: ignore[import-untyped]
-except ImportError:
-    import json
-
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable
+    from collections.abc import Callable, Hashable, Sequence
 
     from typing_extensions import Self
 
@@ -77,7 +79,6 @@ BYTE_SIZES = {
 }
 
 
-@acquire_spill_lock()
 def _plc_write_parquet(
     table,
     filepaths_or_buffers,
@@ -123,117 +124,126 @@ def _plc_write_parquet(
     if index is True or (
         index is None and not isinstance(table.index, RangeIndex)
     ):
-        columns = itertools.chain(table.index._columns, table._columns)
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in columns]
-        )
-        tbl_meta = plc.io.types.TableInputMetadata(plc_table)
-        for level, idx_name in enumerate(table.index.names):
-            tbl_meta.column_metadata[level].set_name(
-                ioutils._index_level_name(idx_name, level, table._column_names)
-            )
-        num_index_cols_meta = table.index.nlevels
+        iter_columns = itertools.chain(table.index._columns, table._columns)
     else:
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in table._columns]
-        )
-        tbl_meta = plc.io.types.TableInputMetadata(plc_table)
-        num_index_cols_meta = 0
+        iter_columns = table._columns
 
-    for i, name in enumerate(table._column_names, num_index_cols_meta):
-        if not isinstance(name, str):
-            if get_option("mode.pandas_compatible"):
-                tbl_meta.column_metadata[i].set_name(str(name))
+    with access_columns(*iter_columns, mode="read", scope="internal"):
+        if index is True or (
+            index is None and not isinstance(table.index, RangeIndex)
+        ):
+            columns = itertools.chain(table.index._columns, table._columns)
+            plc_table = plc.Table([col.plc_column for col in columns])
+            tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+            for level, idx_name in enumerate(table.index.names):
+                idx_name_str = ioutils._index_level_name(
+                    idx_name, level, table._column_names
+                )
+                if not isinstance(idx_name_str, str):
+                    raise ValueError(
+                        f"Index name must be a string, got {type(idx_name_str)}"
+                    )
+                tbl_meta.column_metadata[level].set_name(idx_name_str)
+            num_index_cols_meta = table.index.nlevels
+        else:
+            plc_table = plc.Table([col.plc_column for col in table._columns])
+            tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+            num_index_cols_meta = 0
+
+        for i, name in enumerate(table._column_names, num_index_cols_meta):
+            if not isinstance(name, str):
+                if get_option("mode.pandas_compatible"):
+                    tbl_meta.column_metadata[i].set_name(str(name))
+                else:
+                    raise ValueError(
+                        "Writing a Parquet file requires string column names"
+                    )
             else:
-                raise ValueError(
-                    "Writing a Parquet file requires string column names"
-                )
-        else:
-            tbl_meta.column_metadata[i].set_name(name)
+                tbl_meta.column_metadata[i].set_name(name)
 
-        _set_col_metadata(
-            table[name]._column,
-            tbl_meta.column_metadata[i],
-            force_nullable_schema,
-            None,
-            skip_compression,
-            column_encoding,
-            column_type_length,
-            output_as_binary,
-        )
-    if partitions_info is not None:
-        user_data = [
-            {
-                "pandas": ioutils.generate_pandas_metadata(
-                    table.iloc[start_row : start_row + num_row].copy(
-                        deep=False
-                    ),
-                    index,
-                )
-            }
-            for start_row, num_row in partitions_info
-        ]
-    else:
-        user_data = [
-            {"pandas": ioutils.generate_pandas_metadata(table, index)}
-        ]
-
-    if header_version not in ("1.0", "2.0"):
-        raise ValueError(
-            f"Invalid parquet header version: {header_version}. "
-            "Valid values are '1.0' and '2.0'"
-        )
-
-    dict_policy = (
-        plc.io.types.DictionaryPolicy.ADAPTIVE
-        if use_dictionary
-        else plc.io.types.DictionaryPolicy.NEVER
-    )
-
-    comp_type = _get_comp_type(compression)
-    stat_freq = _get_stat_freq(statistics)
-    options = (
-        plc.io.parquet.ParquetWriterOptions.builder(
-            plc.io.SinkInfo(filepaths_or_buffers), plc_table
-        )
-        .metadata(tbl_meta)
-        .key_value_metadata(user_data)
-        .compression(comp_type)
-        .stats_level(stat_freq)
-        .int96_timestamps(int96_timestamps)
-        .write_v2_headers(header_version == "2.0")
-        .dictionary_policy(dict_policy)
-        .utc_timestamps(False)
-        .write_arrow_schema(write_arrow_schema)
-        .build()
-    )
-    if partitions_info is not None:
-        options.set_partitions(
-            [
-                plc.io.types.PartitionInfo(part[0], part[1])
-                for part in partitions_info
+            _set_col_metadata(
+                table[name]._column,
+                tbl_meta.column_metadata[i],
+                force_nullable_schema,
+                None,
+                skip_compression,
+                column_encoding,
+                column_type_length,
+                output_as_binary,
+            )
+        if partitions_info is not None:
+            user_data = [
+                {
+                    "pandas": ioutils.generate_pandas_metadata(
+                        table.iloc[start_row : start_row + num_row].copy(
+                            deep=False
+                        ),
+                        index,
+                    )
+                }
+                for start_row, num_row in partitions_info
             ]
-        )
-    if metadata_file_path is not None:
-        if is_list_like(metadata_file_path):
-            options.set_column_chunks_file_paths(metadata_file_path)
         else:
-            options.set_column_chunks_file_paths([metadata_file_path])
-    if row_group_size_bytes is not None:
-        options.set_row_group_size_bytes(row_group_size_bytes)
-    if row_group_size_rows is not None:
-        options.set_row_group_size_rows(row_group_size_rows)
-    if max_page_size_bytes is not None:
-        options.set_max_page_size_bytes(max_page_size_bytes)
-    if max_page_size_rows is not None:
-        options.set_max_page_size_rows(max_page_size_rows)
-    if max_dictionary_size is not None:
-        options.set_max_dictionary_size(max_dictionary_size)
-    blob = plc.io.parquet.write_parquet(options)
-    if metadata_file_path is not None:
-        return np.asarray(blob.obj)
-    else:
-        return None
+            user_data = [
+                {"pandas": ioutils.generate_pandas_metadata(table, index)}
+            ]
+
+        if header_version not in ("1.0", "2.0"):
+            raise ValueError(
+                f"Invalid parquet header version: {header_version}. "
+                "Valid values are '1.0' and '2.0'"
+            )
+
+        dict_policy = (
+            plc.io.types.DictionaryPolicy.ADAPTIVE
+            if use_dictionary
+            else plc.io.types.DictionaryPolicy.NEVER
+        )
+
+        comp_type = _get_comp_type(compression)
+        stat_freq = _get_stat_freq(statistics)
+        options = (
+            plc.io.parquet.ParquetWriterOptions.builder(
+                plc.io.SinkInfo(filepaths_or_buffers), plc_table
+            )
+            .metadata(tbl_meta)
+            .key_value_metadata(user_data)
+            .compression(comp_type)
+            .stats_level(stat_freq)
+            .int96_timestamps(int96_timestamps)
+            .write_v2_headers(header_version == "2.0")
+            .dictionary_policy(dict_policy)
+            .utc_timestamps(False)
+            .write_arrow_schema(write_arrow_schema)
+            .build()
+        )
+        if partitions_info is not None:
+            options.set_partitions(
+                [
+                    plc.io.types.PartitionInfo(part[0], part[1])
+                    for part in partitions_info
+                ]
+            )
+        if metadata_file_path is not None:
+            if is_list_like(metadata_file_path):
+                options.set_column_chunks_file_paths(metadata_file_path)
+            else:
+                options.set_column_chunks_file_paths([metadata_file_path])
+        if row_group_size_bytes is not None:
+            options.set_row_group_size_bytes(row_group_size_bytes)
+        if row_group_size_rows is not None:
+            options.set_row_group_size_rows(row_group_size_rows)
+        if max_page_size_bytes is not None:
+            options.set_max_page_size_bytes(max_page_size_bytes)
+        if max_page_size_rows is not None:
+            options.set_max_page_size_rows(max_page_size_rows)
+        if max_dictionary_size is not None:
+            options.set_max_dictionary_size(max_dictionary_size)
+        blob = plc.io.parquet.write_parquet(options)
+        if metadata_file_path is not None:
+            return np.asarray(blob.obj)
+        else:
+            return None
 
 
 @_performance_tracking
@@ -691,7 +701,7 @@ def _parse_metadata(meta) -> tuple[bool, Any, None | np.dtype]:
 @_performance_tracking
 def read_parquet_metadata(
     filepath_or_buffer,
-) -> tuple[int, int, list[Hashable], int, list[dict[str, int]]]:
+) -> tuple[int, int, Sequence[Hashable], int, Sequence[dict[str, int]]]:
     """{docstring}"""
 
     # List of filepaths or buffers
@@ -919,6 +929,7 @@ def read_parquet(
     nrows=None,
     skip_rows=None,
     allow_mismatched_pq_schemas=False,
+    ignore_missing_columns=True,
     *args,
     **kwargs,
 ):
@@ -1081,6 +1092,7 @@ def read_parquet(
         nrows=nrows,
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+        ignore_missing_columns=ignore_missing_columns,
         filters=ast_filter,
         **kwargs,
     )
@@ -1313,6 +1325,7 @@ def _read_parquet(
     nrows: int | None = None,
     skip_rows: int | None = None,
     allow_mismatched_pq_schemas: bool = False,
+    ignore_missing_columns: bool = True,
     filters: plc_expr.Expression | None = None,
     *args,
     **kwargs,
@@ -1349,6 +1362,7 @@ def _read_parquet(
                 )
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
+                .ignore_missing_columns(ignore_missing_columns)
                 .build()
             )
             if row_groups is not None:
@@ -1378,14 +1392,12 @@ def _read_parquet(
             del tbl_w_meta
 
             while reader.has_next():
-                tbl = reader.read_chunk().tbl
-
-                for i in range(tbl.num_columns()):
+                columns = reader.read_chunk().tbl.columns()
+                # Iterate in reverse to avoid O(n²) cost from popping
+                for i in range(len(concatenated_columns) - 1, -1, -1):
                     concatenated_columns[i] = plc.concatenate.concatenate(
-                        [concatenated_columns[i], tbl._columns[i]]
+                        [concatenated_columns[i], columns.pop()]
                     )
-                    # Drop residual columns to save memory
-                    tbl._columns[i] = None
 
             data = {
                 name: ColumnBase.from_pylibcudf(col)
@@ -1418,6 +1430,7 @@ def _read_parquet(
                 )
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
+                .ignore_missing_columns(ignore_missing_columns)
                 .build()
             )
             if row_groups is not None:
@@ -1808,13 +1821,9 @@ class ParquetWriter:
             table.index.name is not None or isinstance(table.index, MultiIndex)
         ):
             columns = itertools.chain(table.index._columns, table._columns)
-            plc_table = plc.Table(
-                [col.to_pylibcudf(mode="read") for col in columns]
-            )
+            plc_table = plc.Table([col.plc_column for col in columns])
         else:
-            plc_table = plc.Table(
-                [col.to_pylibcudf(mode="read") for col in table._columns]
-            )
+            plc_table = plc.Table([col.plc_column for col in table._columns])
         self.writer.write(plc_table, partitions_info)
 
     def close(self, metadata_file_path=None) -> np.ndarray | None:
@@ -1846,15 +1855,13 @@ class ParquetWriter:
 
         # Set the table_metadata
         num_index_cols_meta = 0
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in table._columns]
-        )
+        plc_table = plc.Table([col.plc_column for col in table._columns])
         self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         if self.index is not False:
             if isinstance(table.index, MultiIndex):
                 plc_table = plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain(
                             table.index._columns, table._columns
                         )
@@ -1868,7 +1875,7 @@ class ParquetWriter:
                 if table.index.name is not None:
                     plc_table = plc.Table(
                         [
-                            col.to_pylibcudf(mode="read")
+                            col.plc_column
                             for col in itertools.chain(
                                 table.index._columns, table._columns
                             )
@@ -2366,9 +2373,19 @@ def _set_col_metadata(
 
 
 def _get_comp_type(
-    compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None],
+    compression: Literal[
+        "snappy",
+        "SNAPPY",
+        "GZIP",
+        "BROTLI",
+        "LZ4",
+        "ZSTD",
+        "ZLIB",
+        "NONE",
+        None,
+    ],
 ) -> plc.io.types.CompressionType:
-    if compression is None:
+    if compression is None or compression == "NONE":
         return plc.io.types.CompressionType.NONE
     result = getattr(plc.io.types.CompressionType, compression.upper(), None)
     if result is None:
@@ -2389,7 +2406,7 @@ def _get_stat_freq(
 
 def _process_metadata(
     df: DataFrame,
-    names: list[Hashable],
+    names: Sequence[Hashable],
     per_file_user_data: list,
     row_groups,
     filepaths_or_buffers,
@@ -2435,7 +2452,7 @@ def _process_metadata(
         # update the decimal precision of each column
         for col in names:
             if isinstance(df._data[col].dtype, DecimalDtype):
-                df._data[col].dtype.precision = meta_data_per_column[col][
+                df._data[col].dtype.precision = meta_data_per_column[col][  # type: ignore[union-attr]
                     "metadata"
                 ]["precision"]
 
@@ -2523,3 +2540,55 @@ def _process_metadata(
         df._data.label_dtype = column_index_type
 
     return df
+
+
+def is_supported_read_parquet(
+    compression: Literal["SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for reading Parquet files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "GZIP", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for reading Parquet files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.parquet.is_supported_read_parquet("LZ4")  # doctest: +SKIP
+    True
+    """
+    return plc.io.parquet.is_supported_read_parquet(
+        _get_comp_type(compression)
+    )
+
+
+def is_supported_write_parquet(
+    compression: Literal["SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for writing Parquet files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "GZIP", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for writing Parquet files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.parquet.is_supported_write_parquet("SNAPPY")  # doctest: +SKIP
+    True
+    """
+    return plc.io.parquet.is_supported_write_parquet(
+        _get_comp_type(compression)
+    )

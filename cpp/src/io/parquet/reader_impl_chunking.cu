@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "reader_impl.hpp"
@@ -20,6 +9,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -184,7 +174,8 @@ void reader_impl::setup_next_pass(read_mode mode)
       thrust::make_transform_iterator(pass.chunks.d_begin(), get_chunk_compressed_size{});
     pass.base_mem_size =
       decomp_dict_data_size +
-      thrust::reduce(rmm::exec_policy(_stream), chunk_iter, chunk_iter + pass.chunks.size());
+      cudf::detail::reduce(
+        chunk_iter, chunk_iter + pass.chunks.size(), size_t{0}, cuda::std::plus<size_t>{}, _stream);
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.
@@ -275,13 +266,15 @@ void reader_impl::setup_next_subpass(read_mode mode)
                                   cuda::std::equal_to{},
                                   cumulative_page_sum{});
 
-    // include scratch space needed for decompression. for certain codecs (eg ZSTD) this
-    // can be considerable.
+    // include scratch space needed for decompression and string offset buffers.
+    // for certain codecs (eg ZSTD) this an be considerable.
     if (is_first_subpass) {
       pass.decomp_scratch_sizes =
         compute_decompression_scratch_sizes(pass.chunks, pass.pages, _stream);
+      pass.string_offset_sizes = compute_string_offset_sizes(pass.chunks, pass.pages, _stream);
     }
-    include_decompression_scratch_size(pass.decomp_scratch_sizes, c_info, _stream);
+    include_scratch_size(pass.decomp_scratch_sizes, c_info, _stream);
+    include_scratch_size(pass.string_offset_sizes, c_info, _stream);
 
     auto iter               = thrust::make_counting_iterator(0);
     auto const pass_max_row = pass.skip_rows + pass.num_rows;
@@ -314,7 +307,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
   // copy the appropriate subset of pages from each column and store the mapping back to the source
   // (pass) pages
   else {
-    subpass.page_buf = cudf::detail::hostdevice_vector<PageInfo>(total_pages, total_pages, _stream);
+    subpass.page_buf       = cudf::detail::hostdevice_vector<PageInfo>(total_pages, _stream);
     subpass.page_src_index = rmm::device_uvector<size_t>(total_pages, _stream);
     auto iter              = thrust::make_counting_iterator(0);
     rmm::device_uvector<size_t> dst_offsets(num_columns + 1, _stream);
@@ -334,7 +327,11 @@ void reader_impl::setup_next_subpass(read_mode mode)
     subpass.pages = subpass.page_buf;
   }
 
-  auto const h_spans = cudf::detail::make_host_vector_async(page_indices, _stream);
+  auto h_spans = cudf::detail::make_pinned_vector_async<page_span>(page_indices.size(), _stream);
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<page_span>{h_spans.data(), page_indices.size()},
+    cudf::device_span<page_span const>{page_indices.data(), page_indices.size()},
+    _stream);
   subpass.pages.device_to_host_async(_stream);
 
   _stream.synchronize();
@@ -345,6 +342,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
   // Set the page mask information for the subpass
   set_subpass_page_mask();
+  _subpass_page_mask.host_to_device_async(_stream);
 
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
   // if this is the first subpass in the pass
@@ -359,11 +357,11 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
     if (is_first_subpass) {
       pass.decomp_dict_data = std::move(pass_data);
-      pass.pages.host_to_device(_stream);
+      pass.pages.host_to_device_async(_stream);
     }
 
     subpass.decomp_page_data = std::move(subpass_data);
-    subpass.pages.host_to_device(_stream);
+    subpass.pages.host_to_device_async(_stream);
   }
 
   // since there is only ever 1 dictionary per chunk (the first page), do it at the
@@ -680,8 +678,8 @@ void reader_impl::set_subpass_page_mask()
   auto const& pass    = _pass_itm_data;
   auto const& subpass = pass->subpass;
 
-  // Create a host vector to store the subpass page mask
-  _subpass_page_mask = cudf::detail::make_host_vector<bool>(subpass->pages.size(), _stream);
+  // Create a hostdevice vector to store the subpass page mask
+  _subpass_page_mask = cudf::detail::hostdevice_vector<bool>(subpass->pages.size(), _stream);
 
   // Fill with all true if no pass level page mask is available
   if (_pass_page_mask.empty()) {
@@ -696,7 +694,12 @@ void reader_impl::set_subpass_page_mask()
   }
 
   // Use the pass page index mask to gather the subpass page mask from the pass level page mask
-  auto const host_page_src_index = cudf::detail::make_host_vector(subpass->page_src_index, _stream);
+  auto host_page_src_index =
+    cudf::detail::make_pinned_vector_async<size_t>(subpass->page_src_index.size(), _stream);
+  cudf::detail::cuda_memcpy(
+    cudf::host_span<size_t>{host_page_src_index.data(), subpass->page_src_index.size()},
+    cudf::device_span<size_t const>{subpass->page_src_index.data(), subpass->page_src_index.size()},
+    _stream);
   thrust::gather(thrust::seq,
                  host_page_src_index.begin(),
                  host_page_src_index.end(),

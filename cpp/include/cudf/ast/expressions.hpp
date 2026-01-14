@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -193,6 +182,16 @@ class generic_scalar_device_view : public cudf::detail::scalar_device_view_base 
   {
   }
 
+  /** @brief Construct a new generic scalar device view object from a fixed-point scalar
+   *
+   * @param s The fixed-point scalar to construct from
+   */
+  template <typename T>
+  generic_scalar_device_view(cudf::fixed_point_scalar<T>& s)
+    : generic_scalar_device_view{s.type(), s.data(), s.validity_data()}
+  {
+  }
+
  protected:
   void const* _data{};      ///< Pointer to device memory containing the value
   size_type const _size{};  ///< Size of the string in bytes for string scalar
@@ -268,6 +267,16 @@ class literal : public expression {
    * @param value A string scalar value
    */
   literal(cudf::string_scalar& value) : scalar(value), value(value) {}
+
+  /**
+   * @brief Construct a new literal object.
+   *
+   * @param value A fixed-point scalar value
+   */
+  template <typename T>
+  literal(cudf::fixed_point_scalar<T>& value) : scalar(value), value(value)
+  {
+  }
 
   /**
    * @brief Get the data type.

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 
 import cudf_polars.callback
@@ -36,11 +38,19 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        "--scheduler",
+        "--runtime",
         action="store",
-        default="synchronous",
-        choices=("synchronous", "distributed"),
-        help="Scheduler to use for 'streaming' executor.",
+        default="tasks",
+        choices=("tasks", "rapidsmpf"),
+        help="Runtime to use for the 'streaming' executor.",
+    )
+
+    parser.addoption(
+        "--cluster",
+        action="store",
+        default="single",
+        choices=("single", "distributed"),
+        help="Cluster to use for 'streaming' executor.",
     )
 
     parser.addoption(
@@ -59,13 +69,23 @@ def pytest_configure(config):
     import cudf_polars.testing.asserts
 
     if (
-        config.getoption("--scheduler") == "distributed"
+        config.getoption("--cluster") == "distributed"
         and config.getoption("--executor") != "streaming"
     ):
-        raise pytest.UsageError("Distributed scheduler requires --executor='streaming'")
+        raise pytest.UsageError("Distributed cluster requires --executor='streaming'")
+
+    if config.getoption("--runtime") == "rapidsmpf":
+        if config.getoption("--executor") == "in-memory":
+            raise pytest.UsageError("Rapidsmpf runtime requires --executor='streaming'")
+
+        if importlib.util.find_spec("rapidsmpf") is None:
+            raise pytest.UsageError(
+                "Rapidsmpf runtime requires the 'rapidsmpf' package"
+            )
 
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
-    cudf_polars.testing.asserts.DEFAULT_SCHEDULER = config.getoption("--scheduler")
+    cudf_polars.testing.asserts.DEFAULT_RUNTIME = config.getoption("--runtime")
+    cudf_polars.testing.asserts.DEFAULT_CLUSTER = config.getoption("--cluster")
     cudf_polars.testing.asserts.DEFAULT_BLOCKSIZE_MODE = config.getoption(
         "--blocksize-mode"
     )

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "text/detail/codepoint_metadata.ah"
@@ -145,7 +134,7 @@ rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_st
 {
   auto table_vector = rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream);
   auto table        = table_vector.data();
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                table + cp_section1_end,
                table + codepoint_metadata_size,
                codepoint_metadata_default_value);
@@ -173,7 +162,7 @@ rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_st
 {
   auto table_vector = rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream);
   auto table        = table_vector.data();
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                table + aux_section1_end,
                table + aux_codepoint_data_size,
                aux_codepoint_default_value);
@@ -297,7 +286,8 @@ namespace {
  */
 CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
                                        int64_t total_count,
-                                       cudf::device_span<cudf::string_view const> special_tokens)
+                                       cudf::device_span<cudf::string_view const> special_tokens,
+                                       bool do_lower_case)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx >= total_count) { return; }
@@ -321,9 +311,17 @@ CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
     return;
   }
 
-  // fix up chars to remove the extra spaces
+  // fix up chars to remove the extra spaces and convert to upper-case
   *(begin + 1) = 0;  // removes space after '['
   *(match - 1) = 0;  // removes space before ']'
+  if (do_lower_case) {
+    auto itr = begin + 2;
+    while (itr < match - 2) {
+      auto ch = *itr;
+      if (ch >= 'a' && ch <= 'z') { *itr = ch - 'a' + 'A'; }
+      ++itr;
+    }
+  }
 }
 
 /**
@@ -474,7 +472,7 @@ OutputIterator remove_copy_safe(InputIterator first,
   while (itr != last) {
     auto const copy_end =
       static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
-    result = thrust::remove_copy(rmm::exec_policy(stream), itr, copy_end, result, value);
+    result = thrust::remove_copy(rmm::exec_policy_nosync(stream), itr, copy_end, result, value);
     itr    = copy_end;
   }
   return result;
@@ -491,7 +489,7 @@ Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_st
   auto itr    = first;
   while (itr != last) {
     auto end = static_cast<std::size_t>(std::distance(itr, last)) <= size ? last : itr + size;
-    result   = thrust::remove(rmm::exec_policy(stream), itr, end, value);
+    result   = thrust::remove(rmm::exec_policy_nosync(stream), itr, end, value);
     itr      = end;
   }
   return result;
@@ -533,7 +531,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto const special_tokens = parameters->get_special_tokens();
   if (!special_tokens.empty()) {
     special_tokens_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      d_normalized.data(), chars_size, special_tokens);
+      d_normalized.data(), chars_size, special_tokens, parameters->do_lower_case);
   }
 
   // Use segmented-reduce over the non-zero codepoints to get the size of the output rows

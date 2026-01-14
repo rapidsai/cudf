@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
 import pytest
@@ -7,8 +8,8 @@ import cudf
 from cudf.testing import assert_eq
 
 
-@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
-@pytest.mark.parametrize("categories", [[1, 2], None])
+@pytest.mark.parametrize("data", [[1, 2, 3], []])
+@pytest.mark.parametrize("categories", [[1, 2, 3], None])
 @pytest.mark.parametrize(
     "dtype",
     [

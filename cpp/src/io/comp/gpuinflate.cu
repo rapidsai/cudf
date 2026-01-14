@@ -1,17 +1,7 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (C) 2002-2013 Mark Adler, all rights reserved
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0 AND Zlib
  */
 
 /** @file gpuinflate.cu
@@ -54,6 +44,7 @@ Mark Adler    madler@alumni.caltech.edu
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/gather.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
@@ -1075,6 +1066,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   __syncthreads();
   // Main loop decoding blocks
   while (!state->err) {
+    __syncthreads();
     if (!t) {
       // Thread0: read last flag, block type and custom huffman tables if any
       if (state->cur + (state->bitpos >> 3) >= state->end)
@@ -1129,7 +1121,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       copy_stored(state, t);
     }
     if (state->blast) break;
-    __syncthreads();
   }
   __syncthreads();
   // Output decompression status and length
@@ -1278,8 +1269,8 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                     thrust::make_zip_iterator(inputs.end(), outputs.end()),
                     costs.begin(),
                     [task_type] __device__(auto const& input_output_pair) {
-                      auto const& input  = thrust::get<0>(input_output_pair);
-                      auto const& output = thrust::get<1>(input_output_pair);
+                      auto const& input  = cuda::std::get<0>(input_output_pair);
+                      auto const& output = cuda::std::get<1>(input_output_pair);
                       return cost_model::task_device_cost(input.size(), output.size(), task_type);
                     });
 

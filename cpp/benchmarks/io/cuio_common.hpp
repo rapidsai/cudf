@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -40,15 +29,32 @@ std::string random_file_in_dir(std::string const& dir_path);
  */
 class cuio_source_sink_pair {
  public:
-  cuio_source_sink_pair(io_type type);
-  ~cuio_source_sink_pair()
-  {
-    // delete the temporary file
-    std::remove(file_name.c_str());
-  }
-  // move constructor
-  cuio_source_sink_pair(cuio_source_sink_pair&& ss)            = default;
-  cuio_source_sink_pair& operator=(cuio_source_sink_pair&& ss) = default;
+  cuio_source_sink_pair(io_type type_param);
+  ~cuio_source_sink_pair();
+
+  /**
+   * @brief Move constructor that transfers file ownership.
+   *
+   * After the move, the source object no longer owns the temporary file and its destructor will not
+   * delete it.
+   *
+   * @param ss The source object to move from
+   */
+  cuio_source_sink_pair(cuio_source_sink_pair&& ss) noexcept;
+
+  /**
+   * @brief Move assignment operator that transfers file ownership.
+   *
+   * If this object currently owns a file, it is deleted before taking ownership of the source's
+   * file.
+   *
+   * @param ss The source object to move from
+   * @return Reference to this object
+   */
+  cuio_source_sink_pair& operator=(cuio_source_sink_pair&& ss) noexcept;
+
+  cuio_source_sink_pair(cuio_source_sink_pair const&)            = delete;
+  cuio_source_sink_pair& operator=(cuio_source_sink_pair const&) = delete;
 
   /**
    * @brief Created a source info of the set type
@@ -75,14 +81,20 @@ class cuio_source_sink_pair {
   [[nodiscard]] size_t size();
 
  private:
+  /**
+   * @brief Deletes the temporary file.
+   */
+  void cleanup();
+
   static temp_directory const tmpdir;
 
-  io_type const type;
+  io_type type;
   std::vector<char> h_buffer;
   cudf::detail::host_vector<char> pinned_buffer;
   rmm::device_uvector<std::byte> d_buffer;
-  std::string const file_name;
+  std::string file_name;
   std::unique_ptr<cudf::io::data_sink> void_sink;
+  bool owns_file;
 };
 
 /**

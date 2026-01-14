@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
 import numpy as np
@@ -198,7 +199,10 @@ def test_dataframe_reduction_error():
 
 
 def test_mean_timeseries(numeric_only):
-    gdf = cudf.datasets.timeseries()
+    gdf = cudf.DataFrame(
+        {"a": ["a", "b", "c"], "b": range(3), "c": [-1.0, 12.2, 0.0]},
+        index=pd.date_range("2020-01-01", periods=3, name="timestamp"),
+    )
     if not numeric_only:
         gdf = gdf.select_dtypes(include="number")
     pdf = gdf.to_pandas()
@@ -314,9 +318,20 @@ def test_dataframe_axis1_unsupported_ops(op):
         "any",
     ],
 )
-def test_dataframe_reductions(data, axis, func, skipna):
+def test_dataframe_reductions(request, data, axis, func, skipna):
     pdf = pd.DataFrame(data=data)
-    gdf = cudf.DataFrame(pdf)
+    gdf = cudf.DataFrame(pdf, nan_as_null=False)
+
+    if request.node.callspec.id in {
+        "True-cumsum-1-data0",
+        "True-cumprod-1-data0",
+        "True-any-1-data2",
+    }:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/20628"
+            )
+        )
 
     # Reductions can fail in numerous possible ways when attempting row-wise
     # reductions, which are only partially supported. Catching the appropriate

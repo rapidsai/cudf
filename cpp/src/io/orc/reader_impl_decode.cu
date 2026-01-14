@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/comp/decompression.hpp"
@@ -38,11 +27,11 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/copy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -345,7 +334,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
         chunk.valid_map_base = out_buffers[col_idx].null_mask();
       }
     }
-    chunks.host_to_device(stream);
+    chunks.host_to_device_async(stream);
   }
 }
 
@@ -447,8 +436,8 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<column_desc> const& chun
       return chunk.type_kind == STRUCT;
     });
   auto prefix_sums_to_update =
-    cudf::detail::make_empty_host_vector<thrust::pair<size_type, uint32_t*>>(num_struct_cols,
-                                                                             stream);
+    cudf::detail::make_empty_host_vector<cuda::std::pair<size_type, uint32_t*>>(num_struct_cols,
+                                                                                stream);
   for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
     // Null counts sums are only needed for children of struct columns
     if (chunks[0][col_idx].type_kind == STRUCT) {

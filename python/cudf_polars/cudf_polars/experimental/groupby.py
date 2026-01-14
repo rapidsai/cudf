@@ -14,6 +14,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import GroupBy, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
@@ -95,7 +96,12 @@ def decompose(
     if isinstance(expr, Len):
         selection = NamedExpr(name, Col(dtype, name))
         aggregation = [NamedExpr(name, expr)]
-        reduction = [NamedExpr(name, Agg(dtype, "sum", None, Col(dtype, name)))]
+        reduction = [
+            NamedExpr(
+                name,
+                Agg(dtype, "sum", None, ExecutionContext.GROUPBY, Col(dtype, name)),
+            )
+        ]
         return selection, aggregation, reduction, False
     if isinstance(expr, Agg):
         if expr.name in ("sum", "count", "min", "max", "n_unique"):
@@ -105,19 +111,32 @@ def decompose(
                 aggfunc = expr.name
             selection = NamedExpr(name, Col(dtype, name))
             aggregation = [NamedExpr(name, expr)]
-            reduction = [NamedExpr(name, Agg(dtype, aggfunc, None, Col(dtype, name)))]
+            reduction = [
+                NamedExpr(
+                    name,
+                    Agg(
+                        dtype, aggfunc, None, ExecutionContext.GROUPBY, Col(dtype, name)
+                    ),
+                )
+            ]
             return selection, aggregation, reduction, expr.name == "n_unique"
         elif expr.name == "mean":
             (child,) = expr.children
             (sum, count), aggregations, reductions, need_preshuffle = combine(
                 decompose(
                     f"{next(names)}__mean_sum",
-                    Agg(dtype, "sum", None, child),
+                    Agg(dtype, "sum", None, ExecutionContext.GROUPBY, child),
                     names=names,
                 ),
                 decompose(
                     f"{next(names)}__mean_count",
-                    Agg(DataType(pl.Int32()), "count", False, child),  # noqa: FBT003
+                    Agg(
+                        DataType(pl.Int32()),
+                        "count",
+                        False,  # noqa: FBT003
+                        ExecutionContext.GROUPBY,
+                        child,
+                    ),
                     names=names,
                 ),
             )
@@ -230,6 +249,7 @@ def _(
             child.schema,
             ir.keys,
             config_options.executor.shuffle_method,
+            config_options.executor.shuffler_insertion_method,
             child,
         )
         partition_info[child] = PartitionInfo(
@@ -272,6 +292,7 @@ def _(
             gb_pwise.schema,
             grouped_keys,
             config_options.executor.shuffle_method,
+            config_options.executor.shuffler_insertion_method,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)

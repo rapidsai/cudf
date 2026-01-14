@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -230,8 +219,7 @@ inline std::unique_ptr<cudf::column> make_long_offsets_string_column()
   std::transform(iter, iter + num_chars, chars.begin(), [](cudf::size_type i) {
     return static_cast<int8_t>('a' + (i % 26));
   });
-  rmm::device_buffer d_chars(
-    num_chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  rmm::device_buffer d_chars(num_chars, cudf::get_default_stream());
   cudf::detail::cuda_memcpy(
     cudf::device_span<int8_t>{static_cast<int8_t*>(d_chars.data()), d_chars.size()},
     cudf::host_span<int8_t const>{chars.data(), chars.size()},
@@ -248,9 +236,7 @@ inline std::unique_ptr<cudf::column> make_long_offsets_string_column()
 
 inline std::unique_ptr<cudf::column> make_long_offsets_and_chars_string_column()
 {
-  rmm::device_buffer d_chars{size_t{3} * 1024 * 1024 * 1024,
-                             cudf::get_default_stream(),
-                             rmm::mr::get_current_device_resource()};
+  rmm::device_buffer d_chars{size_t{3} * 1024 * 1024 * 1024, cudf::get_default_stream()};
 
   int8_t* charp         = reinterpret_cast<int8_t*>(d_chars.data());
   auto const block_size = 100 * 1024 * 1024;

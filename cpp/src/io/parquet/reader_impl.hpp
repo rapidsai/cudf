@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -29,10 +18,11 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <memory>
 #include <optional>
@@ -57,11 +47,13 @@ class reader_impl {
    * entire given file.
    *
    * @param sources Dataset sources
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                       std::vector<FileMetaData>&& parquet_metadatas,
                        parquet_reader_options const& options,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
@@ -102,6 +94,7 @@ class reader_impl {
    * @param pass_read_limit Limit on memory usage for the purposes of decompression and processing
    * of input, or `0` if there is no limit.
    * @param sources Dataset sources
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
@@ -109,9 +102,15 @@ class reader_impl {
   explicit reader_impl(std::size_t chunk_read_limit,
                        std::size_t pass_read_limit,
                        std::vector<std::unique_ptr<datasource>>&& sources,
+                       std::vector<FileMetaData>&& parquet_metadatas,
                        parquet_reader_options const& options,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
+
+  reader_impl(reader_impl const&)            = delete;
+  reader_impl& operator=(reader_impl const&) = delete;
+  reader_impl(reader_impl&&)                 = delete;
+  reader_impl& operator=(reader_impl&&)      = delete;
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
@@ -186,11 +185,8 @@ class reader_impl {
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param read_info The range of rows to be read in the subpass
-   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
    */
-  void preprocess_chunk_strings(read_mode mode,
-                                row_range const& read_info,
-                                cudf::device_span<bool const> page_mask);
+  void preprocess_chunk_strings(read_mode mode, row_range const& read_info);
 
   /**
    * @brief Copies over the relevant page mask information for the subpass
@@ -259,6 +255,18 @@ class reader_impl {
   void preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit);
 
   /**
+   * @brief Set page string offset indices for non-dictionary, non-FLBA string columns.
+   *
+   * This function calculates the string offset index for each page of non-dictionary, non-FLBA
+   * string columns and populates the subpass.page_string_offset_indices member variable.
+   * The indices are used by decode kernels to access pre-computed string offsets.
+   *
+   * @param skip_rows The number of rows to skip in this subpass
+   * @param num_rows The number of rows to read in this subpass
+   */
+  void compute_page_string_offset_indices(size_t skip_rows, size_t num_rows);
+
+  /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
    *
    * One large contiguous buffer of PageNestingInfo structs is allocated and
@@ -319,12 +327,8 @@ class reader_impl {
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to decode
-   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
    */
-  void decode_page_data(read_mode mode,
-                        size_t skip_rows,
-                        size_t num_rows,
-                        cudf::device_span<bool const> page_mask);
+  void decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows);
 
   /**
    * @brief Invalidate output buffer nullmask for rows spanned by the pruned pages
@@ -448,11 +452,11 @@ class reader_impl {
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
 
-  // Page mask for filtering out pass data pages
-  cudf::detail::host_vector<bool> _pass_page_mask;
+  // Page mask for filtering out pass data pages (Not copied to the device)
+  thrust::host_vector<bool> _pass_page_mask;
 
-  // Page mask for filtering out subpass data pages
-  cudf::detail::host_vector<bool> _subpass_page_mask;
+  // Page mask for filtering out subpass data pages (Copied to the device)
+  cudf::detail::hostdevice_vector<bool> _subpass_page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;

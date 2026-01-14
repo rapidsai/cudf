@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import random
 
@@ -566,15 +567,6 @@ def test_drop(gdf, gddf):
     dd.assert_eq(gdf2, gddf2)
 
 
-@pytest.mark.parametrize("deep", [True, False])
-@pytest.mark.parametrize("index", [True, False])
-def test_memory_usage(gdf, gddf, index, deep):
-    dd.assert_eq(
-        gdf.memory_usage(deep=deep, index=index),
-        gddf.memory_usage(deep=deep, index=index),
-    )
-
-
 @pytest.mark.parametrize("index", [True, False])
 def test_hash_object_dispatch(index):
     obj = cudf.DataFrame(
@@ -621,9 +613,7 @@ def test_hash_object_dispatch(index):
 )
 def test_make_meta_backends(index):
     dtypes = ["int8", "int32", "int64", "float64"]
-    df = cudf.DataFrame(
-        {dt: np.arange(start=0, stop=3, dtype=dt) for dt in dtypes}
-    )
+    df = cudf.DataFrame({dt: np.arange(0, 3, dtype=dt) for dt in dtypes})
     df["strings"] = ["cat", "dog", "fish"]
     df["cats"] = df["strings"].astype("category")
     df["time_s"] = np.array(
@@ -919,6 +909,8 @@ def test_to_backend_simplify():
 
 @pytest.mark.parametrize("numeric_only", [True, False])
 @pytest.mark.parametrize("op", ["corr", "cov"])
+# the implementation might warn about ddof<=0 or divide by zero
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_cov_corr(op, numeric_only):
     rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame.from_dict(

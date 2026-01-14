@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
 from libcpp cimport bool
@@ -47,20 +48,6 @@ cdef extern from "cudf/join/join.hpp" namespace "cudf" nogil:
         device_memory_resource* mr
     ) except +libcudf_exception_handler
 
-    cdef gather_map_type left_semi_join(
-        const table_view left_keys,
-        const table_view right_keys,
-        cuda_stream_view stream,
-        device_memory_resource* mr
-    ) except +libcudf_exception_handler
-
-    cdef gather_map_type left_anti_join(
-        const table_view left_keys,
-        const table_view right_keys,
-        cuda_stream_view stream,
-        device_memory_resource* mr
-    ) except +libcudf_exception_handler
-
     cdef gather_map_pair_type inner_join(
         const table_view left_keys,
         const table_view right_keys,
@@ -78,22 +65,6 @@ cdef extern from "cudf/join/join.hpp" namespace "cudf" nogil:
     ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type full_join(
-        const table_view left_keys,
-        const table_view right_keys,
-        null_equality nulls_equal,
-        cuda_stream_view stream,
-        device_memory_resource* mr
-    ) except +libcudf_exception_handler
-
-    cdef gather_map_type left_semi_join(
-        const table_view left_keys,
-        const table_view right_keys,
-        null_equality nulls_equal,
-        cuda_stream_view stream,
-        device_memory_resource* mr
-    ) except +libcudf_exception_handler
-
-    cdef gather_map_type left_anti_join(
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
@@ -243,3 +214,34 @@ cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
         cuda_stream_view stream,
         device_memory_resource* mr
     ) except +libcudf_exception_handler
+
+cdef extern from "cudf/join/filtered_join.hpp" namespace "cudf" nogil:
+    cpdef enum class set_as_build_table:
+        LEFT
+        RIGHT
+
+    cdef cppclass filtered_join:
+        filtered_join() except +
+        filtered_join(
+            const table_view build,
+            null_equality compare_nulls,
+            set_as_build_table reuse_tbl,
+            cuda_stream_view stream
+        ) except +libcudf_exception_handler
+        filtered_join(
+            const table_view build,
+            null_equality compare_nulls,
+            set_as_build_table reuse_tbl,
+            double load_factor,
+            cuda_stream_view stream
+        ) except +libcudf_exception_handler
+        gather_map_type semi_join(
+            const table_view probe,
+            cuda_stream_view stream,
+            device_memory_resource* mr
+        ) except +libcudf_exception_handler
+        gather_map_type anti_join(
+            const table_view probe,
+            cuda_stream_view stream,
+            device_memory_resource* mr
+        ) except +libcudf_exception_handler

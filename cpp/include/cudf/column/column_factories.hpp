@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -23,6 +12,8 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cuda/std/utility>
 
 namespace CUDF_EXPORT cudf {
 /**
@@ -372,7 +363,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * @return Constructed strings column
  */
 std::unique_ptr<column> make_strings_column(
-  cudf::device_span<thrust::pair<char const*, size_type> const> strings,
+  cudf::device_span<cuda::std::pair<char const*, size_type> const> strings,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -392,7 +383,7 @@ std::unique_ptr<column> make_strings_column(
  * @return Array of constructed strings columns
  */
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
-  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> const& input,
+  std::vector<cudf::device_span<cuda::std::pair<char const*, size_type> const>> const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

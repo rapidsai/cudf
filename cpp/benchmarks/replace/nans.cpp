@@ -1,60 +1,46 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-class ReplaceNans : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-template <typename type>
-static void BM_replace_nans(benchmark::State& state, bool include_nulls)
+using FloatingTypes = nvbench::type_list<float, double>;
+
+template <typename FloatingType>
+void bench_replace_nans(nvbench::state& state, nvbench::type_list<FloatingType>)
 {
-  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  auto const dtype = cudf::type_to_id<type>();
+  auto const n_rows        = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const include_nulls = state.get_string("nulls") == "include";
+
+  auto const dtype = cudf::type_to_id<FloatingType>();
   auto const input = create_random_column(dtype, row_count{n_rows});
   if (!include_nulls) input->set_null_mask(rmm::device_buffer{}, 0);
 
-  auto zero = cudf::make_fixed_width_scalar<type>(0);
+  auto zero = cudf::make_fixed_width_scalar<FloatingType>(0);
 
-  for (auto _ : state) {
-    cuda_event_timer timer(state, true);
-    auto result = cudf::replace_nans(*input, *zero);
-  }
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  auto const data_size = input->alloc_size();
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
+  state.add_global_memory_writes<nvbench::int8_t>(data_size);
+
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { auto result = cudf::replace_nans(*input, *zero); });
 }
 
-#define NANS_BENCHMARK_DEFINE(name, type, nulls)                        \
-  BENCHMARK_DEFINE_F(ReplaceNans, name)                                 \
-  (::benchmark::State & state) { BM_replace_nans<type>(state, nulls); } \
-  BENCHMARK_REGISTER_F(ReplaceNans, name)                               \
-    ->UseManualTime()                                                   \
-    ->Arg(10000)      /* 10k */                                         \
-    ->Arg(100000)     /* 100k */                                        \
-    ->Arg(1000000)    /* 1M */                                          \
-    ->Arg(10000000)   /* 10M */                                         \
-    ->Arg(100000000); /* 100M */
-
-NANS_BENCHMARK_DEFINE(float32_nulls, float, true);
-NANS_BENCHMARK_DEFINE(float64_nulls, double, true);
-NANS_BENCHMARK_DEFINE(float32_no_nulls, float, false);
-NANS_BENCHMARK_DEFINE(float64_no_nulls, double, false);
+NVBENCH_BENCH_TYPES(bench_replace_nans, NVBENCH_TYPE_AXES(FloatingTypes))
+  .set_name("replace_nans")
+  .set_type_axes_names({"FloatingType"})
+  .add_int64_axis("num_rows", {10000, 100000, 1000000, 10000000, 100000000})
+  .add_string_axis("nulls", {"include", "exclude"});

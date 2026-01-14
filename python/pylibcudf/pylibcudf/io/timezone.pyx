@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport make_optional
@@ -30,6 +31,8 @@ cpdef Table make_timezone_transition_table(
         standard timezone name
     stream : Stream, optional
         CUDA stream for device memory operations and kernel launches
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory
 
     Returns
     -------
@@ -46,7 +49,8 @@ cpdef Table make_timezone_transition_table(
         c_result = cpp_make_timezone_transition_table(
             make_optional[string](c_tzdir),
             c_tzname,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)

@@ -1,37 +1,28 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/operator.hpp>
 #include <cuco/static_set.cuh>
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/tuple.h>
 #include <thrust/uninitialized_fill.h>
 
 #include <optional>
@@ -53,7 +44,7 @@ struct is_not_zero {
   template <typename Pair>
   __device__ bool operator()(Pair const input) const
   {
-    return thrust::get<1>(input) != 0;
+    return cuda::std::get<1>(input) != 0;
   }
 };
 
@@ -147,16 +138,16 @@ compute_row_frequencies(table_view const& input,
                              histogram_count_type{0});
 
   // Construct a hash set
-  auto row_set = cuco::static_set{
-    cuco::extent{num_rows},
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key<size_type>{-1},
-    key_equal,
-    cuco::linear_probing<DEFAULT_HISTOGRAM_CG_SIZE, row_hash>{key_hasher},
-    {},  // thread scope
-    {},  // storage
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  auto row_set =
+    cuco::static_set{cuco::extent{num_rows},
+                     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                     cuco::empty_key<size_type>{-1},
+                     key_equal,
+                     cuco::linear_probing<DEFAULT_HISTOGRAM_CG_SIZE, row_hash>{key_hasher},
+                     {},  // thread scope
+                     {},  // storage
+                     rmm::mr::polymorphic_allocator<char>{},
+                     stream.value()};
 
   // Device-accessible reference to the hash set with `insert_and_find` operator
   auto row_set_ref = row_set.ref(cuco::op::insert_and_find);
@@ -189,8 +180,8 @@ compute_row_frequencies(table_view const& input,
 
   // Copy row indices and counts to the output if counts are non-zero
   auto const input_it = thrust::make_zip_iterator(
-    thrust::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
-  auto const output_it = thrust::make_zip_iterator(thrust::make_tuple(
+    cuda::std::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
+  auto const output_it = thrust::make_zip_iterator(cuda::std::make_tuple(
     distinct_indices->begin(), distinct_counts->mutable_view().begin<histogram_count_type>()));
 
   // Reduction results above are either group sizes of equal rows, or `0`.

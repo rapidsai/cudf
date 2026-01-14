@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import random
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -419,3 +420,22 @@ def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
     q = df.group_by("key1").agg(pl.col("int").rank())
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_sum_decimal_null_group() -> None:
+    df = pl.LazyFrame(
+        {"key1": [1, 1, 2, 3], "foo": [None, None, Decimal("1.00"), Decimal("2.00")]},
+        schema={"key1": pl.Int32, "foo": pl.Decimal(9, 2)},
+    )
+    q = df.group_by("key1").agg(pl.col("foo").sum())
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="https://github.com/rapidsai/cudf/issues/19610",
+)
+def test_groupby_literal_agg():
+    df = pl.LazyFrame({"c0": [True, False]})
+    q = df.group_by("c0").agg(pl.lit(1).is_not_null())
+    assert_gpu_result_equal(q, check_row_order=False)

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -66,8 +55,9 @@ TEST_F(JoinTest, InnerJoin)
 
 TEST_F(JoinTest, SortMergeInnerJoin)
 {
-  cudf::sort_merge_inner_join(
-    table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
+  cudf::sort_merge_join obj(
+    table1, cudf::sorted::NO, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
+  obj.inner_join(table0, cudf::sorted::NO, cudf::test::get_default_stream());
 }
 
 TEST_F(JoinTest, LeftJoin)

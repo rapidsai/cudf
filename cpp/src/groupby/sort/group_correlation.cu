@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "groupby/sort/group_reductions.hpp"
@@ -28,13 +17,13 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <type_traits>
 
@@ -162,7 +151,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
   auto corr_iter =
     thrust::make_transform_iterator(thrust::make_counting_iterator(0), covariance_transform_op);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         group_labels.begin(),
                         group_labels.end(),
                         corr_iter,
@@ -188,7 +177,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
   CUDF_EXPECTS(covariance.type().id() == type_id::FLOAT64, "Covariance result must be FLOAT64");
   auto stddev0_ptr = stddev_0.begin<result_type>();
   auto stddev1_ptr = stddev_1.begin<result_type>();
-  auto stddev_iter = thrust::make_zip_iterator(thrust::make_tuple(stddev0_ptr, stddev1_ptr));
+  auto stddev_iter = thrust::make_zip_iterator(cuda::std::make_tuple(stddev0_ptr, stddev1_ptr));
   auto result      = make_numeric_column(covariance.type(),
                                     covariance.size(),
                                     cudf::detail::copy_bitmask(covariance, stream, mr),
@@ -196,13 +185,13 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                     stream,
                                     mr);
   auto d_result    = result->mutable_view().begin<result_type>();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     covariance.begin<result_type>(),
                     covariance.end<result_type>(),
                     stddev_iter,
                     d_result,
                     [] __device__(auto const covariance, auto const stddev) {
-                      return covariance / thrust::get<0>(stddev) / thrust::get<1>(stddev);
+                      return covariance / cuda::std::get<0>(stddev) / cuda::std::get<1>(stddev);
                     });
 
   result->set_null_count(covariance.null_count());

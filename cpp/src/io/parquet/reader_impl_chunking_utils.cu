@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/comp/decompression.hpp"
@@ -22,6 +11,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -32,7 +22,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/sequence.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
@@ -128,9 +117,8 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
                             page_selection selection,
                             host_span<bool const> page_mask)
 {
-  // TODO: Use a thrust::counting_transform_iterator instead when we are able to avoid decompressing
-  // the list column page in `compute_page_sizes_kernel`
-  auto page_mask_iter = thrust::make_constant_iterator(true);
+  auto page_mask_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](size_t page_idx) { return page_mask.empty() ? true : page_mask[page_idx]; });
 
   // Zip iterator for iterating over pages and the page mask
   auto zip_iter = thrust::make_zip_iterator(pages.begin(), page_mask_iter);
@@ -328,12 +316,13 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   // key
   rmm::device_uvector<size_type> key_offsets(pages.size() + 1, stream);
   auto page_keys             = make_page_key_iterator(pages);
-  auto const key_offsets_end = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                                     page_keys,
-                                                     page_keys + pages.size(),
-                                                     thrust::make_constant_iterator(1),
-                                                     thrust::make_discard_iterator(),
-                                                     key_offsets.begin())
+  auto const key_offsets_end = cudf::detail::reduce_by_key(page_keys,
+                                                           page_keys + pages.size(),
+                                                           thrust::make_constant_iterator(1),
+                                                           thrust::make_discard_iterator(),
+                                                           key_offsets.begin(),
+                                                           cuda::std::plus<>{},
+                                                           stream)
                                  .second;
 
   size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
@@ -374,7 +363,12 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
+  auto h_aggregated_info =
+    cudf::detail::make_pinned_vector_async<cumulative_page_info>(aggregated_info.size(), stream);
+  cudf::detail::cuda_memcpy(
+    cudf::host_span<cumulative_page_info>{h_aggregated_info.data(), aggregated_info.size()},
+    cudf::device_span<cumulative_page_info const>{aggregated_info.data(), aggregated_info.size()},
+    stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -408,9 +402,9 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
       page_offsets, chunks, page_row_index, start_row, end_row, is_first_subpass, has_page_index});
 
   // total page count over all columns
-  auto page_count_iter = thrust::make_transform_iterator(page_bounds.begin(), get_span_size{});
-  size_t const total_pages =
-    thrust::reduce(rmm::exec_policy(stream), page_count_iter, page_count_iter + num_columns);
+  auto page_count_iter   = thrust::make_transform_iterator(page_bounds.begin(), get_span_size{});
+  auto const total_pages = cudf::detail::reduce(
+    page_count_iter, page_count_iter + num_columns, size_t{0}, cuda::std::plus<size_t>{}, stream);
 
   return {
     std::move(page_bounds), total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
@@ -426,7 +420,12 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
+  auto h_aggregated_info =
+    cudf::detail::make_pinned_vector_async<cumulative_page_info>(aggregated_info.size(), stream);
+  cudf::detail::cuda_memcpy(
+    cudf::host_span<cumulative_page_info>{h_aggregated_info.data(), aggregated_info.size()},
+    cudf::device_span<cumulative_page_info const>{aggregated_info.data(), aggregated_info.size()},
+    stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -521,15 +520,17 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     mr);
 
   auto comp_in =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t const>>(num_comp_pages, stream);
   auto comp_out =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t>>(num_comp_pages, stream);
+  auto curr_comp_page = 0;
 
   // vectors to save v2 def and rep level data, if any
   auto copy_in =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t const>>(num_comp_pages, stream);
   auto copy_out =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t>>(num_comp_pages, stream);
+  auto curr_copy_page = 0;
 
   auto set_parameters = [&](codec_stats& codec,
                             host_span<PageInfo> pages,
@@ -538,8 +539,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                             bool select_dict_pages,
                             size_t& decomp_offset) {
     // Create a page mask iterator that defaults to true if the page_mask is empty
-    auto page_mask_iter =
-      page_mask.empty() ? thrust::make_constant_iterator(true) : page_mask.begin();
+    auto page_mask_iter = cudf::detail::make_counting_transform_iterator(
+      0, [&](size_t page_idx) { return page_mask.empty() ? true : page_mask[page_idx]; });
 
     for (auto page_idx = 0; std::cmp_less(page_idx, pages.size()); ++page_idx) {
       auto& page                = pages[page_idx];
@@ -557,15 +558,17 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
         // input and output buffers. otherwise we'd have to keep both the compressed
         // and decompressed data.
         if (offset != 0) {
-          copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
-          copy_out.push_back({dst_base, static_cast<size_t>(offset)});
+          copy_in[curr_copy_page]  = {page.page_data, static_cast<size_t>(offset)};
+          copy_out[curr_copy_page] = {dst_base, static_cast<size_t>(offset)};
+          ++curr_copy_page;
         }
         // Only decompress if the page contains data after the def/rep levels
         if (page.compressed_page_size > offset) {
-          comp_in.push_back(
-            {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
-          comp_out.push_back(
-            {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
+          comp_in[curr_comp_page]  = {page.page_data + offset,
+                                      static_cast<size_t>(page.compressed_page_size - offset)};
+          comp_out[curr_comp_page] = {dst_base + offset,
+                                      static_cast<size_t>(page.uncompressed_page_size - offset)};
+          ++curr_comp_page;
         } else {
           // If the page wasn't included in the decompression parameters, we need to adjust the
           // page count to allocate results and perform decompression correctly
@@ -634,10 +637,12 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   }
 
   CUDF_EXPECTS(
-    thrust::all_of(rmm::exec_policy(stream),
-                   comp_res.begin(),
-                   comp_res.end(),
-                   [] __device__(auto const& res) { return res.status == codec_status::SUCCESS; }),
+    cudf::detail::all_of(comp_res.begin(),
+                         comp_res.end(),
+                         cuda::proclaim_return_type<bool>([] __device__(auto const& res) {
+                           return res.status == codec_status::SUCCESS;
+                         }),
+                         stream),
     "Error during decompression");
 
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
@@ -657,37 +662,41 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
     thrust::make_transform_iterator(pages.begin(), flat_column_num_rows{chunks.data()});
   auto const row_counts_begin = row_counts.begin();
   auto page_keys              = make_page_key_iterator(pages);
-  auto const row_counts_end   = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                                    page_keys,
-                                                    page_keys + pages.size(),
-                                                    size_iter,
-                                                    thrust::make_discard_iterator(),
-                                                    row_counts_begin)
+  auto const row_counts_end   = cudf::detail::reduce_by_key(page_keys,
+                                                          page_keys + pages.size(),
+                                                          size_iter,
+                                                          thrust::make_discard_iterator(),
+                                                          row_counts_begin,
+                                                          cuda::std::plus<>{},
+                                                          stream)
                                 .second;
 
   // make sure all non-zero row counts are the same
   rmm::device_uvector<size_type> compacted_row_counts(pages.size(), stream);
   auto const compacted_row_counts_begin = compacted_row_counts.begin();
-  auto const compacted_row_counts_end   = thrust::copy_if(rmm::exec_policy(stream),
-                                                        row_counts_begin,
-                                                        row_counts_end,
-                                                        compacted_row_counts_begin,
-                                                        row_counts_nonzero{});
+  auto const compacted_row_counts_end   = cudf::detail::copy_if(
+    row_counts_begin, row_counts_end, compacted_row_counts_begin, row_counts_nonzero{}, stream);
   if (compacted_row_counts_end != compacted_row_counts_begin) {
-    auto const found_row_count = static_cast<size_t>(compacted_row_counts.element(0, stream));
+    auto const found_row_count = [&]() {
+      auto found_row_count = cudf::detail::make_pinned_vector_async<size_type>(1, stream);
+      cudf::detail::cuda_memcpy(cudf::host_span<size_type>{found_row_count.data(), 1},
+                                cudf::device_span<size_type const>{compacted_row_counts.data(), 1},
+                                stream);
+      return found_row_count.front();
+    }();
 
     // if we somehow don't match the expected row count from the row groups themselves
     if (expected_row_count.has_value()) {
-      CUDF_EXPECTS(expected_row_count.value() == found_row_count,
+      CUDF_EXPECTS(std::cmp_equal(expected_row_count.value(), found_row_count),
                    "Encountered malformed parquet page data (unexpected row count in page data)");
     }
 
     // all non-zero row counts must be the same
     auto const chk =
-      thrust::count_if(rmm::exec_policy(stream),
-                       compacted_row_counts_begin,
-                       compacted_row_counts_end,
-                       row_counts_different{static_cast<size_type>(found_row_count)});
+      cudf::detail::count_if(compacted_row_counts_begin,
+                             compacted_row_counts_end,
+                             row_counts_different{static_cast<size_type>(found_row_count)},
+                             stream);
     CUDF_EXPECTS(chk == 0,
                  "Encountered malformed parquet page data (row count mismatch in page data)");
   }
@@ -712,8 +721,13 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
                                 decomp_sum{});
 
   // retrieve to host so we can get compression scratch sizes
-  auto h_decomp_info = cudf::detail::make_host_vector(decomp_info, stream);
-  auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
+  auto h_decomp_info =
+    cudf::detail::make_pinned_vector_async<decompression_info>(decomp_info.size(), stream);
+  cudf::detail::cuda_memcpy(
+    cudf::host_span<decompression_info>(h_decomp_info.data(), decomp_info.size()),
+    cudf::device_span<decompression_info const>(decomp_info.data(), decomp_info.size()),
+    stream);
+  auto temp_cost = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
   std::transform(h_decomp_info.begin(), h_decomp_info.end(), temp_cost.begin(), [](auto const& d) {
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
@@ -728,8 +742,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
                     compression_type::ZSTD};
   for (auto const codec : codecs) {
     if (cudf::io::detail::is_decompression_scratch_size_ex_supported(codec)) {
-      auto const total_decomp_info = thrust::transform_reduce(
-        rmm::exec_policy(stream),
+      auto const total_decomp_info = cudf::detail::transform_reduce(
         decomp_iter,
         decomp_iter + pages.size(),
         cuda::proclaim_return_type<decompression_info>(
@@ -737,7 +750,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
             return d.type == codec ? d : decompression_info{codec, 0, 0, 0};
           }),
         decompression_info{codec, 0, 0, 0},
-        decomp_sum{});
+        decomp_sum{},
+        stream);
 
       // Collect pages with matching codecs
       rmm::device_uvector<device_span<uint8_t const>> temp_spans(pages.size(), stream);
@@ -760,11 +774,12 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
       // Copy only non-null spans
       rmm::device_uvector<device_span<uint8_t const>> page_spans(pages.size(), stream);
       auto end_iter =
-        thrust::copy_if(rmm::exec_policy_nosync(stream),
-                        temp_spans.begin(),
-                        temp_spans.end(),
-                        page_spans.begin(),
-                        [] __device__(auto const& span) { return span.data() != nullptr; });
+        cudf::detail::copy_if(temp_spans.begin(),
+                              temp_spans.end(),
+                              page_spans.begin(),
+                              cuda::proclaim_return_type<bool>(
+                                [] __device__(auto const& span) { return span.data() != nullptr; }),
+                              stream);
       if (end_iter == page_spans.begin()) {
         // No pages compressed with this codec, skip
         continue;
@@ -813,9 +828,9 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   return d_temp_cost;
 }
 
-void include_decompression_scratch_size(device_span<size_t const> temp_cost,
-                                        device_span<cumulative_page_info> c_info,
-                                        rmm::cuda_stream_view stream)
+void include_scratch_size(device_span<size_t const> temp_cost,
+                          device_span<cumulative_page_info> c_info,
+                          rmm::cuda_stream_view stream)
 {
   auto iter = thrust::make_counting_iterator(size_t{0});
   thrust::for_each(rmm::exec_policy_nosync(stream),
@@ -824,6 +839,68 @@ void include_decompression_scratch_size(device_span<size_t const> temp_cost,
                    [temp_cost = temp_cost.begin(), c_info = c_info.begin()] __device__(size_t i) {
                      c_info[i].size_bytes += temp_cost[i];
                    });
+}
+
+namespace {
+
+/**
+ * @brief Functor to compute the string offset buffer size needed for a page.
+ *
+ * This computes the memory needed to store string offsets (uint32_t per value)
+ * for non-dictionary, non-FLBA string pages.
+ */
+struct compute_page_string_offset_size {
+  device_span<PageInfo const> pages;
+  device_span<ColumnChunkDesc const> chunks;
+
+  __device__ size_t operator()(size_t page_idx) const
+  {
+    // Mask for non-dictionary, non-delta string columns (same as used in decode kernel)
+    constexpr uint32_t STRINGS_MASK_NON_DELTA_NON_DICT =
+      BitOr(decode_kernel_mask::STRING,
+            decode_kernel_mask::STRING_NESTED,
+            decode_kernel_mask::STRING_LIST,
+            decode_kernel_mask::STRING_STREAM_SPLIT,
+            decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
+            decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+
+    auto const& page  = pages[page_idx];
+    auto const& chunk = chunks[page.chunk_idx];
+
+    // Check if this page is a non-dictionary string page using kernel mask
+    if (BitAnd(page.kernel_mask, STRINGS_MASK_NON_DELTA_NON_DICT) == 0) { return 0; }
+
+    // Fixed length byte array: Offsets are fixed, no need to allocate offset buffer
+    if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
+
+    // Estimate number of offsets based on page.num_input_values
+    // This is an upper bound estimate since we compute this before knowing:
+    // - exact batch sizes for list columns after preprocessing
+    // - which rows will be skipped due to subpass boundaries
+    // We add 1 for the final offset
+    auto const num_offsets = page.num_input_values + 1;
+
+    // Return size in bytes (uint32_t per offset)
+    return num_offsets * sizeof(uint32_t);
+  }
+};
+
+}  // anonymous namespace
+
+rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkDesc const> chunks,
+                                                        device_span<PageInfo const> pages,
+                                                        rmm::cuda_stream_view stream)
+{
+  rmm::device_uvector<size_t> string_offset_sizes(pages.size(), stream);
+
+  auto iter = thrust::make_counting_iterator(size_t{0});
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    iter,
+                    iter + pages.size(),
+                    string_offset_sizes.begin(),
+                    compute_page_string_offset_size{pages, chunks});
+
+  return string_offset_sizes;
 }
 
 }  // namespace cudf::io::parquet::detail

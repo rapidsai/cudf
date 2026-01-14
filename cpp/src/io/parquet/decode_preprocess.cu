@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "delta_binary.cuh"
@@ -25,7 +14,6 @@
 
 #include <cooperative_groups.h>
 #include <cuda/std/iterator>
-#include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
 
@@ -172,6 +160,70 @@ __device__ void update_page_sizes(page_state_s* s,
 }
 
 /**
+ * @brief Updates size information for a pruned page across all nesting levels
+ *
+ * @param[in,out] page The page to compute sizes for
+ * @param[in] state The local page info
+ * @param[in] has_repetition Whether the page has repetition
+ * @param[in] is_base_pass Whether this is the base pass
+ * @param[in] block The current thread block cooperative group
+ */
+__device__ void compute_page_sizes_for_pruned_pages(PageInfo* page,
+                                                    page_state_s* const state,
+                                                    bool has_repetition,
+                                                    bool is_base_pass,
+                                                    cg::thread_block const& block)
+{
+  auto const max_depth = page->num_output_nesting_levels;
+  // Return early if no repetition and max depth is 1
+  if (not has_repetition and max_depth == 1) {
+    if (!block.thread_rank()) {
+      if (is_base_pass) { page->nesting[0].size = page->num_rows; }
+      page->nesting[0].batch_size = state->num_rows;
+    }
+    return;
+  }
+
+  // Use warp 0 to set nesting size information for all depths
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(block);
+  if (warp.meta_group_rank() == 0) {
+    auto list_depth = 0;
+    // Find the depth of the first list
+    if (has_repetition) {
+      auto depth = 0;
+      while (depth < max_depth) {
+        auto const thread_depth = depth + warp.thread_rank();
+        auto const is_list =
+          thread_depth < max_depth and page->nesting[thread_depth].type == type_id::LIST;
+        uint32_t const list_mask = warp.ballot(is_list);
+        if (list_mask != 0) {
+          auto const first_list_lane = cuda::std::countr_zero(list_mask);
+          list_depth                 = warp.shfl(thread_depth, first_list_lane);
+          break;
+        }
+        depth += warp.size();
+      }
+      // Zero out size information for all depths beyond the first list depth
+      for (auto depth = list_depth + 1 + warp.thread_rank(); depth < max_depth;
+           depth += warp.size()) {
+        if (is_base_pass) { page->nesting[depth].size = 0; }
+        page->nesting[depth].batch_size = 0;
+      }
+    }
+    // Write size information for all depths up to the list depth
+    for (auto depth = warp.thread_rank(); depth < list_depth; depth += warp.size()) {
+      if (is_base_pass) { page->nesting[depth].size = page->num_rows; }
+      page->nesting[depth].batch_size = state->num_rows;
+    }
+    // Write size information at the list depth (zero if no list)
+    if (warp.thread_rank() == 0) {
+      if (is_base_pass) { page->nesting[list_depth].size = page->num_rows; }
+      page->nesting[list_depth].batch_size = state->num_rows;
+    }
+  }
+}
+
+/**
  * @brief Kernel for computing per-page column size information for all nesting levels.
  *
  * This function will write out the size field for each level of nesting.
@@ -190,6 +242,7 @@ template <typename level_t>
 CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   compute_page_sizes_kernel(PageInfo* pages,
                             device_span<ColumnChunkDesc const> chunks,
+                            device_span<bool const> page_mask,
                             size_t min_row,
                             size_t num_rows,
                             bool is_base_pass)
@@ -215,6 +268,11 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   if (!setup_local_page_info(
         s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
     return;
+  }
+
+  // Return early if this page is pruned
+  if (not page_mask.empty() and not page_mask[page_idx]) {
+    return compute_page_sizes_for_pruned_pages(pp, s, has_repetition, is_base_pass, block);
   }
 
   // initialize the stream decoders (requires values computed in setup_local_page_info)
@@ -263,7 +321,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
         if (is_base_pass) { pp->nesting[thread_depth].size = pp->num_input_values; }
         pp->nesting[thread_depth].batch_size = pp->num_input_values;
       }
-      depth += blockDim.x;
+      depth += block.size();
     }
     return;
   }
@@ -282,7 +340,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
             ? 0
             : pp->nesting[thread_depth].size;
       }
-      depth += blockDim.x;
+      depth += block.size();
     }
     return;
   }
@@ -334,7 +392,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
       if (thread_depth < s->page.num_output_nesting_levels) {
         pp->nesting[thread_depth].size = pp->nesting[thread_depth].batch_size;
       }
-      depth += blockDim.x;
+      depth += block.size();
     }
   }
 
@@ -351,6 +409,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
  */
 void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
                         cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                        cudf::device_span<bool const> page_mask,
                         size_t min_row,
                         size_t num_rows,
                         bool compute_num_rows,
@@ -369,10 +428,10 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
   // the starting and ending read values to account for these bounds.
   if (level_type_size == 1) {
     compute_page_sizes_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows, compute_num_rows);
   } else {
     compute_page_sizes_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows, compute_num_rows);
   }
 }
 

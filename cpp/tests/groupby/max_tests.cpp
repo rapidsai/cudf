@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/groupby/groupby_test_util.hpp>
@@ -25,6 +14,10 @@
 #include <cudf/dictionary/update_keys.hpp>
 
 #include <limits>
+#include <numeric>
+#include <random>
+#include <unordered_set>
+#include <vector>
 
 using namespace cudf::test::iterators;
 
@@ -553,4 +546,52 @@ TYPED_TEST(groupby_max_floating_point_test, values_with_nan)
   auto const result = gb_obj.aggregate(requests);
 
   EXPECT_EQ(result.first->num_rows(), 1);
+}
+
+// Test the shared memory kernel in hash-based groupby aggregations.
+struct groupby_max_hash_based_shmem_kernel_test : cudf::test::BaseFixture {};
+
+TEST_F(groupby_max_hash_based_shmem_kernel_test, all_unique_keys)
+{
+  auto constexpr block_size      = 128;
+  auto constexpr size_multiplier = 4;
+
+  // Since the maximum number of thread blocks (128 threads each) can be 100+ depending on GPU
+  // architecture, while the number of rows is just 128*4, each thread block will process exactly
+  // 128 rows. Because all thread blocks encounter no more than 128 distinct keys, they will
+  // run using the shared memory kernel.
+  std::vector<int> h_keys(block_size * size_multiplier);
+  std::iota(h_keys.begin(), h_keys.end(), 0);
+
+  cudf::test::fixed_width_column_wrapper<int> keys(h_keys.begin(), h_keys.end());
+  cudf::test::fixed_width_column_wrapper<int> expect_keys(h_keys.begin(), h_keys.end());
+
+  auto agg = cudf::make_max_aggregation<cudf::groupby_aggregation>();
+  // Keys are the same as values.
+  test_single_agg(keys, keys, expect_keys, expect_keys, std::move(agg));
+}
+
+TEST_F(groupby_max_hash_based_shmem_kernel_test, repeated_keys)
+{
+  auto constexpr block_size      = 128;
+  auto constexpr size_multiplier = 10000;
+
+  // Repeat the keys for every 128 rows, thus we will have only 128 distinct keys in total.
+  // Because all thread blocks encounter no more than 128 distinct keys, they will run using the
+  // shared memory kernel.
+  std::vector<int> h_keys(block_size * size_multiplier);
+  auto it = h_keys.begin();
+  while (it != h_keys.end()) {
+    std::iota(it, it + block_size, 0);
+    it += block_size;
+  }
+
+  cudf::test::fixed_width_column_wrapper<int> expect_keys(h_keys.begin(),
+                                                          h_keys.begin() + block_size);
+  std::ranges::shuffle(h_keys.begin(), h_keys.end(), std::default_random_engine());
+  cudf::test::fixed_width_column_wrapper<int> keys(h_keys.begin(), h_keys.end());
+
+  auto agg = cudf::make_max_aggregation<cudf::groupby_aggregation>();
+  // Keys are the same as values.
+  test_single_agg(keys, keys, expect_keys, expect_keys, std::move(agg));
 }

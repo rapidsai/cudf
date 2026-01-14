@@ -1,5 +1,6 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
-from libc.stdint cimport uint64_t
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+from libc.stdint cimport int64_t, uint64_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -17,6 +18,9 @@ cdef extern from "cudf/io/text/byte_range_info.hpp" \
         byte_range_info(
             size_t offset, size_t size
         ) except +libcudf_exception_handler
+
+        int64_t offset() except +libcudf_exception_handler
+        int64_t size() except +libcudf_exception_handler
 
 cdef extern from "cudf/io/text/data_chunk_source.hpp" \
         namespace "cudf::io::text" nogil:
@@ -54,13 +58,6 @@ cdef extern from "cudf/io/text/multibyte_split.hpp" \
         bool strip_delimiters
 
         parse_options() except +libcudf_exception_handler
-
-    unique_ptr[column] multibyte_split(
-        data_chunk_source source,
-        string delimiter,
-        parse_options options,
-        cuda_stream_view stream
-    ) except +libcudf_exception_handler
 
     unique_ptr[column] multibyte_split(
         data_chunk_source source,

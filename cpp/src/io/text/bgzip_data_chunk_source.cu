@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/comp/common.hpp"
@@ -33,6 +22,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -52,17 +42,17 @@ struct bgzip_nvcomp_transform_functor {
   uint8_t const* compressed_ptr;
   uint8_t* decompressed_ptr;
 
-  __device__ thrust::tuple<device_span<uint8_t const>, device_span<uint8_t>> operator()(
-    thrust::tuple<std::size_t, std::size_t, std::size_t, std::size_t> t)
+  __device__ cuda::std::tuple<device_span<uint8_t const>, device_span<uint8_t>> operator()(
+    cuda::std::tuple<std::size_t, std::size_t, std::size_t, std::size_t> t)
   {
-    auto const compressed_begin   = thrust::get<0>(t);
-    auto const compressed_end     = thrust::get<1>(t);
-    auto const decompressed_begin = thrust::get<2>(t);
-    auto const decompressed_end   = thrust::get<3>(t);
-    return thrust::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
-                                                         compressed_end - compressed_begin},
-                              device_span<uint8_t>{decompressed_ptr + decompressed_begin,
-                                                   decompressed_end - decompressed_begin});
+    auto const compressed_begin   = cuda::std::get<0>(t);
+    auto const compressed_end     = cuda::std::get<1>(t);
+    auto const decompressed_begin = cuda::std::get<2>(t);
+    auto const decompressed_end   = cuda::std::get<3>(t);
+    return cuda::std::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
+                                                            compressed_end - compressed_begin},
+                                 device_span<uint8_t>{decompressed_ptr + decompressed_begin,
+                                                      decompressed_end - decompressed_begin});
   }
 };
 
@@ -86,6 +76,11 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       1 << 24;  // 16MB buffer allocation, resized on demand
     static constexpr std::size_t default_offset_alloc =
       1 << 16;  // 64k offset allocation, resized on demand
+
+    decompression_blocks(decompression_blocks const&)            = delete;
+    decompression_blocks& operator=(decompression_blocks const&) = delete;
+    decompression_blocks(decompression_blocks&&)                 = default;
+    decompression_blocks& operator=(decompression_blocks&&)      = default;
 
     cudaEvent_t event;
     cudf::detail::host_vector<char> h_compressed_blocks;

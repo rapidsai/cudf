@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/column_wrapper.hpp>
@@ -33,7 +22,7 @@ void bm_tdigest_merge(nvbench::state& state)
   auto const total_centroids = num_tdigests * tdigest_size;
 
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   constexpr int base_value = 5;
 
@@ -114,7 +103,7 @@ void bm_tdigest_reduce(nvbench::state& state)
   auto const max_centroids  = static_cast<cudf::size_type>(state.get_int64("max_centroids"));
 
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   // construct input values
   auto zero  = cudf::numeric_scalar<cudf::size_type>(0);

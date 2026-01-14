@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -127,7 +116,7 @@ std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
     auto d_output2        = output2->mutable_view().data<uint64_t>();
 
     // Compute the hash value for each row
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::counting_iterator<size_type>(0),
                        input.num_rows(),
                        murmur_device_row_hasher(nullable, *input_view, seed, d_output1, d_output2));

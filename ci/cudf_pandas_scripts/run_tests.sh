@@ -1,6 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -eoxu pipefail
@@ -16,7 +15,7 @@ DEPENDENCIES_PATH="dependencies.yaml"
 export JUPYTER_PLATFORM_DIRS=1
 
 # Use grep to find the line containing the package name and version constraint
-pandas_version_constraint=$(grep -oP "pandas>=\d+\.\d+,\<\d+\.\d+\.\d+dev\d+" $DEPENDENCIES_PATH)
+pandas_version_constraint=$(grep -oP "pandas>=\d+\.\d+(\.\d+)?,<\d+\.\d+(\.\d+)?" $DEPENDENCIES_PATH)
 
 # Function to display script usage
 function display_usage {

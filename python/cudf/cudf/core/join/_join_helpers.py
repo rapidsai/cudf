@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -81,11 +82,11 @@ def _match_join_keys(
         if left_is_categorical:
             if how in {"left", "leftsemi", "leftanti"}:
                 return lcol, rcol.astype(ltype)
-            common_type = ltype.categories.dtype
+            common_type = ltype.categories.dtype  # type: ignore[union-attr]
             if get_option("mode.pandas_compatible"):
                 common_type = get_dtype_of_same_kind(rtype, common_type)
         else:
-            common_type = rtype.categories.dtype
+            common_type = rtype.categories.dtype  # type: ignore[union-attr]
             if get_option("mode.pandas_compatible"):
                 common_type = get_dtype_of_same_kind(ltype, common_type)
         return lcol.astype(common_type), rcol.astype(common_type)
@@ -140,7 +141,7 @@ def _match_categorical_dtypes_both(
 
     # when both are ordered and both have the same categories,
     # no casting required:
-    if ltype == rtype:
+    if ltype._internal_eq(rtype):
         return lcol, rcol
 
     # Merging categorical variables when only one side is ordered is
@@ -170,7 +171,7 @@ def _match_categorical_dtypes_both(
         )
     elif how in {"left", "leftanti", "leftsemi"}:
         # always cast to left type
-        return lcol, rcol.astype(ltype)
+        return lcol, rcol._get_decategorized_column().astype(ltype)
     else:
         # merge categories
         with warnings.catch_warnings():
@@ -181,7 +182,9 @@ def _match_categorical_dtypes_both(
         common_type = CategoricalDtype(
             categories=merged_categories, ordered=False
         )
-        return lcol.astype(common_type), rcol.astype(common_type)
+        return lcol._get_decategorized_column().astype(
+            common_type
+        ), rcol._get_decategorized_column().astype(common_type)
 
 
 def _coerce_to_tuple(obj):

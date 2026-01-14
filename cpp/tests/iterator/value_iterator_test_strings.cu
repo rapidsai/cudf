@@ -1,16 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS,  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include "iterator_tests.cuh"
 
@@ -20,9 +10,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 
 auto strings_to_string_views(std::vector<std::string>& input_strings)
 {
@@ -123,9 +113,9 @@ TEST_F(StringIteratorTest, string_scalar_iterator)
   auto [dev_chars, all_array] = strings_to_string_views(host_values);
 
   // calculate the expected value by CPU.
-  thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());
+  thrust::host_vector<cuda::std::pair<T, bool>> value_and_validity(host_values.size());
   std::transform(all_array.begin(), all_array.end(), value_and_validity.begin(), [](auto v) {
-    return thrust::pair<T, bool>{v, true};
+    return cuda::std::pair<T, bool>{v, true};
   });
 
   // create a scalar

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -62,7 +51,7 @@ TYPED_TEST(TableToDeviceArrayTypedTest, SupportedTypes)
 {
   using T     = TypeParam;
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   int nrows = 3;
   int ncols = 4;
@@ -90,7 +79,7 @@ TYPED_TEST(TableToDeviceArrayTypedTest, SupportedTypes)
     cols.begin(), cols.end(), views.begin(), [](auto const& col) { return col->view(); });
   cudf::table_view input{views};
 
-  auto output = cudf::detail::make_zeroed_device_uvector<T>(nrows * ncols, stream, *mr);
+  auto output = cudf::detail::make_zeroed_device_uvector<T>(nrows * ncols, stream, mr);
 
   cudf::table_to_array(
     input,
@@ -114,7 +103,7 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
   auto scale  = numeric::scale_type{-2};
 
   fp_wrapper col0({123, 456, 789}, scale);
@@ -123,7 +112,7 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
   cudf::table_view input({col0, col1});
   size_t num_elements = input.num_rows() * input.num_columns();
 
-  auto output = cudf::detail::make_zeroed_device_uvector<RepType>(num_elements, stream, *mr);
+  auto output = cudf::detail::make_zeroed_device_uvector<RepType>(num_elements, stream, mr);
 
   cudf::table_to_array(
     input,

@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import io
 import itertools
@@ -111,24 +112,34 @@ def _make_avro_table(avro_dtypes, avro_dtype_data, nullable=False):
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("columns", [["prop1"], [], ["prop1", "prop2"]])
 @pytest.mark.parametrize("nullable", [True, False])
+@pytest.mark.parametrize("source_strategy", ["inline", "set_source"])
 def test_read_avro(
-    avro_dtypes, avro_dtype_data, row_opts, columns, nullable, stream
+    avro_dtypes,
+    avro_dtype_data,
+    row_opts,
+    columns,
+    nullable,
+    stream,
+    source_strategy,
 ):
     skip_rows, num_rows = row_opts
     buffer, expected = _make_avro_table(avro_dtypes, avro_dtype_data, nullable)
 
-    res = plc.io.avro.read_avro(
-        (
-            plc.io.avro.AvroReaderOptions.builder(
-                plc.io.types.SourceInfo([buffer])
-            )
-            .columns(columns)
-            .skip_rows(skip_rows)
-            .num_rows(num_rows)
-            .build()
-        ),
-        stream,
+    source = plc.io.types.SourceInfo([buffer])
+    builder = plc.io.avro.AvroReaderOptions.builder(
+        source if source_strategy == "inline" else plc.io.types.SourceInfo([])
     )
+    options = (
+        builder.columns(columns)
+        .skip_rows(skip_rows)
+        .num_rows(num_rows)
+        .build()
+    )
+
+    if source_strategy == "set_source":
+        options.set_source(source)
+
+    res = plc.io.avro.read_avro(options, stream)
 
     length = num_rows if num_rows != -1 else None
     expected = expected.slice(skip_rows, length=length)
@@ -143,7 +154,7 @@ def test_read_avro(
 def test_read_avro_from_device_buffers(avro_dtypes, avro_dtype_data, stream):
     buffer, expected = _make_avro_table(avro_dtypes, avro_dtype_data)
     buf = buffer.getbuffer()
-    device_buf = DeviceBuffer.to_device(buf)
+    device_buf = DeviceBuffer.to_device(buf, plc.utils._get_stream(stream))
 
     options = plc.io.avro.AvroReaderOptions.builder(
         plc.io.types.SourceInfo([device_buf])

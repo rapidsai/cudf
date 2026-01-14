@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
 import pytest
@@ -15,14 +16,16 @@ def test_cdt_eq(data, categorical_ordered):
     assert dt == "category"
     assert dt == dt
     assert dt == cudf.CategoricalDtype(
-        categories=None, ordered=categorical_ordered
-    )
-    assert dt == cudf.CategoricalDtype(
         categories=data, ordered=categorical_ordered
     )
-    assert dt != cudf.CategoricalDtype(
-        categories=data, ordered=not categorical_ordered
-    )
+    if data is None:
+        assert dt == cudf.CategoricalDtype(
+            categories=data, ordered=not categorical_ordered
+        )
+    else:
+        assert dt != cudf.CategoricalDtype(
+            categories=data, ordered=not categorical_ordered
+        )
 
 
 @pytest.mark.parametrize(

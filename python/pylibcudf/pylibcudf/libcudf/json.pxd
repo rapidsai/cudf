@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -24,13 +25,6 @@ cdef extern from "cudf/json/json.hpp" namespace "cudf" nogil:
             bool val
         ) except +libcudf_exception_handler
         void set_missing_fields_as_nulls(bool val) except +libcudf_exception_handler
-
-    cdef unique_ptr[column] get_json_object(
-        column_view col,
-        string_scalar json_path,
-        get_json_object_options options,
-        cuda_stream_view stream
-    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] get_json_object(
         column_view col,

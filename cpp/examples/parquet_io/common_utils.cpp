@@ -1,29 +1,18 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "common_utils.hpp"
 
 #include <cudf/concatenate.hpp>
 #include <cudf/io/types.hpp>
-#include <cudf/join/join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <chrono>
 #include <iomanip>
@@ -94,13 +83,16 @@ bool get_boolean(std::string input)
   return input == "ON" or input == "TRUE" or input == "YES" or input == "Y" or input == "T";
 }
 
-void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)
+void check_tables_equal(cudf::table_view const& lhs_table,
+                        cudf::table_view const& rhs_table,
+                        rmm::cuda_stream_view stream)
 {
   try {
-    // Left anti-join the original and transcoded tables
-    // identical tables should not throw an exception and
-    // return an empty indices vector
-    auto const indices = cudf::left_anti_join(lhs_table, rhs_table, cudf::null_equality::EQUAL);
+    // Left anti-join the original and transcoded tables identical tables should not throw an
+    // exception and return an empty indices vector
+    cudf::filtered_join join_obj(
+      lhs_table, cudf::null_equality::EQUAL, cudf::set_as_build_table::RIGHT, stream);
+    auto const indices = join_obj.anti_join(rhs_table, stream);
 
     // No exception thrown, check indices
     auto const valid = indices->size() == 0;

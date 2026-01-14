@@ -20,9 +20,9 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     ],
 )
 def test_merge_sorted_without_nulls(descending):
-    df0 = pl.LazyFrame({"name": ["steve", "elise", "bob"], "age": [42, 44, 18]}).sort(
-        "age", descending=descending
-    )
+    df0 = pl.LazyFrame(
+        {"name": ["steve", "elise", "bob"], "age": [42, 44, 18], "height": [5, 6, 5]}
+    ).sort("age", descending=descending)
     df1 = pl.LazyFrame(
         {
             "name": ["anna", "megan", "steve", "thomas"],
@@ -46,7 +46,11 @@ def test_merge_sorted_without_nulls(descending):
 )
 def test_merge_sorted_with_nulls(descending):
     df0 = pl.LazyFrame(
-        {"name": ["steve", "elise", "bob", "john"], "age": [42, 44, 18, None]}
+        {
+            "name": ["steve", "elise", "bob", "john"],
+            "age": [42, 44, 18, None],
+            "height": [5, 6, 7, 5],
+        }
     ).sort("age", descending=descending)
     df1 = pl.LazyFrame(
         {

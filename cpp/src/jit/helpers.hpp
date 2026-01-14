@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -34,6 +23,7 @@ constexpr bool is_scalar(cudf::size_type base_column_size, cudf::size_type colum
 
 typename std::vector<column_view>::const_iterator get_transform_base_column(
   std::vector<column_view> const& inputs);
+
 struct input_column_reflection {
   std::string type_name;
   bool is_scalar = false;
@@ -48,13 +38,6 @@ struct input_column_reflection {
                      : column_accessor;
   }
 };
-
-jitify2::StringVec build_jit_template_params(
-  bool has_user_data,
-  null_aware is_null_aware,
-  std::vector<std::string> const& span_outputs,
-  std::vector<std::string> const& column_outputs,
-  std::vector<input_column_reflection> const& column_inputs);
 
 std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const& output_typenames,
                                                  std::vector<std::string> const& input_typenames,

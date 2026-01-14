@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "compression_common.hpp"
@@ -23,6 +12,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_schema.hpp>
@@ -2493,4 +2483,25 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
       reinterpret_cast<std::byte const*>(mm_buf.data()), mm_buf.size()}});
   auto custom_tbl = cudf::io::read_parquet(custom_args);
   CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
+}
+
+TEST_F(ParquetWriterTest, DISABLED_SizeTypeOverflow)
+{
+  constexpr auto num_rows = std::numeric_limits<cudf::size_type>::max();
+
+  auto const val = cudf::numeric_scalar<bool>(true);
+  auto const col = cudf::make_column_from_scalar(val, num_rows);
+  ASSERT_EQ(col->size(), num_rows);
+
+  std::vector<char> buffer;
+  buffer.reserve(num_rows);
+  cudf::io::parquet_writer_options const options = cudf::io::parquet_writer_options::builder(
+    cudf::io::sink_info{&buffer}, cudf::table_view({col->view()}));
+  EXPECT_NO_THROW(cudf::io::write_parquet(options));
+
+  cudf::io::parquet_reader_options const read_opts = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{cudf::host_span<char const>(buffer.data(), buffer.size())});
+  auto const result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view({col->view()}), result.tbl->view());
 }

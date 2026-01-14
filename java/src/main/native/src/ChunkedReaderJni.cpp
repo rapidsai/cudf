@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "cudf_jni_apis.hpp"
@@ -91,6 +80,8 @@ Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
     }
     auto const read_opts = opts_builder.convert_strings_to_categories(false)
                              .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+                             // Ignore any missing projected column(s) by default
+                             .ignore_missing_columns(true)
                              .build();
     n_addrs_sizes.cancel();
     n_col_binary_read.cancel();
@@ -139,6 +130,8 @@ Java_ai_rapids_cudf_ParquetChunkedReader_createWithDataSource(JNIEnv* env,
     }
     auto const read_opts = opts_builder.convert_strings_to_categories(false)
                              .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+                             // Ignore any missing projected column(s) by default
+                             .ignore_missing_columns(true)
                              .build();
 
     return reinterpret_cast<jlong>(

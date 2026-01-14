@@ -1,15 +1,8 @@
 # =============================================================================
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License. You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software distributed under the License
-# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-# or implied. See the License for the specific language governing permissions and limitations under
-# the License.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
@@ -30,30 +23,24 @@ project(
   LANGUAGES C CXX CUDA
 )
 
-if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0)
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.2)
   message(
     FATAL_ERROR
-      "libcudf requires CUDA Toolkit 12.0+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
+      "libcudf requires CUDA Toolkit 12.2+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
   )
 endif()
 
 rapids_cmake_write_version_file(include/cudf/version_config.hpp)
 
-# Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
-# have different values for the `Threads::Threads` target. Setting this flag ensures
-# `Threads::Threads` is the same value in first run and subsequent runs.
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-
 # ##################################################################################################
 # * build options ---------------------------------------------------------------------------------
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
+option(BUILD_BENCHMARKS "Configure CMake to build benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
-option(CUDF_EXPORT_NVCOMP "Export NVCOMP as a dependency" ON)
 option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
 mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
 option(
@@ -98,7 +85,7 @@ option(
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
-message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF: Configure CMake to build benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
@@ -286,10 +273,10 @@ include(cmake/thirdparty/get_nvtx.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
 
-# find CCCL before rmm so that we get cudf's patched version of CCCL
+# find CCCL
 include(cmake/thirdparty/get_cccl.cmake)
 
-# find rmm
+# find rmm, should come after including CCCL to allow overriding the CCCL version used for testing
 include(cmake/thirdparty/get_rmm.cmake)
 
 # find croaring
@@ -428,19 +415,18 @@ add_library(
   src/filling/sequence.cu
   src/groupby/common/m2_var_std.cu
   src/groupby/groupby.cu
-  src/groupby/hash/compute_aggregations.cu
-  src/groupby/hash/compute_aggregations_null.cu
   src/groupby/hash/compute_global_memory_aggs.cu
   src/groupby/hash/compute_global_memory_aggs_null.cu
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_mapping_indices.cu
   src/groupby/hash/compute_mapping_indices_null.cu
   src/groupby/hash/compute_shared_memory_aggs.cu
-  src/groupby/hash/create_sparse_results_table.cu
-  src/groupby/hash/flatten_single_pass_aggs.cpp
+  src/groupby/hash/compute_single_pass_aggs.cu
+  src/groupby/hash/compute_single_pass_aggs_null.cu
+  src/groupby/hash/extract_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
   src/groupby/hash/hash_compound_agg_finalizer.cu
-  src/groupby/hash/sparse_to_dense_results.cu
+  src/groupby/hash/output_utils.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu
@@ -448,25 +434,26 @@ add_library(
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
   src/groupby/sort/group_count.cu
+  src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_histogram.cu
   src/groupby/sort/group_m2.cu
   src/groupby/sort/group_max.cu
-  src/groupby/sort/group_min.cu
+  src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_merge_lists.cu
   src/groupby/sort/group_merge_m2.cu
+  src/groupby/sort/group_min.cu
+  src/groupby/sort/group_min_scan.cu
   src/groupby/sort/group_nth_element.cu
   src/groupby/sort/group_nunique.cu
   src/groupby/sort/group_product.cu
-  src/groupby/sort/group_quantiles.cu
-  src/groupby/sort/group_std.cu
-  src/groupby/sort/group_sum.cu
-  src/groupby/sort/group_count_scan.cu
-  src/groupby/sort/group_max_scan.cu
-  src/groupby/sort/group_min_scan.cu
   src/groupby/sort/group_product_scan.cu
+  src/groupby/sort/group_quantiles.cu
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
+  src/groupby/sort/group_std.cu
+  src/groupby/sort/group_sum.cu
   src/groupby/sort/group_sum_scan.cu
+  src/groupby/sort/group_topk.cu
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
@@ -510,6 +497,7 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/cudftable.cpp
   src/io/json/host_tree_algorithms.cu
   src/io/json/json_column.cu
   src/io/json/column_tree_construction.cu
@@ -546,6 +534,7 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_impl.cpp
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
+  src/io/parquet/experimental/page_index_filter_utils.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
@@ -589,10 +578,16 @@ add_library(
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
+  src/join/filter_join_indices.cu
+  src/join/filter_join_indices_kernel_complex.cu
+  src/join/filter_join_indices_kernel_null_complex.cu
+  src/join/filter_join_indices_kernel_null_primitive.cu
+  src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
+  src/join/key_remapping.cu
   src/join/mixed_join.cu
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu
@@ -600,7 +595,6 @@ add_library(
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
-  src/join/semi_join.cu
   src/join/sort_merge_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -635,6 +629,8 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/argmax.cu
+  src/reductions/argmin.cu
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/count.cpp
@@ -824,7 +820,7 @@ add_library(
   src/transform/nans_to_nulls.cu
   src/transform/one_hot_encode.cu
   src/transform/row_bit_count.cu
-  src/transform/transform.cpp
+  src/transform/transform.cu
   src/transpose/transpose.cu
   src/unary/cast_ops.cu
   src/unary/math_ops.cu
@@ -854,7 +850,7 @@ set_source_files_properties(
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/rolling.cu
-  src/transform/transform.cpp
+  src/transform/transform.cu
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
@@ -987,7 +983,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow zstd
+          kvikio::kvikio nanoarrow::nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
@@ -1085,13 +1081,13 @@ if(CUDF_BUILD_TESTUTIL)
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cpp>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
   target_compile_features(cudftestutil_impl INTERFACE cxx_std_20)
@@ -1113,7 +1109,7 @@ if(CUDF_BUILD_TESTUTIL)
           tests/utilities/debug_utilities.cu
           tests/utilities/random_seed.cpp
           tests/utilities/table_utilities.cu
-          tests/utilities/tdigest_utilities.cu
+          tests/utilities/tdigest_utilities.cpp
     DESTINATION src/cudftestutil/utilities
   )
 endif()
@@ -1182,10 +1178,6 @@ endif()
 # ##################################################################################################
 # * add benchmarks --------------------------------------------------------------------------------
 if(CUDF_BUILD_BENCHMARKS)
-  # Find or install GoogleBench
-  include(${rapids-cmake-dir}/cpm/gbench.cmake)
-  rapids_cpm_gbench(BUILD_STATIC)
-
   # Find or install nvbench
   include(cmake/thirdparty/get_nvbench.cmake)
 

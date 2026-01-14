@@ -1,27 +1,21 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "compact_protocol_reader.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <functional>
+#include <future>
 #include <tuple>
 
 namespace cudf::io::parquet::detail {
@@ -283,8 +277,8 @@ class parquet_field_string_list : public parquet_field_list<std::string, FieldTy
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(std::cmp_less(l, cpr->m_end - cpr->m_cur), "string length mismatch");
-
       CUDF_EXPECTS(i < val.size(), "Index out of bounds");
+
       val[i].assign(reinterpret_cast<char const*>(cpr->m_cur), l);
       cpr->m_cur += l;
     };
@@ -399,19 +393,73 @@ class parquet_field_union_enumerator : public parquet_field {
 /**
  * @brief Functor to read a vector of structures from CompactProtocolReader
  *
+ * Uses parallel processing when there are more than 512 elements
+ *
  * @return True if field types mismatch or if the process of reading a
  * struct fails
  */
 template <typename T>
-struct parquet_field_struct_list : public parquet_field_list<T, FieldType::STRUCT> {
-  parquet_field_struct_list(int f, std::vector<T>& v)
-    : parquet_field_list<T, FieldType::STRUCT>(f, v)
+class parquet_field_struct_list : public parquet_field {
+  std::vector<T>& val;
+
+ public:
+  parquet_field_struct_list(int f, std::vector<T>& v) : parquet_field(f), val(v) {}
+
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
-      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
-      cpr->read(&val[i]);
-    };
-    this->bind_read_func(read_value);
+    assert_field_type(field_type, FieldType::LIST);
+    auto const [t, n] = cpr->get_listh();
+    assert_field_type(t, FieldType::STRUCT);
+    val.resize(n);
+
+    constexpr uint32_t parallel_threshold = 512;
+    if (n >= parallel_threshold) {
+      auto const num_tasks = std::min(n, cudf::detail::host_worker_pool().get_thread_count() * 2);
+      auto const items_per_task = n / num_tasks;
+      auto const remainder      = n % num_tasks;
+
+      std::vector<std::future<void>> tasks;
+      tasks.reserve(num_tasks);
+
+      std::vector<cudf::host_span<uint8_t const>> all_ranges;
+      all_ranges.reserve(n);
+
+      uint32_t struct_idx = 0;
+      for (uint32_t task_id = 0; task_id < num_tasks; ++task_id) {
+        auto const task_size = items_per_task + (task_id < remainder ? 1 : 0);
+        auto const start_idx = std::min(n, struct_idx);
+        auto const end_idx   = std::min(n, start_idx + task_size);
+
+        if (start_idx >= end_idx) { break; }
+
+        // Collect struct ranges for the next task
+        for (auto i = start_idx; i < end_idx; ++i) {
+          uint8_t const* const start = cpr->m_cur;
+          cpr->skip_struct_field(static_cast<int>(FieldType::STRUCT));
+          all_ranges.emplace_back(start, static_cast<size_t>(cpr->m_cur - start));
+        }
+
+        // Launch task immediately to parse the structs  in parallel while the main thread collects
+        // the remaining ranges
+        tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+          [&val = this->val, &all_ranges, start_idx, end_idx]() {
+            CompactProtocolReader local_cpr;
+            for (size_t i = start_idx; i < end_idx && i < all_ranges.size(); ++i) {
+              local_cpr.init(all_ranges[i].data(), all_ranges[i].size());
+              local_cpr.read(&val[i]);
+            }
+          }));
+
+        struct_idx = end_idx;
+      }
+
+      for (auto& task : tasks) {
+        task.get();
+      }
+    } else {
+      // For small numbers of elements, use sequential processing to avoid overhead
+      std::for_each(val.begin(), val.end(), [&cpr](auto& elem) { cpr->read(&elem); });
+    }
   }
 };
 
@@ -433,7 +481,6 @@ class parquet_field_binary : public parquet_field {
     auto const n = cpr->get_u32();
     CUDF_EXPECTS(std::cmp_less_equal(n, cpr->m_end - cpr->m_cur), "binary length mismatch");
 
-    val.resize(n);
     val.assign(cpr->m_cur, cpr->m_cur + n);
     cpr->m_cur += n;
   }
@@ -453,9 +500,8 @@ class parquet_field_binary_list
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(std::cmp_less_equal(l, cpr->m_end - cpr->m_cur), "binary length mismatch");
-
       CUDF_EXPECTS(i < val.size(), "Index out of bounds");
-      val[i].resize(l);
+
       val[i].assign(cpr->m_cur, cpr->m_cur + l);
       cpr->m_cur += l;
     };

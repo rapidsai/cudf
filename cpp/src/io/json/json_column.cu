@@ -1,28 +1,15 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -37,6 +24,7 @@
 
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/std/utility>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/gather.h>
@@ -123,19 +111,19 @@ reduce_to_column_tree(tree_meta_t const& tree,
   rmm::device_uvector<size_type> max_row_offsets(num_columns, stream);
   auto ordered_row_offsets =
     thrust::make_permutation_iterator(row_offsets.begin(), ordered_node_ids.begin());
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         sorted_col_ids.begin(),
                         sorted_col_ids.end(),
                         ordered_row_offsets,
                         unique_col_ids.begin(),
                         max_row_offsets.begin(),
                         cuda::std::equal_to<size_type>(),
-                        cudf::detail::maximum<size_type>());
+                        cuda::maximum<size_type>());
 
   // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
   thrust::reduce_by_key(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     sorted_col_ids.begin(),
     sorted_col_ids.end(),
     thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
@@ -335,7 +323,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
     case json_col_t::StringColumn: {
       // move string_offsets to GPU and transform to string column
       auto const col_size      = json_col.string_offsets.size();
-      using char_length_pair_t = thrust::pair<char const*, size_type>;
+      using char_length_pair_t = cuda::std::pair<char const*, size_type>;
       CUDF_EXPECTS(json_col.string_offsets.size() == json_col.string_lengths.size(),
                    "string offset, string length mismatch");
       rmm::device_uvector<char_length_pair_t> d_string_data(col_size, stream);
@@ -566,7 +554,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
   root_column.child_offsets.resize(2, stream);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                root_column.child_offsets.begin(),
                root_column.child_offsets.end(),
                0);

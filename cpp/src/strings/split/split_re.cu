@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "strings/count_matches.hpp"
@@ -23,7 +12,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -32,18 +20,17 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform_reduce.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-
-using string_index_pair = thrust::pair<char const*, size_type>;
 
 enum class split_direction {
   FORWARD,  ///< for split logic
@@ -84,7 +71,7 @@ struct token_reader_fn {
       auto const match = prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
 
-      auto const start_pos = thrust::get<0>(match_positions_to_bytes(*match, d_str, last_pos));
+      auto const start_pos = cuda::std::get<0>(match_positions_to_bytes(*match, d_str, last_pos));
 
       // get the token (characters just before this match)
       auto const token = string_index_pair{d_str.data() + last_pos.byte_offset(),
@@ -221,14 +208,14 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 
   // the output column count is the maximum number of tokens generated for any input string
   auto const columns_count = thrust::transform_reduce(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto const idx) -> size_type {
       return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     }),
     0,
-    cudf::detail::maximum<size_type>{});
+    cuda::maximum<size_type>{});
 
   // boundary case: if no columns, return one all-null column (custrings issue #119)
   if (columns_count == 0) {

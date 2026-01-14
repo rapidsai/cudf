@@ -12,7 +12,7 @@ import pytest
 @pytest.fixture(autouse=True, scope="session")
 def dask_cluster(pytestconfig, worker_id):
     if (
-        pytestconfig.getoption("--scheduler") == "distributed"
+        pytestconfig.getoption("--cluster") == "distributed"
         and pytestconfig.getoption("--executor") == "streaming"
     ):
         worker_count = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "0"))

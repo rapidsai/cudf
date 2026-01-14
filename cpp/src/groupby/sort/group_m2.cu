@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -72,9 +61,10 @@ void compute_m2_fn(column_device_view const& values,
   // using the transform-iterator directly in thrust::reduce_by_key
   // improves compile-time significantly.
   auto m2_vals = rmm::device_uvector<ResultType>(values.size(), stream);
-  thrust::transform(rmm::exec_policy(stream), itr, itr + values.size(), m2_vals.begin(), m2_fn);
+  thrust::transform(
+    rmm::exec_policy_nosync(stream), itr, itr + values.size(), m2_vals.begin(), m2_fn);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         group_labels.begin(),
                         group_labels.end(),
                         m2_vals.begin(),
@@ -110,12 +100,6 @@ struct m2_functor {
       auto const values_iter =
         cudf::dictionary::detail::make_dictionary_iterator<T>(*values_dv_ptr);
       compute_m2_fn(d_values, values_iter, group_labels, d_means, d_result, stream);
-    }
-
-    // M2 column values should have the same bitmask as means's.
-    if (group_means.nullable()) {
-      result->set_null_mask(cudf::detail::copy_bitmask(group_means, stream, mr),
-                            group_means.null_count());
     }
 
     return result;

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -20,15 +9,15 @@
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/search.hpp>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
 #include <thrust/iterator/counting_iterator.h>
@@ -143,15 +132,15 @@ void perform_contains(table_view const& haystack,
       return lhs_index_type{idx};
     }));
 
-  auto set = cuco::static_set{
-    cuco::extent{compute_hash_table_size(haystack.num_rows())},
-    cuco::empty_key{rhs_index_type{-1}},
-    d_equal,
-    probing_scheme,
-    {},
-    {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  auto set = cuco::static_set{cuco::extent{haystack.num_rows()},
+                              cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                              cuco::empty_key{rhs_index_type{-1}},
+                              d_equal,
+                              probing_scheme,
+                              {},
+                              {},
+                              rmm::mr::polymorphic_allocator<char>{},
+                              stream.value()};
 
   if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
     auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);

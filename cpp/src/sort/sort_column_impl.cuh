@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -19,7 +8,8 @@
 #include "sort.hpp"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/common_utils.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -70,7 +60,17 @@ struct simple_comparator {
         return (null_precedence == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
       }
     }
-    return relational_compare(d_column.element<T>(lhs), d_column.element<T>(rhs)) ==
+
+    auto left_elememt  = d_column.type().id() == type_id::DICTIONARY32
+                           ? d_column.child(dictionary_column_view::keys_column_index)
+                              .element<T>(d_column.element<dictionary32>(lhs).value())
+                           : d_column.element<T>(lhs);
+    auto right_elememt = d_column.type().id() == type_id::DICTIONARY32
+                           ? d_column.child(dictionary_column_view::keys_column_index)
+                               .element<T>(d_column.element<dictionary32>(rhs).value())
+                           : d_column.element<T>(rhs);
+
+    return relational_compare(left_elememt, right_elememt) ==
            (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
   }
   column_device_view const d_column;

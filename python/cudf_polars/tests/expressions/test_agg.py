@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 import polars as pl
@@ -66,6 +68,19 @@ def df(dtype, with_nulls, is_sorted):
     if is_sorted:
         return df.set_sorted("a")
     return df
+
+
+@pytest.fixture
+def decimal_df() -> pl.LazyFrame:
+    return pl.LazyFrame(
+        {
+            "a": pl.Series(
+                "a",
+                [Decimal("0.10"), Decimal("1.10"), Decimal("100.10")],
+                dtype=pl.Decimal(precision=9, scale=2),
+            ),
+        }
+    )
 
 
 def test_agg(df, agg):
@@ -162,3 +177,28 @@ def test_implode_agg_unsupported():
     )
     q = df.select(pl.col("b").implode())
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
+    q = decimal_df.with_columns(
+        sum=pl.col("a").sum(),
+        min=pl.col("a").min(),
+        max=pl.col("a").max(),
+        mean=pl.col("a").mean(),
+        median=pl.col("a").median(),
+        mean_f32=pl.col("a").mean().cast(pl.Float32),
+        median_f32=pl.col("a").median().cast(pl.Float32),
+    )
+    assert_gpu_result_equal(q)
+
+
+def test_invalid_agg():
+    df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
+    q = df.select(pl.col("s").sum())
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_sum_all_null_decimal_dtype():
+    df = pl.LazyFrame({"foo": pl.Series([None], dtype=pl.Decimal(9, 2))})
+    q = df.select(pl.col("foo").sum())
+    assert_gpu_result_equal(q)

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -141,7 +130,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
   auto const input_size = input.size();
   auto const null_index = input.size();
   if (op == aggregation::LEAD) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(size_type{0}),
                       thrust::make_counting_iterator(size_type{input.size()}),
                       gather_map.begin<size_type>(),
@@ -150,7 +139,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                           return (row_offset > following[i]) ? null_index : (i + row_offset);
                         }));
   } else {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(size_type{0}),
                       thrust::make_counting_iterator(size_type{input.size()}),
                       gather_map.begin<size_type>(),
@@ -174,7 +163,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
 
   // Find all indices at which LEAD/LAG computed nulls previously.
   auto scatter_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator(size_type{0}),
                     thrust::make_counting_iterator(size_type{input.size()}),
                     scatter_map.begin(),

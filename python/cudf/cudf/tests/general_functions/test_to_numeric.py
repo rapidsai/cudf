@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -33,7 +34,7 @@ def downcast(request):
             dtype=pd.CategoricalDtype(categories=["1.0", "2.0", "3.0"]),
         ),
         # Categories with nulls
-        pd.Series([1, 2, 3], dtype=pd.CategoricalDtype(categories=[1, 2])),
+        pd.Series(pd.Categorical.from_codes([0, 1, -1], categories=[1, 2])),
         pd.Series(
             [5.0, 6.0], dtype=pd.CategoricalDtype(categories=[5.0, 6.0])
         ),

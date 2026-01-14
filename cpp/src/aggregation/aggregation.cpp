@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/aggregation.hpp>
@@ -255,6 +244,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   return visit(col_type, static_cast<aggregation const&>(agg));
 }
 
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, top_k_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
 // aggregation_finalizer ----------------------------------------
 
 void aggregation_finalizer::visit(aggregation const& agg) {}
@@ -439,6 +434,11 @@ void aggregation_finalizer::visit(host_udf_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(bitwise_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(top_k_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -703,6 +703,8 @@ template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
 make_argmax_aggregation<rolling_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_argmax_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_argmax_aggregation<reduce_aggregation>();
 
 /// Factory to create an ARGMIN aggregation
 template <typename Base>
@@ -715,6 +717,8 @@ template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
 make_argmin_aggregation<rolling_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_argmin_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_argmin_aggregation<reduce_aggregation>();
 
 /// Factory to create an NUNIQUE aggregation
 template <typename Base>
@@ -979,6 +983,16 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_bitwise_aggregation<groupby_aggregation>(bitwise_op bit_op);
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
 make_bitwise_aggregation<reduce_aggregation>(bitwise_op bit_op);
+
+template <typename Base>
+std::unique_ptr<Base> make_top_k_aggregation(size_type k, order topk_order)
+{
+  return std::make_unique<detail::top_k_aggregation>(k, topk_order);
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_top_k_aggregation<aggregation>(
+  size_type k, order topk_order);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_top_k_aggregation<groupby_aggregation>(size_type k, order topk_order);
 
 namespace detail {
 namespace {

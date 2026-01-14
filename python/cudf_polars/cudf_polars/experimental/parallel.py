@@ -22,6 +22,7 @@ from cudf_polars.dsl.ir import (
     Filter,
     HConcat,
     HStack,
+    IRExecutionContext,
     MapFunction,
     Projection,
     Slice,
@@ -42,7 +43,9 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
     from typing import Any
 
-    from cudf_polars.containers import DataFrame
+    import polars as pl
+
+    from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
     from cudf_polars.utils.config import ConfigOptions
 
@@ -59,7 +62,7 @@ def _(
 
 def lower_ir_graph(
     ir: IR, config_options: ConfigOptions
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -72,9 +75,10 @@ def lower_ir_graph(
 
     Returns
     -------
-    new_ir, partition_info
-        The rewritten graph, and a mapping from unique nodes
-        in the new graph to associated partitioning information.
+    new_ir, partition_info, stats
+        The rewritten graph, a mapping from unique nodes
+        in the new graph to associated partitioning information,
+        and the statistics collector.
 
     Notes
     -----
@@ -90,7 +94,7 @@ def lower_ir_graph(
         "stats": collect_statistics(ir, config_options),
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return mapper(ir)
+    return *mapper(ir), state["stats"]
 
 
 def task_graph(
@@ -110,6 +114,8 @@ def task_graph(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
+    context
+        Runtime context for IR node execution.
 
     Returns
     -------
@@ -130,9 +136,13 @@ def task_graph(
     --------
     generate_ir_tasks
     """
+    context = IRExecutionContext.from_config_options(config_options)
     graph = reduce(
         operator.or_,
-        (generate_ir_tasks(node, partition_info) for node in traversal([ir])),
+        (
+            generate_ir_tasks(node, partition_info, context=context)
+            for node in traversal([ir])
+        ),
     )
 
     key_name = get_key_name(ir)
@@ -140,7 +150,10 @@ def task_graph(
 
     key: str | tuple[str, int]
     if partition_count > 1:
-        graph[key_name] = (_concat, *partition_info[ir].keys(ir))
+        graph[key_name] = (
+            partial(_concat, context=context),
+            *partition_info[ir].keys(ir),
+        )
         key = key_name
     else:
         key = (key_name, 0)
@@ -158,10 +171,10 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
-    scheduler = config_options.executor.scheduler
+    cluster = config_options.executor.cluster
 
     if (
-        scheduler == "distributed"
+        cluster == "distributed"
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
         from distributed import get_client
 
@@ -171,12 +184,12 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         DaskRegisterManager.register_once()
         DaskRegisterManager.run_on_cluster(client)
         return client.get
-    elif scheduler == "synchronous":
+    elif cluster == "single":
         from cudf_polars.experimental.scheduler import synchronous_scheduler
 
         return synchronous_scheduler
     else:  # pragma: no cover
-        raise ValueError(f"{scheduler} not a supported scheduler option.")
+        raise ValueError(f"{cluster} not a supported cluster option.")
 
 
 def post_process_task_graph(
@@ -214,10 +227,34 @@ def post_process_task_graph(
     return graph
 
 
+def evaluate_rapidsmpf(
+    ir: IR,
+    config_options: ConfigOptions,
+) -> pl.DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+    """
+    Evaluate with the RapidsMPF streaming runtime.
+
+    Parameters
+    ----------
+    ir
+        Logical plan to evaluate.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    A cudf-polars DataFrame object.
+    """
+    from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
+
+    result, _ = evaluate_logical_plan(ir, config_options, collect_metadata=False)
+    return result
+
+
 def evaluate_streaming(
     ir: IR,
     config_options: ConfigOptions,
-) -> DataFrame:
+) -> pl.DataFrame:
     """
     Evaluate an IR graph with partitioning.
 
@@ -235,16 +272,26 @@ def evaluate_streaming(
     # Clear source info cache in case data was overwritten
     _clear_source_info_cache()
 
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    assert config_options.executor.name == "streaming", "Executor must be streaming"
+    if (
+        config_options.executor.runtime == "rapidsmpf"
+    ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+        # Using the RapidsMPF streaming runtime.
+        return evaluate_rapidsmpf(ir, config_options)
+    else:
+        # Using the default task engine.
+        ir, partition_info, _ = lower_ir_graph(ir, config_options)
 
-    graph, key = task_graph(ir, partition_info, config_options)
+        graph, key = task_graph(ir, partition_info, config_options)
 
-    return get_scheduler(config_options)(graph, key)
+        return get_scheduler(config_options)(graph, key).to_polars()
 
 
 @generate_ir_tasks.register(IR)
 def _(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     # Generate pointwise (embarrassingly-parallel) tasks by default
     child_names = [get_key_name(c) for c in ir.children]
@@ -252,7 +299,7 @@ def _(
 
     return {
         key: (
-            ir.do_evaluate,
+            partial(ir.do_evaluate, context=context),
             *ir._non_child_args,
             *[
                 (child_name, 0 if bcast_child[j] else i)
@@ -292,7 +339,9 @@ def _(
 
 @generate_ir_tasks.register(Union)
 def _(
-    ir: Union, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: Union,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     key_name = get_key_name(ir)
     partition = itertools.count()

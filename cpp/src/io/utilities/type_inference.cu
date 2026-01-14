@@ -1,28 +1,18 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "io/utilities/column_type_histogram.hpp"
-#include "io/utilities/string_parsing.hpp"
-#include "io/utilities/trie.cuh"
+#include "column_type_histogram.hpp"
+#include "parsing_utils.cuh"
+#include "trie.cuh"
 
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <cub/block/block_reduce.cuh>
+#include <cuda/std/tuple>
 
 #include <cstddef>
 
@@ -101,7 +91,7 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  * @tparam BlockSize Number of threads in each block
  * @tparam OptionsView Type of inference options view
  * @tparam ColumnStringIter Iterator type whose `value_type` is a
- * `thrust::tuple<offset_t, length_t>`, where `offset_t` and `length_t` are of integral type and
+ * `cuda::std::tuple<offset_t, length_t>`, where `offset_t` and `length_t` are of integral type and
  * `offset_t` needs to be convertible to `std::size_t`.
  *
  * @param[in] options View of inference options
@@ -121,8 +111,8 @@ CUDF_KERNEL void infer_column_type_kernel(OptionsView options,
 
   for (auto idx = threadIdx.x + blockDim.x * blockIdx.x; idx < size;
        idx += gridDim.x * blockDim.x) {
-    auto const field_offset = thrust::get<0>(*(offset_length_begin + idx));
-    auto const field_len    = thrust::get<1>(*(offset_length_begin + idx));
+    auto const field_offset = cuda::std::get<0>(*(offset_length_begin + idx));
+    auto const field_len    = cuda::std::get<1>(*(offset_length_begin + idx));
     auto const field_begin  = data.begin() + field_offset;
 
     if (cudf::detail::serialized_trie_contains(
@@ -221,7 +211,7 @@ CUDF_KERNEL void infer_column_type_kernel(OptionsView options,
  *
  * @tparam OptionsView Type of inference options view
  * @tparam ColumnStringIter Iterator type whose `value_type` is a
- * `thrust::tuple<offset_t, length_t>`, where `offset_t` and `length_t` are of integral type and
+ * `cuda::std::tuple<offset_t, length_t>`, where `offset_t` and `length_t` are of integral type and
  * `offset_t` needs to be convertible to `std::size_t`.
  *
  * @param options View of inference options
@@ -254,7 +244,7 @@ cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
 cudf::data_type infer_data_type(
   cudf::io::json_inference_options_view const& options,
   device_span<char const> data,
-  thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
+  thrust::zip_iterator<cuda::std::tuple<size_type const*, size_type const*>> offset_length_begin,
   std::size_t const size,
   rmm::cuda_stream_view stream)
 {

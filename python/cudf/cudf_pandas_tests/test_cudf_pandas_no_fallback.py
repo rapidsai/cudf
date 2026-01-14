@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
@@ -73,9 +72,42 @@ def test_no_fallback_in_binops(dataframe):
     df <= df
 
 
-def test_no_fallback_in_groupby_rolling_sum(dataframe):
+@pytest.mark.parametrize(
+    "agg_name",
+    [
+        "sum",
+        "mean",
+        "min",
+        "max",
+        "count",
+        "std",
+        "var",
+        "median",
+    ],
+)
+def test_no_fallback_in_groupby_rolling_aggs(request, dataframe, agg_name):
+    if agg_name == "median":
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="groupby().rolling().median() not yet implemented"
+            )
+        )
     df = dataframe
-    df.groupby("a").rolling(2).sum()
+    getattr(df.groupby("a").rolling(2), agg_name)()
+
+
+def test_no_fallback_in_rolling_apply(series, dataframe):
+    def sum_minus_min(a):
+        m = a[0]
+        s = 0.0
+        for v in a:
+            s += v
+            if v < m:
+                m = v
+        return s - m
+
+    series.rolling(2, min_periods=1).apply(sum_minus_min, raw=True)
+    dataframe.rolling(2, min_periods=1).apply(sum_minus_min, raw=True)
 
 
 def test_no_fallback_in_concat(dataframe):
@@ -98,3 +130,24 @@ def test_no_fallback_in_merge(dataframe):
     pd.merge(df * df, df + df, how="outer")
     pd.merge(df * df, df + df, how="left")
     pd.merge(df * df, df + df, how="right")
+
+
+def test_no_fallback_in_memory_usage_and_sizeof(dataframe, series):
+    df = dataframe
+    s = series
+    i = df.index
+
+    df.memory_usage()
+    df.memory_usage(index=False)
+    df.memory_usage(index=True, deep=True)
+    df.__sizeof__()
+
+    s.memory_usage()
+    s.memory_usage(index=False)
+    s.memory_usage(index=True, deep=True)
+    s.__sizeof__()
+
+    i.memory_usage()
+    with pytest.warns(UserWarning, match="The deep parameter is ignored"):
+        i.memory_usage(deep=True)
+        i.__sizeof__()

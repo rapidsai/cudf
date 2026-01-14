@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import gzip
 import os
@@ -158,8 +159,10 @@ def test_read_csv_compression_file_list(tmp_path):
         with gzip.open(fn, "wb") as fp:
             fp.write(lines.encode("utf-8"))
 
-    ddf_cpu = dd.read_csv(files, compression="gzip").compute()
-    ddf_gpu = dask_cudf.read_csv(files, compression="gzip").compute()
+    ddf_cpu = dd.read_csv(files, compression="gzip", blocksize=None).compute()
+    ddf_gpu = dask_cudf.read_csv(
+        files, compression="gzip", blocksize=None
+    ).compute()
 
     dd.assert_eq(ddf_cpu, ddf_gpu)
 
@@ -222,7 +225,9 @@ def test_read_csv_skiprows_error(csv_begin_bad_lines):
 def test_read_csv_skipfooter(csv_end_bad_lines):
     # Repro from Issue#13552
     with dask.config.set({"dataframe.convert-string": False}):
-        ddf_cpu = dd.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+        ddf_cpu = dd.read_csv(
+            csv_end_bad_lines, skipfooter=3, engine="python"
+        ).compute()
         ddf_gpu = dask_cudf.read_csv(csv_end_bad_lines, skipfooter=3).compute()
 
         dd.assert_eq(ddf_cpu, ddf_gpu, check_dtype=False)
@@ -234,7 +239,9 @@ def test_read_csv_skipfooter_arrow_string_fail(request, csv_end_bad_lines):
             reason="https://github.com/rapidsai/cudf/issues/14915",
         )
     )
-    ddf_cpu = dd.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+    ddf_cpu = dd.read_csv(
+        csv_end_bad_lines, skipfooter=3, engine="python"
+    ).compute()
     ddf_gpu = dask_cudf.read_csv(csv_end_bad_lines, skipfooter=3).compute()
 
     dd.assert_eq(ddf_cpu, ddf_gpu, check_dtype=False)

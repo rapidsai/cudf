@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "utilities.hpp"
@@ -32,9 +21,9 @@
 #include <cudf/transform.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/mr/device/managed_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/managed_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <algorithm>
 #include <cstdlib>
@@ -412,20 +401,12 @@ void generate_parquet_data_sources(double scale_factor,
   CUDF_BENCHMARK_RANGE();
 
   // Set the memory resource to the managed pool
-  auto old_mr = cudf::get_current_device_resource();
-  // if already managed pool or managed, don't create new one.
-  using managed_pool_mr_t = decltype(make_managed_pool());
-  managed_pool_mr_t managed_pool_mr;
-  bool const is_managed =
-    dynamic_cast<rmm::mr::pool_memory_resource<rmm::mr::managed_memory_resource>*>(old_mr) or
-    dynamic_cast<rmm::mr::managed_memory_resource*>(old_mr);
-  if (!is_managed) {
-    std::cout << "Creating managed pool just for data generation\n";
-    managed_pool_mr = make_managed_pool();
-    cudf::set_current_device_resource(managed_pool_mr.get());
-    // drawback: if already pool takes 50% of free memory, we are left with 50% of 50% of free
-    // memory.
-  }
+  auto old_mr = cudf::get_current_device_resource_ref();
+  // TODO: if old_mr is already managed pool or managed, don't create new one.
+  using managed_pool_mr_t           = decltype(make_managed_pool());
+  managed_pool_mr_t managed_pool_mr = make_managed_pool();
+  cudf::set_current_device_resource_ref(managed_pool_mr.get());
+  // drawback: if already pool takes 50% of free memory, we are left with 50% of 50% of free memory
 
   std::unordered_set<std::string> const requested_table_names = [&table_names]() {
     if (table_names.empty()) {
@@ -488,5 +469,5 @@ void generate_parquet_data_sources(double scale_factor,
   }
 
   // Restore the original memory resource
-  if (!is_managed) { cudf::set_current_device_resource(old_mr); }
+  cudf::set_current_device_resource_ref(old_mr);
 }

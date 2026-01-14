@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -29,6 +30,9 @@ def test_1d_time_series():
     return stumpy.stump(ts, m)
 
 
+@pytest.mark.filterwarnings(
+    "ignore::numba.core.errors.NumbaPerformanceWarning"
+)
 def test_1d_gpu():
     rng = np.random.default_rng(42)
     your_time_series = rng.random(10000)

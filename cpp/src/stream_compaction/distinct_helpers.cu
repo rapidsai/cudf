@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "distinct_helpers.hpp"
@@ -74,7 +63,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
       // Reduction results with `KEEP_NONE` are either group sizes of equal rows, or `0`.
       // Thus, we only output index of the rows in the groups having group size of `1`.
       return thrust::copy_if(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_rows),
         output_indices.begin(),
@@ -88,7 +77,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
     // each group of equal rows (which are the desired output indices), or the value given by
     // `reduction_init_value()`.
     return thrust::copy_if(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       reduction_results.begin(),
       reduction_results.end(),
       output_indices.begin(),

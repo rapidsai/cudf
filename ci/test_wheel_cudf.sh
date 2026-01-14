@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
@@ -33,7 +34,7 @@ rapids-pip-retry install \
 
 rapids-logger "pytest pylibcudf without optional dependencies"
 pushd python/pylibcudf/tests
-python -m pytest \
+timeout 30m python -m pytest \
   --cache-clear \
   --numprocesses=8 \
   --dist=worksteal \
@@ -60,7 +61,7 @@ rapids-pip-retry install \
 
 rapids-logger "pytest pylibcudf"
 pushd python/pylibcudf/tests
-python -m pytest \
+timeout 30m python -m pytest \
   --cache-clear \
   --numprocesses=8 \
   --dist=worksteal \
@@ -69,7 +70,7 @@ popd
 
 rapids-logger "pytest cudf"
 pushd python/cudf/cudf/tests
-python -m pytest \
+timeout 30m python -m pytest \
   --cache-clear \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
   --numprocesses=8 \

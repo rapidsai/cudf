@@ -25,6 +25,7 @@ Properties
    Index.empty
    Index.has_duplicates
    Index.hasnans
+   Index.inferred_type
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
    Index.is_unique
@@ -115,7 +116,6 @@ Conversion
    Index.to_dlpack
    Index.to_pylibcudf
    Index.from_pylibcudf
-   Index.from_pandas
    Index.from_arrow
 
 Sorting
@@ -249,6 +249,7 @@ MultiIndex properties
    MultiIndex.names
    MultiIndex.levels
    MultiIndex.codes
+   MultiIndex.dtypes
    MultiIndex.nlevels
 
 MultiIndex components

@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from textwrap import dedent
 
@@ -32,7 +33,9 @@ def test_categorical_basic():
 
 
 def test_categorical_integer():
-    cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
+    cat = pd.Categorical.from_codes(
+        [0, -1, -1, 2, 0], categories=["a", "b", "c"]
+    )
     pdsr = pd.Series(cat)
     sr = cudf.Series(cat)
     np.testing.assert_array_equal(

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -23,6 +12,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -1063,22 +1053,18 @@ TEST_F(LeadLagNonFixedWidthTest, StringsWithDefaultsNoGroups)
 
 TEST_F(LeadLagNonFixedWidthTest, Dictionary)
 {
-  using dictionary = cudf::test::dictionary_column_wrapper<std::string>;
-
-  auto input_strings = std::initializer_list<std::string>{"",
-                                                          "A_1",
-                                                          "A_22",
-                                                          "A_333",
-                                                          "A_4444",
-                                                          "A_55555",
-                                                          "B_0",
-                                                          "",
-                                                          "B_22",
-                                                          "B_333",
-                                                          "B_4444",
-                                                          "B_55555"};
-  auto input_col     = dictionary{input_strings}.release();
-
+  auto input_col = cudf::test::dictionary_column_wrapper<std::string>({"",
+                                                                       "A_1",
+                                                                       "A_22",
+                                                                       "A_333",
+                                                                       "A_4444",
+                                                                       "A_55555",
+                                                                       "B_0",
+                                                                       "",
+                                                                       "B_22",
+                                                                       "B_333",
+                                                                       "B_4444",
+                                                                       "B_55555"});
   auto const grouping_key =
     cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
@@ -1088,42 +1074,28 @@ TEST_F(LeadLagNonFixedWidthTest, Dictionary)
   auto const min_periods = 1;
 
   {
+    auto agg = cudf::make_lead_aggregation<cudf::rolling_aggregation>(2);
     auto lead_2 =
-      grouped_rolling_window(grouping_keys,
-                             input_col->view(),
-                             preceding,
-                             following,
-                             min_periods,
-                             *cudf::make_lead_aggregation<cudf::rolling_aggregation>(2));
+      grouped_rolling_window(grouping_keys, input_col, preceding, following, min_periods, *agg);
 
-    auto expected_keys = cudf::test::strings_column_wrapper{input_strings}.release();
-    auto expected_values =
-      cudf::test::fixed_width_column_wrapper<int32_t>{
-        {2, 3, 4, 5, 0, 0, 7, 8, 9, 10, 0, 0},
-        cudf::test::iterators::nulls_at(std::vector{4, 5, 10, 11})}
-        .release();
-    auto expected_output =
-      make_dictionary_column(expected_keys->view(), expected_values->view()).release();
+    auto decoded  = cudf::dictionary::decode(lead_2->view());
+    auto expected = cudf::test::strings_column_wrapper(
+      {"A_22", "A_333", "A_4444", "A_55555", "", "", "B_22", "B_333", "B_4444", "B_55555", "", ""},
+      {1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0});
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lead_2->view(), expected_output->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(decoded->view(), expected);
   }
 
   {
-    auto lag_1 = grouped_rolling_window(grouping_keys,
-                                        input_col->view(),
-                                        preceding,
-                                        following,
-                                        min_periods,
-                                        *cudf::make_lag_aggregation<cudf::rolling_aggregation>(1));
+    auto agg = cudf::make_lag_aggregation<cudf::rolling_aggregation>(1);
+    auto lag_1 =
+      grouped_rolling_window(grouping_keys, input_col, preceding, following, min_periods, *agg);
 
-    auto expected_keys = cudf::test::strings_column_wrapper{input_strings}.release();
-    auto expected_values =
-      cudf::test::fixed_width_column_wrapper<int32_t>{
-        {0, 0, 1, 2, 3, 4, 0, 6, 0, 7, 8, 9}, cudf::test::iterators::nulls_at(std::vector{0, 6})}
-        .release();
-    auto expected_output =
-      make_dictionary_column(expected_keys->view(), expected_values->view()).release();
+    auto decoded  = cudf::dictionary::decode(lag_1->view());
+    auto expected = cudf::test::strings_column_wrapper(
+      {"", "", "A_1", "A_22", "A_333", "A_4444", "", "B_0", "", "B_22", "B_333", "B_4444"},
+      {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lag_1->view(), expected_output->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(decoded->view(), expected);
   }
 }

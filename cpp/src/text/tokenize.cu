@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "text/utilities/tokenize_ops.cuh"
@@ -60,7 +49,7 @@ std::unique_ptr<cudf::column> token_count_fn(cudf::size_type strings_count,
                               mr);
   auto d_token_counts = token_counts->mutable_view().data<cudf::size_type>();
   // add the counts to the column
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings_count),
                     d_token_counts,
@@ -91,7 +80,7 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
   tokenizer.d_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(token_offsets->view());
   tokenizer.d_tokens = tokens.data();
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      tokenizer);
@@ -213,7 +202,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   auto d_new_offsets =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
   // offsets are at the beginning byte of each character
-  cudf::detail::copy_if_safe(
+  cudf::detail::copy_if(
     thrust::counting_iterator<int64_t>(0),
     thrust::counting_iterator<int64_t>(chars_bytes + 1),
     d_new_offsets,
@@ -225,7 +214,8 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
 
   // create the output chars buffer -- just a copy of the input's chars
   rmm::device_uvector<char> output_chars(chars_bytes, stream, mr);
-  thrust::copy(rmm::exec_policy(stream), d_chars, d_chars + chars_bytes, output_chars.data());
+  thrust::copy(
+    rmm::exec_policy_nosync(stream), d_chars, d_chars + chars_bytes, output_chars.data());
 
   auto output_strings = cudf::make_strings_column(
     num_characters, std::move(offsets_column), output_chars.release(), 0, rmm::device_buffer{});

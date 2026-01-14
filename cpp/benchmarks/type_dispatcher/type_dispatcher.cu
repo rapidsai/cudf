@@ -1,21 +1,7 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
-
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
@@ -28,6 +14,8 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 #include <type_traits>
 
@@ -173,11 +161,11 @@ void launch_kernel(cudf::mutable_table_view input, T** d_ptr, int work_per_threa
 }
 
 template <class TypeParam, FunctorType functor_type, DispatchingType dispatching_type>
-void type_dispatcher_benchmark(::benchmark::State& state)
+void type_dispatcher_benchmark(nvbench::state& state)
 {
-  auto const n_cols          = static_cast<cudf::size_type>(state.range(0));
-  auto const source_size     = static_cast<cudf::size_type>(state.range(1));
-  auto const work_per_thread = static_cast<cudf::size_type>(state.range(2));
+  auto const n_cols          = static_cast<cudf::size_type>(state.get_int64("n_cols"));
+  auto const source_size     = static_cast<cudf::size_type>(state.get_int64("source_size"));
+  auto const work_per_thread = static_cast<cudf::size_type>(state.get_int64("work_per_thread"));
 
   auto init = cudf::make_fixed_width_scalar<TypeParam>(static_cast<TypeParam>(0));
 
@@ -204,34 +192,90 @@ void type_dispatcher_benchmark(::benchmark::State& state)
       cudaMemcpy(d_vec.data(), h_vec_p.data(), sizeof(TypeParam*) * n_cols, cudaMemcpyDefault));
   }
 
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  auto const data_size = source_size * n_cols * 2 * sizeof(TypeParam);
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
+  state.add_global_memory_writes<nvbench::int8_t>(data_size);
+
   // Warm up
   launch_kernel<functor_type, dispatching_type>(source_table, d_vec.data(), work_per_thread);
   CUDF_CUDA_TRY(cudaDeviceSynchronize());
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     launch_kernel<functor_type, dispatching_type>(source_table, d_vec.data(), work_per_thread);
-  }
-
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * source_size * n_cols * 2 *
-                          sizeof(TypeParam));
+  });
 }
 
-class TypeDispatcher : public cudf::benchmark {};
+void bench_fp64_bandwidth_host(nvbench::state& state)
+{
+  type_dispatcher_benchmark<double, BANDWIDTH_BOUND, HOST_DISPATCHING>(state);
+}
 
-#define TBM_BENCHMARK_DEFINE(name, TypeParam, functor_type, dispatching_type)    \
-  BENCHMARK_DEFINE_F(TypeDispatcher, name)(::benchmark::State & state)           \
-  {                                                                              \
-    type_dispatcher_benchmark<TypeParam, functor_type, dispatching_type>(state); \
-  }                                                                              \
-  BENCHMARK_REGISTER_F(TypeDispatcher, name)                                     \
-    ->RangeMultiplier(2)                                                         \
-    ->Ranges({{1, 8}, {1 << 10, 1 << 26}, {1, 1}})                               \
-    ->UseManualTime();
+void bench_fp64_bandwidth_device(nvbench::state& state)
+{
+  type_dispatcher_benchmark<double, BANDWIDTH_BOUND, DEVICE_DISPATCHING>(state);
+}
 
-TBM_BENCHMARK_DEFINE(fp64_bandwidth_host, double, BANDWIDTH_BOUND, HOST_DISPATCHING);
-TBM_BENCHMARK_DEFINE(fp64_bandwidth_device, double, BANDWIDTH_BOUND, DEVICE_DISPATCHING);
-TBM_BENCHMARK_DEFINE(fp64_bandwidth_no, double, BANDWIDTH_BOUND, NO_DISPATCHING);
-TBM_BENCHMARK_DEFINE(fp64_compute_host, double, COMPUTE_BOUND, HOST_DISPATCHING);
-TBM_BENCHMARK_DEFINE(fp64_compute_device, double, COMPUTE_BOUND, DEVICE_DISPATCHING);
-TBM_BENCHMARK_DEFINE(fp64_compute_no, double, COMPUTE_BOUND, NO_DISPATCHING);
+void bench_fp64_bandwidth_no(nvbench::state& state)
+{
+  type_dispatcher_benchmark<double, BANDWIDTH_BOUND, NO_DISPATCHING>(state);
+}
+
+void bench_fp64_compute_host(nvbench::state& state)
+{
+  type_dispatcher_benchmark<double, COMPUTE_BOUND, HOST_DISPATCHING>(state);
+}
+
+void bench_fp64_compute_device(nvbench::state& state)
+{
+  type_dispatcher_benchmark<double, COMPUTE_BOUND, DEVICE_DISPATCHING>(state);
+}
+
+void bench_fp64_compute_no(nvbench::state& state)
+{
+  type_dispatcher_benchmark<double, COMPUTE_BOUND, NO_DISPATCHING>(state);
+}
+
+NVBENCH_BENCH(bench_fp64_bandwidth_host)
+  .set_name("type_dispatcher_fp64_bandwidth_host")
+  .add_int64_axis("n_cols", {1, 2, 4, 8})
+  .add_int64_axis("source_size",
+                  {1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864})
+  .add_int64_axis("work_per_thread", {1});
+
+NVBENCH_BENCH(bench_fp64_bandwidth_device)
+  .set_name("type_dispatcher_fp64_bandwidth_device")
+  .add_int64_axis("n_cols", {1, 2, 4, 8})
+  .add_int64_axis("source_size",
+                  {1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864})
+  .add_int64_axis("work_per_thread", {1});
+
+NVBENCH_BENCH(bench_fp64_bandwidth_no)
+  .set_name("type_dispatcher_fp64_bandwidth_no")
+  .add_int64_axis("n_cols", {1, 2, 4, 8})
+  .add_int64_axis("source_size",
+                  {1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864})
+  .add_int64_axis("work_per_thread", {1});
+
+NVBENCH_BENCH(bench_fp64_compute_host)
+  .set_name("type_dispatcher_fp64_compute_host")
+  .add_int64_axis("n_cols", {1, 2, 4, 8})
+  .add_int64_axis("source_size",
+                  {1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864})
+  .add_int64_axis("work_per_thread", {1});
+
+NVBENCH_BENCH(bench_fp64_compute_device)
+  .set_name("type_dispatcher_fp64_compute_device")
+  .add_int64_axis("n_cols", {1, 2, 4, 8})
+  .add_int64_axis("source_size",
+                  {1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864})
+  .add_int64_axis("work_per_thread", {1});
+
+NVBENCH_BENCH(bench_fp64_compute_no)
+  .set_name("type_dispatcher_fp64_compute_no")
+  .add_int64_axis("n_cols", {1, 2, 4, 8})
+  .add_int64_axis("source_size",
+                  {1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864})
+  .add_int64_axis("work_per_thread", {1});

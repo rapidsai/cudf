@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ class BytePairEncoder:
 
     def __init__(self, merges_pair: Series) -> None:
         self.merge_pairs = plc.nvtext.byte_pair_encode.BPEMergePairs(
-            merges_pair._column.to_pylibcudf(mode="read")
+            merges_pair._column.plc_column
         )
 
     def __call__(self, text: Series, separator: str = " ") -> Series:

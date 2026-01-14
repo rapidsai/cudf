@@ -1,26 +1,13 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -36,6 +23,7 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/permutation_iterator.h>
@@ -99,16 +87,17 @@ std::vector<std::string> copy_strings_to_host_sync(
   rmm::device_uvector<size_type> string_offsets(num_strings, stream);
   rmm::device_uvector<size_type> string_lengths(num_strings, stream);
   auto d_offset_pairs = thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    d_offset_pairs,
-                    d_offset_pairs + num_strings,
-                    thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
-                    [] __device__(auto const& offsets) {
-                      // Note: first character for non-field columns
-                      return thrust::make_tuple(
-                        static_cast<size_type>(thrust::get<0>(offsets)),
-                        static_cast<size_type>(thrust::get<1>(offsets) - thrust::get<0>(offsets)));
-                    });
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    d_offset_pairs,
+    d_offset_pairs + num_strings,
+    thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
+    [] __device__(auto const& offsets) {
+      // Note: first character for non-field columns
+      return cuda::std::make_tuple(
+        static_cast<size_type>(cuda::std::get<0>(offsets)),
+        static_cast<size_type>(cuda::std::get<1>(offsets) - cuda::std::get<0>(offsets)));
+    });
 
   cudf::io::parse_options_view options_view{};
   options_view.quotechar  = '\0';  // no quotes
@@ -205,7 +194,8 @@ NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT const> col_ids,
   if (col_ids.empty()) { return parent_node_sentinel; }
 
   auto const list_node_index = is_enabled_lines ? 0 : 1;
-  auto const value           = cudf::detail::make_host_vector(
+  if (std::cmp_greater_equal(list_node_index, col_ids.size())) { return parent_node_sentinel; }
+  auto const value = cudf::detail::make_host_vector(
     device_span<NodeIndexT const>{col_ids.data() + list_node_index, 1}, stream);
 
   return value[0];
@@ -440,7 +430,7 @@ std::
         rmm::exec_policy_nosync(stream),
         thrust::make_zip_iterator(col.string_offsets.begin(), col.string_lengths.begin()),
         thrust::make_zip_iterator(col.string_offsets.end(), col.string_lengths.end()),
-        thrust::make_tuple(0, 0));
+        cuda::std::make_tuple(0, 0));
     } else if (column_category == NC_LIST) {
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
       thrust::uninitialized_fill(
@@ -457,7 +447,7 @@ std::
   auto h_range_col_id_it =
     thrust::make_zip_iterator(column_range_beg.begin(), unique_col_ids.begin());
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
-    return thrust::get<0>(a) < thrust::get<0>(b);
+    return cuda::std::get<0>(a) < cuda::std::get<0>(b);
   });
   // adjacency list construction
   std::map<NodeIndexT, std::vector<NodeIndexT>> adj;
@@ -1005,13 +995,13 @@ void scatter_offsets(tree_meta_t const& tree,
                              col.string_offsets.begin(),
                              col.string_offsets.end(),
                              col.string_offsets.begin(),
-                             cudf::detail::maximum<json_column::row_offset_t>{});
+                             cuda::maximum<json_column::row_offset_t>{});
     } else if (col.type == json_col_t::ListColumn) {
       thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                              col.child_offsets.begin(),
                              col.child_offsets.end(),
                              col.child_offsets.begin(),
-                             cudf::detail::maximum<json_column::row_offset_t>{});
+                             cuda::maximum<json_column::row_offset_t>{});
     }
   }
   stream.synchronize();

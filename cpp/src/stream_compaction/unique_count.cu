@@ -1,21 +1,10 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
@@ -44,21 +33,21 @@ cudf::size_type unique_count(table_view const& keys,
     // the comparator speeds up compile-time significantly without much degradation in
     // runtime performance over using the comparator directly in thrust::count_if.
     auto d_results = rmm::device_uvector<bool>(keys.num_rows(), stream);
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(keys.num_rows()),
                       d_results.begin(),
                       [comp] __device__(auto i) { return (i == 0 or not comp(i, i - 1)); });
 
     return static_cast<size_type>(
-      thrust::count(rmm::exec_policy(stream), d_results.begin(), d_results.end(), true));
+      thrust::count(rmm::exec_policy_nosync(stream), d_results.begin(), d_results.end(), true));
   } else {
     auto const comp =
       row_comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(keys)}, nulls_equal);
     // Using thrust::copy_if with the comparator directly will compile more slowly but
     // improves runtime by up to 2x over the transform/count approach above.
     return thrust::count_if(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::counting_iterator<cudf::size_type>(0),
       thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
       [comp] __device__(cudf::size_type i) { return (i == 0 or not comp(i, i - 1)); });

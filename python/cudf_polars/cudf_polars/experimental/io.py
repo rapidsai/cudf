@@ -5,13 +5,12 @@
 from __future__ import annotations
 
 import dataclasses
-import enum
 import functools
 import itertools
 import math
 import statistics
 from collections import defaultdict
-from enum import IntEnum
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -19,24 +18,35 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.dsl.ir import IR, DataFrameScan, Empty, Scan, Sink, Union
+from cudf_polars.dsl.ir import (
+    IR,
+    DataFrameScan,
+    Empty,
+    Scan,
+    Sink,
+    Union,
+)
 from cudf_polars.experimental.base import (
     ColumnSourceInfo,
     ColumnStat,
     ColumnStats,
     DataSourceInfo,
     DataSourcePair,
+    IOPartitionFlavor,
+    IOPartitionPlan,
     PartitionInfo,
     UniqueStats,
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
@@ -80,73 +90,40 @@ def _(
     return ir, {ir: PartitionInfo(count=1)}
 
 
-class ScanPartitionFlavor(IntEnum):
-    """Flavor of Scan partitioning."""
+def scan_partition_plan(
+    ir: Scan, stats: StatsCollector, config_options: ConfigOptions
+) -> IOPartitionPlan:
+    """Extract the partitioning plan of a Scan operation."""
+    if ir.typ == "parquet":
+        # TODO: Use system info to set default blocksize
+        assert config_options.executor.name == "streaming", (
+            "'in-memory' executor not supported in 'generate_ir_tasks'"
+        )
 
-    SINGLE_FILE = enum.auto()  # 1:1 mapping between files and partitions
-    SPLIT_FILES = enum.auto()  # Split each file into >1 partition
-    FUSED_FILES = enum.auto()  # Fuse multiple files into each partition
+        blocksize: int = config_options.executor.target_partition_size
+        column_stats = stats.column_stats.get(ir, {})
+        column_sizes: list[int] = []
+        for cs in column_stats.values():
+            storage_size = cs.source_info.storage_size
+            if storage_size.value is not None:
+                column_sizes.append(storage_size.value)
 
+        if (file_size := sum(column_sizes)) > 0:
+            if file_size > blocksize:
+                # Split large files
+                return IOPartitionPlan(
+                    math.ceil(file_size / blocksize),
+                    IOPartitionFlavor.SPLIT_FILES,
+                )
+            else:
+                # Fuse small files
+                return IOPartitionPlan(
+                    max(blocksize // int(file_size), 1),
+                    IOPartitionFlavor.FUSED_FILES,
+                )
 
-class ScanPartitionPlan:
-    """
-    Scan partitioning plan.
-
-    Notes
-    -----
-    The meaning of `factor` depends on the value of `flavor`:
-      - SINGLE_FILE: `factor` must be `1`.
-      - SPLIT_FILES: `factor` is the number of partitions per file.
-      - FUSED_FILES: `factor` is the number of files per partition.
-    """
-
-    __slots__ = ("factor", "flavor")
-    factor: int
-    flavor: ScanPartitionFlavor
-
-    def __init__(self, factor: int, flavor: ScanPartitionFlavor) -> None:
-        if (
-            flavor == ScanPartitionFlavor.SINGLE_FILE and factor != 1
-        ):  # pragma: no cover
-            raise ValueError(f"Expected factor == 1 for {flavor}, got: {factor}")
-        self.factor = factor
-        self.flavor = flavor
-
-    @staticmethod
-    def from_scan(
-        ir: Scan, stats: StatsCollector, config_options: ConfigOptions
-    ) -> ScanPartitionPlan:
-        """Extract the partitioning plan of a Scan operation."""
-        if ir.typ == "parquet":
-            # TODO: Use system info to set default blocksize
-            assert config_options.executor.name == "streaming", (
-                "'in-memory' executor not supported in 'generate_ir_tasks'"
-            )
-
-            blocksize: int = config_options.executor.target_partition_size
-            column_stats = stats.column_stats.get(ir, {})
-            column_sizes: list[int] = []
-            for cs in column_stats.values():
-                storage_size = cs.source_info.storage_size
-                if storage_size.value is not None:
-                    column_sizes.append(storage_size.value)
-
-            if (file_size := sum(column_sizes)) > 0:
-                if file_size > blocksize:
-                    # Split large files
-                    return ScanPartitionPlan(
-                        math.ceil(file_size / blocksize),
-                        ScanPartitionFlavor.SPLIT_FILES,
-                    )
-                else:
-                    # Fuse small files
-                    return ScanPartitionPlan(
-                        max(blocksize // int(file_size), 1),
-                        ScanPartitionFlavor.FUSED_FILES,
-                    )
-
-        # TODO: Use file sizes for csv and json
-        return ScanPartitionPlan(1, ScanPartitionFlavor.SINGLE_FILE)
+    # TODO: Use file sizes for csv and json
+    return IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE)
 
 
 class SplitScan(IR):
@@ -222,6 +199,8 @@ class SplitScan(IR):
         include_file_paths: str | None,
         predicate: NamedExpr | None,
         parquet_options: ParquetOptions,
+        *,
+        context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ not in ("parquet",):  # pragma: no cover
@@ -282,6 +261,7 @@ class SplitScan(IR):
             include_file_paths,
             predicate,
             parquet_options,
+            context=context,
         )
 
 
@@ -304,9 +284,9 @@ def _(
         and ir.skip_rows == 0
         and ir.row_index is None
     ):
-        plan = ScanPartitionPlan.from_scan(ir, rec.state["stats"], config_options)
+        plan = scan_partition_plan(ir, rec.state["stats"], config_options)
         paths = list(ir.paths)
-        if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
+        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
             parquet_options = dataclasses.replace(
                 config_options.parquet_options,
@@ -435,9 +415,12 @@ def _sink_to_directory(
     options: dict[str, Any],
     df: DataFrame,
     ready: None,
+    context: IRExecutionContext,
 ) -> DataFrame:
     """Sink a partition to a new file."""
-    return Sink.do_evaluate(schema, kind, path, parquet_options, options, df)
+    return Sink.do_evaluate(
+        schema, kind, path, parquet_options, options, df, context=context
+    )
 
 
 def _sink_to_parquet_file(
@@ -456,7 +439,9 @@ def _sink_to_parquet_file(
             plc.io.parquet.ChunkedParquetWriterOptions.builder(sink), options
         )
         writer_options = builder.metadata(metadata).build()
-        writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
+        writer = plc.io.parquet.ChunkedParquetWriter.from_options(
+            writer_options, stream=df.stream
+        )
 
     # Append to the open Parquet file.
     assert isinstance(writer, plc.io.parquet.ChunkedParquetWriter), (
@@ -499,12 +484,14 @@ def _sink_to_file(
             mode = "ab"
             use_options["include_header"] = False
         with Path.open(Path(path), mode) as f:
-            sink = plc.io.types.SinkInfo([f])
+            # Path.open returns IO[Any] but SinkInfo needs more specific IO types
+            sink = plc.io.types.SinkInfo([f])  # type: ignore[arg-type]
             Sink._write_csv(sink, use_options, df)
     elif kind == "Json":
         mode = "wb" if writer_state is None else "ab"
         with Path.open(Path(path), mode) as f:
-            sink = plc.io.types.SinkInfo([f])
+            # Path.open returns IO[Any] but SinkInfo needs more specific IO types
+            sink = plc.io.types.SinkInfo([f])  # type: ignore[arg-type]
             Sink._write_json(sink, df)
     else:  # pragma: no cover; Shouldn't get here.
         raise NotImplementedError(f"{kind} not yet supported in _sink_to_file")
@@ -516,7 +503,9 @@ def _sink_to_file(
 
 
 def _file_sink_graph(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """Sink to a single file."""
     name = get_key_name(ir)
@@ -526,7 +515,7 @@ def _file_sink_graph(
     if count == 1:
         return {
             (name, 0): (
-                sink.do_evaluate,
+                partial(sink.do_evaluate, context=context),
                 *sink._non_child_args,
                 (child_name, 0),
             )
@@ -552,7 +541,9 @@ def _file_sink_graph(
 
 
 def _directory_sink_graph(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """Sink to a directory of files."""
     name = get_key_name(ir)
@@ -573,6 +564,7 @@ def _directory_sink_graph(
             sink.options,
             (child_name, i),
             setup_name,
+            context,
         )
         for i in range(count)
     }
@@ -582,12 +574,14 @@ def _directory_sink_graph(
 
 @generate_ir_tasks.register(StreamingSink)
 def _(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     if ir.executor_options.sink_to_directory:
-        return _directory_sink_graph(ir, partition_info)
+        return _directory_sink_graph(ir, partition_info, context=context)
     else:
-        return _file_sink_graph(ir, partition_info)
+        return _file_sink_graph(ir, partition_info, context=context)
 
 
 class ParquetMetadata:
@@ -715,6 +709,8 @@ class ParquetSourceInfo(DataSourceInfo):
         # Helper attributes
         self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
         self._unique_stats: dict[str, UniqueStats] = {}
+        self._read_columns: set[str] = set()
+        self._real_rg_size: dict[str, int] = {}
 
     @functools.cached_property
     def metadata(self) -> ParquetMetadata:
@@ -737,11 +733,13 @@ class ParquetSourceInfo(DataSourceInfo):
             return
 
         column_names = self.metadata.column_names
-        if not (
-            key_columns := [key for key in self._key_columns if key in column_names]
-        ):  # pragma: no cover; should never get here
-            # No key columns found in the file
-            raise ValueError(f"None of {self._key_columns} in {column_names}")
+        key_columns = [key for key in self._key_columns if key in column_names]
+        read_columns = list(
+            self._read_columns.intersection(column_names).union(key_columns)
+        )
+        if not read_columns:  # pragma: no cover; should never get here
+            # No key columns or read columns found in the file
+            raise ValueError(f"None of {read_columns} in {column_names}")
 
         sampled_file_count = len(sample_paths)
         num_row_groups_per_file = self.metadata.num_row_groups_per_file
@@ -751,15 +749,15 @@ class ParquetSourceInfo(DataSourceInfo):
         ):
             raise ValueError("Parquet metadata sampling failed.")  # pragma: no cover
 
-        n = 0
+        n_sampled = 0
         samples: defaultdict[str, list[int]] = defaultdict(list)
         for path, num_rgs in zip(sample_paths, num_row_groups_per_file, strict=True):
             for rg_id in range(num_rgs):
-                n += 1
+                n_sampled += 1
                 samples[path].append(rg_id)
-                if n == self.max_row_group_samples:
+                if n_sampled == self.max_row_group_samples:
                     break
-            if n == self.max_row_group_samples:
+            if n_sampled == self.max_row_group_samples:
                 break
 
         exact = sampled_file_count == len(
@@ -769,36 +767,43 @@ class ParquetSourceInfo(DataSourceInfo):
         options = plc.io.parquet.ParquetReaderOptions.builder(
             plc.io.SourceInfo(list(samples))
         ).build()
-        options.set_columns(key_columns)
+        options.set_columns(read_columns)
         options.set_row_groups(list(samples.values()))
-        tbl_w_meta = plc.io.parquet.read_parquet(options)
+        stream = get_cuda_stream()
+        tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
         row_group_num_rows = tbl_w_meta.tbl.num_rows()
         for name, column in zip(
-            tbl_w_meta.column_names(), tbl_w_meta.columns, strict=True
+            tbl_w_meta.column_names(include_children=False),
+            tbl_w_meta.columns,
+            strict=True,
         ):
-            row_group_unique_count = plc.stream_compaction.distinct_count(
-                column,
-                plc.types.NullPolicy.INCLUDE,
-                plc.types.NanPolicy.NAN_IS_NULL,
-            )
-            fraction = row_group_unique_count / row_group_num_rows
-            # Assume that if every row is unique then this is a
-            # primary key otherwise it's a foreign key and we
-            # can't use the single row group count estimate.
-            # Example, consider a "foreign" key that has 100
-            # unique values. If we sample from a single row group,
-            # we likely obtain a unique count of 100. But we can't
-            # necessarily deduce that that means that the unique
-            # count is 100 / num_rows_in_group * num_rows_in_file
-            count: int | None = None
-            if exact:
-                count = row_group_unique_count
-            elif row_group_unique_count == row_group_num_rows:
-                count = self.row_count.value
-            self._unique_stats[name] = UniqueStats(
-                ColumnStat[int](value=count, exact=exact),
-                ColumnStat[float](value=fraction, exact=exact),
-            )
+            self._real_rg_size[name] = column.device_buffer_size() // n_sampled
+            if name in key_columns:
+                row_group_unique_count = plc.stream_compaction.distinct_count(
+                    column,
+                    plc.types.NullPolicy.INCLUDE,
+                    plc.types.NanPolicy.NAN_IS_NULL,
+                    stream=stream,
+                )
+                fraction = row_group_unique_count / row_group_num_rows
+                # Assume that if every row is unique then this is a
+                # primary key otherwise it's a foreign key and we
+                # can't use the single row group count estimate.
+                # Example, consider a "foreign" key that has 100
+                # unique values. If we sample from a single row group,
+                # we likely obtain a unique count of 100. But we can't
+                # necessarily deduce that that means that the unique
+                # count is 100 / num_rows_in_group * num_rows_in_file
+                count: int | None = None
+                if exact:
+                    count = row_group_unique_count
+                elif row_group_unique_count == row_group_num_rows:
+                    count = self.row_count.value
+                self._unique_stats[name] = UniqueStats(
+                    ColumnStat[int](value=count, exact=exact),
+                    ColumnStat[float](value=fraction, exact=exact),
+                )
+        stream.synchronize()
 
     def _update_unique_stats(self, column: str) -> None:
         if column not in self._unique_stats and column in self.metadata.column_names:
@@ -813,7 +818,27 @@ class ParquetSourceInfo(DataSourceInfo):
 
     def storage_size(self, column: str) -> ColumnStat[int]:
         """Return the average column size for a single file."""
-        return self.metadata.mean_size_per_file.get(column, ColumnStat[int]())
+        file_count = len(self.paths)
+        row_count = self.row_count.value
+        partial_mean_size = self.metadata.mean_size_per_file.get(
+            column, ColumnStat[int]()
+        ).value
+        if file_count and row_count and partial_mean_size:
+            # NOTE: We set a lower bound on the estimated size using
+            # the row count, because dictionary encoding can make the
+            # in-memory size much larger.
+            min_value = max(1, row_count // file_count)
+            if partial_mean_size < min_value and column not in self._real_rg_size:
+                # If the metadata is suspiciously small,
+                # sample "real" data to get a better estimate.
+                self._sample_row_groups()
+            if column in self._real_rg_size:
+                partial_mean_size = int(
+                    self._real_rg_size[column]
+                    * statistics.mean(self.metadata.num_row_groups_per_file)
+                )
+            return ColumnStat[int](max(min_value, partial_mean_size))
+        return ColumnStat[int]()
 
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""
@@ -853,14 +878,19 @@ def _extract_scan_stats(
             config_options.parquet_options.max_row_group_samples,
             config_options.executor.stats_planning,
         )
-        return {
+        cstats = {
             name: ColumnStats(
                 name=name,
                 source_info=ColumnSourceInfo(DataSourcePair(table_source_info, name)),
             )
             for name in ir.schema
         }
-
+        # Mark all columns that we are reading in case
+        # we need to sample real data later.
+        if config_options.executor.stats_planning.use_sampling:
+            for name, cs in cstats.items():
+                cs.source_info.add_read_column(name)
+        return cstats
     else:
         return {name: ColumnStats(name=name) for name in ir.schema}
 
@@ -879,10 +909,10 @@ class DataFrameSourceInfo(DataSourceInfo):
 
     def __init__(
         self,
-        df: Any,
+        df: pl.DataFrame,
         stats_planning: StatsPlanningOptions,
     ):
-        self._df = df
+        self._pdf = df
         self._stats_planning = stats_planning
         self._key_columns: set[str] = set()
         self._unique_stats_columns = set()
@@ -891,17 +921,19 @@ class DataFrameSourceInfo(DataSourceInfo):
     @functools.cached_property
     def row_count(self) -> ColumnStat[int]:
         """Data source row-count estimate."""
-        return ColumnStat[int](value=self._df.height(), exact=True)
+        return ColumnStat[int](value=self._pdf.height, exact=True)
 
     def _update_unique_stats(self, column: str) -> None:
         if column not in self._unique_stats and self._stats_planning.use_sampling:
             row_count = self.row_count.value
             try:
                 unique_count = (
-                    self._df.get_column(column).approx_n_unique() if row_count else 0
+                    self._pdf._df.get_column(column).approx_n_unique()
+                    if row_count
+                    else 0
                 )
             except pl.exceptions.InvalidOperationError:  # pragma: no cover
-                unique_count = self._df.get_column(column).n_unique()
+                unique_count = self._pdf._df.get_column(column).n_unique()
             unique_fraction = min((unique_count / row_count), 1.0) if row_count else 1.0
             self._unique_stats[column] = UniqueStats(
                 ColumnStat[int](value=unique_count),
@@ -922,7 +954,7 @@ def _extract_dataframescan_stats(
         "Only streaming executor is supported in _extract_dataframescan_stats"
     )
     table_source_info = DataFrameSourceInfo(
-        ir.df,
+        pl.DataFrame._from_pydf(ir.df),
         config_options.executor.stats_planning,
     )
     return {

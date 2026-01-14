@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 # If libcudf was installed as a wheel, we must request it to load the library symbols.
 # Otherwise, we assume that the library was installed in a system path that ld can find.
@@ -18,6 +19,7 @@ from . import (
     contiguous_split,
     copying,
     datetime,
+    experimental,
     expressions,
     filling,
     groupby,
@@ -41,6 +43,7 @@ from . import (
     round,
     search,
     sorting,
+    span,
     stream_compaction,
     strings,
     traits,
@@ -49,6 +52,7 @@ from . import (
     types,
     unary,
     utilities,
+    utils,
 )
 from .column import Column
 from .gpumemoryview import gpumemoryview
@@ -70,6 +74,7 @@ __all__ = [
     "contiguous_split",
     "copying",
     "datetime",
+    "experimental",
     "expressions",
     "filling",
     "gpumemoryview",
@@ -94,6 +99,7 @@ __all__ = [
     "round",
     "search",
     "sorting",
+    "span",
     "stream_compaction",
     "strings",
     "traits",
@@ -102,4 +108,5 @@ __all__ = [
     "types",
     "unary",
     "utilities",
+    "utils",
 ]

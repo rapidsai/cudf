@@ -16,7 +16,7 @@ from cudf_polars.testing.asserts import (
 from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
-    from cudf_polars.typing import RankMethod
+    from cudf_polars.typing import RankMethod, RoundMethod
 
 
 @pytest.fixture(
@@ -161,3 +161,9 @@ def test_rank_unsupported(ldf: pl.LazyFrame, method: RankMethod, seed: int) -> N
     expr = pl.col("a").rank(method=method, seed=seed)
     q = ldf.select(expr)
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("mode", ["half_to_even", "half_away_from_zero"])
+def test_round(ldf: pl.LazyFrame, mode: RoundMethod) -> None:
+    q = ldf.select(pl.col("a").sin().round(2, mode=mode))
+    assert_gpu_result_equal(q)

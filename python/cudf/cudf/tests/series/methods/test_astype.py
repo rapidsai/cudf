@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import datetime
 import zoneinfo
 from decimal import Decimal
@@ -101,6 +102,16 @@ def test_astype_pandas_nullable_pandas_compat(dtype, klass, kind):
         actual = ser.astype(kind(dtype))
         expected = klass([1, 2, 3], dtype=kind(dtype))
         assert_eq(actual, expected)
+
+
+def test_cast_float_nan_to_bool_pandas_compat():
+    with cudf.option_context("mode.pandas_compatible", True):
+        data = [1.0, 0.0, np.nan, None]
+        gs = cudf.Series(data, dtype="float64")
+        got = gs.astype("bool")
+        expected = pd.Series([True, False, True, True], dtype="bool")
+        assert got.null_count == 0
+        assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
@@ -1328,3 +1339,11 @@ def test_empty_series_category_cast(ordered):
 
     assert_eq(expected, actual)
     assert_eq(expected.dtype.ordered, actual.dtype.ordered)
+
+
+@pytest.mark.parametrize("copy", [True, False])
+def test_series_astype_no_copy(copy):
+    gsr = cudf.Series([1, 2, 3])
+    result = gsr.astype("int64", copy=copy)
+    assert_eq(result, gsr)
+    assert (result is gsr) is (not copy)

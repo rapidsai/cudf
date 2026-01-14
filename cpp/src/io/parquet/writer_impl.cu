@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -49,6 +38,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
@@ -1346,9 +1336,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
 
   // Create a single bulk storage used by all sub-dictionaries
-  auto map_storage = storage_type{
-    total_map_storage_size,
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+  auto map_storage =
+    storage_type{total_map_storage_size, rmm::mr::polymorphic_allocator<char>{}, stream.value()};
   // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
   device_span<slot_type> const map_storage_data{map_storage.data(), total_map_storage_size};
 
@@ -1525,7 +1514,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
   rmm::device_uvector<codec_exec_result> comp_res(max_comp_pages, stream);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                comp_res.begin(),
                comp_res.end(),
                codec_exec_result{0, codec_status::FAILURE});
@@ -1766,10 +1755,11 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                  partitions.end(),
                  std::back_inserter(num_frag_in_part),
                  [max_page_fragment_size](auto const& part) {
-                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
+                   return util::div_rounding_up_safe<size_type>(part.num_rows,
+                                                                max_page_fragment_size);
                  });
 
-  size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
+  auto const num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
 
   auto part_frag_offset =
     cudf::detail::make_empty_host_vector<int>(num_frag_in_part.size() + 1, stream);
@@ -1884,8 +1874,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     for (int r = 0; r < num_rg_in_part[p]; r++) {
       size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
       auto& row_group = agg_meta->file(p).row_groups[global_r];
-      uint32_t fragments_in_chunk =
-        util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size);
+      auto const fragments_in_chunk =
+        util::div_rounding_up_safe<uint32_t>(row_group.num_rows, max_page_fragment_size);
       row_group.total_byte_size = 0;
       row_group.columns.resize(num_columns);
       for (int c = 0; c < num_columns; c++) {
@@ -1920,7 +1910,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         column_chunk_meta.codec          = Compression::UNCOMPRESSED;
         column_chunk_meta.num_values     = ck.num_values;
 
-        frags_per_column[c] += util::div_rounding_up_unsafe(
+        frags_per_column[c] += util::div_rounding_up_safe<size_type>(
           row_group.num_rows, std::min(column_frag_size[c], max_page_fragment_size));
       }
       f += fragments_in_chunk;
@@ -1958,8 +1948,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         for (int r = 0; r < num_rg_in_part[p]; r++) {
           auto const global_r   = global_rowgroup_base[p] + r;
           auto const& row_group = agg_meta->file(p).row_groups[global_r];
-          uint32_t const fragments_in_chunk =
-            util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
+          auto const fragments_in_chunk =
+            util::div_rounding_up_safe<uint32_t>(row_group.num_rows, frag_size);
           EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
           ck.fragments       = page_fragments.device_ptr(frag_offset);
           ck.first_fragment  = frag_offset;
