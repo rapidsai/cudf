@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -119,10 +119,9 @@ static void bench_multibyte_split(nvbench::state& state,
 
   auto const delim_factor = static_cast<double>(delim_percent) / 100;
   std::unique_ptr<cudf::io::datasource> datasource;
-  auto device_input = create_random_input(file_size_approx, delim_factor, 0.05, delim);
-  auto host_input   = std::vector<char>{};
-  auto host_pinned_input =
-  cudf::detail::make_host_vector<char>(0, cudf::get_default_stream());
+  auto device_input      = create_random_input(file_size_approx, delim_factor, 0.05, delim);
+  auto host_input        = std::vector<char>{};
+  auto host_pinned_input = cudf::detail::make_host_vector<char>(0, cudf::get_default_stream());
 
   if (source_type != data_chunk_source_type::device &&
       source_type != data_chunk_source_type::host_pinned) {
@@ -131,7 +130,8 @@ static void bench_multibyte_split(nvbench::state& state,
       cudf::get_default_stream());
   }
   if (source_type == data_chunk_source_type::host_pinned) {
-    host_pinned_input = cudf::detail::make_pinned_vector<char>(device_input, cudf::get_default_stream());
+    host_pinned_input =
+      cudf::detail::make_pinned_vector<char>(device_input, cudf::get_default_stream());
   }
 
   auto source = [&] {

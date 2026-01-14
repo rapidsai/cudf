@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -568,7 +568,7 @@ void host_decompress(compression_type compression,
     auto task = [d_in = h_inputs[i], d_out = h_outputs[i], cur_stream, compression]() -> size_t {
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in, cur_stream);
 
-      auto h_out             = cudf::detail::make_pinned_vector_async<uint8_t>(d_out.size(), cur_stream);
+      auto h_out = cudf::detail::make_pinned_vector_async<uint8_t>(d_out.size(), cur_stream);
       auto const uncomp_size = decompress(compression, h_in, h_out);
       h_in.clear();  // Free pinned memory as soon as possible
 

@@ -1164,9 +1164,10 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
 
   // get stats_merge_groups[num_stat_blobs - 1] via a host pinned bounce buffer
   auto const max_blobs = [&]() {
-    auto max_blobs_element =
-      cudf::detail::make_pinned_vector<statistics_merge_group>(cudf::device_span<statistics_merge_group>{stats_merge_groups.device_ptr(num_stat_blobs - 1),
-        1}, stream);
+    auto max_blobs_element = cudf::detail::make_pinned_vector<statistics_merge_group>(
+      cudf::device_span<statistics_merge_group>{stats_merge_groups.device_ptr(num_stat_blobs - 1),
+                                                1},
+      stream);
     return max_blobs_element.front();
   }();
 
