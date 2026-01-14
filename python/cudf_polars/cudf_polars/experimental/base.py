@@ -423,6 +423,27 @@ class StatsCollector:
             self.row_count[new_ir] = self.row_count[old_ir]
 
 
+class Profiler:
+    """
+    Profiler for collecting runtime statistics during execution.
+
+    Attributes
+    ----------
+    row_count
+        Mapping from IR node to actual row count produced during execution.
+    """
+
+    row_count: defaultdict[IR, int]
+
+    def __init__(self) -> None:
+        self.row_count = defaultdict(int)
+
+    def merge(self, other: Profiler) -> None:
+        """Merge another profiler's statistics into this one."""
+        for ir, n_rows in other.row_count.items():
+            self.row_count[ir] += n_rows
+
+
 class IOPartitionFlavor(IntEnum):
     """Flavor of IO partitioning."""
 

@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+    from cudf_polars.experimental.base import PartitionInfo, Profiler, StatsCollector
 
 
 def explain_query(
@@ -101,6 +101,7 @@ def _repr_ir_tree(
     *,
     offset: str = "",
     stats: StatsCollector | None = None,
+    profiler: Profiler | None = None,
 ) -> str:
     header = _repr_ir(ir, offset=offset)
     count = partition_info[ir].count if partition_info else None
@@ -110,12 +111,23 @@ def _repr_ir_tree(
             stats.row_count.get(ir, ColumnStat[int](None)).value
         )
         row_count = f"~{row_count_estimate}" if row_count_estimate else "unknown"
-        header = header.rstrip("\n") + f" {row_count=}\n"
+        header = header.rstrip("\n") + f" {row_count=}"
+        if profiler is not None:
+            actual = profiler.row_count.get(ir)
+            actual_str = _fmt_row_count(actual) if actual is not None else "?"
+            header += f" [actual={actual_str}]"
+        header += "\n"
     if count is not None:
         header = header.rstrip("\n") + f" [{count}]\n"
 
     children_strs = [
-        _repr_ir_tree(child, partition_info, offset=offset + "  ", stats=stats)
+        _repr_ir_tree(
+            child,
+            partition_info,
+            offset=offset + "  ",
+            stats=stats,
+            profiler=profiler,
+        )
         for child in ir.children
     ]
 
