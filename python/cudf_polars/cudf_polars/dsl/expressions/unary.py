@@ -242,7 +242,7 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
-        elif POLARS_VERSION_LT_135 and self.name == "set_sorted":  # pragma: no cover
+        elif self.name == "set_sorted": # pragma: no cover
             # TODO: LazyFrame.set_sorted is proper IR concept (ie. FunctionIR::Hint)
             # and is is currently not implemented. We should reimplement it
             # and then probably translate it to a UnaryFunction or add a Hint (IR).
