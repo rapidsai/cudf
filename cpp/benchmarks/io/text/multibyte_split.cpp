@@ -122,7 +122,7 @@ static void bench_multibyte_split(nvbench::state& state,
   auto device_input = create_random_input(file_size_approx, delim_factor, 0.05, delim);
   auto host_input   = std::vector<char>{};
   auto host_pinned_input =
-    thrust::host_vector<char>(0, cudf::get_default_stream());
+  cudf::detail::make_host_vector<char>(0, cudf::get_default_stream());
 
   if (source_type != data_chunk_source_type::device &&
       source_type != data_chunk_source_type::host_pinned) {
