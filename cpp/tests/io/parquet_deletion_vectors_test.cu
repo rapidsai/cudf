@@ -149,12 +149,17 @@ auto build_deletion_vector_and_expected_row_mask(cudf::size_type num_rows,
 
   auto deletion_vector = roaring::api::roaring64_bitmap_create();
 
+  // Context for the roaring64 bitmap for faster (bulk) add operations
+  auto roaring64_context =
+    roaring::api::roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
+
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator<size_t>(num_rows),
                 [&](auto row_idx) {
                   // Insert provided host row index if the row is deleted in the row mask
                   if (not expected_row_mask[row_idx]) {
-                    roaring::api::roaring64_bitmap_add(deletion_vector, row_indices[row_idx]);
+                    roaring::api::roaring64_bitmap_add_bulk(
+                      deletion_vector, &roaring64_context, row_indices[row_idx]);
                   }
                 });
 
