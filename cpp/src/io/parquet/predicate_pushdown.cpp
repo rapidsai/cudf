@@ -443,7 +443,9 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
 
   // Return only filtered row groups based on predicate
   auto is_row_group_required = cudf::detail::make_pinned_vector(
-    cudf::device_span<uint8_t const>{predicate.data<uint8_t>(), static_cast<size_t>(predicate.size())}, stream);
+    cudf::device_span<uint8_t const>{predicate.data<uint8_t>(),
+                                     static_cast<size_t>(predicate.size())},
+    stream);
 
   // Return if all are required, or all are nulls.
   if (predicate.null_count() == predicate.size() or std::all_of(is_row_group_required.cbegin(),
