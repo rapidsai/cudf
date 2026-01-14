@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import decimal
 import itertools
@@ -381,7 +381,12 @@ def test_serialize_string_check_buffer_sizes():
     df = cudf.DataFrame({"a": ["a", "b", "cd", None]})
     expect = df.memory_usage(deep=True).loc["a"]
     header, frames = df.serialize()
-    got = sum(b.nbytes for b in frames)
+    # Frames can be either Buffer (on GPU, use .size) or memoryview
+    # (spilled to CPU, use .nbytes). See SpillableBuffer.serialize().
+    got = sum(
+        b.size if isinstance(b, cudf.core.buffer.Buffer) else b.nbytes
+        for b in frames
+    )
     assert expect == got
 
 
