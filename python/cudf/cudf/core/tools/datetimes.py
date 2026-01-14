@@ -905,7 +905,8 @@ def date_range(
     elif isinstance(freq, str):
         offset = pd.tseries.frequencies.to_offset(freq)
         if not isinstance(
-            offset, (pd.tseries.offsets.Tick, pd.tseries.offsets.Week)
+            offset,
+            (pd.tseries.offsets.Tick, pd.offsets.Day, pd.tseries.offsets.Week),
         ):
             raise ValueError(
                 f"Unrecognized frequency string {freq}. cuDF does "

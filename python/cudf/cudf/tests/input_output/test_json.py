@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
@@ -143,8 +143,8 @@ def test_json_writer(tmp_path, pdf, gdf):
     pdf_df_fname = tmp_path / "pdf_df.json"
     gdf_df_fname = tmp_path / "gdf_df.json"
 
-    pdf.to_json(pdf_df_fname)
-    gdf.to_json(gdf_df_fname)
+    pdf.to_json(pdf_df_fname, date_format="iso")
+    gdf.to_json(gdf_df_fname, date_format="iso")
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
@@ -158,8 +158,8 @@ def test_json_writer(tmp_path, pdf, gdf):
         pdf_series_fname = tmp_path / f"{column}_pdf_series.json"
         gdf_series_fname = tmp_path / f"{column}_gdf_series.json"
 
-        pdf[column].to_json(pdf_series_fname)
-        gdf[column].to_json(gdf_series_fname)
+        pdf[column].to_json(pdf_series_fname, date_format="iso")
+        gdf[column].to_json(gdf_series_fname, date_format="iso")
 
         assert os.path.exists(pdf_series_fname)
         assert os.path.exists(gdf_series_fname)
@@ -170,8 +170,8 @@ def test_json_writer(tmp_path, pdf, gdf):
         assert_eq(expect_series, got_series)
 
         # Make sure results align for regular strings, not just files
-        pdf_string = pdf[column].to_json()
-        gdf_string = pdf[column].to_json()
+        pdf_string = pdf[column].to_json(date_format="iso")
+        gdf_string = pdf[column].to_json(date_format="iso")
         assert_eq(pdf_string, gdf_string)
 
 
