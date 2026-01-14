@@ -39,6 +39,10 @@ if [[ "${PIP_NO_BUILD_ISOLATION:-}" != "0" ]]; then
     RAPIDS_PIP_WHEEL_ARGS+=(--build-constraint="${PIP_CONSTRAINT}")
 fi
 
+# unset that environment variable... it doesn't affect builds as of pip 25.3, and
+# results in an error from 'pip wheel' when set and --build-constraint is also passed
+unset PIP_CONSTRAINT
+
 rapids-telemetry-record build-${package_name}.log rapids-pip-retry wheel \
     "${RAPIDS_PIP_WHEEL_ARGS[@]}" \
     .
