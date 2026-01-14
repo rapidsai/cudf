@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -606,7 +606,7 @@ void __launch_bounds__(decode_page_headers_block_size)
               bs->page.num_rows = bs->page.num_input_values;
               values_found += bs->page.num_input_values;
               break;
-            case PageType::DATA_PAGE_V2:
+            case PageType::DATA_PAGE_V2: {
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
               bs->page.flags |= PAGEINFO_FLAGS_V2;
@@ -614,7 +614,14 @@ void __launch_bounds__(decode_page_headers_block_size)
               // V2 only uses RLE, so it was removed from the header
               bs->page.definition_level_encoding = Encoding::RLE;
               bs->page.repetition_level_encoding = Encoding::RLE;
+              // Per Parquet spec, V2 header sizes are value-only (not including level bytes).
+              // Add level bytes for internal use (cursor advancement, decoding, etc.)
+              auto const lvl_bytes = bs->page.lvl_bytes[level_type::DEFINITION] +
+                                     bs->page.lvl_bytes[level_type::REPETITION];
+              bs->page.uncompressed_page_size += lvl_bytes;
+              bs->page.compressed_page_size += lvl_bytes;
               break;
+            }
             case PageType::DICTIONARY_PAGE:
               index_out = dictionary_page_count;
               dictionary_page_count++;
@@ -704,6 +711,10 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
             case PageType::DATA_PAGE_V2:
               data_page_count++;
               values_found += bs->page.num_input_values;
+              // Per Parquet spec, V2 header compressed_page_size is value-only.
+              // Add level bytes for cursor advancement.
+              bs->page.compressed_page_size += bs->page.lvl_bytes[level_type::DEFINITION] +
+                                               bs->page.lvl_bytes[level_type::REPETITION];
               break;
             case PageType::DICTIONARY_PAGE: dictionary_page_count++; break;
             default:
@@ -799,12 +810,19 @@ struct decode_page_headers_with_pgidx_fn {
         // definition levels
         bs.page.num_rows = bs.page.num_input_values;
         break;
-      case PageType::DATA_PAGE_V2:
+      case PageType::DATA_PAGE_V2: {
         bs.page.flags |= PAGEINFO_FLAGS_V2;
         // V2 only uses RLE, so it was removed from the header
         bs.page.definition_level_encoding = Encoding::RLE;
         bs.page.repetition_level_encoding = Encoding::RLE;
+        // Per Parquet spec, V2 header sizes are value-only (not including level bytes).
+        // Add level bytes for internal use.
+        auto const lvl_bytes =
+          bs.page.lvl_bytes[level_type::DEFINITION] + bs.page.lvl_bytes[level_type::REPETITION];
+        bs.page.uncompressed_page_size += lvl_bytes;
+        bs.page.compressed_page_size += lvl_bytes;
         break;
+      }
       case PageType::DICTIONARY_PAGE: bs.page.flags |= PAGEINFO_FLAGS_DICTIONARY; break;
       default:
         set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE),

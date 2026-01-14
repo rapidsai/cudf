@@ -2601,10 +2601,17 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
   }
 
   __syncwarp();
-  // Second pass: for non-V2 pages, set is_compressed based on non-V2 decision
+  // Second pass: for non-V2 pages, set is_compressed based on chunk decision.
+  // Dictionary pages MUST be compressed if the chunk is compressed, because
+  // dictionary page headers don't have an is_compressed field - readers assume
+  // they're compressed when chunk.codec != NONE.
+  // V1 data pages follow the non-V2 compression decision.
   for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
     auto& curr_page = ck_g[warp_id].pages[page_id];
-    if (not curr_page.is_v2()) { curr_page.is_compressed = non_v2_compress; }
+    if (not curr_page.is_v2()) {
+      bool const is_dict_page = curr_page.page_type == PageType::DICTIONARY_PAGE;
+      curr_page.is_compressed = is_dict_page ? write_compressed : non_v2_compress;
+    }
   }
 }
 
@@ -3040,13 +3047,17 @@ CUDF_KERNEL void __launch_bounds__(encode_block_size)
     hdr_end   = EncodeStatistics(hdr_start, &chunk_stats[page.chunk_id], stats_type, scratch);
     page.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
   }
-  auto const uncompressed_page_size = page.data_size;
+  // For V2 pages, uncompressed_page_size and compressed_page_size in the header
+  // are for value data only, NOT including level bytes (per Parquet spec).
+  // For V1 pages and dictionary pages, they include the full page data.
+  auto const lvl_bytes              = page.is_v2() ? page.level_bytes() : 0;
+  auto const uncompressed_page_size = page.data_size - lvl_bytes;
   uint32_t compressed_page_size{};
   if (page.is_compressed) {
-    auto const lvl_bytes = page.is_v2() ? page.level_bytes() : 0;
     hdr_start            = page.compressed_data;
-    compressed_page_size = static_cast<uint32_t>(comp_results[page_idx].bytes_written) + lvl_bytes;
-    page.comp_data_size  = compressed_page_size;
+    compressed_page_size = static_cast<uint32_t>(comp_results[page_idx].bytes_written);
+    // comp_data_size is total data size (including levels) for internal use
+    page.comp_data_size = compressed_page_size + lvl_bytes;
   } else {
     hdr_start            = page.page_data;
     compressed_page_size = uncompressed_page_size;
@@ -3143,7 +3154,9 @@ CUDF_KERNEL void __launch_bounds__(1024) gpuGatherPages(device_span<EncColumnChu
     // Copy page data. For V2, the level data and page data are disjoint.
     if (page_g.is_v2()) {
       auto const lvl_len = page_g.level_bytes();
-      memcpy_block<1024, true>(dst, src, lvl_len, cg::this_thread_block());
+      // For V2 pages, level data is ALWAYS in the uncompressed buffer (levels are never compressed)
+      auto const* lvl_src = page_g.page_data + page_g.max_hdr_size;
+      memcpy_block<1024, true>(dst, lvl_src, lvl_len, cg::this_thread_block());
       src += page_g.max_lvl_size;
       dst += lvl_len;
       data_len -= lvl_len;
