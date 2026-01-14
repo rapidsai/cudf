@@ -110,9 +110,11 @@ auto serialize_deletion_vector(roaring::api::roaring64_bitmap_t const* deletion_
 {
   auto const num_bytes = roaring::api::roaring64_bitmap_portable_size_in_bytes(deletion_vector);
   EXPECT_GT(num_bytes, 0);
-  auto serialized_bitmap = thrust::host_vector<cuda::std::byte>(num_bytes);
-  std::ignore            = roaring::api::roaring64_bitmap_portable_serialize(
+  auto serialized_bitmap   = thrust::host_vector<cuda::std::byte>(num_bytes);
+  auto const bytes_written = roaring::api::roaring64_bitmap_portable_serialize(
     deletion_vector, reinterpret_cast<char*>(serialized_bitmap.data()));
+  CUDF_EXPECTS(bytes_written == num_bytes,
+               "Number of bytes written must match the number of bytes in the bitmap");
   return serialized_bitmap;
 }
 
@@ -144,17 +146,12 @@ auto build_deletion_vector_and_expected_row_mask(cudf::size_type num_rows,
 
   auto deletion_vector = roaring::api::roaring64_bitmap_create();
 
-  // Context for the roaring64 bitmap for faster (bulk) add operations
-  auto roaring64_context =
-    roaring::api::roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
-
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator<size_t>(num_rows),
                 [&](auto row_idx) {
                   // Insert provided host row index if the row is deleted in the row mask
                   if (not expected_row_mask[row_idx]) {
-                    roaring::api::roaring64_bitmap_add_bulk(
-                      deletion_vector, &roaring64_context, row_indices[row_idx]);
+                    roaring::api::roaring64_bitmap_add(deletion_vector, row_indices[row_idx]);
                   }
                 });
 
@@ -497,9 +494,9 @@ TEST_F(ParquetDeletionVectorsTest, NoRowIndexColumn)
 
 TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
 {
-  auto constexpr num_rows             = 50'000;
+  auto constexpr num_rows             = 25'000;
   auto constexpr num_row_groups       = 5;
-  auto constexpr num_columns          = 8;
+  auto constexpr num_columns          = 4;
   auto constexpr include_validity     = false;
   auto constexpr deletion_probability = 0.4;  ///< 40% of the rows are deleted
   auto constexpr rows_per_row_group   = num_rows / num_row_groups;
@@ -564,7 +561,7 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
   auto [deletion_vector, expected_row_mask_column] = build_deletion_vector_and_expected_row_mask(
     num_rows, deletion_probability, expected_row_indices, stream, mr);
 
-  // Don't concatenate the input tables and test with single deletion vector
+  // Don't concatenate the input table and test with single deletion vector
   test_read_parquet_and_apply_deletion_vector<1>(parquet_buffer,
                                                  deletion_vector,
                                                  row_group_offsets,
@@ -575,8 +572,19 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
                                                  stream,
                                                  mr);
 
-  // Concatenate the input tables and test with multiple deletion vectors
-  test_read_parquet_and_apply_deletion_vector<3>(parquet_buffer,
+  // Concatenate input table and test with multiple deletion vectors
+  test_read_parquet_and_apply_deletion_vector<4>(parquet_buffer,
+                                                 deletion_vector,
+                                                 row_group_offsets,
+                                                 row_group_num_rows,
+                                                 input_table->view(),
+                                                 expected_row_mask_column->view(),
+                                                 expected_row_index_column->view(),
+                                                 stream,
+                                                 mr);
+
+  // Concatenate input table and test with many deletion vectors (>= stream fork threshold of 8)
+  test_read_parquet_and_apply_deletion_vector<8>(parquet_buffer,
                                                  deletion_vector,
                                                  row_group_offsets,
                                                  row_group_num_rows,

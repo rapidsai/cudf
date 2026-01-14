@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/experimental/deletion_vectors.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -250,6 +251,8 @@ std::unique_ptr<cudf::column> compute_partial_row_index_column(
 /**
  * @brief Computes a BOOL8 row mask column from the specified row index column and deletion vectors
  *
+ * @note This function synchronizes the stream before returning the row mask column
+ *
  * @param row_index_column View of the row index column
  * @param deletion_vector_refs Host span of cuco roaring bitmap references
  * @param rows_per_deletion_vector Host span of number of rows per deletion vector
@@ -265,15 +268,16 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto const num_rows = row_index_column.size();
-  auto row_mask       = rmm::device_buffer(num_rows * sizeof(bool), stream, mr);
+  auto const num_rows             = row_index_column.size();
+  auto const num_deletion_vectors = static_cast<cudf::size_type>(deletion_vector_refs.size());
+  auto row_mask                   = rmm::device_buffer(num_rows * sizeof(bool), stream, mr);
 
   // Iterator to negate and store the output value from `contains_async`
   auto row_mask_iter = thrust::make_transform_output_iterator(
     static_cast<bool*>(row_mask.data()), [] __device__(auto b) { return not b; });
 
-  if (deletion_vector_refs.size() == 1) {
-    deletion_vector_refs.front().get().contains_async(
+  if (num_deletion_vectors == 1) {
+    deletion_vector_refs.front().get().contains(
       row_index_column.begin<size_t>(), row_index_column.end<size_t>(), row_mask_iter, stream);
     return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
                                           num_rows,
@@ -292,15 +296,33 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
                "Encountered a mismatch in the number of rows in the row index column and the "
                "number of rows in the deletion vector(s)");
 
-  std::for_each(thrust::counting_iterator(0),
-                thrust::counting_iterator<size_type>(deletion_vector_refs.size()),
-                [&](auto const dv_idx) {
-                  deletion_vector_refs[dv_idx].get().contains_async(
-                    row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx],
-                    row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx + 1],
-                    row_mask_iter + deletion_vector_row_offsets[dv_idx],
-                    stream);
-                });
+  // Fork the stream if the number of deletion vectors is greater than the threshold
+  constexpr auto stream_fork_threshold = 8;
+  if (num_deletion_vectors >= stream_fork_threshold) {
+    auto streams = cudf::detail::fork_streams(stream, num_deletion_vectors);
+    std::for_each(thrust::counting_iterator(0),
+                  thrust::counting_iterator(num_deletion_vectors),
+                  [&](auto const dv_idx) {
+                    deletion_vector_refs[dv_idx].get().contains_async(
+                      row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx],
+                      row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx + 1],
+                      row_mask_iter + deletion_vector_row_offsets[dv_idx],
+                      streams[dv_idx]);
+                  });
+    cudf::detail::join_streams(streams, stream);
+  } else {
+    // Otherwise, launch the queries on the same stream
+    std::for_each(thrust::counting_iterator(0),
+                  thrust::counting_iterator(num_deletion_vectors),
+                  [&](auto const dv_idx) {
+                    deletion_vector_refs[dv_idx].get().contains_async(
+                      row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx],
+                      row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx + 1],
+                      row_mask_iter + deletion_vector_row_offsets[dv_idx],
+                      stream);
+                  });
+    stream.synchronize();
+  }
 
   return std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::BOOL8}, num_rows, std::move(row_mask), rmm::device_buffer{}, 0);
