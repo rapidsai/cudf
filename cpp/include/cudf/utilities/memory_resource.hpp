@@ -25,8 +25,7 @@ namespace cudf {
  */
 inline rmm::device_async_resource_ref get_current_device_resource_ref()
 {
-  // For now, match current behavior which is to return current resource pointer
-  return rmm::mr::get_current_device_resource();
+  return rmm::mr::get_current_device_resource_ref();
 }
 
 /**
@@ -41,7 +40,10 @@ inline rmm::device_async_resource_ref get_current_device_resource_ref()
 inline rmm::mr::device_memory_resource* set_current_device_resource(
   rmm::mr::device_memory_resource* mr)
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   return rmm::mr::set_current_device_resource(mr);
+#pragma GCC diagnostic pop
 }
 
 /**
