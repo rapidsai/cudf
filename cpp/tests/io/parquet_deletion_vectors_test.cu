@@ -262,8 +262,13 @@ void test_read_parquet_and_apply_deletion_vector(
   auto serialized_roaring_bitmaps      = std::vector<cudf::host_span<cuda::std::byte const>>{};
   serialized_roaring_bitmaps_data.reserve(num_concat - 1);
   serialized_roaring_bitmaps.reserve(num_concat);
-  // Insert the first serialized roaring bitmap span
-  serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmap);
+
+  // Insert the first serialized roaring bitmap span if non-empty
+  if (not serialized_roaring_bitmap.empty()) {
+    serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmap);
+  } else {
+    CUDF_EXPECTS(num_concat == 1, "num_concat must be 1 if serialized_roaring_bitmap is empty");
+  }
 
   // Build the expected table
   auto expected_table = [&]() {
@@ -502,6 +507,22 @@ TEST_F(ParquetDeletionVectorsTest, NoRowIndexColumn)
                                                           expected_row_index_column->view(),
                                                           stream,
                                                           mr);
+  // Test no row index column and no deletion vector
+  {
+    // Build expected row mask column containing all true values
+    auto expected_row_mask = thrust::host_vector<bool>(num_rows, true);
+    auto expected_row_mask_column =
+      build_column_from_host_data<bool>(expected_row_mask, cudf::type_id::BOOL8, stream, mr);
+    test_read_parquet_and_apply_deletion_vector<num_concat>(parquet_buffer,
+                                                            {},
+                                                            {},
+                                                            {},
+                                                            input_table->view(),
+                                                            expected_row_mask_column->view(),
+                                                            expected_row_index_column->view(),
+                                                            stream,
+                                                            mr);
+  }
 }
 
 TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
@@ -605,4 +626,22 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
                                                  expected_row_index_column->view(),
                                                  stream,
                                                  mr);
+
+  // Test custom row index column and no deletion vector
+  {
+    // Build expected row mask column containing all true values
+    auto expected_row_mask = thrust::host_vector<bool>(num_rows, true);
+    auto expected_row_mask_column =
+      build_column_from_host_data<bool>(expected_row_mask, cudf::type_id::BOOL8, stream, mr);
+
+    test_read_parquet_and_apply_deletion_vector<1>(parquet_buffer,
+                                                   {},
+                                                   row_group_offsets,
+                                                   row_group_num_rows,
+                                                   input_table->view(),
+                                                   expected_row_mask_column->view(),
+                                                   expected_row_index_column->view(),
+                                                   stream,
+                                                   mr);
+  }
 }

@@ -421,7 +421,8 @@ chunked_parquet_reader::chunked_parquet_reader(
     not options.get_filter().has_value(),
     "Encountered a non-empty AST filter expression. Use a roaring64 bitmap deletion vector to "
     "filter the table instead");
-  CUDF_EXPECTS(serialized_roaring_bitmaps.size() == deletion_vector_row_counts.size(),
+  CUDF_EXPECTS(serialized_roaring_bitmaps.empty() or
+                 serialized_roaring_bitmaps.size() == deletion_vector_row_counts.size(),
                "Encountered a mismatch in the number of deletion vectors and the number of rows "
                "per deletion vector");
 
@@ -485,8 +486,12 @@ chunked_parquet_reader::chunked_parquet_reader(
       chunk_read_limit,
       pass_read_limit,
       options,
-      std::vector<cudf::host_span<cuda::std::byte const>>{serialized_roaring_bitmap},
-      std::vector<size_type>{std::numeric_limits<size_type>::max()},
+      serialized_roaring_bitmap.empty()
+        ? std::vector<cudf::host_span<cuda::std::byte const>>{}
+        : std::vector<cudf::host_span<cuda::std::byte const>>{serialized_roaring_bitmap},
+      serialized_roaring_bitmap.empty()
+        ? std::vector<size_type>{}
+        : std::vector<size_type>{std::numeric_limits<size_type>::max()},
       row_group_offsets,
       row_group_num_rows,
       stream,
@@ -613,7 +618,8 @@ table_with_metadata read_parquet(
     not options.get_filter().has_value(),
     "Encountered a non-empty AST filter expression. Use a roaring64 bitmap deletion vector to "
     "filter the table instead");
-  CUDF_EXPECTS(serialized_roaring_bitmaps.size() == deletion_vector_row_counts.size(),
+  CUDF_EXPECTS(serialized_roaring_bitmaps.empty() or
+                 serialized_roaring_bitmaps.size() == deletion_vector_row_counts.size(),
                "Encountered a mismatch in the number of deletion vectors and the number of rows "
                "per deletion vector");
 
