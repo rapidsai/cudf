@@ -591,8 +591,12 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
 {
   return read_parquet(
     options,
-    std::vector<cudf::host_span<cuda::std::byte const>>{serialized_roaring_bitmap},
-    std::vector<size_type>{std::numeric_limits<size_type>::max()},
+    serialized_roaring_bitmap.empty()
+      ? std::vector<cudf::host_span<cuda::std::byte const>>{}
+      : std::vector<cudf::host_span<cuda::std::byte const>>{serialized_roaring_bitmap},
+    serialized_roaring_bitmap.empty()
+      ? std::vector<size_type>{}
+      : std::vector<size_type>{std::numeric_limits<size_type>::max()},
     row_group_offsets,
     row_group_num_rows,
     stream,
