@@ -3584,9 +3584,9 @@ class DatetimeIndex(Index):
         >>> import cudf
         >>> import pandas as pd
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
-        ...             periods=3, freq="Y"))
+        ...             periods=3, freq="YE"))
         >>> datetime_index
-        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]', freq='YE-DEC')
+        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[us]', freq='YE-DEC')
         >>> datetime_index.year
         Index([2000, 2001, 2002], dtype='int16')
         """
@@ -3604,9 +3604,9 @@ class DatetimeIndex(Index):
         >>> import cudf
         >>> import pandas as pd
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
-        ...             periods=3, freq="M"))
+        ...             periods=3, freq="ME"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]', freq='ME')
+        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[us]', freq='ME')
         >>> datetime_index.month
         Index([1, 2, 3], dtype='int16')
         """
@@ -3626,7 +3626,7 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="D"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]', freq='D')
+        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[us]', freq='24h')
         >>> datetime_index.day
         Index([1, 2, 3], dtype='int16')
         """
@@ -3648,7 +3648,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 01:00:00',
                     '2000-01-01 02:00:00'],
-                    dtype='datetime64[ns]', freq='h')
+                    dtype='datetime64[us]', freq='h')
         >>> datetime_index.hour
         Index([0, 1, 2], dtype='int16')
         """
@@ -3666,11 +3666,11 @@ class DatetimeIndex(Index):
         >>> import pandas as pd
         >>> import cudf
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
-        ...             periods=3, freq="T"))
+        ...             periods=3, freq="min"))
         >>> datetime_index
         DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:01:00',
                     '2000-01-01 00:02:00'],
-                    dtype='datetime64[ns]', freq='min')
+                    dtype='datetime64[us]', freq='min')
         >>> datetime_index.minute
         Index([0, 1, 2], dtype='int16')
         """
@@ -3692,7 +3692,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:00:01',
                     '2000-01-01 00:00:02'],
-                    dtype='datetime64[ns]', freq='s')
+                    dtype='datetime64[us]', freq='s')
         >>> datetime_index.second
         Index([0, 1, 2], dtype='int16')
         """
@@ -3714,7 +3714,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex([       '2000-01-01 00:00:00', '2000-01-01 00:00:00.000001',
                '2000-01-01 00:00:00.000002'],
-              dtype='datetime64[ns]', freq='us')
+              dtype='datetime64[us]', freq='us')
         >>> datetime_index.microsecond
         Index([0, 1, 2], dtype='int16')
         """
@@ -3760,7 +3760,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]', freq='D')
+                    dtype='datetime64[us]', freq='24h')
         >>> datetime_index.weekday
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
@@ -3783,7 +3783,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]', freq='D')
+                    dtype='datetime64[us]', freq='24h')
         >>> datetime_index.dayofweek
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
@@ -3807,7 +3807,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]', freq='D')
+                    dtype='datetime64[us]', freq='24h')
         >>> datetime_index.dayofyear
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
@@ -3831,7 +3831,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]', freq='D')
+                    dtype='datetime64[us]', freq='24h')
         >>> datetime_index.day_of_year
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
@@ -3894,12 +3894,12 @@ class DatetimeIndex(Index):
         Examples
         --------
         >>> import cudf
-        >>> datetime_index = cudf.date_range("2016-12-31", "2017-01-08", freq="D")
+        >>> datetime_index = cudf.date_range("2016-12-31", "2017-01-08", freq="24h")
         >>> datetime_index
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                        '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                        '2017-01-08'],
-                      dtype='datetime64[ns]', freq='D')
+                      dtype='datetime64[ns]', freq='24h')
         >>> datetime_index.day_name()
         Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
                'Friday', 'Saturday', 'Sunday'],
@@ -3920,7 +3920,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2017-12-30', '2018-01-06', '2018-01-13', '2018-01-20',
                     '2018-01-27', '2018-02-03'],
-                      dtype='datetime64[ns]', freq='7D')
+                      dtype='datetime64[ns]', freq='168h')
         >>> datetime_index.month_name()
         Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='object')
         """
@@ -3967,7 +3967,7 @@ class DatetimeIndex(Index):
         Parameters
         ----------
         freq : str
-            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            One of ["D", "h", "min", "S", "L", "ms", "U", "us", "N"].
             Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
                 user_guide/timeseries.html#timeseries-offset-aliases>`__
@@ -3985,7 +3985,7 @@ class DatetimeIndex(Index):
         ...     "2020-05-31 08:05:42",
         ...     "1999-12-31 18:40:30",
         ... ])
-        >>> gIndex.ceil("T")
+        >>> gIndex.ceil("min")
         DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[ns]')
         """
         return type(self)._from_column(self._column.ceil(freq), name=self.name)
@@ -3998,7 +3998,7 @@ class DatetimeIndex(Index):
         Parameters
         ----------
         freq : str
-            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            One of ["D", "h", "min", "S", "L", "ms", "U", "us", "N"].
             Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
                 user_guide/timeseries.html#timeseries-offset-aliases>`__
@@ -4016,7 +4016,7 @@ class DatetimeIndex(Index):
         ...     "2020-05-31 08:59:59",
         ...     "1999-12-31 18:44:59",
         ... ])
-        >>> gIndex.floor("T")
+        >>> gIndex.floor("min")
         DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
         """
         return type(self)._from_column(
@@ -4031,7 +4031,7 @@ class DatetimeIndex(Index):
         Parameters
         ----------
         freq : str
-            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            One of ["D", "h", "min", "S", "L", "ms", "U", "us", "N"].
             Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
                 user_guide/timeseries.html#timeseries-offset-aliases>`__
@@ -4054,9 +4054,9 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2001-01-01 00:04:45', '2001-01-01 00:04:58',
                        '2001-01-01 00:05:04'],
                       dtype='datetime64[ns]')
-        >>> dt_idx.round('H')
+        >>> dt_idx.round('h')
         DatetimeIndex(['2001-01-01', '2001-01-01', '2001-01-01'], dtype='datetime64[ns]')
-        >>> dt_idx.round('T')
+        >>> dt_idx.round('min')
         DatetimeIndex(['2001-01-01 00:05:00', '2001-01-01 00:05:00', '2001-01-01 00:05:00'], dtype='datetime64[ns]')
         """
         return type(self)._from_column(
@@ -4085,12 +4085,12 @@ class DatetimeIndex(Index):
         --------
         >>> import cudf
         >>> import pandas as pd
-        >>> tz_naive = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
+        >>> tz_naive = cudf.date_range('2018-03-01 09:00', periods=3, freq='24h')
         >>> tz_aware = tz_naive.tz_localize("America/New_York")
         >>> tz_aware
         DatetimeIndex(['2018-03-01 09:00:00-05:00', '2018-03-02 09:00:00-05:00',
                        '2018-03-03 09:00:00-05:00'],
-                      dtype='datetime64[ns, America/New_York]', freq='D')
+                      dtype='datetime64[ns, America/New_York]', freq='24h')
 
         Ambiguous or nonexistent datetimes are converted to NaT.
 
@@ -4098,10 +4098,10 @@ class DatetimeIndex(Index):
         ...                                   '2018-10-28 02:36:00',
         ...                                   '2018-10-28 03:46:00']))
         >>> s.dt.tz_localize("CET")
-        0    2018-10-28 01:20:00.000000000
-        1                              NaT
-        2    2018-10-28 03:46:00.000000000
-        dtype: datetime64[ns, CET]
+        0    2018-10-28 01:20:00.000000
+        1                           NaT
+        2    2018-10-28 03:46:00.000000
+        dtype: datetime64[us, CET]
 
         Notes
         -----
@@ -4135,12 +4135,12 @@ class DatetimeIndex(Index):
         Examples
         --------
         >>> import cudf
-        >>> dti = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
+        >>> dti = cudf.date_range('2018-03-01 09:00', periods=3, freq='24h')
         >>> dti = dti.tz_localize("America/New_York")
         >>> dti
         DatetimeIndex(['2018-03-01 09:00:00-05:00', '2018-03-02 09:00:00-05:00',
                        '2018-03-03 09:00:00-05:00'],
-                      dtype='datetime64[ns, America/New_York]', freq='D')
+                      dtype='datetime64[ns, America/New_York]', freq='24h')
         >>> dti.tz_convert("Europe/London")
         DatetimeIndex(['2018-03-01 14:00:00+00:00',
                        '2018-03-02 14:00:00+00:00',
