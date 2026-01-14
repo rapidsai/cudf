@@ -122,7 +122,7 @@ static void bench_multibyte_split(nvbench::state& state,
   auto device_input = create_random_input(file_size_approx, delim_factor, 0.05, delim);
   auto host_input   = std::vector<char>{};
   auto host_pinned_input =
-    cudf::detail::make_pinned_vector_async<char>(0, cudf::get_default_stream());
+    thrust::host_vector<char>(0, cudf::get_default_stream());
 
   if (source_type != data_chunk_source_type::device &&
       source_type != data_chunk_source_type::host_pinned) {
@@ -131,9 +131,7 @@ static void bench_multibyte_split(nvbench::state& state,
       cudf::get_default_stream());
   }
   if (source_type == data_chunk_source_type::host_pinned) {
-    host_pinned_input.resize(static_cast<std::size_t>(device_input.size()));
-    CUDF_CUDA_TRY(cudaMemcpy(
-      host_pinned_input.data(), device_input.data(), host_pinned_input.size(), cudaMemcpyDefault));
+    host_pinned_input = cudf::detail::make_pinned_vector<char>(device_input, cudf::get_default_stream());
   }
 
   auto source = [&] {
