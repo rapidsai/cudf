@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -152,13 +152,9 @@ def test_dataframe_resample_level():
         ("ms", "1s", "s"),
         ("s", "1min", "s"),
         ("1min", "30s", "s"),
-        ("1D", "10D", "s"),
-        ("10D", "1D", "s"),
+        ("24h", "240h", "s"),
+        ("240h", "24h", "s"),
     ],
-)
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
 )
 def test_resampling_frequency_conversion(in_freq, sampling_freq, out_freq):
     rng = np.random.default_rng(seed=0)
