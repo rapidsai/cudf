@@ -165,7 +165,7 @@ add_library(
   src/DataSourceHelperJni.cpp
   src/HashJoinJni.cpp
   src/HostMemoryBufferNativeUtilsJni.cpp
-  src/KeyRemappingJni.cpp
+  src/JoinFactorizerJni.cpp
   src/HostUDFWrapperJni.cpp
   src/NvcompJni.cpp
   src/NvtxRangeJni.cpp

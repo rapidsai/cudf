@@ -8,7 +8,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/join/join.hpp>
-#include <cudf/join/key_remapping.hpp>
+#include <cudf/join/join_factorizer.hpp>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -34,7 +34,7 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
   }
 
   auto const num_keys     = state.get_int64("num_keys");
-  auto const use_remap    = state.get_int64("use_key_remap") != 0;
+  auto const use_remap    = state.get_int64("use_factorizer") != 0;
   auto const left_size    = static_cast<cudf::size_type>(state.get_int64("left_size"));
   auto const right_size   = static_cast<cudf::size_type>(state.get_int64("right_size"));
   auto const multiplicity = 1;
@@ -70,12 +70,12 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
       // Step 1: Build key remapping (with metrics disabled, the metrics need to be calculated
       //  for the join type selection heuristic, either way)
-      cudf::key_remapping remap(
-        build_keys, NullEquality, cudf::compute_metrics::NO, cudf::get_default_stream());
+      cudf::join_factorizer remap(
+        build_keys, NullEquality, cudf::factorizer_metrics::DISABLE, cudf::get_default_stream());
 
       // Step 2: Remap build and probe keys to integers
-      auto remapped_build = remap.remap_build_keys();
-      auto remapped_probe = remap.remap_probe_keys(probe_keys);
+      auto remapped_build = remap.factorize_build_keys();
+      auto remapped_probe = remap.factorize_probe_keys(probe_keys);
 
       // Step 3: Create table views from remapped columns
       cudf::table_view remapped_build_view({remapped_build->view()});
@@ -114,4 +114,4 @@ NVBENCH_BENCH_TYPES(
   .add_int64_axis("num_keys", nvbench::range(1, 3, 1))
   .add_int64_axis("left_size", {10'000, 100'000})
   .add_int64_axis("right_size", {10'000, 100'000})
-  .add_int64_axis("use_key_remap", {0, 1});
+  .add_int64_axis("use_factorizer", {0, 1});

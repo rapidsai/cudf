@@ -7,15 +7,15 @@
 #include <benchmarks/common/table_utilities.hpp>
 #include <benchmarks/join/join_common.hpp>
 
-#include <cudf/join/key_remapping.hpp>
+#include <cudf/join/join_factorizer.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
 
 /**
- * @brief Benchmark for key_remapping build phase with metrics computation.
+ * @brief Benchmark for join_factorizer build phase with metrics computation.
  *
- * This benchmark isolates the key_remapping construction time (including metrics)
+ * This benchmark isolates the join_factorizer construction time (including metrics)
  * to measure performance across various data types and distributions.
  *
  * Cardinality distributions:
@@ -50,10 +50,10 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto) { return std::string{}; })
 
 template <bool Nullable, data_type DataType, key_cardinality Card>
-void nvbench_key_remap_build(nvbench::state& state,
-                             nvbench::type_list<nvbench::enum_type<Nullable>,
-                                                nvbench::enum_type<DataType>,
-                                                nvbench::enum_type<Card>>)
+void nvbench_join_factorizer_build(nvbench::state& state,
+                                   nvbench::type_list<nvbench::enum_type<Nullable>,
+                                                      nvbench::enum_type<DataType>,
+                                                      nvbench::enum_type<Card>>)
 {
   auto const num_rows = state.get_int64("num_rows");
   auto const num_keys = state.get_int64("num_keys");
@@ -98,8 +98,10 @@ void nvbench_key_remap_build(nvbench::state& state,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    cudf::key_remapping remap(
-      keys, cudf::null_equality::EQUAL, cudf::compute_metrics::YES, cudf::get_default_stream());
+    cudf::join_factorizer remap(keys,
+                                cudf::null_equality::EQUAL,
+                                cudf::factorizer_metrics::ENABLE,
+                                cudf::get_default_stream());
     // Access metrics to ensure they're computed
     [[maybe_unused]] auto dc = remap.get_distinct_count();
     [[maybe_unused]] auto mc = remap.get_max_duplicate_count();
@@ -107,7 +109,7 @@ void nvbench_key_remap_build(nvbench::state& state,
 }
 
 // Data types to test
-using key_remap_datatypes =
+using factorizer_datatypes =
   nvbench::enum_type_list<data_type::INT32, data_type::INT64, data_type::STRING, data_type::STRUCT>;
 
 // Cardinality distributions
@@ -120,9 +122,9 @@ using cardinality_list = nvbench::enum_type_list<key_cardinality::ALL_UNIQUE,
 // Nullable options
 using nullable_list = nvbench::enum_type_list<false>;
 
-NVBENCH_BENCH_TYPES(nvbench_key_remap_build,
-                    NVBENCH_TYPE_AXES(nullable_list, key_remap_datatypes, cardinality_list))
-  .set_name("key_remap_build")
+NVBENCH_BENCH_TYPES(nvbench_join_factorizer_build,
+                    NVBENCH_TYPE_AXES(nullable_list, factorizer_datatypes, cardinality_list))
+  .set_name("join_factorizer_build")
   .set_type_axes_names({"Nullable", "DataType", "Cardinality"})
   .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
   .add_int64_axis("num_keys", {1, 2, 3});

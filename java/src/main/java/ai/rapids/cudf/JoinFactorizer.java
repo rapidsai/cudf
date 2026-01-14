@@ -9,12 +9,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Remaps keys to unique integer IDs.
+ * Factorizes keys from two tables into unique integer IDs with cardinality metadata.
  * <p>
- * Each distinct key in the build table is assigned a unique non-negative integer ID.
+ * This class performs joint factorization of keys from a build table and optional probe table(s).
+ * Each distinct key in the build table is assigned a unique non-negative integer ID (factor).
  * Rows with equal keys will map to the same ID. Keys that cannot be mapped (e.g., not found
  * in probe, or null keys when nulls are unequal) receive negative sentinel values.
  * The specific ID values are stable for the lifetime of this object but are otherwise unspecified.
+ * </p>
+ * <p>
+ * In addition to key factorization, this class tracks important cardinality metadata:
+ * <ul>
+ *   <li>Distinct count: number of unique keys in the build table</li>
+ *   <li>Max duplicate count: maximum frequency of any single key</li>
+ * </ul>
  * </p>
  * <p>
  * <b>Ownership:</b> This class increments the reference counts on the columns from the provided
@@ -31,30 +39,30 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <b>Usage pattern:</b>
  * <pre>{@code
- * try (KeyRemapping remap = new KeyRemapping(buildKeys, true)) {
- *   // Remap build keys (recomputes from cached build table)
- *   try (ColumnVector remappedBuild = remap.remapBuildKeys()) {
- *     // Remap probe keys
- *     try (ColumnVector remappedProbe = remap.remapProbeKeys(probeKeys)) {
- *       // Use remapped integer keys
+ * try (JoinFactorizer factorizer = new JoinFactorizer(buildKeys, true)) {
+ *   // Factorize build keys (recomputes from cached build table)
+ *   try (ColumnVector factorizedBuild = factorizer.factorizeBuildKeys()) {
+ *     // Factorize probe keys
+ *     try (ColumnVector factorizedProbe = factorizer.factorizeProbeKeys(probeKeys)) {
+ *       // Use factorized integer keys
  *     }
  *   }
  * }
  * }</pre>
  * </p>
  */
-public class KeyRemapping implements AutoCloseable {
+public class JoinFactorizer implements AutoCloseable {
   static {
     NativeDepsLoader.loadNativeDeps();
   }
 
-  private static final Logger log = LoggerFactory.getLogger(KeyRemapping.class);
+  private static final Logger log = LoggerFactory.getLogger(JoinFactorizer.class);
 
   /**
    * Sentinel value for probe-side keys not found in build table.
    * <p>
    * This constant is primarily exposed for testing purposes.
-   * It must be kept in sync with KEY_REMAP_NOT_FOUND in cudf/join/key_remapping.hpp.
+   * It must be kept in sync with FACTORIZE_NOT_FOUND in cudf/join/join_factorizer.hpp.
    * </p>
    */
   public static final int NOT_FOUND_SENTINEL = -1;
@@ -63,17 +71,17 @@ public class KeyRemapping implements AutoCloseable {
    * Sentinel value for build-side rows with null keys (when nulls are not equal).
    * <p>
    * This constant is primarily exposed for testing purposes.
-   * It must be kept in sync with KEY_REMAP_BUILD_NULL in cudf/join/key_remapping.hpp.
+   * It must be kept in sync with FACTORIZE_BUILD_NULL in cudf/join/join_factorizer.hpp.
    * </p>
    */
   public static final int BUILD_NULL_SENTINEL = -2;
 
-  private static class KeyRemappingCleaner extends MemoryCleaner.Cleaner {
+  private static class JoinFactorizerCleaner extends MemoryCleaner.Cleaner {
     private Table buildKeys;
     private long nativeHandle;
     private boolean buildKeysReleased = false;
 
-    KeyRemappingCleaner(Table buildKeys, long nativeHandle) {
+    JoinFactorizerCleaner(Table buildKeys, long nativeHandle) {
       this.buildKeys = buildKeys;
       this.nativeHandle = nativeHandle;
       addRef();
@@ -95,7 +103,7 @@ public class KeyRemapping implements AutoCloseable {
           nativeHandle = 0;
         }
         if (logErrorIfNotClean) {
-          log.error("A KEY REMAPPING WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress));
+          log.error("A JOINT FACTORIZER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress));
         }
       }
       return neededCleanup;
@@ -107,20 +115,20 @@ public class KeyRemapping implements AutoCloseable {
     }
   }
 
-  private final KeyRemappingCleaner cleaner;
+  private final JoinFactorizerCleaner cleaner;
   private final NullEquality nullEquality;
   private final boolean computeMetrics;
   private boolean isClosed = false;
 
   /**
-   * Construct a key remapping structure from build keys.
+   * Construct a joint factorizer from build keys.
    * <p>
    * This constructor increments the reference counts on the columns from the provided table,
    * creating a shared reference to the underlying column data. The original table is not
    * affected and the caller retains ownership of it.
    * </p>
    *
-   * @param buildKeys table containing the keys to build from. The column reference counts
+   * @param buildKeys table containing the keys to factorize. The column reference counts
    *        will be incremented; the caller retains ownership of this table.
    * @param nullEquality how null key values should be compared.
    *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
@@ -129,13 +137,13 @@ public class KeyRemapping implements AutoCloseable {
    *        If false, skip metrics computation for better performance; calling
    *        {@link #getDistinctCount()} or {@link #getMaxDuplicateCount()} will throw.
    */
-  public KeyRemapping(Table buildKeys, NullEquality nullEquality, boolean computeMetrics) {
+  public JoinFactorizer(Table buildKeys, NullEquality nullEquality, boolean computeMetrics) {
     this.nullEquality = nullEquality;
     this.computeMetrics = computeMetrics;
     Table buildTable = new Table(buildKeys.getColumns());
     try {
       long handle = create(buildTable.getNativeView(), nullEquality.nullsEqual, computeMetrics);
-      this.cleaner = new KeyRemappingCleaner(buildTable, handle);
+      this.cleaner = new JoinFactorizerCleaner(buildTable, handle);
       MemoryCleaner.register(this, cleaner);
     } catch (Throwable t) {
       try {
@@ -148,22 +156,22 @@ public class KeyRemapping implements AutoCloseable {
   }
 
   /**
-   * Construct a key remapping structure from build keys with metrics computation enabled.
+   * Construct a joint factorizer from build keys with metrics computation enabled.
    *
-   * @param buildKeys table containing the keys to build from
+   * @param buildKeys table containing the keys to factorize
    * @param nullEquality how null key values should be compared
    */
-  public KeyRemapping(Table buildKeys, NullEquality nullEquality) {
+  public JoinFactorizer(Table buildKeys, NullEquality nullEquality) {
     this(buildKeys, nullEquality, true);
   }
 
   /**
-   * Construct a key remapping structure from build keys with nulls comparing equal
+   * Construct a joint factorizer from build keys with nulls comparing equal
    * and metrics computation enabled.
    *
-   * @param buildKeys table containing the keys to build from
+   * @param buildKeys table containing the keys to factorize
    */
-  public KeyRemapping(Table buildKeys) {
+  public JoinFactorizer(Table buildKeys) {
     this(buildKeys, NullEquality.EQUAL, true);
   }
 
@@ -179,12 +187,12 @@ public class KeyRemapping implements AutoCloseable {
   }
 
   /**
-   * Get the native handle to the key remapping structure.
+   * Get the native handle to the joint factorizer structure.
    * <p><b>Internal use only.</b></p>
    */
   long getNativeHandle() {
     if (isClosed) {
-      throw new IllegalStateException("KeyRemapping is already closed");
+      throw new IllegalStateException("JoinFactorizer is already closed");
     }
     return cleaner.nativeHandle;
   }
@@ -215,7 +223,7 @@ public class KeyRemapping implements AutoCloseable {
    */
   public int getDistinctCount() {
     if (isClosed) {
-      throw new IllegalStateException("KeyRemapping is already closed");
+      throw new IllegalStateException("JoinFactorizer is already closed");
     }
     return getDistinctCount(cleaner.nativeHandle);
   }
@@ -228,7 +236,7 @@ public class KeyRemapping implements AutoCloseable {
    */
   public int getMaxDuplicateCount() {
     if (isClosed) {
-      throw new IllegalStateException("KeyRemapping is already closed");
+      throw new IllegalStateException("JoinFactorizer is already closed");
     }
     return getMaxDuplicateCount(cleaner.nativeHandle);
   }
@@ -243,8 +251,8 @@ public class KeyRemapping implements AutoCloseable {
    * <ul>
    *   <li>The caller owns the returned Table and is responsible for closing it</li>
    *   <li>The caller must ensure the returned Table remains valid (not closed, not spilled)
-   *       for as long as this KeyRemapping object is in use</li>
-   *   <li>When this KeyRemapping is closed, it will NOT close the build keys table</li>
+   *       for as long as this JoinFactorizer object is in use</li>
+   *   <li>When this JoinFactorizer is closed, it will NOT close the build keys table</li>
    *   <li>This method can only be called once; subsequent calls will throw an exception</li>
    * </ul>
    * </p>
@@ -259,7 +267,7 @@ public class KeyRemapping implements AutoCloseable {
    */
   public synchronized Table releaseBuildKeys() {
     if (isClosed) {
-      throw new IllegalStateException("KeyRemapping is already closed");
+      throw new IllegalStateException("JoinFactorizer is already closed");
     }
     if (cleaner.buildKeysReleased) {
       throw new IllegalStateException("Build keys have already been released");
@@ -281,30 +289,30 @@ public class KeyRemapping implements AutoCloseable {
   }
 
   /**
-   * Remap build keys to integer IDs.
+   * Factorize build keys to integer IDs.
    * <p>
-   * Recomputes the remapped build table from the cached build keys. This does not cache
-   * the remapped table; each call will recompute it from the key remapping.
+   * Computes the factorized build table from the cached build keys. This does not cache
+   * the factorized table; each call will recompute it from the internal hash table.
    * </p>
    * <p>
-   * For each row in the cached build table, returns the integer ID assigned to that key.
-   * Non-negative integers represent valid mapped keys, while negative values represent
-   * keys that cannot be mapped (e.g., null keys when nulls are unequal).
+   * For each row in the cached build table, returns the integer ID (factor) assigned to that key.
+   * Non-negative integers represent valid factorized keys, while negative values represent
+   * keys that cannot be factorized (e.g., null keys when nulls are unequal).
    * </p>
    *
-   * @return A column of INT32 values with the remapped key IDs (caller must close)
+   * @return A column of INT32 values with the factorized key IDs (caller must close)
    */
-  public ColumnVector remapBuildKeys() {
+  public ColumnVector factorizeBuildKeys() {
     if (isClosed) {
-      throw new IllegalStateException("KeyRemapping is already closed");
+      throw new IllegalStateException("JoinFactorizer is already closed");
     }
-    return new ColumnVector(remapBuildKeys(cleaner.nativeHandle));
+    return new ColumnVector(factorizeBuildKeys(cleaner.nativeHandle));
   }
 
   /**
-   * Remap probe keys to integer IDs.
+   * Factorize probe keys to integer IDs.
    * <p>
-   * For each row in the input, returns the integer ID assigned to that key.
+   * For each row in the input, returns the integer ID (factor) assigned to that key.
    * The keys table must have the same schema (number and types of columns) as
    * the build table used to construct this object.
    * </p>
@@ -314,16 +322,16 @@ public class KeyRemapping implements AutoCloseable {
    * are unequal, or keys not present in the build table).
    * </p>
    *
-   * @param keys The probe keys to remap (must have same schema as build table)
-   * @return A column of INT32 values with the remapped key IDs (caller must close)
+   * @param keys The probe keys to factorize (must have same schema as build table)
+   * @return A column of INT32 values with the factorized key IDs (caller must close)
    * @throws IllegalArgumentException if keys has different number of columns than build table
    * @throws CudfException if keys has different column types than build table
    */
-  public ColumnVector remapProbeKeys(Table keys) {
+  public ColumnVector factorizeProbeKeys(Table keys) {
     if (isClosed) {
-      throw new IllegalStateException("KeyRemapping is already closed");
+      throw new IllegalStateException("JoinFactorizer is already closed");
     }
-    return new ColumnVector(remapProbeKeys(cleaner.nativeHandle, keys.getNativeView()));
+    return new ColumnVector(factorizeProbeKeys(cleaner.nativeHandle, keys.getNativeView()));
   }
 
   // Native methods
@@ -331,6 +339,6 @@ public class KeyRemapping implements AutoCloseable {
   private static native void destroy(long handle);
   private static native int getDistinctCount(long handle);
   private static native int getMaxDuplicateCount(long handle);
-  private static native long remapBuildKeys(long handle);
-  private static native long remapProbeKeys(long handle, long keysTableView);
+  private static native long factorizeBuildKeys(long handle);
+  private static native long factorizeProbeKeys(long handle, long keysTableView);
 }

@@ -10,10 +10,10 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Basic tests to validate JNI plumbing for KeyRemapping.
+ * Basic tests to validate JNI plumbing for JoinFactorizer.
  * Comprehensive algorithm testing is done in C++ tests.
  */
-public class KeyRemappingTest extends CudfTestBase {
+public class JoinFactorizerTest extends CudfTestBase {
 
   @Test
   void testBasicIntegerKeys() {
@@ -21,14 +21,14 @@ public class KeyRemappingTest extends CudfTestBase {
     try (Table buildTable = new Table.TestBuilder()
             .column(1, 2, 3, 2, 1)
             .build();
-         KeyRemapping remap = new KeyRemapping(buildTable)) {
+         JoinFactorizer remap = new JoinFactorizer(buildTable)) {
 
       // Verify counts
       assertEquals(3, remap.getDistinctCount());
       assertEquals(2, remap.getMaxDuplicateCount());
 
       // Verify we can remap and get non-negative IDs
-      try (ColumnVector result = remap.remapBuildKeys();
+      try (ColumnVector result = remap.factorizeBuildKeys();
            HostColumnVector hostResult = result.copyToHost()) {
         assertEquals(5, hostResult.getRowCount());
         for (int i = 0; i < hostResult.getRowCount(); i++) {
@@ -43,14 +43,14 @@ public class KeyRemappingTest extends CudfTestBase {
     try (Table buildTable = new Table.TestBuilder()
             .column("apple", "banana", null, "cherry", "banana", null)
             .build();
-         KeyRemapping remap = new KeyRemapping(buildTable)) {
+         JoinFactorizer remap = new JoinFactorizer(buildTable)) {
 
       // Distinct keys: "apple", "banana", null, "cherry" = 4 (with default EQUAL null handling)
       assertEquals(4, remap.getDistinctCount());
       // "banana" appears twice, null appears twice = max duplicate count 2
       assertEquals(2, remap.getMaxDuplicateCount());
 
-      try (ColumnVector result = remap.remapBuildKeys();
+      try (ColumnVector result = remap.factorizeBuildKeys();
            HostColumnVector hostResult = result.copyToHost()) {
         assertEquals(6, hostResult.getRowCount());
       }
@@ -62,16 +62,16 @@ public class KeyRemappingTest extends CudfTestBase {
     try (Table buildTable = new Table.TestBuilder()
             .column(1, 2, 3)
             .build();
-         KeyRemapping remap = new KeyRemapping(buildTable);
+         JoinFactorizer remap = new JoinFactorizer(buildTable);
          Table probeTable = new Table.TestBuilder()
             .column(4, 5)  // Keys not in build
             .build();
-         ColumnVector result = remap.remapProbeKeys(probeTable);
+         ColumnVector result = remap.factorizeProbeKeys(probeTable);
          HostColumnVector hostResult = result.copyToHost()) {
 
       // All probe keys should be NOT_FOUND
       for (int i = 0; i < hostResult.getRowCount(); i++) {
-        assertEquals(KeyRemapping.NOT_FOUND_SENTINEL, hostResult.getInt(i));
+        assertEquals(JoinFactorizer.NOT_FOUND_SENTINEL, hostResult.getInt(i));
       }
     }
   }
@@ -81,13 +81,13 @@ public class KeyRemappingTest extends CudfTestBase {
     // With EQUAL, nulls are treated as equal and get valid IDs
     try (ColumnVector col = ColumnVector.fromBoxedInts(1, 2, null, 2);
          Table buildTable = new Table(col);
-         KeyRemapping remap = new KeyRemapping(buildTable, NullEquality.EQUAL)) {
+         JoinFactorizer remap = new JoinFactorizer(buildTable, NullEquality.EQUAL)) {
 
       // Distinct: 1, 2, null = 3
       assertEquals(3, remap.getDistinctCount());
       assertEquals(NullEquality.EQUAL, remap.getNullEquality());
 
-      try (ColumnVector result = remap.remapBuildKeys();
+      try (ColumnVector result = remap.factorizeBuildKeys();
            HostColumnVector hostResult = result.copyToHost()) {
         // All IDs should be non-negative (including null row)
         for (int i = 0; i < hostResult.getRowCount(); i++) {
@@ -102,16 +102,16 @@ public class KeyRemappingTest extends CudfTestBase {
     // With UNEQUAL, null rows get BUILD_NULL_SENTINEL
     try (ColumnVector col = ColumnVector.fromBoxedInts(1, 2, null, 2);
          Table buildTable = new Table(col);
-         KeyRemapping remap = new KeyRemapping(buildTable, NullEquality.UNEQUAL)) {
+         JoinFactorizer remap = new JoinFactorizer(buildTable, NullEquality.UNEQUAL)) {
 
       // Distinct: 1, 2 = 2 (null is skipped)
       assertEquals(2, remap.getDistinctCount());
       assertEquals(NullEquality.UNEQUAL, remap.getNullEquality());
 
-      try (ColumnVector result = remap.remapBuildKeys();
+      try (ColumnVector result = remap.factorizeBuildKeys();
            HostColumnVector hostResult = result.copyToHost()) {
         // Null row (index 2) should have BUILD_NULL_SENTINEL
-        assertEquals(KeyRemapping.BUILD_NULL_SENTINEL, hostResult.getInt(2));
+        assertEquals(JoinFactorizer.BUILD_NULL_SENTINEL, hostResult.getInt(2));
         // Non-null rows should have non-negative IDs
         assertTrue(hostResult.getInt(0) >= 0);
         assertTrue(hostResult.getInt(1) >= 0);
@@ -125,7 +125,7 @@ public class KeyRemappingTest extends CudfTestBase {
     try (Table buildTable = new Table.TestBuilder()
             .column(new Integer[0])
             .build();
-         KeyRemapping remap = new KeyRemapping(buildTable)) {
+         JoinFactorizer remap = new JoinFactorizer(buildTable)) {
 
       assertEquals(0, remap.getDistinctCount());
       assertEquals(0, remap.getMaxDuplicateCount());
@@ -137,7 +137,7 @@ public class KeyRemappingTest extends CudfTestBase {
     Table buildTable = new Table.TestBuilder()
             .column(1, 2, 3)
             .build();
-    try (KeyRemapping remap = new KeyRemapping(buildTable)) {
+    try (JoinFactorizer remap = new JoinFactorizer(buildTable)) {
       assertFalse(remap.isBuildKeysReleased());
 
       // Release the build keys

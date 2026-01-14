@@ -25,15 +25,15 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
- * @brief Enum to control whether key remapping metrics should be computed
+ * @brief Enum to control whether factorization metrics should be computed
  */
 enum class compute_metrics : bool { NO = false, YES = true };
 
 namespace detail {
 /**
- * @brief Forward declaration for key remapping implementation
+ * @brief Forward declaration for join factorizer implementation
  */
-class key_remapping_impl;
+class join_factorizer_impl;
 }  // namespace detail
 
 /**
@@ -43,7 +43,7 @@ class key_remapping_impl;
  * Application code should check for negative values rather than relying on specific sentinel
  * values.
  */
-constexpr size_type KEY_REMAP_NOT_FOUND = -1;
+constexpr size_type FACTORIZE_NOT_FOUND = -1;
 
 /**
  * @brief Sentinel value for build-side rows with null keys (when nulls are not equal)
@@ -52,72 +52,77 @@ constexpr size_type KEY_REMAP_NOT_FOUND = -1;
  * Application code should check for negative values rather than relying on specific sentinel
  * values.
  */
-constexpr size_type KEY_REMAP_BUILD_NULL = -2;
+constexpr size_type FACTORIZE_BUILD_NULL = -2;
 
 /**
- * @brief Remaps keys to unique integer IDs
+ * @brief Factorizes keys from two tables into unique integer IDs with cardinality metadata
  *
- * Each distinct key in the build table is assigned a unique non-negative integer ID.
- * Rows with equal keys will map to the same ID. Keys that cannot be mapped (e.g., not found
- * in probe, or null keys when nulls are unequal) receive negative sentinel values.
+ * This class performs factorization of keys from a build table and optional probe table(s)
+ * for join operations. Each distinct key in the build table is assigned a unique non-negative
+ * integer ID (factor). Rows with equal keys will map to the same ID. Keys that cannot be mapped
+ * (e.g., not found in probe, or null keys when nulls are unequal) receive negative sentinel values.
  * The specific ID values are stable for the lifetime of this object but are otherwise unspecified.
+ *
+ * In addition to key factorization, this class tracks important cardinality metadata:
+ * - Distinct count: number of unique keys in the build table
+ * - Max duplicate count: maximum frequency of any single key
  *
  * @note The build table must remain valid for the lifetime of this object,
  *       as the hash table references it directly without copying.
  * @note All NaNs are considered equal
  */
-class key_remapping {
+class join_factorizer {
  public:
-  key_remapping() = delete;
-  ~key_remapping();
-  key_remapping(key_remapping const&)            = delete;
-  key_remapping(key_remapping&&)                 = delete;
-  key_remapping& operator=(key_remapping const&) = delete;
-  key_remapping& operator=(key_remapping&&)      = delete;
+  join_factorizer() = delete;
+  ~join_factorizer();
+  join_factorizer(join_factorizer const&)            = delete;
+  join_factorizer(join_factorizer&&)                 = delete;
+  join_factorizer& operator=(join_factorizer const&) = delete;
+  join_factorizer& operator=(join_factorizer&&)      = delete;
 
   /**
-   * @brief Constructs a key remapping structure from the given build keys.
+   * @brief Constructs a join factorizer from the given build keys.
    *
    * @throw cudf::logic_error if the build table has no columns
    *
-   * @param build The build table containing the keys to remap
+   * @param build The build table containing the keys to factorize
    * @param compare_nulls Controls whether null key values should match or not.
    *        When EQUAL, null keys are treated as equal and assigned a valid non-negative ID.
    *        When UNEQUAL, rows with null keys receive a negative sentinel value.
    * @param metrics Controls whether to compute distinct_count and max_duplicate_count.
-   *        If YES (default), compute metrics for later retrieval via get_distinct_count()
-   *        and get_max_duplicate_count(). If NO, skip metrics computation for better performance;
-   *        calling get_distinct_count() or get_max_duplicate_count() will throw.
+   *        If ENABLE (default), compute metrics for later retrieval via get_distinct_count()
+   *        and get_max_duplicate_count(). If DISABLE, skip metrics computation for better
+   * performance; calling get_distinct_count() or get_max_duplicate_count() will throw.
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  key_remapping(cudf::table_view const& build,
-                null_equality compare_nulls   = null_equality::EQUAL,
-                cudf::compute_metrics metrics = cudf::compute_metrics::YES,
-                rmm::cuda_stream_view stream  = cudf::get_default_stream());
+  join_factorizer(cudf::table_view const& build,
+                  null_equality compare_nulls      = null_equality::EQUAL,
+                  cudf::factorizer_metrics metrics = cudf::factorizer_metrics::ENABLE,
+                  rmm::cuda_stream_view stream     = cudf::get_default_stream());
 
   /**
-   * @brief Remap build keys to integer IDs.
+   * @brief Factorize build keys to integer IDs.
    *
-   * Recomputes the remapped build table from the cached build keys. This does not cache
-   * the remapped table; each call will recompute it from the key remapping.
+   * Computes the factorized build table from the cached build keys. This does not cache
+   * the factorized table; each call will recompute it from the internal hash table.
    *
-   * For each row in the cached build table, returns the integer ID assigned to that key.
-   * Non-negative integers represent valid mapped keys, while negative values represent
-   * keys that cannot be mapped (e.g., null keys when nulls are unequal).
+   * For each row in the cached build table, returns the integer ID (factor) assigned to that key.
+   * Non-negative integers represent valid factorized keys, while negative values represent
+   * keys that cannot be factorized (e.g., null keys when nulls are unequal).
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
    *
-   * @return A column of INT32 values with the remapped key IDs
+   * @return A column of INT32 values with the factorized key IDs
    */
-  [[nodiscard]] std::unique_ptr<cudf::column> remap_build_keys(
+  [[nodiscard]] std::unique_ptr<cudf::column> factorize_build_keys(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
-   * @brief Remap probe keys to integer IDs.
+   * @brief Factorize probe keys to integer IDs.
    *
-   * For each row in the input, returns the integer ID assigned to that key.
+   * For each row in the input, returns the integer ID (factor) assigned to that key.
    * Non-negative integers represent keys found in the build table, while negative values
    * represent keys that were not found or cannot be matched (e.g., null keys when nulls
    * are unequal, or keys not present in the build table).
@@ -125,13 +130,13 @@ class key_remapping {
    * @throw std::invalid_argument if keys has different number of columns than build table
    * @throw cudf::data_type_error if keys has different column types than build table
    *
-   * @param keys The probe keys to remap (must have same schema as build table)
+   * @param keys The probe keys to factorize (must have same schema as build table)
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
    *
-   * @return A column of INT32 values with the remapped key IDs
+   * @return A column of INT32 values with the factorized key IDs
    */
-  [[nodiscard]] std::unique_ptr<cudf::column> remap_probe_keys(
+  [[nodiscard]] std::unique_ptr<cudf::column> factorize_probe_keys(
     cudf::table_view const& keys,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
@@ -162,7 +167,7 @@ class key_remapping {
   [[nodiscard]] size_type get_max_duplicate_count() const;
 
  private:
-  using impl_type = cudf::detail::key_remapping_impl;
+  using impl_type = cudf::detail::join_factorizer_impl;
 
   std::unique_ptr<impl_type> _impl;
 };
