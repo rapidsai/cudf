@@ -645,6 +645,7 @@ struct EncPage {
   PageType page_type;      //!< Page type
   Encoding encoding;       //!< Encoding used for page data
   uint16_t num_fragments;  //!< Number of fragments in page
+  bool is_compressed;      //!< Whether this page is compressed (for V2 page-level compression)
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_v2() const
   {
