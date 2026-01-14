@@ -530,7 +530,7 @@ template <typename T>
 host_vector<T> make_pinned_vector_async(host_span<T const> v, rmm::cuda_stream_view stream)
 {
   auto result = make_pinned_vector_async<T>(v.size(), stream);
-  std::move(v.begin(), v.end(), result.begin());
+  std::copy(v.begin(), v.end(), result.begin());
   return result;
 }
 

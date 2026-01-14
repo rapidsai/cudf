@@ -1044,8 +1044,7 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               cuda::std::plus<>{},
                               _stream);
 
-  auto col_string_sizes = cudf::detail::make_pinned_vector(d_col_sizes, _stream);
-  return col_string_sizes;
+  return cudf::detail::make_pinned_vector(d_col_sizes, _stream);
 }
 
 }  // namespace cudf::io::parquet::detail
