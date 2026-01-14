@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from cython.operator cimport dereference
 
@@ -977,6 +977,26 @@ cdef class ParquetWriterOptionsBuilder:
         Self
         """
         self.c_obj.write_v2_headers(enabled)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder page_level_compression(self, bool enabled):
+        """
+        Set to true to enable per-page compression decisions for V2 data pages.
+
+        When enabled, each V2 data page independently decides whether to compress
+        based on compression ratio. When disabled (default), all V2 data pages
+        in a chunk follow the same compression decision as dictionary pages.
+
+        Parameters
+        ----------
+        enabled : bool
+            Boolean value to enable/disable per-page compression decisions.
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.page_level_compression(enabled)
         return self
 
     cpdef ParquetWriterOptionsBuilder dictionary_policy(self, dictionary_policy_t val):
