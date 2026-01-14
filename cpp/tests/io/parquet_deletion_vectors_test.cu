@@ -113,8 +113,11 @@ auto serialize_deletion_vector(roaring::api::roaring64_bitmap_t const* deletion_
   auto serialized_bitmap   = thrust::host_vector<cuda::std::byte>(num_bytes);
   auto const bytes_written = roaring::api::roaring64_bitmap_portable_serialize(
     deletion_vector, reinterpret_cast<char*>(serialized_bitmap.data()));
-  CUDF_EXPECTS(bytes_written == num_bytes,
-               "Number of bytes written must match the number of bytes in the bitmap");
+  EXPECT_EQ(bytes_written, num_bytes);
+  auto num_buckets = uint64_t{0};
+  std::memcpy(
+    &num_buckets, reinterpret_cast<uint64_t*>(serialized_bitmap.data()), sizeof(uint64_t));
+  EXPECT_LT(num_buckets, std::numeric_limits<cudf::size_type>::max());
   return serialized_bitmap;
 }
 
@@ -249,9 +252,12 @@ void test_read_parquet_and_apply_deletion_vector(
     deletion_vector_row_counts.emplace_back(num_input_rows);
   }
 
-  // Insert the first serialized roaring bitmap
-  auto serialized_roaring_bitmaps = std::vector<cudf::host_span<cuda::std::byte const>>{};
+  // Vector to store serialized roaring bitmap data and spans
+  auto serialized_roaring_bitmaps_data = std::vector<thrust::host_vector<cuda::std::byte>>{};
+  auto serialized_roaring_bitmaps      = std::vector<cudf::host_span<cuda::std::byte const>>{};
+  serialized_roaring_bitmaps_data.reserve(num_concat - 1);
   serialized_roaring_bitmaps.reserve(num_concat);
+  // Insert the first serialized roaring bitmap span
   serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmap);
 
   // Build the expected table
@@ -287,7 +293,8 @@ void test_read_parquet_and_apply_deletion_vector(
                                                  stream,
                                                  mr));
         table_views.emplace_back(tables.back()->view());
-        serialized_roaring_bitmaps.emplace_back(std::move(local_deletion_vector));
+        serialized_roaring_bitmaps_data.emplace_back(std::move(local_deletion_vector));
+        serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmaps_data.back());
       }
 
       return cudf::concatenate(table_views, stream, mr);
