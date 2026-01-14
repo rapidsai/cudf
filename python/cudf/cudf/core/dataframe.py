@@ -5911,23 +5911,22 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
         num_cols = len(data[0])
-
-        if columns is None and data.dtype.names is None:
-            names = range(num_cols)
-
-        elif (names := data.dtype.names) is not None:
-            if diff := set(columns) - set(names):
-                raise ValueError(
-                    f"Found columns that don't exist in data: {diff}"
-                )
-
-        else:
+        if columns is not None:
+            if (names := data.dtype.names) is not None:
+                if diff := set(columns) - set(names):
+                    raise ValueError(
+                        f"Found columns that don't exist in data: {diff}"
+                    )
             if len(columns) != num_cols:
                 raise ValueError(
                     f"columns length expected {num_cols} "
                     f"but found {len(columns)}"
                 )
             names = columns
+        elif data.dtype.names is None:
+            names = range(num_cols)
+        else:
+            names = data.dtype.names
 
         if data.ndim == 2:
             ca_data = {
@@ -5952,7 +5951,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         df = cls._from_data(
             ColumnAccessor(
-                data=ca_data,  # type: ignore[arg-type]
+                data=ca_data,
                 multiindex=isinstance(
                     columns, (pd.MultiIndex, cudf.MultiIndex)
                 ),
