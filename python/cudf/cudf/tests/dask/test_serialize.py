@@ -383,10 +383,7 @@ def test_serialize_string_check_buffer_sizes():
     header, frames = df.serialize()
     # Frames can be either Buffer (on GPU, use .size) or memoryview
     # (spilled to CPU, use .nbytes). See SpillableBuffer.serialize().
-    got = sum(
-        b.size if isinstance(b, cudf.core.buffer.Buffer) else b.nbytes
-        for b in frames
-    )
+    got = sum(b.nbytes for b in frames)
     assert expect == got
 
 
