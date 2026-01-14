@@ -152,8 +152,8 @@ def test_dataframe_resample_level():
         ("ms", "1s", "s"),
         ("s", "1min", "s"),
         ("1min", "30s", "s"),
-        ("24h", "240h", "s"),
-        ("240h", "24h", "s"),
+        ("1D", "10D", "s"),
+        ("10D", "1D", "s"),
     ],
 )
 def test_resampling_frequency_conversion(in_freq, sampling_freq, out_freq):
