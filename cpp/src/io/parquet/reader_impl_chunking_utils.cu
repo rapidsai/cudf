@@ -14,6 +14,7 @@
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -505,6 +506,26 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     // at this point, the codec contains info for both dictionary pass pages and data subpass pages
     total_decomp_size += codec.total_decomp_size;
     num_comp_pages += codec.num_pages;
+  }
+
+  // Log V2 pages that are uncompressed in compressed chunks
+  {
+    size_t total_v2_pages       = 0;
+    size_t uncompressed_v2_data = 0;
+    for (auto const& page : subpass_pages) {
+      if ((page.flags & PAGEINFO_FLAGS_V2) and not(page.flags & PAGEINFO_FLAGS_DICTIONARY) and
+          chunks[page.chunk_idx].codec != Compression::UNCOMPRESSED) {
+        total_v2_pages++;
+        if (not page.is_compressed) { uncompressed_v2_data++; }
+      }
+    }
+    if (uncompressed_v2_data > 0) {
+      CUDF_LOG_WARN(
+        "Parquet reader: %zu/%zu V2 data pages in compressed chunks are stored uncompressed "
+        "(per-page compression)",
+        uncompressed_v2_data,
+        total_v2_pages);
+    }
   }
 
   // Dispatch batches of pages to decompress for each codec.
