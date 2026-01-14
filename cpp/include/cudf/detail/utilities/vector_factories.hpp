@@ -517,12 +517,12 @@ host_vector<typename Container::value_type> make_pinned_vector_async(Container c
 
 /**
  * @brief Asynchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
- * from a `host_span` (pageable memory)
+ * from a `host_span`
  *
  * @note This function does not synchronize `stream`.
  *
  * @tparam T The type of the data to copy
- * @param v The pageable host data to copy
+ * @param v The host data to copy
  * @param stream The stream on which to allocate memory
  * @return The data copied to pinned host memory
  */
