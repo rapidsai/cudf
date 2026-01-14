@@ -152,7 +152,7 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, cudf::detail::lead_lag_aggregation const& agg) override
   {
-    // no preprocess operation for non-fixed-width and dictionary
+    // no preprocess operation for non-fixed-width and non-dictionary
     if (!cudf::is_fixed_width(col_type) && !cudf::is_dictionary(col_type)) { return {}; }
     // otherwise, pass through
     std::vector<std::unique_ptr<aggregation>> aggs;
