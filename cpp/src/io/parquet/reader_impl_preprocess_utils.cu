@@ -520,15 +520,15 @@ void decode_page_headers(pass_intermediate_data& pass,
 
   // compute max bytes needed for level data
   auto level_bit_size = cudf::detail::make_counting_transform_iterator(
-    0, cuda::proclaim_return_type<int>([chunks = pass.chunks.d_begin()] __device__(int i) {
+    0, cuda::proclaim_return_type<int32_t>([chunks = pass.chunks.d_begin()] __device__(int i) {
       auto c = chunks[i];
-      return static_cast<int>(
-        max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
+      return std::max<int32_t>(c.level_bits[level_type::REPETITION],
+                               c.level_bits[level_type::DEFINITION]);
     }));
   // max level data bit size.
   auto const max_level_bits = cudf::detail::reduce(
     level_bit_size, level_bit_size + pass.chunks.size(), int{0}, cuda::maximum<int>{}, stream);
-  pass.level_type_size = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
+  pass.level_type_size = std::max<int32_t>(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
   pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);

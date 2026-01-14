@@ -154,6 +154,12 @@ class BufferOwner(Serializable):
         return self._size
 
     @property
+    def nbytes(self) -> int:
+        """Size of the buffer in bytes."""
+        # Note: this property is used by `distributed.utils.nbytes`, please do not remove.
+        return self._size
+
+    @property
     def owner(self) -> object:
         """Object owning the memory of the buffer."""
         return self._owner
@@ -255,6 +261,12 @@ class Buffer(Serializable):
     @property
     def size(self) -> int:
         """Size of the buffer in bytes."""
+        return self._size
+
+    @property
+    def nbytes(self) -> int:
+        """Size of the buffer in bytes."""
+        # Note: this property is used by `distributed.utils.nbytes`, please do not remove.
         return self._size
 
     @property
