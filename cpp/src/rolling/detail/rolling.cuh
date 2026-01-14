@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -96,31 +96,29 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   // NOTE : all other aggregations are passed through unchanged via the default
   // visit() function in the simple_aggregations_collector.
 
-  // MIN aggregations with strings are processed in 2 passes. The first pass performs
+  // MIN aggregations with compound columns are processed in 2 passes. The first pass performs
   // the rolling operation on a ARGMIN aggregation to generate indices instead of values.
-  // Then a second pass uses those indices to gather the final strings.  This step
+  // Then a second pass uses those indices to gather the final results.  This step
   // translates the MIN -> ARGMIN aggregation
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                   cudf::detail::min_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING || col_type.id() == type_id::STRUCT
-                     ? make_argmin_aggregation()
-                     : make_min_aggregation());
+    aggs.push_back(cudf::is_compound(col_type) ? make_argmin_aggregation()
+                                               : make_min_aggregation());
     return aggs;
   }
 
-  // MAX aggregations with strings are processed in 2 passes. The first pass performs
+  // MAX aggregations with compound columns are processed in 2 passes. The first pass performs
   // the rolling operation on a ARGMAX aggregation to generate indices instead of values.
-  // Then a second pass uses those indices to gather the final strings.  This step
+  // Then a second pass uses those indices to gather the final result.  This step
   // translates the MAX -> ARGMAX aggregation
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                   cudf::detail::max_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING || col_type.id() == type_id::STRUCT
-                     ? make_argmax_aggregation()
-                     : make_max_aggregation());
+    aggs.push_back(cudf::is_compound(col_type) ? make_argmax_aggregation()
+                                               : make_max_aggregation());
     return aggs;
   }
 
@@ -154,8 +152,8 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, cudf::detail::lead_lag_aggregation const& agg) override
   {
-    // no rolling operation for non-fixed width.  just a postprocess step at the end
-    if (!cudf::is_fixed_width(col_type)) { return {}; }
+    // no preprocess operation for non-fixed-width and dictionary
+    if (!cudf::is_fixed_width(col_type) && !cudf::is_dictionary(col_type)) { return {}; }
     // otherwise, pass through
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(agg.clone());
@@ -213,7 +211,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
   // perform a final gather on the generated ARGMIN data
   void visit(cudf::detail::min_aggregation const&) override
   {
-    if (result_type.id() == type_id::STRING || result_type.id() == type_id::STRUCT) {
+    if (cudf::is_compound(result_type)) {
       // The rows that represent null elements will have negative values in gather map,
       // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
       auto output_table = detail::gather(table_view{{input}},
@@ -231,7 +229,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
   // perform a final gather on the generated ARGMAX data
   void visit(cudf::detail::max_aggregation const&) override
   {
-    if (result_type.id() == type_id::STRING || result_type.id() == type_id::STRUCT) {
+    if (cudf::is_compound(result_type)) {
       // The rows that represent null elements will have negative values in gather map,
       // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
       auto output_table = detail::gather(table_view{{input}},
@@ -296,8 +294,13 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
   // LEAD and LAG have custom behaviors for non fixed-width types.
   void visit(cudf::detail::lead_lag_aggregation const& agg) override
   {
-    // if this is non-fixed width, run the custom lead-lag code
-    if (!cudf::is_fixed_width(result_type)) {
+    if (cudf::is_dictionary(result_type)) {
+      // 'intermediate' is the column of indices for the output dictionary
+      auto keys =  // copy the keys
+        std::make_unique<cudf::column>(cudf::dictionary_column_view(input).keys(), stream, mr);
+      result = cudf::make_dictionary_column(std::move(keys), std::move(intermediate), stream, mr);
+    } else if (cudf::is_compound(result_type)) {
+      // custom lead-lag used to gather column results for compound columns
       result =
         cudf::detail::compute_lead_lag_for_nested<PrecedingWindowIterator, FollowingWindowIterator>(
           agg.kind,
@@ -442,8 +445,16 @@ struct rolling_window_launcher {
     requires(corresponding_rolling_operator<InputType, op>::type::is_supported())
   {
     auto const do_rolling = [&](auto const& device_op) {
-      auto output = make_fixed_width_column(
-        target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
+      // indices are used with dictionary aggregations; the element method always returns size_type
+      auto out_type = cudf::is_dictionary(input.type()) ? data_type{type_to_id<size_type>()}
+                                                        : target_type(input.type(), op);
+      using OutType =
+        typename std::conditional_t<cudf::is_dictionary<InputType>(),
+                                    size_type,
+                                    device_storage_type_t<target_type_t<InputType, op>>>;
+
+      auto output =
+        make_fixed_width_column(out_type, input.size(), mask_state::UNINITIALIZED, stream, mr);
 
       auto const d_inp_ptr         = column_device_view::create(input, stream);
       auto const d_default_out_ptr = column_device_view::create(default_outputs, stream);
@@ -452,7 +463,6 @@ struct rolling_window_launcher {
 
       auto constexpr block_size = 256;
       auto const grid           = cudf::detail::grid_1d(input.size(), block_size);
-      using OutType             = device_storage_type_t<target_type_t<InputType, op>>;
 
       if (input.has_nulls()) {
         gpu_rolling<OutType, block_size, true>
@@ -610,44 +620,16 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   min_periods = std::max(min_periods, 0);
 
-  auto input_col = cudf::is_dictionary(input.type())
-                     ? dictionary_column_view(input).get_indices_annotated()
-                     : input;
-
-  auto output = cudf::type_dispatcher(input_col.type(),
-                                      dispatch_rolling{},
-                                      input_col,
-                                      default_outputs,
-                                      preceding_window_begin,
-                                      following_window_begin,
-                                      min_periods,
-                                      agg,
-                                      stream,
-                                      mr);
-
-  if (!cudf::is_dictionary(input.type())) return output;
-
-  // dictionary column post processing
-  if (agg.kind == aggregation::COUNT_ALL || agg.kind == aggregation::COUNT_VALID ||
-      agg.kind == aggregation::ROW_NUMBER) {
-    return output;
-  }
-
-  // output is new dictionary indices (including nulls)
-  auto keys = std::make_unique<column>(dictionary_column_view(input).keys(), stream, mr);
-  auto const indices_type = output->type();        // capture these
-  auto const output_size  = output->size();        // before calling
-  auto const null_count   = output->null_count();  // release()
-  auto contents           = output->release();
-  // create indices column from output column data
-  auto indices = std::make_unique<column>(indices_type,
-                                          output_size,
-                                          std::move(*(contents.data.release())),
-                                          rmm::device_buffer{0, stream, mr},
-                                          0);
-  // create dictionary from keys and indices
-  return make_dictionary_column(
-    std::move(keys), std::move(indices), std::move(*(contents.null_mask.release())), null_count);
+  return cudf::type_dispatcher(input.type(),
+                               dispatch_rolling{},
+                               input,
+                               default_outputs,
+                               preceding_window_begin,
+                               following_window_begin,
+                               min_periods,
+                               agg,
+                               stream,
+                               mr);
 }
 
 }  // namespace detail
