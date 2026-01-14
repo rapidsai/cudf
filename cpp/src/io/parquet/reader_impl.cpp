@@ -1002,19 +1002,16 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   // Use a bounce buffer to avoid pageable copies
   auto pinned_null_masks =
     cudf::detail::make_pinned_vector(cudf::host_span<bitmask_type* const>{null_masks}, _stream);
-  auto pinned_begin_bits =
+  auto const pinned_begin_bits =
     cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type const>{begin_bits}, _stream);
-  auto pinned_end_bits =
+  auto const pinned_end_bits =
     cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type const>{end_bits}, _stream);
 
   // Bulk update the nullmasks if the number of pages is above the threshold
   if (pinned_null_masks.size() >= min_nullmasks_for_bulk_update) {
-    // Note: This works because `make_pinned_vector_async` synchronizes the stream and initializes
-    // the vector with zeros. Should that change, we would need to manually synchronize the stream
-    // before we do std::fill.
-    auto pinned_valids =
-      cudf::detail::make_pinned_vector_async<bool>(pinned_null_masks.size(), _stream);
-    std::fill(pinned_valids.begin(), pinned_valids.end(), false);
+    auto const valids = thrust::host_vector<bool>(pinned_null_masks.size(), false);
+    auto const pinned_valids =
+      cudf::detail::make_pinned_vector<bool>(cudf::host_span<bool const>{valids}, _stream);
     cudf::set_null_masks_safe(
       pinned_null_masks, pinned_begin_bits, pinned_end_bits, pinned_valids, _stream);
   }
