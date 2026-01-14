@@ -53,6 +53,7 @@ def is_sorted(request):
 
 @pytest.fixture
 def xfail_if_sorted_gt_135(is_sorted, request):
+    # See https://github.com/rapidsai/cudf/pull/20791#issuecomment-3750528419
     if is_sorted and not POLARS_VERSION_LT_135:
         request.applymarker(
             pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/24981")
