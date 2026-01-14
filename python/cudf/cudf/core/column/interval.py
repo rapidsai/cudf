@@ -61,7 +61,7 @@ class IntervalColumn(StructColumn):
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()  # type: ignore[union-attr]
         struct_arrow = self.plc_column.to_arrow(
-            metadata=_dtype_to_metadata(self.dtype)  # type: ignore[arg-type]
+            metadata=_dtype_to_metadata(self.dtype)
         )
         possibly_null_struct_arrow = _handle_nulls(struct_arrow)
 
