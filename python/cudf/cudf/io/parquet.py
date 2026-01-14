@@ -114,6 +114,7 @@ def _plc_write_parquet(
     column_type_length: dict | None = None,
     output_as_binary: set[Hashable] | None = None,
     write_arrow_schema: bool = False,
+    page_level_compression: bool = False,
 ) -> np.ndarray | None:
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -213,6 +214,7 @@ def _plc_write_parquet(
             .stats_level(stat_freq)
             .int96_timestamps(int96_timestamps)
             .write_v2_headers(header_version == "2.0")
+            .page_level_compression(page_level_compression)
             .dictionary_policy(dict_policy)
             .utc_timestamps(False)
             .write_arrow_schema(write_arrow_schema)
@@ -283,6 +285,7 @@ def _write_parquet(
     column_type_length: dict | None = None,
     output_as_binary: set[Hashable] | None = None,
     write_arrow_schema: bool = True,
+    page_level_compression: bool = False,
 ) -> np.ndarray | None:
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -321,6 +324,7 @@ def _write_parquet(
         "column_type_length": column_type_length,
         "output_as_binary": output_as_binary,
         "write_arrow_schema": write_arrow_schema,
+        "page_level_compression": page_level_compression,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -1518,6 +1522,7 @@ def to_parquet(
     column_type_length: dict | None = None,
     output_as_binary: set[Hashable] | None = None,
     store_schema=False,
+    page_level_compression: bool = False,
     *args,
     **kwargs,
 ):
@@ -1604,6 +1609,7 @@ def to_parquet(
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
             write_arrow_schema=store_schema,
+            page_level_compression=page_level_compression,
         )
 
     else:
