@@ -1075,6 +1075,44 @@ class IntervalDtype(_BaseDtype):
     def __hash__(self) -> int:
         return hash((self.subtype, self.closed))
 
+    def _recursively_replace_fields(self, result: dict) -> dict:
+        """
+        Return a new dict result but with the keys replaced by "left" and "right".
+
+        Intended when result comes from pylibcudf without preserved nested field names.
+        Converts dict with numeric/string keys to {"left": ..., "right": ...}.
+        Handles nested StructDtype and ListDtype recursively.
+        """
+        # Convert the dict keys (which may be numeric like 0, 1 or string like "0", "1")
+        # to the proper field names "left" and "right"
+        values = list(result.values())
+        if len(values) != 2:
+            raise ValueError(
+                f"Expected 2 fields for IntervalDtype, got {len(values)}"
+            )
+
+        new_result = {}
+        for field_name, result_value in zip(
+            ["left", "right"], values, strict=True
+        ):
+            if self._subtype is None:
+                new_result[field_name] = result_value
+            elif isinstance(self._subtype, StructDtype) and isinstance(
+                result_value, dict
+            ):
+                new_result[field_name] = (
+                    self._subtype._recursively_replace_fields(result_value)
+                )
+            elif isinstance(self._subtype, ListDtype) and isinstance(
+                result_value, list
+            ):
+                new_result[field_name] = (
+                    self._subtype._recursively_replace_fields(result_value)
+                )
+            else:
+                new_result[field_name] = result_value
+        return new_result
+
     def serialize(self) -> tuple[dict, list]:
         header = {
             "fields": (
