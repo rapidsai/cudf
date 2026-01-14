@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/testing_main.hpp>
 
@@ -94,9 +95,9 @@ TEST_F(CountBitmaskTest, NegativeStart)
 {
   auto mask = make_mask(1);
   EXPECT_THROW(cudf::detail::count_set_bits(mask.data(), -1, 32, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::detail::valid_count(mask.data(), -1, 32, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
 
   std::vector<cudf::size_type> indices = {0, 16, -1, 32};
   EXPECT_THROW(
@@ -111,9 +112,9 @@ TEST_F(CountBitmaskTest, StartLargerThanStop)
 {
   auto mask = make_mask(1);
   EXPECT_THROW(cudf::detail::count_set_bits(mask.data(), 32, 31, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::detail::valid_count(mask.data(), 32, 31, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
 
   std::vector<cudf::size_type> indices = {0, 16, 31, 30};
   EXPECT_THROW(
@@ -332,6 +333,31 @@ TEST_F(CountBitmaskTest, MultipleWordsSingleBit)
   auto valid_counts =
     cudf::detail::segmented_valid_count(mask.data(), indices, cudf::get_default_stream());
   EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{1, 1, 1}));
+}
+
+TEST_F(CountBitmaskTest, BatchNullCount)
+{
+  using cudf::test::iterators::nulls_at;
+  using col_type  = cudf::test::fixed_width_column_wrapper<int32_t>;
+  auto const col0 = col_type{{0, 1, 2, 3, 4, 5}, nulls_at({1, 3, 5})};
+  auto const col1 = col_type{{0, 1, 2, 3, 4, 5}, nulls_at({0, 2, 4})};
+  auto const col2 = col_type{{0, 1, 2, 3, 4, 5}, nulls_at({2, 3})};
+  auto const col3 = col_type{{0, 1, 2, 3, 4, 5}, nulls_at({4})};
+  auto const col4 = col_type{{0, 1, 2, 3, 4, 5}, nulls_at({0, 1, 2, 3, 4, 5})};
+  auto const col5 = col_type{0, 1, 2, 3, 4, 5};
+
+  auto const bitmasks =
+    std::vector<cudf::bitmask_type const*>{static_cast<cudf::column_view>(col0).null_mask(),
+                                           static_cast<cudf::column_view>(col1).null_mask(),
+                                           static_cast<cudf::column_view>(col2).null_mask(),
+                                           static_cast<cudf::column_view>(col3).null_mask(),
+                                           static_cast<cudf::column_view>(col4).null_mask(),
+                                           static_cast<cudf::column_view>(col5).null_mask()};
+
+  auto const null_counts =
+    cudf::batch_null_count(bitmasks, 0, static_cast<cudf::column_view>(col0).size());
+  EXPECT_THAT(null_counts,
+              ::testing::ElementsAreArray(std::vector<cudf::size_type>{3, 3, 2, 1, 6, 0}));
 }
 
 using CountUnsetBitsTest = CountBitmaskTest;
