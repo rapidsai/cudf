@@ -180,3 +180,32 @@ def _(ir: Sort, *, offset: str = "") -> str:
 def _(ir: Scan, *, offset: str = "") -> str:
     label = f"SCAN {ir.typ.upper()}"
     return _repr_header(offset, label, ir.schema)
+
+
+def write_profile_output(
+    profile_output: str,
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    stats: StatsCollector,
+    profiler: Profiler,
+) -> None:
+    """
+    Write a post-execution profile showing estimated vs actual row counts.
+
+    Parameters
+    ----------
+    profile_output
+        Path to write the profile file.
+    ir
+        The lowered IR root node.
+    partition_info
+        Partition information for the IR nodes.
+    stats
+        The statistics collector with row count estimates.
+    profiler
+        The profiler with actual row counts from execution.
+    """
+    from pathlib import Path
+
+    profile_repr = _repr_ir_tree(ir, partition_info, stats=stats, profiler=profiler)
+    Path(profile_output).write_text(profile_repr)

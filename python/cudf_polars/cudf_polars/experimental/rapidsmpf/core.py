@@ -133,12 +133,9 @@ def evaluate_logical_plan(
     # Write profiler output if configured
     profile_output = config_options.executor.profile_output
     if profile_output is not None and profiler is not None:
-        from pathlib import Path
+        from cudf_polars.experimental.explain import write_profile_output
 
-        from cudf_polars.experimental.explain import _repr_ir_tree
-
-        profile_repr = _repr_ir_tree(ir, partition_info, stats=stats, profiler=profiler)
-        Path(profile_output).write_text(profile_repr)
+        write_profile_output(profile_output, ir, partition_info, stats, profiler)
 
     return result, metadata_collector
 
