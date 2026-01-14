@@ -1009,9 +1009,9 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
 
   // Bulk update the nullmasks if the number of pages is above the threshold
   if (pinned_null_masks.size() >= min_nullmasks_for_bulk_update) {
-    auto const valids = thrust::host_vector<bool>(pinned_null_masks.size(), false);
-    auto const pinned_valids =
-      cudf::detail::make_pinned_vector<bool>(cudf::host_span<bool const>{valids}, _stream);
+    auto pinned_valids =
+      cudf::detail::make_pinned_vector<bool>(pinned_null_masks.size(), _stream);
+    std::fill(pinned_valids.begin(), pinned_valids.end(), false);
     cudf::set_null_masks_safe(
       pinned_null_masks, pinned_begin_bits, pinned_end_bits, pinned_valids, _stream);
   }

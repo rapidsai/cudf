@@ -554,7 +554,7 @@ host_vector<typename Container::value_type> make_pinned_vector(Container const& 
 }
 
 /**
- * @brief Asynchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
+ * @brief Synchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
  * from a `host_span`
  *
  * @tparam T The type of the data to copy
@@ -565,10 +565,7 @@ host_vector<typename Container::value_type> make_pinned_vector(Container const& 
 template <typename T>
 host_vector<T> make_pinned_vector(host_span<T const> v, rmm::cuda_stream_view stream)
 {
-  // Note: This works because `make_pinned_vector_async` synchronizes the stream and initializes the
-  // vector with zeros. Should that change, we would need to manually synchronize the stream before
-  // we do std::copy.
-  auto result = make_pinned_vector_async<T>(v.size(), stream);
+  auto result = make_pinned_vector<T>(v.size(), stream);
   std::copy(v.begin(), v.end(), result.begin());
   return result;
 }
