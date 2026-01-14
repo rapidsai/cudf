@@ -67,7 +67,7 @@ cudf::io::table_with_metadata read_parquet(io_source const& io_source, rmm::cuda
 {
   auto source_info = io_source.get_source_info();
   auto options     = cudf::io::parquet_reader_options::builder(source_info).build();
-  return cudf::io::read_parquet(options);
+  return cudf::io::read_parquet(options, stream);
 }
 
 struct hybrid_scan_fn {
