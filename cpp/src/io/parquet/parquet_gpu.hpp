@@ -1117,9 +1117,12 @@ void EncodePages(device_span<EncPage> pages,
  * Also calculates the set of page encodings used for each chunk.
  *
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
+ * @param[in] page_level_compression If true, V2 pages can independently decide compression
  * @param[in] stream CUDA stream to use
  */
-void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
+void DecideCompression(device_span<EncColumnChunk> chunks,
+                       bool page_level_compression,
+                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to encode page headers

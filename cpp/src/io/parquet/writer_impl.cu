@@ -1491,6 +1491,7 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
  * @param compression compression format
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @param write_v2_headers True if V2 page headers should be written
+ * @param page_level_compression True if V2 pages can make per-page compression decisions
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
@@ -1502,6 +1503,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                   compression_type compression,
                   int32_t column_index_truncate_length,
                   bool write_v2_headers,
+                  bool page_level_compression,
                   rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
@@ -1526,7 +1528,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   // chunk-level
 
   auto d_chunks = chunks.device_view();
-  DecideCompression(d_chunks.flat_view(), stream);
+  DecideCompression(d_chunks.flat_view(), page_level_compression, stream);
   EncodePageHeaders(pages, comp_res, pages_stats, chunk_stats, stream);
   GatherPages(d_chunks.flat_view(), stream);
 
@@ -1655,6 +1657,7 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
  * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
  * @param utc_timestamps Flag to indicate if timestamps are UTC
  * @param write_v2_headers True if V2 page headers are to be written
+ * @param page_level_compression True if V2 pages can make per-page compression decisions
  * @param out_sink Sink for checking if device write is supported, should not be used to write any
  *        data in this function
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -1680,6 +1683,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    bool int96_timestamps,
                                    bool utc_timestamps,
                                    bool write_v2_headers,
+                                   bool page_level_compression,
                                    bool write_arrow_schema,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
@@ -2149,6 +2153,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       compression,
       column_index_truncate_length,
       write_v2_headers,
+      page_level_compression,
       stream);
 
     bool need_sync{false};
@@ -2310,6 +2315,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _page_level_compression(options.is_enabled_page_level_compression()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -2345,6 +2351,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _page_level_compression(options.is_enabled_page_level_compression()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -2428,6 +2435,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _int96_timestamps,
                                            _utc_timestamps,
                                            _write_v2_headers,
+                                           _page_level_compression,
                                            _write_arrow_schema,
                                            _out_sink,
                                            _stream);
