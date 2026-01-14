@@ -2500,7 +2500,7 @@ constexpr int decide_compression_block_size =
 
 // blockDim(decide_compression_block_size, 1, 1)
 CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
-  gpuDecideCompression(device_span<EncColumnChunk> chunks)
+  gpuDecideCompression(device_span<EncColumnChunk> chunks, bool page_level_compression)
 {
   __shared__ __align__(8) EncColumnChunk ck_g[decide_compression_warps_in_block];
   __shared__ __align__(4) unsigned int compression_error[decide_compression_warps_in_block];
@@ -2538,13 +2538,24 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
       auto const lvl_bytes      = curr_page.is_v2() ? curr_page.level_bytes() : 0;
       auto const comp_page_size = comp_res->bytes_written + lvl_bytes;
 
-      // For V2 pages, decide compression per-page
+      // For V2 pages, decide compression per-page only if page_level_compression is enabled
       if (curr_page.is_v2()) {
         bool const page_compress_ok =
           comp_res->status == codec_status::SUCCESS and comp_page_size < page_data_size;
-        curr_page.is_compressed = page_compress_ok;
-        v2_actual_size += page_compress_ok ? comp_page_size : page_data_size;
-        if (page_compress_ok) { atomicOr(&any_v2_compressed[warp_id], 1); }
+        if (page_level_compression) {
+          // Per-page decision: each V2 page decides independently
+          curr_page.is_compressed = page_compress_ok;
+          v2_actual_size += page_compress_ok ? comp_page_size : page_data_size;
+          if (page_compress_ok) { atomicOr(&any_v2_compressed[warp_id], 1); }
+        } else {
+          // Chunk-level decision: V2 pages follow same logic as non-V2
+          curr_page.is_compressed = false;  // Will be updated based on chunk decision
+          non_v2_uncomp_size += page_data_size;
+          non_v2_comp_size += comp_page_size;
+          if (comp_res->status != codec_status::SUCCESS) {
+            atomicOr(&compression_error[warp_id], 1);
+          }
+        }
       } else {
         // Dictionary or V1 page - track separately for chunk-level decision
         curr_page.is_compressed = false;  // Will be updated based on chunk decision
@@ -2554,7 +2565,7 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
       }
     } else {
       curr_page.is_compressed = false;
-      if (curr_page.is_v2()) {
+      if (curr_page.is_v2() and page_level_compression) {
         v2_actual_size += page_data_size;
       } else {
         non_v2_uncomp_size += page_data_size;
@@ -2601,17 +2612,20 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
   }
 
   __syncwarp();
-  // Second pass: for non-V2 pages, set is_compressed based on chunk decision.
+  // Second pass: set is_compressed for pages that didn't decide in first pass.
   // Dictionary pages MUST be compressed if the chunk is compressed, because
   // dictionary page headers don't have an is_compressed field - readers assume
   // they're compressed when chunk.codec != NONE.
   // V1 data pages follow the non-V2 compression decision.
+  // V2 pages with page_level_compression disabled also follow chunk decision.
   for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
     auto& curr_page = ck_g[warp_id].pages[page_id];
-    if (not curr_page.is_v2()) {
-      bool const is_dict_page = curr_page.page_type == PageType::DICTIONARY_PAGE;
-      curr_page.is_compressed = is_dict_page ? write_compressed : non_v2_compress;
+    if (curr_page.is_v2() and page_level_compression) {
+      // V2 pages already decided in first pass when page_level_compression is enabled
+      continue;
     }
+    bool const is_dict_page = curr_page.page_type == PageType::DICTIONARY_PAGE;
+    curr_page.is_compressed = is_dict_page ? write_compressed : non_v2_compress;
   }
 }
 
@@ -3047,20 +3061,25 @@ CUDF_KERNEL void __launch_bounds__(encode_block_size)
     hdr_end   = EncodeStatistics(hdr_start, &chunk_stats[page.chunk_id], stats_type, scratch);
     page.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
   }
-  // For V2 pages, uncompressed_page_size and compressed_page_size in the header
-  // are for value data only, NOT including level bytes (per Parquet spec).
-  // For V1 pages and dictionary pages, they include the full page data.
-  auto const lvl_bytes              = page.is_v2() ? page.level_bytes() : 0;
-  auto const uncompressed_page_size = page.data_size - lvl_bytes;
+  // For V2 pages, compressed_page_size and uncompressed_page_size include level bytes
+  // for compatibility with other readers (PyArrow, etc.) which expect this layout.
+  // Level bytes are stored uncompressed before the (possibly compressed) value data.
+  auto const lvl_bytes = page.is_v2() ? page.level_bytes() : 0;
   uint32_t compressed_page_size{};
+  uint32_t uncompressed_page_size{};
   if (page.is_compressed) {
-    hdr_start            = page.compressed_data;
-    compressed_page_size = static_cast<uint32_t>(comp_results[page_idx].bytes_written);
+    hdr_start = page.compressed_data;
+    // compressed_page_size = level_bytes + compressed_value_size
+    compressed_page_size = lvl_bytes + static_cast<uint32_t>(comp_results[page_idx].bytes_written);
     // comp_data_size is total data size (including levels) for internal use
-    page.comp_data_size = compressed_page_size + lvl_bytes;
+    page.comp_data_size = compressed_page_size;
+    // uncompressed_page_size = level_bytes + uncompressed_value_size = data_size
+    uncompressed_page_size = page.data_size;
   } else {
-    hdr_start            = page.page_data;
-    compressed_page_size = uncompressed_page_size;
+    hdr_start = page.page_data;
+    // Both sizes are the same when uncompressed
+    compressed_page_size   = page.data_size;
+    uncompressed_page_size = page.data_size;
   }
   header_encoder encoder(hdr_start);
 
@@ -3546,11 +3565,14 @@ void EncodePages(device_span<EncPage> pages,
   cudf::detail::join_streams(streams, stream);
 }
 
-void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
+void DecideCompression(device_span<EncColumnChunk> chunks,
+                       bool page_level_compression,
+                       rmm::cuda_stream_view stream)
 {
   auto const num_blocks =
     util::div_rounding_up_safe<int>(chunks.size(), decide_compression_warps_in_block);
-  gpuDecideCompression<<<num_blocks, decide_compression_block_size, 0, stream.value()>>>(chunks);
+  gpuDecideCompression<<<num_blocks, decide_compression_block_size, 0, stream.value()>>>(
+    chunks, page_level_compression);
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,
