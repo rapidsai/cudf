@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -495,3 +495,32 @@ def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
         assert re.search(
             rf"^\s*SORT.*row_count=\'~{final_count_2}\'\s*$", repr, re.MULTILINE
         )
+
+
+@pytest.mark.parametrize("use_reduction_planning", [True, False])
+def test_physical_plan_row_counts(tmp_path, df, use_reduction_planning):
+    """
+    Test that row-count statistics are shown in the physical plan
+    regardless of whether use_reduction_planning is enabled.
+    """
+    make_partitioned_source(df, tmp_path, fmt="parquet", n_files=2)
+
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "target_partition_size": 10_000,
+            "stats_planning": {"use_reduction_planning": use_reduction_planning},
+        },
+    )
+
+    q = pl.scan_parquet(tmp_path).group_by("y").agg(pl.col("x").sum().alias("x_sum"))
+    repr = explain_query(q, engine, physical=True)
+
+    # Row count should be shown (not 'unknown') for parquet scans
+    row_count = _fmt_row_count(df.height)
+    assert re.search(rf"row_count=\'~{row_count}\'", repr), (
+        f"Expected row_count='~{row_count}' in physical plan, got:\n{repr}"
+    )

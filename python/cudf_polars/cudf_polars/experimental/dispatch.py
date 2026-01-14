@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition dispatch functions."""
 
@@ -160,3 +160,42 @@ def update_column_stats(
         GPUEngine configuration options.
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
+
+
+def make_lowering_wrapper(
+    lower_fn: Any,
+) -> Any:
+    """
+    Create a lowering wrapper that propagates row_count stats.
+
+    This wrapper calls the given lowering function and copies
+    row_count statistics from the original node to the returned
+    node and any single-child descendants without stats.
+
+    Parameters
+    ----------
+    lower_fn
+        The lowering function to wrap (typically a singledispatch function).
+
+    Returns
+    -------
+    A wrapper function suitable for use with CachingVisitor.
+    """
+
+    def _lower_with_stats(
+        node: IR, rec: LowerIRTransformer
+    ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+        new_node, partition_info = lower_fn(node, rec)
+        _node = new_node
+        while True:
+            rec.state["stats"].copy_row_count(node, _node)
+            if (
+                len(_node.children) == 1
+                and _node.children[0] not in rec.state["stats"].row_count
+            ):
+                _node = _node.children[0]
+            else:
+                break
+        return new_node, partition_info
+
+    return _lower_with_stats
