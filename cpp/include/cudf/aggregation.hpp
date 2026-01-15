@@ -28,11 +28,6 @@ namespace CUDF_EXPORT cudf {
  * @file
  */
 
-// forward declaration for rolling operations backward compatibility
-namespace detail {
-class aggregation_finalizer;
-}  // namespace detail
-
 /**
  * @brief Tie-breaker method to use for ranking the column.
  *
@@ -156,19 +151,6 @@ class aggregation {
    * @return A copy of the aggregation object
    */
   [[nodiscard]] virtual std::unique_ptr<aggregation> clone() const = 0;
-
-  /**
-   * @brief DEPRECATED: Finalize compound aggregation (for rolling operations only).
-   *
-   * @deprecated This method is deprecated and only retained for backward compatibility
-   * with rolling operations. New code should use template functors with aggregation_dispatcher.
-   *
-   * @param finalizer The finalizer visitor pattern to use to compute the aggregation
-   */
-  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const
-  {
-    finalizer.visit(*this);
-  }
 };
 
 /**
