@@ -148,9 +148,7 @@ class StructColumn(ColumnBase):
             "Structs are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _with_type_metadata(
-        self: StructColumn, dtype: DtypeObj
-    ) -> StructColumn:
+    def _with_type_metadata(self: StructColumn, dtype: DtypeObj) -> ColumnBase:
         from cudf.core.column import IntervalColumn
         from cudf.core.dtypes import IntervalDtype
 
