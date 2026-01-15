@@ -491,8 +491,10 @@ def get_executor_options(
             "GROUPBY ('o_orderpriority',)": 0.0001,
             "GROUPBY ('o_year',)": 0.0006,
             "GROUPBY ('supp_nation', 'cust_nation', 'l_year')": 0.0004,
+            # NOTE: q17 GROUPBY hint removed - reduces to 1 partition too early,
+            # breaking the final sum(l_extendedprice)/7.0 tree reduction
             # FILTER hints (actual output / actual input from child)
-            "FILTER ('key', 'avg_quantity', 'l_extendedprice', 'l_quantity')": 0.2707,
+            "FILTER ('key', 'avg_quantity', 'l_extendedprice', 'l_quantity')": 0.09,  # q17: 161K/1.79M=9%
             "FILTER ('l_orderkey', 'sum_quantity')": 0.0001,
             # SCAN hints (actual / estimated - for predicate pushdown)
             "SCAN PARQUET ('l_extendedprice', 'l_discount', 'l_quantity', 'l_shipdate')": 0.0714,
@@ -505,8 +507,8 @@ def get_executor_options(
             "JOIN Inner ('p_partkey', 'ps_suppkey') ('l_partkey', 'l_suppkey')": 0.054,  # q9
             "JOIN Inner ('l_suppkey', 'n_nationkey') ('s_suppkey', 's_nationkey')": 0.002,  # q5
             "JOIN Inner ('s_suppkey',) ('supplier_no',)": 0.002,  # q15
-            "JOIN Inner ('p_partkey',) ('l_partkey',) ('p_partkey', 'p_container',": 0.001,  # q17 only
-            "JOIN Inner ('key',) ('p_partkey',)": 0.001,
+            # q17 join hint removed - 0.001 was too aggressive, killed parallelism
+            # q17 key-partkey join hint removed - not actually selective (100%)
             # q18: extremely selective joins after sum(l_quantity) > 300 filter
             "JOIN Semi ('o_orderkey',) ('l_orderkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice')": 0.00004,
             "JOIN Inner ('o_orderkey',) ('l_orderkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice', 'l_quantity')": 0.0001,
