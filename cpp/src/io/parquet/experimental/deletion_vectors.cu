@@ -357,9 +357,11 @@ std::unique_ptr<cudf::column> compute_partial_row_mask_column(
   size_type rows_filled = 0;
 
   while (std::cmp_less(rows_filled, num_rows)) {
-    CUDF_EXPECTS(not(deletion_vector_row_counts.empty() or deletion_vectors.empty()),
-                 "" + std::to_string(deletion_vector_row_counts.size()) + " " +
-                   std::to_string(deletion_vectors.size()));
+    CUDF_EXPECTS(
+      not(deletion_vector_row_counts.empty() or deletion_vectors.empty()),
+      "Encountered insufficient number of deletion vector row counts or deletion vectors: " +
+        std::to_string(deletion_vector_row_counts.size()) + " " +
+        std::to_string(deletion_vectors.size()));
 
     // Compute how many rows can be queried from the current roaring bitmap
     auto const row_count =
@@ -401,7 +403,7 @@ chunked_parquet_reader::chunked_parquet_reader(
   std::size_t pass_read_limit,
   parquet_reader_options const& options,
   cudf::host_span<cudf::host_span<cuda::std::byte const> const> serialized_roaring_bitmaps,
-  cudf::host_span<size_type const> deletion_vector_row_counts,
+  cudf::host_span<size_type const> rows_per_deletion_vector,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
@@ -422,7 +424,7 @@ chunked_parquet_reader::chunked_parquet_reader(
     "Encountered a non-empty AST filter expression. Use a roaring64 bitmap deletion vector to "
     "filter the table instead");
   CUDF_EXPECTS(serialized_roaring_bitmaps.empty() or
-                 serialized_roaring_bitmaps.size() == deletion_vector_row_counts.size(),
+                 serialized_roaring_bitmaps.size() == rows_per_deletion_vector.size(),
                "Encountered a mismatch in the number of deletion vectors and the number of rows "
                "per deletion vector");
 
@@ -438,65 +440,12 @@ chunked_parquet_reader::chunked_parquet_reader(
 
   if (not serialized_roaring_bitmaps.empty()) {
     auto iter = thrust::make_zip_iterator(serialized_roaring_bitmaps.begin(),
-                                          deletion_vector_row_counts.begin());
+                                          rows_per_deletion_vector.begin());
     std::for_each(iter, iter + serialized_roaring_bitmaps.size(), [&](auto const& elem) {
       _deletion_vectors.emplace(cuda::std::get<0>(elem));
       _deletion_vector_row_counts.push(cuda::std::get<1>(elem));
     });
   }
-}
-
-/**
- * @copydoc
- * cudf::io::parquet::experimental::chunked_parquet_reader::chunked_parquet_reader
- */
-chunked_parquet_reader::chunked_parquet_reader(
-  std::size_t chunk_read_limit,
-  parquet_reader_options const& options,
-  cudf::host_span<cuda::std::byte const> serialized_roaring_bitmaps,
-  cudf::host_span<size_t const> row_group_offsets,
-  cudf::host_span<size_type const> row_group_num_rows,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-  : chunked_parquet_reader(chunk_read_limit,
-                           std::size_t{0},
-                           options,
-                           serialized_roaring_bitmaps,
-                           row_group_offsets,
-                           row_group_num_rows,
-                           stream,
-                           mr)
-{
-}
-
-/**
- * @copydoc
- * cudf::io::parquet::experimental::chunked_parquet_reader::chunked_parquet_reader
- */
-chunked_parquet_reader::chunked_parquet_reader(
-  std::size_t chunk_read_limit,
-  std::size_t pass_read_limit,
-  parquet_reader_options const& options,
-  cudf::host_span<cuda::std::byte const> serialized_roaring_bitmap,
-  cudf::host_span<size_t const> row_group_offsets,
-  cudf::host_span<size_type const> row_group_num_rows,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-  : chunked_parquet_reader(
-      chunk_read_limit,
-      pass_read_limit,
-      options,
-      serialized_roaring_bitmap.empty()
-        ? std::vector<cudf::host_span<cuda::std::byte const>>{}
-        : std::vector<cudf::host_span<cuda::std::byte const>>{serialized_roaring_bitmap},
-      serialized_roaring_bitmap.empty()
-        ? std::vector<size_type>{}
-        : std::vector<size_type>{std::numeric_limits<size_type>::max()},
-      row_group_offsets,
-      row_group_num_rows,
-      stream,
-      mr)
-{
 }
 
 /**
@@ -589,18 +538,20 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
-  return read_parquet(
-    options,
-    serialized_roaring_bitmap.empty()
-      ? std::vector<cudf::host_span<cuda::std::byte const>>{}
-      : std::vector<cudf::host_span<cuda::std::byte const>>{serialized_roaring_bitmap},
-    serialized_roaring_bitmap.empty()
-      ? std::vector<size_type>{}
-      : std::vector<size_type>{std::numeric_limits<size_type>::max()},
-    row_group_offsets,
-    row_group_num_rows,
-    stream,
-    mr);
+  std::vector<cudf::host_span<cuda::std::byte const>> serialized_roaring_bitmaps;
+  std::vector<size_type> deletion_vector_row_counts;
+  if (not serialized_roaring_bitmap.empty()) {
+    serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmap);
+    deletion_vector_row_counts.emplace_back(std::numeric_limits<size_type>::max());
+  }
+
+  return read_parquet(options,
+                      serialized_roaring_bitmaps,
+                      deletion_vector_row_counts,
+                      row_group_offsets,
+                      row_group_num_rows,
+                      stream,
+                      mr);
 }
 
 /**

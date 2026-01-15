@@ -47,61 +47,6 @@ class chunked_parquet_reader {
    *
    * @param chunk_read_limit Byte limit on the returned table chunk size, `0` if there is no limit
    * @param options Parquet reader options
-   * @param serialized_roaring_bitmap Host span of `portable` serialized 64-bit roaring bitmap
-   * @param row_group_offsets Host span of row offsets of each row group
-   * @param row_group_num_rows Host span of number of rows in each row group
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  chunked_parquet_reader(
-    std::size_t chunk_read_limit,
-    parquet_reader_options const& options,
-    cudf::host_span<cuda::std::byte const> serialized_roaring_bitmap,
-    cudf::host_span<size_t const> row_group_offsets,
-    cudf::host_span<size_type const> row_group_num_rows,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-  /**
-   * @brief Constructor for the chunked reader
-   *
-   * Requires the same arguments as `cudf::io::parquet::experimental::read_parquet()`, with
-   * additional parameters to specify the size byte limit of the output table chunk produced, and a
-   * byte limit on the amount of temporary memory to use when reading. The `pass_read_limit` affects
-   * how many row groups we can read at a time by limiting the amount of memory dedicated to
-   * decompression space. The `pass_read_limit` is a hint, not an absolute limit - if a single row
-   * group cannot fit within the limit given, it will still be loaded. Also note that the
-   * `pass_read_limit` does not include the memory to deserialize and construct the roaring64 bitmap
-   * deletion vector that stays alive throughout the the lifetime of the reader.
-   *
-   * @param chunk_read_limit Byte limit on the returned table chunk size, `0` if there is no limit
-   * @param pass_read_limit Byte limit on the amount of memory used for decompressing and decoding
-   * data, `0` if there is no limit
-   * @param options Parquet reader options
-   * @param serialized_roaring_bitmap Host span of `portable` serialized 64-bit roaring bitmap
-   * @param row_group_offsets Host span of row offsets of each row group
-   * @param row_group_num_rows Host span of number of rows in each row group
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  chunked_parquet_reader(
-    std::size_t chunk_read_limit,
-    std::size_t pass_read_limit,
-    parquet_reader_options const& options,
-    cudf::host_span<cuda::std::byte const> serialized_roaring_bitmap,
-    cudf::host_span<size_t const> row_group_offsets,
-    cudf::host_span<size_type const> row_group_num_rows,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-  /**
-   * @brief Constructor for the chunked reader
-   *
-   * Requires the same arguments as the `cudf::io::parquet::experimental::read_parquet()`, and an
-   * additional parameter to specify the size byte limit of the output table chunk produced.
-   *
-   * @param chunk_read_limit Byte limit on the returned table chunk size, `0` if there is no limit
-   * @param options Parquet reader options
    * @param serialized_roaring_bitmaps Host span of host spans containing `portable` serialized
    * 64-bit roaring bitmaps
    * @param deletion_vector_row_counts Host span of number of rows in each deletion vector
