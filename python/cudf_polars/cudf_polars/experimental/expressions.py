@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """
 Multi-partition Expr classes and utilities.
@@ -48,7 +48,11 @@ from cudf_polars.dsl.traversal import (
 )
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.utils import _get_unique_fractions, _leaf_column_names
+from cudf_polars.experimental.utils import (
+    _get_selectivity_hint,
+    _get_unique_fractions,
+    _leaf_column_names,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -206,26 +210,37 @@ def _decompose_unique(
         "'in-memory' executor not supported in '_decompose_unique'"
     )
 
-    unique_fraction_dict = _get_unique_fractions(
-        _leaf_column_names(child),
-        config_options.executor.unique_fraction,
-        row_count=row_count_estimate,
-        column_stats=column_stats,
+    # Create the Distinct node first so we can check for hints
+    distinct_ir = Distinct(
+        {column.name: column.dtype},
+        plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
+        None,
+        None,
+        maintain_order,
+        input_ir,
     )
 
-    unique_fraction = (
-        max(unique_fraction_dict.values()) if unique_fraction_dict else None
-    )
+    # Check for selectivity hint first (takes priority over stats)
+    unique_fraction: float | None = None
+    if hint := _get_selectivity_hint(
+        distinct_ir,
+        config_options.executor.selectivity_hints,
+    ):
+        unique_fraction = hint
+    else:
+        # Fall back to unique_fraction from stats
+        unique_fraction_dict = _get_unique_fractions(
+            _leaf_column_names(child),
+            config_options.executor.unique_fraction,
+            row_count=row_count_estimate,
+            column_stats=column_stats,
+        )
+        unique_fraction = (
+            max(unique_fraction_dict.values()) if unique_fraction_dict else None
+        )
 
     input_ir, partition_info = lower_distinct(
-        Distinct(
-            {column.name: column.dtype},
-            plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
-            None,
-            None,
-            maintain_order,
-            input_ir,
-        ),
+        distinct_ir,
         input_ir,
         partition_info,
         config_options,

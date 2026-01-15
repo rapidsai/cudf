@@ -107,13 +107,15 @@ def lower_distinct(
             )
             shuffled = True
 
-    output_count = 1
+    # Conservative default: preserve input partitions unless tree reduction required
+    output_count = 1 if require_tree_reduction else child_count
     n_ary = 32  # Arbitrary default (for now)
     if ir.zlice is not None:
         # Head/tail slice operation has been pushed into Distinct
         if ir.zlice[0] < 1 and ir.zlice[1] is not None:
             # Use rough 1m-row heuristic to set n_ary
             n_ary = max(int(1_000_000 / ir.zlice[1]), 2)
+            output_count = 1  # Sliced operations require reduction
         else:  # pragma: no cover
             # TODO: General slicing is not supported for multiple
             # partitions. For now, we raise an error to fall back
@@ -123,15 +125,14 @@ def lower_distinct(
         # Use unique_fraction to determine partitioning
         n_ary = min(max(int(1.0 / unique_fraction), 2), child_count)
         output_count = max(int(unique_fraction * child_count), 1)
-
-    if output_count > 1 and require_tree_reduction:
-        # Need to reduce down to a single partition even
-        # if the unique_fraction is large.
-        output_count = 1
-        _fallback_inform(
-            "Unsupported unique options for multiple partitions.",
-            config_options,
-        )
+        if output_count > 1 and require_tree_reduction:
+            # Need to reduce down to a single partition even
+            # if the unique_fraction is large.
+            output_count = 1
+            _fallback_inform(
+                "Unsupported unique options for multiple partitions.",
+                config_options,
+            )
 
     # Partition-wise unique
     count = child_count
