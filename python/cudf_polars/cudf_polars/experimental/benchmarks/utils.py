@@ -474,11 +474,11 @@ def get_executor_options(
     ):
         # Selectivity hints for highly-selective operations.
         # These hints specify the output/input row ratio and are used to
-        # consolidate partitions after selective operations. Derived from
-        # profiling sf300 on 8 GPUs. Hints take precedence over stats-based
-        # estimates, allowing corrections where sampling is inaccurate.
+        # determine output partition count. Derived from profiling sf300
+        # on 8 GPUs. Hints take precedence over stats-based estimates,
+        # allowing corrections where sampling is inaccurate.
         executor_options["selectivity_hints"] = {
-            # GROUPBY hints
+            # GROUPBY hints (actual output / actual input from child)
             "GROUPBY ('c_count',)": 0.0001,
             "GROUPBY ('c_custkey', 'c_name', 'c_acctbal', 'c_phone', 'n_name', 'c_address', 'c_comment')": 0.5,
             "GROUPBY ('c_custkey',)": 0.3,
@@ -491,34 +491,14 @@ def get_executor_options(
             "GROUPBY ('o_orderpriority',)": 0.0001,
             "GROUPBY ('o_year',)": 0.0006,
             "GROUPBY ('supp_nation', 'cust_nation', 'l_year')": 0.0004,
-            # DISTINCT hints
-            "DISTINCT ('____________0',)": 0.0055,
-            # SCAN hints (for predicate pushdown)
+            # FILTER hints (actual output / actual input from child)
+            "FILTER ('key', 'avg_quantity', 'l_extendedprice', 'l_quantity')": 0.2707,
+            "FILTER ('l_orderkey', 'sum_quantity')": 0.0001,
+            # SCAN hints (actual / estimated - for predicate pushdown)
             "SCAN PARQUET ('l_extendedprice', 'l_discount', 'l_quantity', 'l_shipdate')": 0.0714,
             "SCAN PARQUET ('l_partkey', 'l_extendedprice', 'l_discount', 'l_shipdate')": 0.0468,
             "SCAN PARQUET ('l_suppkey', 'l_extendedprice', 'l_discount', 'l_shipdate')": 0.1418,
             "SCAN PARQUET ('o_orderkey', 'o_orderpriority', 'o_orderdate')": 0.1434,
-            # FILTER hints (row filtering operations)
-            "FILTER ('c_custkey', 'c_acctbal', 'cntrycode', 'o_custkey')": 0.0446,
-            "FILTER ('key', 'avg_quantity', 'l_extendedprice', 'l_quantity')": 0.0004,
-            "FILTER ('l_orderkey', 'sum_quantity')": 0.0002,
-            "FILTER ('p_partkey', 'ps_suppkey', 'ps_availqty', 'sum_quantity')": 0.0055,
-            # SELECT hints (column transformations with filtering effect)
-            "SELECT ('____________0',)": 0.0055,
-            "SELECT ('_____________0',)": 0.0001,
-            "SELECT ('c_name', 'c_custkey', 'o_orderkey', 'o_orderdat', 'o_totalprice', 'col6')": 0.0001,
-            "SELECT ('c_name', 'o_custkey', 'o_orderkey', 'o_orderdate', 'o_totalprice', 'col6')": 0.0001,
-            "SELECT ('cust_nation', 'l_extendedprice', 'l_discount', 'l_shipdate', 'supp_nation')": 0.0028,
-            "SELECT ('cust_nation', 'o_orderkey')": 0.1499,
-            "SELECT ('l_orderkey', 'revenue', 'o_orderdate', 'o_shippriority')": 0.0282,
-            "SELECT ('l_partkey', 'l_suppkey', '____________1')": 0.3264,
-            "SELECT ('l_partkey', 'l_suppkey', 'sum_quantity')": 0.3264,
-            "SELECT ('l_suppkey', 'total_revenue')": 0.0074,
-            "SELECT ('nation', 'o_year', 'amount')": 0.2039,
-            "SELECT ('o_orderkey', 'o_orderdate', 'o_shippriority', 'revenue')": 0.0282,
-            "SELECT ('o_year', 'volume', 'nation')": 0.0024,
-            "SELECT ('ps_suppkey',)": 0.0042,
-            "SELECT ('supplier_no', 'total_revenue')": 0.0074,
         }
 
     return executor_options
