@@ -22,6 +22,173 @@ namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
+ * @brief DEPRECATED: Base class for aggregation finalization visitor pattern.
+ *
+ * @deprecated This class is deprecated and only retained for backward compatibility
+ * with rolling operations. New code should use template functors with aggregation_dispatcher.
+ * See aggregation_functors.hpp for the new approach.
+ */
+class aggregation_finalizer {
+ public:
+  virtual ~aggregation_finalizer() = default;
+
+  // Declare overloads for each kind of a agg to dispatch
+  virtual void visit(aggregation const& agg) {}
+  virtual void visit(class sum_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class sum_with_overflow_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class product_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class min_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class max_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class count_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class histogram_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class any_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class all_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class sum_of_squares_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class mean_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class m2_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class var_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class std_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class median_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class quantile_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class argmax_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class argmin_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class nunique_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class nth_element_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class row_number_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class rank_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class collect_list_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class collect_set_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class lead_lag_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class udf_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class host_udf_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class merge_lists_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class merge_sets_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class merge_m2_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class merge_histogram_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class covariance_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class correlation_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class tdigest_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class merge_tdigest_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class ewma_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class bitwise_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class top_k_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+};
+
+/**
  * @brief Derived class for specifying a sum aggregation
  */
 class sum_aggregation final : public rolling_aggregation,
