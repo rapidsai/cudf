@@ -39,32 +39,32 @@ struct groupby_simple_aggregation_collector_fn {
 // Specialization for MIN aggregation
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-groupby_simple_aggregation_collector_fn::operator()<aggregation::MIN>(
-  data_type col_type, aggregation const&) const
+groupby_simple_aggregation_collector_fn::operator()<aggregation::MIN>(data_type col_type,
+                                                                      aggregation const&) const
 {
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(col_type.id() == type_id::STRING ? make_argmin_aggregation()
-                                                   : make_min_aggregation());
+                                                  : make_min_aggregation());
   return aggs;
 }
 
 // Specialization for MAX aggregation
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-groupby_simple_aggregation_collector_fn::operator()<aggregation::MAX>(
-  data_type col_type, aggregation const&) const
+groupby_simple_aggregation_collector_fn::operator()<aggregation::MAX>(data_type col_type,
+                                                                      aggregation const&) const
 {
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(col_type.id() == type_id::STRING ? make_argmax_aggregation()
-                                                   : make_max_aggregation());
+                                                  : make_max_aggregation());
   return aggs;
 }
 
 // Specialization for MEAN aggregation
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-groupby_simple_aggregation_collector_fn::operator()<aggregation::MEAN>(
-  data_type col_type, aggregation const&) const
+groupby_simple_aggregation_collector_fn::operator()<aggregation::MEAN>(data_type col_type,
+                                                                       aggregation const&) const
 {
   CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
   std::vector<std::unique_ptr<aggregation>> aggs;
@@ -91,8 +91,8 @@ groupby_simple_aggregation_collector_fn::operator()<aggregation::M2>(data_type,
 // Specialization for VARIANCE aggregation
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-groupby_simple_aggregation_collector_fn::operator()<aggregation::VARIANCE>(
-  data_type, aggregation const&) const
+groupby_simple_aggregation_collector_fn::operator()<aggregation::VARIANCE>(data_type,
+                                                                           aggregation const&) const
 {
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(make_sum_of_squares_aggregation());

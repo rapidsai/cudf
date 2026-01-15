@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -165,7 +165,10 @@ class aggregation {
    *
    * @param finalizer The finalizer visitor pattern to use to compute the aggregation
    */
-  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const { finalizer.visit(*this); }
+  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const
+  {
+    finalizer.visit(*this);
+  }
 };
 
 /**

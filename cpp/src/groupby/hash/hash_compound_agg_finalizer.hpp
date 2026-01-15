@@ -44,7 +44,9 @@ struct hash_compound_agg_finalizer_fn {
 
   // Default case: no-op
   template <aggregation::Kind k>
-  void operator()(aggregation const& agg) const {}
+  void operator()(aggregation const& agg) const
+  {
+  }
 };
 
 // Declare specializations

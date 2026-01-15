@@ -95,24 +95,20 @@ void hash_compound_agg_finalizer_fn::operator()<aggregation::MEAN>(aggregation c
   auto const count_result      = ctx.cache->get_result(ctx.col, *count_agg);
   auto const sum_without_nulls = [&] {
     if (sum_result.null_count() == 0) { return sum_result; }
-    return column_view{sum_result.type(),
-                       sum_result.size(),
-                       sum_result.head(),
-                       nullptr,
-                       0,
-                       sum_result.offset()};
+    return column_view{
+      sum_result.type(), sum_result.size(), sum_result.head(), nullptr, 0, sum_result.offset()};
   }();
 
   // Perform division without any null masks, and generate the null mask for the result later.
   // This is because the null mask (if exists) is just needed to be copied from the sum result,
   // and copying is faster than running the `bitmask_and` kernel.
-  auto result = cudf::detail::binary_operation(
-    sum_without_nulls,
-    count_result,
-    binary_operator::DIV,
-    cudf::detail::target_type(ctx.input_type, aggregation::MEAN),
-    ctx.stream,
-    ctx.mr);
+  auto result =
+    cudf::detail::binary_operation(sum_without_nulls,
+                                   count_result,
+                                   binary_operator::DIV,
+                                   cudf::detail::target_type(ctx.input_type, aggregation::MEAN),
+                                   ctx.stream,
+                                   ctx.mr);
   // SUM result only has nulls if it is an input aggregation, not intermediate-only aggregation.
   if (sum_result.has_nulls()) {
     result->set_null_mask(cudf::detail::copy_bitmask(sum_result, ctx.stream, ctx.mr),
@@ -150,22 +146,20 @@ void hash_compound_agg_finalizer_fn::operator()<aggregation::M2>(aggregation con
 
 // Specialization for VARIANCE aggregation
 template <>
-void hash_compound_agg_finalizer_fn::operator()<aggregation::VARIANCE>(
-  aggregation const& agg) const
+void hash_compound_agg_finalizer_fn::operator()<aggregation::VARIANCE>(aggregation const& agg) const
 {
   if (ctx.cache->has_result(ctx.col, agg)) { return; }
 
   auto const m2_agg = make_m2_aggregation();
   // Since M2 is a compound aggregation, we need to "finalize" it using aggregation finalizer.
-  cudf::detail::aggregation_dispatcher(
-    m2_agg->kind, hash_compound_agg_finalizer_fn{ctx}, *m2_agg);
+  cudf::detail::aggregation_dispatcher(m2_agg->kind, hash_compound_agg_finalizer_fn{ctx}, *m2_agg);
   auto const count_agg    = make_count_aggregation();
   auto const m2_result    = ctx.cache->get_result(ctx.col, *m2_agg);
   auto const count_result = ctx.cache->get_result(ctx.col, *count_agg);
 
   // Safe cast: this specialization is only called for VARIANCE aggregations
   auto const& var_agg = static_cast<cudf::detail::var_aggregation const&>(agg);
-  auto output         = compute_variance(m2_result, count_result, var_agg._ddof, ctx.stream, ctx.mr);
+  auto output = compute_variance(m2_result, count_result, var_agg._ddof, ctx.stream, ctx.mr);
   ctx.cache->add_result(ctx.col, agg, std::move(output));
 }
 
@@ -177,8 +171,7 @@ void hash_compound_agg_finalizer_fn::operator()<aggregation::STD>(aggregation co
 
   auto const m2_agg = make_m2_aggregation();
   // Since M2 is a compound aggregation, we need to "finalize" it using aggregation finalizer.
-  cudf::detail::aggregation_dispatcher(
-    m2_agg->kind, hash_compound_agg_finalizer_fn{ctx}, *m2_agg);
+  cudf::detail::aggregation_dispatcher(m2_agg->kind, hash_compound_agg_finalizer_fn{ctx}, *m2_agg);
   auto const count_agg    = make_count_aggregation();
   auto const m2_result    = ctx.cache->get_result(ctx.col, *m2_agg);
   auto const count_result = ctx.cache->get_result(ctx.col, *count_agg);

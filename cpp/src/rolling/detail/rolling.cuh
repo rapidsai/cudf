@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -144,8 +144,8 @@ rolling_aggregation_preprocessor_fn::operator()<aggregation::MAX>(data_type col_
 // They get processed entirely in the finalize() step.
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-rolling_aggregation_preprocessor_fn::operator()<aggregation::COLLECT_LIST>(
-  data_type, aggregation const&) const
+rolling_aggregation_preprocessor_fn::operator()<aggregation::COLLECT_LIST>(data_type,
+                                                                           aggregation const&) const
 {
   return {};
 }
@@ -155,8 +155,8 @@ rolling_aggregation_preprocessor_fn::operator()<aggregation::COLLECT_LIST>(
 // They get processed entirely in the finalize() step.
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-rolling_aggregation_preprocessor_fn::operator()<aggregation::COLLECT_SET>(
-  data_type, aggregation const&) const
+rolling_aggregation_preprocessor_fn::operator()<aggregation::COLLECT_SET>(data_type,
+                                                                          aggregation const&) const
 {
   return {};
 }
@@ -210,8 +210,8 @@ rolling_aggregation_preprocessor_fn::operator()<aggregation::LAG>(data_type col_
 // NTH_ELEMENT aggregations are computed in finalize(). Skip preprocessing.
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-rolling_aggregation_preprocessor_fn::operator()<aggregation::NTH_ELEMENT>(
-  data_type, aggregation const&) const
+rolling_aggregation_preprocessor_fn::operator()<aggregation::NTH_ELEMENT>(data_type,
+                                                                          aggregation const&) const
 {
   return {};
 }

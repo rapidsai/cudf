@@ -55,7 +55,9 @@ struct aggregation_finalizer_fn {
    * @param agg The aggregation to finalize
    */
   template <aggregation::Kind k>
-  void operator()(aggregation const& agg) const {}
+  void operator()(aggregation const& agg) const
+  {
+  }
 };
 
 }  // namespace detail

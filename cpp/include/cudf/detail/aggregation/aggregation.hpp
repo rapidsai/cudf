@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,44 +34,158 @@ class aggregation_finalizer {
 
   // Declare overloads for each kind of a agg to dispatch
   virtual void visit(aggregation const& agg) {}
-  virtual void visit(class sum_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class sum_with_overflow_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class product_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class min_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class max_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class count_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class histogram_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class any_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class all_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class sum_of_squares_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class mean_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class m2_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class var_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class std_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class median_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class quantile_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class argmax_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class argmin_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class nunique_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class nth_element_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class row_number_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class rank_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class collect_list_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class collect_set_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class lead_lag_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class udf_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class host_udf_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class merge_lists_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class merge_sets_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class merge_m2_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class merge_histogram_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class covariance_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class correlation_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class tdigest_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class merge_tdigest_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class ewma_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class bitwise_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
-  virtual void visit(class top_k_aggregation const& agg) { visit(static_cast<aggregation const&>(agg)); }
+  virtual void visit(class sum_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class sum_with_overflow_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class product_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class min_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class max_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class count_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class histogram_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class any_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class all_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class sum_of_squares_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class mean_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class m2_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class var_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class std_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class median_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class quantile_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class argmax_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class argmin_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class nunique_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class nth_element_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class row_number_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class rank_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class collect_list_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class collect_set_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class lead_lag_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class udf_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class host_udf_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class merge_lists_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class merge_sets_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class merge_m2_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class merge_histogram_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class covariance_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class correlation_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class tdigest_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class merge_tdigest_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class ewma_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class bitwise_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
+  virtual void visit(class top_k_aggregation const& agg)
+  {
+    visit(static_cast<aggregation const&>(agg));
+  }
 };
 
 /**
@@ -90,8 +204,6 @@ class sum_aggregation final : public rolling_aggregation,
   {
     return std::make_unique<sum_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -108,8 +220,6 @@ class sum_with_overflow_aggregation final : public groupby_aggregation,
   {
     return std::make_unique<sum_with_overflow_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -127,8 +237,6 @@ class product_aggregation final : public groupby_aggregation,
   {
     return std::make_unique<product_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -147,8 +255,6 @@ class min_aggregation final : public rolling_aggregation,
   {
     return std::make_unique<min_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -167,8 +273,6 @@ class max_aggregation final : public rolling_aggregation,
   {
     return std::make_unique<max_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -185,8 +289,6 @@ class count_aggregation final : public rolling_aggregation,
   {
     return std::make_unique<count_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -200,8 +302,6 @@ class histogram_aggregation final : public groupby_aggregation, public reduce_ag
   {
     return std::make_unique<histogram_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -215,8 +315,6 @@ class any_aggregation final : public reduce_aggregation, public segmented_reduce
   {
     return std::make_unique<any_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -230,8 +328,6 @@ class all_aggregation final : public reduce_aggregation, public segmented_reduce
   {
     return std::make_unique<all_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -247,8 +343,6 @@ class sum_of_squares_aggregation final : public groupby_aggregation,
   {
     return std::make_unique<sum_of_squares_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -265,8 +359,6 @@ class mean_aggregation final : public rolling_aggregation,
   {
     return std::make_unique<mean_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -280,8 +372,6 @@ class m2_aggregation : public groupby_aggregation {
   {
     return std::make_unique<m2_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -329,8 +419,6 @@ class var_aggregation final : public std_var_aggregation {
   {
     return std::make_unique<var_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -347,8 +435,6 @@ class std_aggregation final : public std_var_aggregation {
   {
     return std::make_unique<std_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -362,8 +448,6 @@ class median_aggregation final : public groupby_aggregation, public reduce_aggre
   {
     return std::make_unique<median_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -398,8 +482,6 @@ class quantile_aggregation final : public groupby_aggregation, public reduce_agg
     return std::make_unique<quantile_aggregation>(*this);
   }
 
-
-
  private:
   [[nodiscard]] size_t hash_impl() const
   {
@@ -424,8 +506,6 @@ class argmax_aggregation final : public rolling_aggregation,
   {
     return std::make_unique<argmax_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -441,8 +521,6 @@ class argmin_aggregation final : public rolling_aggregation,
   {
     return std::make_unique<argmin_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -475,8 +553,6 @@ class nunique_aggregation final : public groupby_aggregation,
   {
     return std::make_unique<nunique_aggregation>(*this);
   }
-
-
 
  private:
   [[nodiscard]] size_t hash_impl() const
@@ -517,8 +593,6 @@ class nth_element_aggregation final : public groupby_aggregation,
     return std::make_unique<nth_element_aggregation>(*this);
   }
 
-
-
  private:
   [[nodiscard]] size_t hash_impl() const
   {
@@ -537,8 +611,6 @@ class row_number_aggregation final : public rolling_aggregation {
   {
     return std::make_unique<row_number_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -559,16 +631,12 @@ class ewma_aggregation final : public scan_aggregation {
     return std::make_unique<ewma_aggregation>(*this);
   }
 
-
-
   [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<ewma_aggregation const&>(_other);
     return this->center_of_mass == other.center_of_mass and this->history == other.history;
   }
-
-
 };
 
 /**
@@ -616,8 +684,6 @@ class rank_aggregation final : public rolling_aggregation,
     return std::make_unique<rank_aggregation>(*this);
   }
 
-
-
  private:
   [[nodiscard]] size_t hash_impl() const
   {
@@ -659,8 +725,6 @@ class collect_list_aggregation final : public rolling_aggregation,
   {
     return std::make_unique<collect_list_aggregation>(*this);
   }
-
-
 
  private:
   [[nodiscard]] size_t hash_impl() const
@@ -709,8 +773,6 @@ class collect_set_aggregation final : public rolling_aggregation,
     return std::make_unique<collect_set_aggregation>(*this);
   }
 
-
-
  protected:
   [[nodiscard]] size_t hash_impl() const
   {
@@ -745,8 +807,6 @@ class lead_lag_aggregation final : public rolling_aggregation {
   {
     return std::make_unique<lead_lag_aggregation>(*this);
   }
-
-
 
   size_type row_offset;
 
@@ -791,8 +851,6 @@ class udf_aggregation final : public rolling_aggregation {
     return std::make_unique<udf_aggregation>(*this);
   }
 
-
-
   std::string const _source;
   std::string const _operator_name;
   std::string const _function_name;
@@ -829,9 +887,6 @@ class host_udf_aggregation final : public groupby_aggregation,
   [[nodiscard]] size_t do_hash() const override;
 
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override;
-
-
-
 };
 
 /**
@@ -845,8 +900,6 @@ class merge_lists_aggregation final : public groupby_aggregation, public reduce_
   {
     return std::make_unique<merge_lists_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -880,8 +933,6 @@ class merge_sets_aggregation final : public groupby_aggregation, public reduce_a
     return std::make_unique<merge_sets_aggregation>(*this);
   }
 
-
-
  protected:
   [[nodiscard]] size_t hash_impl() const
   {
@@ -900,8 +951,6 @@ class merge_m2_aggregation final : public groupby_aggregation {
   {
     return std::make_unique<merge_m2_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -915,8 +964,6 @@ class merge_histogram_aggregation final : public groupby_aggregation, public red
   {
     return std::make_unique<merge_histogram_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -940,8 +987,6 @@ class covariance_aggregation final : public groupby_aggregation {
   {
     return std::make_unique<covariance_aggregation>(*this);
   }
-
-
 
  protected:
   [[nodiscard]] size_t hash_impl() const
@@ -979,8 +1024,6 @@ class correlation_aggregation final : public groupby_aggregation {
     return std::make_unique<correlation_aggregation>(*this);
   }
 
-
-
  protected:
   [[nodiscard]] size_t hash_impl() const
   {
@@ -1004,8 +1047,6 @@ class tdigest_aggregation final : public groupby_aggregation, public reduce_aggr
   {
     return std::make_unique<tdigest_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -1024,8 +1065,6 @@ class merge_tdigest_aggregation final : public groupby_aggregation, public reduc
   {
     return std::make_unique<merge_tdigest_aggregation>(*this);
   }
-
-
 };
 
 /**
@@ -1053,10 +1092,6 @@ class bitwise_aggregation final : public groupby_aggregation, public reduce_aggr
   {
     return std::make_unique<bitwise_aggregation>(*this);
   }
-
-
-
-
 };
 
 class top_k_aggregation final : public groupby_aggregation {
@@ -1085,10 +1120,6 @@ class top_k_aggregation final : public groupby_aggregation {
   {
     return std::make_unique<top_k_aggregation>(*this);
   }
-
-
-
-
 
  private:
   [[nodiscard]] std::size_t hash_impl() const
