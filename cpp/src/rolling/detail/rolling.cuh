@@ -169,7 +169,8 @@ inline std::vector<std::unique_ptr<aggregation>>
 rolling_aggregation_preprocessor_fn::operator()<aggregation::STD>(data_type,
                                                                   aggregation const& agg) const
 {
-  auto const& std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
+  // Safe cast: this specialization is only called for STD aggregations
+  auto const& std_agg = static_cast<cudf::detail::std_aggregation const&>(agg);
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(make_variance_aggregation(std_agg._ddof));
   return aggs;

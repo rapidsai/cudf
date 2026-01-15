@@ -163,7 +163,8 @@ void hash_compound_agg_finalizer_fn::operator()<aggregation::VARIANCE>(
   auto const m2_result    = ctx.cache->get_result(ctx.col, *m2_agg);
   auto const count_result = ctx.cache->get_result(ctx.col, *count_agg);
 
-  auto const& var_agg = dynamic_cast<cudf::detail::var_aggregation const&>(agg);
+  // Safe cast: this specialization is only called for VARIANCE aggregations
+  auto const& var_agg = static_cast<cudf::detail::var_aggregation const&>(agg);
   auto output         = compute_variance(m2_result, count_result, var_agg._ddof, ctx.stream, ctx.mr);
   ctx.cache->add_result(ctx.col, agg, std::move(output));
 }
@@ -182,7 +183,8 @@ void hash_compound_agg_finalizer_fn::operator()<aggregation::STD>(aggregation co
   auto const m2_result    = ctx.cache->get_result(ctx.col, *m2_agg);
   auto const count_result = ctx.cache->get_result(ctx.col, *count_agg);
 
-  auto const& std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
+  // Safe cast: this specialization is only called for STD aggregations
+  auto const& std_agg = static_cast<cudf::detail::std_aggregation const&>(agg);
   auto output         = compute_std(m2_result, count_result, std_agg._ddof, ctx.stream, ctx.mr);
   ctx.cache->add_result(ctx.col, agg, std::move(output));
 }
