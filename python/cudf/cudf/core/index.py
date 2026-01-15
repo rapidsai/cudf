@@ -286,16 +286,8 @@ class Index(SingleColumnFrame):
                 ufunc, cupy_func, inputs, **kwargs
             )
 
-            out = [_index_from_data(out) for out in data]
-
-            # pandas returns numpy arrays when the outputs are boolean.
-            for i, o in enumerate(out):
-                # We explicitly _do not_ use isinstance here: we want only
-                # boolean Indexes, not dtype-specific subclasses.
-                if type(o) is Index and o.dtype.kind == "b":
-                    out[i] = o.values
-
-            return out[0] if ufunc.nout == 1 else tuple(out)
+            out = tuple(_index_from_data(out) for out in data)
+            return out[0] if ufunc.nout == 1 else out
 
         return NotImplemented
 
