@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
-    from cudf_polars.experimental.base import ColumnStat, StatsCollector
+    from cudf_polars.experimental.base import ColumnStat, Profiler, StatsCollector
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
@@ -144,6 +144,7 @@ async def dataframescan_node(
     num_producers: int,
     rows_per_partition: int,
     estimated_chunk_bytes: int,
+    profiler: Profiler | None = None,
 ) -> None:
     """
     DataFrameScan node for rapidsmpf.
@@ -165,6 +166,8 @@ async def dataframescan_node(
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
+    profiler
+        The profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Find local partition count.
@@ -201,11 +204,13 @@ async def dataframescan_node(
             await ch_out.data.drain(context)
             return
 
+        n_rows_out = 0
+
         # If there is only one ir_slices or one producer, we can
         # skip the lineariser and read the chunks directly
         if len(ir_slices) == 1 or num_producers == 1:
             for seq_num, ir_slice in enumerate(ir_slices):
-                await read_chunk(
+                n_rows_out += await read_chunk(
                     context,
                     ir_slice,
                     seq_num,
@@ -214,6 +219,8 @@ async def dataframescan_node(
                     estimated_chunk_bytes,
                 )
             await ch_out.data.drain(context)
+            if profiler is not None:
+                profiler.row_count[ir] += n_rows_out
             return
 
         # Use Lineariser to ensure ordered delivery
@@ -228,9 +235,10 @@ async def dataframescan_node(
             producer_id = task_idx % num_producers
             producer_tasks[producer_id].append((task_idx, ir_slice))
 
-        async def _producer(producer_id: int, ch_out: Channel) -> None:
+        async def _producer(producer_id: int, ch_out: Channel) -> int:
+            rows = 0
             for task_idx, ir_slice in producer_tasks[producer_id]:
-                await read_chunk(
+                rows += await read_chunk(
                     context,
                     ir_slice,
                     task_idx,
@@ -239,12 +247,17 @@ async def dataframescan_node(
                     estimated_chunk_bytes,
                 )
             await ch_out.drain(context)
+            return rows
 
-        tasks = [lineariser.drain()]
+        tasks: list[Any] = [lineariser.drain()]
         tasks.extend(
             _producer(i, ch_in) for i, ch_in in enumerate(lineariser.input_channels)
         )
-        await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks)
+        # First result is from lineariser.drain() (None), rest are row counts
+        n_rows_out = sum(r for r in results[1:] if r is not None)
+        if profiler is not None:
+            profiler.row_count[ir] += n_rows_out
 
 
 @generate_ir_sub_network.register(DataFrameScan)
@@ -273,6 +286,7 @@ def _(
                 num_producers=num_producers,
                 rows_per_partition=rows_per_partition,
                 estimated_chunk_bytes=estimated_chunk_bytes,
+                profiler=rec.state["profiler"],
             )
         ]
     }
@@ -318,7 +332,7 @@ async def read_chunk(
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
-) -> None:
+) -> int:
     """
     Read a chunk from disk and send it to the output channel.
 
@@ -337,6 +351,11 @@ async def read_chunk(
     estimated_chunk_bytes
         Estimated size of the chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
+
+    Returns
+    -------
+    int
+        The number of rows read.
     """
     with opaque_reservation(context, estimated_chunk_bytes):
         df = await asyncio.to_thread(
@@ -344,6 +363,7 @@ async def read_chunk(
             *scan._non_child_args,
             context=ir_context,
         )
+        n_rows = df.table.num_rows()
         await ch_out.send(
             context,
             Message(
@@ -355,6 +375,7 @@ async def read_chunk(
                 ),
             ),
         )
+        return n_rows
 
 
 @define_py_node()
@@ -368,6 +389,7 @@ async def scan_node(
     plan: IOPartitionPlan,
     parquet_options: ParquetOptions,
     estimated_chunk_bytes: int,
+    profiler: Profiler | None = None,
 ) -> None:
     """
     Scan node for rapidsmpf.
@@ -391,6 +413,8 @@ async def scan_node(
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
+    profiler
+        The profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Build a list of local Scan operations
@@ -468,11 +492,13 @@ async def scan_node(
             await ch_out.data.drain(context)
             return
 
+        n_rows_out = 0
+
         # If there is only one scan or one producer, we can
         # skip the lineariser and read the chunks directly
         if len(scans) == 1 or num_producers == 1:
             for seq_num, scan in enumerate(scans):
-                await read_chunk(
+                n_rows_out += await read_chunk(
                     context,
                     scan,
                     seq_num,
@@ -481,6 +507,8 @@ async def scan_node(
                     estimated_chunk_bytes,
                 )
             await ch_out.data.drain(context)
+            if profiler is not None:
+                profiler.row_count[ir] += n_rows_out
             return
 
         # Use Lineariser to ensure ordered delivery
@@ -495,9 +523,10 @@ async def scan_node(
             producer_id = task_idx % num_producers
             producer_tasks[producer_id].append((task_idx, scan))
 
-        async def _producer(producer_id: int, ch_out: Channel) -> None:
+        async def _producer(producer_id: int, ch_out: Channel) -> int:
+            rows = 0
             for task_idx, scan in producer_tasks[producer_id]:
-                await read_chunk(
+                rows += await read_chunk(
                     context,
                     scan,
                     task_idx,
@@ -506,12 +535,17 @@ async def scan_node(
                     estimated_chunk_bytes,
                 )
             await ch_out.drain(context)
+            return rows
 
-        tasks = [lineariser.drain()]
+        tasks: list[Any] = [lineariser.drain()]
         tasks.extend(
             _producer(i, ch_in) for i, ch_in in enumerate(lineariser.input_channels)
         )
-        await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks)
+        # First result is from lineariser.drain() (None), rest are row counts
+        n_rows_out = sum(r for r in results[1:] if r is not None)
+        if profiler is not None:
+            profiler.row_count[ir] += n_rows_out
 
 
 def make_rapidsmpf_read_parquet_node(
@@ -691,6 +725,7 @@ def _(
                 plan=plan,
                 parquet_options=parquet_options,
                 estimated_chunk_bytes=executor.target_partition_size,
+                profiler=rec.state["profiler"],
             )
         ]
     return nodes, channels

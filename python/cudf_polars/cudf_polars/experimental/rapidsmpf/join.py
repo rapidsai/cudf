@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.experimental.base import Profiler
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
@@ -51,6 +52,7 @@ async def broadcast_join_node(
     broadcast_side: Literal["left", "right"],
     collective_id: int,
     target_partition_size: int,
+    profiler: Profiler | None = None,
 ) -> None:
     """
     Join node for rapidsmpf.
@@ -75,6 +77,8 @@ async def broadcast_join_node(
         Pre-allocated collective ID for this operation.
     target_partition_size
         The target partition size in bytes.
+    profiler
+        The profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(
         context,
@@ -169,6 +173,7 @@ async def broadcast_join_node(
 
         # Stream through large side, joining with the small-side
         seq_num = 0
+        n_rows_out = 0
         large_chunk_processed = False
         receiving_large_chunks = True
         while receiving_large_chunks:
@@ -231,6 +236,7 @@ async def broadcast_join_node(
                 )
 
                 # Send output chunk
+                n_rows_out += df.table.num_rows()
                 await ch_out.data.send(
                     context,
                     Message(
@@ -244,6 +250,8 @@ async def broadcast_join_node(
 
         del small_dfs, small_chunks
         await ch_out.data.drain(context)
+        if profiler is not None:
+            profiler.row_count[ir] += n_rows_out
 
 
 @generate_ir_sub_network.register(Join)
@@ -287,6 +295,7 @@ def _(
                     channels[right].reserve_output_slot(),
                 ),
                 partitioning_index=partitioning_index,
+                profiler=rec.state["profiler"],
             )
         ]
         return nodes, channels
@@ -317,6 +326,7 @@ def _(
                 broadcast_side=broadcast_side,
                 collective_id=rec.state["collective_id_map"][ir],
                 target_partition_size=target_partition_size,
+                profiler=rec.state["profiler"],
             )
         ]
         return nodes, channels

@@ -147,6 +147,7 @@ async def default_node_multi(
     chs_in: tuple[ChannelPair, ...],
     *,
     partitioning_index: int | None = None,
+    profiler: Profiler | None = None,
 ) -> None:
     """
     Pointwise node for rapidsmpf.
@@ -166,6 +167,8 @@ async def default_node_multi(
     partitioning_index
         Index of the input channel to preserve partitioning information for.
         If None, no partitioning information is preserved.
+    profiler
+        The profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(
         context,
@@ -185,6 +188,7 @@ async def default_node_multi(
         await ch_out.send_metadata(context, metadata)
 
         seq_num = 0
+        n_rows_out = 0
         n_children = len(chs_in)
         finished_channels: set[int] = set()
         # Store TableChunk objects to keep data alive and prevent use-after-free
@@ -247,6 +251,7 @@ async def default_node_multi(
                     *dfs,
                     context=ir_context,
                 )
+                n_rows_out += df.table.num_rows()
                 await ch_out.data.send(
                     context,
                     Message(
@@ -264,6 +269,8 @@ async def default_node_multi(
         # Drain the output channel
         del ready_chunks
         await ch_out.data.drain(context)
+        if profiler is not None:
+            profiler.row_count[ir] += n_rows_out
 
 
 @define_py_node()
@@ -569,6 +576,7 @@ def _(
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
+                profiler=rec.state["profiler"],
             )
         ]
 
