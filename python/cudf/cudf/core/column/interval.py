@@ -221,6 +221,12 @@ class IntervalColumn(ColumnBase):
             self.plc_column.children()[1]
         )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
 
+    @property
+    def __cuda_array_interface__(self) -> dict[str, Any]:
+        raise NotImplementedError(
+            "Intervals are not yet supported via `__cuda_array_interface__`"
+        )
+
     def overlaps(other) -> ColumnBase:
         raise NotImplementedError("overlaps is not currently implemented.")
 
