@@ -282,7 +282,7 @@ struct delta_binary_decoder {
     int const lane_id = t % warp_size;
 
     while (current_value_idx < skip && current_value_idx < num_encoded_values(true)) {
-      // calc_mini_block_values only runs in warp 0, but writes to current_value_index,
+      // calc_mini_block_values only runs in warp 0, but writes to current_value_idx,
       // so everyone must sync before we diverge
       __syncthreads();
       if (t < warp_size) {
