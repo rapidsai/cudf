@@ -314,7 +314,8 @@ def _dtype_to_names_list(dtype: DtypeObj) -> list[tuple[Hashable, Any]]:
             for name, field_dtype in dtype.fields.items()
         ]
     elif isinstance(dtype, ListDtype):
-        return [("", _dtype_to_names_list(dtype.element_type))]
+        # List columns have two children: offsets and values
+        return [("", []), ("", _dtype_to_names_list(dtype.element_type))]
     return []
 
 
