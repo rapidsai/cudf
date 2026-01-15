@@ -15,6 +15,7 @@ import cudf
 from cudf.core.column.column import ColumnBase, _handle_nulls, as_column
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.dtypes import is_dtype_obj_interval
+from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
 if TYPE_CHECKING:
     from cudf._typing import DtypeObj
@@ -262,6 +263,9 @@ class IntervalColumn(ColumnBase):
         self, index: int
     ) -> pd.Interval | dict[Any, Any] | None:
         result = super().element_indexing(index)
+        if isinstance(result, pa.Scalar):
+            py_element = maybe_nested_pa_scalar_to_py(result)
+            result = self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
         if isinstance(result, dict) and cudf.get_option(
             "mode.pandas_compatible"
         ):
