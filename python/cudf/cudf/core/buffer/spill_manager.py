@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -149,16 +149,16 @@ class SpillStatistics:
         with self.lock:
             tb = get_traceback()
             stat = self.exposes.get(tb, None)
-            spilled_nbytes = buf.nbytes if buf.is_spilled else 0
+            spilled_nbytes = buf.size if buf.is_spilled else 0
             if stat is None:
                 self.exposes[tb] = self.Expose(
                     traceback=tb,
-                    total_nbytes=buf.nbytes,
+                    total_nbytes=buf.size,
                     spilled_nbytes=spilled_nbytes,
                 )
             else:
                 stat.count += 1
-                stat.total_nbytes += buf.nbytes
+                stat.total_nbytes += buf.size
                 stat.spilled_nbytes += spilled_nbytes
 
     def __repr__(self) -> str:
