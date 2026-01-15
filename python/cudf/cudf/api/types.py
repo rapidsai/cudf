@@ -106,7 +106,7 @@ def is_string_dtype(obj):
     return (
         (
             isinstance(obj, (cudf.Index, cudf.Series))
-            and is_string_dtype(obj.dtype)
+            and isinstance(obj.dtype, pd.StringDtype)
         )
         or (isinstance(obj, pd.StringDtype))
         or (
@@ -337,7 +337,7 @@ def is_object_dtype(arr_or_dtype):
     False
     """
     if isinstance(arr_or_dtype, cudf.Index):
-        return is_string_dtype(arr_or_dtype.dtype)
+        return isinstance(arr_or_dtype.dtype, pd.StringDtype)
     elif isinstance(arr_or_dtype, cudf.Series):
         return pd_types.is_object_dtype(arr_or_dtype=arr_or_dtype.dtype)
     else:
