@@ -53,17 +53,14 @@ class StructColumn(ColumnBase):
         cls, plc_column: plc.Column, dtype: StructDtype
     ) -> tuple[plc.Column, StructDtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        # IntervalDtype is a subclass of StructDtype, so compare types exactly
         if (
             not cudf.get_option("mode.pandas_compatible")
-            and type(dtype) is not StructDtype
+            and not isinstance(dtype, StructDtype)
         ) or (
             cudf.get_option("mode.pandas_compatible")
             and not is_dtype_obj_struct(dtype)
         ):
-            raise ValueError(
-                f"{type(dtype).__name__} must be a StructDtype exactly."
-            )
+            raise ValueError(f"{type(dtype).__name__} must be a StructDtype.")
         return plc_column, dtype
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
