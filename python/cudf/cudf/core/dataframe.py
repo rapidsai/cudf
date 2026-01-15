@@ -5917,7 +5917,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     raise ValueError(
                         f"Found columns that don't exist in data: {diff}"
                     )
-            if len(columns) != num_cols:
+            if len(columns) > num_cols:
                 raise ValueError(
                     f"columns length expected {num_cols} "
                     f"but found {len(columns)}"
