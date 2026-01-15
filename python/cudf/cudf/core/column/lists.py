@@ -78,7 +78,10 @@ class ListColumn(ColumnBase):
 
         if idx == 1:
             sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-            return ColumnBase.from_pylibcudf(sliced_plc_col)
+            dtype = cast(ListDtype, self.dtype)
+            return ColumnBase.from_pylibcudf(
+                sliced_plc_col
+            )._with_type_metadata(dtype.element_type)
 
         return self._children[idx]
 
@@ -141,7 +144,7 @@ class ListColumn(ColumnBase):
         Integer offsets to elements specifying each row of the ListColumn
         """
         return cast(
-            cudf.core.column.numerical.NumericalColumn, self.children[0]
+            "cudf.core.column.numerical.NumericalColumn", self.children[0]
         )
 
     @property
@@ -228,7 +231,7 @@ class ListColumn(ColumnBase):
             [offset_col, data_plc_col],
         )
         return cast(
-            Self,
+            "Self",
             cls.from_pylibcudf(plc_column),
         )
 
@@ -259,7 +262,7 @@ class ListColumn(ColumnBase):
                 self._string_separators,
             )
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 type(self).from_pylibcudf(plc_column),
             )
 
@@ -299,7 +302,7 @@ class ListColumn(ColumnBase):
                 [offsets, plc_leaf_col],
             )
         return cast(
-            Self,
+            "Self",
             ColumnBase.from_pylibcudf(plc_leaf_col),
         )
 
@@ -477,7 +480,7 @@ class ListColumn(ColumnBase):
                 plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
             )
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 type(self).from_pylibcudf(plc_column),
             )
 
@@ -497,7 +500,7 @@ class ListColumn(ColumnBase):
                     )
                 seed = np.uint32(seed)
             return cast(
-                Self,
+                "Self",
                 type(self).from_pylibcudf(
                     plc.nvtext.minhash.minhash_ngrams(
                         self.plc_column,
@@ -525,7 +528,7 @@ class ListColumn(ColumnBase):
                     )
                 seed = np.uint64(seed)
             return cast(
-                Self,
+                "Self",
                 type(self).from_pylibcudf(
                     plc.nvtext.minhash.minhash64_ngrams(
                         self.plc_column,

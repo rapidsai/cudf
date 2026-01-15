@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -90,7 +90,13 @@ class StructColumn(ColumnBase):
             )
 
         sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
-        return type(self).from_pylibcudf(sliced_plc_col)
+        dtype = cast(StructDtype, self.dtype)
+        field_name = list(dtype.fields.keys())[idx]
+        return (
+            type(self)
+            .from_pylibcudf(sliced_plc_col)
+            ._with_type_metadata(dtype.fields[field_name])
+        )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
