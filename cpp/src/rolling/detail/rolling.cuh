@@ -256,8 +256,7 @@ class rolling_aggregation_postprocessor final {
    */
   void finalize(aggregation const& agg)
   {
-    cudf::detail::aggregation_dispatcher(
-      agg.kind, rolling_postprocessor_fn{*this}, agg);
+    cudf::detail::aggregation_dispatcher(agg.kind, rolling_postprocessor_fn{*this}, agg);
   }
 
   std::unique_ptr<column> get_result()
@@ -310,8 +309,8 @@ struct rolling_postprocessor_fn {
 // Specialization for MIN aggregation
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 template <>
-inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::
-  operator()<aggregation::MIN>(aggregation const&) const
+inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
+  aggregation::MIN>(aggregation const&) const
 {
   if (ctx.result_type.id() == type_id::STRING || ctx.result_type.id() == type_id::STRUCT) {
     // The rows that represent null elements will have negative values in gather map,
@@ -331,8 +330,8 @@ inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIte
 // Specialization for MAX aggregation
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 template <>
-inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::
-  operator()<aggregation::MAX>(aggregation const&) const
+inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
+  aggregation::MAX>(aggregation const&) const
 {
   if (ctx.result_type.id() == type_id::STRING || ctx.result_type.id() == type_id::STRUCT) {
     // The rows that represent null elements will have negative values in gather map,
@@ -352,8 +351,8 @@ inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIte
 // Specialization for COLLECT_LIST aggregation
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 template <>
-inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::
-  operator()<aggregation::COLLECT_LIST>(aggregation const& agg) const
+inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
+  aggregation::COLLECT_LIST>(aggregation const& agg) const
 {
   auto const& collect_agg = static_cast<cudf::detail::collect_list_aggregation const&>(agg);
   ctx.result              = rolling_collect_list(ctx.input,
@@ -369,18 +368,18 @@ inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIte
 // Specialization for COLLECT_SET aggregation
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 template <>
-inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::
-  operator()<aggregation::COLLECT_SET>(aggregation const& agg) const
+inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
+  aggregation::COLLECT_SET>(aggregation const& agg) const
 {
-  auto const& collect_agg     = static_cast<cudf::detail::collect_set_aggregation const&>(agg);
+  auto const& collect_agg   = static_cast<cudf::detail::collect_set_aggregation const&>(agg);
   auto const collected_list = rolling_collect_list(ctx.input,
-                                                    ctx.default_outputs,
-                                                    ctx.preceding_window_begin,
-                                                    ctx.following_window_begin,
-                                                    ctx.min_periods,
-                                                    collect_agg._null_handling,
-                                                    ctx.stream,
-                                                    cudf::get_current_device_resource_ref());
+                                                   ctx.default_outputs,
+                                                   ctx.preceding_window_begin,
+                                                   ctx.following_window_begin,
+                                                   ctx.min_periods,
+                                                   collect_agg._null_handling,
+                                                   ctx.stream,
+                                                   cudf::get_current_device_resource_ref());
 
   ctx.result = lists::detail::distinct(lists_column_view{collected_list->view()},
                                        collect_agg._nulls_equal,
@@ -393,17 +392,18 @@ inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIte
 // Specialization for STD aggregation
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 template <>
-inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::
-  operator()<aggregation::STD>(aggregation const&) const
+inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
+  aggregation::STD>(aggregation const&) const
 {
-  ctx.result = detail::unary_operation(ctx.intermediate->view(), unary_operator::SQRT, ctx.stream, ctx.mr);
+  ctx.result =
+    detail::unary_operation(ctx.intermediate->view(), unary_operator::SQRT, ctx.stream, ctx.mr);
 }
 
 // Specialization for LEAD aggregation
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 template <>
-inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::
-  operator()<aggregation::LEAD>(aggregation const& agg) const
+inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
+  aggregation::LEAD>(aggregation const& agg) const
 {
   auto const& lead_agg = static_cast<cudf::detail::lead_lag_aggregation const&>(agg);
   // if this is non-fixed width, run the custom lead-lag code
@@ -428,8 +428,8 @@ inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIte
 // Specialization for LAG aggregation
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 template <>
-inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::
-  operator()<aggregation::LAG>(aggregation const& agg) const
+inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
+  aggregation::LAG>(aggregation const& agg) const
 {
   auto const& lag_agg = static_cast<cudf::detail::lead_lag_aggregation const&>(agg);
   // if this is non-fixed width, run the custom lead-lag code
@@ -454,8 +454,8 @@ inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIte
 // Specialization for NTH_ELEMENT aggregation
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 template <>
-inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::
-  operator()<aggregation::NTH_ELEMENT>(aggregation const& agg) const
+inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
+  aggregation::NTH_ELEMENT>(aggregation const& agg) const
 {
   auto const& nth_agg = static_cast<cudf::detail::nth_element_aggregation const&>(agg);
   ctx.result          = nth_agg._null_handling == null_policy::EXCLUDE
