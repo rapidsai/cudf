@@ -1480,7 +1480,7 @@ class Index(SingleColumnFrame):
         >>> idx.inferred_type
         'integer'
         """
-        if self.dtype == CUDF_STRING_DTYPE:
+        if isinstance(self.dtype, pd.StringDtype):
             if len(self) == 0:
                 return "empty"
             else:
@@ -1749,7 +1749,7 @@ class Index(SingleColumnFrame):
 
             output = output.replace("nan", str(cudf.NA))
         elif preprocess._column.nullable:
-            if self.dtype == CUDF_STRING_DTYPE:
+            if isinstance(self.dtype, pd.StringDtype):
                 output = repr(self.to_pandas(nullable=True))
             else:
                 output = repr(self._pandas_repr_compatible().to_pandas())
@@ -1978,7 +1978,7 @@ class Index(SingleColumnFrame):
                 if is_mixed_with_object_dtype(this, other):
                     got_dtype = (
                         other.dtype
-                        if this.dtype == CUDF_STRING_DTYPE
+                        if isinstance(this.dtype, pd.StringDtype)
                         else this.dtype
                     )
                     raise TypeError(
@@ -4214,7 +4214,7 @@ class TimedeltaIndex(Index):
 
         name = _getdefault_name(data, name=name)
         col = as_column(data)
-        if col.dtype == CUDF_STRING_DTYPE:
+        if isinstance(col.dtype, pd.StringDtype):
             # String -> Timedelta parsing via astype isn't rigorous enough yet
             # to cover cudf.pandas test cases, go through pandas instead.
             col = as_column(pd.to_timedelta(data))
@@ -4983,7 +4983,7 @@ class IntervalIndex(Index):
         if (
             len(breaks) == 0
             and dtype is None
-            and breaks.dtype == CUDF_STRING_DTYPE
+            and isinstance(breaks.dtype, pd.StringDtype)
         ):
             breaks = breaks.astype(np.dtype(np.int64))
         if copy:

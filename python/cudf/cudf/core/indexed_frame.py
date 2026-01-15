@@ -67,7 +67,6 @@ from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
     find_common_type,
@@ -3498,7 +3497,7 @@ class IndexedFrame(Frame):
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        if retty == CUDF_STRING_DTYPE:
+        if retty == np.dtype("object"):
             col = ColumnBase.from_pylibcudf(
                 strings_udf.column_from_managed_udf_string_array(ans_col)
             )
@@ -3642,7 +3641,7 @@ class IndexedFrame(Frame):
 
         method = "nlargest" if largest else "nsmallest"
         for col in columns:
-            if self._data[col].dtype == CUDF_STRING_DTYPE:
+            if isinstance(self._data[col].dtype, pd.StringDtype):
                 if isinstance(self, cudf.DataFrame):
                     error_msg = (
                         f"Column '{col}' has dtype {self._data[col].dtype}, "

@@ -80,7 +80,9 @@ def dtype(arbitrary: Any) -> DtypeObj:
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
-    if is_pandas_nullable_extension_dtype(pd_dtype):
+    if isinstance(pd_dtype, pd.StringDtype):
+        return pd_dtype
+    elif is_pandas_nullable_extension_dtype(pd_dtype):
         if isinstance(pd_dtype, pd.ArrowDtype):
             arrow_type = pd_dtype.pyarrow_dtype
             if (
@@ -97,8 +99,6 @@ def dtype(arbitrary: Any) -> DtypeObj:
                 )
         if cudf.get_option("mode.pandas_compatible"):
             return pd_dtype
-        elif isinstance(pd_dtype, pd.StringDtype):
-            return CUDF_STRING_DTYPE
         else:
             return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.core.dtypes.dtypes.NumpyEADtype):

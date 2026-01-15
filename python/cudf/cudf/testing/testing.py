@@ -14,7 +14,7 @@ from pandas import testing as tm
 
 import cudf
 from cudf.core.missing import NA, NaT
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, is_dtype_obj_numeric
+from cudf.utils.dtypes import is_dtype_obj_numeric
 
 pa_types = pa.types
 
@@ -65,7 +65,7 @@ def dtype_can_compare_equal_to_other(dtype):
     # return True if values of this dtype can compare
     # as equal to equal values of a different dtype
     return not (
-        dtype == CUDF_STRING_DTYPE
+        isinstance(dtype, pd.StringDtype)
         or isinstance(
             dtype,
             (

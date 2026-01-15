@@ -655,7 +655,9 @@ class NumericalColumn(NumericalBaseColumn):
                 return super()._process_values_for_isin(values.tolist())
             else:
                 raise
-        if lhs.dtype != rhs.dtype and rhs.dtype != CUDF_STRING_DTYPE:
+        if lhs.dtype != rhs.dtype and not isinstance(
+            rhs.dtype, pd.StringDtype
+        ):
             if rhs.can_cast_safely(lhs.dtype):
                 rhs = rhs.astype(lhs.dtype)
             elif lhs.can_cast_safely(rhs.dtype):

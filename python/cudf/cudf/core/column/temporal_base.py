@@ -317,8 +317,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                 to_res,  # type: ignore[call-overload]
             ).astype(f"m8[{self.time_unit}]", copy=False)
             return bool(max_dist <= max_to_res and min_dist <= max_to_res)
-        elif (
-            to_dtype == self._UNDERLYING_DTYPE or to_dtype == CUDF_STRING_DTYPE
+        elif to_dtype == self._UNDERLYING_DTYPE or isinstance(
+            to_dtype, pd.StringDtype
         ):
             # can safely cast to representation, or string
             return True

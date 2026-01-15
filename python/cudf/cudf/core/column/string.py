@@ -26,7 +26,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -118,17 +117,13 @@ class StringColumn(ColumnBase, Scannable):
 
     @classmethod
     def _validate_args(
-        cls, plc_column: plc.Column, dtype: np.dtype
+        cls, plc_column: plc.Column, dtype: pd.StringDtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not is_dtype_obj_string(dtype):
-            raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(dtype, np.dtype)
-            and dtype.kind == "U"
-        ):
-            dtype = CUDF_STRING_DTYPE
+        if not isinstance(dtype, pd.StringDtype):
+            raise ValueError(
+                f"dtype must be a pandas.StringDtype, not {dtype}"
+            )
         return plc_column, dtype
 
     @property

@@ -205,9 +205,8 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if isinstance(key, tuple):
             key = list(key)
 
-        if (
-            self._frame.dtype.kind in "uifb"
-            or self._frame.dtype == CUDF_STRING_DTYPE
+        if self._frame.dtype.kind in "uifb" or isinstance(
+            self._frame.dtype, pd.StringDtype
         ):
             # normalize types if necessary:
             # In contrast to Column.__setitem__ (which downcasts the value to

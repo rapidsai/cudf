@@ -628,8 +628,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         elif dtype.kind == "m":
             cls = cudf.core.column.TimeDeltaColumn
         elif (
-            dtype == CUDF_STRING_DTYPE
-            or dtype.kind == "U"
+            dtype.kind == "U"
             or isinstance(dtype, pd.StringDtype)
             or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
         ):
@@ -1068,7 +1067,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        if not inplace or self.dtype == CUDF_STRING_DTYPE:
+        if not inplace or isinstance(self.dtype, pd.StringDtype):
             with self.access(mode="read", scope="internal"):
                 result = cast(
                     Self,
@@ -1081,7 +1080,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         )
                     ),
                 )
-            if self.dtype == CUDF_STRING_DTYPE:
+            if isinstance(self.dtype, pd.StringDtype):
                 return self._mimic_inplace(result, inplace=True)
             return result
 
@@ -1558,7 +1557,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return 0
 
     def interpolate(self, index: Index) -> ColumnBase:
-        if self.dtype == CUDF_STRING_DTYPE:
+        if isinstance(self.dtype, pd.StringDtype):
             # TODO: Should raise for other types?
             raise TypeError(
                 f"Cannot interpolate with column of dtype {self.dtype}"
@@ -2593,9 +2592,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
             if other_col.dtype != self.dtype:
                 try:
-                    warn = (
-                        find_common_type((other_col.dtype, self.dtype))
-                        == CUDF_STRING_DTYPE
+                    warn = isinstance(
+                        find_common_type((other_col.dtype, self.dtype)),
+                        pd.StringDtype,
                     )
                 except NotImplementedError:
                     warn = True

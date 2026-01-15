@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype
 from cudf.core.index import ensure_index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     can_convert_to_column,
     is_dtype_obj_numeric,
 )
@@ -127,7 +126,7 @@ def to_numeric(
                 errors,
                 downcast,
             )
-    elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
+    elif isinstance(dtype, pd.StringDtype):
         col = _convert_str_col(col, errors, downcast)  # type: ignore[arg-type]
     elif isinstance(dtype, (ListDtype, StructDtype)):
         raise ValueError("Input does not support nested datatypes")
@@ -197,7 +196,7 @@ def _convert_str_col(
     -------
     Converted numeric column
     """
-    if col.dtype != CUDF_STRING_DTYPE:
+    if not isinstance(col.dtype, pd.StringDtype):
         raise TypeError("col must be string dtype.")
 
     if col.is_integer().all():

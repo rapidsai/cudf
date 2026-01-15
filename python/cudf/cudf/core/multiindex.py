@@ -35,7 +35,6 @@ from cudf.core.index import (
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     is_column_like,
     is_dtype_obj_numeric,
@@ -279,9 +278,9 @@ class MultiIndex(Index):
 
     @_performance_tracking
     def astype(self, dtype: Dtype, copy: bool = True) -> Self:
-        if cudf.dtype(dtype) != CUDF_STRING_DTYPE:
+        if not isinstance(cudf.dtype(dtype), pd.StringDtype):
             raise TypeError(
-                "Setting a MultiIndex dtype to anything other than object is "
+                "Setting a MultiIndex dtype to anything other than string is "
                 "not supported"
             )
         return self

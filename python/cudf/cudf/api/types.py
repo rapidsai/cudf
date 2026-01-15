@@ -34,7 +34,7 @@ from cudf.core.dtypes import (  # noqa: F401
     is_list_dtype,
     is_struct_dtype,
 )
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, is_dtype_obj_numeric
+from cudf.utils.dtypes import is_dtype_obj_numeric
 
 if TYPE_CHECKING:
     from cudf.core.index import CategoricalIndex
@@ -106,7 +106,7 @@ def is_string_dtype(obj):
     return (
         (
             isinstance(obj, (cudf.Index, cudf.Series))
-            and obj.dtype == CUDF_STRING_DTYPE
+            and is_string_dtype(obj.dtype)
         )
         or (isinstance(obj, pd.StringDtype))
         or (
@@ -337,7 +337,7 @@ def is_object_dtype(arr_or_dtype):
     False
     """
     if isinstance(arr_or_dtype, cudf.Index):
-        return arr_or_dtype.dtype == CUDF_STRING_DTYPE
+        return is_string_dtype(arr_or_dtype.dtype)
     elif isinstance(arr_or_dtype, cudf.Series):
         return pd_types.is_object_dtype(arr_or_dtype=arr_or_dtype.dtype)
     else:
