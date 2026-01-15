@@ -920,6 +920,7 @@ class StreamingExecutor:
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
         d["stats_planning"] = json.dumps(d["stats_planning"])
+        d["selectivity_hints"] = json.dumps(d["selectivity_hints"])
         return hash(tuple(sorted(d.items())))
 
 

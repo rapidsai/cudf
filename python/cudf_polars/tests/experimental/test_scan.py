@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -87,6 +87,24 @@ def test_split_scan_predicate(tmp_path, df, mask):
             "target_partition_size": 1_000,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
+        },
+    )
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_scan_selectivity_hint(tmp_path, df):
+    # Test that selectivity hints trigger repartition after selective scans
+    make_partitioned_source(df, tmp_path, "parquet", n_files=3)
+    q = pl.scan_parquet(tmp_path).filter(pl.col("x") < 500)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 1_000,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            # Hint to reduce partitions after this selective scan
+            "selectivity_hints": {"SCAN PARQUET ('x', 'y', 'z')": 0.1},
         },
     )
     assert_gpu_result_equal(q, engine=engine)

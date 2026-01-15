@@ -211,6 +211,31 @@ def test_groupby_then_slice(df: pl.LazyFrame, zlice: tuple[int, int]) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_groupby_tree_reduction_with_hint() -> None:
+    # Test N-ary tree reduction with selectivity hints.
+    # With 16 partitions and n_ary=4, we need multiple reduction levels:
+    # 16 -> 4 -> 1, which exercises the intermediate GroupBy creation.
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 2,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "groupby_n_ary": 4,
+            "selectivity_hints": {"GROUPBY ('y',)": 0.0001},
+        },
+    )
+    df = pl.LazyFrame(
+        {
+            "x": list(range(32)),
+            "y": [1, 2, 3, 4] * 8,
+        }
+    )
+    q = df.group_by("y").sum()
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 def test_groupby_on_equality(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     # See: https://github.com/rapidsai/cudf/issues/19152
     df = pl.LazyFrame(
