@@ -7,7 +7,7 @@ ci:
   autoupdate_branch: ""
   autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: quarterly
-  skip: ["mypy", "verify-alpha-spec"]
+  skip: ["mypy", "verify-alpha-spec", "verify-thrust-exec-policy"]
   submodules: false
 
 repos:
