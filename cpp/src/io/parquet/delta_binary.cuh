@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -282,6 +282,9 @@ struct delta_binary_decoder {
     int const lane_id = t % warp_size;
 
     while (current_value_idx < skip && current_value_idx < num_encoded_values(true)) {
+      // calc_mini_block_values only runs in warp 0, but writes to current_value_index,
+      // so everyone must sync before we diverge
+      __syncthreads();
       if (t < warp_size) {
         calc_mini_block_values(lane_id);
         if (lane_id == 0) { setup_next_mini_block(true); }
