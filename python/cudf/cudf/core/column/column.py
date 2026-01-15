@@ -2646,9 +2646,9 @@ def column_empty(
     dtype : Dtype
         Type of the column.
     """
-    if (is_struct := isinstance(dtype, StructDtype)) or isinstance(
-        dtype, ListDtype
-    ):
+    if (
+        is_struct := isinstance(dtype, (StructDtype, IntervalDtype))
+    ) or isinstance(dtype, ListDtype):
         if is_struct:
             children = tuple(
                 column_empty(row_count, field_dtype)
