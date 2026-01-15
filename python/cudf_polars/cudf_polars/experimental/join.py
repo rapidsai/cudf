@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel Join Logic."""
 
@@ -13,7 +13,12 @@ from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle, _hash_partition_dataframe
-from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _concat,
+    _fallback_inform,
+    _get_selectivity_hint,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -285,6 +290,7 @@ def _(
             msg=f"Join({maintain_order=}) not supported for multiple partitions.",
         )
 
+    result_node: IR
     if _should_bcast_join(
         ir,
         left,
@@ -294,7 +300,7 @@ def _(
         config_options.executor.broadcast_join_limit,
     ):
         # Create a broadcast join
-        return _make_bcast_join(
+        result_node, partition_info = _make_bcast_join(
             ir,
             output_count,
             partition_info,
@@ -306,7 +312,7 @@ def _(
         )
     else:
         # Create a hash join
-        return _make_hash_join(
+        result_node, partition_info = _make_hash_join(
             ir,
             output_count,
             partition_info,
@@ -315,6 +321,21 @@ def _(
             config_options.executor.shuffle_method,
             shuffler_insertion_method=config_options.executor.shuffler_insertion_method,
         )
+
+    # Check for selectivity hint to consolidate partitions after selective joins
+    join_count = partition_info[result_node].count
+    if join_count > 1 and (
+        hint := _get_selectivity_hint(
+            ir,
+            config_options.executor.selectivity_hints,
+        )
+    ):
+        new_count = max(int(hint * join_count), 1)
+        if new_count < join_count:
+            result_node = Repartition(result_node.schema, result_node)
+            partition_info[result_node] = PartitionInfo(count=new_count)
+
+    return result_node, partition_info
 
 
 @generate_ir_tasks.register(Join)
