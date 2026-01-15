@@ -458,10 +458,8 @@ def get_executor_options(
             executor_options["cluster"] = "distributed"
         executor_options["stats_planning"] = {
             "use_reduction_planning": run_config.stats_planning,
-            "use_sampling": (
-                # Always allow row-group sampling for rapidsmpf runtime
-                run_config.stats_planning or run_config.runtime == "rapidsmpf"
-            ),
+            "use_io_partitioning": True,  # Always use parquet metadata for IO partitioning
+            "use_sampling": True,  # Always sample for consistent IO partitioning
         }
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
@@ -491,8 +489,7 @@ def get_executor_options(
             "GROUPBY ('o_orderpriority',)": 0.0001,
             "GROUPBY ('o_year',)": 0.0006,
             "GROUPBY ('supp_nation', 'cust_nation', 'l_year')": 0.0004,
-            # NOTE: q17 GROUPBY hint removed - reduces to 1 partition too early,
-            # breaking the final sum(l_extendedprice)/7.0 tree reduction
+            "GROUPBY ('p_partkey',)": 0.01,
             # FILTER hints (actual output / actual input from child)
             "FILTER ('key', 'avg_quantity', 'l_extendedprice', 'l_quantity')": 0.09,  # q17: 161K/1.79M=9%
             "FILTER ('l_orderkey', 'sum_quantity')": 0.0001,
@@ -505,14 +502,12 @@ def get_executor_options(
             # JOIN hints (actual output / larger input - for truly selective joins < 10%)
             "JOIN Inner ('p_partkey',) ('ps_partkey',) ('p_partkey', 'p_name',": 0.054,  # q9 only
             "JOIN Inner ('p_partkey', 'ps_suppkey') ('l_partkey', 'l_suppkey')": 0.054,  # q9
-            "JOIN Inner ('l_suppkey', 'n_nationkey') ('s_suppkey', 's_nationkey')": 0.002,  # q5
             "JOIN Inner ('s_suppkey',) ('supplier_no',)": 0.002,  # q15
-            # q17 join hint removed - 0.001 was too aggressive, killed parallelism
-            # q17 key-partkey join hint removed - not actually selective (100%)
-            # q18: extremely selective joins after sum(l_quantity) > 300 filter
-            "JOIN Semi ('o_orderkey',) ('l_orderkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice')": 0.00004,
-            "JOIN Inner ('o_orderkey',) ('l_orderkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice', 'l_quantity')": 0.0001,
-            "JOIN Inner ('o_custkey',) ('c_custkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice', 'l_quantity', 'c_name')": 0.003,
+            "JOIN Inner ('n_nationkey',) ('c_nationkey',) ('r_regionkey', 'n_nationkey', 'n_name', 'r_name', 'c_custkey')": 0.2,  # q5
+            "JOIN Inner ('o_orderkey',) ('l_orderkey',) ('c_custkey', 'o_orderkey', 'n_nationkey', '...', 'l_extendedprice', 'l_discount')": 0.03,  # q5
+            "JOIN Semi ('o_orderkey',) ('l_orderkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice')": 0.00004,  # q18
+            "JOIN Inner ('o_orderkey',) ('l_orderkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice', 'l_quantity')": 0.0001,  # q18
+            "JOIN Inner ('o_custkey',) ('c_custkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice', 'l_quantity', 'c_name')": 0.003,  # q18
         }
 
     return executor_options
