@@ -59,8 +59,8 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
 test_datetime[polars[lazy]] or \
 test_nan[polars[lazy]] or \
-test_to_datetime_tz_aware[polars[lazy]-None] \
-test_truncate[polars[lazy]-1ns-expected0] \
+test_to_datetime_tz_aware[polars[lazy]-None] or \
+test_truncate[polars[lazy]-1ns-expected0] or \
 test_truncate_multiples[polars[lazy]-2ns-expected0] \
 "
 
