@@ -459,7 +459,6 @@ def get_executor_options(
         executor_options["stats_planning"] = {
             "use_reduction_planning": run_config.stats_planning,
             "use_io_partitioning": True,  # Always use parquet metadata for IO partitioning
-            "use_sampling": True,  # Always sample for consistent IO partitioning
         }
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
@@ -489,6 +488,7 @@ def get_executor_options(
             "GROUPBY ('o_orderpriority',)": 0.0001,
             "GROUPBY ('o_year',)": 0.0006,
             "GROUPBY ('supp_nation', 'cust_nation', 'l_year')": 0.0004,
+            "GROUPBY ('s_name',)": 0.04,
             "GROUPBY ('p_partkey',)": 0.01,
             # FILTER hints (actual output / actual input from child)
             "FILTER ('key', 'avg_quantity', 'l_extendedprice', 'l_quantity')": 0.09,  # q17: 161K/1.79M=9%
