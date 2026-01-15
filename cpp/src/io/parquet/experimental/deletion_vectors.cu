@@ -403,7 +403,7 @@ chunked_parquet_reader::chunked_parquet_reader(
   std::size_t pass_read_limit,
   parquet_reader_options const& options,
   cudf::host_span<cudf::host_span<cuda::std::byte const> const> serialized_roaring_bitmaps,
-  cudf::host_span<size_type const> rows_per_deletion_vector,
+  cudf::host_span<size_type const> deletion_vector_row_counts,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
@@ -424,7 +424,7 @@ chunked_parquet_reader::chunked_parquet_reader(
     "Encountered a non-empty AST filter expression. Use a roaring64 bitmap deletion vector to "
     "filter the table instead");
   CUDF_EXPECTS(serialized_roaring_bitmaps.empty() or
-                 serialized_roaring_bitmaps.size() == rows_per_deletion_vector.size(),
+                 serialized_roaring_bitmaps.size() == deletion_vector_row_counts.size(),
                "Encountered a mismatch in the number of deletion vectors and the number of rows "
                "per deletion vector");
 
@@ -440,7 +440,7 @@ chunked_parquet_reader::chunked_parquet_reader(
 
   if (not serialized_roaring_bitmaps.empty()) {
     auto iter = thrust::make_zip_iterator(serialized_roaring_bitmaps.begin(),
-                                          rows_per_deletion_vector.begin());
+                                          deletion_vector_row_counts.begin());
     std::for_each(iter, iter + serialized_roaring_bitmaps.size(), [&](auto const& elem) {
       _deletion_vectors.emplace(cuda::std::get<0>(elem));
       _deletion_vector_row_counts.push(cuda::std::get<1>(elem));
@@ -456,7 +456,7 @@ chunked_parquet_reader::chunked_parquet_reader(
   std::size_t chunk_read_limit,
   parquet_reader_options const& options,
   cudf::host_span<cudf::host_span<cuda::std::byte const> const> serialized_roaring_bitmap,
-  cudf::host_span<size_type const> rows_per_deletion_vector,
+  cudf::host_span<size_type const> deletion_vector_row_counts,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
@@ -465,7 +465,7 @@ chunked_parquet_reader::chunked_parquet_reader(
                            std::size_t{0},
                            options,
                            serialized_roaring_bitmap,
-                           rows_per_deletion_vector,
+                           deletion_vector_row_counts,
                            row_group_offsets,
                            row_group_num_rows,
                            stream,
