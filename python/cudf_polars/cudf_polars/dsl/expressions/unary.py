@@ -243,8 +243,7 @@ class UnaryFunction(Expr):
             return column
         elif self.name == "set_sorted":  # pragma: no cover
             # TODO: LazyFrame.set_sorted is proper IR concept (ie. FunctionIR::Hint)
-            # and is is currently not implemented. We should reimplement it
-            # and then probably translate it to a UnaryFunction or add a Hint (IR).
+            # and is is currently not implemented. We should reimplement it as a MapFunction.
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             (asc,) = self.options
             order = (
