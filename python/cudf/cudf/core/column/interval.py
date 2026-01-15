@@ -51,6 +51,27 @@ class IntervalColumn(ColumnBase):
         return plc_column, dtype
 
     @classmethod
+    def _apply_child_metadata(
+        cls,
+        children: tuple[ColumnBase, ...],
+        dtype: IntervalDtype,  # type: ignore[override]
+    ) -> tuple[ColumnBase, ...]:
+        """Apply interval subtype metadata to children."""
+        return tuple(
+            child._with_type_metadata(dtype.subtype) for child in children
+        )
+
+    def _get_sliced_child(self, idx: int) -> ColumnBase:
+        """Get a child column properly sliced to match the parent's view."""
+        if idx < 0 or idx >= len(self._children):
+            raise IndexError(
+                f"Index {idx} out of range for {len(self._children)} children"
+            )
+
+        sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
+        return ColumnBase.from_pylibcudf(sliced_plc_col)
+
+    @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
         if not isinstance(array, pa.ExtensionArray):
             raise ValueError("Expected ExtensionArray for interval data")
