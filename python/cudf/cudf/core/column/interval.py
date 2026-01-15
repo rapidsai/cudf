@@ -71,6 +71,39 @@ class IntervalColumn(ColumnBase):
         sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
         return ColumnBase.from_pylibcudf(sliced_plc_col)
 
+    def _with_type_metadata(self, dtype: DtypeObj) -> ColumnBase:
+        """
+        Apply IntervalDtype metadata to this column.
+
+        Creates new children with the subtype metadata applied and
+        reconstructs the plc.Column.
+        """
+        if isinstance(dtype, IntervalDtype):
+            new_children = tuple(
+                child.astype(dtype.subtype) for child in self.children
+            )
+            new_plc_column = plc.Column(
+                plc.DataType(plc.TypeId.STRUCT),
+                self.plc_column.size(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                self.plc_column.offset(),
+                [child.plc_column for child in new_children],
+            )
+            return type(self)._from_preprocessed(
+                plc_column=new_plc_column,
+                dtype=dtype,
+                children=new_children,
+            )
+        # For pandas dtypes, store them directly in the column's dtype property
+        elif isinstance(dtype, pd.ArrowDtype) and isinstance(
+            dtype.pyarrow_dtype, pa.lib.StructType
+        ):
+            self._dtype = dtype
+
+        return self
+
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
         if not isinstance(array, pa.ExtensionArray):
