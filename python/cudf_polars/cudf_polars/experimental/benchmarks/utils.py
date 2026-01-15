@@ -499,6 +499,7 @@ def get_executor_options(
             "SCAN PARQUET ('l_partkey', 'l_extendedprice', 'l_discount', 'l_shipdate')": 0.0468,
             "SCAN PARQUET ('l_suppkey', 'l_extendedprice', 'l_discount', 'l_shipdate')": 0.1418,
             "SCAN PARQUET ('o_orderkey', 'o_orderpriority', 'o_orderdate')": 0.1434,
+            "SCAN PARQUET ('p_partkey', 'p_name')": 0.07,  # q9: 6.8%, q20: 1.4%
             # JOIN hints (actual / estimated - for selective joins)
             "JOIN Inner ('c_nationkey',) ('n_nationkey',)": 0.0898,
             "JOIN Inner ('key',) ('p_partkey',)": 0.0037,
