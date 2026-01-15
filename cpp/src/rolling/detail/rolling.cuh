@@ -169,8 +169,8 @@ inline std::vector<std::unique_ptr<aggregation>>
 rolling_aggregation_preprocessor_fn::operator()<aggregation::STD>(data_type,
                                                                   aggregation const& agg) const
 {
-  // Safe cast: this specialization is only called for STD aggregations
-  auto const& std_agg = static_cast<cudf::detail::std_aggregation const&>(agg);
+  // Dynamic cast needed due to virtual inheritance
+  auto const& std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(make_variance_aggregation(std_agg._ddof));
   return aggs;
@@ -354,7 +354,7 @@ template <>
 inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
   aggregation::COLLECT_LIST>(aggregation const& agg) const
 {
-  auto const& collect_agg = static_cast<cudf::detail::collect_list_aggregation const&>(agg);
+  auto const& collect_agg = dynamic_cast<cudf::detail::collect_list_aggregation const&>(agg);
   ctx.result              = rolling_collect_list(ctx.input,
                                     ctx.default_outputs,
                                     ctx.preceding_window_begin,
@@ -371,7 +371,7 @@ template <>
 inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
   aggregation::COLLECT_SET>(aggregation const& agg) const
 {
-  auto const& collect_agg   = static_cast<cudf::detail::collect_set_aggregation const&>(agg);
+  auto const& collect_agg   = dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg);
   auto const collected_list = rolling_collect_list(ctx.input,
                                                    ctx.default_outputs,
                                                    ctx.preceding_window_begin,
@@ -405,7 +405,7 @@ template <>
 inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
   aggregation::LEAD>(aggregation const& agg) const
 {
-  auto const& lead_agg = static_cast<cudf::detail::lead_lag_aggregation const&>(agg);
+  auto const& lead_agg = dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg);
   // if this is non-fixed width, run the custom lead-lag code
   if (!cudf::is_fixed_width(ctx.result_type)) {
     ctx.result =
@@ -431,7 +431,7 @@ template <>
 inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
   aggregation::LAG>(aggregation const& agg) const
 {
-  auto const& lag_agg = static_cast<cudf::detail::lead_lag_aggregation const&>(agg);
+  auto const& lag_agg = dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg);
   // if this is non-fixed width, run the custom lead-lag code
   if (!cudf::is_fixed_width(ctx.result_type)) {
     ctx.result =
@@ -457,7 +457,7 @@ template <>
 inline void rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator>::operator()<
   aggregation::NTH_ELEMENT>(aggregation const& agg) const
 {
-  auto const& nth_agg = static_cast<cudf::detail::nth_element_aggregation const&>(agg);
+  auto const& nth_agg = dynamic_cast<cudf::detail::nth_element_aggregation const&>(agg);
   ctx.result          = nth_agg._null_handling == null_policy::EXCLUDE
                           ? rolling::nth_element<null_policy::EXCLUDE>(nth_agg._n,
                                                               ctx.input,
