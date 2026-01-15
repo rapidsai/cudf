@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -76,7 +76,7 @@ TEST_F(DictionarySetKeysTest, Errors)
   cudf::test::fixed_width_column_wrapper<float> new_keys{1.0, 2.0, 3.0};
   EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), new_keys), cudf::data_type_error);
   cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {true, false, true}};
-  EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), null_keys), cudf::logic_error);
+  EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), null_keys), std::invalid_argument);
 }
 
 TEST_F(DictionarySetKeysTest, MatchDictionaries)
