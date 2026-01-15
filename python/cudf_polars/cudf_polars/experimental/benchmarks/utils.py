@@ -501,7 +501,7 @@ def get_executor_options(
             "SCAN PARQUET ('o_orderkey', 'o_orderpriority', 'o_orderdate')": 0.1434,
             "SCAN PARQUET ('p_partkey', 'p_name')": 0.07,  # q9: 6.8%, q20: 1.4%
             # JOIN hints (actual output / larger input - for truly selective joins < 10%)
-            "JOIN Inner ('p_partkey',) ('ps_partkey',)": 0.054,  # q9
+            "JOIN Inner ('p_partkey',) ('ps_partkey',) ('p_partkey', 'p_name',": 0.054,  # q9 only
             "JOIN Inner ('p_partkey', 'ps_suppkey') ('l_partkey', 'l_suppkey')": 0.054,  # q9
             "JOIN Inner ('l_suppkey', 'n_nationkey') ('s_suppkey', 's_nationkey')": 0.002,  # q5
             "JOIN Inner ('s_suppkey',) ('supplier_no',)": 0.002,  # q15
