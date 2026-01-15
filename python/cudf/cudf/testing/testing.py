@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -796,6 +796,24 @@ def assert_frame_equal(
             atol=atol,
             obj=f'Column name="{col}"',
         )
+
+
+def _object_array_equal_nan(x, y):
+    if x.shape != y.shape:
+        assert False
+    for xe, ye in zip(x.flat, y.flat, strict=True):
+        if xe is ye:
+            continue
+        if (
+            isinstance(xe, float)
+            and isinstance(ye, float)
+            and np.isnan(xe)
+            and np.isnan(ye)
+        ):
+            continue
+        if xe != ye:
+            assert False
+    return True
 
 
 def assert_eq(left, right, **kwargs):

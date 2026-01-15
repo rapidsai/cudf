@@ -753,7 +753,7 @@ class StringMethods(BaseAccessor):
         ):
             # GH#59561
             raise ValueError(
-                f"na must be None, pd.NA, np.nan, True, or False; got {na}"
+                f"na must be None, pd.NA, np.nan, True, or False;got {na!r}"
             )
         if na not in {no_default, np.nan}:
             raise NotImplementedError("`na` parameter is not yet supported")
@@ -780,6 +780,8 @@ class StringMethods(BaseAccessor):
                     input_column = self._column
                     pat_normed = pat
                 result_col = input_column.str_contains(pat_normed)
+            if self._column.has_nulls():
+                result_col = result_col.fillna(False)
         else:
             # TODO: we silently ignore the `regex=` flag here
             col_pat = as_column(pat, dtype=CUDF_STRING_DTYPE)
@@ -901,6 +903,8 @@ class StringMethods(BaseAccessor):
         2    ccc
         dtype: object
         """
+        if isinstance(repeats, int) and repeats < 0:
+            raise ValueError("Negative repeats is not allowed.")
         if can_convert_to_column(repeats):
             repeats = as_column(repeats, dtype=np.dtype(np.int64))  # type: ignore[assignment]
         return self._return_or_inplace(self._column.repeat_strings(repeats))  # type: ignore[arg-type]
@@ -3710,7 +3714,7 @@ class StringMethods(BaseAccessor):
                 f"found {type(patterns)}"
             )
 
-        if patterns_column.dtype != CUDF_STRING_DTYPE:
+        if not is_string_dtype(patterns_column.dtype):
             raise TypeError(
                 "patterns can only be of 'string' dtype, "
                 f"got: {patterns_column.dtype}"

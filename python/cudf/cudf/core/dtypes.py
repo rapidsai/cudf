@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -68,6 +68,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
         if np_dtype.kind == "O":
             return CUDF_STRING_DTYPE
         elif np_dtype.kind == "U":
+            return pd.StringDtype(na_value=np.nan)
             if cudf.get_option("mode.pandas_compatible"):
                 return np_dtype
             return CUDF_STRING_DTYPE

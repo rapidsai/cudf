@@ -121,14 +121,7 @@ class StringColumn(ColumnBase, Scannable):
         cls, plc_column: plc.Column, dtype: np.dtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and dtype != CUDF_STRING_DTYPE
-            and dtype.kind != "U"
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_string(dtype)
-        ):
+        if not is_dtype_obj_string(dtype):
             raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
         if (
             cudf.get_option("mode.pandas_compatible")
@@ -137,6 +130,17 @@ class StringColumn(ColumnBase, Scannable):
         ):
             dtype = CUDF_STRING_DTYPE
         return plc_column, dtype
+
+    @property
+    def _PANDAS_NA_VALUE(self) -> ScalarLike:
+        """Return appropriate NA value based on dtype."""
+        if is_pandas_nullable_extension_dtype(self.dtype):
+            return self.dtype.na_value
+        elif cudf.api.types.is_string_dtype(self.dtype):
+            # numpy string dtype case, may be moved
+            # to `StringColumn` later
+            return None
+        return pd.NA
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
@@ -183,9 +187,11 @@ class StringColumn(ColumnBase, Scannable):
         # the call to super().to_arrow().
         # TODO: Investigate if the above is a bug in libcudf and fix it there.
         if len(self.children) == 0 or self.null_count == len(self):
+            if len(self) == 0:
+                return pa.chunked_array([], type=pa.large_string())  # type: ignore[return-value]
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
-            )
+            ).cast(pa.large_string())
         return super().to_arrow()
 
     def sum(
@@ -243,9 +249,15 @@ class StringColumn(ColumnBase, Scannable):
         Returns the result with appropriate boolean type metadata based on
         the source column's dtype and pandas compatibility mode.
         """
+        if (
+            isinstance(self.dtype, pd.StringDtype)
+            and self.dtype.na_value is np.nan
+        ):
+            result = result.fillna(False)
         if cudf.get_option("mode.pandas_compatible"):
             new_type = self._get_pandas_compatible_dtype(np.dtype("bool"))
             return result._with_type_metadata(new_type)
+
         return result
 
     def _apply_pandas_int_metadata(self, result: ColumnBase) -> ColumnBase:
@@ -416,11 +428,10 @@ class StringColumn(ColumnBase, Scannable):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.StringDtype)
-            and self.dtype.storage in ["pyarrow", "python"]
-        ):
+        if isinstance(self.dtype, pd.StringDtype) and self.dtype.storage in [
+            "pyarrow",
+            "python",
+        ]:
             if self.dtype.storage == "pyarrow":
                 pandas_array = self.dtype.__from_arrow__(
                     self.to_arrow().cast(pa.large_string())
