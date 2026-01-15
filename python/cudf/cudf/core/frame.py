@@ -37,6 +37,7 @@ from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils.dtypes import (
     find_common_type,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -661,11 +662,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     elif to_dtype.kind in "ui":
                         to_dtype = np.dtype("float64")
 
-            if cudf.get_option(
-                "mode.pandas_compatible"
-            ) and is_pandas_nullable_extension_dtype(to_dtype):
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and is_pandas_nullable_extension_dtype(to_dtype)
+            ) or is_dtype_obj_string(to_dtype):
                 to_dtype = getattr(to_dtype, "numpy_dtype", to_dtype)
-                if getattr(to_dtype, "kind", None) == "U":
+                if getattr(to_dtype, "kind", None) in {"U", "O"}:
                     to_dtype = np.dtype(object)
             if isinstance(to_dtype, cudf.CategoricalDtype):
                 to_dtype = to_dtype.categories.dtype
