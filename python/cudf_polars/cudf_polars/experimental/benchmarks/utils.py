@@ -500,16 +500,13 @@ def get_executor_options(
             "SCAN PARQUET ('l_suppkey', 'l_extendedprice', 'l_discount', 'l_shipdate')": 0.1418,
             "SCAN PARQUET ('o_orderkey', 'o_orderpriority', 'o_orderdate')": 0.1434,
             "SCAN PARQUET ('p_partkey', 'p_name')": 0.07,  # q9: 6.8%, q20: 1.4%
-            # JOIN hints (actual / estimated - for selective joins)
-            "JOIN Inner ('c_nationkey',) ('n_nationkey',)": 0.0898,
-            "JOIN Inner ('key',) ('p_partkey',)": 0.0037,
-            "JOIN Inner ('l_partkey',) ('p_partkey',)": 0.0468,
-            "JOIN Inner ('l_suppkey', 'n_nationkey') ('s_suppkey', 's_nationkey')": 0.0057,
-            "JOIN Inner ('n_regionkey',) ('r_regionkey',)": 0.0037,
-            "JOIN Inner ('o_custkey',) ('c_custkey',)": 0.0095,
-            "JOIN Inner ('p_partkey',) ('l_partkey',)": 0.025,
-            "JOIN Inner ('ps_suppkey', 'p_partkey') ('l_suppkey', 'l_partkey')": 0.0044,
-            "JOIN Inner ('s_suppkey',) ('supplier_no',)": 0.0074,
+            # JOIN hints (actual output / larger input - for truly selective joins < 10%)
+            "JOIN Inner ('p_partkey',) ('ps_partkey',)": 0.054,  # q9
+            "JOIN Inner ('p_partkey', 'ps_suppkey') ('l_partkey', 'l_suppkey')": 0.054,  # q9
+            "JOIN Inner ('l_suppkey', 'n_nationkey') ('s_suppkey', 's_nationkey')": 0.002,  # q5
+            "JOIN Inner ('s_suppkey',) ('supplier_no',)": 0.002,  # q15
+            "JOIN Inner ('p_partkey',) ('l_partkey',)": 0.001,  # q17
+            "JOIN Inner ('key',) ('p_partkey',)": 0.001,
         }
 
     return executor_options
