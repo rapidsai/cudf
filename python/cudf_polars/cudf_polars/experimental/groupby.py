@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel GroupBy Logic."""
 
@@ -22,7 +22,11 @@ from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.utils import _get_unique_fractions, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _get_selectivity_hint,
+    _get_unique_fractions,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
@@ -201,8 +205,6 @@ def _(
             msg="group_by does not support multiple partitions for non-pointwise keys.",
         )
 
-    # Check if we are dealing with any high-cardinality columns
-    post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
     shuffled = partition_info[child].partitioned_on == ir.keys
 
@@ -211,14 +213,21 @@ def _(
         "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
+    # Determine output partition count
+    # Conservative default: preserve input partition count
     child_count = partition_info[child].count
-    if unique_fraction_dict := _get_unique_fractions(
+    post_aggregation_count = child_count
+
+    # Check for selectivity hint (explicit user knowledge)
+    if hint := _get_selectivity_hint(ir, config_options.executor.selectivity_hints):
+        post_aggregation_count = max(int(hint * child_count), 1)
+    elif unique_fraction_dict := _get_unique_fractions(
         groupby_key_columns,
         config_options.executor.unique_fraction,
         row_count=rec.state["stats"].row_count.get(original_child),
         column_stats=rec.state["stats"].column_stats.get(original_child),
     ):
-        # Use unique_fraction to determine output partitioning
+        # Fall back to unique_fraction statistics
         unique_fraction = max(unique_fraction_dict.values())
         post_aggregation_count = max(int(unique_fraction * child_count), 1)
 

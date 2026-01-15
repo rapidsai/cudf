@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -188,9 +188,19 @@ def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
 
 
 @pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
-def test_groupby_then_slice(
-    df: pl.LazyFrame, engine: pl.GPUEngine, zlice: tuple[int, int]
-) -> None:
+def test_groupby_then_slice(df: pl.LazyFrame, zlice: tuple[int, int]) -> None:
+    # Use a custom engine with selectivity hint to reduce output partitions.
+    # maintain_order=True requires single output partition.
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 4,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "selectivity_hints": {"GROUPBY ('y',)": 0.0001},
+        },
+    )
     df = pl.LazyFrame(
         {
             "x": [0, 1, 2, 3] * 2,

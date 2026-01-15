@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition Distinct logic."""
 
@@ -15,6 +15,7 @@ from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.utils import (
     _fallback_inform,
+    _get_selectivity_hint,
     _get_unique_fractions,
     _lower_ir_fallback,
 )
@@ -176,16 +177,23 @@ def _(
         "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
-    subset: frozenset[str] = ir.subset or frozenset(ir.schema)
-    unique_fraction_dict = _get_unique_fractions(
-        tuple(subset),
-        config_options.executor.unique_fraction,
-        row_count=rec.state["stats"].row_count.get(original_child),
-        column_stats=rec.state["stats"].column_stats.get(original_child),
-    )
-    unique_fraction = (
-        max(unique_fraction_dict.values()) if unique_fraction_dict else None
-    )
+    # Determine selectivity for output partitioning
+    # Check for selectivity hint first (explicit user knowledge)
+    unique_fraction: float | None = None
+    if hint := _get_selectivity_hint(ir, config_options.executor.selectivity_hints):
+        unique_fraction = hint
+    else:
+        # Fall back to unique_fraction statistics
+        subset: frozenset[str] = ir.subset or frozenset(ir.schema)
+        unique_fraction_dict = _get_unique_fractions(
+            tuple(subset),
+            config_options.executor.unique_fraction,
+            row_count=rec.state["stats"].row_count.get(original_child),
+            column_stats=rec.state["stats"].column_stats.get(original_child),
+        )
+        unique_fraction = (
+            max(unique_fraction_dict.values()) if unique_fraction_dict else None
+        )
 
     try:
         return lower_distinct(
