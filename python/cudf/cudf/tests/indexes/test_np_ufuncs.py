@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -19,6 +19,12 @@ def test_ufunc_index(request, numpy_ufunc):
             and parse(np.__version__) >= parse("2.1")
             and parse(cp.__version__) < parse("14"),
             reason="https://github.com/cupy/cupy/issues/9018",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=numpy_ufunc == np.matmul,
+            reason="cuDF doesn't support matmul for Indexes yet",
         )
     )
 
