@@ -505,8 +505,12 @@ def get_executor_options(
             "JOIN Inner ('p_partkey', 'ps_suppkey') ('l_partkey', 'l_suppkey')": 0.054,  # q9
             "JOIN Inner ('l_suppkey', 'n_nationkey') ('s_suppkey', 's_nationkey')": 0.002,  # q5
             "JOIN Inner ('s_suppkey',) ('supplier_no',)": 0.002,  # q15
-            "JOIN Inner ('p_partkey',) ('l_partkey',)": 0.001,  # q17
+            "JOIN Inner ('p_partkey',) ('l_partkey',) ('p_partkey', 'p_container',": 0.001,  # q17 only
             "JOIN Inner ('key',) ('p_partkey',)": 0.001,
+            # q18: extremely selective joins after sum(l_quantity) > 300 filter
+            "JOIN Semi ('o_orderkey',) ('l_orderkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice')": 0.00004,
+            "JOIN Inner ('o_orderkey',) ('l_orderkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice', 'l_quantity')": 0.0001,
+            "JOIN Inner ('o_custkey',) ('c_custkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice', 'l_quantity', 'c_name')": 0.003,
         }
 
     return executor_options
