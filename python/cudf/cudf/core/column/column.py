@@ -3266,12 +3266,14 @@ def as_column(
                     length=length,
                 )
             elif (
-                isinstance(element, (pd.Timestamp, pd.Timedelta))
+                isinstance(element, (pd.Timestamp, pd.Timedelta, pd.Interval))
                 or element is pd.NaT
             ):
                 # TODO: Remove this after
                 # https://github.com/apache/arrow/issues/26492
                 # is fixed.
+                # Note: pd.Interval also requires pandas Series conversion
+                # because PyArrow cannot infer interval type from raw list
                 return as_column(
                     pd.Series(arbitrary),
                     dtype=dtype,
