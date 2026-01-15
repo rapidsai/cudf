@@ -144,6 +144,12 @@ repos:
         language: system
         pass_filenames: false
         verbose: true
+      - id: verify-thrust-exec-policy
+        name: verify-thrust-exec-policy
+        entry: ./cpp/scripts/verify_thrust_exec_policy.py
+        types_or: [c, c++, cuda]
+        language: python
+        verbose: true
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
