@@ -149,15 +149,10 @@ class StructColumn(ColumnBase):
         )
 
     def _with_type_metadata(self: StructColumn, dtype: DtypeObj) -> ColumnBase:
-        from cudf.core.column import IntervalColumn
-        from cudf.core.dtypes import IntervalDtype
-
-        # Check IntervalDtype first because it's a subclass of StructDtype
-        if isinstance(dtype, IntervalDtype):
-            # TODO: Rewrite this to avoid needing to round-trip via ColumnBase
+        if isinstance(dtype, StructDtype):
             new_children = tuple(
-                ColumnBase.from_pylibcudf(child).astype(dtype.subtype)
-                for child in self.plc_column.children()
+                ColumnBase.from_pylibcudf(child)._with_type_metadata(dtype.fields[f])
+                for child, f in zip(self.plc_column.children(), dtype.fields.keys())
             )
             new_plc_column = plc.Column(
                 plc.DataType(plc.TypeId.STRUCT),
@@ -168,12 +163,10 @@ class StructColumn(ColumnBase):
                 self.plc_column.offset(),
                 [child.plc_column for child in new_children],
             )
-            return IntervalColumn._from_preprocessed(
+            return StructColumn._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
             )
-        elif isinstance(dtype, StructDtype):
-            self._dtype = dtype
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
             dtype.pyarrow_dtype, pa.StructType
