@@ -14,7 +14,7 @@ function(find_and_configure_cudf VERSION)
     INSTALL_EXPORT_SET cudf_kafka-exports
     CPM_ARGS
     GIT_REPOSITORY https://github.com/rapidsai/cudf.git
-    GIT_TAG main
+    GIT_TAG release/26.02
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
     OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF"
   )
