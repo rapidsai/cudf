@@ -2844,7 +2844,15 @@ def as_column(
                 dtype=dtype,
                 length=length,
             )
-            if (
+            if isinstance(arbitrary.dtype, pd.IntervalDtype):
+                # Wrap StructColumn as IntervalColumn with proper metadata
+                result = result._with_type_metadata(
+                    IntervalDtype(
+                        subtype=cudf.dtype(arbitrary.dtype.subtype),
+                        closed=arbitrary.dtype.closed,
+                    )
+                )
+            elif (
                 cudf.get_option("mode.pandas_compatible")
                 and isinstance(arbitrary.dtype, pd.CategoricalDtype)
                 and is_pandas_nullable_extension_dtype(

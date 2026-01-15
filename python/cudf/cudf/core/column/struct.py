@@ -11,7 +11,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase
-from cudf.core.dtypes import StructDtype
+from cudf.core.dtypes import IntervalDtype, StructDtype
 from cudf.utils.dtypes import is_dtype_obj_struct
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
@@ -163,6 +163,29 @@ class StructColumn(ColumnBase):
             return StructColumn._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
+            )
+        elif isinstance(dtype, IntervalDtype):
+            # Dispatch to IntervalColumn when given IntervalDtype
+            from cudf.core.column.interval import IntervalColumn
+
+            # Apply subtype metadata to children and reconstruct as IntervalColumn
+            new_children = tuple(
+                child._with_type_metadata(dtype.subtype)
+                for child in self.children
+            )
+            new_plc_column = plc.Column(
+                plc.DataType(plc.TypeId.STRUCT),
+                self.plc_column.size(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                self.plc_column.offset(),
+                [child.plc_column for child in new_children],
+            )
+            return IntervalColumn._from_preprocessed(
+                plc_column=new_plc_column,
+                dtype=dtype,
+                children=new_children,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
