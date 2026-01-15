@@ -303,11 +303,10 @@ __device__ int skip_validity_and_row_indices_nonlist(
     int const is_valid = [&]() {
       if (t >= batch_size) {
         return 0;
-      } else if (def) {
+      } else {
         int const def_level = static_cast<int>(def[value_count + t]);
         return (def_level >= max_def_level) ? 1 : 0;
       }
-      return 1;
     }();
 
     // thread and block validity count
@@ -366,10 +365,9 @@ __device__ int update_validity_and_row_indices_nested(
     int const d = [&]() {
       if (t >= batch_size) {
         return -1;
-      } else if (def) {
+      } else {
         return static_cast<int>(def[value_count + t]);
       }
-      return 1;
     }();
 
     int const thread_value_count = t;
@@ -504,11 +502,10 @@ __device__ int update_validity_and_row_indices_flat(
     int const is_valid = [&]() {
       if (t >= batch_size) {
         return 0;
-      } else if (def) {
+      } else {
         int const def_level = static_cast<int>(def[value_count + t]);
         return ((def_level > 0) && in_row_bounds) ? 1 : 0;
       }
-      return in_row_bounds;
     }();
 
     // thread and block validity count
@@ -629,13 +626,9 @@ __device__ int update_validity_and_row_indices_lists(int32_t target_value_count,
       if constexpr (!nullable) {
         return cuda::std::make_tuple(-1, start_depth, max_depth);
       } else {
-        if (def != nullptr) {
-          int const def_level = static_cast<int>(def[value_count + t]);
-          return cuda::std::make_tuple(
-            def_level, start_depth, s->nesting_info[def_level].end_depth);
-        } else {
-          return cuda::std::make_tuple(1, start_depth, max_depth);
-        }
+        int const def_level = static_cast<int>(def[value_count + t]);
+        return cuda::std::make_tuple(
+          def_level, start_depth, s->nesting_info[def_level].end_depth);
       }
     }();
 
