@@ -219,7 +219,7 @@ rolling_aggregation_preprocessor_fn::operator()<aggregation::NTH_ELEMENT>(
  * @brief Rolling window specific implementation of aggregation_finalizer.
  *
  * The purpose of this class is to postprocess rolling window data depending on the
- * aggregation/type pair. See the description of rolling_aggregation_preprocessor for
+ * aggregation/type pair. See the description of rolling_aggregation_preprocessor_fn for
  * a detailed description.
  *
  */

@@ -28,9 +28,8 @@ namespace CUDF_EXPORT cudf {
  * @file
  */
 
-// forward declaration
+// forward declaration for rolling operations backward compatibility
 namespace detail {
-class simple_aggregations_collector;
 class aggregation_finalizer;
 }  // namespace detail
 
@@ -158,24 +157,15 @@ class aggregation {
    */
   [[nodiscard]] virtual std::unique_ptr<aggregation> clone() const = 0;
 
-  // override functions for compound aggregations
   /**
-   * @pure @brief Get the simple aggregations that this aggregation requires to compute.
+   * @brief DEPRECATED: Finalize compound aggregation (for rolling operations only).
    *
-   * @param col_type The type of the column to aggregate
-   * @param collector The collector visitor pattern to use to collect the simple aggregations
-   * @return Vector of pre-requisite simple aggregations
-   */
-  virtual std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const = 0;
-
-  /**
-   * @pure @brief Compute the aggregation after pre-requisite simple aggregations have been
-   * computed.
+   * @deprecated This method is deprecated and only retained for backward compatibility
+   * with rolling operations. New code should use template functors with aggregation_dispatcher.
    *
    * @param finalizer The finalizer visitor pattern to use to compute the aggregation
    */
-  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const = 0;
+  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const { finalizer.visit(*this); }
 };
 
 /**
