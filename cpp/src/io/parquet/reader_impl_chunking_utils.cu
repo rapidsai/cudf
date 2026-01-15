@@ -508,26 +508,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     num_comp_pages += codec.num_pages;
   }
 
-  // Log V2 pages that are uncompressed in compressed chunks
-  {
-    size_t total_v2_pages       = 0;
-    size_t uncompressed_v2_data = 0;
-    for (auto const& page : subpass_pages) {
-      if ((page.flags & PAGEINFO_FLAGS_V2) and not(page.flags & PAGEINFO_FLAGS_DICTIONARY) and
-          chunks[page.chunk_idx].codec != Compression::UNCOMPRESSED) {
-        total_v2_pages++;
-        if (not page.is_compressed) { uncompressed_v2_data++; }
-      }
-    }
-    if (uncompressed_v2_data > 0) {
-      CUDF_LOG_WARN(
-        "Parquet reader: %zu/%zu V2 data pages in compressed chunks are stored uncompressed "
-        "(per-page compression)",
-        uncompressed_v2_data,
-        total_v2_pages);
-    }
-  }
-
   // Dispatch batches of pages to decompress for each codec.
   // Buffer needs to be padded, required by `gpuDecodePageData`.
   rmm::device_buffer pass_decomp_pages(
