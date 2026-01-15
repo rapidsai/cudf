@@ -206,13 +206,14 @@ filter_join_indices(cudf::table_view const& left,
     auto predicate_func = [predicate_results_ptr] __device__(size_t idx) {
       return static_cast<bool>(predicate_results_ptr[idx]);
     };
-    filter_passing_indices.insert_if_async(left_ptr,
-                                           left_ptr + left_indices.size(),
-                                           cuda::counting_iterator<size_t>(0),
-                                           predicate_func,
-                                           stream.value());
+    auto const num_filter_passing =
+      filter_passing_indices.insert_if(left_ptr,
+                                       left_ptr + left_indices.size(),
+                                       cuda::counting_iterator<size_t>(0),
+                                       predicate_func,
+                                       stream.value());
 
-    auto const num_invalid = left.num_rows() - filter_passing_indices.size(stream);
+    auto const num_invalid = left.num_rows() - num_filter_passing;
 
     cudf::detail::device_scalar<size_t> d_num_valid(stream);
     {
