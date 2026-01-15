@@ -1546,31 +1546,6 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
     comp_stats.value() += collect_compression_statistics(comp_in, comp_res, stream);
   }
   stream.synchronize();
-
-  // Log page-level compression statistics for V2 pages
-  if (write_v2_headers and compression != compression_type::NONE) {
-    auto const h_pages = cudf::detail::make_host_vector(device_span<EncPage const>{pages}, stream);
-    size_t total_v2_pages        = 0;
-    size_t compressed_v2_pages   = 0;
-    size_t uncompressed_v2_pages = 0;
-    for (auto const& page : h_pages) {
-      if (page.page_type == PageType::DATA_PAGE_V2) {
-        total_v2_pages++;
-        if (page.is_compressed) {
-          compressed_v2_pages++;
-        } else {
-          uncompressed_v2_pages++;
-        }
-      }
-    }
-    if (uncompressed_v2_pages > 0) {
-      CUDF_LOG_WARN(
-        "Parquet writer: %zu/%zu V2 data pages were written uncompressed (per-page compression "
-        "decision)",
-        uncompressed_v2_pages,
-        total_v2_pages);
-    }
-  }
 }
 
 /**
