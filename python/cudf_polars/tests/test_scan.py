@@ -15,7 +15,7 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_135
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -641,4 +641,8 @@ def test_hits_scan_row_index_duplicate(tmp_path):
         "index"
     )
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    if POLARS_VERSION_LT_135:
+        # Did not raise before
+        assert_gpu_result_equal(q)
+    else:
+        assert_ir_translation_raises(q, NotImplementedError)
