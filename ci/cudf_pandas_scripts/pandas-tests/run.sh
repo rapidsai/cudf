@@ -60,7 +60,7 @@ fi
 MAIN_RUN_ID=$(
     gh run list                       \
         -w "Pandas Test Job"          \
-        -b release/26.02                       \
+        -b main                       \
         --repo 'rapidsai/cudf'        \
         --status success              \
         --limit 7                     \
