@@ -65,11 +65,13 @@ if [ ! -x "${TEST_EXECUTABLE}" ]; then
   exit 1
 fi
 
+CS_EXCLUDE_NAMES="kns=nvcomp,kns=zstd,kns=_no_sanitize,kns=_no_${TOOL_NAME}"
+
 # Run compute-sanitizer on the specified test
 compute-sanitizer \
   --tool "${TOOL_NAME}" \
   --force-blocking-launches \
-  --kernel-name-exclude kns=nvcomp,kns=zstd \
+  --kernel-name-exclude "${CS_EXCLUDE_NAMES}" \
   --error-exitcode=1 \
   "${TEST_EXECUTABLE}" \
   "$@"

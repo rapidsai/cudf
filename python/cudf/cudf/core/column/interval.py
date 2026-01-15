@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -17,8 +18,8 @@ from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
-
+    from cudf._typing import DtypeObj
+    from cudf.core.buffer import Buffer
     from cudf.core.column import ColumnBase
 
 
@@ -61,7 +62,7 @@ class IntervalColumn(StructColumn):
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()  # type: ignore[union-attr]
         struct_arrow = self.plc_column.to_arrow(
-            metadata=_dtype_to_metadata(self.dtype)  # type: ignore[arg-type]
+            metadata=_dtype_to_metadata(self.dtype)
         )
         possibly_null_struct_arrow = _handle_nulls(struct_arrow)
 
@@ -77,8 +78,48 @@ class IntervalColumn(StructColumn):
             struct_arrow = pa.array([], typ.storage_type)
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
+    @classmethod
+    def _deserialize_plc_column(
+        cls,
+        header: dict,
+        dtype: DtypeObj,
+        data: Buffer | None,
+        mask: Buffer | None,
+        children: list[ColumnBase],
+    ) -> plc.Column:
+        """Construct plc.Column using STRUCT type for interval columns."""
+        offset = header.get("offset", 0)
+        if mask is None:
+            null_count = 0
+        else:
+            null_count = plc.null_mask.null_count(
+                mask, offset, header["size"] + offset
+            )
+
+        plc_type = plc.DataType(plc.TypeId.STRUCT)
+        return plc.Column(
+            plc_type,
+            header["size"],
+            data,
+            mask,
+            null_count,
+            offset,
+            [child.plc_column for child in children],
+            validate=False,
+        )
+
     def copy(self, deep: bool = True) -> Self:
         return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
+
+    def _adjust_reduce_result(
+        self,
+        result_col: ColumnBase,
+        reduction_op: str,
+        col_dtype: DtypeObj,
+        plc_scalar: plc.Scalar,
+    ) -> ColumnBase:
+        """Preserve IntervalDtype metadata on reduction result."""
+        return result_col._with_type_metadata(col_dtype)
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:

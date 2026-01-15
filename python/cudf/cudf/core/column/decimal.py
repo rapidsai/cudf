@@ -94,6 +94,36 @@ class DecimalBaseColumn(NumericalBaseColumn):
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
+    def _adjust_reduce_result(
+        self,
+        result_col: ColumnBase,
+        reduction_op: str,
+        col_dtype: DtypeObj,
+        plc_scalar: plc.Scalar,
+    ) -> ColumnBase:
+        """Adjust decimal precision based on reduction operation."""
+        scale = -plc_scalar.type().scale()
+        # Narrow type for mypy - we know col_dtype is a decimal type
+        assert isinstance(col_dtype, DecimalDtype)
+        p = col_dtype.precision
+        # https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
+        nrows = len(self)
+        if reduction_op in {"min", "max"}:
+            new_p = p
+        elif reduction_op == "sum":
+            new_p = p + nrows - 1
+        elif reduction_op == "product":
+            new_p = p * nrows + nrows - 1
+        elif reduction_op == "sum_of_squares":
+            new_p = 2 * p + nrows
+        else:
+            raise NotImplementedError(
+                f"{reduction_op} not implemented for decimal types."
+            )
+        precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)
+        new_dtype = type(col_dtype)(precision, scale)
+        return result_col.astype(new_dtype)
+
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
@@ -127,7 +157,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     -data.type.scale,
                 ),
             )
-            result = cls.from_pylibcudf(plc_column)
+            result = cast(Self, cls.from_pylibcudf(plc_column))
             result._dtype = dtype
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
@@ -165,7 +195,10 @@ class DecimalBaseColumn(NumericalBaseColumn):
                         self.plc_column,
                     )
                 )
-                return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+                return cast(
+                    cudf.core.column.string.StringColumn,
+                    type(self).from_pylibcudf(plc_column),
+                )
         else:
             return cast(
                 cudf.core.column.StringColumn,
