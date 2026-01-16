@@ -258,6 +258,7 @@ class RunConfig:
     stats_planning: bool
     max_io_threads: int
     native_parquet: bool
+    spill_to_pinned_memory: bool
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -375,6 +376,7 @@ class RunConfig:
             stats_planning=args.stats_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
+            spill_to_pinned_memory=args.spill_to_pinned_memory,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -466,6 +468,7 @@ def get_executor_options(
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
+        executor_options["spill_to_pinned_memory"] = run_config.spill_to_pinned_memory
 
     if (
         benchmark
