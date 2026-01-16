@@ -2018,13 +2018,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         header: dict[Any, Any] = {}
         frames = []
 
-        if (plc_data := plc_col.data()) is not None and plc_data.size > 0:
+        if (plc_data := plc_col.data()) is not None:
             header["data"], data_frames = cast(
                 "Buffer", plc_data
             ).device_serialize()
             frames.extend(data_frames)
 
-        if (plc_mask := plc_col.null_mask()) is not None and plc_mask.size > 0:
+        if (plc_mask := plc_col.null_mask()) is not None:
             header["mask"], mask_frames = cast(
                 "Buffer", plc_mask
             ).device_serialize()
