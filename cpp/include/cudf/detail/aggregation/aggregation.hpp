@@ -163,8 +163,10 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
  * this helper and must implement clone() manually.
  *
  * Usage:
- *   class my_aggregation final : public clonable<my_aggregation>::derived_from<base1, base2, ...>
- * {};
+ * @code{.cpp}
+ * class my_aggregation final :
+ *     public clonable<my_aggregation>::derived_from<base1, base2, ...> { ... };
+ * @endcode
  *
  * @tparam Derived The concrete aggregation class (CRTP pattern)
  */
@@ -179,6 +181,11 @@ struct clonable {
   template <typename... Bases>
   class derived_from : public Bases... {
    public:
+    /**
+     * @brief Clone the aggregation object and return it wrapped in a unique_ptr.
+     *
+     * @return A unique_ptr containing the cloned aggregation object
+     */
     [[nodiscard]] std::unique_ptr<aggregation> clone() const override
     {
       return std::make_unique<Derived>(static_cast<Derived const&>(*this));
