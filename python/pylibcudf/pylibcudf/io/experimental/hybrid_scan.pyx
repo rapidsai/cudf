@@ -17,7 +17,7 @@ from pylibcudf.io.types cimport TableWithMetadata
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view, mutable_column_view
 from pylibcudf.libcudf.io.hybrid_scan cimport (
-    const_device_span_uint8_t,
+    const_device_span_const_uint8_t,
     const_size_type,
     const_uint8_t,
     hybrid_scan_reader as cpp_hybrid_scan_reader,
@@ -88,7 +88,7 @@ cdef class DeviceSpan:
     """
 
     def __init__(self, uintptr_t ptr, size_type size):
-        self.c_obj = device_span[uint8_t](<uint8_t*>ptr, size)
+        self.c_obj = device_span[const_uint8_t](<const_uint8_t*>ptr, size)
 
     @property
     def data(self):
@@ -317,7 +317,7 @@ cdef class HybridScanReader:
         list[int]
             Filtered row group indices
         """
-        cdef vector[device_span[uint8_t]] spans_vec
+        cdef vector[device_span[const_uint8_t]] spans_vec
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         for span in dictionary_page_data:
@@ -328,8 +328,8 @@ cdef class HybridScanReader:
 
         cdef vector[size_type] filtered = \
             self.c_obj.get()[0].filter_row_groups_with_dictionary_pages(
-                host_span[const_device_span_uint8_t](
-                    <const_device_span_uint8_t*>spans_vec.data(), spans_vec.size()
+                host_span[const_device_span_const_uint8_t](
+                    <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
@@ -362,7 +362,7 @@ cdef class HybridScanReader:
         list[int]
             Filtered row group indices
         """
-        cdef vector[device_span[uint8_t]] spans_vec
+        cdef vector[device_span[const_uint8_t]] spans_vec
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         for span in bloom_filter_data:
@@ -373,8 +373,8 @@ cdef class HybridScanReader:
 
         cdef vector[size_type] filtered = \
             self.c_obj.get()[0].filter_row_groups_with_bloom_filters(
-                host_span[const_device_span_uint8_t](
-                    <const_device_span_uint8_t*>spans_vec.data(), spans_vec.size()
+                host_span[const_device_span_const_uint8_t](
+                    <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
@@ -480,7 +480,7 @@ cdef class HybridScanReader:
         """
         cdef vector[size_type] indices_vec = row_group_indices
 
-        cdef vector[device_span[uint8_t]] spans_vec
+        cdef vector[device_span[const_uint8_t]] spans_vec
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
@@ -492,8 +492,8 @@ cdef class HybridScanReader:
         cdef table_with_metadata c_result = \
             self.c_obj.get()[0].materialize_filter_columns(
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-                host_span[const_device_span_uint8_t](
-                    <const_device_span_uint8_t*>spans_vec.data(), spans_vec.size()
+                host_span[const_device_span_const_uint8_t](
+                    <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 mask_view,
                 mask_data_pages,
@@ -563,7 +563,7 @@ cdef class HybridScanReader:
         """
         cdef vector[size_type] indices_vec = row_group_indices
 
-        cdef vector[device_span[uint8_t]] spans_vec
+        cdef vector[device_span[const_uint8_t]] spans_vec
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
@@ -575,8 +575,8 @@ cdef class HybridScanReader:
         cdef table_with_metadata c_result = \
             self.c_obj.get()[0].materialize_payload_columns(
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-                host_span[const_device_span_uint8_t](
-                    <const_device_span_uint8_t*>spans_vec.data(), spans_vec.size()
+                host_span[const_device_span_const_uint8_t](
+                    <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 mask_view,
                 mask_data_pages,
@@ -622,7 +622,7 @@ cdef class HybridScanReader:
         """
         cdef vector[size_type] indices_vec = row_group_indices
 
-        cdef vector[device_span[uint8_t]] spans_vec
+        cdef vector[device_span[const_uint8_t]] spans_vec
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
@@ -637,8 +637,8 @@ cdef class HybridScanReader:
             host_span[const_size_type](indices_vec.data(), indices_vec.size()),
             mask_view,
             mask_data_pages,
-            host_span[const_device_span_uint8_t](
-                <const_device_span_uint8_t*>spans_vec.data(), spans_vec.size()
+            host_span[const_device_span_const_uint8_t](
+                <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
             ),
             options.c_obj,
             stream.view()
@@ -711,7 +711,7 @@ cdef class HybridScanReader:
         """
         cdef vector[size_type] indices_vec = row_group_indices
 
-        cdef vector[device_span[uint8_t]] spans_vec
+        cdef vector[device_span[const_uint8_t]] spans_vec
         cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
@@ -726,8 +726,8 @@ cdef class HybridScanReader:
             host_span[const_size_type](indices_vec.data(), indices_vec.size()),
             mask_view,
             mask_data_pages,
-            host_span[const_device_span_uint8_t](
-                <const_device_span_uint8_t*>spans_vec.data(), spans_vec.size()
+            host_span[const_device_span_const_uint8_t](
+                <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
             ),
             options.c_obj,
             stream.view()

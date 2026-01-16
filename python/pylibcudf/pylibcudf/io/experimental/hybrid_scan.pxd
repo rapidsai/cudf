@@ -16,6 +16,7 @@ from pylibcudf.libcudf.io.hybrid_scan cimport (
     use_data_page_mask,
 )
 from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
+from pylibcudf.libcudf.io.hybrid_scan cimport const_uint8_t
 from pylibcudf.libcudf.utilities.span cimport device_span
 
 
@@ -31,4 +32,4 @@ cdef class HybridScanReader:
 
 
 cdef class DeviceSpan:
-    cdef device_span[uint8_t] c_obj
+    cdef device_span[const_uint8_t] c_obj

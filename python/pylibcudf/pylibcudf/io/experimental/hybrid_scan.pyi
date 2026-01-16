@@ -54,14 +54,14 @@ class HybridScanReader:
     ) -> tuple[list[ByteRangeInfo], list[ByteRangeInfo]]: ...
     def filter_row_groups_with_dictionary_pages(
         self,
-        dictionary_page_spans: list[DeviceSpan],
+        dictionary_page_data: list[DeviceSpan],
         row_group_indices: list[int],
         options: ParquetReaderOptions,
         stream: Stream | None = None,
     ) -> list[int]: ...
     def filter_row_groups_with_bloom_filters(
         self,
-        bloom_filter_spans: list[DeviceSpan],
+        bloom_filter_data: list[DeviceSpan],
         row_group_indices: list[int],
         options: ParquetReaderOptions,
         stream: Stream | None = None,

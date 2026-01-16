@@ -49,13 +49,13 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
  * @return Device spans corresponding to the input device buffers
  */
 template <typename T>
-std::vector<cudf::device_span<T>> make_device_spans(
+std::vector<cudf::device_span<T const>> make_device_spans(
   cudf::host_span<rmm::device_buffer const> buffers)
   requires(sizeof(T) == 1)
 {
-  std::vector<cudf::device_span<T>> device_spans(buffers.size());
+  std::vector<cudf::device_span<T const>> device_spans(buffers.size());
   std::transform(buffers.begin(), buffers.end(), device_spans.begin(), [](auto const& buffer) {
-    return cudf::device_span<T>{static_cast<T*>(const_cast<void*>(buffer.data())), buffer.size()};
+    return cudf::device_span<T const>{static_cast<T const*>(buffer.data()), buffer.size()};
   });
   return device_spans;
 }
