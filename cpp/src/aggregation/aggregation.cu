@@ -99,7 +99,7 @@ struct identity_initializer {
       CUDF_FAIL("Struct columns are only supported for SUM_WITH_OVERFLOW aggregation");
     } else {
       using DeviceType = device_storage_type_t<T>;
-      thrust::fill(rmm::exec_policy_nosync(stream),
+      thrust::fill(rmm::exec_policy(stream),
                    col.begin<DeviceType>(),
                    col.end<DeviceType>(),
                    get_identity<DeviceType, k>());

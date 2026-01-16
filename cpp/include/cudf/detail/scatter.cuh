@@ -70,7 +70,7 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
   // We'll use the `numeric_limits::lowest()` value for this since it should always be outside the
   // valid range.
   auto gather_map = rmm::device_uvector<size_type>(gather_rows, stream);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+  thrust::uninitialized_fill(rmm::exec_policy(stream),
                              gather_map.begin(),
                              gather_map.end(),
                              std::numeric_limits<size_type>::lowest());
