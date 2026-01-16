@@ -146,7 +146,7 @@ repos:
         verbose: true
       - id: verify-thrust-exec-policy
         name: verify-thrust-exec-policy
-        entry: ./cpp/scripts/verify_thrust_exec_policy.py
+        entry: ./cpp/scripts/verify_thrust_exec_policy.sh
         types_or: [c, c++, cuda]
         language: python
         verbose: true
