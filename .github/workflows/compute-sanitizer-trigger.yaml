@@ -13,7 +13,7 @@ jobs:
   discover-sanitizer-tests:
     runs-on: linux-amd64-cpu4
     container:
-      image: rapidsai/ci-conda:26.02-latest
+      image: rapidsai/ci-conda:26.04-latest
     outputs:
       tests: ${{ steps.find-tests.outputs.tests }}
     steps:

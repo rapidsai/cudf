@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utility functions/classes for running the PDS-H and PDS-DS benchmarks."""
@@ -903,6 +903,12 @@ def parse_args(
         default=True,
         help="Use C++ read_parquet nodes for the rapidsmpf runtime.",
     )
+    parser.add_argument(
+        "--results-directory",
+        type=Path,
+        default=None,
+        help="Optional directory to write query results as parquet files.",
+    )
 
     parsed_args = parser.parse_args(args)
 
@@ -1003,6 +1009,12 @@ def run_polars(
             )
             if args.print_results:
                 print(result)
+
+            if args.results_directory is not None and i == 0:
+                results_dir = Path(args.results_directory)
+                results_dir.mkdir(parents=True, exist_ok=True)
+                output_path = results_dir / f"q_{q_id:02d}.parquet"
+                result.write_parquet(output_path)
 
             print(
                 f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",

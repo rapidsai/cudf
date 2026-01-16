@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -620,9 +620,9 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
  */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  unsnap_kernel(device_span<device_span<uint8_t const> const> inputs,
-                device_span<device_span<uint8_t> const> outputs,
-                device_span<codec_exec_result> results)
+  unsnap_kernel_no_racecheck(device_span<device_span<uint8_t const> const> inputs,
+                             device_span<device_span<uint8_t> const> outputs,
+                             device_span<codec_exec_result> results)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
   __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
@@ -705,7 +705,8 @@ void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
   dim3 dim_block(128, 1);           // 4 warps per stream, 1 stream per block
   dim3 dim_grid(inputs.size(), 1);  // TODO: Check max grid dimensions vs max expected count
 
-  unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
+  unsnap_kernel_no_racecheck<128>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
 }
 
 __global__ void get_snappy_uncompressed_size_kernel(
