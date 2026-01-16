@@ -47,8 +47,8 @@ class chunked_parquet_reader {
    *
    * @param chunk_read_limit Byte limit on the returned table chunk size, `0` if there is no limit
    * @param options Parquet reader options
-   * @param serialized_roaring_bitmaps Host span of host spans containing `portable` serialized
-   * 64-bit roaring bitmaps
+   * @param serialized_roaring_bitmaps Vector of vectors of `portable` serialized 64-bit roaring
+   * bitmaps
    * @param deletion_vector_row_counts Host span of number of rows in each deletion vector
    * @param row_group_offsets Host span of row offsets of each row group
    * @param row_group_num_rows Host span of number of rows in each row group
@@ -58,7 +58,7 @@ class chunked_parquet_reader {
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
     parquet_reader_options const& options,
-    cudf::host_span<cudf::host_span<cuda::std::byte const> const> serialized_roaring_bitmaps,
+    std::vector<std::vector<cuda::std::byte>>&& serialized_roaring_bitmaps,
     cudf::host_span<size_type const> deletion_vector_row_counts,
     cudf::host_span<size_t const> row_group_offsets,
     cudf::host_span<size_type const> row_group_num_rows,
@@ -81,8 +81,8 @@ class chunked_parquet_reader {
    * @param pass_read_limit Byte limit on the amount of memory used for decompressing and decoding
    * data, `0` if there is no limit
    * @param options Parquet reader options
-   * @param serialized_roaring_bitmaps Host span of host spans containing `portable` serialized
-   * 64-bit roaring bitmap
+   * @param serialized_roaring_bitmaps Vector of vectors of `portable` serialized 64-bit roaring
+   * bitmaps
    * @param deletion_vector_row_counts Host span of number of rows in each deletion vector
    * @param row_group_offsets Host span of row offsets of each row group
    * @param row_group_num_rows Host span of number of rows in each row group
@@ -93,7 +93,7 @@ class chunked_parquet_reader {
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     parquet_reader_options const& options,
-    cudf::host_span<cudf::host_span<cuda::std::byte const> const> serialized_roaring_bitmaps,
+    std::vector<std::vector<cuda::std::byte>>&& serialized_roaring_bitmaps,
     cudf::host_span<size_type const> deletion_vector_row_counts,
     cudf::host_span<size_t const> row_group_offsets,
     cudf::host_span<size_type const> row_group_num_rows,
@@ -154,7 +154,7 @@ class chunked_parquet_reader {
  * @ingroup io_readers
  *
  * @param options Parquet reader options
- * @param serialized_roaring_bitmap Host span of `portable` serialized 64-bit roaring bitmap
+ * @param serialized_roaring_bitmap Vector of `portable` serialized 64-bit roaring bitmap
  * @param row_group_offsets Host span of row index offsets for each row group
  * @param row_group_num_rows Host span of number of rows in each row group
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -165,7 +165,7 @@ class chunked_parquet_reader {
  */
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
-  cudf::host_span<cuda::std::byte const> serialized_roaring_bitmap,
+  std::vector<cuda::std::byte>&& serialized_roaring_bitmap,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -186,8 +186,8 @@ table_with_metadata read_parquet(
  * @ingroup io_readers
  *
  * @param options Parquet reader options
- * @param serialized_roaring_bitmaps Host span of host spans containing `portable` serialized 64-bit
- * roaring bitmaps
+ * @param serialized_roaring_bitmaps Vector of vectors of `portable` serialized 64-bit roaring
+ * bitmaps
  * @param deletion_vector_row_counts Host span of number of rows in each deletion vector
  * @param row_group_offsets Host span of row index offsets for each row group
  * @param row_group_num_rows Host span of number of rows in each row group
@@ -199,7 +199,7 @@ table_with_metadata read_parquet(
  */
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
-  cudf::host_span<cudf::host_span<cuda::std::byte const> const> serialized_roaring_bitmaps,
+  std::vector<std::vector<cuda::std::byte>>&& serialized_roaring_bitmaps,
   cudf::host_span<size_type const> deletion_vector_row_counts,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,

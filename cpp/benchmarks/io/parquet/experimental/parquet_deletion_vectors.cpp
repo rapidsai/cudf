@@ -28,7 +28,7 @@ auto serialize_roaring_bitmap(roaring64_bitmap_t const* roaring_bitmap)
 {
   auto const num_bytes = roaring64_bitmap_portable_size_in_bytes(roaring_bitmap);
   CUDF_EXPECTS(num_bytes > 0, "Roaring64 bitmap is empty");
-  auto serialized_bitmap = thrust::host_vector<cuda::std::byte>(num_bytes);
+  auto serialized_bitmap = std::vector<cuda::std::byte>(num_bytes);
   std::ignore            = roaring64_bitmap_portable_serialize(
     roaring_bitmap, reinterpret_cast<char*>(serialized_bitmap.data()));
   return serialized_bitmap;
@@ -211,20 +211,28 @@ void BM_parquet_deletion_vectors(nvbench::state& state)
   auto [source_sink, row_group_offsets, row_group_num_rows, deletion_vector] =
     setup_table_and_deletion_vector(state);
 
+  auto rows_per_deletion_vector =
+    std::vector<cudf::size_type>{std::numeric_limits<cudf::size_type>::max()};
+  auto deletion_vectors = std::vector<std::vector<cuda::std::byte>>{};
+  deletion_vectors.emplace_back(deletion_vector);
+
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();
 
-               timer.start();
-               auto const result = cudf::io::parquet::experimental::read_parquet(
-                 read_opts, deletion_vector, row_group_offsets, row_group_num_rows);
-               timer.stop();
-             });
+      timer.start();
+      std::ignore = cudf::io::parquet::experimental::read_parquet(read_opts,
+                                                                  std::move(deletion_vectors),
+                                                                  rows_per_deletion_vector,
+                                                                  row_group_offsets,
+                                                                  row_group_num_rows);
+      timer.stop();
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(num_rows) / time, "rows_per_second");
@@ -245,6 +253,11 @@ void BM_parquet_chunked_deletion_vectors(nvbench::state& state)
   auto [source_sink, row_group_offsets, row_group_num_rows, deletion_vector] =
     setup_table_and_deletion_vector(state);
 
+  auto rows_per_deletion_vector =
+    std::vector<cudf::size_type>{std::numeric_limits<cudf::size_type>::max()};
+  auto deletion_vectors = std::vector<std::vector<cuda::std::byte>>{};
+  deletion_vectors.emplace_back(deletion_vector);
+
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
 
@@ -256,12 +269,14 @@ void BM_parquet_chunked_deletion_vectors(nvbench::state& state)
       try_drop_l3_cache();
 
       timer.start();
-      auto reader = cudf::io::parquet::experimental::chunked_parquet_reader(chunk_read_limit,
-                                                                            pass_read_limit,
-                                                                            read_opts,
-                                                                            deletion_vector,
-                                                                            row_group_offsets,
-                                                                            row_group_num_rows);
+      auto reader =
+        cudf::io::parquet::experimental::chunked_parquet_reader(chunk_read_limit,
+                                                                pass_read_limit,
+                                                                read_opts,
+                                                                std::move(deletion_vectors),
+                                                                rows_per_deletion_vector,
+                                                                row_group_offsets,
+                                                                row_group_num_rows);
       do {
         auto const result = reader.read_chunk();
         num_chunks++;
