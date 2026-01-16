@@ -162,28 +162,40 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
  * Classes with non-copyable members (like host_udf_aggregation) should not use
  * this helper and must implement clone() manually.
  *
+ * Usage:
+ *   class my_aggregation final : public clonable<my_aggregation>::derived_from<base1, base2, ...>
+ * {};
+ *
  * @tparam Derived The concrete aggregation class (CRTP pattern)
- * @tparam Bases The base classes to inherit from (e.g., rolling_aggregation, groupby_aggregation)
  */
-template <typename Derived, typename... Bases>
-class clonable_aggregation : public Bases... {
- public:
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<Derived>(static_cast<Derived const&>(*this));
-  }
+template <typename Derived>
+struct clonable {
+  /**
+   * @brief Inherits from the specified base classes and provides an automatic clone()
+   * implementation.
+   *
+   * @tparam Bases The base classes to inherit from (e.g., rolling_aggregation, groupby_aggregation)
+   */
+  template <typename... Bases>
+  class derived_from : public Bases... {
+   public:
+    [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+    {
+      return std::make_unique<Derived>(static_cast<Derived const&>(*this));
+    }
+  };
 };
 
 /**
  * @brief Derived class for specifying a sum aggregation
  */
-class sum_aggregation final : public clonable_aggregation<sum_aggregation,
-                                                          rolling_aggregation,
-                                                          groupby_aggregation,
-                                                          groupby_scan_aggregation,
-                                                          reduce_aggregation,
-                                                          scan_aggregation,
-                                                          segmented_reduce_aggregation> {
+class sum_aggregation final
+  : public clonable<sum_aggregation>::derived_from<rolling_aggregation,
+                                                   groupby_aggregation,
+                                                   groupby_scan_aggregation,
+                                                   reduce_aggregation,
+                                                   scan_aggregation,
+                                                   segmented_reduce_aggregation> {
  public:
   sum_aggregation() : aggregation(SUM) {}
 
@@ -199,11 +211,10 @@ class sum_aggregation final : public clonable_aggregation<sum_aggregation,
  * @brief Derived class for specifying a sum_with_overflow aggregation
  */
 class sum_with_overflow_aggregation final
-  : public clonable_aggregation<sum_with_overflow_aggregation,
-                                groupby_aggregation,
-                                groupby_scan_aggregation,
-                                reduce_aggregation,
-                                segmented_reduce_aggregation> {
+  : public clonable<sum_with_overflow_aggregation>::derived_from<groupby_aggregation,
+                                                                 groupby_scan_aggregation,
+                                                                 reduce_aggregation,
+                                                                 segmented_reduce_aggregation> {
  public:
   sum_with_overflow_aggregation() : aggregation(SUM_WITH_OVERFLOW) {}
 
@@ -218,12 +229,12 @@ class sum_with_overflow_aggregation final
 /**
  * @brief Derived class for specifying a product aggregation
  */
-class product_aggregation final : public clonable_aggregation<product_aggregation,
-                                                              groupby_aggregation,
-                                                              groupby_scan_aggregation,
-                                                              reduce_aggregation,
-                                                              scan_aggregation,
-                                                              segmented_reduce_aggregation> {
+class product_aggregation final
+  : public clonable<product_aggregation>::derived_from<groupby_aggregation,
+                                                       groupby_scan_aggregation,
+                                                       reduce_aggregation,
+                                                       scan_aggregation,
+                                                       segmented_reduce_aggregation> {
  public:
   product_aggregation() : aggregation(PRODUCT) {}
 
@@ -238,13 +249,13 @@ class product_aggregation final : public clonable_aggregation<product_aggregatio
 /**
  * @brief Derived class for specifying a min aggregation
  */
-class min_aggregation final : public clonable_aggregation<min_aggregation,
-                                                          rolling_aggregation,
-                                                          groupby_aggregation,
-                                                          groupby_scan_aggregation,
-                                                          reduce_aggregation,
-                                                          scan_aggregation,
-                                                          segmented_reduce_aggregation> {
+class min_aggregation final
+  : public clonable<min_aggregation>::derived_from<rolling_aggregation,
+                                                   groupby_aggregation,
+                                                   groupby_scan_aggregation,
+                                                   reduce_aggregation,
+                                                   scan_aggregation,
+                                                   segmented_reduce_aggregation> {
  public:
   min_aggregation() : aggregation(MIN) {}
 
@@ -259,13 +270,13 @@ class min_aggregation final : public clonable_aggregation<min_aggregation,
 /**
  * @brief Derived class for specifying a max aggregation
  */
-class max_aggregation final : public clonable_aggregation<max_aggregation,
-                                                          rolling_aggregation,
-                                                          groupby_aggregation,
-                                                          groupby_scan_aggregation,
-                                                          reduce_aggregation,
-                                                          scan_aggregation,
-                                                          segmented_reduce_aggregation> {
+class max_aggregation final
+  : public clonable<max_aggregation>::derived_from<rolling_aggregation,
+                                                   groupby_aggregation,
+                                                   groupby_scan_aggregation,
+                                                   reduce_aggregation,
+                                                   scan_aggregation,
+                                                   segmented_reduce_aggregation> {
  public:
   max_aggregation() : aggregation(MAX) {}
 
@@ -280,11 +291,11 @@ class max_aggregation final : public clonable_aggregation<max_aggregation,
 /**
  * @brief Derived class for specifying a count aggregation
  */
-class count_aggregation final : public clonable_aggregation<count_aggregation,
-                                                            rolling_aggregation,
-                                                            groupby_aggregation,
-                                                            groupby_scan_aggregation,
-                                                            reduce_aggregation> {
+class count_aggregation final
+  : public clonable<count_aggregation>::derived_from<rolling_aggregation,
+                                                     groupby_aggregation,
+                                                     groupby_scan_aggregation,
+                                                     reduce_aggregation> {
  public:
   count_aggregation(aggregation::Kind kind) : aggregation(kind) {}
 
@@ -300,7 +311,7 @@ class count_aggregation final : public clonable_aggregation<count_aggregation,
  * @brief Derived class for specifying a histogram aggregation
  */
 class histogram_aggregation final
-  : public clonable_aggregation<histogram_aggregation, groupby_aggregation, reduce_aggregation> {
+  : public clonable<histogram_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   histogram_aggregation() : aggregation(HISTOGRAM) {}
 
@@ -316,7 +327,8 @@ class histogram_aggregation final
  * @brief Derived class for specifying an any aggregation
  */
 class any_aggregation final
-  : public clonable_aggregation<any_aggregation, reduce_aggregation, segmented_reduce_aggregation> {
+  : public clonable<any_aggregation>::derived_from<reduce_aggregation,
+                                                   segmented_reduce_aggregation> {
  public:
   any_aggregation() : aggregation(ANY) {}
 
@@ -332,7 +344,8 @@ class any_aggregation final
  * @brief Derived class for specifying an all aggregation
  */
 class all_aggregation final
-  : public clonable_aggregation<all_aggregation, reduce_aggregation, segmented_reduce_aggregation> {
+  : public clonable<all_aggregation>::derived_from<reduce_aggregation,
+                                                   segmented_reduce_aggregation> {
  public:
   all_aggregation() : aggregation(ALL) {}
 
@@ -347,10 +360,9 @@ class all_aggregation final
 /**
  * @brief Derived class for specifying a sum_of_squares aggregation
  */
-class sum_of_squares_aggregation final : public clonable_aggregation<sum_of_squares_aggregation,
-                                                                     groupby_aggregation,
-                                                                     reduce_aggregation,
-                                                                     segmented_reduce_aggregation> {
+class sum_of_squares_aggregation final
+  : public clonable<sum_of_squares_aggregation>::
+      derived_from<groupby_aggregation, reduce_aggregation, segmented_reduce_aggregation> {
  public:
   sum_of_squares_aggregation() : aggregation(SUM_OF_SQUARES) {}
 
@@ -365,11 +377,11 @@ class sum_of_squares_aggregation final : public clonable_aggregation<sum_of_squa
 /**
  * @brief Derived class for specifying a mean aggregation
  */
-class mean_aggregation final : public clonable_aggregation<mean_aggregation,
-                                                           rolling_aggregation,
-                                                           groupby_aggregation,
-                                                           reduce_aggregation,
-                                                           segmented_reduce_aggregation> {
+class mean_aggregation final
+  : public clonable<mean_aggregation>::derived_from<rolling_aggregation,
+                                                    groupby_aggregation,
+                                                    reduce_aggregation,
+                                                    segmented_reduce_aggregation> {
  public:
   mean_aggregation() : aggregation(MEAN) {}
 
@@ -384,7 +396,7 @@ class mean_aggregation final : public clonable_aggregation<mean_aggregation,
 /**
  * @brief Derived class for specifying a m2 aggregation
  */
-class m2_aggregation : public clonable_aggregation<m2_aggregation, groupby_aggregation> {
+class m2_aggregation : public clonable<m2_aggregation>::derived_from<groupby_aggregation> {
  public:
   m2_aggregation() : aggregation{M2} {}
 
@@ -475,7 +487,7 @@ class std_aggregation final : public std_var_aggregation {
  * @brief Derived class for specifying a median aggregation
  */
 class median_aggregation final
-  : public clonable_aggregation<median_aggregation, groupby_aggregation, reduce_aggregation> {
+  : public clonable<median_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   median_aggregation() : aggregation(MEDIAN) {}
 
@@ -491,7 +503,7 @@ class median_aggregation final
  * @brief Derived class for specifying a quantile aggregation
  */
 class quantile_aggregation final
-  : public clonable_aggregation<quantile_aggregation, groupby_aggregation, reduce_aggregation> {
+  : public clonable<quantile_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   quantile_aggregation(std::vector<double> const& q, interpolation i)
     : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i}
@@ -536,10 +548,9 @@ class quantile_aggregation final
 /**
  * @brief Derived class for specifying an argmax aggregation
  */
-class argmax_aggregation final : public clonable_aggregation<argmax_aggregation,
-                                                             rolling_aggregation,
-                                                             groupby_aggregation,
-                                                             reduce_aggregation> {
+class argmax_aggregation final
+  : public clonable<argmax_aggregation>::
+      derived_from<rolling_aggregation, groupby_aggregation, reduce_aggregation> {
  public:
   argmax_aggregation() : aggregation(ARGMAX) {}
 
@@ -554,10 +565,9 @@ class argmax_aggregation final : public clonable_aggregation<argmax_aggregation,
 /**
  * @brief Derived class for specifying an argmin aggregation
  */
-class argmin_aggregation final : public clonable_aggregation<argmin_aggregation,
-                                                             rolling_aggregation,
-                                                             groupby_aggregation,
-                                                             reduce_aggregation> {
+class argmin_aggregation final
+  : public clonable<argmin_aggregation>::
+      derived_from<rolling_aggregation, groupby_aggregation, reduce_aggregation> {
  public:
   argmin_aggregation() : aggregation(ARGMIN) {}
 
@@ -572,10 +582,9 @@ class argmin_aggregation final : public clonable_aggregation<argmin_aggregation,
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
-class nunique_aggregation final : public clonable_aggregation<nunique_aggregation,
-                                                              groupby_aggregation,
-                                                              reduce_aggregation,
-                                                              segmented_reduce_aggregation> {
+class nunique_aggregation final
+  : public clonable<nunique_aggregation>::
+      derived_from<groupby_aggregation, reduce_aggregation, segmented_reduce_aggregation> {
  public:
   nunique_aggregation(null_policy null_handling)
     : aggregation{NUNIQUE}, _null_handling{null_handling}
@@ -613,10 +622,9 @@ class nunique_aggregation final : public clonable_aggregation<nunique_aggregatio
 /**
  * @brief Derived class for specifying a nth element aggregation
  */
-class nth_element_aggregation final : public clonable_aggregation<nth_element_aggregation,
-                                                                  groupby_aggregation,
-                                                                  reduce_aggregation,
-                                                                  rolling_aggregation> {
+class nth_element_aggregation final
+  : public clonable<nth_element_aggregation>::
+      derived_from<groupby_aggregation, reduce_aggregation, rolling_aggregation> {
  public:
   nth_element_aggregation(size_type n, null_policy null_handling)
     : aggregation{NTH_ELEMENT}, _n{n}, _null_handling{null_handling}
@@ -656,7 +664,7 @@ class nth_element_aggregation final : public clonable_aggregation<nth_element_ag
  * @brief Derived class for specifying a row_number aggregation
  */
 class row_number_aggregation final
-  : public clonable_aggregation<row_number_aggregation, rolling_aggregation> {
+  : public clonable<row_number_aggregation>::derived_from<rolling_aggregation> {
  public:
   row_number_aggregation() : aggregation(ROW_NUMBER) {}
 
@@ -671,7 +679,7 @@ class row_number_aggregation final
 /**
  * @brief Derived class for specifying an ewma aggregation
  */
-class ewma_aggregation final : public clonable_aggregation<ewma_aggregation, scan_aggregation> {
+class ewma_aggregation final : public clonable<ewma_aggregation>::derived_from<scan_aggregation> {
  public:
   double const center_of_mass;
   cudf::ewm_history history;
@@ -700,10 +708,9 @@ class ewma_aggregation final : public clonable_aggregation<ewma_aggregation, sca
 /**
  * @brief Derived class for specifying a rank aggregation
  */
-class rank_aggregation final : public clonable_aggregation<rank_aggregation,
-                                                           rolling_aggregation,
-                                                           groupby_scan_aggregation,
-                                                           scan_aggregation> {
+class rank_aggregation final
+  : public clonable<rank_aggregation>::
+      derived_from<rolling_aggregation, groupby_scan_aggregation, scan_aggregation> {
  public:
   rank_aggregation(rank_method method,
                    order column_order,
@@ -759,10 +766,9 @@ class rank_aggregation final : public clonable_aggregation<rank_aggregation,
 /**
  * @brief Derived aggregation class for specifying COLLECT_LIST aggregation
  */
-class collect_list_aggregation final : public clonable_aggregation<collect_list_aggregation,
-                                                                   rolling_aggregation,
-                                                                   groupby_aggregation,
-                                                                   reduce_aggregation> {
+class collect_list_aggregation final
+  : public clonable<collect_list_aggregation>::
+      derived_from<rolling_aggregation, groupby_aggregation, reduce_aggregation> {
  public:
   explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
     : aggregation{COLLECT_LIST}, _null_handling{null_handling}
@@ -800,10 +806,9 @@ class collect_list_aggregation final : public clonable_aggregation<collect_list_
 /**
  * @brief Derived aggregation class for specifying COLLECT_SET aggregation
  */
-class collect_set_aggregation final : public clonable_aggregation<collect_set_aggregation,
-                                                                  rolling_aggregation,
-                                                                  groupby_aggregation,
-                                                                  reduce_aggregation> {
+class collect_set_aggregation final
+  : public clonable<collect_set_aggregation>::
+      derived_from<rolling_aggregation, groupby_aggregation, reduce_aggregation> {
  public:
   explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
                                    null_equality nulls_equal = null_equality::EQUAL,
@@ -852,7 +857,7 @@ class collect_set_aggregation final : public clonable_aggregation<collect_set_ag
  * @brief Derived aggregation class for specifying LEAD/LAG window aggregations
  */
 class lead_lag_aggregation final
-  : public clonable_aggregation<lead_lag_aggregation, rolling_aggregation> {
+  : public clonable<lead_lag_aggregation>::derived_from<rolling_aggregation> {
  public:
   lead_lag_aggregation(Kind kind, size_type offset)
     : aggregation{offset < 0 ? (kind == LAG ? LEAD : LAG) : kind}, row_offset{std::abs(offset)}
@@ -888,7 +893,7 @@ class lead_lag_aggregation final
  * @brief Derived class for specifying a custom aggregation
  * specified in udf
  */
-class udf_aggregation final : public clonable_aggregation<udf_aggregation, rolling_aggregation> {
+class udf_aggregation final : public clonable<udf_aggregation>::derived_from<rolling_aggregation> {
  public:
   udf_aggregation(aggregation::Kind type,
                   std::string user_defined_aggregator,
@@ -972,7 +977,8 @@ class host_udf_aggregation final : public groupby_aggregation,
  * @brief Derived aggregation class for specifying MERGE_LISTS aggregation
  */
 class merge_lists_aggregation final
-  : public clonable_aggregation<merge_lists_aggregation, groupby_aggregation, reduce_aggregation> {
+  : public clonable<merge_lists_aggregation>::derived_from<groupby_aggregation,
+                                                           reduce_aggregation> {
  public:
   explicit merge_lists_aggregation() : aggregation{MERGE_LISTS} {}
 
@@ -988,7 +994,7 @@ class merge_lists_aggregation final
  * @brief Derived aggregation class for specifying MERGE_SETS aggregation
  */
 class merge_sets_aggregation final
-  : public clonable_aggregation<merge_sets_aggregation, groupby_aggregation, reduce_aggregation> {
+  : public clonable<merge_sets_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   explicit merge_sets_aggregation(null_equality nulls_equal, nan_equality nans_equal)
     : aggregation{MERGE_SETS}, _nulls_equal(nulls_equal), _nans_equal(nans_equal)
@@ -1029,7 +1035,7 @@ class merge_sets_aggregation final
  * @brief Derived aggregation class for specifying MERGE_M2 aggregation
  */
 class merge_m2_aggregation final
-  : public clonable_aggregation<merge_m2_aggregation, groupby_aggregation> {
+  : public clonable<merge_m2_aggregation>::derived_from<groupby_aggregation> {
  public:
   explicit merge_m2_aggregation() : aggregation{MERGE_M2} {}
 
@@ -1044,9 +1050,9 @@ class merge_m2_aggregation final
 /**
  * @brief Derived aggregation class for specifying MERGE_HISTOGRAM aggregation
  */
-class merge_histogram_aggregation final : public clonable_aggregation<merge_histogram_aggregation,
-                                                                      groupby_aggregation,
-                                                                      reduce_aggregation> {
+class merge_histogram_aggregation final
+  : public clonable<merge_histogram_aggregation>::derived_from<groupby_aggregation,
+                                                               reduce_aggregation> {
  public:
   explicit merge_histogram_aggregation() : aggregation{MERGE_HISTOGRAM} {}
 
@@ -1062,7 +1068,7 @@ class merge_histogram_aggregation final : public clonable_aggregation<merge_hist
  * @brief Derived aggregation class for specifying COVARIANCE aggregation
  */
 class covariance_aggregation final
-  : public clonable_aggregation<covariance_aggregation, groupby_aggregation> {
+  : public clonable<covariance_aggregation>::derived_from<groupby_aggregation> {
  public:
   explicit covariance_aggregation(size_type min_periods, size_type ddof)
     : aggregation{COVARIANCE}, _min_periods{min_periods}, _ddof(ddof)
@@ -1094,7 +1100,7 @@ class covariance_aggregation final
  * @brief Derived aggregation class for specifying CORRELATION aggregation
  */
 class correlation_aggregation final
-  : public clonable_aggregation<correlation_aggregation, groupby_aggregation> {
+  : public clonable<correlation_aggregation>::derived_from<groupby_aggregation> {
  public:
   explicit correlation_aggregation(correlation_type type, size_type min_periods)
     : aggregation{CORRELATION}, _type{type}, _min_periods{min_periods}
@@ -1133,7 +1139,7 @@ class correlation_aggregation final
  * @brief Derived aggregation class for specifying TDIGEST aggregation
  */
 class tdigest_aggregation final
-  : public clonable_aggregation<tdigest_aggregation, groupby_aggregation, reduce_aggregation> {
+  : public clonable<tdigest_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   explicit tdigest_aggregation(int max_centroids_)
     : aggregation{TDIGEST}, max_centroids{max_centroids_}
@@ -1153,9 +1159,9 @@ class tdigest_aggregation final
 /**
  * @brief Derived aggregation class for specifying MERGE_TDIGEST aggregation
  */
-class merge_tdigest_aggregation final : public clonable_aggregation<merge_tdigest_aggregation,
-                                                                    groupby_aggregation,
-                                                                    reduce_aggregation> {
+class merge_tdigest_aggregation final
+  : public clonable<merge_tdigest_aggregation>::derived_from<groupby_aggregation,
+                                                             reduce_aggregation> {
  public:
   explicit merge_tdigest_aggregation(int max_centroids_)
     : aggregation{MERGE_TDIGEST}, max_centroids{max_centroids_}
@@ -1176,7 +1182,7 @@ class merge_tdigest_aggregation final : public clonable_aggregation<merge_tdiges
  * @brief Derived aggregation class for specifying BITWISE_AGG aggregation.
  */
 class bitwise_aggregation final
-  : public clonable_aggregation<bitwise_aggregation, groupby_aggregation, reduce_aggregation> {
+  : public clonable<bitwise_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   explicit bitwise_aggregation(bitwise_op bit_op_) : aggregation{BITWISE_AGG}, bit_op{bit_op_} {}
 
@@ -1204,7 +1210,7 @@ class bitwise_aggregation final
 };
 
 class top_k_aggregation final
-  : public clonable_aggregation<top_k_aggregation, groupby_aggregation> {
+  : public clonable<top_k_aggregation>::derived_from<groupby_aggregation> {
  public:
   explicit top_k_aggregation(size_type k, order topk_order)
     : aggregation{TOP_K}, k{k}, topk_order{topk_order}
