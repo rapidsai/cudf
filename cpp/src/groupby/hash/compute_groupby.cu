@@ -152,9 +152,10 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       // single-pass aggregations with linear transformations such as addition/multiplication (e.g.
       // for variance/stddev). In the future, if there are more compound aggregations that require
       // additional aggregation steps, we can revisit this design.
-      auto finalizer = hash_compound_agg_finalizer(col, cache, row_bitmask, stream, mr);
+      auto finalizer_ctx = hash_compound_agg_finalizer_context(col, cache, row_bitmask, stream, mr);
       for (auto&& agg : agg_v) {
-        agg->finalize(finalizer);
+        cudf::detail::aggregation_dispatcher(
+          agg->kind, hash_compound_agg_finalizer_fn{finalizer_ctx}, *agg);
       }
     }
   }

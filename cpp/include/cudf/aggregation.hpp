@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,12 +27,6 @@ namespace CUDF_EXPORT cudf {
  * @{
  * @file
  */
-
-// forward declaration
-namespace detail {
-class simple_aggregations_collector;
-class aggregation_finalizer;
-}  // namespace detail
 
 /**
  * @brief Tie-breaker method to use for ranking the column.
@@ -157,25 +151,6 @@ class aggregation {
    * @return A copy of the aggregation object
    */
   [[nodiscard]] virtual std::unique_ptr<aggregation> clone() const = 0;
-
-  // override functions for compound aggregations
-  /**
-   * @pure @brief Get the simple aggregations that this aggregation requires to compute.
-   *
-   * @param col_type The type of the column to aggregate
-   * @param collector The collector visitor pattern to use to collect the simple aggregations
-   * @return Vector of pre-requisite simple aggregations
-   */
-  virtual std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const = 0;
-
-  /**
-   * @pure @brief Compute the aggregation after pre-requisite simple aggregations have been
-   * computed.
-   *
-   * @param finalizer The finalizer visitor pattern to use to compute the aggregation
-   */
-  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const = 0;
 };
 
 /**
