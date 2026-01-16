@@ -57,7 +57,8 @@ hierarchical_thread_pool& pool(int level)
   if (std::cmp_less(level, g_pools.size()) && g_pools[level]) { return *g_pools[level]; }
 
   // Create and add the pool to the vector
-  CUDF_EXPECTS(level == g_pools.size(), "Invalid pool level, should only increase by 1");
+  CUDF_EXPECTS(std::cmp_equal(level, g_pools.size()),
+               "Invalid pool level, should only increase by 1");
   g_pools.emplace_back(std::make_unique<hierarchical_thread_pool>(pool_size(), level));
   return *g_pools.back();
 }
