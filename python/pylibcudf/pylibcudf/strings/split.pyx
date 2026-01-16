@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 # ---------------------- Imports ----------------------
 from libcudf.strings.split cimport split_part as cpp_split_part
 from libcudf.strings.strings_column_view cimport strings_column_view
