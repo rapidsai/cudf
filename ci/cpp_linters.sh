@@ -34,9 +34,10 @@ sccache --stop-server 2>/dev/null || true
 # Run the build via CMake, which will run clang-tidy when CUDF_STATIC_LINTERS is enabled.
 
 iwyu_flag=""
-if [[ "${RAPIDS_BUILD_TYPE:-}" == "nightly" ]]; then
-  iwyu_flag="-DCUDF_IWYU=ON"
-fi
+# Temporarily disabling this until we can figure out why it causes the build to hang
+# if [[ "${RAPIDS_BUILD_TYPE:-}" == "nightly" ]]; then
+#  iwyu_flag="-DCUDF_IWYU=ON"
+# fi
 rapids-telemetry-record cpp_linters_build.log cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON ${iwyu_flag} -DBUILD_TESTS=OFF -DCMAKE_CUDA_ARCHITECTURES=75 -GNinja
 cmake --build cpp/build 2>&1 | python cpp/scripts/parse_iwyu_output.py
 
