@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -17,8 +18,7 @@ from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
-
+    from cudf._typing import DtypeObj
     from cudf.core.column import ColumnBase
 
 
@@ -79,6 +79,16 @@ class IntervalColumn(StructColumn):
 
     def copy(self, deep: bool = True) -> Self:
         return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
+
+    def _adjust_reduce_result(
+        self,
+        result_col: ColumnBase,
+        reduction_op: str,
+        col_dtype: DtypeObj,
+        plc_scalar: plc.Scalar,
+    ) -> ColumnBase:
+        """Preserve IntervalDtype metadata on reduction result."""
+        return result_col._with_type_metadata(col_dtype)
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
