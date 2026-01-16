@@ -527,6 +527,32 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return ColumnBase._unwrap_buffers(self.plc_column)
 
     @staticmethod
+    def _wrap_buffer_or_span(
+        buffer_or_span: Buffer | Any | None,
+    ) -> Buffer | None:
+        """Wrap a buffer or span in a cudf Buffer.
+
+        If the input is already a Buffer, it will be shallow-copied to track
+        that we are now sharing the same BufferOwner. If it's a gpumemoryview
+        or other span, it will be wrapped in a new Buffer.
+
+        Parameters
+        ----------
+        buffer_or_span : Buffer, gpumemoryview, or None
+            The buffer or span to wrap.
+
+        Returns
+        -------
+        Buffer or None
+            A wrapped Buffer, or None if input was None.
+        """
+        if buffer_or_span is None:
+            return None
+        if isinstance(buffer_or_span, Buffer):
+            return buffer_or_span.copy(deep=False)
+        return as_buffer(buffer_or_span)
+
+    @staticmethod
     def _wrap_buffers(col: plc.Column) -> plc.Column:
         """Recursively wrap all buffers in a pylibcudf.Column.
 
@@ -555,23 +581,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 new_dtype, col.size(), plc.types.MaskState.ALL_NULL
             )
 
-        # Typically non-Buffers will be gpumemoryview objects produced as new memory
-        # from pylibcudf, which must be wrapped in a buffer. If the underlying data is
-        # already a buffer it must be shallow-copied to track that we are now sharing
-        # the same BufferOwner.
-        data = col.data()
-        if data is not None:
-            if isinstance(data, Buffer):
-                data = data.copy(deep=False)
-            else:
-                data = as_buffer(data)
-
-        mask = col.null_mask()
-        if mask is not None:
-            if isinstance(mask, Buffer):
-                mask = mask.copy(deep=False)
-            else:
-                mask = as_buffer(mask)
+        data = ColumnBase._wrap_buffer_or_span(col.data())
+        mask = ColumnBase._wrap_buffer_or_span(col.null_mask())
 
         wrapped_children = [
             ColumnBase._wrap_buffers(child) for child in col.children()
@@ -607,16 +618,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        if col.type().id() == plc.TypeId.TIMESTAMP_DAYS:
-            col = plc.unary.cast(
-                col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS)
-            )
-        elif col.type().id() == plc.TypeId.EMPTY:
-            new_dtype = plc.DataType(plc.TypeId.INT8)
-            col = plc.column_factories.make_numeric_column(
-                new_dtype, col.size(), plc.types.MaskState.ALL_NULL
-            )
-
         wrapped = ColumnBase._wrap_buffers(col)
 
         dtype = dtype_from_pylibcudf_column(col)
