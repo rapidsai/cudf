@@ -228,7 +228,12 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
 
   [[nodiscard]] operator std::span<T const>() const noexcept
   {
-    return std::span<T const>(this->data(), this->size());
+    return std::span<T const>(base::data(), base::size());
+  }
+
+  [[nodiscard]] operator std::span<T>() noexcept
+  {
+    return std::span<T>(base::data(), base::size());
   }
 };
 
