@@ -150,7 +150,7 @@ enum class use_data_page_mask : bool {
  * if (dict_page_byte_ranges.size()) {
  *   // Fetch dictionary page byte ranges into device buffers and create spans
  *   std::vector<rmm::device_buffer> dictionary_page_buffers =
- *     fetch_device_buffers(dict_page_byte_ranges);
+ *     fetch_device_buffers(dict_page_byte_ranges, stream, mr);
  *   auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
  *
  *   // Prune row groups using dictionaries
