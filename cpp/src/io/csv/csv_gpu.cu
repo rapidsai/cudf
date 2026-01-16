@@ -687,8 +687,8 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
         }
       } else if (c == quotechar) {
         if (c_prev == delimiter || c_prev == quotechar) {
-          // Quote after delimiter: toggle quote mode (start/end of quoted field)
-          // Quote after quote: toggle for escaped quote sequences ("")
+          // Quote after delimiter or quote after quote: both toggle quote mode
+          // (start/end of quoted field, including escaped quote sequences (""))
           ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
         } else {
           // Quote in middle of unquoted field (ignored for Spark compatibility)
