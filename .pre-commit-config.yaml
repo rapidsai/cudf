@@ -141,7 +141,7 @@ repos:
       - id: verify-thrust-exec-policy
         name: verify-thrust-exec-policy
         description: 'Enforce that rmm::exec_policy_nosync is used when possible (see developer guide)'
-        entry: ./cpp/scripts/verify_thrust_exec_policy.sh
+        entry: ./ci/checks/verify_thrust_exec_policy.sh
         types_or: [c, c++, cuda]
         language: python
         pass_filenames: false
