@@ -1224,7 +1224,8 @@ class StringColumn(ColumnBase, Scannable):
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
        
     def split_part(self, delimiter=None, index=0):
-        if delimiter is None: delimiter = " "
+        if delimiter is None:
+            delimiter = " "
 
         from pylibcudf.strings import split as plc_split
 

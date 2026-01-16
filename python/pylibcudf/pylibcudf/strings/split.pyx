@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # ---------------------- Imports ----------------------
 from libcudf.strings.split cimport split_part as cpp_split_part
@@ -12,7 +12,7 @@ from libcpp.memory cimport unique_ptr
 from libcudf cimport move
 
 # ---------------------- The Function ----------------------
-cpdef Column split_part(Column strings,Scalar delimiter,size_type index):
+cpdef Column split_part(Column strings, Scalar delimiter, size_type index):
     cdef strings_column_view c_strings = strings.view()
     cdef const string_scalar* c_delim = <const string_scalar*>delimiter.c_value()
 
