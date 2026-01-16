@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,6 +7,7 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -21,7 +22,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
+#include <cub/cub.cuh>
+#include <cuco/static_set.cuh>
+#include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -179,24 +184,134 @@ filter_join_indices(cudf::table_view const& left,
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
 
   } else if (join_kind == join_kind::LEFT_JOIN) {
-    // LEFT_JOIN: preserve all left rows, nullify right indices for failed predicates
-    auto [filtered_left_indices, filtered_right_indices] = make_result_vectors(left_indices.size());
+    // LEFT_JOIN: Keep pairs that pass predicate, add one unmatched entry per left row with no
+    // matches
+    using SetType =
+      cuco::static_set<size_type,
+                       cuco::extent<std::size_t>,
+                       cuda::thread_scope_device,
+                       cuda::std::equal_to<size_type>,
+                       cuco::double_hashing<1, cuco::default_hash_function<size_type>>,
+                       rmm::mr::polymorphic_allocator<char>>;
+    SetType filter_passing_indices{cuco::extent{static_cast<std::size_t>(left.num_rows())},
+                                   cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                                   cuco::empty_key{-1},
+                                   {},
+                                   {},
+                                   {},
+                                   {},
+                                   {},
+                                   stream.value()};
 
-    auto transform_op = [=] __device__(size_type i) -> cuda::std::tuple<size_type, size_type> {
-      auto left_idx  = left_ptr[i];
-      auto right_idx = right_ptr[i];
-      return predicate_results_ptr[i] ? cuda::std::tuple{left_idx, right_idx}
-                                      : cuda::std::tuple{left_idx, JoinNoMatch};
+    auto predicate_func = [predicate_results_ptr] __device__(size_t idx) {
+      return static_cast<bool>(predicate_results_ptr[idx]);
     };
+    auto const num_filter_passing =
+      filter_passing_indices.insert_if(left_ptr,
+                                       left_ptr + left_indices.size(),
+                                       cuda::counting_iterator<size_t>(0),
+                                       predicate_func,
+                                       stream.value());
 
-    auto output_iter = thrust::make_zip_iterator(
-      cuda::std::tuple{filtered_left_indices->begin(), filtered_right_indices->begin()});
+    auto const num_invalid = left.num_rows() - num_filter_passing;
 
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator{0},
-                      thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
-                      output_iter,
-                      transform_op);
+    // Find the number of indices passing the filter i.e. rows that are valid according to the
+    // predicate CUB APIs are used instead of Thrust to enable 64-bit operations on index vectors of
+    // size greater than integer limits
+    cudf::detail::device_scalar<size_t> d_num_valid(stream);
+    {
+      auto const predicate_it =
+        cuda::transform_iterator{predicate_results_ptr,
+                                 cuda::proclaim_return_type<size_t>(
+                                   [] __device__(auto val) -> size_t { return val ? 1 : 0; })};
+      size_t temp_storage_bytes = 0;
+      cub::DeviceReduce::Sum(nullptr,
+                             temp_storage_bytes,
+                             predicate_it,
+                             d_num_valid.data(),
+                             left_indices.size(),
+                             stream.value());
+      rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+      cub::DeviceReduce::Sum(temp_storage.data(),
+                             temp_storage_bytes,
+                             predicate_it,
+                             d_num_valid.data(),
+                             left_indices.size(),
+                             stream.value());
+    }
+    auto const num_valid   = d_num_valid.value(stream);
+    auto const output_size = num_valid + num_invalid;
+    if (output_size == 0) { return make_empty_result(); }
+
+    auto [filtered_left_indices, filtered_right_indices] = make_result_vectors(output_size);
+    if (num_valid > 0) {
+      auto input_iter =
+        thrust::make_zip_iterator(cuda::std::tuple{left_indices.begin(), right_indices.begin()});
+      auto output_iter = thrust::make_zip_iterator(
+        cuda::std::tuple{filtered_left_indices->begin(), filtered_right_indices->begin()});
+      auto valid_predicate = [predicate_results_ptr] __device__(auto i) -> bool {
+        return predicate_results_ptr[i];
+      };
+
+      // Copy valid indices to output vector
+      // CUB APIs are used instead of Thrust to enable 64-bit operations on index vectors of size
+      // greater than integer limits
+      {
+        size_t temp_storage_bytes = 0;
+        cub::DeviceSelect::FlaggedIf(nullptr,
+                                     temp_storage_bytes,
+                                     input_iter,
+                                     cuda::counting_iterator<size_t>(0),
+                                     output_iter,
+                                     d_num_valid.data(),
+                                     left_indices.size(),
+                                     valid_predicate,
+                                     stream.value());
+        rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+        cub::DeviceSelect::FlaggedIf(temp_storage.data(),
+                                     temp_storage_bytes,
+                                     input_iter,
+                                     cuda::counting_iterator<size_t>(0),
+                                     output_iter,
+                                     d_num_valid.data(),
+                                     left_indices.size(),
+                                     valid_predicate,
+                                     stream.value());
+      }
+    }
+    if (num_invalid > 0) {
+      {
+        // For invalid indices, set the output pairs to be `(invalid_left_idx, JoinNoMatch)`
+        // CUB APIs are used instead of Thrust to enable 64-bit operations on index vectors of size
+        // greater than integer limits
+        size_t temp_storage_bytes       = 0;
+        auto filter_passing_indices_ref = filter_passing_indices.ref(cuco::contains);
+        auto is_unmatched_idx           = [filter_passing_indices_ref] __device__(size_type idx) {
+          auto is_unmatched = !filter_passing_indices_ref.contains(idx);
+          return is_unmatched;
+        };
+        cudf::detail::device_scalar<size_t> d_num_invalid(num_invalid, stream);
+        cub::DeviceSelect::If(nullptr,
+                              temp_storage_bytes,
+                              cuda::counting_iterator<size_t>(0),
+                              filtered_left_indices->begin() + num_valid,
+                              d_num_invalid.data(),
+                              left.num_rows(),
+                              is_unmatched_idx,
+                              stream.value());
+        rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+        cub::DeviceSelect::If(temp_storage.data(),
+                              temp_storage_bytes,
+                              cuda::counting_iterator<size_t>(0),
+                              filtered_left_indices->begin() + num_valid,
+                              d_num_invalid.data(),
+                              left.num_rows(),
+                              is_unmatched_idx,
+                              stream.value());
+      }
+      cub::DeviceTransform::Fill(
+        filtered_right_indices->begin() + num_valid, num_invalid, JoinNoMatch, stream.value());
+    }
 
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
 
