@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -285,9 +285,9 @@ class ListMethods(BaseAccessor):
             )
         if (
             not is_dtype_obj_numeric(
-                lists_indices_col.children[1].dtype, include_decimal=False
+                lists_indices_col.dtype.element_type, include_decimal=False
             )
-            or lists_indices_col.children[1].dtype.kind not in "iu"
+            or lists_indices_col.dtype.element_type.kind not in "iu"
         ):
             raise TypeError(
                 "lists_indices should be column of values of index types."
@@ -322,7 +322,9 @@ class ListMethods(BaseAccessor):
         3                           []
         dtype: list
         """
-        if isinstance(self._column.children[1].dtype, ListDtype):
+        if isinstance(
+            cast("ListDtype", self._column.dtype).element_type, ListDtype
+        ):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
@@ -383,7 +385,9 @@ class ListMethods(BaseAccessor):
             raise NotImplementedError("`kind` not currently implemented.")
         if na_position not in {"first", "last"}:
             raise ValueError(f"Unknown `na_position` value {na_position}")
-        if isinstance(self._column.children[1].dtype, ListDtype):
+        if isinstance(
+            cast("ListDtype", self._column.dtype).element_type, ListDtype
+        ):
             raise NotImplementedError("Nested lists sort is not supported.")
 
         return self._return_or_inplace(
