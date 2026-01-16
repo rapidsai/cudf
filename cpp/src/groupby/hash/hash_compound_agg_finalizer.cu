@@ -59,28 +59,32 @@ auto hash_compound_agg_finalizer_context::gather_argminmax(aggregation const& ag
   return std::move(gather_argminmax->release()[0]);
 }
 
+// Helper for MIN/MAX finalization - shared logic for compound types (e.g., strings)
+template <typename MakeArgAggFn>
+void finalize_minmax_for_compound_types(hash_compound_agg_finalizer_context& ctx,
+                                        aggregation const& agg,
+                                        MakeArgAggFn make_arg_agg)
+{
+  if (ctx.cache->has_result(ctx.col, agg)) { return; }
+  if (ctx.input_type.id() == type_id::STRING) {
+    auto transformed_agg = make_arg_agg();
+    ctx.cache->add_result(ctx.col, agg, ctx.gather_argminmax(*transformed_agg));
+  }  // else: no-op, since this is only relevant for compound aggregations
+  // TODO: support other nested types.
+}
+
 // Specialization for MIN aggregation
 template <>
 void hash_compound_agg_finalizer_fn::operator()<aggregation::MIN>(aggregation const& agg) const
 {
-  if (ctx.cache->has_result(ctx.col, agg)) { return; }
-  if (ctx.input_type.id() == type_id::STRING) {
-    auto transformed_agg = make_argmin_aggregation();
-    ctx.cache->add_result(ctx.col, agg, ctx.gather_argminmax(*transformed_agg));
-  }  // else: no-op, since this is only relevant for compound aggregations
-  // TODO: support other nested types.
+  finalize_minmax_for_compound_types(ctx, agg, make_argmin_aggregation<>);
 }
 
 // Specialization for MAX aggregation
 template <>
 void hash_compound_agg_finalizer_fn::operator()<aggregation::MAX>(aggregation const& agg) const
 {
-  if (ctx.cache->has_result(ctx.col, agg)) { return; }
-  if (ctx.input_type.id() == type_id::STRING) {
-    auto transformed_agg = make_argmax_aggregation();
-    ctx.cache->add_result(ctx.col, agg, ctx.gather_argminmax(*transformed_agg));
-  }  // else: no-op, since this is only relevant for compound aggregations
-  // TODO: support other nested types.
+  finalize_minmax_for_compound_types(ctx, agg, make_argmax_aggregation<>);
 }
 
 // Specialization for MEAN aggregation
@@ -144,9 +148,12 @@ void hash_compound_agg_finalizer_fn::operator()<aggregation::M2>(aggregation con
   ctx.cache->add_result(ctx.col, agg, std::move(output));
 }
 
-// Specialization for VARIANCE aggregation
-template <>
-void hash_compound_agg_finalizer_fn::operator()<aggregation::VARIANCE>(aggregation const& agg) const
+// Helper for VARIANCE/STD finalization - shared logic for M2-based computations
+template <typename ComputeFn>
+void finalize_var_std(hash_compound_agg_finalizer_context& ctx,
+                      aggregation const& agg,
+                      size_type ddof,
+                      ComputeFn compute_fn)
 {
   if (ctx.cache->has_result(ctx.col, agg)) { return; }
 
@@ -157,29 +164,24 @@ void hash_compound_agg_finalizer_fn::operator()<aggregation::VARIANCE>(aggregati
   auto const m2_result    = ctx.cache->get_result(ctx.col, *m2_agg);
   auto const count_result = ctx.cache->get_result(ctx.col, *count_agg);
 
-  // Dynamic cast needed due to virtual inheritance
-  auto const& var_agg = dynamic_cast<cudf::detail::var_aggregation const&>(agg);
-  auto output = compute_variance(m2_result, count_result, var_agg._ddof, ctx.stream, ctx.mr);
+  auto output = compute_fn(m2_result, count_result, ddof, ctx.stream, ctx.mr);
   ctx.cache->add_result(ctx.col, agg, std::move(output));
+}
+
+// Specialization for VARIANCE aggregation
+template <>
+void hash_compound_agg_finalizer_fn::operator()<aggregation::VARIANCE>(aggregation const& agg) const
+{
+  auto const& var_agg = dynamic_cast<cudf::detail::var_aggregation const&>(agg);
+  finalize_var_std(ctx, agg, var_agg._ddof, compute_variance);
 }
 
 // Specialization for STD aggregation
 template <>
 void hash_compound_agg_finalizer_fn::operator()<aggregation::STD>(aggregation const& agg) const
 {
-  if (ctx.cache->has_result(ctx.col, agg)) { return; }
-
-  auto const m2_agg = make_m2_aggregation();
-  // Since M2 is a compound aggregation, we need to "finalize" it using aggregation finalizer.
-  cudf::detail::aggregation_dispatcher(m2_agg->kind, hash_compound_agg_finalizer_fn{ctx}, *m2_agg);
-  auto const count_agg    = make_count_aggregation();
-  auto const m2_result    = ctx.cache->get_result(ctx.col, *m2_agg);
-  auto const count_result = ctx.cache->get_result(ctx.col, *count_agg);
-
-  // Dynamic cast needed due to virtual inheritance
   auto const& std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
-  auto output         = compute_std(m2_result, count_result, std_agg._ddof, ctx.stream, ctx.mr);
-  ctx.cache->add_result(ctx.col, agg, std::move(output));
+  finalize_var_std(ctx, agg, std_agg._ddof, compute_std);
 }
 
 }  // namespace cudf::groupby::detail::hash

@@ -7,7 +7,6 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/aggregation/aggregation_functors.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
@@ -24,7 +23,7 @@
 namespace cudf::groupby::detail::hash {
 
 // Groupby-specific functor for collecting simple aggregations
-struct groupby_simple_aggregation_collector_fn {
+struct simple_aggregation_collector_fn {
   // Default case: return clone of the aggregation
   template <aggregation::Kind k>
   std::vector<std::unique_ptr<aggregation>> operator()(data_type col_type,
@@ -39,8 +38,8 @@ struct groupby_simple_aggregation_collector_fn {
 // Specialization for MIN aggregation
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-groupby_simple_aggregation_collector_fn::operator()<aggregation::MIN>(data_type col_type,
-                                                                      aggregation const&) const
+simple_aggregation_collector_fn::operator()<aggregation::MIN>(data_type col_type,
+                                                              aggregation const&) const
 {
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(col_type.id() == type_id::STRING ? make_argmin_aggregation()
@@ -51,8 +50,8 @@ groupby_simple_aggregation_collector_fn::operator()<aggregation::MIN>(data_type 
 // Specialization for MAX aggregation
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-groupby_simple_aggregation_collector_fn::operator()<aggregation::MAX>(data_type col_type,
-                                                                      aggregation const&) const
+simple_aggregation_collector_fn::operator()<aggregation::MAX>(data_type col_type,
+                                                              aggregation const&) const
 {
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(col_type.id() == type_id::STRING ? make_argmax_aggregation()
@@ -63,8 +62,8 @@ groupby_simple_aggregation_collector_fn::operator()<aggregation::MAX>(data_type 
 // Specialization for MEAN aggregation
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-groupby_simple_aggregation_collector_fn::operator()<aggregation::MEAN>(data_type col_type,
-                                                                       aggregation const&) const
+simple_aggregation_collector_fn::operator()<aggregation::MEAN>(data_type col_type,
+                                                               aggregation const&) const
 {
   CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
   std::vector<std::unique_ptr<aggregation>> aggs;
@@ -74,11 +73,8 @@ groupby_simple_aggregation_collector_fn::operator()<aggregation::MEAN>(data_type
   return aggs;
 }
 
-// Specialization for M2 aggregation
-template <>
-inline std::vector<std::unique_ptr<aggregation>>
-groupby_simple_aggregation_collector_fn::operator()<aggregation::M2>(data_type,
-                                                                     aggregation const&) const
+// Helper for M2/VARIANCE/STD - they all need the same simple aggregations
+inline std::vector<std::unique_ptr<aggregation>> collect_m2_simple_aggs()
 {
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(make_sum_of_squares_aggregation());
@@ -86,34 +82,31 @@ groupby_simple_aggregation_collector_fn::operator()<aggregation::M2>(data_type,
   // COUNT_VALID
   aggs.push_back(make_count_aggregation());
   return aggs;
+}
+
+// Specialization for M2 aggregation
+template <>
+inline std::vector<std::unique_ptr<aggregation>>
+simple_aggregation_collector_fn::operator()<aggregation::M2>(data_type, aggregation const&) const
+{
+  return collect_m2_simple_aggs();
 }
 
 // Specialization for VARIANCE aggregation
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-groupby_simple_aggregation_collector_fn::operator()<aggregation::VARIANCE>(data_type,
-                                                                           aggregation const&) const
+simple_aggregation_collector_fn::operator()<aggregation::VARIANCE>(data_type,
+                                                                   aggregation const&) const
 {
-  std::vector<std::unique_ptr<aggregation>> aggs;
-  aggs.push_back(make_sum_of_squares_aggregation());
-  aggs.push_back(make_sum_aggregation());
-  // COUNT_VALID
-  aggs.push_back(make_count_aggregation());
-  return aggs;
+  return collect_m2_simple_aggs();
 }
 
 // Specialization for STD aggregation
 template <>
 inline std::vector<std::unique_ptr<aggregation>>
-groupby_simple_aggregation_collector_fn::operator()<aggregation::STD>(data_type,
-                                                                      aggregation const&) const
+simple_aggregation_collector_fn::operator()<aggregation::STD>(data_type, aggregation const&) const
 {
-  std::vector<std::unique_ptr<aggregation>> aggs;
-  aggs.push_back(make_sum_of_squares_aggregation());
-  aggs.push_back(make_sum_aggregation());
-  // COUNT_VALID
-  aggs.push_back(make_count_aggregation());
-  return aggs;
+  return collect_m2_simple_aggs();
 }
 
 std::tuple<table_view,
@@ -167,7 +160,7 @@ extract_single_pass_aggs(host_span<aggregation_request const> requests,
                                : request.values.type();
     for (auto const& agg : input_aggs) {
       auto spass_aggs = cudf::detail::aggregation_dispatcher(
-        agg->kind, groupby_simple_aggregation_collector_fn{}, values_type, *agg);
+        agg->kind, simple_aggregation_collector_fn{}, values_type, *agg);
       if (spass_aggs.size() > 1 || !spass_aggs.front()->is_equal(*agg)) {
         has_compound_aggs = true;
       }
@@ -189,7 +182,7 @@ std::vector<aggregation::Kind> get_simple_aggregations(groupby_aggregation const
                                                        data_type values_type)
 {
   auto aggs = cudf::detail::aggregation_dispatcher(
-    agg.kind, groupby_simple_aggregation_collector_fn{}, values_type, agg);
+    agg.kind, simple_aggregation_collector_fn{}, values_type, agg);
   std::vector<aggregation::Kind> agg_kinds;
   std::transform(
     aggs.begin(), aggs.end(), std::back_inserter(agg_kinds), [](auto const& a) { return a->kind; });
