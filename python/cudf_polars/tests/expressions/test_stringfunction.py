@@ -883,3 +883,13 @@ def test_single_column_concat_str():
     lf = pl.LazyFrame({"c0": ["a", "b"]})
     q = lf.select(pl.concat_str(pl.col("c0")))
     assert_gpu_result_equal(q)
+
+
+def test_split_regex_not_supported():
+    lf = pl.LazyFrame({"a": ["foo1bar", "baz456boo", "abc321"]})
+    
+    q = lf.select(pl.col("a").str.split(r"\d+", literal=False))
+    
+    assert_ir_translation_raises(
+        q, NotImplementedError
+    )

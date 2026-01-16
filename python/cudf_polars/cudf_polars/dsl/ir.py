@@ -51,7 +51,7 @@ from cudf_polars.utils.cuda_stream import (
     get_new_cuda_stream,
     join_cuda_streams,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_134
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_134, POLARS_VERSION_LT_136, POLARS_VERSION_LT_137
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
@@ -1039,7 +1039,7 @@ class Sink(IR):
                     f"Compression type '{compression}' is not supported."
                 )
         elif (
-            kind == "Json"
+            kind == "Json" if POLARS_VERSION_LT_137 else "NDJson"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
                 plc.io.json.is_supported_write_json(dtype.plc_type)
@@ -1229,7 +1229,7 @@ class Sink(IR):
             cls._write_csv(target, options, df)
         elif kind == "Parquet":
             cls._write_parquet(target, parquet_options, options, df)
-        elif kind == "Json":
+        elif kind == "Json" if POLARS_VERSION_LT_137 else "NDJson":
             cls._write_json(target, df)
 
         return DataFrame([], stream=df.stream)
@@ -2960,6 +2960,7 @@ class MapFunction(IR):
             "unpivot",
             "row_index",
             "fast_count",
+            "hint_sorted",
         ]
     )
 
@@ -2975,7 +2976,12 @@ class MapFunction(IR):
                 f"Unhandled map function {self.name}"
             )  # pragma: no cover
         if self.name == "explode":
-            (to_explode,) = self.options
+            if POLARS_VERSION_LT_136 or len(self.options) == 1:
+                (to_explode,) = self.options
+            else:
+                (to_explode, empty_as_null, keep_nulls) = self.options
+                if not empty_as_null or not keep_nulls:
+                    raise NotImplementedError("Explode an empty or null list/array")
             if len(to_explode) > 1:
                 # TODO: straightforward, but need to error check
                 # polars requires that all to-explode columns have the
@@ -3027,6 +3033,11 @@ class MapFunction(IR):
             raise NotImplementedError(
                 "Fast count unsupported for CSV scans"
             )  # pragma: no cover
+        elif self.name == "hint_sorted":
+            # options is a list containing one tuple of sorted info
+            # sorted info is a tuple: (column_name, descending, nulls_last)
+            (sorted_info,) = options
+            self.options = (tuple(sorted_info),)
         self._non_child_args = (schema, name, self.options)
 
     def get_hashable(self) -> Hashable:
@@ -3141,6 +3152,28 @@ class MapFunction(IR):
                 dtype=dtype,
             )
             return DataFrame([index_col, *df.columns], stream=df.stream)
+        elif name == "hint_sorted":
+            (sorted_info,) = options
+            
+            for column_name, descending, nulls_last in sorted_info:
+                column = df.column_map[column_name]
+                
+                order = (
+                    plc.types.Order.DESCENDING if descending
+                    else plc.types.Order.ASCENDING
+                )
+                
+                null_order = (
+                    plc.types.NullOrder.AFTER if nulls_last
+                    else plc.types.NullOrder.BEFORE
+                )
+                
+                df.column_map[column_name] = column.set_sorted(
+                    is_sorted=plc.types.Sorted.YES,
+                    order=order,
+                    null_order=null_order,
+                )
+            return df
         else:
             raise AssertionError("Should never be reached")  # pragma: no cover
 

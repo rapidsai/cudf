@@ -39,6 +39,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_1323,
+    POLARS_VERSION_LT_136,
 )
 
 if TYPE_CHECKING:
@@ -102,7 +103,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (11, 1):
+        if (version := self.visitor.version()) >= (12, 1):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -591,7 +592,7 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
     payload = json.loads(node.payload)
     try:
         file = payload["File"]
-        sink_kind_options = file["file_type"]
+        sink_kind_options = file["file_type" if POLARS_VERSION_LT_136 else "file_format"]
     except KeyError as err:  # pragma: no cover
         raise NotImplementedError("Unsupported payload structure") from err
     if isinstance(sink_kind_options, dict):
@@ -904,6 +905,73 @@ def _(
         )
     assert_never(node.options)
 
+
+@_translate_expr.register
+def _(
+    node: plrs._expr_nodes.Rolling,
+    translator: Translator,
+    dtype: DataType,
+    schema: Schema,
+) -> expr.Expr:
+    # New Rolling expression node from Polars 1.36+
+    # pl.sum("a").rolling(index_column="dt", period="2d")
+    with set_expr_context(translator, ExecutionContext.ROLLING):
+        agg = translator.translate_expr(n=node.function, schema=schema)
+    
+    # Translate the index_column expression
+    index_col_expr = translator.translate_expr(n=node.index_column, schema=schema)
+    
+    # For now, we only support simple column references as index_column
+    if not isinstance(index_col_expr, expr.Col):
+        raise NotImplementedError(
+            f"Rolling with complex index_column expressions not supported. "
+            f"Only simple column references are supported, got {type(index_col_expr).__name__}"
+        )
+    
+    orderby = index_col_expr.name
+    orderby_dtype = index_col_expr.dtype.plc_type
+    if plc.traits.is_integral(orderby_dtype):
+        # Integer orderby column is cast in implementation to int64 in polars
+        orderby_dtype = plc.DataType(plc.TypeId.INT64)
+    
+    # These come as tuples from the Rust side (Wrap<Duration> and Wrap<ClosedWindow>)
+    period = node.period  # tuple: (months, weeks, days, nanoseconds, parsed_int, negative)
+    offset = node.offset  # tuple: (months, weeks, days, nanoseconds, parsed_int, negative)
+    closed_window = node.closed_window  # string: "left", "right", "both", or "none"
+    
+    name_generator = unique_names(schema)
+    aggs, named_post_agg = decompose_single_agg(
+        expr.NamedExpr(next(name_generator), agg),
+        name_generator,
+        is_top=True,
+        context=ExecutionContext.ROLLING,
+    )
+    named_aggs = [agg for agg, _ in aggs]
+    
+    if isinstance(named_post_agg.value, expr.Col):
+        (named_agg,) = named_aggs
+        return expr.RollingWindow(
+            named_agg.value.dtype,
+            orderby_dtype,
+            offset,
+            period,
+            closed_window,
+            orderby,
+            named_agg.value,
+        )
+    replacements: dict[expr.Expr, expr.Expr] = {
+        expr.Col(agg.value.dtype, agg.name): expr.RollingWindow(
+            agg.value.dtype,
+            orderby_dtype,
+            offset,
+            period,
+            closed_window,
+            orderby,
+            agg.value,
+        )
+        for agg in named_aggs
+    }
+    return replace([named_post_agg.value], replacements)[0]
 
 @_translate_expr.register
 def _(

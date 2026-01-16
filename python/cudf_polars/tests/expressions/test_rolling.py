@@ -13,7 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132, POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
     from cudf_polars.typing import RankMethod
@@ -34,6 +34,12 @@ def df():
 
 @pytest.mark.parametrize("time_unit", ["ns", "us", "ms"])
 def test_rolling_datetime(time_unit):
+    # request.applymarker(
+    #     pytest.mark.xfail(
+    #         condition=not POLARS_VERSION_LT_136,
+    #         reason="Polars translates this to AExpr::Rolling which is NotImplemented",
+    #     )
+    # )
     dates = [
         "2020-01-01 13:45:48",
         "2020-01-01 16:42:13",
@@ -134,7 +140,10 @@ def test_invalid_duration_spec_raises_in_translation():
     assert_ir_translation_raises(q, pl.exceptions.InvalidOperationError)
 
 
-def test_rolling_inside_groupby_raises():
+def test_rolling_inside_groupby_raises(request):
+    request.applymarker(
+        pytest.mark.xfail(condition=not POLARS_VERSION_LT_136, reason="not supported as of polars 1.36")
+    )
     df = pl.LazyFrame(
         {"keys": [1, 1, 1, 2], "orderby": [1, 2, 4, 2], "values": [1, 2, 3, 4]}
     )

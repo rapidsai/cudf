@@ -111,3 +111,14 @@ def test_unique_hash():
     ir_b = Translator(b._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     assert hash(ir_a) != hash(ir_b)
+
+
+def test_set_sorted_then_inner_join():
+    df = pl.LazyFrame({"a": [1, 2, 3, 4, 5]})
+    
+    q = df.set_sorted("a").join(
+        pl.LazyFrame({"a": [2, 4], "b": [20, 40]}),
+        on="a",
+        how="inner"
+    )
+    assert_gpu_result_equal(q)

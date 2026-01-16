@@ -15,7 +15,7 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_135
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_135, POLARS_VERSION_LT_137
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -214,7 +214,13 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
         (4, 2),
     ],
 )
-def test_scan_csv_multi(tmp_path, filename, glob, nrows_skiprows):
+def test_scan_csv_multi(request, tmp_path, filename, glob, nrows_skiprows):
+    # request.applymarker(
+    #     pytest.mark.xfail(
+    #         condition=not POLARS_VERSION_LT_137,
+    #         reason="Polars 1.37 has overflow bug with skip_rows + n_rows > file length",
+    #     )
+    # )
     n_rows, skiprows = nrows_skiprows
     with (tmp_path / "test1.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
@@ -634,7 +640,13 @@ polars"""
     assert_gpu_result_equal(q)
 
 
-def test_hits_scan_row_index_duplicate(tmp_path):
+def test_hits_scan_row_index_duplicate(request, tmp_path):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not POLARS_VERSION_LT_137,
+            reason="polars fails ahead of time",
+        )
+    )
     pl.DataFrame({"col": [1, 2, 3]}).write_parquet(tmp_path / "a.parquet")
 
     q = pl.scan_parquet(tmp_path / "*.parquet", row_index_name="index").with_row_index(

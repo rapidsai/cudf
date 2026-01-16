@@ -13,7 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_135
+from cudf_polars.utils.versions import POLARS_VERSION_LT_135, POLARS_VERSION_LT_136
 
 
 @pytest.fixture(
@@ -52,15 +52,6 @@ def is_sorted(request):
 
 
 @pytest.fixture
-def xfail_if_sorted_gt_135(is_sorted, request):
-    # See https://github.com/rapidsai/cudf/pull/20791#issuecomment-3750528419
-    if is_sorted and not POLARS_VERSION_LT_135:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/24981")
-        )
-
-
-@pytest.fixture
 def df(dtype, with_nulls, is_sorted):
     values = [-10, 4, 5, 2, 3, 6, 8, 9, 4, 4, 5, 2, 3, 7, 3, 6, -10, -11]
     if with_nulls:
@@ -93,7 +84,7 @@ def decimal_df() -> pl.LazyFrame:
     )
 
 
-def test_agg(df, agg, xfail_if_sorted_gt_135):
+def test_agg(df, agg):
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
     assert_gpu_result_equal(q, check_exact=False)
@@ -120,7 +111,7 @@ def test_cum_agg_reverse_unsupported(cum_agg):
 
 @pytest.mark.parametrize("q", [0.5, pl.lit(0.5)])
 @pytest.mark.parametrize("interp", ["nearest", "higher", "lower", "midpoint", "linear"])
-def test_quantile(df, q, interp, xfail_if_sorted_gt_135):
+def test_quantile(df, q, interp):
     expr = pl.col("a").quantile(q, interp)
     q = df.select(expr)
     assert_gpu_result_equal(q, check_exact=False)
@@ -202,7 +193,13 @@ def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
     assert_gpu_result_equal(q)
 
 
-def test_invalid_agg():
+def test_invalid_agg(request):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not POLARS_VERSION_LT_136,
+            reason="polars raises now",
+        )
+    )
     df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
     q = df.select(pl.col("s").sum())
     assert_ir_translation_raises(q, NotImplementedError)

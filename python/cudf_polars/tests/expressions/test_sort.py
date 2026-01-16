@@ -60,36 +60,35 @@ def test_sort_by_expression(descending, nulls_last, maintain_order):
 
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("nulls_last", [False, True])
-def test_setsorted(request, descending, nulls_last, with_nulls):
-    if not POLARS_VERSION_LT_135:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/24981")
-        )
+@pytest.mark.parametrize("with_nulls", ["no_nulls", "nulls"])
+def test_setsorted(descending, nulls_last, with_nulls):
     values = sorted([1, 2, 3, 4, 5, 6, -2], reverse=descending)
-    if with_nulls:
+    if with_nulls == "nulls":
         values[-1 if nulls_last else 0] = None
     df = pl.LazyFrame({"a": values})
 
     q = df.set_sorted("a", descending=descending)
 
     assert_gpu_result_equal(q)
-    translator = Translator(q._ldf.visit(), pl.GPUEngine())
+    
+    if POLARS_VERSION_LT_135:
+        translator = Translator(q._ldf.visit(), pl.GPUEngine())
 
-    df = translator.translate_ir().evaluate(
-        cache={},
-        timer=None,
-        context=IRExecutionContext.from_config_options(translator.config_options),
-    )
+        df = translator.translate_ir().evaluate(
+            cache={},
+            timer=None,
+            context=IRExecutionContext.from_config_options(translator.config_options),
+        )
 
-    a = df.column_map["a"]
+        a = df.column_map["a"]
 
-    assert a.is_sorted == plc.types.Sorted.YES
-    null_order = (
-        plc.types.NullOrder.AFTER
-        if (descending ^ nulls_last) and with_nulls
-        else plc.types.NullOrder.BEFORE
-    )
-    assert a.null_order == null_order
-    assert a.order == (
-        plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
-    )
+        assert a.is_sorted == plc.types.Sorted.YES
+        null_order = (
+            plc.types.NullOrder.AFTER
+            if (descending ^ nulls_last) and with_nulls == "nulls"
+            else plc.types.NullOrder.BEFORE
+        )
+        assert a.null_order == null_order
+        assert a.order == (
+            plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+        )
