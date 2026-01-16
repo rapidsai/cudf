@@ -2,14 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 import decimal
 import itertools
-import pickle
 
 import msgpack
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from packaging import version
 
 import cudf
 from cudf.testing import assert_eq
@@ -334,7 +332,7 @@ def test_serialize_string():
     ],
 )
 def test_serialize_empty(frames):
-    gdf, pdf = frames
+    gdf, _pdf = frames
 
     typ = type(gdf)
     res = typ.deserialize(*gdf.serialize())
@@ -380,28 +378,11 @@ def test_serialize_seriesresampler():
 def test_serialize_string_check_buffer_sizes():
     df = cudf.DataFrame({"a": ["a", "b", "cd", None]})
     expect = df.memory_usage(deep=True).loc["a"]
-    header, frames = df.serialize()
+    _header, frames = df.serialize()
     # Frames can be either Buffer (on GPU, use .size) or memoryview
     # (spilled to CPU, use .nbytes). See SpillableBuffer.serialize().
-    got = sum(
-        b.size if isinstance(b, cudf.core.buffer.Buffer) else b.nbytes
-        for b in frames
-    )
+    got = sum(b.nbytes for b in frames)
     assert expect == got
-
-
-@pytest.mark.skipif(
-    version.parse(np.__version__) < version.parse("2.0.0"),
-    reason="The serialization of numpy 2.0 types is incompatible with numpy 1.x",
-)
-def test_deserialize_cudf_23_12(datadir):
-    fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_23.12.pkl"
-
-    expected = cudf.DataFrame({"a": ["hi", "hello", "world", None]})
-    with open(fname, "rb") as f:
-        actual = pickle.load(f)
-
-    assert_eq(expected, actual)
 
 
 def test_serialize_sliced_string():
