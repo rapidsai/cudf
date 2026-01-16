@@ -22,7 +22,7 @@ import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
@@ -66,12 +66,12 @@ def dtype(arbitrary: Any) -> DtypeObj:
         pass
     else:
         if np_dtype.kind == "O":
-            return CUDF_STRING_DTYPE
+            return DEFAULT_STRING_DTYPE
         elif np_dtype.kind == "U":
             return pd.StringDtype(na_value=np.nan)
             if cudf.get_option("mode.pandas_compatible"):
                 return np_dtype
-            return CUDF_STRING_DTYPE
+            return DEFAULT_STRING_DTYPE
         elif np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
@@ -214,7 +214,7 @@ class CategoricalDtype(_BaseDtype):
         Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
-            col = cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE)
+            col = cudf.core.column.column_empty(0, dtype=DEFAULT_STRING_DTYPE)
         else:
             col = self._categories
         return cudf.Index._from_column(col)
@@ -270,7 +270,7 @@ class CategoricalDtype(_BaseDtype):
             getattr(categories, "dtype", None),
             (IntervalDtype, pd.IntervalDtype),
         ):
-            dtype = CUDF_STRING_DTYPE
+            dtype = DEFAULT_STRING_DTYPE
         else:
             dtype = None
 

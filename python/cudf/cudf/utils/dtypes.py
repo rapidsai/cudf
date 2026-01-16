@@ -140,7 +140,7 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
             raise NotImplementedError("cudf does not support Decimal256Type")
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
-        return CUDF_STRING_DTYPE
+        return DEFAULT_STRING_DTYPE
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
@@ -338,7 +338,7 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
                 ]
             )
         else:
-            return CUDF_STRING_DTYPE
+            return DEFAULT_STRING_DTYPE
     elif any(
         isinstance(dtype, (cudf.ListDtype, cudf.StructDtype))
         for dtype in dtypes
@@ -430,7 +430,7 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
     elif pa.types.is_large_string(pyarrow_dtype) or pa.types.is_string(
         pyarrow_dtype
     ):
-        return CUDF_STRING_DTYPE
+        return DEFAULT_STRING_DTYPE
     elif pa.types.is_date(pyarrow_dtype):
         raise TypeError("Unsupported type")
     elif isinstance(pyarrow_dtype, pa.DataType):
@@ -606,7 +606,7 @@ def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
             precision=cudf.Decimal128Dtype.MAX_PRECISION, scale=-type_.scale()
         )
     elif tid == plc.TypeId.STRING:
-        return CUDF_STRING_DTYPE
+        return DEFAULT_STRING_DTYPE
     else:
         return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
 
@@ -828,4 +828,4 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING] = np.dtype(
 )
 
 SIZE_TYPE_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.SIZE_TYPE_ID]
-CUDF_STRING_DTYPE = pd.StringDtype(na_value=np.nan)
+DEFAULT_STRING_DTYPE = pd.StringDtype(na_value=np.nan)

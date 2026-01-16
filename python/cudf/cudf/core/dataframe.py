@@ -100,7 +100,7 @@ from cudf.errors import MixedTypeError
 from cudf.options import get_option
 from cudf.utils import docutils, ioutils, queryutils
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
@@ -532,7 +532,7 @@ def _listlike_to_column_accessor(
             index = cudf.RangeIndex(0)
         if columns is not None:
             col_data = {
-                col_label: column_empty(len(index), dtype=CUDF_STRING_DTYPE)
+                col_label: column_empty(len(index), dtype=DEFAULT_STRING_DTYPE)
                 for col_label in columns
             }
         else:
@@ -1031,7 +1031,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     index = index[:0]
                     col_accessor = ColumnAccessor(
                         {
-                            col: column_empty(0, dtype=CUDF_STRING_DTYPE)
+                            col: column_empty(0, dtype=DEFAULT_STRING_DTYPE)
                             for col in columns
                         },
                         verify=False,
@@ -1051,7 +1051,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if columns is not None:
                 col_accessor = ColumnAccessor(
                     {
-                        k: column_empty(len(index), dtype=CUDF_STRING_DTYPE)
+                        k: column_empty(len(index), dtype=DEFAULT_STRING_DTYPE)
                         for k in columns
                     },
                     verify=False,
@@ -1165,7 +1165,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             new_data = {
                 second_label: col_accessor[second_label]
                 if second_label in col_accessor
-                else column_empty(col_accessor.nrows, dtype=CUDF_STRING_DTYPE)
+                else column_empty(
+                    col_accessor.nrows, dtype=DEFAULT_STRING_DTYPE
+                )
                 for second_label in second_columns
             }
             col_accessor = ColumnAccessor(
@@ -3600,10 +3602,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if isinstance(value, (np.ndarray, cupy.ndarray)):
                 dtype = value.dtype
                 if dtype.kind == "U":
-                    dtype = CUDF_STRING_DTYPE
+                    dtype = DEFAULT_STRING_DTYPE
                 value = value.item()
             if _is_null_host_scalar(value):
-                dtype = CUDF_STRING_DTYPE
+                dtype = DEFAULT_STRING_DTYPE
             value = as_column(
                 value,
                 length=len(self),

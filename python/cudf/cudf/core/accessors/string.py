@@ -26,7 +26,7 @@ from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.options import get_option
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     can_convert_to_column,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -57,7 +57,7 @@ def _massage_string_arg(
 
     if allow_col:
         if isinstance(value, list):
-            return as_column(value, dtype=CUDF_STRING_DTYPE)  # type: ignore[return-value]
+            return as_column(value, dtype=DEFAULT_STRING_DTYPE)  # type: ignore[return-value]
 
         from cudf.core.column.string import StringColumn
 
@@ -340,14 +340,14 @@ class StringMethods(BaseAccessor):
             ):
                 other_cols = (
                     as_column(
-                        frame.reindex(parent_index), dtype=CUDF_STRING_DTYPE
+                        frame.reindex(parent_index), dtype=DEFAULT_STRING_DTYPE
                     )
                     if (
                         parent_index is not None
                         and isinstance(frame, cudf.Series)
                         and not frame.index.equals(parent_index)
                     )
-                    else as_column(frame, dtype=CUDF_STRING_DTYPE)
+                    else as_column(frame, dtype=DEFAULT_STRING_DTYPE)
                     for frame in others
                 )
             elif others is not None and not isinstance(others, StringMethods):
@@ -358,7 +358,7 @@ class StringMethods(BaseAccessor):
                 ):
                     others = others.reindex(parent_index)
 
-                other_cols = [as_column(others, dtype=CUDF_STRING_DTYPE)]
+                other_cols = [as_column(others, dtype=DEFAULT_STRING_DTYPE)]
             else:
                 raise TypeError(
                     "others must be Series, Index, DataFrame, np.ndarrary "
@@ -784,7 +784,7 @@ class StringMethods(BaseAccessor):
                 result_col = result_col.fillna(False)
         else:
             # TODO: we silently ignore the `regex=` flag here
-            col_pat = as_column(pat, dtype=CUDF_STRING_DTYPE)
+            col_pat = as_column(pat, dtype=DEFAULT_STRING_DTYPE)
             if case is False:
                 input_column = self._column.to_lower()
                 col_pat = col_pat.to_lower()  # type: ignore[attr-defined]
@@ -996,12 +996,12 @@ class StringMethods(BaseAccessor):
             if regex:
                 result = self._column.replace_re(
                     list(pat),
-                    as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
+                    as_column(repl, dtype=DEFAULT_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             else:
                 result = self._column.replace_multiple(
-                    as_column(pat, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
-                    as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
+                    as_column(pat, dtype=DEFAULT_STRING_DTYPE),  # type: ignore[arg-type]
+                    as_column(repl, dtype=DEFAULT_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             return self._return_or_inplace(result)
 

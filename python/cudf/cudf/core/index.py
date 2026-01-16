@@ -49,7 +49,7 @@ from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
@@ -1714,12 +1714,12 @@ class Index(SingleColumnFrame):
         if isinstance(preprocess, CategoricalIndex):
             if preprocess.categories.dtype.kind == "f":
                 output = repr(
-                    preprocess.astype(CUDF_STRING_DTYPE)
+                    preprocess.astype(DEFAULT_STRING_DTYPE)
                     .to_pandas()
                     .astype(
                         dtype=pd.CategoricalDtype(
                             categories=preprocess.dtype.categories.astype(
-                                CUDF_STRING_DTYPE
+                                DEFAULT_STRING_DTYPE
                             ).to_pandas(),
                             ordered=preprocess.dtype.ordered,
                         )
@@ -1983,7 +1983,7 @@ class Index(SingleColumnFrame):
                     )
                     raise TypeError(
                         f"cudf does not support appending an Index of "
-                        f"dtype `{CUDF_STRING_DTYPE}` with an Index "
+                        f"dtype `{DEFAULT_STRING_DTYPE}` with an Index "
                         f"of dtype `{got_dtype}`, please type-cast "
                         f"either one of them to same dtypes."
                     )

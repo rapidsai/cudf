@@ -60,7 +60,7 @@ from cudf.core.udf.scalar_function import SeriesApplyKernel
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     _get_nan_for_dtype,
     find_common_type,
     get_dtype_of_same_kind,
@@ -121,7 +121,7 @@ def _describe_timetype(
             zip(
                 _format_percentile_names(percentiles),
                 obj.quantile(percentiles)
-                .astype(CUDF_STRING_DTYPE)
+                .astype(DEFAULT_STRING_DTYPE)
                 .to_numpy(na_value=np.nan)
                 .tolist(),
                 strict=True,
@@ -1297,12 +1297,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             preprocess.index = preprocess.index._pandas_repr_compatible()
             if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
-                    preprocess.astype(CUDF_STRING_DTYPE)
+                    preprocess.astype(DEFAULT_STRING_DTYPE)
                     .to_pandas()
                     .astype(
                         dtype=pd.CategoricalDtype(
                             categories=preprocess.dtype.categories.astype(
-                                CUDF_STRING_DTYPE
+                                DEFAULT_STRING_DTYPE
                             ).to_pandas(),
                             ordered=preprocess.dtype.ordered,
                         )

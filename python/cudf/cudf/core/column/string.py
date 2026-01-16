@@ -22,7 +22,7 @@ from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
@@ -406,7 +406,7 @@ class StringColumn(ColumnBase, Scannable):
                 # TODO: Drop the deep copies on astype's copy keyword
                 # default value is fixed in `25.10`
                 col = self.copy(deep=True)
-                col._dtype = CUDF_STRING_DTYPE
+                col._dtype = DEFAULT_STRING_DTYPE
         return col
 
     @property

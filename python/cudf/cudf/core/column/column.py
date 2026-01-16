@@ -63,7 +63,7 @@ from cudf.core.dtypes import (
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _get_nan_for_dtype,
     _maybe_convert_to_default_type,
@@ -2656,7 +2656,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
 def column_empty(
     row_count: int,
-    dtype: DtypeObj = CUDF_STRING_DTYPE,
+    dtype: DtypeObj = DEFAULT_STRING_DTYPE,
 ) -> ColumnBase:
     """
     Allocate a new column with the given row_count and dtype.
