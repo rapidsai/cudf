@@ -76,7 +76,7 @@ std::vector<cudf::device_span<T const>> make_device_spans(
   cudf::host_span<rmm::device_buffer const> buffers)
   requires(sizeof(T) == 1)
 {
-  std::vector<cudf::device_span<T>> device_spans(buffers.size());
+  std::vector<cudf::device_span<T const>> device_spans(buffers.size());
   std::transform(buffers.begin(), buffers.end(), device_spans.begin(), [](auto const& buffer) {
     return cudf::device_span<T>{static_cast<T const*>((buffer.data())), buffer.size()};
   });
