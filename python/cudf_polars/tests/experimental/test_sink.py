@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from cudf_polars.testing.asserts import (
     assert_sink_result_equal,
 )
 from cudf_polars.utils.config import ConfigOptions
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 # TODO: Add Sink support to the rapidsmpf runtime.
 # See: https://github.com/rapidsai/cudf/issues/20485
@@ -144,12 +143,8 @@ def test_sink_parquet_raises(df, tmp_path):
             "sink_to_directory": True,
         },
     )
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError, match="not supported"):
-            df.sink_parquet(path, engine=engine)
-    else:
-        with pytest.raises(NotImplementedError, match="not supported"):
-            df.sink_parquet(path, engine=engine)
+    with pytest.raises(NotImplementedError, match="not supported"):
+        df.sink_parquet(path, engine=engine)
 
 
 @pytest.mark.parametrize("include_header", [True, False])
