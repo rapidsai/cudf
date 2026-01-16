@@ -989,6 +989,11 @@ def run_polars(
 
     client = initialize_dask_cluster(run_config, args)
 
+    # Update n_workers from the actual cluster when using scheduler file/address
+    if client is not None:
+        actual_n_workers = len(client.scheduler_info().get("workers", {}))
+        run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
+
     records: defaultdict[int, list[Record]] = defaultdict(list)
     engine: pl.GPUEngine | None = None
 
