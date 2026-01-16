@@ -65,6 +65,7 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
 )
@@ -205,8 +206,8 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if isinstance(key, tuple):
             key = list(key)
 
-        if self._frame.dtype.kind in "uifb" or isinstance(
-            self._frame.dtype, pd.StringDtype
+        if self._frame.dtype.kind in "uifb" or is_dtype_obj_string(
+            self._frame.dtype
         ):
             # normalize types if necessary:
             # In contrast to Column.__setitem__ (which downcasts the value to

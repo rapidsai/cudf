@@ -108,6 +108,7 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
@@ -2693,7 +2694,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             map_index = map_index.astype(SIZE_TYPE_DTYPE)
 
         # Convert string or categorical to integer
-        if isinstance(map_index.dtype, pd.StringDtype):
+        if is_dtype_obj_string(map_index.dtype):
             map_index = map_index._label_encoding(map_index.unique())
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
@@ -4046,7 +4047,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         ):
             raise MixedTypeError("Cannot create a column with mixed types")
 
-        if any(isinstance(dt, pd.StringDtype) for dt in dtypes):
+        if any(is_dtype_obj_string(dt) for dt in dtypes):
             raise NotImplementedError(
                 "DataFrame.agg() is not supported for "
                 "frames containing string columns"
@@ -6345,12 +6346,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     else:
                         # These checks must happen after the conversions above
                         # since numpy can't handle categorical dtypes.
-                        self_is_str = isinstance(
-                            self_col.dtype, pd.StringDtype
-                        )
-                        other_is_str = isinstance(
-                            other_col.dtype, pd.StringDtype
-                        )
+                        self_is_str = is_dtype_obj_string(self_col.dtype)
+                        other_is_str = is_dtype_obj_string(other_col.dtype)
 
                     if self_is_str != other_is_str:
                         # Strings can't compare to anything else.
@@ -6408,8 +6405,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         common_dtype = find_common_type(dtypes)
         if (
             not numeric_only
-            and isinstance(common_dtype, pd.StringDtype)
-            and any(not isinstance(dtype, pd.StringDtype) for dtype in dtypes)
+            and is_dtype_obj_string(common_dtype)
+            and any(not is_dtype_obj_string(dtype) for dtype in dtypes)
         ):
             raise TypeError(
                 f"Cannot perform row-wise {method} across mixed-dtype columns,"
@@ -6569,9 +6566,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # TODO: What happens if common_dtype is None?
                 common_dtype = find_common_type(source_dtypes)
                 if (
-                    isinstance(common_dtype, pd.StringDtype)
+                    is_dtype_obj_string(common_dtype)
                     and any(
-                        not isinstance(dtype, pd.StringDtype)
+                        not is_dtype_obj_string(dtype)
                         for dtype in source_dtypes
                     )
                     or common_dtype is not None

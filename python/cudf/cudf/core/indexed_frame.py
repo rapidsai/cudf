@@ -73,6 +73,7 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
 )
@@ -3641,7 +3642,7 @@ class IndexedFrame(Frame):
 
         method = "nlargest" if largest else "nsmallest"
         for col in columns:
-            if isinstance(self._data[col].dtype, pd.StringDtype):
+            if is_dtype_obj_string(self._data[col].dtype):
                 if isinstance(self, cudf.DataFrame):
                     error_msg = (
                         f"Column '{col}' has dtype {self._data[col].dtype}, "

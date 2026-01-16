@@ -36,6 +36,7 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
+    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -733,9 +734,7 @@ class NumericalColumn(NumericalBaseColumn):
                 return super()._process_values_for_isin(values.tolist())
             else:
                 raise
-        if lhs.dtype != rhs.dtype and not isinstance(
-            rhs.dtype, pd.StringDtype
-        ):
+        if lhs.dtype != rhs.dtype and not is_dtype_obj_string(rhs.dtype):
             if rhs.can_cast_safely(lhs.dtype):
                 rhs = rhs.astype(lhs.dtype)
             elif lhs.can_cast_safely(rhs.dtype):

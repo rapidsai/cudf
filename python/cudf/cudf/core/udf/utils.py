@@ -12,7 +12,6 @@ import cachetools
 import cupy as cp
 import llvmlite.binding as ll
 import numpy as np
-import pandas as pd
 from cuda.bindings import runtime
 from numba import cuda, typeof
 from numba.core.datamodel import models
@@ -40,6 +39,7 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     STRING_TYPES,
     TIMEDELTA_TYPES,
+    is_dtype_obj_string,
 )
 
 if TYPE_CHECKING:
@@ -112,7 +112,7 @@ def _masked_array_type_from_col(col):
     array of bools representing a mask.
     """
 
-    if isinstance(col.dtype, pd.StringDtype):
+    if is_dtype_obj_string(col.dtype):
         col_type = CPointer(string_view)
     else:
         nb_scalar_ty = numpy_support.from_dtype(col.dtype)
@@ -242,7 +242,7 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
     args: list[Buffer | tuple[Buffer, Buffer]] = []
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
-        if isinstance(col.dtype, pd.StringDtype):
+        if is_dtype_obj_string(col.dtype):
             data = column_to_string_view_array_init_heap(col.plc_column)
         else:
             data = col.data

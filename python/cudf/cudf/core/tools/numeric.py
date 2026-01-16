@@ -15,6 +15,7 @@ from cudf.core.series import Series
 from cudf.utils.dtypes import (
     can_convert_to_column,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
 )
 
 if TYPE_CHECKING:
@@ -126,7 +127,7 @@ def to_numeric(
                 errors,
                 downcast,
             )
-    elif isinstance(dtype, pd.StringDtype):
+    elif is_dtype_obj_string(dtype):
         col = _convert_str_col(col, errors, downcast)  # type: ignore[arg-type]
     elif isinstance(dtype, (ListDtype, StructDtype)):
         raise ValueError("Input does not support nested datatypes")

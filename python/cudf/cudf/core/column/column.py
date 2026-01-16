@@ -78,6 +78,7 @@ from cudf.utils.dtypes import (
     is_dtype_obj_interval,
     is_dtype_obj_list,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_dtype_obj_struct,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
@@ -570,11 +571,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             cls = cudf.core.column.DatetimeColumn
         elif dtype.kind == "m":
             cls = cudf.core.column.TimeDeltaColumn
-        elif (
-            dtype.kind == "U"
-            or isinstance(dtype, pd.StringDtype)
-            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
-        ):
+        elif isinstance(dtype, pd.StringDtype):
             cls = cudf.core.column.StringColumn
         elif isinstance(dtype, ListDtype):
             cls = cudf.core.column.ListColumn
@@ -1008,7 +1005,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        if not inplace or isinstance(self.dtype, pd.StringDtype):
+        if not inplace or is_dtype_obj_string(self.dtype):
             with self.access(mode="read", scope="internal"):
                 result = cast(
                     Self,
@@ -1021,7 +1018,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         )
                     ),
                 )
-            if isinstance(self.dtype, pd.StringDtype):
+            if is_dtype_obj_string(self.dtype):
                 return self._mimic_inplace(result, inplace=True)
             return result
 
@@ -1481,7 +1478,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return 0
 
     def interpolate(self, index: Index) -> ColumnBase:
-        if isinstance(self.dtype, pd.StringDtype):
+        if is_dtype_obj_string(self.dtype):
             # TODO: Should raise for other types?
             raise TypeError(
                 f"Cannot interpolate with column of dtype {self.dtype}"
@@ -2487,9 +2484,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
             if other_col.dtype != self.dtype:
                 try:
-                    warn = isinstance(
+                    warn = is_dtype_obj_string(
                         find_common_type((other_col.dtype, self.dtype)),
-                        pd.StringDtype,
                     )
                 except NotImplementedError:
                     warn = True

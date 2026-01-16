@@ -22,6 +22,7 @@ from cudf.core.dtypes import CategoricalDtype, dtype as cudf_dtype
 from cudf.utils.dtypes import (
     DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    is_dtype_obj_string,
     min_unsigned_type,
 )
 
@@ -104,7 +105,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
     else:
         index = indexes[0]
         if sort is None:
-            sort = not isinstance(index.dtype, pd.StringDtype)
+            sort = not is_dtype_obj_string(index.dtype)
         for other in indexes[1:]:
             index = index.union(other, sort=False)
 
