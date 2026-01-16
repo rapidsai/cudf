@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition dispatch functions."""
 
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
 from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from cudf_polars.dsl import ir
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -160,3 +160,48 @@ def update_column_stats(
         GPUEngine configuration options.
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
+
+
+def make_lowering_wrapper(
+    lower_fn: Callable[
+        [IR, LowerIRTransformer], tuple[IR, MutableMapping[IR, PartitionInfo]]
+    ],
+) -> Callable[[IR, LowerIRTransformer], tuple[IR, MutableMapping[IR, PartitionInfo]]]:
+    """
+    Create a lowering wrapper that propagates row_count stats.
+
+    This wrapper calls the given lowering function and copies
+    row_count statistics from the original node to the returned
+    node and any single-child descendants without stats.
+
+    Parameters
+    ----------
+    lower_fn
+        The lowering function to wrap.
+
+    Returns
+    -------
+    A wrapper function suitable for use with CachingVisitor.
+    """
+
+    def _lower_with_stats(
+        node: IR, rec: LowerIRTransformer
+    ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+        new_node, partition_info = lower_fn(node, rec)
+        # Propagate row_count through single-child descendants.
+        # lower_fn may replace `node` with a chain of new IR nodes.
+        # For now, we just assume all new nodes have the same
+        # row_count as the original node (not always true).
+        stats = rec.state["stats"]
+        _node: IR | None = new_node
+        while _node is not None:
+            stats.copy_row_count(node, _node)
+            children = _node.children
+            _node = (
+                children[0]
+                if len(children) == 1 and children[0] not in stats.row_count
+                else None
+            )
+        return new_node, partition_info
+
+    return _lower_with_stats

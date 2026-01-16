@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition evaluation."""
 
@@ -33,6 +33,7 @@ from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
+    make_lowering_wrapper,
 )
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
@@ -93,7 +94,9 @@ def lower_ir_graph(
         "config_options": config_options,
         "stats": collect_statistics(ir, config_options),
     }
-    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
+    mapper: LowerIRTransformer = CachingVisitor(
+        make_lowering_wrapper(lower_ir_node), state=state
+    )
     return *mapper(ir), state["stats"]
 
 
