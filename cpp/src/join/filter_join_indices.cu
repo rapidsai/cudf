@@ -215,6 +215,9 @@ filter_join_indices(cudf::table_view const& left,
 
     auto const num_invalid = left.num_rows() - num_filter_passing;
 
+    // Find the number of indices passing the filter i.e. rows that are valid according to the
+    // predicate CUB APIs are used instead of Thrust to enable 64-bit operations on index vectors of
+    // size greater than integer limits
     cudf::detail::device_scalar<size_t> d_num_valid(stream);
     {
       auto const predicate_it =
@@ -250,6 +253,9 @@ filter_join_indices(cudf::table_view const& left,
         return predicate_results_ptr[i];
       };
 
+      // Copy valid indices to output vector
+      // CUB APIs are used instead of Thrust to enable 64-bit operations on index vectors of size
+      // greater than integer limits
       {
         size_t temp_storage_bytes = 0;
         cub::DeviceSelect::FlaggedIf(nullptr,
@@ -275,11 +281,12 @@ filter_join_indices(cudf::table_view const& left,
     }
     if (num_invalid > 0) {
       {
+        // For invalid indices, set the output pairs to be `(invalid_left_idx, JoinNoMatch)`
+        // CUB APIs are used instead of Thrust to enable 64-bit operations on index vectors of size
+        // greater than integer limits
         size_t temp_storage_bytes       = 0;
         auto filter_passing_indices_ref = filter_passing_indices.ref(cuco::contains);
-        auto insert_failing_indices     = [left_ptr,
-                                       filter_passing_indices_ref,
-                                       predicate_results_ptr] __device__(size_type idx) mutable {
+        auto is_unmatched_idx           = [filter_passing_indices_ref] __device__(size_type idx) {
           auto is_unmatched = !filter_passing_indices_ref.contains(idx);
           return is_unmatched;
         };
@@ -290,7 +297,7 @@ filter_join_indices(cudf::table_view const& left,
                               filtered_left_indices->begin() + num_valid,
                               d_num_invalid.data(),
                               left.num_rows(),
-                              insert_failing_indices,
+                              is_unmatched_idx,
                               stream.value());
         rmm::device_buffer temp_storage(temp_storage_bytes, stream);
         cub::DeviceSelect::If(temp_storage.data(),
@@ -299,7 +306,7 @@ filter_join_indices(cudf::table_view const& left,
                               filtered_left_indices->begin() + num_valid,
                               d_num_invalid.data(),
                               left.num_rows(),
-                              insert_failing_indices,
+                              is_unmatched_idx,
                               stream.value());
       }
       cub::DeviceTransform::Fill(
