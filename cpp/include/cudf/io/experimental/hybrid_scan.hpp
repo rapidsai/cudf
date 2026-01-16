@@ -12,7 +12,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
-#include <thrust/host_vector.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <utility>
