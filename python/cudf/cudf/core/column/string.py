@@ -129,13 +129,7 @@ class StringColumn(ColumnBase, Scannable):
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
         """Return appropriate NA value based on dtype."""
-        if is_pandas_nullable_extension_dtype(self.dtype):
-            return self.dtype.na_value
-        elif cudf.api.types.is_string_dtype(self.dtype):
-            # numpy string dtype case, may be moved
-            # to `StringColumn` later
-            return None
-        return pd.NA
+        return cast("pd.StringDtype", self.dtype).na_value
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
