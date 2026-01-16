@@ -314,9 +314,10 @@ void test_read_parquet_and_apply_deletion_vector(
       cudf::io::source_info{cudf::host_span<cudf::host_span<char const>>{input_buffers}})
       .build();
 
+  auto serialized_roaring_bitmaps_copy = serialized_roaring_bitmaps;
   auto const table_with_deletion_vector =
     cudf::io::parquet::experimental::read_parquet(in_opts,
-                                                  std::vector(serialized_roaring_bitmaps),
+                                                  serialized_roaring_bitmaps_copy,
                                                   deletion_vector_row_counts,
                                                   row_group_row_offsets,
                                                   row_group_num_counts,
@@ -330,11 +331,12 @@ void test_read_parquet_and_apply_deletion_vector(
   // Read using the chunked reader
   auto const test_chunked_table_with_deletion_vector = [&](size_t chunk_read_limit,
                                                            size_t pass_read_limit) {
+    auto serialized_roaring_bitmaps_copy = serialized_roaring_bitmaps;
     auto const reader = std::make_unique<cudf::io::parquet::experimental::chunked_parquet_reader>(
       chunk_read_limit,
       pass_read_limit,
       in_opts,
-      std::move(serialized_roaring_bitmaps),
+      serialized_roaring_bitmaps_copy,
       deletion_vector_row_counts,
       row_group_row_offsets,
       row_group_num_counts,

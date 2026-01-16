@@ -58,7 +58,7 @@ class chunked_parquet_reader {
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
     parquet_reader_options const& options,
-    std::vector<std::vector<cuda::std::byte>>&& serialized_roaring_bitmaps,
+    cudf::host_span<std::vector<cuda::std::byte>> serialized_roaring_bitmaps,
     cudf::host_span<size_type const> deletion_vector_row_counts,
     cudf::host_span<size_t const> row_group_offsets,
     cudf::host_span<size_type const> row_group_num_rows,
@@ -93,7 +93,7 @@ class chunked_parquet_reader {
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     parquet_reader_options const& options,
-    std::vector<std::vector<cuda::std::byte>>&& serialized_roaring_bitmaps,
+    cudf::host_span<std::vector<cuda::std::byte>> serialized_roaring_bitmaps,
     cudf::host_span<size_type const> deletion_vector_row_counts,
     cudf::host_span<size_t const> row_group_offsets,
     cudf::host_span<size_type const> row_group_num_rows,
@@ -199,7 +199,7 @@ table_with_metadata read_parquet(
  */
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
-  std::vector<std::vector<cuda::std::byte>>&& serialized_roaring_bitmaps,
+  cudf::host_span<std::vector<cuda::std::byte>> serialized_roaring_bitmaps,
   cudf::host_span<size_type const> deletion_vector_row_counts,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
