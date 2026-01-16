@@ -149,6 +149,7 @@ repos:
         entry: ./cpp/scripts/verify_thrust_exec_policy.sh
         types_or: [c, c++, cuda]
         language: python
+        pass_filenames: false
         verbose: true
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1

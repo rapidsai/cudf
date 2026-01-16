@@ -5,6 +5,4 @@
 # libcudf verify thrust execution policy check
 ###############################
 
-echo $0
-echo "$@"
 python cpp/scripts/verify_thrust_exec_policy.py
