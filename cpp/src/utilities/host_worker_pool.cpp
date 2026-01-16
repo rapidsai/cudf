@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,18 +44,14 @@ hierarchical_thread_pool& pool(int level)
   {
     // Shared lock is sufficient for read operations
     std::shared_lock<std::shared_mutex> read_lock(g_pools_mutex);
-    if (level < static_cast<int>(g_pools.size()) && g_pools[level]) {
-      return *g_pools[level];
-    }
+    if (level < static_cast<int>(g_pools.size()) && g_pools[level]) { return *g_pools[level]; }
   }
 
   // Exclusive lock is required for write operations
   std::unique_lock<std::shared_mutex> write_lock(g_pools_mutex);
 
   // Double-check after acquiring write lock
-  if (std::cmp_less(level, g_pools.size()) && g_pools[level]) {
-    return *g_pools[level];
-  }
+  if (std::cmp_less(level, g_pools.size()) && g_pools[level]) { return *g_pools[level]; }
 
   // Create and add the pool to the vector
   g_pools.emplace_back(std::make_unique<hierarchical_thread_pool>(default_pool_size(), level));

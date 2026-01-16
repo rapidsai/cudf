@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -414,7 +414,8 @@ class parquet_field_struct_list : public parquet_field {
 
     constexpr uint32_t parallel_threshold = 512;
     if (n >= parallel_threshold) {
-      auto const num_tasks = std::min<uint32_t>(n, cudf::detail::host_worker_pool().get_thread_count() * 2);
+      auto const num_tasks =
+        std::min<uint32_t>(n, cudf::detail::host_worker_pool().get_thread_count() * 2);
       auto const items_per_task = n / num_tasks;
       auto const remainder      = n % num_tasks;
 
