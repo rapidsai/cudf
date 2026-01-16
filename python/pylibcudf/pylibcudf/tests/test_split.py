@@ -22,8 +22,8 @@ from pylibcudf.strings import split as plc_split
 def test_pylibcudf_split_part(data, delimiter, index, expected):
     plc_input = plc.Column.from_column(cudf.Series(data)._column.to_pylibcudf(mode="read"))
     plc_delim = plc.Scalar(delimiter)
-    
+
     got = plc_split.split_part(plc_input, plc_delim, index)
-    
+
     expect_col = cudf.Series(expected)._column
     assert_eq(got.to_column(), expect_col)
