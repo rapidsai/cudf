@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "cudf/utilities/error.hpp"
 #include "io/utilities/getenv_or.hpp"
 
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -31,9 +32,11 @@ std::vector<std::unique_ptr<hierarchical_thread_pool>> g_pools;
 // Reader-writer lock for pool access
 std::shared_mutex g_pools_mutex;
 
-[[nodiscard]] std::size_t default_pool_size()
+[[nodiscard]] std::size_t pool_size()
 {
-  return std::min(16u, std::thread::hardware_concurrency() / 2);
+  static const std::size_t default_pool_size =
+    std::min(16u, std::thread::hardware_concurrency() / 4);
+  return getenv_or("LIBCUDF_NUM_HOST_WORKERS", default_pool_size);
 }
 
 /**
@@ -44,7 +47,7 @@ hierarchical_thread_pool& pool(int level)
   {
     // Shared lock is sufficient for read operations
     std::shared_lock<std::shared_mutex> read_lock(g_pools_mutex);
-    if (level < static_cast<int>(g_pools.size()) && g_pools[level]) { return *g_pools[level]; }
+    if (std::cmp_less(level, g_pools.size()) && g_pools[level]) { return *g_pools[level]; }
   }
 
   // Exclusive lock is required for write operations
@@ -54,7 +57,8 @@ hierarchical_thread_pool& pool(int level)
   if (std::cmp_less(level, g_pools.size()) && g_pools[level]) { return *g_pools[level]; }
 
   // Create and add the pool to the vector
-  g_pools.emplace_back(std::make_unique<hierarchical_thread_pool>(default_pool_size(), level));
+  CUDF_EXPECTS(level == g_pools.size(), "Invalid pool level, should only increase by 1");
+  g_pools.emplace_back(std::make_unique<hierarchical_thread_pool>(pool_size(), level));
   return *g_pools.back();
 }
 
