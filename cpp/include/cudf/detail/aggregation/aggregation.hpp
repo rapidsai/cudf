@@ -414,10 +414,11 @@ class m2_aggregation : public clonable<m2_aggregation>::derived_from<groupby_agg
  * @tparam Derived The concrete aggregation class (CRTP pattern)
  */
 template <typename Derived>
-class std_var_aggregation : public clonable<Derived>::template derived_from<rolling_aggregation,
-                                                                            groupby_aggregation,
-                                                                            reduce_aggregation,
-                                                                            segmented_reduce_aggregation> {
+class std_var_aggregation
+  : public clonable<Derived>::template derived_from<rolling_aggregation,
+                                                    groupby_aggregation,
+                                                    reduce_aggregation,
+                                                    segmented_reduce_aggregation> {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 
