@@ -99,7 +99,7 @@ All headers in cudf should use `#pragma once` for include guards.
 
 Only use `.cu` and `.cuh` if necessary. A good indicator is the inclusion of `__device__` and other
 symbols that are only recognized by `nvcc`. Another indicator is Thrust algorithm APIs with a device
-execution policy (always `rmm::exec_policy_nosync` in libcudf when the return value is not required).
+execution policy (always use `rmm::exec_policy_nosync` in libcudf when the return value is not required).
 
 ## Code and Documentation Style and Formatting
 

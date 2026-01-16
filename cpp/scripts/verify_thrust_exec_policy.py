@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Verify that thrust functions in the cpp/ directory use the correct exec_policy.
+Verify that thrust functions in the cpp/ directory use the correct rmm::exec_policy.
 
 Rules:
-- If the return value of a thrust function is used, use rmm::exec_policy
+- If the return value of a thrust function is used, rmm::exec_policy is allowed
 - If the return value is NOT used, use rmm::exec_policy_nosync
 
 This script analyzes the source code context to determine if the return value
@@ -356,7 +356,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Rules:
-  - If the return value of a thrust call is USED, use rmm::exec_policy
+  - If the return value of a thrust call is USED, rmm::exec_policy is allowed
   - If the return value is NOT used, use rmm::exec_policy_nosync
 
 The script analyzes the source code context to determine if the return value
@@ -367,7 +367,7 @@ Examples:
   %(prog)s --path cpp/src           # Check specific directory
   %(prog)s --verbose                # Show all thrust calls and their analysis
   %(prog)s --exclude-tests          # Exclude test files
-  %(prog)s --nosync-only            # Only report where nosync should be used
+  %(prog)s --check-all              # Report all violations (default: only nosync violations)
         """,
     )
     parser.add_argument(
@@ -388,10 +388,9 @@ Examples:
         help="Exclude test files from checking",
     )
     parser.add_argument(
-        "--nosync-only",
-        default=True,
-        action="store_false",  # Default to True
-        help="Only report violations where exec_policy_nosync is expected (return value not used)",
+        "--check-all",
+        action="store_true",
+        help="Report all violations (default: only report where exec_policy_nosync is expected)",
     )
 
     args = parser.parse_args()
@@ -435,7 +434,7 @@ Examples:
 
     for file_path in cpp_files:
         violations = check_file(
-            file_path, verbose=args.verbose, nosync_only=args.nosync_only
+            file_path, verbose=args.verbose, nosync_only=not args.check_all
         )
         if violations:
             files_with_violations += 1
