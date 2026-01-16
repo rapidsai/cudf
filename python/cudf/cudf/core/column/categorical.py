@@ -63,13 +63,9 @@ class CategoricalColumn(column.ColumnBase):
         The validity mask
     offset : int
         Data offset
-    children : Tuple[ColumnBase]
-        Two non-null columns containing the categories and codes
-        respectively
     """
 
     dtype: CategoricalDtype
-    _children: tuple[NumericalColumn]
     _VALID_REDUCTIONS = {
         "max",
         "min",
@@ -113,7 +109,10 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self) -> NumericalColumn:
-        return cast("cudf.core.column.NumericalColumn", self.children[0])
+        codes_dtype = min_unsigned_type(len(self.dtype.categories))
+        return cudf.core.column.NumericalColumn._from_preprocessed(
+            self.plc_column, codes_dtype
+        )
 
     @property
     def ordered(self) -> bool | None:
@@ -664,7 +663,6 @@ class CategoricalColumn(column.ColumnBase):
             return type(self)._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=dtype,
-                children=self.children,
             )
 
         return self

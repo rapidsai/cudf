@@ -313,7 +313,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
     plc_column: plc.Column
     _dtype: DtypeObj
-    _children: tuple[ColumnBase, ...]
     _distinct_count: dict[bool, int]
     _exposed_buffers: set[Buffer]
 
@@ -335,15 +334,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 f"plc_column must be a pylibcudf.Column with a TypeId in {cls._VALID_PLC_TYPES}"
             )
         return plc_column, dtype
-
-    @classmethod
-    def _apply_child_metadata(
-        cls,
-        children: tuple[ColumnBase, ...],
-        dtype: DtypeObj,
-    ) -> tuple[ColumnBase, ...]:
-        """Apply type metadata to children based on parent dtype."""
-        return children
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
@@ -459,10 +449,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def offset(self) -> int:
         return self.plc_column.offset()
 
-    @property
-    def children(self) -> tuple[ColumnBase, ...]:
-        return self._children
-
     def _mimic_inplace(
         self, other_col: Self, inplace: bool = False
     ) -> None | Self:
@@ -475,11 +461,52 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if inplace:
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
-            self._children = other_col._children
             self._clear_cache()
             return None
         else:
             return other_col
+
+    @staticmethod
+    def _unwrap_buffers(plc_column: plc.Column) -> plc.Column:
+        """Recursively unwrap all buffers in a pylibcudf.Column.
+
+        This function will traverse the provided pylibcudf Column and unwrap
+        all data and mask buffers from cudf Buffers, removing cudf memory
+        semantics.
+
+        Parameters
+        ----------
+        col : pylibcudf.Column
+            The column to unwrap.
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column with unwrapped buffers.
+        """
+        data = plc_column.data()
+        if data is not None:
+            data = cast("plc.span.Span", cast("Buffer", data).owner.owner)
+
+        mask = plc_column.null_mask()
+        if mask is not None:
+            mask = cast("plc.span.Span", cast("Buffer", mask).owner.owner)
+
+        unwrapped_children = [
+            ColumnBase._unwrap_buffers(child)
+            for child in plc_column.children()
+        ]
+
+        return plc.Column(
+            data_type=plc_column.type(),
+            size=plc_column.size(),
+            data=data,
+            mask=mask,
+            null_count=plc_column.null_count(),
+            offset=plc_column.offset(),
+            children=unwrapped_children,
+            validate=False,
+        )
 
     def to_pylibcudf(self) -> plc.Column:
         """Convert this Column to a pylibcudf.Column.
@@ -497,34 +524,69 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column with unwrapped buffers.
         """
-        with self.access(mode="read", scope="internal"):
-            data = self.data
-            unwrapped_data = (
-                cast("plc.span.Span", data.owner.owner)
-                if data is not None
-                else None
+        return ColumnBase._unwrap_buffers(self.plc_column)
+
+    @staticmethod
+    def _wrap_buffers(col: plc.Column) -> plc.Column:
+        """Recursively wrap all buffers in a pylibcudf.Column.
+
+        This function will traverse the provided pylibcudf Column and wrap
+        all data and mask buffers in cudf Buffers, ensuring that cudf memory
+        semantics are preserved when using the resulting Column.
+
+        Parameters
+        ----------
+        col : pylibcudf.Column
+            The column to wrap.
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column with wrapped buffers.
+        """
+        # Convert unsupported types to supported types
+        if col.type().id() == plc.TypeId.TIMESTAMP_DAYS:
+            col = plc.unary.cast(
+                col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS)
             )
-            mask = self.mask
-            unwrapped_mask = (
-                cast("plc.span.Span", mask.owner.owner)
-                if mask is not None
-                else None
+        elif col.type().id() == plc.TypeId.EMPTY:
+            new_dtype = plc.DataType(plc.TypeId.INT8)
+            col = plc.column_factories.make_numeric_column(
+                new_dtype, col.size(), plc.types.MaskState.ALL_NULL
             )
 
-            # Recursively unwrap children
-            children = [child.to_pylibcudf() for child in self.children]
+        # Typically non-Buffers will be gpumemoryview objects produced as new memory
+        # from pylibcudf, which must be wrapped in a buffer. If the underlying data is
+        # already a buffer it must be shallow-copied to track that we are now sharing
+        # the same BufferOwner.
+        data = col.data()
+        if data is not None:
+            if isinstance(data, Buffer):
+                data = data.copy(deep=False)
+            else:
+                data = as_buffer(data)
 
-            # Construct new pylibcudf Column with unwrapped buffers
-            return plc.Column(
-                data_type=self.plc_column.type(),
-                size=self.plc_column.size(),
-                data=unwrapped_data,
-                mask=unwrapped_mask,
-                null_count=self.plc_column.null_count(),
-                offset=self.plc_column.offset(),
-                children=children,
-                validate=False,
-            )
+        mask = col.null_mask()
+        if mask is not None:
+            if isinstance(mask, Buffer):
+                mask = mask.copy(deep=False)
+            else:
+                mask = as_buffer(mask)
+
+        wrapped_children = [
+            ColumnBase._wrap_buffers(child) for child in col.children()
+        ]
+
+        return plc.Column(
+            data_type=col.type(),
+            size=col.size(),
+            data=data,
+            mask=mask,
+            null_count=col.null_count(),
+            offset=col.offset(),
+            children=wrapped_children,
+            validate=False,
+        )
 
     @staticmethod
     def from_pylibcudf(col: plc.Column) -> ColumnBase:
@@ -555,22 +617,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 new_dtype, col.size(), plc.types.MaskState.ALL_NULL
             )
 
-        # Typically non-Buffers will be gpumemoryview objects produced as new memory
-        # from pylibcudf. If the underlying data is already a buffer it must be
-        # shallow-copied to track that we are now sharing the same BufferOwner.
-        data = col.data()
-        if data is not None:
-            if isinstance(data, Buffer):
-                data = data.copy(deep=False)
-            else:
-                data = as_buffer(data)
-
-        mask = col.null_mask()
-        if mask is not None:
-            if isinstance(mask, Buffer):
-                mask = mask.copy(deep=False)
-            else:
-                mask = as_buffer(mask)
+        wrapped = ColumnBase._wrap_buffers(col)
 
         dtype = dtype_from_pylibcudf_column(col)
 
@@ -605,28 +652,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             raise TypeError(f"Unrecognized dtype: {dtype}")
 
-        wrapped_children: tuple[ColumnBase, ...] = tuple(
-            cls.from_pylibcudf(child) for child in col.children()
-        )
-        wrapped_children = cls._apply_child_metadata(wrapped_children, dtype)
-
-        child_plc_columns = [child.plc_column for child in wrapped_children]
-
-        col = plc.Column(
-            data_type=col.type(),
-            size=col.size(),
-            data=data,
-            mask=mask,
-            null_count=col.null_count(),
-            offset=col.offset(),
-            children=child_plc_columns,
-            validate=False,
-        )
-
         return cls._from_preprocessed(
-            plc_column=col,
+            plc_column=wrapped,
             dtype=dtype,
-            children=wrapped_children,
         )
 
     @classmethod
@@ -634,7 +662,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         cls,
         plc_column: plc.Column,
         dtype: DtypeObj,
-        children: tuple[ColumnBase, ...],
     ) -> Self:
         # TODO: This function bypassess some of the buffer copying/wrapping that would
         # be done in from_pylibcudf, so it is only ever safe to call this in situations
@@ -646,7 +673,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         plc_column, dtype = self._validate_args(plc_column, dtype)
         self.plc_column = plc_column
         self._dtype = dtype
-        self._children = children
         self._distinct_count = {}
         # The set of exposed buffers associated with this column. These buffers must be
         # kept alive for the lifetime of this column since anything that accessed the

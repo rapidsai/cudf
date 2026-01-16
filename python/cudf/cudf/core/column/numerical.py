@@ -1006,12 +1006,13 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
+            # TODO: Try to avoid going via ColumnBase methods here
             codes = cast(
                 cudf.core.column.numerical.NumericalColumn,
                 self.astype(codes_dtype),
             )
             return CategoricalColumn._from_preprocessed(
-                codes.plc_column, dtype, (codes,)
+                codes.plc_column, dtype
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)
