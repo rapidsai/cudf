@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -325,7 +325,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
   if ((input.size() == input.null_count()) ||
       ((last_offset - first_offset) / (input.size() - input.null_count())) <
         AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       results->mutable_view().data<bool>(),

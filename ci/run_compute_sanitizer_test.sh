@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -65,10 +65,13 @@ if [ ! -x "${TEST_EXECUTABLE}" ]; then
   exit 1
 fi
 
+CS_EXCLUDE_NAMES="kns=nvcomp,kns=zstd,kns=_no_sanitize,kns=_no_${TOOL_NAME}"
+
 # Run compute-sanitizer on the specified test
 compute-sanitizer \
   --tool "${TOOL_NAME}" \
-  --kernel-name-exclude kns=nvcomp,kns=zstd \
+  --force-blocking-launches \
+  --kernel-name-exclude "${CS_EXCLUDE_NAMES}" \
   --error-exitcode=1 \
   "${TEST_EXECUTABLE}" \
   "$@"

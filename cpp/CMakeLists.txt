@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -497,6 +497,7 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/cudftable.cpp
   src/io/json/host_tree_algorithms.cu
   src/io/json/json_column.cu
   src/io/json/column_tree_construction.cu
@@ -586,6 +587,7 @@ add_library(
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
+  src/join/key_remapping.cu
   src/join/mixed_join.cu
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu
@@ -627,6 +629,7 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/approx_distinct_count.cu
   src/reductions/argmax.cu
   src/reductions/argmin.cu
   src/reductions/bitwise.cu
