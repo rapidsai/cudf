@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import pytest
+
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
+
 
 @pytest.mark.parametrize(
     "data, delimiter, index, expected",
@@ -15,7 +17,7 @@ from cudf.testing._utils import assert_eq
         (["one_two", "three"], "_", 2, [None, None]),
         # Empty, None, and no match
         ([None, "", "x_y_z", "no_delim"], "_", 1, [None, None, "y", None]),
-    ]
+    ],
 )
 def test_split_part(data, delimiter, index, expected):
     s = cudf.Series(data)

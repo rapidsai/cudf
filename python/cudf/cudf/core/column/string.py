@@ -12,6 +12,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
+from typing import Optional
+from cudf import Series
+
 import pylibcudf as plc
 
 import cudf
@@ -1223,19 +1226,18 @@ class StringColumn(ColumnBase, Scannable):
     def rsplit(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
 
-    def split_part(self, delimiter=None, index=0):
+    def split_part(self, delimiter: Optional[str] = None, index: int = 0) -> "Series":
         if delimiter is None:
             delimiter = " "
 
         from pylibcudf.strings import split as plc_split
 
         plc_input = self._column.to_pylibcudf(mode="read")
-        plc_delim = plc_split.pylibcudf.Scalar(delimiter)
+        plc_delim = plc_split.Scalar(delimiter)
 
         plc_result = plc_split.split_part(plc_input, plc_delim, index)
 
         return self._parent._from_column(plc_result)
-
 
     def _partition(
         self,
