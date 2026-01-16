@@ -107,15 +107,15 @@ void nvbench_hm_full_join(nvbench::state& state,
 
 NVBENCH_BENCH_TYPES(nvbench_hm_inner_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
-                                      JOIN_NULL_EQUALITY,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
                                       DEFAULT_JOIN_DATATYPES,
                                       JOIN_ALGORITHM))
   .set_name("high_multiplicity_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType", "Algorithm"})
-  .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
+  .add_int64_axis("num_keys", nvbench::range(1, 3, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
+  .add_int64_axis("multiplicity", {100, 1'000, 10'000, 50'000});
 
 NVBENCH_BENCH_TYPES(nvbench_hm_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -124,10 +124,10 @@ NVBENCH_BENCH_TYPES(nvbench_hm_left_join,
                                       JOIN_ALGORITHM))
   .set_name("high_multiplicity_left_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType", "Algorithm"})
-  .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
+  .add_int64_axis("num_keys", nvbench::range(1, 3, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
+  .add_int64_axis("multiplicity", {100, 1'000, 10'000, 50'000});
 
 NVBENCH_BENCH_TYPES(nvbench_hm_full_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -136,7 +136,7 @@ NVBENCH_BENCH_TYPES(nvbench_hm_full_join,
                                       JOIN_ALGORITHM))
   .set_name("high_multiplicity_full_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType", "Algorithm"})
-  .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
+  .add_int64_axis("num_keys", nvbench::range(1, 3, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
+  .add_int64_axis("multiplicity", {100, 1'000, 10'000, 50'000});
