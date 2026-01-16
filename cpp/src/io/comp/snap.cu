@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -224,9 +224,9 @@ static __device__ uint32_t Match60(uint8_t const* src1,
  * @param[in] count Number of blocks to compress
  */
 CUDF_KERNEL void __launch_bounds__(128)
-  snap_kernel(device_span<device_span<uint8_t const> const> inputs,
-              device_span<device_span<uint8_t> const> outputs,
-              device_span<codec_exec_result> results)
+  snap_kernel_no_racecheck(device_span<device_span<uint8_t const> const> inputs,
+                           device_span<device_span<uint8_t> const> outputs,
+                           device_span<codec_exec_result> results)
 {
   __shared__ __align__(16) snap_state_s state_g;
 
@@ -318,7 +318,7 @@ void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
   dim3 dim_grid(inputs.size(), 1);
   if (inputs.size() > 0) {
-    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
+    snap_kernel_no_racecheck<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
   }
 }
 
