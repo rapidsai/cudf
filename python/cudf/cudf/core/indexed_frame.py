@@ -6795,10 +6795,7 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     val_col = as_column(
         value,
         dtype=col.dtype
-        if (
-            cudf.utils.utils._is_null_host_scalar(value)
-            or value in {None, np.nan}
-        )
+        if (cudf.utils.utils.is_na_like(value) or value is np.nan)
         else None,
     )
     if val_col.dtype.kind != "f" and val_col.can_cast_safely(col.dtype):
