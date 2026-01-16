@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
-    dtype_from_pylibcudf_column,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -95,30 +94,6 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
-    @property
-    def base_data(self) -> None:
-        """
-        Categorical columns don't have a data buffer - data is stored
-        in the codes child column instead.
-        """
-        return None
-
-    def _get_children_from_pylibcudf_column(
-        self, plc_column: plc.Column, dtype: DtypeObj, exposed: bool
-    ) -> tuple[ColumnBase]:
-        """
-        This column considers the plc_column (i.e. codes) as children
-        """
-        return (
-            type(self).from_pylibcudf(plc_column, data_ptr_exposed=exposed),
-        )
-
-    @property
-    def base_size(self) -> int:
-        return int(
-            (self.base_children[0].size) / self.base_children[0].dtype.itemsize
-        )
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
             encoded = self._encode(item)
@@ -132,41 +107,20 @@ class CategoricalColumn(column.ColumnBase):
         # Convert values to categorical dtype like self
         return self, column.as_column(values, dtype=self.dtype)
 
-    def _recompute_children(self) -> None:
-        if self.offset == 0 and self.size == self.base_size:
-            # Optimization: for non-sliced columns, children == base_children (just references)
-            self._children = self.base_children  # type: ignore[assignment]
-        else:
-            # Pass along size, offset, null_count from __init__
-            # which doesn't necessarily match the attributes of plc_column
-            # Use base_children[0]'s plc_column as it has the actual codes data
-            child = cudf.core.column.numerical.NumericalColumn(
-                plc_column=self.base_children[0].plc_column,
-                dtype=dtype_from_pylibcudf_column(
-                    self.base_children[0].plc_column
-                ),
-                exposed=False,
-            )
-            self._children = (child,)
-
-    @property
-    def children(self) -> tuple[NumericalColumn]:
-        return self._children
-
     @property
     def categories(self) -> ColumnBase:
         return self.dtype.categories._column
 
     @property
     def codes(self) -> NumericalColumn:
-        return self.children[0]
+        return cast("cudf.core.column.NumericalColumn", self.children[0])
 
     @property
     def ordered(self) -> bool | None:
         return self.dtype.ordered
 
-    def to_pylibcudf(self, mode: Literal["read", "write"]) -> plc.Column:
-        return self.base_children[0].to_pylibcudf(mode)
+    def to_pylibcudf(self) -> plc.Column:
+        return self.codes.to_pylibcudf()
 
     def __setitem__(self, key: Any, value: Any) -> None:
         if is_scalar(value) and _is_null_host_scalar(value):
@@ -586,7 +540,7 @@ class CategoricalColumn(column.ColumnBase):
                 raise TypeError(
                     "Cannot set a categorical with non-categorical data"
                 )
-            fill_value = cast(CategoricalColumn, fill_value)._set_categories(
+            fill_value = cast("CategoricalColumn", fill_value)._set_categories(
                 self.categories,
             )
             return fill_value.codes.astype(self.codes.dtype)
@@ -612,7 +566,7 @@ class CategoricalColumn(column.ColumnBase):
                 # Otherwise if both categories are of different Column types,
                 # return a column full of nulls.
                 codes = cast(
-                    cudf.core.column.numerical.NumericalColumn,
+                    "cudf.core.column.numerical.NumericalColumn",
                     column.as_column(
                         _DEFAULT_CATEGORICAL_VALUE,
                         length=self.size,
@@ -646,7 +600,16 @@ class CategoricalColumn(column.ColumnBase):
             return self.codes
         gather_map = self.codes.astype(SIZE_TYPE_DTYPE).fillna(0)
         out = self.categories.take(gather_map)
-        out = out.set_mask(self.mask)
+        mask = self.mask
+        if self.offset > 0 and mask is not None:
+            mask = cudf.core.buffer.as_buffer(
+                plc.null_mask.copy_bitmask_from_bitmask(
+                    mask,
+                    self.offset,
+                    mask.size - self.offset,
+                )
+            )
+        out = out.set_mask(mask)
         return out
 
     def copy(self, deep: bool = True) -> Self:
@@ -656,7 +619,9 @@ class CategoricalColumn(column.ColumnBase):
                 categories=self.categories.copy(),
                 ordered=self.ordered,
             )
-            result_col = cast(Self, result_col._with_type_metadata(dtype_copy))
+            result_col = cast(
+                "Self", result_col._with_type_metadata(dtype_copy)
+            )
         return result_col
 
     @cached_property
@@ -696,10 +661,10 @@ class CategoricalColumn(column.ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, CategoricalDtype):
-            return type(self)(
+            return type(self)._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=dtype,
-                exposed=False,
+                children=self.children,
             )
 
         return self
@@ -737,7 +702,7 @@ class CategoricalColumn(column.ColumnBase):
                 # If both categories are of different Column types,
                 # return a column full of Nulls.
                 new_codes = cast(
-                    cudf.core.column.numerical.NumericalColumn,
+                    "cudf.core.column.numerical.NumericalColumn",
                     column.as_column(
                         _DEFAULT_CATEGORICAL_VALUE,
                         length=self.size,
@@ -833,7 +798,7 @@ class CategoricalColumn(column.ColumnBase):
 
         ordered = ordered if ordered is not None else self.ordered
         new_codes = cast(
-            cudf.core.column.numerical.NumericalColumn, df._data["new_codes"]
+            "cudf.core.column.numerical.NumericalColumn", df._data["new_codes"]
         )
         return new_codes._with_type_metadata(  # type: ignore[return-value]
             CategoricalDtype(categories=new_cats, ordered=ordered)

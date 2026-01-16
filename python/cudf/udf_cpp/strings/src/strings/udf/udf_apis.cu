@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -67,7 +67,7 @@ std::unique_ptr<cudf::column> column_from_managed_udf_string_array(
 {
   // create string_views of the udf_strings
   auto indices = rmm::device_uvector<cudf::string_view>(size, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     managed_strings,
                     managed_strings + size,
                     indices.data(),

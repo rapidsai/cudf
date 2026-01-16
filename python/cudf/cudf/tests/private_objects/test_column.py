@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from decimal import Decimal
 
@@ -89,21 +89,10 @@ def test_column_set_equal_length_object_by_mask():
 def test_column_offset_and_size(pandas_input, offset, size):
     col = as_column(pandas_input)
 
-    # Use column.slice() to preserve dtype information
     col = col.slice(offset, offset + size)
 
     if isinstance(col.dtype, cudf.CategoricalDtype):
         assert col.size == col.codes.size
-        assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
-    elif cudf.api.types.is_string_dtype(col.dtype):
-        if col.size > 0:
-            assert col.size == (col.children[0].size - 1)
-            assert col.size == (
-                (col.children[0].data.size / col.children[0].dtype.itemsize)
-                - 1
-            )
-    else:
-        assert col.size == (col.data.size / col.dtype.itemsize)
 
     got = cudf.Series._from_column(col)
 
@@ -283,8 +272,12 @@ def test_column_chunked_array_creation():
 )
 def test_as_column_buffer(box, data):
     expected = as_column(data)
+    boxed = box(data)
     actual_column = as_column(
-        cudf.core.buffer.as_buffer(box(data)), dtype=data.dtype
+        cudf.core.buffer.as_buffer(
+            boxed if isinstance(boxed, cp.ndarray) else boxed.data
+        ),
+        dtype=data.dtype,
     )
     assert_eq(
         cudf.Series._from_column(actual_column),

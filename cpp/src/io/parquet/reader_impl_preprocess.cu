@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -440,11 +440,11 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                     compute_page_offset_count{subpass.pages, pass.chunks, skip_rows, num_rows});
 
   // Compute prefix sum (exclusive scan) to get indices for each page
-  _page_string_offset_indices = rmm::device_uvector<size_t>(num_pages, _stream);
+  subpass.page_string_offset_indices = rmm::device_uvector<size_t>(num_pages, _stream);
   thrust::exclusive_scan(rmm::exec_policy_nosync(_stream),
                          d_page_offset_counts.begin(),
                          d_page_offset_counts.end(),
-                         _page_string_offset_indices.begin());
+                         subpass.page_string_offset_indices.begin());
 
   // Compute the total number of offsets needed
   auto const total_num_offsets = cudf::detail::reduce(d_page_offset_counts.begin(),
@@ -454,14 +454,14 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                                                       _stream);
 
   // Allocate the string offset buffer
-  _string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
+  subpass.string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
 
   // Set the string offset buffer for non-dictionary, non-FLBA string columns
   for (size_t col_idx = 0; col_idx < pass.chunks.size(); ++col_idx) {
     auto& chunk = pass.chunks[col_idx];
     // Check if this is a string column without dictionary & not a fixed length byte array
     if (preprocess_offsets(chunk)) {
-      chunk.column_string_offset_base = _string_offset_buffer.data();
+      chunk.column_string_offset_base = subpass.string_offset_buffer.data();
     }
   }
 
@@ -472,7 +472,7 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
   // Pre-process string offsets for non-dictionary string columns
   detail::preprocess_string_offsets(subpass.pages,
                                     pass.chunks,
-                                    _page_string_offset_indices,
+                                    subpass.page_string_offset_indices,
                                     _subpass_page_mask,
                                     skip_rows,
                                     num_rows,
@@ -672,7 +672,7 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
   // absolute row index for the whole file. chunk_row in PageInfo is relative to the beginning of
   // the chunk. so in the kernels, chunk.start_row + page.chunk_row gives us the absolute row index
   if (is_estimate_row_counts == is_estimate_row_counts::YES) {
-    thrust::for_each(rmm::exec_policy(_stream),
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
                      pass.pages.d_begin(),
                      pass.pages.d_end(),
                      set_list_row_count_estimate{pass.chunks});
@@ -802,6 +802,16 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                      update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
   }
 
+  // For string columns, preprocess offsets early so we can reuse them for size computation.
+  // This applies to both chunked and non-chunked reads to avoid redundant scanning.
+  if (subpass.kernel_mask & STRINGS_MASK) {
+    // For plain-encoded strings, preprocess offsets early so we can reuse them.
+    // Allocate for the full subpass range (will be extra memory for boundary pages in chunked
+    // reads). The compute_page_string_offset_indices function will filter to only plain-encoded
+    // string pages, and the allocation will be empty if there are none.
+    compute_page_string_offset_indices(pass.skip_rows, pass.num_rows);
+  }
+
   // compute string sizes if necessary. if we are doing chunking, we need to know
   // the sizes of all strings so we can properly compute chunk boundaries.
   if ((chunk_read_limit > 0) && (subpass.kernel_mask & STRINGS_MASK)) {
@@ -810,11 +820,13 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
         return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
                is_treat_fixed_length_as_string(chunk.logical_type);
       });
+
     if (!_has_page_index || has_flba) {
       constexpr bool compute_all_string_sizes = true;
       compute_page_string_sizes_pass1(subpass.pages,
                                       pass.chunks,
                                       _subpass_page_mask,
+                                      subpass.page_string_offset_indices,
                                       pass.skip_rows,
                                       pass.num_rows,
                                       subpass.kernel_mask,
@@ -943,10 +955,10 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   // compute output column sizes by examining the pages of the -input- columns
   if (has_lists) {
     auto h_cols_info =
-      cudf::detail::make_empty_host_vector<input_col_info>(_input_columns.size(), _stream);
+      cudf::detail::make_pinned_vector_async<input_col_info>(_input_columns.size(), _stream);
     std::transform(_input_columns.cbegin(),
                    _input_columns.cend(),
-                   std::back_inserter(h_cols_info),
+                   h_cols_info.begin(),
                    [](auto& col) -> input_col_info {
                      return {col.schema_idx, static_cast<size_type>(col.nesting_depth())};
                    });
@@ -1062,8 +1074,12 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   }
 
   // Need to set null mask bufs to all high bits
+  auto pinned_nullmask_bufs =
+    cudf::detail::make_pinned_vector_async<cudf::device_span<cudf::bitmask_type>>(
+      nullmask_bufs.size(), _stream);
+  std::move(nullmask_bufs.begin(), nullmask_bufs.end(), pinned_nullmask_bufs.begin());
   cudf::detail::batched_memset<cudf::bitmask_type>(
-    nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
+    pinned_nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
 cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
@@ -1096,7 +1112,12 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               cuda::std::plus<>{},
                               _stream);
 
-  return cudf::detail::make_host_vector(d_col_sizes, _stream);
+  auto col_string_sizes =
+    cudf::detail::make_pinned_vector_async<size_t>(d_col_sizes.size(), _stream);
+  cudf::detail::cuda_memcpy(cudf::host_span<size_t>{col_string_sizes},
+                            cudf::device_span<size_t const>{d_col_sizes.data(), d_col_sizes.size()},
+                            _stream);
+  return col_string_sizes;
 }
 
 }  // namespace cudf::io::parquet::detail

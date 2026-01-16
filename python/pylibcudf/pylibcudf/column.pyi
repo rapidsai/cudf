@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
@@ -8,7 +8,7 @@ from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
-from pylibcudf._interop_helpers import ArrowLike
+from pylibcudf._interop_helpers import ArrowLike, ColumnMetadata
 from pylibcudf.scalar import Scalar
 from pylibcudf.span import Span
 from pylibcudf.types import DataType
@@ -66,7 +66,8 @@ class Column:
     def with_mask(
         self, mask: Span | None, null_count: int, validate: bool = True
     ) -> Column: ...
-    def list_view(self) -> ListColumnView: ...
+    def list_view(self) -> ListsColumnView: ...
+    def struct_view(self) -> StructsColumnView: ...
     @staticmethod
     def from_scalar(
         scalar: Scalar,
@@ -91,7 +92,9 @@ class Column:
         buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
     ) -> Column: ...
     def to_arrow(
-        self, metadata: list | str | None = None, stream: Stream | None = None
+        self,
+        metadata: ColumnMetadata | str | None = None,
+        stream: Stream | None = None,
     ) -> ArrowLike: ...
     # Private methods below are included because polars is currently using them,
     # but we want to remove stubs for these private methods eventually
@@ -127,10 +130,19 @@ class Column:
         stream: Stream | None = None,
     ) -> Column: ...
 
-class ListColumnView:
+class ListsColumnView:
     def __init__(self, column: Column): ...
     def child(self) -> Column: ...
     def offsets(self) -> Column: ...
+    def get_sliced_child(self, stream: Stream | None = None) -> Column: ...
+
+class StructsColumnView:
+    def __init__(self, column: Column): ...
+    def child(self) -> Column: ...
+    def offsets(self) -> Column: ...
+    def get_sliced_child(
+        self, index: int, stream: Stream | None = None
+    ) -> Column: ...
 
 def is_c_contiguous(
     shape: Sequence[int], strides: Sequence[int] | None, itemsize: int

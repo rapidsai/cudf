@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -107,7 +107,7 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
 
     // Perform segmented scan.
     auto const do_scan = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+      thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                     group_labels.begin(),
                                     group_labels.end(),
                                     inp_iter,
@@ -152,7 +152,7 @@ struct group_scan_functor<K,
 
     // Perform segmented scan.
     auto const do_scan = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+      thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                     group_labels.begin(),
                                     group_labels.end(),
                                     inp_iter,
@@ -194,7 +194,7 @@ struct group_scan_functor<K,
 
     auto const binop_generator =
       cudf::reduction::detail::arg_minmax_binop_generator::create<K>(values, stream);
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                   group_labels.begin(),
                                   group_labels.end(),
                                   thrust::make_counting_iterator<size_type>(0),

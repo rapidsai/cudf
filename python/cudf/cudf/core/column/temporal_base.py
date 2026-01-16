@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -6,7 +6,7 @@ from __future__ import annotations
 import datetime
 import functools
 import warnings
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import cupy as cp
 import numpy as np
@@ -210,7 +210,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
         if self.has_nulls():
             raise ValueError("cupy does not support NaT.")
-        return cp.asarray(self.data).view(dtype)
+        return cp.asarray(self).view(dtype)
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
@@ -255,13 +255,16 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         new_plc_column = plc.Column(
             data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
             size=self.size,
-            data=self.base_data,
-            mask=self.base_mask,
+            data=self.data,
+            mask=self.mask,
             null_count=self.null_count,
             offset=self.offset,
             children=[],
         )
-        return type(self).from_pylibcudf(new_plc_column).astype(dtype)  # type:ignore[return-value]
+        return cast(
+            cudf.core.column.numerical.NumericalColumn,
+            type(self).from_pylibcudf(new_plc_column).astype(dtype),
+        )
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")
