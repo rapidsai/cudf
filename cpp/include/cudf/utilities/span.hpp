@@ -301,7 +301,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
    *
    * @return Standard span instance
    */
-  [[nodiscard]] operator std::span<T>() const noexcept
+  [[nodiscard]] constexpr operator std::span<T>() const noexcept
   {
     return std::span<T>(this->data(), this->size());
   }
@@ -435,7 +435,7 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
    *
    * @return Standard span instance
    */
-  [[nodiscard]] operator cuda::std::span<T>() const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr operator cuda::std::span<T>() const noexcept
   {
     return cuda::std::span<T>(this->data(), this->size());
   }
