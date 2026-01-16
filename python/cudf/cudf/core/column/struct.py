@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -84,13 +84,19 @@ class StructColumn(ColumnBase):
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
-        if idx < 0 or idx >= len(self._children):
+        if idx < 0 or idx >= self.plc_column.num_children():
             raise IndexError(
-                f"Index {idx} out of range for {len(self._children)} children"
+                f"Index {idx} out of range for {self.plc_column.num_children()} children"
             )
 
         sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
-        return type(self).from_pylibcudf(sliced_plc_col)
+        dtype = cast(StructDtype, self.dtype)
+        sub_dtype = list(dtype.fields.values())[idx]
+        return (
+            type(self)
+            .from_pylibcudf(sliced_plc_col)
+            ._with_type_metadata(sub_dtype)
+        )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """

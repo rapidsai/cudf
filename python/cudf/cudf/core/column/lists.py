@@ -71,14 +71,17 @@ class ListColumn(ColumnBase):
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
-        if idx < 0 or idx >= len(self._children):
+        if idx < 0 or idx >= self.plc_column.num_children():
             raise IndexError(
-                f"Index {idx} out of range for {len(self._children)} children"
+                f"Index {idx} out of range for {self.plc_column.num_children()} children"
             )
 
         if idx == 1:
             sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-            return ColumnBase.from_pylibcudf(sliced_plc_col)
+            dtype = cast(ListDtype, self.dtype)
+            return ColumnBase.from_pylibcudf(
+                sliced_plc_col
+            )._with_type_metadata(dtype.element_type)
 
         return self._children[idx]
 
@@ -141,7 +144,7 @@ class ListColumn(ColumnBase):
         Integer offsets to elements specifying each row of the ListColumn
         """
         return cast(
-            cudf.core.column.numerical.NumericalColumn, self.children[0]
+            "cudf.core.column.numerical.NumericalColumn", self.children[0]
         )
 
     @property
@@ -228,7 +231,7 @@ class ListColumn(ColumnBase):
             [offset_col, data_plc_col],
         )
         return cast(
-            Self,
+            "Self",
             cls.from_pylibcudf(plc_column),
         )
 
@@ -259,7 +262,7 @@ class ListColumn(ColumnBase):
                 self._string_separators,
             )
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 type(self).from_pylibcudf(plc_column),
             )
 
@@ -269,32 +272,38 @@ class ListColumn(ColumnBase):
         """
         Return a new column like Self but with func applied to the last leaf column.
         """
-        leaf_queue: list[ListColumn] = []
-        curr_col: ColumnBase = self
+        # Store metadata for reconstruction: (plc_column, list_view)
+        # We need to keep the full plc_column for accessing size, mask, null_count, offset
+        leaf_queue: list[plc.Column] = []
+        curr_plc_col: plc.Column = self.plc_column
 
-        while isinstance(curr_col, ListColumn):
-            leaf_queue.append(curr_col)
-            curr_col = curr_col.children[1]
+        while curr_plc_col.type().id() == plc.TypeId.LIST:
+            leaf_queue.append(curr_plc_col)
+            curr_plc_col = curr_plc_col.list_view().child()
 
-        plc_leaf_col = func(curr_col, *args).plc_column
+        # Apply the transformation to the leaf column
+        # TODO: For now we convert plc.Column to ColumnBase for the func, then back to
+        # plc.Column, but we should be able to eventually avoid this double conversion.
+        leaf_col_base = ColumnBase.from_pylibcudf(curr_plc_col)
+        plc_leaf_col = func(leaf_col_base, *args).plc_column
 
-        # Rebuild the list column replacing just the leaf child
+        # Rebuild the list column hierarchy from leaf back to root
         while leaf_queue:
-            col = leaf_queue.pop()
-            offsets = col.children[0].plc_column
-            # col.mask is a Buffer which is Span-compliant
+            parent_plc_col = leaf_queue.pop()
+            offsets = parent_plc_col.list_view().offsets()
+            # parent_plc_col.null_mask() is a Span which is Span-compliant
             plc_leaf_col = plc.Column(
                 plc.DataType(plc.TypeId.LIST),
-                col.size,
+                parent_plc_col.size(),
                 None,
-                col.mask,
-                col.null_count,
-                col.offset,
+                parent_plc_col.null_mask(),
+                parent_plc_col.null_count(),
+                parent_plc_col.offset(),
                 [offsets, plc_leaf_col],
             )
         return cast(
-            Self,
-            type(self).from_pylibcudf(plc_leaf_col),
+            "Self",
+            ColumnBase.from_pylibcudf(plc_leaf_col),
         )
 
     @property
@@ -471,7 +480,7 @@ class ListColumn(ColumnBase):
                 plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
             )
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 type(self).from_pylibcudf(plc_column),
             )
 
@@ -491,7 +500,7 @@ class ListColumn(ColumnBase):
                     )
                 seed = np.uint32(seed)
             return cast(
-                Self,
+                "Self",
                 type(self).from_pylibcudf(
                     plc.nvtext.minhash.minhash_ngrams(
                         self.plc_column,
@@ -519,7 +528,7 @@ class ListColumn(ColumnBase):
                     )
                 seed = np.uint64(seed)
             return cast(
-                Self,
+                "Self",
                 type(self).from_pylibcudf(
                     plc.nvtext.minhash.minhash64_ngrams(
                         self.plc_column,

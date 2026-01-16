@@ -50,6 +50,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
+    from cudf._typing import DtypeObj
     from cudf.core.series import Series
 
 
@@ -162,7 +163,7 @@ def _plc_write_parquet(
                 tbl_meta.column_metadata[i].set_name(name)
 
             _set_col_metadata(
-                table[name]._column,
+                table[name]._column.dtype,
                 tbl_meta.column_metadata[i],
                 force_nullable_schema,
                 None,
@@ -1885,7 +1886,7 @@ class ParquetWriter:
         for i, name in enumerate(table._column_names, num_index_cols_meta):
             self.tbl_meta.column_metadata[i].set_name(name)
             _set_col_metadata(
-                table[name]._column,
+                table[name]._column.dtype,
                 self.tbl_meta.column_metadata[i],
             )
 
@@ -2278,7 +2279,7 @@ def _hive_dirname(name, val):
 
 
 def _set_col_metadata(
-    col: ColumnBase,
+    dtype: DtypeObj,
     col_meta: plc.io.types.ColumnInMetadata,
     force_nullable_schema: bool = False,
     path: str | None = None,
@@ -2336,13 +2337,11 @@ def _set_col_metadata(
     if output_as_binary is not None and full_path in output_as_binary:
         col_meta.set_output_as_binary(True)
 
-    if isinstance(col.dtype, StructDtype):
-        for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields), strict=True)
-        ):
+    if isinstance(dtype, StructDtype):
+        for i, (name, field_dtype) in enumerate(dtype.fields.items()):
             col_meta.child(i).set_name(name)
             _set_col_metadata(
-                child_col,
+                field_dtype,
                 col_meta.child(i),
                 force_nullable_schema,
                 full_path,
@@ -2351,12 +2350,12 @@ def _set_col_metadata(
                 column_type_length,
                 output_as_binary,
             )
-    elif isinstance(col.dtype, ListDtype):
+    elif isinstance(dtype, ListDtype):
         if full_path is not None:
             full_path = full_path + ".list"
             col_meta.child(1).set_name("element")
         _set_col_metadata(
-            col.children[1],
+            dtype.element_type,
             col_meta.child(1),
             force_nullable_schema,
             full_path,
@@ -2365,8 +2364,8 @@ def _set_col_metadata(
             column_type_length,
             output_as_binary,
         )
-    elif isinstance(col.dtype, DecimalDtype):
-        col_meta.set_decimal_precision(col.dtype.precision)
+    elif isinstance(dtype, DecimalDtype):
+        col_meta.set_decimal_precision(dtype.precision)
 
 
 def _get_comp_type(
