@@ -51,26 +51,18 @@ class IntervalColumn(ColumnBase):
             raise ValueError("dtype must be a IntervalDtype.")
         return plc_column, dtype
 
-    @classmethod
-    def _apply_child_metadata(
-        cls,
-        children: tuple[ColumnBase, ...],
-        dtype: IntervalDtype,  # type: ignore[override]
-    ) -> tuple[ColumnBase, ...]:
-        """Apply interval subtype metadata to children."""
-        return tuple(
-            child._with_type_metadata(dtype.subtype) for child in children
-        )
-
     def _get_sliced_child(self, idx: int) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
-        if idx < 0 or idx >= len(self._children):
+        if idx < 0 or idx >= self.plc_column.num_children():
             raise IndexError(
-                f"Index {idx} out of range for {len(self._children)} children"
+                f"Index {idx} out of range for {self.plc_column.num_children()} children"
             )
 
         sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
-        return ColumnBase.from_pylibcudf(sliced_plc_col)
+        sub_dtype = self.dtype.subtype  # type: ignore[union-attr]
+        return ColumnBase.from_pylibcudf(sliced_plc_col)._with_type_metadata(
+            sub_dtype
+        )
 
     def _with_type_metadata(self, dtype: DtypeObj) -> ColumnBase:
         """
@@ -81,7 +73,8 @@ class IntervalColumn(ColumnBase):
         """
         if isinstance(dtype, IntervalDtype):
             new_children = tuple(
-                child.astype(dtype.subtype) for child in self.children
+                ColumnBase.from_pylibcudf(child).astype(dtype.subtype)
+                for child in self.plc_column.children()
             )
             new_plc_column = plc.Column(
                 plc.DataType(plc.TypeId.STRUCT),
@@ -95,7 +88,6 @@ class IntervalColumn(ColumnBase):
             return type(self)._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                children=new_children,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
