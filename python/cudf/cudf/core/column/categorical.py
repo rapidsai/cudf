@@ -53,17 +53,7 @@ _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 
 class CategoricalColumn(column.ColumnBase):
-    """
-    Implements operations for Columns of Categorical type
-
-    Parameters
-    ----------
-    dtype : CategoricalDtype
-    mask : Buffer
-        The validity mask
-    offset : int
-        Data offset
-    """
+    """Implements operations for Columns of Categorical type"""
 
     dtype: CategoricalDtype
     _VALID_REDUCTIONS = {

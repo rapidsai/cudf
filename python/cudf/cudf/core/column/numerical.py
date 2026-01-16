@@ -60,16 +60,7 @@ if TYPE_CHECKING:
 
 
 class NumericalColumn(NumericalBaseColumn):
-    """
-    A Column object for Numeric types.
-
-    Parameters
-    ----------
-    data : Buffer
-    dtype : np.dtype
-        The dtype associated with the data Buffer
-    mask : Buffer, optional
-    """
+    """A Column object for Numeric types."""
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
     _VALID_PLC_TYPES = {

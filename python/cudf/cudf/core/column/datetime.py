@@ -77,18 +77,7 @@ def _resolve_binop_resolution(
 
 
 class DatetimeColumn(TemporalBaseColumn):
-    """
-    A Column implementation for Date-time types.
-
-    Parameters
-    ----------
-    data : Buffer
-        The datetime values
-    dtype : np.dtype
-        The data type
-    mask : Buffer; optional
-        The validity mask
-    """
+    """A Column implementation for Date-time types."""
 
     _NP_SCALAR = np.datetime64
     _PD_SCALAR = pd.Timestamp
