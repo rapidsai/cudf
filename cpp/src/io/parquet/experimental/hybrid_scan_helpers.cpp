@@ -523,7 +523,7 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
 
 std::vector<std::vector<cudf::size_type>>
 aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
-  cudf::host_span<cudf::device_span<uint8_t> const> bloom_filter_data,
+  cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
   host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<cudf::size_type const> output_column_schemas,
@@ -551,14 +551,14 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
   auto const total_row_groups = compute_total_row_groups(row_group_indices);
 
   // Transform bloom filter data to cuda::std::byte type for apply_bloom_filters
-  std::vector<cudf::device_span<cuda::std::byte>> transformed_bloom_filter_data;
+  std::vector<cudf::device_span<cuda::std::byte const>> transformed_bloom_filter_data;
   transformed_bloom_filter_data.reserve(bloom_filter_data.size());
   std::transform(bloom_filter_data.begin(),
                  bloom_filter_data.end(),
                  std::back_inserter(transformed_bloom_filter_data),
                  [](auto const& data) {
-                   return cudf::device_span<cuda::std::byte>{
-                     reinterpret_cast<cuda::std::byte*>(data.data()), data.size()};
+                   return cudf::device_span<cuda::std::byte const>{
+                     reinterpret_cast<cuda::std::byte const*>(data.data()), data.size()};
                  });
 
   auto const bloom_filtered_row_groups = apply_bloom_filters(transformed_bloom_filter_data,
