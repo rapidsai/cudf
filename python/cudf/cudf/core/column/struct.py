@@ -84,18 +84,18 @@ class StructColumn(ColumnBase):
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
-        if idx < 0 or idx >= len(self.plc_column.children()):
+        if idx < 0 or idx >= self.plc_column.num_children():
             raise IndexError(
-                f"Index {idx} out of range for {len(self.plc_column.children())} children"
+                f"Index {idx} out of range for {self.plc_column.num_children()} children"
             )
 
         sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
         dtype = cast(StructDtype, self.dtype)
-        field_name = list(dtype.fields.keys())[idx]
+        sub_dtype = list(dtype.fields.values())[idx]
         return (
             type(self)
             .from_pylibcudf(sliced_plc_col)
-            ._with_type_metadata(dtype.fields[field_name])
+            ._with_type_metadata(sub_dtype)
         )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
