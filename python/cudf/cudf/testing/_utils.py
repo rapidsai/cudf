@@ -262,11 +262,10 @@ def _assert_column_memory_eq(lhs: plc.Column, rhs: plc.Column):
     assert lhs.size() == rhs.size()
     assert lhs.offset() == rhs.offset()
     assert lhs.num_children() == rhs.num_children()
-    for i in range(lhs.num_children()):
-        _assert_column_memory_eq(
-            lhs.children()[i],
-            rhs.children()[i],
-        )
+    for lhs_child, rhs_child in zip(
+        lhs.children(), rhs.children(), strict=True
+    ):
+        _assert_column_memory_eq(lhs_child, rhs_child)
 
 
 def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):

@@ -467,6 +467,27 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return other_col
 
     @staticmethod
+    def _unwrap_buffer_to_span(buffer: Buffer | Any | None) -> Any:
+        """Unwrap a cudf Buffer to a span.
+
+        If the input is a cudf Buffer, extract the underlying span. Otherwise,
+        return the input as-is (already a span or None).
+
+        Parameters
+        ----------
+        buffer : Buffer or None
+            The buffer to unwrap.
+
+        Returns
+        -------
+        plc.span.Span or None
+            The underlying span, or None if input was None.
+        """
+        if buffer is None:
+            return None
+        return cast("plc.span.Span", cast("Buffer", buffer).owner.owner)
+
+    @staticmethod
     def _unwrap_buffers(plc_column: plc.Column) -> plc.Column:
         """Recursively unwrap all buffers in a pylibcudf.Column.
 
@@ -484,13 +505,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column with unwrapped buffers.
         """
-        data = plc_column.data()
-        if data is not None:
-            data = cast("plc.span.Span", cast("Buffer", data).owner.owner)
-
-        mask = plc_column.null_mask()
-        if mask is not None:
-            mask = cast("plc.span.Span", cast("Buffer", mask).owner.owner)
+        data = ColumnBase._unwrap_buffer_to_span(plc_column.data())
+        mask = ColumnBase._unwrap_buffer_to_span(plc_column.null_mask())
 
         unwrapped_children = [
             ColumnBase._unwrap_buffers(child)
