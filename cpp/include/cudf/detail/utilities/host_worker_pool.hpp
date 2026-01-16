@@ -68,7 +68,7 @@ class CUDF_EXPORT hierarchical_thread_pool {
     // it from a const context.
     auto task_ptr = std::make_shared<std::decay_t<F>>(std::forward<F>(task));
     return pool_.submit_task([task_ptr, level = level_]() {
-      // Mark this thread as owned by this pool's level (happens happens once per thread)
+      // Mark this thread as owned by this pool's level (happens once per thread)
       if (thread_pool_level == THREAD_POOL_LEVEL_NONE) { thread_pool_level = level; }
 
       // Execute the actual task
