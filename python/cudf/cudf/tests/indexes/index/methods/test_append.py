@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import re
@@ -59,15 +59,17 @@ def test_index_append(data, other):
     if cudf.utils.dtypes.is_mixed_with_object_dtype(gd_data, gd_other):
         gd_data = gd_data.astype("str")
         gd_other = gd_other.astype("str")
+        # As of pandas 3.0, mixed string/numbers will return object type (of PyObjects)
+        pd_data = pd_data.astype("str")
+        pd_other = pd_other.astype("str")
 
     expected = pd_data.append(pd_other)
     actual = gd_data.append(gd_other)
     if len(data) == 0 and len(other) == 0:
-        # Pandas default dtype to "object" for empty list
-        # cudf default dtype to "float" for empty list
-        assert_eq(expected, actual.astype("str"))
-    elif actual.dtype == "object":
-        assert_eq(expected.astype("str"), actual)
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        assert_eq(expected.astype(actual.dtype), actual)
     else:
         assert_eq(expected, actual)
 
