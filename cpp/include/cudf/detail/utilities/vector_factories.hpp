@@ -411,7 +411,7 @@ host_vector<typename Container::value_type> make_host_vector_async(Container con
  * using a pinned memory resource.
  *
  * @tparam T The type of the data to copy
- * @param source_data The device data to copy
+ * @param v The device data to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to the host
  */
@@ -484,7 +484,7 @@ host_vector<T> make_pinned_vector(size_t size, rmm::cuda_stream_view stream)
  * @note This function does not synchronize `stream` after the copy.
  *
  * @tparam T The type of the data to copy
- * @param source_data The device data to copy
+ * @param v The device data to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to pinned host memory
  */
