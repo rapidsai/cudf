@@ -858,7 +858,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
 
     if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
 
-    bool use_jit = cudf::get_context().use_jit() || _options.use_jit_filter;
+    bool use_jit = cudf::get_context(init_flags::NONE).use_jit() || _options.use_jit_filter;
 
     if (!use_jit) {
       auto predicate = cudf::detail::compute_column(
