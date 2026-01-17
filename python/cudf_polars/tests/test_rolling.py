@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(params=[False, True], ids=["nosort", "sort"])
@@ -114,14 +113,10 @@ def test_unsorted_raises():
     q = df.rolling("orderby", period="2i").agg(sum=pl.sum("values"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
-    else:
-        with pytest.raises(
-            RuntimeError, match=r".*rolling is not sorted, please sort first"
-        ):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    with pytest.raises(
+        RuntimeError, match=r".*rolling is not sorted, please sort first"
+    ):
+        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_grouped_rolling():
@@ -149,14 +144,8 @@ def test_grouped_rolling_unsorted_raises():
 
     with pytest.raises(pl.exceptions.ComputeError):
         q.collect(engine="in-memory")
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
-    else:
-        with pytest.raises(
-            RuntimeError, match="Input for grouped rolling is not sorted"
-        ):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    with pytest.raises(RuntimeError, match="Input for grouped rolling is not sorted"):
+        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_orderby_nulls_raises_computeerror():
@@ -164,14 +153,10 @@ def test_orderby_nulls_raises_computeerror():
     q = df.rolling("orderby", period="2i").agg(sum=pl.sum("values"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
-    else:
-        with pytest.raises(
-            RuntimeError, match=r"Index column.*in rolling may not contain nulls"
-        ):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    with pytest.raises(
+        RuntimeError, match=r"Index column.*in rolling may not contain nulls"
+    ):
+        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_rolling_nested_raises():

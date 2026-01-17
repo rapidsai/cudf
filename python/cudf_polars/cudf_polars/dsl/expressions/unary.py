@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 """DSL nodes for unary operations."""
@@ -241,7 +241,9 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
-        elif self.name == "set_sorted":
+        elif self.name == "set_sorted":  # pragma: no cover
+            # TODO: LazyFrame.set_sorted is proper IR concept (ie. FunctionIR::Hint)
+            # and is is currently not implemented. We should reimplement it as a MapFunction.
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             (asc,) = self.options
             order = (

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from cudf_polars.testing.asserts import (
     DEFAULT_RUNTIME,
     assert_gpu_result_equal,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -82,7 +81,7 @@ def test_unique_fallback(df):
     )
     q = df.unique(keep="first", maintain_order=True)
     with pytest.raises(
-        pl.exceptions.ComputeError if POLARS_VERSION_LT_130 else NotImplementedError,
+        NotImplementedError,
         match="Unsupported unique options",
     ):
         assert_gpu_result_equal(q, engine=engine)

@@ -176,15 +176,13 @@ enum class use_data_page_mask : bool {
  * }
  * @endcode
  *
- * Build an initial row mask: Once the row groups are filtered, the next step is to build an
- * initial row mask column to indicate which rows in the current span of row groups will survive in
- * the read table. This initial row mask may be a BOOL8 cudf column of size equal to the
- * total number of rows in the current span of row groups (computed by `total_rows_in_row_groups()`)
- * containing all `true` values. Alternatively, the row mask may be built with
- * the `build_row_mask_with_page_index_stats()` function and contain a `true` value for only the
- * rows that survive the page-level statistics from the page index subject to the same filter as row
- * groups. Note that this step requires the page index to be set up using the `setup_page_index()`
- * function.
+ * Build an initial row mask: Once the row groups are filtered, the next step is to build an initial
+ * BOOL8 row mask column indicating which rows in the current span of row groups survive in the
+ * final table. This row mask column may contain all `true` values built using the
+ * `build_all_true_row_mask()` function or it may contain a `true` value for only the rows that
+ * survive the page-level statistics from the page index subject to the same filter as row groups
+ * (needs page index to be set up using the `setup_page_index()` function). The size of this row
+ * mask column must be equal to the total number of rows in the current span of row groups.
  * @code{.cpp}
  * // If not already done, get the page index byte range
  * auto page_index_byte_range = reader->page_index_byte_range();
@@ -420,6 +418,21 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Builds a boolean (survival) column of size equal to the total number of rows in the row
+   * groups containing all `true` values
+   *
+   * @param row_group_indices Input row groups indices
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @return An all-true boolean (survival) column of size equal to the total number of rows in the
+   * row groups
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
+    cudf::host_span<size_type const> row_group_indices,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Builds a boolean column indicating surviving rows using page-level statistics in the

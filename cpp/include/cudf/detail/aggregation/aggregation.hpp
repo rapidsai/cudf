@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -153,21 +153,59 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
 };
 
 /**
+ * @brief CRTP (Curiously Recurring Template Pattern) helper to automatically implement clone() for
+ * aggregation classes.
+ *
+ * Derived classes that have proper copy constructors can inherit from this
+ * to get an automatic clone() implementation, eliminating boilerplate code.
+ *
+ * Classes with non-copyable members (like host_udf_aggregation) should not use
+ * this helper and must implement clone() manually.
+ *
+ * Usage:
+ * @code{.cpp}
+ * class my_aggregation final :
+ *     public clonable<my_aggregation>::derived_from<base1, base2, ...> { ... };
+ * @endcode
+ *
+ * @tparam Derived The concrete aggregation class (CRTP pattern)
+ */
+template <typename Derived>
+struct clonable {
+  /**
+   * @brief Inherits from the specified base classes and provides an automatic clone()
+   * implementation.
+   *
+   * @tparam Bases The base classes to inherit from (e.g., rolling_aggregation, groupby_aggregation)
+   */
+  template <typename... Bases>
+  class derived_from : public Bases... {
+   public:
+    /**
+     * @brief Clone the aggregation object and return it wrapped in a unique_ptr.
+     *
+     * @return A unique_ptr containing the cloned aggregation object
+     */
+    [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+    {
+      return std::make_unique<Derived>(static_cast<Derived const&>(*this));
+    }
+  };
+};
+
+/**
  * @brief Derived class for specifying a sum aggregation
  */
-class sum_aggregation final : public rolling_aggregation,
-                              public groupby_aggregation,
-                              public groupby_scan_aggregation,
-                              public reduce_aggregation,
-                              public scan_aggregation,
-                              public segmented_reduce_aggregation {
+class sum_aggregation final
+  : public clonable<sum_aggregation>::derived_from<rolling_aggregation,
+                                                   groupby_aggregation,
+                                                   groupby_scan_aggregation,
+                                                   reduce_aggregation,
+                                                   scan_aggregation,
+                                                   segmented_reduce_aggregation> {
  public:
   sum_aggregation() : aggregation(SUM) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<sum_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -179,17 +217,14 @@ class sum_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a sum_with_overflow aggregation
  */
-class sum_with_overflow_aggregation final : public groupby_aggregation,
-                                            public groupby_scan_aggregation,
-                                            public reduce_aggregation,
-                                            public segmented_reduce_aggregation {
+class sum_with_overflow_aggregation final
+  : public clonable<sum_with_overflow_aggregation>::derived_from<groupby_aggregation,
+                                                                 groupby_scan_aggregation,
+                                                                 reduce_aggregation,
+                                                                 segmented_reduce_aggregation> {
  public:
   sum_with_overflow_aggregation() : aggregation(SUM_WITH_OVERFLOW) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<sum_with_overflow_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -201,18 +236,15 @@ class sum_with_overflow_aggregation final : public groupby_aggregation,
 /**
  * @brief Derived class for specifying a product aggregation
  */
-class product_aggregation final : public groupby_aggregation,
-                                  public groupby_scan_aggregation,
-                                  public reduce_aggregation,
-                                  public scan_aggregation,
-                                  public segmented_reduce_aggregation {
+class product_aggregation final
+  : public clonable<product_aggregation>::derived_from<groupby_aggregation,
+                                                       groupby_scan_aggregation,
+                                                       reduce_aggregation,
+                                                       scan_aggregation,
+                                                       segmented_reduce_aggregation> {
  public:
   product_aggregation() : aggregation(PRODUCT) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<product_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -224,19 +256,16 @@ class product_aggregation final : public groupby_aggregation,
 /**
  * @brief Derived class for specifying a min aggregation
  */
-class min_aggregation final : public rolling_aggregation,
-                              public groupby_aggregation,
-                              public groupby_scan_aggregation,
-                              public reduce_aggregation,
-                              public scan_aggregation,
-                              public segmented_reduce_aggregation {
+class min_aggregation final
+  : public clonable<min_aggregation>::derived_from<rolling_aggregation,
+                                                   groupby_aggregation,
+                                                   groupby_scan_aggregation,
+                                                   reduce_aggregation,
+                                                   scan_aggregation,
+                                                   segmented_reduce_aggregation> {
  public:
   min_aggregation() : aggregation(MIN) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<min_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -248,19 +277,16 @@ class min_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a max aggregation
  */
-class max_aggregation final : public rolling_aggregation,
-                              public groupby_aggregation,
-                              public groupby_scan_aggregation,
-                              public reduce_aggregation,
-                              public scan_aggregation,
-                              public segmented_reduce_aggregation {
+class max_aggregation final
+  : public clonable<max_aggregation>::derived_from<rolling_aggregation,
+                                                   groupby_aggregation,
+                                                   groupby_scan_aggregation,
+                                                   reduce_aggregation,
+                                                   scan_aggregation,
+                                                   segmented_reduce_aggregation> {
  public:
   max_aggregation() : aggregation(MAX) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<max_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -272,17 +298,14 @@ class max_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a count aggregation
  */
-class count_aggregation final : public rolling_aggregation,
-                                public groupby_aggregation,
-                                public groupby_scan_aggregation,
-                                public reduce_aggregation {
+class count_aggregation final
+  : public clonable<count_aggregation>::derived_from<rolling_aggregation,
+                                                     groupby_aggregation,
+                                                     groupby_scan_aggregation,
+                                                     reduce_aggregation> {
  public:
   count_aggregation(aggregation::Kind kind) : aggregation(kind) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<count_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -294,14 +317,11 @@ class count_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a histogram aggregation
  */
-class histogram_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class histogram_aggregation final
+  : public clonable<histogram_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   histogram_aggregation() : aggregation(HISTOGRAM) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<histogram_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -313,14 +333,12 @@ class histogram_aggregation final : public groupby_aggregation, public reduce_ag
 /**
  * @brief Derived class for specifying an any aggregation
  */
-class any_aggregation final : public reduce_aggregation, public segmented_reduce_aggregation {
+class any_aggregation final
+  : public clonable<any_aggregation>::derived_from<reduce_aggregation,
+                                                   segmented_reduce_aggregation> {
  public:
   any_aggregation() : aggregation(ANY) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<any_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -332,14 +350,12 @@ class any_aggregation final : public reduce_aggregation, public segmented_reduce
 /**
  * @brief Derived class for specifying an all aggregation
  */
-class all_aggregation final : public reduce_aggregation, public segmented_reduce_aggregation {
+class all_aggregation final
+  : public clonable<all_aggregation>::derived_from<reduce_aggregation,
+                                                   segmented_reduce_aggregation> {
  public:
   all_aggregation() : aggregation(ALL) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<all_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -351,16 +367,12 @@ class all_aggregation final : public reduce_aggregation, public segmented_reduce
 /**
  * @brief Derived class for specifying a sum_of_squares aggregation
  */
-class sum_of_squares_aggregation final : public groupby_aggregation,
-                                         public reduce_aggregation,
-                                         public segmented_reduce_aggregation {
+class sum_of_squares_aggregation final
+  : public clonable<sum_of_squares_aggregation>::
+      derived_from<groupby_aggregation, reduce_aggregation, segmented_reduce_aggregation> {
  public:
   sum_of_squares_aggregation() : aggregation(SUM_OF_SQUARES) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<sum_of_squares_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -372,17 +384,14 @@ class sum_of_squares_aggregation final : public groupby_aggregation,
 /**
  * @brief Derived class for specifying a mean aggregation
  */
-class mean_aggregation final : public rolling_aggregation,
-                               public groupby_aggregation,
-                               public reduce_aggregation,
-                               public segmented_reduce_aggregation {
+class mean_aggregation final
+  : public clonable<mean_aggregation>::derived_from<rolling_aggregation,
+                                                    groupby_aggregation,
+                                                    reduce_aggregation,
+                                                    segmented_reduce_aggregation> {
  public:
   mean_aggregation() : aggregation(MEAN) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<mean_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -394,14 +403,10 @@ class mean_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a m2 aggregation
  */
-class m2_aggregation : public groupby_aggregation {
+class m2_aggregation : public clonable<m2_aggregation>::derived_from<groupby_aggregation> {
  public:
   m2_aggregation() : aggregation{M2} {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<m2_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -412,11 +417,15 @@ class m2_aggregation : public groupby_aggregation {
 
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
+ *
+ * @tparam Derived The concrete aggregation class (CRTP pattern)
  */
-class std_var_aggregation : public rolling_aggregation,
-                            public groupby_aggregation,
-                            public reduce_aggregation,
-                            public segmented_reduce_aggregation {
+template <typename Derived>
+class std_var_aggregation
+  : public clonable<Derived>::template derived_from<rolling_aggregation,
+                                                    groupby_aggregation,
+                                                    reduce_aggregation,
+                                                    segmented_reduce_aggregation> {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 
@@ -433,7 +442,7 @@ class std_var_aggregation : public rolling_aggregation,
   }
 
  protected:
-  std_var_aggregation(aggregation::Kind k, size_type ddof) : rolling_aggregation(k), _ddof{ddof}
+  std_var_aggregation(aggregation::Kind k, size_type ddof) : _ddof{ddof}
   {
     CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
                  "std_var_aggregation can accept only STD, VARIANCE");
@@ -444,17 +453,13 @@ class std_var_aggregation : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a variance aggregation
  */
-class var_aggregation final : public std_var_aggregation {
+class var_aggregation final : public std_var_aggregation<var_aggregation> {
  public:
   var_aggregation(size_type ddof)
     : aggregation{aggregation::VARIANCE}, std_var_aggregation{aggregation::VARIANCE, ddof}
   {
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<var_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -466,17 +471,13 @@ class var_aggregation final : public std_var_aggregation {
 /**
  * @brief Derived class for specifying a standard deviation aggregation
  */
-class std_aggregation final : public std_var_aggregation {
+class std_aggregation final : public std_var_aggregation<std_aggregation> {
  public:
   std_aggregation(size_type ddof)
     : aggregation{aggregation::STD}, std_var_aggregation{aggregation::STD, ddof}
   {
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<std_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -488,14 +489,11 @@ class std_aggregation final : public std_var_aggregation {
 /**
  * @brief Derived class for specifying a median aggregation
  */
-class median_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class median_aggregation final
+  : public clonable<median_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   median_aggregation() : aggregation(MEDIAN) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<median_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -507,7 +505,8 @@ class median_aggregation final : public groupby_aggregation, public reduce_aggre
 /**
  * @brief Derived class for specifying a quantile aggregation
  */
-class quantile_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class quantile_aggregation final
+  : public clonable<quantile_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   quantile_aggregation(std::vector<double> const& q, interpolation i)
     : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i}
@@ -531,10 +530,6 @@ class quantile_aggregation final : public groupby_aggregation, public reduce_agg
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<quantile_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -556,16 +551,12 @@ class quantile_aggregation final : public groupby_aggregation, public reduce_agg
 /**
  * @brief Derived class for specifying an argmax aggregation
  */
-class argmax_aggregation final : public rolling_aggregation,
-                                 public groupby_aggregation,
-                                 public reduce_aggregation {
+class argmax_aggregation final
+  : public clonable<argmax_aggregation>::
+      derived_from<rolling_aggregation, groupby_aggregation, reduce_aggregation> {
  public:
   argmax_aggregation() : aggregation(ARGMAX) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<argmax_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -577,16 +568,12 @@ class argmax_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying an argmin aggregation
  */
-class argmin_aggregation final : public rolling_aggregation,
-                                 public groupby_aggregation,
-                                 public reduce_aggregation {
+class argmin_aggregation final
+  : public clonable<argmin_aggregation>::
+      derived_from<rolling_aggregation, groupby_aggregation, reduce_aggregation> {
  public:
   argmin_aggregation() : aggregation(ARGMIN) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<argmin_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -598,9 +585,9 @@ class argmin_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
-class nunique_aggregation final : public groupby_aggregation,
-                                  public reduce_aggregation,
-                                  public segmented_reduce_aggregation {
+class nunique_aggregation final
+  : public clonable<nunique_aggregation>::
+      derived_from<groupby_aggregation, reduce_aggregation, segmented_reduce_aggregation> {
  public:
   nunique_aggregation(null_policy null_handling)
     : aggregation{NUNIQUE}, _null_handling{null_handling}
@@ -621,10 +608,6 @@ class nunique_aggregation final : public groupby_aggregation,
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<nunique_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -642,9 +625,9 @@ class nunique_aggregation final : public groupby_aggregation,
 /**
  * @brief Derived class for specifying a nth element aggregation
  */
-class nth_element_aggregation final : public groupby_aggregation,
-                                      public reduce_aggregation,
-                                      public rolling_aggregation {
+class nth_element_aggregation final
+  : public clonable<nth_element_aggregation>::
+      derived_from<groupby_aggregation, reduce_aggregation, rolling_aggregation> {
  public:
   nth_element_aggregation(size_type n, null_policy null_handling)
     : aggregation{NTH_ELEMENT}, _n{n}, _null_handling{null_handling}
@@ -666,10 +649,6 @@ class nth_element_aggregation final : public groupby_aggregation,
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<nth_element_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -687,14 +666,11 @@ class nth_element_aggregation final : public groupby_aggregation,
 /**
  * @brief Derived class for specifying a row_number aggregation
  */
-class row_number_aggregation final : public rolling_aggregation {
+class row_number_aggregation final
+  : public clonable<row_number_aggregation>::derived_from<rolling_aggregation> {
  public:
   row_number_aggregation() : aggregation(ROW_NUMBER) {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<row_number_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -706,7 +682,7 @@ class row_number_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying an ewma aggregation
  */
-class ewma_aggregation final : public scan_aggregation {
+class ewma_aggregation final : public clonable<ewma_aggregation>::derived_from<scan_aggregation> {
  public:
   double const center_of_mass;
   cudf::ewm_history history;
@@ -714,11 +690,6 @@ class ewma_aggregation final : public scan_aggregation {
   ewma_aggregation(double const center_of_mass, cudf::ewm_history history)
     : aggregation{EWMA}, center_of_mass{center_of_mass}, history{history}
   {
-  }
-
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<ewma_aggregation>(*this);
   }
 
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
@@ -740,9 +711,9 @@ class ewma_aggregation final : public scan_aggregation {
 /**
  * @brief Derived class for specifying a rank aggregation
  */
-class rank_aggregation final : public rolling_aggregation,
-                               public groupby_scan_aggregation,
-                               public scan_aggregation {
+class rank_aggregation final
+  : public clonable<rank_aggregation>::
+      derived_from<rolling_aggregation, groupby_scan_aggregation, scan_aggregation> {
  public:
   rank_aggregation(rank_method method,
                    order column_order,
@@ -777,10 +748,6 @@ class rank_aggregation final : public rolling_aggregation,
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<rank_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -802,9 +769,9 @@ class rank_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived aggregation class for specifying COLLECT_LIST aggregation
  */
-class collect_list_aggregation final : public rolling_aggregation,
-                                       public groupby_aggregation,
-                                       public reduce_aggregation {
+class collect_list_aggregation final
+  : public clonable<collect_list_aggregation>::
+      derived_from<rolling_aggregation, groupby_aggregation, reduce_aggregation> {
  public:
   explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
     : aggregation{COLLECT_LIST}, _null_handling{null_handling}
@@ -825,10 +792,6 @@ class collect_list_aggregation final : public rolling_aggregation,
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<collect_list_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -846,9 +809,9 @@ class collect_list_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived aggregation class for specifying COLLECT_SET aggregation
  */
-class collect_set_aggregation final : public rolling_aggregation,
-                                      public groupby_aggregation,
-                                      public reduce_aggregation {
+class collect_set_aggregation final
+  : public clonable<collect_set_aggregation>::
+      derived_from<rolling_aggregation, groupby_aggregation, reduce_aggregation> {
  public:
   explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
                                    null_equality nulls_equal = null_equality::EQUAL,
@@ -878,10 +841,6 @@ class collect_set_aggregation final : public rolling_aggregation,
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<collect_set_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -900,7 +859,8 @@ class collect_set_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived aggregation class for specifying LEAD/LAG window aggregations
  */
-class lead_lag_aggregation final : public rolling_aggregation {
+class lead_lag_aggregation final
+  : public clonable<lead_lag_aggregation>::derived_from<rolling_aggregation> {
  public:
   lead_lag_aggregation(Kind kind, size_type offset)
     : aggregation{offset < 0 ? (kind == LAG ? LEAD : LAG) : kind}, row_offset{std::abs(offset)}
@@ -919,10 +879,6 @@ class lead_lag_aggregation final : public rolling_aggregation {
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<lead_lag_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -940,7 +896,7 @@ class lead_lag_aggregation final : public rolling_aggregation {
  * @brief Derived class for specifying a custom aggregation
  * specified in udf
  */
-class udf_aggregation final : public rolling_aggregation {
+class udf_aggregation final : public clonable<udf_aggregation>::derived_from<rolling_aggregation> {
  public:
   udf_aggregation(aggregation::Kind type,
                   std::string user_defined_aggregator,
@@ -968,10 +924,6 @@ class udf_aggregation final : public rolling_aggregation {
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<udf_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -1027,14 +979,12 @@ class host_udf_aggregation final : public groupby_aggregation,
 /**
  * @brief Derived aggregation class for specifying MERGE_LISTS aggregation
  */
-class merge_lists_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class merge_lists_aggregation final
+  : public clonable<merge_lists_aggregation>::derived_from<groupby_aggregation,
+                                                           reduce_aggregation> {
  public:
   explicit merge_lists_aggregation() : aggregation{MERGE_LISTS} {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<merge_lists_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -1046,7 +996,8 @@ class merge_lists_aggregation final : public groupby_aggregation, public reduce_
 /**
  * @brief Derived aggregation class for specifying MERGE_SETS aggregation
  */
-class merge_sets_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class merge_sets_aggregation final
+  : public clonable<merge_sets_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   explicit merge_sets_aggregation(null_equality nulls_equal, nan_equality nans_equal)
     : aggregation{MERGE_SETS}, _nulls_equal(nulls_equal), _nans_equal(nans_equal)
@@ -1069,10 +1020,6 @@ class merge_sets_aggregation final : public groupby_aggregation, public reduce_a
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<merge_sets_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -1090,14 +1037,11 @@ class merge_sets_aggregation final : public groupby_aggregation, public reduce_a
 /**
  * @brief Derived aggregation class for specifying MERGE_M2 aggregation
  */
-class merge_m2_aggregation final : public groupby_aggregation {
+class merge_m2_aggregation final
+  : public clonable<merge_m2_aggregation>::derived_from<groupby_aggregation> {
  public:
   explicit merge_m2_aggregation() : aggregation{MERGE_M2} {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<merge_m2_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -1109,14 +1053,12 @@ class merge_m2_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_HISTOGRAM aggregation
  */
-class merge_histogram_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class merge_histogram_aggregation final
+  : public clonable<merge_histogram_aggregation>::derived_from<groupby_aggregation,
+                                                               reduce_aggregation> {
  public:
   explicit merge_histogram_aggregation() : aggregation{MERGE_HISTOGRAM} {}
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<merge_histogram_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -1128,7 +1070,8 @@ class merge_histogram_aggregation final : public groupby_aggregation, public red
 /**
  * @brief Derived aggregation class for specifying COVARIANCE aggregation
  */
-class covariance_aggregation final : public groupby_aggregation {
+class covariance_aggregation final
+  : public clonable<covariance_aggregation>::derived_from<groupby_aggregation> {
  public:
   explicit covariance_aggregation(size_type min_periods, size_type ddof)
     : aggregation{COVARIANCE}, _min_periods{min_periods}, _ddof(ddof)
@@ -1142,10 +1085,6 @@ class covariance_aggregation final : public groupby_aggregation {
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<covariance_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -1163,7 +1102,8 @@ class covariance_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying CORRELATION aggregation
  */
-class correlation_aggregation final : public groupby_aggregation {
+class correlation_aggregation final
+  : public clonable<correlation_aggregation>::derived_from<groupby_aggregation> {
  public:
   explicit correlation_aggregation(correlation_type type, size_type min_periods)
     : aggregation{CORRELATION}, _type{type}, _min_periods{min_periods}
@@ -1184,10 +1124,6 @@ class correlation_aggregation final : public groupby_aggregation {
     return this->aggregation::do_hash() ^ hash_impl();
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<correlation_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -1205,7 +1141,8 @@ class correlation_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying TDIGEST aggregation
  */
-class tdigest_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class tdigest_aggregation final
+  : public clonable<tdigest_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   explicit tdigest_aggregation(int max_centroids_)
     : aggregation{TDIGEST}, max_centroids{max_centroids_}
@@ -1214,10 +1151,6 @@ class tdigest_aggregation final : public groupby_aggregation, public reduce_aggr
 
   int const max_centroids;
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<tdigest_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -1229,7 +1162,9 @@ class tdigest_aggregation final : public groupby_aggregation, public reduce_aggr
 /**
  * @brief Derived aggregation class for specifying MERGE_TDIGEST aggregation
  */
-class merge_tdigest_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class merge_tdigest_aggregation final
+  : public clonable<merge_tdigest_aggregation>::derived_from<groupby_aggregation,
+                                                             reduce_aggregation> {
  public:
   explicit merge_tdigest_aggregation(int max_centroids_)
     : aggregation{MERGE_TDIGEST}, max_centroids{max_centroids_}
@@ -1238,10 +1173,6 @@ class merge_tdigest_aggregation final : public groupby_aggregation, public reduc
 
   int const max_centroids;
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<merge_tdigest_aggregation>(*this);
-  }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -1253,7 +1184,8 @@ class merge_tdigest_aggregation final : public groupby_aggregation, public reduc
 /**
  * @brief Derived aggregation class for specifying BITWISE_AGG aggregation.
  */
-class bitwise_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class bitwise_aggregation final
+  : public clonable<bitwise_aggregation>::derived_from<groupby_aggregation, reduce_aggregation> {
  public:
   explicit bitwise_aggregation(bitwise_op bit_op_) : aggregation{BITWISE_AGG}, bit_op{bit_op_} {}
 
@@ -1271,11 +1203,6 @@ class bitwise_aggregation final : public groupby_aggregation, public reduce_aggr
     return this->aggregation::do_hash() ^ static_cast<size_t>(bit_op);
   }
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<bitwise_aggregation>(*this);
-  }
-
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
@@ -1285,7 +1212,8 @@ class bitwise_aggregation final : public groupby_aggregation, public reduce_aggr
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
-class top_k_aggregation final : public groupby_aggregation {
+class top_k_aggregation final
+  : public clonable<top_k_aggregation>::derived_from<groupby_aggregation> {
  public:
   explicit top_k_aggregation(size_type k, order topk_order)
     : aggregation{TOP_K}, k{k}, topk_order{topk_order}
@@ -1305,11 +1233,6 @@ class top_k_aggregation final : public groupby_aggregation {
   [[nodiscard]] std::size_t do_hash() const override
   {
     return this->aggregation::do_hash() ^ hash_impl();
-  }
-
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<top_k_aggregation>(*this);
   }
 
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(

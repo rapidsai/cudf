@@ -148,6 +148,20 @@ std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_bloom_fi
     .front();
 }
 
+std::unique_ptr<cudf::column> hybrid_scan_reader::build_all_true_row_mask(
+  cudf::host_span<size_type const> row_group_indices,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  CUDF_FUNC_RANGE();
+
+  // Temporary vector with row group indices from the first source
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+
+  return _impl->build_all_true_row_mask(input_row_group_indices, stream, mr);
+}
+
 std::unique_ptr<cudf::column> hybrid_scan_reader::build_row_mask_with_page_index_stats(
   cudf::host_span<size_type const> row_group_indices,
   parquet_reader_options const& options,
