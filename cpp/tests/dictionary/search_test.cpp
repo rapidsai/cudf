@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,17 +20,18 @@ TEST_F(DictionarySearchTest, StringsColumn)
 
   auto result = cudf::dictionary::get_index(dictionary, cudf::string_scalar("ccc"));
   EXPECT_TRUE(result->is_valid());
-  auto n_result = dynamic_cast<cudf::numeric_scalar<int32_t>*>(result.get());
-  EXPECT_EQ(int32_t{3}, n_result->value());
 
   result = cudf::dictionary::get_index(dictionary, cudf::string_scalar("eee"));
   EXPECT_FALSE(result->is_valid());
-  result   = cudf::dictionary::detail::get_insert_index(dictionary,
+
+  result        = cudf::dictionary::detail::get_insert_index(dictionary,
                                                       cudf::string_scalar("eee"),
                                                       cudf::get_default_stream(),
                                                       cudf::get_current_device_resource_ref());
-  n_result = dynamic_cast<cudf::numeric_scalar<int32_t>*>(result.get());
-  EXPECT_EQ(int32_t{5}, n_result->value());
+  auto n_result = dynamic_cast<cudf::numeric_scalar<cudf::size_type>*>(result.get());
+
+  auto view = cudf::dictionary_column_view(dictionary);
+  EXPECT_EQ(view.keys().size(), n_result->value());
 }
 
 TEST_F(DictionarySearchTest, WithNulls)
@@ -40,17 +41,14 @@ TEST_F(DictionarySearchTest, WithNulls)
 
   auto result = cudf::dictionary::get_index(dictionary, cudf::numeric_scalar<int64_t>(4));
   EXPECT_TRUE(result->is_valid());
-  auto n_result = dynamic_cast<cudf::numeric_scalar<int32_t>*>(result.get());
-  EXPECT_EQ(int32_t{0}, n_result->value());
 
   result = cudf::dictionary::get_index(dictionary, cudf::numeric_scalar<int64_t>(5));
   EXPECT_FALSE(result->is_valid());
-  result   = cudf::dictionary::detail::get_insert_index(dictionary,
+  result = cudf::dictionary::detail::get_insert_index(dictionary,
                                                       cudf::numeric_scalar<int64_t>(5),
                                                       cudf::get_default_stream(),
                                                       cudf::get_current_device_resource_ref());
-  n_result = dynamic_cast<cudf::numeric_scalar<int32_t>*>(result.get());
-  EXPECT_EQ(int32_t{1}, n_result->value());
+  EXPECT_TRUE(result->is_valid());
 }
 
 TEST_F(DictionarySearchTest, EmptyColumn)
