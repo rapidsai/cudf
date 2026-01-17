@@ -176,7 +176,7 @@ class StringColumn(ColumnBase, Scannable):
         # All null string columns fail to convert in libcudf, so we must short-circuit
         # the call to super().to_arrow().
         # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if len(self.children) == 0 or self.null_count == len(self):
+        if self.plc_column.num_children() == 0 or self.null_count == len(self):
             if len(self) == 0:
                 return pa.chunked_array([], type=pa.large_string())  # type: ignore[return-value]
             return pa.NullArray.from_buffers(

@@ -197,7 +197,7 @@ def _convert_str_col(
     -------
     Converted numeric column
     """
-    if not isinstance(col.dtype, pd.StringDtype):
+    if not is_dtype_obj_string(col.dtype):
         raise TypeError("col must be string dtype.")
 
     if col.is_integer().all():
