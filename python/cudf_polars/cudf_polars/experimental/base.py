@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition base classes."""
 
@@ -404,6 +404,44 @@ class StatsCollector:
         self.row_count: dict[IR, ColumnStat[int]] = {}
         self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
         self.join_info = JoinInfo()
+
+    def copy_row_count(self, old_ir: IR, new_ir: IR) -> None:
+        """
+        Copy row count estimate from old IR node to new IR node.
+
+        This is used during IR lowering to propagate row count estimates
+        from the original IR nodes to the lowered/reconstructed nodes.
+
+        Parameters
+        ----------
+        old_ir
+            The original IR node (before lowering).
+        new_ir
+            The new IR node (after lowering/reconstruction).
+        """
+        if old_ir in self.row_count and new_ir not in self.row_count:
+            self.row_count[new_ir] = self.row_count[old_ir]
+
+
+class Profiler:
+    """
+    Profiler for collecting runtime statistics during execution.
+
+    Attributes
+    ----------
+    row_count
+        Mapping from IR node to actual row count produced during execution.
+    """
+
+    row_count: defaultdict[IR, int]
+
+    def __init__(self) -> None:
+        self.row_count = defaultdict(int)
+
+    def merge(self, other: Profiler) -> None:
+        """Merge another profiler's statistics into this one."""
+        for ir, n_rows in other.row_count.items():
+            self.row_count[ir] += n_rows
 
 
 class IOPartitionFlavor(IntEnum):

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for tracking column statistics."""
@@ -71,40 +71,35 @@ def collect_statistics(
     )
     stats_planning = config_options.executor.stats_planning
     need_local_statistics = using_local_statistics(stats_planning)
-    if need_local_statistics or stats_planning.use_io_partitioning:
-        # Start with base statistics.
-        # Here we build an outline of the statistics that will be
-        # collected before any real data is sampled. We will not
-        # read any Parquet metadata or sample any unique-value
-        # statistics during this step.
-        # (That said, Polars does it's own metadata sampling
-        # before we ever get the logical plan in cudf-polars)
-        stats = collect_base_stats(root, config_options)
 
-        # Avoid collecting local statistics unless we are using them.
-        if need_local_statistics:
-            # Apply PK-FK heuristics.
-            # Here we use PK-FK heuristics to estimate the unique count
-            # for each join key. We will not do any unique-value sampling
-            # during this step. However, we will use Parquet metadata to
-            # estimate the row-count for each table source. This metadata
-            # is cached in the DataSourceInfo object for each table.
-            if stats_planning.use_join_heuristics:
-                apply_pkfk_heuristics(stats.join_info)
+    # Start with base statistics.
+    # Here we build an outline of the statistics that will be
+    # collected before any real data is sampled. We will not
+    # read any Parquet metadata or sample any unique-value
+    # statistics during this step.
+    # (That said, Polars does it's own metadata sampling
+    # before we ever get the logical plan in cudf-polars)
+    stats = collect_base_stats(root, config_options)
 
-            # Update statistics for each node.
-            # Here we set local row-count and unique-value statistics
-            # on each node in the IR graph. We DO perform unique-value
-            # sampling during this step. However, we only sample columns
-            # that have been marked as needing unique-value statistics
-            # during the `collect_base_stats` step. We always sample ALL
-            # "marked" columns within the same table source at once.
-            for node in post_traversal([root]):
-                update_column_stats(node, stats, config_options)
+    # Apply PK-FK heuristics if needed.
+    # Here we use PK-FK heuristics to estimate the unique count
+    # for each join key. We will not do any unique-value sampling
+    # during this step. However, we will use Parquet metadata to
+    # estimate the row-count for each table source. This metadata
+    # is cached in the DataSourceInfo object for each table.
+    if need_local_statistics and stats_planning.use_join_heuristics:
+        apply_pkfk_heuristics(stats.join_info)
 
-        return stats
+    # Update statistics for each node.
+    # Here we set local row-count and unique-value statistics
+    # on each node in the IR graph. Unique-value sampling only
+    # happens for columns that have been marked as needing it
+    # during the `collect_base_stats` step (when use_reduction_planning
+    # is enabled). Row-count propagation always happens.
+    for node in post_traversal([root]):
+        update_column_stats(node, stats, config_options)
 
-    return StatsCollector()
+    return stats
 
 
 def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollector:
@@ -138,14 +133,10 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
 
     stats: StatsCollector = StatsCollector()
     for node in post_traversal([root]):
-        # Initialize column statistics from datasource information
-        if need_local_statistics or (
-            stats_planning.use_io_partitioning
-            and isinstance(node, (Scan, DataFrameScan))
-        ):
-            stats.column_stats[node] = initialize_column_stats(
-                node, stats, config_options
-            )
+        # Initialize column statistics from datasource information.
+        # We always initialize column_stats for all nodes so that
+        # update_column_stats can propagate row-count estimates.
+        stats.column_stats[node] = initialize_column_stats(node, stats, config_options)
         # Initialize join information
         if need_join_info and isinstance(node, Join):
             initialize_join_info(node, stats)
@@ -626,16 +617,22 @@ def _(
         stats.row_count[ir] = ColumnStat[int](None)
 
     # Update unique-count estimates with sampled statistics
-    for column_stats in stats.column_stats[ir].values():
-        if column_stats.source_info.implied_unique_count.value is None:
-            # We don't have a unique-count estimate, so we need to sample the data.
-            source_unique_stats = column_stats.source_info.unique_stats(
-                force=False,
-            )
-            if source_unique_stats.count.value is not None:
-                column_stats.unique_count = source_unique_stats.count
-        else:
-            column_stats.unique_count = column_stats.source_info.implied_unique_count
+    # (only when use_reduction_planning is enabled)
+    if using_local_statistics(
+        config_options.executor.stats_planning  # type: ignore[union-attr]
+    ):
+        for column_stats in stats.column_stats[ir].values():
+            if column_stats.source_info.implied_unique_count.value is None:
+                # We don't have a unique-count estimate, so we need to sample the data.
+                source_unique_stats = column_stats.source_info.unique_stats(
+                    force=False,
+                )
+                if source_unique_stats.count.value is not None:
+                    column_stats.unique_count = source_unique_stats.count
+            else:
+                column_stats.unique_count = (
+                    column_stats.source_info.implied_unique_count
+                )
 
     stream.synchronize()
 
@@ -663,22 +660,28 @@ def _(
             stats.row_count[ir] = ColumnStat[int](ir.n_rows)
 
     # Update unique-count estimates with estimated and/or sampled statistics
-    for column_stats in stats.column_stats[ir].values():
-        if column_stats.source_info.implied_unique_count.value is None:
-            # We don't have a unique-count estimate, so we need to sample the data.
-            source_unique_stats = column_stats.source_info.unique_stats(
-                force=False,
-            )
-            if source_unique_stats.count.value is not None:
-                column_stats.unique_count = source_unique_stats.count
-            elif (
-                unique_fraction := source_unique_stats.fraction.value
-            ) is not None and (row_count := stats.row_count[ir].value) is not None:
-                column_stats.unique_count = ColumnStat[int](
-                    max(1, int(unique_fraction * row_count))
+    # (only when use_reduction_planning is enabled)
+    if using_local_statistics(
+        config_options.executor.stats_planning  # type: ignore[union-attr]
+    ):
+        for column_stats in stats.column_stats[ir].values():
+            if column_stats.source_info.implied_unique_count.value is None:
+                # We don't have a unique-count estimate, so we need to sample the data.
+                source_unique_stats = column_stats.source_info.unique_stats(
+                    force=False,
                 )
-        else:
-            column_stats.unique_count = column_stats.source_info.implied_unique_count
+                if source_unique_stats.count.value is not None:
+                    column_stats.unique_count = source_unique_stats.count
+                elif (
+                    unique_fraction := source_unique_stats.fraction.value
+                ) is not None and (row_count := stats.row_count[ir].value) is not None:
+                    column_stats.unique_count = ColumnStat[int](
+                        max(1, int(unique_fraction * row_count))
+                    )
+            else:
+                column_stats.unique_count = (
+                    column_stats.source_info.implied_unique_count
+                )
 
     if ir.predicate is not None and ir.n_rows == -1:
         apply_predicate_selectivity(ir, stats, ir.predicate.value, config_options)

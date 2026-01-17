@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -649,6 +649,11 @@ class StreamingExecutor:
     max_io_threads
         Maximum number of IO threads for the rapidsmpf runtime. Default is 2.
         This controls the parallelism of IO operations when reading data.
+    profile_output
+        Path to write the post-execution profile (showing estimated vs actual
+        row counts per IR node). If None (default), no profile is written.
+        This is useful for diagnosing query performance and validating
+        row-count estimates.
 
     Notes
     -----
@@ -749,6 +754,11 @@ class StreamingExecutor:
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=2
+        )
+    )
+    profile_output: str | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PROFILE_OUTPUT", str, default=None
         )
     )
 

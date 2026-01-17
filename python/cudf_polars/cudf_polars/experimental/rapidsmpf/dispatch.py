@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Dispatching for the RapidsMPF streaming runtime."""
 
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import (
         PartitionInfo,
+        Profiler,
         StatsCollector,
     )
     from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
@@ -77,6 +78,8 @@ class GenState(TypedDict):
         Statistics collector.
     collective_id_map
         The mapping of IR nodes to collective IDs.
+    profiler
+        The profiler for collecting runtime statistics.
     """
 
     context: Context
@@ -87,6 +90,7 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     collective_id_map: dict[IR, int]
+    profiler: Profiler | None
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[
