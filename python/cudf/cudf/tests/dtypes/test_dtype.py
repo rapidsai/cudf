@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -66,7 +66,6 @@ def test_dtype(in_dtype, expect):
         np.float16,
         "timedelta64",
         "timedelta64[D]",
-        "datetime64[D]",
         "datetime64",
     ],
 )

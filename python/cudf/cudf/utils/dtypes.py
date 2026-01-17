@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -796,6 +796,7 @@ SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES: dict[np.dtype[Any], plc.types.TypeId] = {
     np.dtype("uint64"): plc.types.TypeId.UINT64,
     np.dtype("float32"): plc.types.TypeId.FLOAT32,
     np.dtype("float64"): plc.types.TypeId.FLOAT64,
+    np.dtype("datetime64[D]"): plc.types.TypeId.TIMESTAMP_DAYS,
     np.dtype("datetime64[s]"): plc.types.TypeId.TIMESTAMP_SECONDS,
     np.dtype("datetime64[ms]"): plc.types.TypeId.TIMESTAMP_MILLISECONDS,
     np.dtype("datetime64[us]"): plc.types.TypeId.TIMESTAMP_MICROSECONDS,

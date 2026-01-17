@@ -116,7 +116,9 @@ class IntervalColumn(StructColumn):
 
     @property
     def left(self) -> ColumnBase:
-        return ColumnBase.from_pylibcudf(self.plc_column.children()[0])
+        return ColumnBase.from_pylibcudf(
+            self.plc_column.children()[0]
+        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
 
     @functools.cached_property
     def mid(self) -> ColumnBase:
@@ -128,7 +130,9 @@ class IntervalColumn(StructColumn):
 
     @property
     def right(self) -> ColumnBase:
-        return ColumnBase.from_pylibcudf(self.plc_column.children()[1])
+        return ColumnBase.from_pylibcudf(
+            self.plc_column.children()[1]
+        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
 
     def overlaps(other) -> ColumnBase:
         raise NotImplementedError("overlaps is not currently implemented.")

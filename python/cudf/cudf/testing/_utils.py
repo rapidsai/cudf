@@ -12,13 +12,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import pylibcudf as plc  # noqa: TC002
-
 import cudf
 from cudf.utils import dtypes as dtypeutils
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
+    import pylibcudf as plc
+
     from cudf.core.column.column import ColumnBase
 
 supported_numpy_dtypes = [
