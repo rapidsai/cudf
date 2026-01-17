@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -62,17 +62,16 @@ static std::unique_ptr<column> empty_output_for_rolling_aggregation(column_view 
 }
 
 /**
- * @brief Rolling window specific implementation of simple_aggregations_collector.
+ * @brief Rolling window specific functor for preprocessing aggregations.
  *
- * The purpose of this class is to preprocess incoming aggregation/type pairs and
+ * The purpose of this functor is to preprocess incoming aggregation/type pairs and
  * potentially transform them into other aggregation/type pairs. Typically when this
- * happens, the equivalent aggregation/type implementation of finalize() will perform
- * some postprocessing step.
+ * happens, the rolling_aggregation_postprocessor will perform some postprocessing step.
  *
  * An example of this would be applying a MIN aggregation to strings. This cannot be done
  * directly in the rolling operation, so instead the following happens:
  *
- * - the rolling_aggregation_preprocessor transforms the incoming MIN/string pair to
+ * - The rolling_preprocessor_fn transforms the incoming MIN/string pair to
  *   an ARGMIN/int pair.
  * - The ARGMIN/int has the rolling operation applied to it, generating a list of indices
  *   that can then be used as a gather map.
@@ -83,106 +82,325 @@ static std::unique_ptr<column> empty_output_for_rolling_aggregation(column_view 
  * normal gpu rolling kernel at all. It has a completely custom implementation. So the
  * following happens:
  *
- * - the rolling_aggregation_preprocessor transforms the COLLECT_LIST aggregation into nothing,
+ * - The rolling_preprocessor_fn transforms the COLLECT_LIST aggregation into nothing,
  *   since no actual rolling window operation will be performed.
- * - the rolling_aggregation_postprocessor calls the specialized rolling_collect_list()
+ * - The rolling_aggregation_postprocessor calls the specialized rolling_collect_list()
  *   function to generate the final output.
  *
+ * This functor has a templated operator() that is specialized for aggregation types
+ * that require special preprocessing for rolling window operations.
  */
-class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggregations_collector {
- public:
-  using cudf::detail::simple_aggregations_collector::visit;
-
-  // NOTE : all other aggregations are passed through unchanged via the default
-  // visit() function in the simple_aggregations_collector.
-
-  // MIN aggregations with strings are processed in 2 passes. The first pass performs
-  // the rolling operation on a ARGMIN aggregation to generate indices instead of values.
-  // Then a second pass uses those indices to gather the final strings.  This step
-  // translates the MIN -> ARGMIN aggregation
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::min_aggregation const&) override
+struct rolling_preprocessor_fn {
+  // Default case: return clone of the aggregation
+  template <aggregation::Kind k>
+  std::vector<std::unique_ptr<aggregation>> operator()(data_type col_type,
+                                                       aggregation const& agg) const
   {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING || col_type.id() == type_id::STRUCT
-                     ? make_argmin_aggregation()
-                     : make_min_aggregation());
-    return aggs;
-  }
-
-  // MAX aggregations with strings are processed in 2 passes. The first pass performs
-  // the rolling operation on a ARGMAX aggregation to generate indices instead of values.
-  // Then a second pass uses those indices to gather the final strings.  This step
-  // translates the MAX -> ARGMAX aggregation
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::max_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING || col_type.id() == type_id::STRUCT
-                     ? make_argmax_aggregation()
-                     : make_max_aggregation());
-    return aggs;
-  }
-
-  // COLLECT_LIST aggregations do not perform a rolling operation at all. They get processed
-  // entirely in the finalize() step.
-  std::vector<std::unique_ptr<aggregation>> visit(
-    data_type, cudf::detail::collect_list_aggregation const&) override
-  {
-    return {};
-  }
-
-  // COLLECT_SET aggregations do not perform a rolling operation at all. They get processed
-  // entirely in the finalize() step.
-  std::vector<std::unique_ptr<aggregation>> visit(
-    data_type, cudf::detail::collect_set_aggregation const&) override
-  {
-    return {};
-  }
-
-  // STD aggregations depends on VARIANCE aggregation. Each element is applied
-  // with square-root in the finalize() step.
-  std::vector<std::unique_ptr<aggregation>> visit(data_type,
-                                                  cudf::detail::std_aggregation const& agg) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_variance_aggregation(agg._ddof));
-    return aggs;
-  }
-
-  // LEAD and LAG have custom behaviors for non fixed-width types.
-  std::vector<std::unique_ptr<aggregation>> visit(
-    data_type col_type, cudf::detail::lead_lag_aggregation const& agg) override
-  {
-    // no rolling operation for non-fixed width.  just a postprocess step at the end
-    if (!cudf::is_fixed_width(col_type)) { return {}; }
-    // otherwise, pass through
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(agg.clone());
     return aggs;
   }
+};
 
-  // NTH_ELEMENT aggregations are computed in finalize(). Skip preprocessing.
-  std::vector<std::unique_ptr<aggregation>> visit(
-    data_type, cudf::detail::nth_element_aggregation const&) override
+// Helper for MIN/MAX preprocessing - strings/structs use ARG variants
+template <typename MakeArgAggFn, typename MakeDirectAggFn>
+inline std::vector<std::unique_ptr<aggregation>> preprocess_minmax(data_type col_type,
+                                                                   MakeArgAggFn make_arg_agg,
+                                                                   MakeDirectAggFn make_direct_agg)
+{
+  std::vector<std::unique_ptr<aggregation>> aggs;
+  aggs.push_back(col_type.id() == type_id::STRING || col_type.id() == type_id::STRUCT
+                   ? make_arg_agg()
+                   : make_direct_agg());
+  return aggs;
+}
+
+// MIN/MAX aggregations with strings/structs are processed in 2 passes. The first pass performs
+// the rolling operation on a ARG(MIN/MAX) aggregation to generate indices instead of values.
+// Then a second pass uses those indices to gather the final strings/structs.
+template <>
+inline std::vector<std::unique_ptr<aggregation>>
+rolling_preprocessor_fn::operator()<aggregation::MIN>(data_type col_type, aggregation const&) const
+{
+  return preprocess_minmax(col_type, make_argmin_aggregation<>, make_min_aggregation<>);
+}
+
+template <>
+inline std::vector<std::unique_ptr<aggregation>>
+rolling_preprocessor_fn::operator()<aggregation::MAX>(data_type col_type, aggregation const&) const
+{
+  return preprocess_minmax(col_type, make_argmax_aggregation<>, make_max_aggregation<>);
+}
+
+// COLLECT_LIST, COLLECT_SET, and NTH_ELEMENT aggregations do not perform a rolling operation.
+// They get processed entirely in the postprocessing step.
+template <>
+inline std::vector<std::unique_ptr<aggregation>>
+rolling_preprocessor_fn::operator()<aggregation::COLLECT_LIST>(data_type, aggregation const&) const
+{
+  return {};
+}
+
+template <>
+inline std::vector<std::unique_ptr<aggregation>>
+rolling_preprocessor_fn::operator()<aggregation::COLLECT_SET>(data_type, aggregation const&) const
+{
+  return {};
+}
+
+// Specialization for STD aggregation
+// STD aggregations depend on VARIANCE aggregation. Each element is applied
+// with square-root in the postprocessing step.
+template <>
+inline std::vector<std::unique_ptr<aggregation>>
+rolling_preprocessor_fn::operator()<aggregation::STD>(data_type, aggregation const& agg) const
+{
+  // Dynamic cast needed due to virtual inheritance
+  auto const& std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
+  std::vector<std::unique_ptr<aggregation>> aggs;
+  aggs.push_back(make_variance_aggregation(std_agg._ddof));
+  return aggs;
+}
+
+// LEAD/LAG have custom behaviors for non fixed-width types - no rolling op, just postprocess.
+template <>
+inline std::vector<std::unique_ptr<aggregation>>
+rolling_preprocessor_fn::operator()<aggregation::LEAD>(data_type col_type,
+                                                       aggregation const& agg) const
+{
+  if (!cudf::is_fixed_width(col_type)) { return {}; }
+  std::vector<std::unique_ptr<aggregation>> aggs;
+  aggs.push_back(agg.clone());
+  return aggs;
+}
+
+template <>
+inline std::vector<std::unique_ptr<aggregation>>
+rolling_preprocessor_fn::operator()<aggregation::LAG>(data_type col_type,
+                                                      aggregation const& agg) const
+{
+  if (!cudf::is_fixed_width(col_type)) { return {}; }
+  std::vector<std::unique_ptr<aggregation>> aggs;
+  aggs.push_back(agg.clone());
+  return aggs;
+}
+
+template <>
+inline std::vector<std::unique_ptr<aggregation>>
+rolling_preprocessor_fn::operator()<aggregation::NTH_ELEMENT>(data_type, aggregation const&) const
+{
+  return {};
+}
+
+// Forward declaration of postprocessor context
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+struct rolling_aggregation_postprocessor;
+
+/**
+ * @brief Functor for rolling window postprocessing.
+ *
+ * Primary template: default case passes through intermediate result.
+ * Partial specializations handle specific aggregation kinds.
+ */
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator, aggregation::Kind k>
+struct rolling_postprocessor_fn {
+  static void call(
+    rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx,
+    aggregation const&)
   {
-    return {};
+    ctx.result = std::move(ctx.intermediate);
+  }
+};
+
+// Helper for MIN/MAX postprocessing - gather-based finalization for strings/structs
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+inline void postprocess_minmax(
+  rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx)
+{
+  if (ctx.result_type.id() == type_id::STRING || ctx.result_type.id() == type_id::STRUCT) {
+    auto output_table = detail::gather(table_view{{ctx.input}},
+                                       ctx.intermediate->view(),
+                                       cudf::out_of_bounds_policy::NULLIFY,
+                                       detail::negative_index_policy::NOT_ALLOWED,
+                                       ctx.stream,
+                                       ctx.mr);
+    ctx.result        = std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
+  } else {
+    ctx.result = std::move(ctx.intermediate);
+  }
+}
+
+// MIN/MAX partial specializations - perform final gather on ARG(MIN/MAX) data for strings/structs
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+struct rolling_postprocessor_fn<PrecedingWindowIterator,
+                                FollowingWindowIterator,
+                                aggregation::MIN> {
+  static void call(
+    rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx,
+    aggregation const&)
+  {
+    postprocess_minmax(ctx);
+  }
+};
+
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+struct rolling_postprocessor_fn<PrecedingWindowIterator,
+                                FollowingWindowIterator,
+                                aggregation::MAX> {
+  static void call(
+    rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx,
+    aggregation const&)
+  {
+    postprocess_minmax(ctx);
+  }
+};
+
+// Partial specialization for COLLECT_LIST aggregation
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+struct rolling_postprocessor_fn<PrecedingWindowIterator,
+                                FollowingWindowIterator,
+                                aggregation::COLLECT_LIST> {
+  static void call(
+    rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx,
+    aggregation const& agg)
+  {
+    auto const& collect_agg = dynamic_cast<cudf::detail::collect_list_aggregation const&>(agg);
+    ctx.result              = rolling_collect_list(ctx.input,
+                                      ctx.default_outputs,
+                                      ctx.preceding_window_begin,
+                                      ctx.following_window_begin,
+                                      ctx.min_periods,
+                                      collect_agg._null_handling,
+                                      ctx.stream,
+                                      ctx.mr);
+  }
+};
+
+// Partial specialization for COLLECT_SET aggregation
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+struct rolling_postprocessor_fn<PrecedingWindowIterator,
+                                FollowingWindowIterator,
+                                aggregation::COLLECT_SET> {
+  static void call(
+    rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx,
+    aggregation const& agg)
+  {
+    auto const& collect_agg   = dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg);
+    auto const collected_list = rolling_collect_list(ctx.input,
+                                                     ctx.default_outputs,
+                                                     ctx.preceding_window_begin,
+                                                     ctx.following_window_begin,
+                                                     ctx.min_periods,
+                                                     collect_agg._null_handling,
+                                                     ctx.stream,
+                                                     cudf::get_current_device_resource_ref());
+
+    ctx.result = lists::detail::distinct(lists_column_view{collected_list->view()},
+                                         collect_agg._nulls_equal,
+                                         collect_agg._nans_equal,
+                                         duplicate_keep_option::KEEP_ANY,
+                                         ctx.stream,
+                                         ctx.mr);
+  }
+};
+
+// Partial specialization for STD aggregation
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+struct rolling_postprocessor_fn<PrecedingWindowIterator,
+                                FollowingWindowIterator,
+                                aggregation::STD> {
+  static void call(
+    rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx,
+    aggregation const&)
+  {
+    ctx.result =
+      detail::unary_operation(ctx.intermediate->view(), unary_operator::SQRT, ctx.stream, ctx.mr);
+  }
+};
+
+// Helper for LEAD/LAG postprocessing - custom handling for non-fixed-width types
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+inline void postprocess_lead_lag(
+  rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx,
+  cudf::detail::lead_lag_aggregation const& agg)
+{
+  if (!cudf::is_fixed_width(ctx.result_type)) {
+    ctx.result =
+      cudf::detail::compute_lead_lag_for_nested<PrecedingWindowIterator, FollowingWindowIterator>(
+        agg.kind,
+        ctx.input,
+        ctx.default_outputs,
+        ctx.preceding_window_begin,
+        ctx.following_window_begin,
+        agg.row_offset,
+        ctx.stream,
+        ctx.mr);
+  } else {
+    ctx.result = std::move(ctx.intermediate);
+  }
+}
+
+// LEAD/LAG partial specializations
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+struct rolling_postprocessor_fn<PrecedingWindowIterator,
+                                FollowingWindowIterator,
+                                aggregation::LEAD> {
+  static void call(
+    rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx,
+    aggregation const& agg)
+  {
+    postprocess_lead_lag(ctx, dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg));
+  }
+};
+
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+struct rolling_postprocessor_fn<PrecedingWindowIterator,
+                                FollowingWindowIterator,
+                                aggregation::LAG> {
+  static void call(
+    rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx,
+    aggregation const& agg)
+  {
+    postprocess_lead_lag(ctx, dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg));
+  }
+};
+
+// Partial specialization for NTH_ELEMENT aggregation
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+struct rolling_postprocessor_fn<PrecedingWindowIterator,
+                                FollowingWindowIterator,
+                                aggregation::NTH_ELEMENT> {
+  static void call(
+    rolling_aggregation_postprocessor<PrecedingWindowIterator, FollowingWindowIterator>& ctx,
+    aggregation const& agg)
+  {
+    auto const& nth_agg = dynamic_cast<cudf::detail::nth_element_aggregation const&>(agg);
+    ctx.result          = nth_agg._null_handling == null_policy::EXCLUDE
+                            ? rolling::nth_element<null_policy::EXCLUDE>(nth_agg._n,
+                                                                ctx.input,
+                                                                ctx.preceding_window_begin,
+                                                                ctx.following_window_begin,
+                                                                ctx.min_periods,
+                                                                ctx.stream,
+                                                                ctx.mr)
+                            : rolling::nth_element<null_policy::INCLUDE>(nth_agg._n,
+                                                                ctx.input,
+                                                                ctx.preceding_window_begin,
+                                                                ctx.following_window_begin,
+                                                                ctx.min_periods,
+                                                                ctx.stream,
+                                                                ctx.mr);
   }
 };
 
 /**
- * @brief Rolling window specific implementation of aggregation_finalizer.
+ * @brief Context for rolling window postprocessing.
  *
- * The purpose of this class is to postprocess rolling window data depending on the
- * aggregation/type pair. See the description of rolling_aggregation_preprocessor for
- * a detailed description.
+ * The purpose of this struct is to hold state needed for postprocessing rolling window data.
  *
  */
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
-class rolling_aggregation_postprocessor final : public cudf::detail::aggregation_finalizer {
- public:
-  using cudf::detail::aggregation_finalizer::visit;
-
+struct rolling_aggregation_postprocessor {
   rolling_aggregation_postprocessor(column_view const& _input,
                                     column_view const& _default_outputs,
                                     data_type _result_type,
@@ -207,126 +425,39 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
   {
   }
 
-  // all non-specialized aggregation types simply pass the intermediate result through.
-  void visit(aggregation const&) override { result = std::move(intermediate); }
-
-  // perform a final gather on the generated ARGMIN data
-  void visit(cudf::detail::min_aggregation const&) override
+  /**
+   * @brief Finalize the aggregation by dispatching to the appropriate handler.
+   *
+   * @param agg The aggregation to finalize
+   */
+  void finalize(aggregation const& agg)
   {
-    if (result_type.id() == type_id::STRING || result_type.id() == type_id::STRUCT) {
-      // The rows that represent null elements will have negative values in gather map,
-      // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
-      auto output_table = detail::gather(table_view{{input}},
-                                         intermediate->view(),
-                                         cudf::out_of_bounds_policy::NULLIFY,
-                                         detail::negative_index_policy::NOT_ALLOWED,
-                                         stream,
-                                         mr);
-      result            = std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
-    } else {
-      result = std::move(intermediate);
-    }
-  }
-
-  // perform a final gather on the generated ARGMAX data
-  void visit(cudf::detail::max_aggregation const&) override
-  {
-    if (result_type.id() == type_id::STRING || result_type.id() == type_id::STRUCT) {
-      // The rows that represent null elements will have negative values in gather map,
-      // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
-      auto output_table = detail::gather(table_view{{input}},
-                                         intermediate->view(),
-                                         cudf::out_of_bounds_policy::NULLIFY,
-                                         detail::negative_index_policy::NOT_ALLOWED,
-                                         stream,
-                                         mr);
-      result            = std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
-    } else {
-      result = std::move(intermediate);
-    }
-  }
-
-  // perform the actual COLLECT_LIST operation entirely.
-  void visit(cudf::detail::collect_list_aggregation const& agg) override
-  {
-    result = rolling_collect_list(input,
-                                  default_outputs,
-                                  preceding_window_begin,
-                                  following_window_begin,
-                                  min_periods,
-                                  agg._null_handling,
-                                  stream,
-                                  mr);
-  }
-
-  // perform the actual COLLECT_SET operation entirely.
-  void visit(cudf::detail::collect_set_aggregation const& agg) override
-  {
-    auto const collected_list = rolling_collect_list(input,
-                                                     default_outputs,
-                                                     preceding_window_begin,
-                                                     following_window_begin,
-                                                     min_periods,
-                                                     agg._null_handling,
-                                                     stream,
-                                                     cudf::get_current_device_resource_ref());
-
-    result = lists::detail::distinct(lists_column_view{collected_list->view()},
-                                     agg._nulls_equal,
-                                     agg._nans_equal,
-                                     duplicate_keep_option::KEEP_ANY,
-                                     stream,
-                                     mr);
-  }
-
-  // perform the element-wise square root operation on result of VARIANCE
-  void visit(cudf::detail::std_aggregation const&) override
-  {
-    result = detail::unary_operation(intermediate->view(), unary_operator::SQRT, stream, mr);
+    cudf::detail::aggregation_dispatcher(agg.kind, dispatcher_fn{*this}, agg);
   }
 
   std::unique_ptr<column> get_result()
   {
     CUDF_EXPECTS(result != nullptr,
-                 "Calling result on rolling aggregation postprocessor that has not been visited in "
-                 "rolling_window");
+                 "Calling result on rolling aggregation postprocessor that has not been finalized "
+                 "in rolling_window");
     return std::move(result);
   }
 
-  // LEAD and LAG have custom behaviors for non fixed-width types.
-  void visit(cudf::detail::lead_lag_aggregation const& agg) override
-  {
-    // if this is non-fixed width, run the custom lead-lag code
-    if (!cudf::is_fixed_width(result_type)) {
-      result =
-        cudf::detail::compute_lead_lag_for_nested<PrecedingWindowIterator, FollowingWindowIterator>(
-          agg.kind,
-          input,
-          default_outputs,
-          preceding_window_begin,
-          following_window_begin,
-          agg.row_offset,
-          stream,
-          mr);
-    }
-    // otherwise just pass through the intermediate
-    else {
-      result = std::move(intermediate);
-    }
-  }
+  /**
+   * @brief Dispatcher functor that forwards to the appropriate partial specialization.
+   */
+  struct dispatcher_fn {
+    rolling_aggregation_postprocessor& ctx;
 
-  // Nth_ELEMENT aggregation.
-  void visit(cudf::detail::nth_element_aggregation const& agg) override
-  {
-    result =
-      agg._null_handling == null_policy::EXCLUDE
-        ? rolling::nth_element<null_policy::EXCLUDE>(
-            agg._n, input, preceding_window_begin, following_window_begin, min_periods, stream, mr)
-        : rolling::nth_element<null_policy::INCLUDE>(
-            agg._n, input, preceding_window_begin, following_window_begin, min_periods, stream, mr);
-  }
+    explicit dispatcher_fn(rolling_aggregation_postprocessor& ctx) : ctx(ctx) {}
 
- private:
+    template <aggregation::Kind k>
+    void operator()(aggregation const& agg) const
+    {
+      rolling_postprocessor_fn<PrecedingWindowIterator, FollowingWindowIterator, k>::call(ctx, agg);
+    }
+  };
+
   column_view input;
   column_view default_outputs;
   data_type result_type;
@@ -534,8 +665,8 @@ struct dispatch_rolling {
                                      rmm::device_async_resource_ref mr)
   {
     // do any preprocessing of aggregations (eg, MIN -> ARGMIN, COLLECT_LIST -> nothing)
-    rolling_aggregation_preprocessor preprocessor;
-    auto preprocessed_aggs = agg.get_simple_aggregations(input.type(), preprocessor);
+    auto preprocessed_aggs =
+      cudf::detail::aggregation_dispatcher(agg.kind, rolling_preprocessor_fn{}, input.type(), agg);
     CUDF_EXPECTS(preprocessed_aggs.size() <= 1,
                  "Encountered a non-trivial rolling aggregation result");
 
@@ -565,7 +696,7 @@ struct dispatch_rolling {
                                                     std::move(intermediate),
                                                     stream,
                                                     mr);
-    agg.finalize(postprocessor);
+    postprocessor.finalize(agg);
     return postprocessor.get_result();
   }
 };
