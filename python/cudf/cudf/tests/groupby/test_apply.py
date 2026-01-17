@@ -887,6 +887,11 @@ def test_groupby_first(data, agg):
     gdf = cudf.from_pandas(pdf)
     expect = pdf.groupby("a").agg(agg)
     got = gdf.groupby("a").agg(agg)
+    if data["a"] == [None]:
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        expect.index = expect.index.astype(got.index.dtype)
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
