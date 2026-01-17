@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import pandas as pd
 import pytest
@@ -55,6 +55,14 @@ def test_index_difference(data, other, sort, name_data, name_other):
 
     gd_data = cudf.from_pandas(pd_data)
     gd_other = cudf.from_pandas(pd_other)
+
+    # As of pandas 3.0, empty default type of object isn't
+    # necessarily equivalent to cuDF's empty default type of
+    # pandas.StringDtype
+    if pd_data.dtype == "object":
+        pd_data = pd_data.astype(gd_data.dtype)
+    if pd_other.dtype == "object":
+        pd_other = pd_other.astype(gd_other.dtype)
 
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)

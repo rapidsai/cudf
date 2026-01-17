@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import re
@@ -226,15 +226,21 @@ def test_index_date_duration_freq_error(cls):
 def test_index_empty_from_pandas(all_supported_types_as_str):
     pidx = pd.Index([], dtype=all_supported_types_as_str)
     gidx = cudf.from_pandas(pidx)
-
+    if all_supported_types_as_str == "category":
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        pidx = pidx.set_categories(pd.Index([], dtype=gidx.categories.dtype))
     assert_eq(pidx, gidx)
 
 
 def test_empty_index_init():
     pidx = pd.Index([])
     gidx = cudf.Index([])
+    assert pidx.dtype != gidx.dtype
+    assert gidx.dtype == pd.StringDtype(na_value=np.nan)
 
-    assert_eq(pidx, gidx)
+    assert_eq(pidx.astype(gidx.dtype), gidx)
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], range(0, 10)])
