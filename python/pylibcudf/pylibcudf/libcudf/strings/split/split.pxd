@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -75,3 +75,11 @@ cdef extern from "cudf/strings/split/split_re.hpp" namespace \
         size_type maxsplit,
         cuda_stream_view stream,
         device_memory_resource* mr) except +libcudf_exception_handler
+
+cdef extern from "<cudf/strings/split/split_part.hpp>" namespace "cudf::strings" nogil:
+
+    cdef unique_ptr[column] split_part(
+        const strings_column_view& strings,
+        const string_scalar& delimiter,
+        size_type index,
+        rmm.mr.device_memory_resource* mr) except +libcudf_exception_handler
