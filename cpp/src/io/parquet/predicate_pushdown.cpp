@@ -429,10 +429,10 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   auto host_bitmask = [&] {
     std::size_t const num_bitmasks = num_bitmask_words(predicate.size());
     if (predicate.nullable()) {
-      return cudf::detail::make_pinned_vector_async(
+      return cudf::detail::make_pinned_vector(
         cudf::device_span<bitmask_type const>{predicate.null_mask(), num_bitmasks}, stream);
     } else {
-      auto bitmask = cudf::detail::make_pinned_vector_async<bitmask_type>(num_bitmasks, stream);
+      auto bitmask = cudf::detail::make_pinned_vector<bitmask_type>(num_bitmasks, stream);
       std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
       return bitmask;
     }

@@ -334,7 +334,7 @@ void host_compress(compression_type compression,
     auto const cur_stream = streams[i % streams.size()];
     if (h_results[i].status == codec_status::SKIPPED) { continue; }
     auto task = [d_in = h_inputs[i], d_out = h_outputs[i], cur_stream, compression, i]() {
-      auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in, cur_stream);
+      auto h_in = cudf::detail::make_pinned_vector<uint8_t>(d_in, cur_stream);
 
       auto const h_out = compress(compression, h_in);
       h_in.clear();  // Free pinned memory as soon as possible
