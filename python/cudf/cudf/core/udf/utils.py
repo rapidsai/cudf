@@ -83,7 +83,9 @@ DEPRECATED_SM_REGEX = "Architectures prior to '<compute/sm>_75' are deprecated"
 
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
-        colname: dtype if str(dtype) in supported_types else np.dtype("O")
+        colname: dtype
+        if str(dtype) in supported_types and not is_dtype_obj_string(dtype)
+        else np.dtype("O")
         for colname, dtype in frame._dtypes
     }
 
