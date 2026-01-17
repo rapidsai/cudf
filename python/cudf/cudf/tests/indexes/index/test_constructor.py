@@ -226,7 +226,11 @@ def test_index_date_duration_freq_error(cls):
 def test_index_empty_from_pandas(all_supported_types_as_str):
     pidx = pd.Index([], dtype=all_supported_types_as_str)
     gidx = cudf.from_pandas(pidx)
-
+    if all_supported_types_as_str == "category":
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        pidx = pidx.set_categories(pd.Index([], dtype=gidx.categories.dtype))
     assert_eq(pidx, gidx)
 
 
