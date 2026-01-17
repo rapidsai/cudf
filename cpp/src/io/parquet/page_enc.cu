@@ -670,7 +670,7 @@ CUDF_KERNEL void __launch_bounds__(128)
         page_g.rep_lvl_bytes   = 0;
         page_g.max_lvl_size    = 0;
         page_g.comp_data_size  = 0;
-        page_g.is_compressed   = false;  // Will be set by gpuDecideCompression
+        page_g.is_compressed   = false;
         page_g.max_hdr_size    = MAX_V1_HDR_SIZE;
         page_g.max_data_size   = ck_g.uniq_data_size;
         page_g.data_size       = ck_g.uniq_data_size;
@@ -778,7 +778,7 @@ CUDF_KERNEL void __launch_bounds__(128)
           page_g.max_lvl_size   = 0;
           page_g.data_size      = 0;
           page_g.comp_data_size = 0;
-          page_g.is_compressed  = false;                   // Will be set by gpuDecideCompression
+          page_g.is_compressed  = false;
           page_g.max_hdr_size   = max_data_page_hdr_size;  // Max size excluding statistics
           if (ck_g.stats) {
             uint32_t stats_hdr_len = 16;
@@ -2515,15 +2515,15 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
   if (lane_id == 0) { ck_g[warp_id] = chunks[chunk_id]; }
   __syncwarp();
 
-  // First pass: decide per-page compression for pages with PLC, collect totals for chunk decision
+  // First pass: decide per-page compression for pages with PLC, collect totals for chunk decisions
   // Track PLC (page-level compression) and non-PLC contributions separately
   uint32_t uncompressed_data_size = 0;
-  uint32_t plc_actual_size        = 0;  // Size of pages using page-level compression decisions
-  uint32_t non_plc_uncomp_size    = 0;  // Uncompressed size of pages using chunk-level decision
-  uint32_t non_plc_comp_size      = 0;  // Compressed size of pages using chunk-level decision
+  uint32_t plc_actual_size        = 0;
+  uint32_t non_plc_uncomp_size    = 0;
+  uint32_t non_plc_comp_size      = 0;
   uint32_t encodings              = 0;
-  bool local_compression_error    = false;  // Track compression errors per-thread
-  bool local_any_plc_compressed   = false;  // Track if any PLC page is compressed per-thread
+  bool local_compression_error    = false;
+  bool local_any_plc_compressed   = false;
   auto const num_pages            = ck_g[warp_id].num_pages;
   for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
     auto& curr_page           = ck_g[warp_id].pages[page_id];
@@ -2576,17 +2576,16 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
   __syncwarp();
 
   // Decide whether non-PLC pages should be compressed (only lane 0 has correct reduced values)
-  auto non_plc_compress = !has_compression_error and non_plc_comp_size < non_plc_uncomp_size;
-  non_plc_compress      = __shfl_sync(0xffffffff, non_plc_compress, 0);
-
-  // Calculate actual sizes based on compression decisions (only lane 0 needs these)
-  auto const non_plc_actual_size  = non_plc_compress ? non_plc_comp_size : non_plc_uncomp_size;
-  auto const compressed_data_size = plc_actual_size + non_plc_actual_size;
+  auto non_plc_compressed = !has_compression_error and non_plc_comp_size < non_plc_uncomp_size;
+  non_plc_compressed      = __shfl_sync(0xffffffff, non_plc_compressed, 0);
 
   // Chunk uses compression if any page is compressed (for codec in metadata)
-  auto const write_compressed = any_plc_compressed or non_plc_compress;
+  auto const write_compressed = any_plc_compressed or non_plc_compressed;
 
   if (lane_id == 0) {
+    auto const non_plc_actual_size  = non_plc_compressed ? non_plc_comp_size : non_plc_uncomp_size;
+    auto const compressed_data_size = plc_actual_size + non_plc_actual_size;
+
     chunks[chunk_id].is_compressed = write_compressed;
     chunks[chunk_id].bfr_size      = uncompressed_data_size;
     chunks[chunk_id].compressed_size =
@@ -2602,8 +2601,7 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
   __syncwarp();
   // Second pass: set is_compressed for pages that didn't decide in first pass.
   // Dictionary pages MUST be compressed if the chunk is compressed, because
-  // dictionary page headers don't have an is_compressed field - readers assume
-  // they're compressed when chunk.codec != NONE.
+  // dictionary page headers don't have an is_compressed field.
   // Non-PLC pages (V1 data pages, V2 with PLC disabled) follow the chunk-level decision.
   for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
     auto& curr_page = ck_g[warp_id].pages[page_id];
@@ -2612,7 +2610,7 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
       continue;
     }
     bool const is_dict_page = curr_page.page_type == PageType::DICTIONARY_PAGE;
-    curr_page.is_compressed = is_dict_page ? write_compressed : non_plc_compress;
+    curr_page.is_compressed = is_dict_page ? write_compressed : non_plc_compressed;
   }
 }
 
@@ -3048,19 +3046,16 @@ CUDF_KERNEL void __launch_bounds__(encode_block_size)
     hdr_end   = EncodeStatistics(hdr_start, &chunk_stats[page.chunk_id], stats_type, scratch);
     page.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
   }
-  // For V2 pages, compressed_page_size and uncompressed_page_size include level bytes
-  // for compatibility with other readers (PyArrow, etc.) which expect this layout.
+  // For V2 pages, compressed_page_size and uncompressed_page_size include level bytes.
   // Level bytes are stored uncompressed before the (possibly compressed) value data.
   auto const lvl_bytes = page.is_v2() ? page.level_bytes() : 0;
   uint32_t compressed_page_size{};
   uint32_t uncompressed_page_size{};
   if (page.is_compressed) {
-    hdr_start = page.compressed_data;
-    // compressed_page_size = level_bytes + compressed_value_size
-    compressed_page_size = lvl_bytes + static_cast<uint32_t>(comp_results[page_idx].bytes_written);
-    // comp_data_size is total data size (including levels) for internal use
-    page.comp_data_size = compressed_page_size;
-    // uncompressed_page_size = level_bytes + uncompressed_value_size = data_size
+    hdr_start            = page.compressed_data;
+    compressed_page_size = lvl_bytes + comp_results[page_idx].bytes_written;
+    // comp_data_size is total data size (including levels)
+    page.comp_data_size    = compressed_page_size;
     uncompressed_page_size = page.data_size;
   } else {
     hdr_start = page.page_data;
