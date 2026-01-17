@@ -35,7 +35,7 @@ std::shared_mutex g_pools_mutex;
 [[nodiscard]] std::size_t pool_size()
 {
   static std::size_t const default_pool_size =
-    std::min(16u, std::thread::hardware_concurrency() / 4);
+    std::min<std::size_t>(16, std::thread::hardware_concurrency() / 4);
   return getenv_or("LIBCUDF_NUM_HOST_WORKERS", default_pool_size);
 }
 
