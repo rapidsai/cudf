@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 #include "io/utilities/hostdevice_span.hpp"
 
 #include <cudf/detail/timezone.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
@@ -519,8 +520,8 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     host_read_buffers.emplace_back(fut.get());
     auto* host_buffer = host_read_buffers.back().get();
     CUDF_EXPECTS(host_buffer->size() == expected_size, "Unexpected discrepancy in bytes read.");
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      dev_dst, host_buffer->data(), host_buffer->size(), cudaMemcpyDefault, _stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+      dev_dst, host_buffer->data(), host_buffer->size(), cudaMemcpyDefault, _stream));
   }
 
   for (auto& task : device_read_tasks) {  // if there were device reads
