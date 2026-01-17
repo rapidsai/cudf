@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import decimal
 import itertools
@@ -184,13 +184,15 @@ def test_groupby_as_index_multiindex(as_index):
     ],
 )
 def test_groupby_2keys_agg(func):
-    # gdf (Note: lack of multiIndex)
     nelem = 20
     pdf = pd.DataFrame(np.ones((nelem, 2)), columns=["x", "y"])
     gdf = cudf.DataFrame(pdf)
     expect_df = pdf.groupby(["x", "y"]).agg(func)
     got_df = gdf.groupby(["x", "y"]).agg(func)
-
+    # As of pandas 3.0, empty default type of object isn't
+    # necessarily equivalent to cuDF's empty default type of
+    # pandas.StringDtype
+    expect_df.columns = expect_df.columns.astype(got_df.columns.dtype)
     assert_groupby_results_equal(got_df, expect_df)
 
 

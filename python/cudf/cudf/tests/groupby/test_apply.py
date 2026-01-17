@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
@@ -26,18 +26,19 @@ def engine(request):
     return request.param
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Include groups missing on old versions of pandas",
-)
 def test_groupby_as_index_apply(as_index, engine):
     pdf = pd.DataFrame({"x": [1, 2, 3], "y": [0, 1, 1]})
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [0, 1, 1]})
     gdf = gdf.groupby("y", as_index=as_index).apply(
         lambda df: df["x"].mean(), engine=engine
     )
-    kwargs = {"func": lambda df: df["x"].mean(), "include_groups": False}
-    pdf = pdf.groupby("y", as_index=as_index).apply(**kwargs)
+    pdf = pdf.groupby("y", as_index=as_index).apply(
+        func=lambda df: df["x"].mean(), include_groups=False
+    )
+    if not as_index:
+        # pandas uses object type for the resulting ["y", None] column labels,
+        # cuDF uses StringDtype instead
+        pdf.columns = pdf.columns.astype(gdf.columns.dtype)
     assert_groupby_results_equal(pdf, gdf, as_index=as_index, by="y")
 
 
@@ -886,6 +887,11 @@ def test_groupby_first(data, agg):
     gdf = cudf.from_pandas(pdf)
     expect = pdf.groupby("a").agg(agg)
     got = gdf.groupby("a").agg(agg)
+    if data["a"] == [None]:
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        expect.index = expect.index.astype(got.index.dtype)
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
