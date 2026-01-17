@@ -3015,6 +3015,8 @@ class MapFunction(IR):
             )
         elif self.name == "row_index":
             col_name, offset = options
+            if col_name in df.schema:
+                raise NotImplementedError("Duplicate row index name")
             self.options = (col_name, offset)
         elif self.name == "fast_count":
             # TODO: Remove this once all scan types support projections
