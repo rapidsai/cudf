@@ -110,7 +110,7 @@ auto serialize_deletion_vector(roaring::api::roaring64_bitmap_t const* deletion_
 {
   auto const num_bytes = roaring::api::roaring64_bitmap_portable_size_in_bytes(deletion_vector);
   EXPECT_GT(num_bytes, 0);
-  auto serialized_bitmap   = thrust::host_vector<cuda::std::byte>(num_bytes);
+  auto serialized_bitmap   = std::vector<cuda::std::byte>(num_bytes);
   auto const bytes_written = roaring::api::roaring64_bitmap_portable_serialize(
     deletion_vector, reinterpret_cast<char*>(serialized_bitmap.data()));
   EXPECT_EQ(bytes_written, num_bytes);
@@ -213,7 +213,7 @@ std::unique_ptr<cudf::table> build_expected_table(
  * well as the `cudf::io::parquet::experimental::chunked_parquet_reader`
  *
  * @param parquet_buffer Span of host buffer containing Parquet data
- * @param serialized_roaring_bitmap Span of `portable` serialized 64-bit roaring bitmap
+ * @param serialized_roaring_bitmap Vector of `portable` serialized 64-bit roaring bitmap
  * @param row_group_offsets Host span of input row group offsets
  * @param row_group_num_rows Host span of input row group row counts
  * @param input_table_view Input table view
@@ -225,7 +225,7 @@ std::unique_ptr<cudf::table> build_expected_table(
 template <cudf::size_type num_concat = 1>
 void test_read_parquet_and_apply_deletion_vector(
   cudf::host_span<char const> parquet_buffer,
-  cudf::host_span<cuda::std::byte const> serialized_roaring_bitmap,
+  std::vector<cuda::std::byte>&& serialized_roaring_bitmap,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<cudf::size_type const> row_group_num_rows,
   cudf::table_view const& input_table_view,
@@ -258,12 +258,15 @@ void test_read_parquet_and_apply_deletion_vector(
   }
 
   // Vector to store serialized roaring bitmap data and spans
-  auto serialized_roaring_bitmaps_data = std::vector<thrust::host_vector<cuda::std::byte>>{};
-  auto serialized_roaring_bitmaps      = std::vector<cudf::host_span<cuda::std::byte const>>{};
-  serialized_roaring_bitmaps_data.reserve(num_concat - 1);
+  auto serialized_roaring_bitmaps = std::vector<std::vector<cuda::std::byte>>{};
   serialized_roaring_bitmaps.reserve(num_concat);
-  // Insert the first serialized roaring bitmap span
-  serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmap);
+
+  // Insert the first serialized roaring bitmap span if non-empty
+  if (not serialized_roaring_bitmap.empty()) {
+    serialized_roaring_bitmaps.emplace_back(std::move(serialized_roaring_bitmap));
+  } else {
+    CUDF_EXPECTS(num_concat == 1, "num_concat must be 1 if serialized_roaring_bitmap is empty");
+  }
 
   // Build the expected table
   auto expected_table = [&]() {
@@ -298,8 +301,7 @@ void test_read_parquet_and_apply_deletion_vector(
                                                  stream,
                                                  mr));
         table_views.emplace_back(tables.back()->view());
-        serialized_roaring_bitmaps_data.emplace_back(std::move(local_deletion_vector));
-        serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmaps_data.back());
+        serialized_roaring_bitmaps.emplace_back(std::move(local_deletion_vector));
       }
 
       return cudf::concatenate(table_views, stream, mr);
@@ -312,9 +314,10 @@ void test_read_parquet_and_apply_deletion_vector(
       cudf::io::source_info{cudf::host_span<cudf::host_span<char const>>{input_buffers}})
       .build();
 
+  auto serialized_roaring_bitmaps_copy = serialized_roaring_bitmaps;
   auto const table_with_deletion_vector =
     cudf::io::parquet::experimental::read_parquet(in_opts,
-                                                  serialized_roaring_bitmaps,
+                                                  serialized_roaring_bitmaps_copy,
                                                   deletion_vector_row_counts,
                                                   row_group_row_offsets,
                                                   row_group_num_counts,
@@ -328,11 +331,12 @@ void test_read_parquet_and_apply_deletion_vector(
   // Read using the chunked reader
   auto const test_chunked_table_with_deletion_vector = [&](size_t chunk_read_limit,
                                                            size_t pass_read_limit) {
+    auto serialized_roaring_bitmaps_copy = serialized_roaring_bitmaps;
     auto const reader = std::make_unique<cudf::io::parquet::experimental::chunked_parquet_reader>(
       chunk_read_limit,
       pass_read_limit,
       in_opts,
-      serialized_roaring_bitmaps,
+      serialized_roaring_bitmaps_copy,
       deletion_vector_row_counts,
       row_group_row_offsets,
       row_group_num_counts,
@@ -494,7 +498,7 @@ TEST_F(ParquetDeletionVectorsTest, NoRowIndexColumn)
   // concatenation won't properly reset it.
   auto constexpr num_concat = 1;
   test_read_parquet_and_apply_deletion_vector<num_concat>(parquet_buffer,
-                                                          deletion_vector,
+                                                          std::move(deletion_vector),
                                                           {},
                                                           {},
                                                           input_table->view(),
@@ -502,6 +506,22 @@ TEST_F(ParquetDeletionVectorsTest, NoRowIndexColumn)
                                                           expected_row_index_column->view(),
                                                           stream,
                                                           mr);
+  // Test no row index column and no deletion vector
+  {
+    // Build expected row mask column containing all true values
+    auto expected_row_mask = thrust::host_vector<bool>(num_rows, true);
+    auto expected_row_mask_column =
+      build_column_from_host_data<bool>(expected_row_mask, cudf::type_id::BOOL8, stream, mr);
+    test_read_parquet_and_apply_deletion_vector<num_concat>(parquet_buffer,
+                                                            {},
+                                                            {},
+                                                            {},
+                                                            input_table->view(),
+                                                            expected_row_mask_column->view(),
+                                                            expected_row_index_column->view(),
+                                                            stream,
+                                                            mr);
+  }
 }
 
 TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
@@ -575,7 +595,7 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
 
   // Don't concatenate the input table and test with single deletion vector
   test_read_parquet_and_apply_deletion_vector<1>(parquet_buffer,
-                                                 deletion_vector,
+                                                 std::vector(deletion_vector),
                                                  row_group_offsets,
                                                  row_group_num_rows,
                                                  input_table->view(),
@@ -586,7 +606,7 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
 
   // Concatenate input table and test with multiple deletion vectors
   test_read_parquet_and_apply_deletion_vector<4>(parquet_buffer,
-                                                 deletion_vector,
+                                                 std::vector(deletion_vector),
                                                  row_group_offsets,
                                                  row_group_num_rows,
                                                  input_table->view(),
@@ -597,7 +617,7 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
 
   // Concatenate input table and test with many deletion vectors (>= stream fork threshold of 8)
   test_read_parquet_and_apply_deletion_vector<8>(parquet_buffer,
-                                                 deletion_vector,
+                                                 std::vector(deletion_vector),
                                                  row_group_offsets,
                                                  row_group_num_rows,
                                                  input_table->view(),
@@ -605,4 +625,22 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
                                                  expected_row_index_column->view(),
                                                  stream,
                                                  mr);
+
+  // Test custom row index column and no deletion vector
+  {
+    // Build expected row mask column containing all true values
+    auto expected_row_mask = thrust::host_vector<bool>(num_rows, true);
+    auto expected_row_mask_column =
+      build_column_from_host_data<bool>(expected_row_mask, cudf::type_id::BOOL8, stream, mr);
+
+    test_read_parquet_and_apply_deletion_vector<1>(parquet_buffer,
+                                                   {},
+                                                   row_group_offsets,
+                                                   row_group_num_rows,
+                                                   input_table->view(),
+                                                   expected_row_mask_column->view(),
+                                                   expected_row_index_column->view(),
+                                                   stream,
+                                                   mr);
+  }
 }
