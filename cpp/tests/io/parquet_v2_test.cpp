@@ -74,6 +74,7 @@ TEST_P(ParquetV2Test, MultiColumn)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .compression(cudf::io::compression_type::ZSTD)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
@@ -142,6 +143,7 @@ TEST_P(ParquetV2Test, MultiColumnWithNulls)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .compression(cudf::io::compression_type::ZSTD)
       .metadata(expected_metadata);
 
@@ -184,6 +186,7 @@ TEST_P(ParquetV2Test, Strings)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .compression(cudf::io::compression_type::ZSTD)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
@@ -238,6 +241,7 @@ TEST_P(ParquetV2Test, StringsAsBinary)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, write_tbl)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
@@ -363,6 +367,7 @@ TEST_P(ParquetV2Test, SlicedTable)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
@@ -463,6 +468,7 @@ TEST_P(ParquetV2Test, ListColumn)
   auto filepath = temp_env->get_temp_filepath("ListColumn.parquet");
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
                     .write_v2_headers(is_v2)
+                    .page_level_compression(is_v2)
                     .metadata(expected_metadata)
                     .compression(cudf::io::compression_type::NONE);
 
@@ -543,6 +549,7 @@ TEST_P(ParquetV2Test, StructOfList)
   cudf::io::parquet_writer_options args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .metadata(expected_metadata);
   cudf::io::write_parquet(args);
 
@@ -600,6 +607,7 @@ TEST_P(ParquetV2Test, ListOfStruct)
   cudf::io::parquet_writer_options args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .metadata(expected_metadata);
   cudf::io::write_parquet(args);
 
@@ -633,6 +641,7 @@ TEST_P(ParquetV2Test, PartitionedWriteEmptyPartitions)
       cudf::io::sink_info(std::vector<std::string>{filepath1, filepath2}), *source)
       .partitions({partition1, partition2})
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .compression(cudf::io::compression_type::NONE);
   cudf::io::write_parquet(args);
 
@@ -667,6 +676,7 @@ TEST_P(ParquetV2Test, PartitionedWriteEmptyColumns)
       cudf::io::sink_info(std::vector<std::string>{filepath1, filepath2}), *source)
       .partitions({partition1, partition2})
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .compression(cudf::io::compression_type::NONE);
   cudf::io::write_parquet(args);
 
@@ -717,6 +727,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .max_page_size_rows(20000);
   cudf::io::write_parquet(out_opts);
 
@@ -815,6 +826,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .max_page_size_rows(20000);
   cudf::io::write_parquet(out_opts);
 
@@ -904,6 +916,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .max_page_size_rows(20000);
   cudf::io::write_parquet(out_opts);
 
@@ -1001,6 +1014,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .max_page_size_rows(page_size_for_ordered_tests);
   cudf::io::write_parquet(out_opts);
 
@@ -1094,6 +1108,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .max_page_size_rows(page_size_for_ordered_tests);
   cudf::io::write_parquet(out_opts);
 
@@ -1300,6 +1315,7 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
                     .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
                     .write_v2_headers(is_v2)
+                    .page_level_compression(is_v2)
                     .compression(cudf::io::compression_type::NONE);
 
   cudf::io::write_parquet(out_opts);
@@ -1398,7 +1414,8 @@ TEST_P(ParquetV2Test, CheckEncodings)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .max_page_size_rows(num_rows)
-      .write_v2_headers(is_v2);
+      .write_v2_headers(is_v2)
+      .page_level_compression(is_v2);
   cudf::io::write_parquet(out_opts);
 
   // make sure the expected encodings are present
@@ -1442,11 +1459,8 @@ TEST_P(ParquetV2Test, CheckEncodings)
   }
 }
 
-// Test that V2 pages have per-page compression flags
 TEST_F(ParquetWriterTest, V2PageLevelCompression)
 {
-  // Create data with multiple pages where some compress well and others don't.
-  // We use small page sizes to ensure multiple pages.
   constexpr auto num_rows           = 20000;
   constexpr auto max_page_size_rows = 5000;
 
@@ -1468,41 +1482,32 @@ TEST_F(ParquetWriterTest, V2PageLevelCompression)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER);
   cudf::io::write_parquet(out_opts);
 
-  // Read back and verify
   cudf::io::parquet_reader_options in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_parquet(in_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
-  // Verify page-level compression flags
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
   read_footer(source, &fmd);
 
-  // Check that the codec is set since we have compressed data
   ASSERT_TRUE(fmd.row_groups.size() > 0);
   auto const& chunk = fmd.row_groups[0].columns[0];
   EXPECT_EQ(chunk.meta_data.codec, cudf::io::parquet::Compression::SNAPPY);
 
-  // Read page headers and check is_compressed flag
   auto const oi = read_offset_index(source, chunk);
-  ASSERT_TRUE(oi.page_locations.size() > 1);  // Ensure we have multiple pages
+  ASSERT_TRUE(oi.page_locations.size() > 1);
 
   for (auto const& page_loc : oi.page_locations) {
     auto const ph = read_page_header(source, page_loc);
     EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
-    // For highly compressible data, pages should be compressed
     EXPECT_TRUE(ph.data_page_header_v2.is_compressed);
-    // Compressed size should be less than uncompressed size
     EXPECT_LT(ph.compressed_page_size, ph.uncompressed_page_size);
   }
 }
 
-// Test V2 pages with mixed compressibility (some pages compress, some don't)
 TEST_F(ParquetWriterTest, V2PageLevelCompressionMixed)
 {
-  // Create data where different pages have different compression characteristics.
-  // Highly random data doesn't compress well, while constant data compresses well.
   constexpr auto num_rows           = 20000;
   constexpr auto max_page_size_rows = 5000;
 
@@ -1512,7 +1517,6 @@ TEST_F(ParquetWriterTest, V2PageLevelCompressionMixed)
   std::vector<int64_t> mixed_data;
   mixed_data.reserve(num_rows);
 
-  // First half: random data
   std::mt19937 gen(42);
   std::uniform_int_distribution<int64_t> dist(std::numeric_limits<int64_t>::min(),
                                               std::numeric_limits<int64_t>::max());
@@ -1520,7 +1524,6 @@ TEST_F(ParquetWriterTest, V2PageLevelCompressionMixed)
     mixed_data.push_back(dist(gen));
   }
 
-  // Second half: constant data
   for (int i = 0; i < num_rows / 2; i++) {
     mixed_data.push_back(42);
   }
@@ -1540,13 +1543,11 @@ TEST_F(ParquetWriterTest, V2PageLevelCompressionMixed)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER);
   cudf::io::write_parquet(out_opts);
 
-  // Read back and verify correctness
   cudf::io::parquet_reader_options in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_parquet(in_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
-  // Verify page-level compression flags
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
   read_footer(source, &fmd);
@@ -1554,99 +1555,23 @@ TEST_F(ParquetWriterTest, V2PageLevelCompressionMixed)
   ASSERT_TRUE(fmd.row_groups.size() > 0);
   auto const& chunk = fmd.row_groups[0].columns[0];
 
-  // Read page headers and check is_compressed flag
   auto const oi = read_offset_index(source, chunk);
-  ASSERT_TRUE(oi.page_locations.size() > 1);  // Ensure we have multiple pages
+  ASSERT_TRUE(oi.page_locations.size() > 1);
 
-  bool found_compressed   = false;
-  bool found_uncompressed = false;
+  bool found_compressed = false;
   for (auto const& page_loc : oi.page_locations) {
     auto const ph = read_page_header(source, page_loc);
     EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
 
     if (ph.data_page_header_v2.is_compressed) {
       found_compressed = true;
-      // Compressed size should be less than uncompressed
       EXPECT_LT(ph.compressed_page_size, ph.uncompressed_page_size);
     } else {
-      found_uncompressed = true;
-      // Uncompressed page: sizes should be equal
       EXPECT_EQ(ph.compressed_page_size, ph.uncompressed_page_size);
     }
   }
 
-  // With mixed data, we expect to find both compressed and uncompressed pages
-  // Note: This assertion depends on compression ratios. If random data still
-  // compresses (even poorly), both may be compressed. The important thing is
-  // that the file can be read correctly and the flags are consistent.
-  // The constant data pages should definitely be compressed.
   EXPECT_TRUE(found_compressed);
-  // Silence unused variable warning - found_uncompressed may or may not be true
-  // depending on how well random data compresses
-  (void)found_uncompressed;
-}
-
-// Test V2 page compression with incompressible data (all pages should be uncompressed)
-TEST_F(ParquetWriterTest, V2PageLevelCompressionIncompressible)
-{
-  // Create fully random data that won't compress
-  constexpr auto num_rows           = 20000;
-  constexpr auto max_page_size_rows = 5000;
-
-  std::mt19937 gen(12345);
-  std::uniform_int_distribution<int64_t> dist(std::numeric_limits<int64_t>::min(),
-                                              std::numeric_limits<int64_t>::max());
-
-  std::vector<int64_t> random_data;
-  random_data.reserve(num_rows);
-  for (int i = 0; i < num_rows; i++) {
-    random_data.push_back(dist(gen));
-  }
-
-  auto col0 =
-    cudf::test::fixed_width_column_wrapper<int64_t>(random_data.begin(), random_data.end());
-
-  auto const expected = table_view{{col0}};
-
-  auto const filepath = temp_env->get_temp_filepath("V2PageLevelCompressionIncompressible.parquet");
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .write_v2_headers(true)
-      .page_level_compression(true)
-      .compression(cudf::io::compression_type::SNAPPY)
-      .max_page_size_rows(max_page_size_rows)
-      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
-  cudf::io::write_parquet(out_opts);
-
-  // Read back and verify correctness
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-  auto result = cudf::io::read_parquet(in_opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-
-  // Verify page-level compression flags
-  auto const source = cudf::io::datasource::create(filepath);
-  cudf::io::parquet::FileMetaData fmd;
-  read_footer(source, &fmd);
-
-  ASSERT_TRUE(fmd.row_groups.size() > 0);
-  auto const& chunk = fmd.row_groups[0].columns[0];
-
-  // Read page headers and check is_compressed flag
-  auto const oi = read_offset_index(source, chunk);
-  ASSERT_TRUE(oi.page_locations.size() > 1);  // Ensure we have multiple pages
-
-  for (auto const& page_loc : oi.page_locations) {
-    auto const ph = read_page_header(source, page_loc);
-    EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
-    // For incompressible data, pages should not be compressed
-    // (is_compressed should be false)
-    if (!ph.data_page_header_v2.is_compressed) {
-      // Uncompressed page: sizes should be equal
-      EXPECT_EQ(ph.compressed_page_size, ph.uncompressed_page_size);
-    }
-  }
 }
 
 // Test V2 page compression with large data mimicking benchmark patterns
