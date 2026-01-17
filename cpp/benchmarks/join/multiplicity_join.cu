@@ -115,7 +115,7 @@ NVBENCH_BENCH_TYPES(nvbench_hm_inner_join,
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
+  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000});
 
 NVBENCH_BENCH_TYPES(nvbench_hm_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
