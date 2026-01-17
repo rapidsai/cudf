@@ -12,7 +12,6 @@ import cachetools
 import cupy as cp
 import llvmlite.binding as ll
 import numpy as np
-import pandas as pd
 from cuda.bindings import runtime
 from numba import cuda, typeof
 from numba.core.datamodel import models
@@ -85,8 +84,7 @@ DEPRECATED_SM_REGEX = "Architectures prior to '<compute/sm>_75' are deprecated"
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: dtype
-        if str(dtype) in supported_types
-        and not isinstance(dtype, pd.StringDtype)
+        if str(dtype) in supported_types and not is_dtype_obj_string(dtype)
         else np.dtype("O")
         for colname, dtype in frame._dtypes
     }
