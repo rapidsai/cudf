@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -4199,7 +4199,7 @@ public class TableTest extends CudfTestBase {
          ColumnVector parts = ColumnVector
              .fromInts(1, 2, 1, 2, 1, 2, 1, 2, 1, 2);
          PartitionedTable pt = t.partition(parts, 3)) {
-      assertArrayEquals(new int[]{0, 0, 5}, pt.getPartitions());
+      assertArrayEquals(new int[]{0, 0, 5, 10}, pt.getPartitions());
       // order within partitions is not guaranteed, so sort each partition to compare
       ColumnVector[] slicedColumns = pt.getTable().getColumn(0).slice(0, 5, 5, 10);
       try (Table part1 = new Table(slicedColumns[0]);
