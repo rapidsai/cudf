@@ -55,35 +55,13 @@ class ListColumn(ColumnBase):
             raise ValueError("dtype must be a cudf.ListDtype")
         return plc_column, dtype
 
-    @classmethod
-    def _apply_child_metadata(
-        cls,
-        children: tuple[ColumnBase, ...],
-        dtype: ListDtype,  # type: ignore[override]
-    ) -> tuple[ColumnBase, ...]:
-        """Apply list element type metadata to elements child (child[1])."""
-        return (
-            children[0],  # Offsets column unchanged
-            children[1]._with_type_metadata(
-                dtype.element_type
-            ),  # Elements with metadata
-        )
-
-    def _get_sliced_child(self, idx: int) -> ColumnBase:
+    def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
-        if idx < 0 or idx >= self.plc_column.num_children():
-            raise IndexError(
-                f"Index {idx} out of range for {self.plc_column.num_children()} children"
-            )
-
-        if idx == 1:
-            sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-            dtype = cast(ListDtype, self.dtype)
-            return ColumnBase.from_pylibcudf(
-                sliced_plc_col
-            )._with_type_metadata(dtype.element_type)
-
-        return self._children[idx]
+        sliced_plc_col = self.plc_column.list_view().get_sliced_child()
+        dtype = cast("ListDtype", self.dtype)
+        return ColumnBase.from_pylibcudf(sliced_plc_col)._with_type_metadata(
+            dtype.element_type
+        )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
@@ -132,20 +110,8 @@ class ListColumn(ColumnBase):
 
     @property
     def elements(self) -> ColumnBase:
-        """
-        Column containing the elements of each list (may itself be a
-        ListColumn)
-        """
-        return self._get_sliced_child(1)
-
-    @property
-    def offsets(self) -> NumericalColumn:
-        """
-        Integer offsets to elements specifying each row of the ListColumn
-        """
-        return cast(
-            "cudf.core.column.numerical.NumericalColumn", self.children[0]
-        )
+        """Column containing the elements of each list (may itself be a ListColumn)"""
+        return self._get_sliced_child()
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -155,31 +121,11 @@ class ListColumn(ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, ListDtype):
-            elements = self.children[1]._with_type_metadata(dtype.element_type)
-            new_children = (
-                self.children[0],  # Offsets unchanged
-                elements,  # Elements with metadata
-            )
-            new_plc_column = plc.Column(
-                plc.DataType(plc.TypeId.LIST),
-                self.plc_column.size(),
-                self.plc_column.data(),
-                self.plc_column.null_mask(),
-                self.plc_column.null_count(),
-                self.plc_column.offset(),
-                [child.plc_column for child in new_children],
-            )
-            return type(self)._from_preprocessed(
-                plc_column=new_plc_column,
-                dtype=dtype,
-                children=new_children,
-            )
-        # For pandas dtypes, store them directly in the column's dtype property
+            self._dtype = dtype
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
             dtype.pyarrow_dtype, pa.ListType
         ):
             self._dtype = dtype
-
         return self
 
     def copy(self, deep: bool = True) -> Self:
