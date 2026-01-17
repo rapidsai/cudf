@@ -2515,55 +2515,47 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
   if (lane_id == 0) { ck_g[warp_id] = chunks[chunk_id]; }
   __syncwarp();
 
-  // First pass: decide per-page compression for V2 pages, collect totals for chunk decision
-  // Track V2 and non-V2 contributions separately
+  // First pass: decide per-page compression for pages with PLC, collect totals for chunk decision
+  // Track PLC (page-level compression) and non-PLC contributions separately
   uint32_t uncompressed_data_size = 0;
-  uint32_t v2_actual_size         = 0;  // Size of V2 pages (using per-page decision)
-  uint32_t non_v2_uncomp_size     = 0;  // Uncompressed size of non-V2 pages
-  uint32_t non_v2_comp_size       = 0;  // Compressed size of non-V2 pages
+  uint32_t plc_actual_size        = 0;  // Size of pages using page-level compression decisions
+  uint32_t non_plc_uncomp_size    = 0;  // Uncompressed size of pages using chunk-level decision
+  uint32_t non_plc_comp_size      = 0;  // Compressed size of pages using chunk-level decision
   uint32_t encodings              = 0;
   bool local_compression_error    = false;  // Track compression errors per-thread
-  bool local_any_v2_compressed    = false;  // Track if any V2 page is compressed per-thread
+  bool local_any_plc_compressed   = false;  // Track if any PLC page is compressed per-thread
   auto const num_pages            = ck_g[warp_id].num_pages;
   for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
     auto& curr_page           = ck_g[warp_id].pages[page_id];
     auto const page_data_size = curr_page.data_size;
     uncompressed_data_size += page_data_size;
 
-    if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
+    if (auto const comp_res = curr_page.comp_res; comp_res != nullptr) {
       auto const lvl_bytes      = curr_page.is_v2() ? curr_page.level_bytes() : 0;
       auto const comp_page_size = comp_res->bytes_written + lvl_bytes;
 
       // For V2 pages, decide compression per-page only if page_level_compression is enabled
-      if (curr_page.is_v2()) {
-        auto const page_compress_ok =
+      if (curr_page.is_v2() and page_level_compression) {
+        // Per-page decision: each V2 page decides independently
+        auto const compressed_page_preferred =
           comp_res->status == codec_status::SUCCESS and comp_page_size < page_data_size;
-        if (page_level_compression) {
-          // Per-page decision: each V2 page decides independently
-          curr_page.is_compressed = page_compress_ok;
-          v2_actual_size += page_compress_ok ? comp_page_size : page_data_size;
-          if (page_compress_ok) { local_any_v2_compressed = true; }
-        } else {
-          // Chunk-level decision: V2 pages follow same logic as non-V2
-          curr_page.is_compressed = false;  // Will be updated based on chunk decision
-          non_v2_uncomp_size += page_data_size;
-          non_v2_comp_size += comp_page_size;
-          if (comp_res->status != codec_status::SUCCESS) { local_compression_error = true; }
-        }
+        curr_page.is_compressed = compressed_page_preferred;
+        plc_actual_size += compressed_page_preferred ? comp_page_size : page_data_size;
+        if (compressed_page_preferred) { local_any_plc_compressed = true; }
       } else {
-        // Dictionary or V1 page - track separately for chunk-level decision
+        // Chunk-level decision: V2 pages (when PLC disabled), dictionary, or V1 pages
         curr_page.is_compressed = false;  // Will be updated based on chunk decision
-        non_v2_uncomp_size += page_data_size;
-        non_v2_comp_size += comp_page_size;
+        non_plc_uncomp_size += page_data_size;
+        non_plc_comp_size += comp_page_size;
         if (comp_res->status != codec_status::SUCCESS) { local_compression_error = true; }
       }
     } else {
       curr_page.is_compressed = false;
       if (curr_page.is_v2() and page_level_compression) {
-        v2_actual_size += page_data_size;
+        plc_actual_size += page_data_size;
       } else {
-        non_v2_uncomp_size += page_data_size;
-        non_v2_comp_size += page_data_size;
+        non_plc_uncomp_size += page_data_size;
+        non_plc_comp_size += page_data_size;
       }
     }
 
@@ -2572,29 +2564,27 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
   }
 
   auto const has_compression_error = __any_sync(0xffffffff, local_compression_error);
-  auto const any_v2_compressed     = __any_sync(0xffffffff, local_any_v2_compressed);
+  auto const any_plc_compressed    = __any_sync(0xffffffff, local_any_plc_compressed);
 
   uncompressed_data_size = warp_reduce(temp_storage[warp_id][0]).Sum(uncompressed_data_size);
-  v2_actual_size         = warp_reduce(temp_storage[warp_id][1]).Sum(v2_actual_size);
+  plc_actual_size        = warp_reduce(temp_storage[warp_id][1]).Sum(plc_actual_size);
   __syncwarp();
-  non_v2_uncomp_size = warp_reduce(temp_storage[warp_id][0]).Sum(non_v2_uncomp_size);
-  non_v2_comp_size   = warp_reduce(temp_storage[warp_id][1]).Sum(non_v2_comp_size);
+  non_plc_uncomp_size = warp_reduce(temp_storage[warp_id][0]).Sum(non_plc_uncomp_size);
+  non_plc_comp_size   = warp_reduce(temp_storage[warp_id][1]).Sum(non_plc_comp_size);
   __syncwarp();
   encodings = warp_reduce(temp_storage[warp_id][0]).Reduce(encodings, BitwiseOr{});
   __syncwarp();
 
-  // Decide whether non-V2 pages should be compressed (only lane 0 has correct reduced values)
-  auto non_v2_compress = !has_compression_error and non_v2_comp_size < non_v2_uncomp_size;
-
-  // Broadcast non_v2_compress from lane 0 to all lanes for the second pass
-  non_v2_compress = __shfl_sync(0xffffffff, non_v2_compress, 0);
+  // Decide whether non-PLC pages should be compressed (only lane 0 has correct reduced values)
+  auto non_plc_compress = !has_compression_error and non_plc_comp_size < non_plc_uncomp_size;
+  non_plc_compress      = __shfl_sync(0xffffffff, non_plc_compress, 0);
 
   // Calculate actual sizes based on compression decisions (only lane 0 needs these)
-  uint32_t non_v2_actual_size   = non_v2_compress ? non_v2_comp_size : non_v2_uncomp_size;
-  uint32_t compressed_data_size = v2_actual_size + non_v2_actual_size;
+  auto const non_plc_actual_size  = non_plc_compress ? non_plc_comp_size : non_plc_uncomp_size;
+  auto const compressed_data_size = plc_actual_size + non_plc_actual_size;
 
   // Chunk uses compression if any page is compressed (for codec in metadata)
-  auto const write_compressed = any_v2_compressed or non_v2_compress;
+  auto const write_compressed = any_plc_compressed or non_plc_compress;
 
   if (lane_id == 0) {
     chunks[chunk_id].is_compressed = write_compressed;
@@ -2614,16 +2604,15 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
   // Dictionary pages MUST be compressed if the chunk is compressed, because
   // dictionary page headers don't have an is_compressed field - readers assume
   // they're compressed when chunk.codec != NONE.
-  // V1 data pages follow the non-V2 compression decision.
-  // V2 pages with page_level_compression disabled also follow chunk decision.
+  // Non-PLC pages (V1 data pages, V2 with PLC disabled) follow the chunk-level decision.
   for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
     auto& curr_page = ck_g[warp_id].pages[page_id];
     if (curr_page.is_v2() and page_level_compression) {
-      // V2 pages already decided in first pass when page_level_compression is enabled
+      // PLC pages already decided in first pass
       continue;
     }
     bool const is_dict_page = curr_page.page_type == PageType::DICTIONARY_PAGE;
-    curr_page.is_compressed = is_dict_page ? write_compressed : non_v2_compress;
+    curr_page.is_compressed = is_dict_page ? write_compressed : non_plc_compress;
   }
 }
 
