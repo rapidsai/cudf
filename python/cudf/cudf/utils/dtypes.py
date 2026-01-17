@@ -121,7 +121,7 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
         return dtype.to_arrow()
     elif isinstance(dtype, pd.DatetimeTZDtype):
         return pa.timestamp(dtype.unit, str(dtype.tz))
-    elif isinstance(dtype, pd.StringDtype):
+    elif is_dtype_obj_string(dtype):
         return pa.string()
     else:
         return pa.from_numpy_dtype(dtype)
@@ -643,28 +643,25 @@ def is_dtype_obj_categorical(obj):
         return pd_types.is_categorical_dtype(obj)
 
 
-def is_dtype_obj_string(obj):
-    """Check whether the provided array or dtype is of the string dtype.
+def is_dtype_obj_string(obj: DtypeObj) -> bool:
+    """
+    Check whether the provided dtype is a supported string dtype.
 
     Parameters
     ----------
-    obj : array-like or dtype
-        The array or dtype to check.
+    obj : DtypeObj
+        The dtype object
 
     Returns
     -------
     bool
-        Whether or not the array or dtype is of the string dtype.
+        Whether or not the dtype is a supported string dtype.
     """
-    return (
-        obj is np.dtype("str")
-        or (isinstance(obj, pd.StringDtype))
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and (
-                pa.types.is_string(obj.pyarrow_dtype)
-                or pa.types.is_large_string(obj.pyarrow_dtype)
-            )
+    return isinstance(obj, pd.StringDtype) or (
+        isinstance(obj, pd.ArrowDtype)
+        and (
+            pa.types.is_string(obj.pyarrow_dtype)
+            or pa.types.is_large_string(obj.pyarrow_dtype)
         )
     )
 

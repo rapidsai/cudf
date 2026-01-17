@@ -57,6 +57,7 @@ from cudf.utils.dtypes import (
     dtype_to_pylibcudf_type,
     find_common_type,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -1480,7 +1481,7 @@ class Index(SingleColumnFrame):
         >>> idx.inferred_type
         'integer'
         """
-        if isinstance(self.dtype, pd.StringDtype):
+        if is_dtype_obj_string(self.dtype):
             if len(self) == 0:
                 return "empty"
             else:
@@ -1749,7 +1750,7 @@ class Index(SingleColumnFrame):
 
             output = output.replace("nan", str(cudf.NA))
         elif preprocess._column.nullable:
-            if isinstance(self.dtype, pd.StringDtype):
+            if is_dtype_obj_string(self.dtype):
                 output = repr(self.to_pandas(nullable=True))
             else:
                 output = repr(self._pandas_repr_compatible().to_pandas())
@@ -1978,7 +1979,7 @@ class Index(SingleColumnFrame):
                 if is_mixed_with_object_dtype(this, other):
                     got_dtype = (
                         other.dtype
-                        if isinstance(this.dtype, pd.StringDtype)
+                        if is_dtype_obj_string(this.dtype)
                         else this.dtype
                     )
                     raise TypeError(
@@ -4214,7 +4215,7 @@ class TimedeltaIndex(Index):
 
         name = _getdefault_name(data, name=name)
         col = as_column(data)
-        if isinstance(col.dtype, pd.StringDtype):
+        if is_dtype_obj_string(col.dtype):
             # String -> Timedelta parsing via astype isn't rigorous enough yet
             # to cover cudf.pandas test cases, go through pandas instead.
             col = as_column(pd.to_timedelta(data))
@@ -4983,7 +4984,7 @@ class IntervalIndex(Index):
         if (
             len(breaks) == 0
             and dtype is None
-            and isinstance(breaks.dtype, pd.StringDtype)
+            and is_dtype_obj_string(breaks.dtype)
         ):
             breaks = breaks.astype(np.dtype(np.int64))
         if copy:

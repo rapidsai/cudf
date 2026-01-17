@@ -26,6 +26,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
+    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -120,7 +121,7 @@ class StringColumn(ColumnBase, Scannable):
         cls, plc_column: plc.Column, dtype: pd.StringDtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not isinstance(dtype, pd.StringDtype):
+        if not is_dtype_obj_string(dtype):
             raise ValueError(
                 f"dtype must be a pandas.StringDtype, not {dtype}"
             )
@@ -129,7 +130,7 @@ class StringColumn(ColumnBase, Scannable):
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
         """Return appropriate NA value based on dtype."""
-        return cast("pd.StringDtype", self.dtype).na_value
+        return cast("pd.StringDtype | pd.ArrowDtype", self.dtype).na_value
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
@@ -175,7 +176,7 @@ class StringColumn(ColumnBase, Scannable):
         # All null string columns fail to convert in libcudf, so we must short-circuit
         # the call to super().to_arrow().
         # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if len(self.children) == 0 or self.null_count == len(self):
+        if self.plc_column.num_children() == 0 or self.null_count == len(self):
             if len(self) == 0:
                 return pa.chunked_array([], type=pa.large_string())  # type: ignore[return-value]
             return pa.NullArray.from_buffers(

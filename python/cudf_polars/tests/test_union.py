@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import polars as pl
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 def test_union():
@@ -43,7 +42,5 @@ def test_concat_diagonal_empty():
 
     assert_gpu_result_equal(
         q,
-        collect_kwargs={"no_optimization": True}
-        if POLARS_VERSION_LT_130
-        else {"optimizations": pl.QueryOptFlags()},
+        collect_kwargs={"optimizations": pl.QueryOptFlags()},
     )

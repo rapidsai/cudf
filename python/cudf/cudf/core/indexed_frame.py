@@ -73,6 +73,7 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
 )
@@ -3641,7 +3642,7 @@ class IndexedFrame(Frame):
 
         method = "nlargest" if largest else "nsmallest"
         for col in columns:
-            if isinstance(self._data[col].dtype, pd.StringDtype):
+            if is_dtype_obj_string(self._data[col].dtype):
                 if isinstance(self, cudf.DataFrame):
                     error_msg = (
                         f"Column '{col}' has dtype {self._data[col].dtype}, "
@@ -6794,10 +6795,7 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     val_col = as_column(
         value,
         dtype=col.dtype
-        if (
-            cudf.utils.utils._is_null_host_scalar(value)
-            or value in {None, np.nan}
-        )
+        if (cudf.utils.utils.is_na_like(value) or value is np.nan)
         else None,
     )
     if val_col.dtype.kind != "f" and val_col.can_cast_safely(col.dtype):

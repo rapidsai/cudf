@@ -36,12 +36,13 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
+    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.utils import _is_null_host_scalar, is_na_like
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -733,9 +734,7 @@ class NumericalColumn(NumericalBaseColumn):
                 return super()._process_values_for_isin(values.tolist())
             else:
                 raise
-        if lhs.dtype != rhs.dtype and not isinstance(
-            rhs.dtype, pd.StringDtype
-        ):
+        if lhs.dtype != rhs.dtype and not is_dtype_obj_string(rhs.dtype):
             if rhs.can_cast_safely(lhs.dtype):
                 rhs = rhs.astype(lhs.dtype)
             elif lhs.can_cast_safely(rhs.dtype):
@@ -1109,7 +1108,7 @@ def _normalize_find_and_replace_input(
         )
         # Scalar case
         if len(col_to_normalize) == 1:
-            if _is_null_host_scalar(col_to_normalize[0]):
+            if is_na_like(col_to_normalize[0]):
                 return normalized_column.astype(input_column_dtype)
             if np.isinf(col_to_normalize[0]):
                 return normalized_column

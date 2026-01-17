@@ -25,6 +25,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
+    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
@@ -317,8 +318,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                 to_res,  # type: ignore[call-overload]
             ).astype(f"m8[{self.time_unit}]", copy=False)
             return bool(max_dist <= max_to_res and min_dist <= max_to_res)
-        elif to_dtype == self._UNDERLYING_DTYPE or isinstance(
-            to_dtype, pd.StringDtype
+        elif to_dtype == self._UNDERLYING_DTYPE or is_dtype_obj_string(
+            to_dtype
         ):
             # can safely cast to representation, or string
             return True
