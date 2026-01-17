@@ -49,7 +49,7 @@ from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
@@ -57,6 +57,7 @@ from cudf.utils.dtypes import (
     dtype_to_pylibcudf_type,
     find_common_type,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -1480,7 +1481,7 @@ class Index(SingleColumnFrame):
         >>> idx.inferred_type
         'integer'
         """
-        if self.dtype == CUDF_STRING_DTYPE:
+        if is_dtype_obj_string(self.dtype):
             if len(self) == 0:
                 return "empty"
             else:
@@ -1714,12 +1715,12 @@ class Index(SingleColumnFrame):
         if isinstance(preprocess, CategoricalIndex):
             if preprocess.categories.dtype.kind == "f":
                 output = repr(
-                    preprocess.astype(CUDF_STRING_DTYPE)
+                    preprocess.astype(DEFAULT_STRING_DTYPE)
                     .to_pandas()
                     .astype(
                         dtype=pd.CategoricalDtype(
                             categories=preprocess.dtype.categories.astype(
-                                CUDF_STRING_DTYPE
+                                DEFAULT_STRING_DTYPE
                             ).to_pandas(),
                             ordered=preprocess.dtype.ordered,
                         )
@@ -1749,7 +1750,7 @@ class Index(SingleColumnFrame):
 
             output = output.replace("nan", str(cudf.NA))
         elif preprocess._column.nullable:
-            if self.dtype == CUDF_STRING_DTYPE:
+            if is_dtype_obj_string(self.dtype):
                 output = repr(self.to_pandas(nullable=True))
             else:
                 output = repr(self._pandas_repr_compatible().to_pandas())
@@ -1978,12 +1979,12 @@ class Index(SingleColumnFrame):
                 if is_mixed_with_object_dtype(this, other):
                     got_dtype = (
                         other.dtype
-                        if this.dtype == CUDF_STRING_DTYPE
+                        if is_dtype_obj_string(this.dtype)
                         else this.dtype
                     )
                     raise TypeError(
                         f"cudf does not support appending an Index of "
-                        f"dtype `{CUDF_STRING_DTYPE}` with an Index "
+                        f"dtype `{DEFAULT_STRING_DTYPE}` with an Index "
                         f"of dtype `{got_dtype}`, please type-cast "
                         f"either one of them to same dtypes."
                     )
@@ -4214,7 +4215,7 @@ class TimedeltaIndex(Index):
 
         name = _getdefault_name(data, name=name)
         col = as_column(data)
-        if col.dtype == CUDF_STRING_DTYPE:
+        if is_dtype_obj_string(col.dtype):
             # String -> Timedelta parsing via astype isn't rigorous enough yet
             # to cover cudf.pandas test cases, go through pandas instead.
             col = as_column(pd.to_timedelta(data))
@@ -4983,7 +4984,7 @@ class IntervalIndex(Index):
         if (
             len(breaks) == 0
             and dtype is None
-            and breaks.dtype == CUDF_STRING_DTYPE
+            and is_dtype_obj_string(breaks.dtype)
         ):
             breaks = breaks.astype(np.dtype(np.int64))
         if copy:

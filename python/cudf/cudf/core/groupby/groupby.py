@@ -47,7 +47,6 @@ from cudf.core.reshape import concat
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.options import get_option
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
@@ -101,9 +100,12 @@ _DECIMAL_AGGS = {
 
 @singledispatch
 def get_valid_aggregation(dtype):
-    if dtype == CUDF_STRING_DTYPE:
-        return _STRING_AGGS
     return "ALL"
+
+
+@get_valid_aggregation.register
+def _(dtype: pd.StringDtype):
+    return _STRING_AGGS
 
 
 @get_valid_aggregation.register

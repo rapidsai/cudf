@@ -20,11 +20,12 @@ from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
+    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
@@ -258,7 +259,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
     def strftime(self, format: str) -> StringColumn:
         if len(self) == 0:
-            return column_empty(0, dtype=CUDF_STRING_DTYPE)  # type:ignore[return-value]
+            return column_empty(0, dtype=DEFAULT_STRING_DTYPE)  # type:ignore[return-value]
         else:
             raise NotImplementedError("strftime is currently not implemented")
 
@@ -317,8 +318,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                 to_res,  # type: ignore[call-overload]
             ).astype(f"m8[{self.time_unit}]", copy=False)
             return bool(max_dist <= max_to_res and min_dist <= max_to_res)
-        elif (
-            to_dtype == self._UNDERLYING_DTYPE or to_dtype == CUDF_STRING_DTYPE
+        elif to_dtype == self._UNDERLYING_DTYPE or is_dtype_obj_string(
+            to_dtype
         ):
             # can safely cast to representation, or string
             return True

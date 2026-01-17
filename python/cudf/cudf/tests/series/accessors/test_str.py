@@ -2324,6 +2324,8 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
             )
         else:
             expectation = pytest.raises(NotImplementedError)
+    else:
+        expectation = does_not_raise()
 
     with expectation:
         expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)

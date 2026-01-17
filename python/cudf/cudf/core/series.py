@@ -60,11 +60,12 @@ from cudf.core.udf.scalar_function import SeriesApplyKernel
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     _get_nan_for_dtype,
     find_common_type,
     get_dtype_of_same_kind,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
 )
@@ -121,7 +122,7 @@ def _describe_timetype(
             zip(
                 _format_percentile_names(percentiles),
                 obj.quantile(percentiles)
-                .astype(CUDF_STRING_DTYPE)
+                .astype(DEFAULT_STRING_DTYPE)
                 .to_numpy(na_value=np.nan)
                 .tolist(),
                 strict=True,
@@ -205,9 +206,8 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if isinstance(key, tuple):
             key = list(key)
 
-        if (
-            self._frame.dtype.kind in "uifb"
-            or self._frame.dtype == CUDF_STRING_DTYPE
+        if self._frame.dtype.kind in "uifb" or is_dtype_obj_string(
+            self._frame.dtype
         ):
             # normalize types if necessary:
             # In contrast to Column.__setitem__ (which downcasts the value to
@@ -1298,12 +1298,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             preprocess.index = preprocess.index._pandas_repr_compatible()
             if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
-                    preprocess.astype(CUDF_STRING_DTYPE)
+                    preprocess.astype(DEFAULT_STRING_DTYPE)
                     .to_pandas()
                     .astype(
                         dtype=pd.CategoricalDtype(
                             categories=preprocess.dtype.categories.astype(
-                                CUDF_STRING_DTYPE
+                                DEFAULT_STRING_DTYPE
                             ).to_pandas(),
                             ordered=preprocess.dtype.ordered,
                         )

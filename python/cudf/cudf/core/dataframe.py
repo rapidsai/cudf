@@ -100,7 +100,7 @@ from cudf.errors import MixedTypeError
 from cudf.options import get_option
 from cudf.utils import docutils, ioutils, queryutils
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
@@ -108,6 +108,7 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
@@ -532,7 +533,7 @@ def _listlike_to_column_accessor(
             index = cudf.RangeIndex(0)
         if columns is not None:
             col_data = {
-                col_label: column_empty(len(index), dtype=CUDF_STRING_DTYPE)
+                col_label: column_empty(len(index), dtype=DEFAULT_STRING_DTYPE)
                 for col_label in columns
             }
         else:
@@ -1031,7 +1032,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     index = index[:0]
                     col_accessor = ColumnAccessor(
                         {
-                            col: column_empty(0, dtype=CUDF_STRING_DTYPE)
+                            col: column_empty(0, dtype=DEFAULT_STRING_DTYPE)
                             for col in columns
                         },
                         verify=False,
@@ -1051,7 +1052,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if columns is not None:
                 col_accessor = ColumnAccessor(
                     {
-                        k: column_empty(len(index), dtype=CUDF_STRING_DTYPE)
+                        k: column_empty(len(index), dtype=DEFAULT_STRING_DTYPE)
                         for k in columns
                     },
                     verify=False,
@@ -1165,7 +1166,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             new_data = {
                 second_label: col_accessor[second_label]
                 if second_label in col_accessor
-                else column_empty(col_accessor.nrows, dtype=CUDF_STRING_DTYPE)
+                else column_empty(
+                    col_accessor.nrows, dtype=DEFAULT_STRING_DTYPE
+                )
                 for second_label in second_columns
             }
             col_accessor = ColumnAccessor(
@@ -2691,7 +2694,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             map_index = map_index.astype(SIZE_TYPE_DTYPE)
 
         # Convert string or categorical to integer
-        if map_index.dtype == CUDF_STRING_DTYPE:
+        if is_dtype_obj_string(map_index.dtype):
             map_index = map_index._label_encoding(map_index.unique())
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
@@ -3600,10 +3603,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if isinstance(value, (np.ndarray, cupy.ndarray)):
                 dtype = value.dtype
                 if dtype.kind == "U":
-                    dtype = CUDF_STRING_DTYPE
+                    dtype = DEFAULT_STRING_DTYPE
                 value = value.item()
             if is_na_like(value):
-                dtype = CUDF_STRING_DTYPE
+                dtype = DEFAULT_STRING_DTYPE
             value = as_column(
                 value,
                 length=len(self),
@@ -4044,7 +4047,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         ):
             raise MixedTypeError("Cannot create a column with mixed types")
 
-        if any(dt == CUDF_STRING_DTYPE for dt in dtypes):
+        if any(is_dtype_obj_string(dt) for dt in dtypes):
             raise NotImplementedError(
                 "DataFrame.agg() is not supported for "
                 "frames containing string columns"
@@ -6343,8 +6346,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     else:
                         # These checks must happen after the conversions above
                         # since numpy can't handle categorical dtypes.
-                        self_is_str = self_col.dtype == CUDF_STRING_DTYPE
-                        other_is_str = other_col.dtype == CUDF_STRING_DTYPE
+                        self_is_str = is_dtype_obj_string(self_col.dtype)
+                        other_is_str = is_dtype_obj_string(other_col.dtype)
 
                     if self_is_str != other_is_str:
                         # Strings can't compare to anything else.
@@ -6402,8 +6405,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         common_dtype = find_common_type(dtypes)
         if (
             not numeric_only
-            and common_dtype == CUDF_STRING_DTYPE
-            and any(dtype != CUDF_STRING_DTYPE for dtype in dtypes)
+            and is_dtype_obj_string(common_dtype)
+            and any(not is_dtype_obj_string(dtype) for dtype in dtypes)
         ):
             raise TypeError(
                 f"Cannot perform row-wise {method} across mixed-dtype columns,"
@@ -6563,9 +6566,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # TODO: What happens if common_dtype is None?
                 common_dtype = find_common_type(source_dtypes)
                 if (
-                    common_dtype == CUDF_STRING_DTYPE
+                    is_dtype_obj_string(common_dtype)
                     and any(
-                        dtype != CUDF_STRING_DTYPE for dtype in source_dtypes
+                        not is_dtype_obj_string(dtype)
+                        for dtype in source_dtypes
                     )
                     or common_dtype is not None
                     and common_dtype.kind != "b"

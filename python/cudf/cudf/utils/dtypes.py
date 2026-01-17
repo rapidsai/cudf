@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
         return dtype.to_arrow()
     elif isinstance(dtype, pd.DatetimeTZDtype):
         return pa.timestamp(dtype.unit, str(dtype.tz))
-    elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
+    elif is_dtype_obj_string(dtype):
         return pa.string()
     else:
         return pa.from_numpy_dtype(dtype)
@@ -140,7 +140,7 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
             raise NotImplementedError("cudf does not support Decimal256Type")
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
-        return CUDF_STRING_DTYPE
+        return DEFAULT_STRING_DTYPE
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
@@ -338,7 +338,7 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
                 ]
             )
         else:
-            return CUDF_STRING_DTYPE
+            return DEFAULT_STRING_DTYPE
     elif any(
         isinstance(dtype, (cudf.ListDtype, cudf.StructDtype))
         for dtype in dtypes
@@ -427,9 +427,11 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
         return cudf.ListDtype.from_arrow(pyarrow_dtype)
     elif isinstance(pyarrow_dtype, pa.StructType):
         return cudf.StructDtype.from_arrow(pyarrow_dtype)
-    elif str(pyarrow_dtype) == "large_string":
-        return CUDF_STRING_DTYPE
-    elif pyarrow_dtype is pa.date32():
+    elif pa.types.is_large_string(pyarrow_dtype) or pa.types.is_string(
+        pyarrow_dtype
+    ):
+        return DEFAULT_STRING_DTYPE
+    elif pa.types.is_date(pyarrow_dtype):
         raise TypeError("Unsupported type")
     elif isinstance(pyarrow_dtype, pa.DataType):
         return pyarrow_dtype.to_pandas_dtype()
@@ -495,7 +497,7 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = _get_base_dtype(dtype)
     elif isinstance(dtype, pd.StringDtype):
-        dtype = CUDF_STRING_DTYPE
+        return plc.DataType(plc.TypeId.STRING)
     else:
         dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
         try:
@@ -508,11 +510,13 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
 def dtype_to_pandas_arrowdtype(dtype) -> pd.ArrowDtype:
     if isinstance(dtype, pd.ArrowDtype):
         return dtype
-    if isinstance(
+    elif isinstance(
         dtype,
         (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
     ):
         return pd.ArrowDtype(dtype.to_arrow())
+    elif isinstance(dtype, pd.StringDtype):
+        return pd.ArrowDtype(pa.large_string())
     # libcudf types don't support timezones so convert to the base type
     elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = _get_base_dtype(dtype)
@@ -522,8 +526,6 @@ def dtype_to_pandas_arrowdtype(dtype) -> pd.ArrowDtype:
             dtype = np.dtype(dtype)
         except TypeError:
             dtype = cudf.dtype(dtype)
-    if dtype is CUDF_STRING_DTYPE:
-        dtype = np.dtype("str")
     return pd.ArrowDtype(pa.from_numpy_dtype(dtype))
 
 
@@ -604,7 +606,7 @@ def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
             precision=cudf.Decimal128Dtype.MAX_PRECISION, scale=-type_.scale()
         )
     elif tid == plc.TypeId.STRING:
-        return pd.StringDtype(na_value=np.nan)
+        return DEFAULT_STRING_DTYPE
     else:
         return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
 
@@ -641,29 +643,25 @@ def is_dtype_obj_categorical(obj):
         return pd_types.is_categorical_dtype(obj)
 
 
-def is_dtype_obj_string(obj):
-    """Check whether the provided array or dtype is of the string dtype.
+def is_dtype_obj_string(obj: DtypeObj) -> bool:
+    """
+    Check whether the provided dtype is a supported string dtype.
 
     Parameters
     ----------
-    obj : array-like or dtype
-        The array or dtype to check.
+    obj : DtypeObj
+        The dtype object
 
     Returns
     -------
     bool
-        Whether or not the array or dtype is of the string dtype.
+        Whether or not the dtype is a supported string dtype.
     """
-    return (
-        obj is CUDF_STRING_DTYPE
-        or obj is np.dtype("str")
-        or (isinstance(obj, pd.StringDtype))
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and (
-                pa.types.is_string(obj.pyarrow_dtype)
-                or pa.types.is_large_string(obj.pyarrow_dtype)
-            )
+    return isinstance(obj, pd.StringDtype) or (
+        isinstance(obj, pd.ArrowDtype)
+        and (
+            pa.types.is_string(obj.pyarrow_dtype)
+            or pa.types.is_large_string(obj.pyarrow_dtype)
         )
     )
 
@@ -827,4 +825,4 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING] = np.dtype(
 )
 
 SIZE_TYPE_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.SIZE_TYPE_ID]
-CUDF_STRING_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING]
+DEFAULT_STRING_DTYPE = pd.StringDtype(na_value=np.nan)

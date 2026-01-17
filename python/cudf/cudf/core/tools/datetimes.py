@@ -21,7 +21,7 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import DatetimeIndex, Index, ensure_index
 from cudf.core.series import Series
-from cudf.utils.dtypes import CUDF_STRING_DTYPE
+from cudf.utils.dtypes import DEFAULT_STRING_DTYPE
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
@@ -205,11 +205,15 @@ def to_datetime(
                 )
 
             new_series = (
-                arg[unit_rev["year"]].astype(CUDF_STRING_DTYPE)
+                arg[unit_rev["year"]].astype(DEFAULT_STRING_DTYPE)
                 + "-"
-                + arg[unit_rev["month"]].astype(CUDF_STRING_DTYPE).str.zfill(2)
+                + arg[unit_rev["month"]]
+                .astype(DEFAULT_STRING_DTYPE)
+                .str.zfill(2)
                 + "-"
-                + arg[unit_rev["day"]].astype(CUDF_STRING_DTYPE).str.zfill(2)
+                + arg[unit_rev["day"]]
+                .astype(DEFAULT_STRING_DTYPE)
+                .str.zfill(2)
             )
             format = "%Y-%m-%d"
             for u in ["h", "m", "s", "ms", "us", "ns"]:
@@ -330,7 +334,7 @@ def _process_col(
             # parsing against `format`.
             col = (
                 col.astype(np.dtype(np.int64))
-                .astype(CUDF_STRING_DTYPE)
+                .astype(DEFAULT_STRING_DTYPE)
                 .strptime(
                     dtype=np.dtype("datetime64[us]")
                     if "%f" in format
@@ -352,7 +356,7 @@ def _process_col(
         if format is not None:
             if unit is None:
                 unit = "us"
-            col = col.astype(CUDF_STRING_DTYPE).strptime(
+            col = col.astype(DEFAULT_STRING_DTYPE).strptime(
                 dtype=np.dtype(_unit_dtype_map[unit]), format=format
             )
         else:

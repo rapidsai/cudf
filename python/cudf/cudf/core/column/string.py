@@ -22,7 +22,7 @@ from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
@@ -118,29 +118,19 @@ class StringColumn(ColumnBase, Scannable):
 
     @classmethod
     def _validate_args(
-        cls, plc_column: plc.Column, dtype: np.dtype
+        cls, plc_column: plc.Column, dtype: pd.StringDtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
         if not is_dtype_obj_string(dtype):
-            raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(dtype, np.dtype)
-            and dtype.kind == "U"
-        ):
-            dtype = CUDF_STRING_DTYPE
+            raise ValueError(
+                f"dtype must be a pandas.StringDtype, not {dtype}"
+            )
         return plc_column, dtype
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
         """Return appropriate NA value based on dtype."""
-        if is_pandas_nullable_extension_dtype(self.dtype):
-            return self.dtype.na_value
-        elif cudf.api.types.is_string_dtype(self.dtype):
-            # numpy string dtype case, may be moved
-            # to `StringColumn` later
-            return None
-        return pd.NA
+        return cast("pd.StringDtype | pd.ArrowDtype", self.dtype).na_value
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
@@ -411,7 +401,7 @@ class StringColumn(ColumnBase, Scannable):
                 # TODO: Drop the deep copies on astype's copy keyword
                 # default value is fixed in `25.10`
                 col = self.copy(deep=True)
-                col._dtype = CUDF_STRING_DTYPE
+                col._dtype = DEFAULT_STRING_DTYPE
         return col
 
     @property

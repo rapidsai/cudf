@@ -29,13 +29,14 @@ from cudf.core.column.utils import access_columns
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
+    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -578,7 +579,7 @@ class NumericalColumn(NumericalBaseColumn):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column_empty(0, dtype=CUDF_STRING_DTYPE),
+                column_empty(0, dtype=DEFAULT_STRING_DTYPE),
             )
 
         conv_func: Callable[[plc.Column], plc.Column]
@@ -733,7 +734,7 @@ class NumericalColumn(NumericalBaseColumn):
                 return super()._process_values_for_isin(values.tolist())
             else:
                 raise
-        if lhs.dtype != rhs.dtype and rhs.dtype != CUDF_STRING_DTYPE:
+        if lhs.dtype != rhs.dtype and not is_dtype_obj_string(rhs.dtype):
             if rhs.can_cast_safely(lhs.dtype):
                 rhs = rhs.astype(lhs.dtype)
             elif lhs.can_cast_safely(rhs.dtype):

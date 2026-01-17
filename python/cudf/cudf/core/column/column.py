@@ -62,7 +62,7 @@ from cudf.core.dtypes import (
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _get_nan_for_dtype,
     _maybe_convert_to_default_type,
@@ -77,6 +77,7 @@ from cudf.utils.dtypes import (
     is_dtype_obj_interval,
     is_dtype_obj_list,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_dtype_obj_struct,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
@@ -574,12 +575,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             cls = cudf.core.column.DatetimeColumn
         elif dtype.kind == "m":
             cls = cudf.core.column.TimeDeltaColumn
-        elif (
-            dtype == CUDF_STRING_DTYPE
-            or dtype.kind == "U"
-            or isinstance(dtype, pd.StringDtype)
-            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
-        ):
+        elif isinstance(dtype, pd.StringDtype):
             cls = cudf.core.column.StringColumn
         elif isinstance(dtype, ListDtype):
             cls = cudf.core.column.ListColumn
@@ -1017,7 +1013,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        if not inplace or self.dtype == CUDF_STRING_DTYPE:
+        if not inplace or is_dtype_obj_string(self.dtype):
             with self.access(mode="read", scope="internal"):
                 result = cast(
                     "Self",
@@ -1030,7 +1026,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         )
                     ),
                 )
-            if self.dtype == CUDF_STRING_DTYPE:
+            if is_dtype_obj_string(self.dtype):
                 return self._mimic_inplace(result, inplace=True)
             return result
 
@@ -1490,7 +1486,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return 0
 
     def interpolate(self, index: Index) -> ColumnBase:
-        if self.dtype == CUDF_STRING_DTYPE:
+        if is_dtype_obj_string(self.dtype):
             # TODO: Should raise for other types?
             raise TypeError(
                 f"Cannot interpolate with column of dtype {self.dtype}"
@@ -2523,9 +2519,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
             if other_col.dtype != self.dtype:
                 try:
-                    warn = (
-                        find_common_type((other_col.dtype, self.dtype))
-                        == CUDF_STRING_DTYPE
+                    warn = is_dtype_obj_string(
+                        find_common_type((other_col.dtype, self.dtype)),
                     )
                 except NotImplementedError:
                     warn = True
@@ -2587,7 +2582,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
 def column_empty(
     row_count: int,
-    dtype: DtypeObj = CUDF_STRING_DTYPE,
+    dtype: DtypeObj = DEFAULT_STRING_DTYPE,
 ) -> ColumnBase:
     """
     Allocate a new column with the given row_count and dtype.
