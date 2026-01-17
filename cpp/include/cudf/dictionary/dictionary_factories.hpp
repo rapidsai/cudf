@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -42,8 +42,8 @@ namespace CUDF_EXPORT cudf {
  *
  * The null_mask and null count for the output column are copied from the indices column.
  *
- * @throw cudf::logic_error if keys_column contains nulls
- * @throw cudf::logic_error if indices_column type is not INT32
+ * @throw std::invalid_argument if keys_column contains nulls
+ * @throw std::invalid_argument if indices_column type is not a signed integer
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
@@ -68,24 +68,19 @@ std::unique_ptr<column> make_dictionary_column(
  *
  * The indices values must be in the range [0,keys_column.size()).
  *
- * @throw cudf::logic_error if keys_column or indices_column contains nulls
- * @throw cudf::logic_error if indices_column type is not an unsigned integer type
+ * @throw std::invalid_argument if keys_column or indices_column contains nulls
+ * @throw std::invalid_argument if indices_column type is not a signed integer type
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
  * @param null_mask Null mask for the output column.
  * @param null_count Number of nulls for the output column.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
-std::unique_ptr<column> make_dictionary_column(
-  std::unique_ptr<column> keys_column,
-  std::unique_ptr<column> indices_column,
-  rmm::device_buffer&& null_mask,
-  size_type null_count,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_column,
+                                               std::unique_ptr<column> indices_column,
+                                               rmm::device_buffer&& null_mask,
+                                               size_type null_count);
 
 /**
  * @brief Construct a dictionary column by taking ownership of the provided keys

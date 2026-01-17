@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -224,25 +224,11 @@ struct column_scatterer_impl<dictionary32> {
                     scatter_map_begin,
                     target_itr);
 
-    // record some data before calling release()
-    auto const indices_type = new_indices->type();
-    auto const output_size  = new_indices->size();
-    auto const null_count   = new_indices->null_count();
-    auto contents           = new_indices->release();
-    auto indices_column     = std::make_unique<column>(indices_type,
-                                                   static_cast<size_type>(output_size),
-                                                   std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{0, stream, mr},
-                                                   0);
-
     // take the keys from the matched column allocated using mr
     std::unique_ptr<column> keys_column(std::move(target_matched->release().children.back()));
 
     // create column with keys_column and indices_column
-    return make_dictionary_column(std::move(keys_column),
-                                  std::move(indices_column),
-                                  std::move(*(contents.null_mask.release())),
-                                  null_count);
+    return make_dictionary_column(std::move(keys_column), std::move(new_indices), stream, mr);
   }
 };
 

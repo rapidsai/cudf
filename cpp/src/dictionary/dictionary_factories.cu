@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,7 +23,8 @@ struct dispatch_create_indices {
                                      rmm::device_async_resource_ref mr)
     requires(is_index_type<IndexType>())
   {
-    CUDF_EXPECTS(cudf::is_signed<IndexType>(), "indices must be a signed type");
+    CUDF_EXPECTS(
+      cudf::is_signed<IndexType>(), "indices must be a signed type", std::invalid_argument);
     column_view indices_view{
       indices.type(), indices.size(), indices.data<IndexType>(), nullptr, 0, indices.offset()};
     return std::make_unique<column>(indices_view, stream, mr);
@@ -44,7 +45,7 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls");
+  CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls", std::invalid_argument);
   if (keys_column.is_empty()) return make_empty_column(type_id::DICTIONARY32);
 
   auto keys_copy = std::make_unique<column>(keys_column, stream, mr);
@@ -68,14 +69,14 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
 std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_column,
                                                std::unique_ptr<column> indices_column,
                                                rmm::device_buffer&& null_mask,
-                                               size_type null_count,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
+                                               size_type null_count)
 {
-  CUDF_EXPECTS(!keys_column->has_nulls(), "keys column must not have nulls");
-  CUDF_EXPECTS(!indices_column->has_nulls(), "indices column must not have nulls");
+  CUDF_EXPECTS(!keys_column->has_nulls(), "keys column must not have nulls", std::invalid_argument);
+  CUDF_EXPECTS(
+    !indices_column->has_nulls(), "indices column must not have nulls", std::invalid_argument);
   CUDF_EXPECTS(is_signed(indices_column->type()) && is_index_type(indices_column->type()),
-               "indices must be type unsigned integer");
+               "indices must be type signed integer",
+               std::invalid_argument);
 
   auto count = indices_column->size();
   std::vector<std::unique_ptr<column>> children;
@@ -83,7 +84,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
   children.emplace_back(std::move(keys_column));
   return std::make_unique<column>(data_type{type_id::DICTIONARY32},
                                   count,
-                                  rmm::device_buffer{0, stream, mr},
+                                  rmm::device_buffer{},
                                   std::move(null_mask),
                                   null_count,
                                   std::move(children));
@@ -92,14 +93,14 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
 namespace {
 
 /**
- * @brief This functor maps signed type_ids to unsigned counterparts.
+ * @brief This functor maps unsigned type_ids to signed counterparts
  */
-struct make_unsigned_fn {
+struct make_signed_fn {
   template <typename T>
   constexpr cudf::type_id operator()()
     requires(is_index_type<T>())
   {
-    return cudf::type_to_id<std::make_unsigned_t<T>>();
+    return cudf::type_to_id<std::make_signed_t<T>>();
   }
   template <typename T>
   constexpr cudf::type_id operator()()
@@ -116,30 +117,25 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(!keys->has_nulls(), "keys column must not have nulls");
+  CUDF_EXPECTS(!keys->has_nulls(), "keys column must not have nulls", std::invalid_argument);
 
-  // signed integer data can be used directly in the unsigned indices column
-  auto const indices_type = cudf::type_dispatcher(indices->type(), make_unsigned_fn{});
+  auto const indices_type = indices->type();
   auto const indices_size = indices->size();        // these need to be saved
   auto const null_count   = indices->null_count();  // before calling release()
   auto contents           = indices->release();
-  // compute the indices type using the size of the key set
-  auto const new_type = dictionary::detail::get_indices_type_for_size(keys->size());
 
-  // create the dictionary indices: convert to unsigned and remove nulls
+  auto const new_type_id = cudf::type_dispatcher(indices_type, make_signed_fn{});
+
+  // create the dictionary indices: convert to signed and remove nulls if necessary
   auto indices_column = [&] {
     // If the types match, then just commandeer the column's data buffer.
-    if (new_type.id() == indices_type) {
-      return std::make_unique<column>(new_type,
-                                      indices_size,
-                                      std::move(*(contents.data.release())),
-                                      rmm::device_buffer{0, stream, mr},
-                                      0);
+    if (new_type_id == indices_type.id()) {
+      return std::make_unique<column>(
+        indices_type, indices_size, std::move(*(contents.data.release())), rmm::device_buffer{}, 0);
     }
     // If the new type does not match, then convert the data.
-    cudf::column_view cast_view{
-      cudf::data_type{indices_type}, indices_size, contents.data->data(), nullptr, 0};
-    return cudf::detail::cast(cast_view, new_type, stream, mr);
+    cudf::column_view cast_view{indices_type, indices_size, contents.data->data(), nullptr, 0};
+    return cudf::detail::cast(cast_view, data_type{new_type_id}, stream, mr);
   }();
 
   return make_dictionary_column(std::move(keys),
