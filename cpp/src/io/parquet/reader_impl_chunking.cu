@@ -329,7 +329,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
   auto h_spans = cudf::detail::make_pinned_vector_async<page_span>(page_indices.size(), _stream);
   cudf::detail::cuda_memcpy_async(
-    cudf::host_span<page_span>{h_spans.data(), page_indices.size()},
+    cudf::host_span<page_span>{h_spans},
     cudf::device_span<page_span const>{page_indices.data(), page_indices.size()},
     _stream);
   subpass.pages.device_to_host_async(_stream);
