@@ -19,7 +19,6 @@ from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
     from cudf._typing import DtypeObj
-    from cudf.core.buffer import Buffer
     from cudf.core.column import ColumnBase
 
 
@@ -77,36 +76,6 @@ class IntervalColumn(StructColumn):
             # we need to make sure its children have non-null type
             struct_arrow = pa.array([], typ.storage_type)
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
-
-    @classmethod
-    def _deserialize_plc_column(
-        cls,
-        header: dict,
-        dtype: DtypeObj,
-        data: Buffer | None,
-        mask: Buffer | None,
-        children: list[ColumnBase],
-    ) -> plc.Column:
-        """Construct plc.Column using STRUCT type for interval columns."""
-        offset = header.get("offset", 0)
-        if mask is None:
-            null_count = 0
-        else:
-            null_count = plc.null_mask.null_count(
-                mask, offset, header["size"] + offset
-            )
-
-        plc_type = plc.DataType(plc.TypeId.STRUCT)
-        return plc.Column(
-            plc_type,
-            header["size"],
-            data,
-            mask,
-            null_count,
-            offset,
-            [child.plc_column for child in children],
-            validate=False,
-        )
 
     def copy(self, deep: bool = True) -> Self:
         return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
