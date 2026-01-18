@@ -636,7 +636,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         wrapped = ColumnBase._wrap_buffers(col)
 
-        dtype = dtype_from_pylibcudf_column(col)
+        dtype = dtype_from_pylibcudf_column(wrapped)
 
         cls: type[ColumnBase]
         if isinstance(dtype, pd.DatetimeTZDtype):
