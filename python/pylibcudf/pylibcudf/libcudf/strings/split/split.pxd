@@ -44,6 +44,13 @@ cdef extern from "cudf/strings/split/split.hpp" namespace \
         cuda_stream_view stream,
         device_memory_resource* mr) except +libcudf_exception_handler
 
+    cdef unique_ptr[column] split_part(
+        column_view strings,
+        string_scalar delimiter,
+        size_type index,
+        cuda_stream_view stream,
+        device_memory_resource* mr) except +libcudf_exception_handler
+
 
 cdef extern from "cudf/strings/split/split_re.hpp" namespace \
         "cudf::strings" nogil:

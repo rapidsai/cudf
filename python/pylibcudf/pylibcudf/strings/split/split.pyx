@@ -13,6 +13,7 @@ from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from pylibcudf.libcudf.strings.split cimport split_part as cpp_split_part
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
@@ -405,3 +406,20 @@ cpdef Column rsplit_record_re(
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
+
+
+cpdef Column split_part(Column input, Scalar delimiter, int index):
+    cdef unique_ptr[column] c_result
+    cdef strings_column_view c_input = strings_column_view(input.view())
+    cdef const string_scalar* c_delim = <const string_scalar*>delimiter.c_value()
+
+    with nogil:
+        c_result = cpp_split_part(
+            c_input, 
+            c_delim[0], 
+            index,
+            <cuda_stream_view>NULL, 
+            <device_memory_resource*>NULL
+        )
+
+    return Column.from_libcudf(move(c_result))
