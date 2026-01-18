@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -415,10 +415,10 @@ cpdef Column split_part(Column input, Scalar delimiter, int index):
 
     with nogil:
         c_result = cpp_split_part(
-            c_input, 
-            c_delim[0], 
+            c_input,
+            c_delim[0],
             index,
-            <cuda_stream_view>NULL, 
+            <cuda_stream_view>NULL,
             <device_memory_resource*>NULL
         )
 

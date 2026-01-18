@@ -1223,32 +1223,34 @@ class StringColumn(ColumnBase, Scannable):
 
     def rsplit(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
-    
+
     def split_part(self, delimiter: str | None = None, index: int = 0) -> Self:
         """
         Splits the string by delimiter and returns the token at the given index.
         """
-        import pylibcudf
         import pyarrow as pa
-        from cudf.utils.scalar import pa_scalar_to_plc_scalar
+
         from pylibcudf.strings import split as plc_split
+
+        from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
         if delimiter is None:
             delimiter = ""
 
         input_col = self.to_pylibcudf(mode="read")
-        
+
         delim_scalar = pa_scalar_to_plc_scalar(
             pa.scalar(delimiter, type=pa.string())
         )
-        
+
         plc_column = plc_split.split_part(input_col, delim_scalar, index)
 
         return cast(
             Self,
-            type(self).from_pylibcudf(plc_column)._with_type_metadata(self.dtype)
+            type(self)
+            .from_pylibcudf(plc_column)
+            ._with_type_metadata(self.dtype),
         )
-
 
     def _partition(
         self,
