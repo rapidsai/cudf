@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <functional>
@@ -73,10 +74,10 @@ enum class bitwise_op : int32_t {
 class aggregation {
  public:
   /**
-   * @brief Possible aggregation operations
+   * @brief Possible aggregation operations.
    */
-  enum Kind {
-    SUM,                ///< sum reduction
+  enum Kind : int32_t {
+    SUM = 0,            ///< sum reduction
     SUM_WITH_OVERFLOW,  ///< sum reduction with overflow detection
     PRODUCT,            ///< product reduction
     MIN,                ///< min reduction
@@ -116,17 +117,29 @@ class aggregation {
     HISTOGRAM,          ///< compute frequency of each element
     MERGE_HISTOGRAM,    ///< merge partial values of HISTOGRAM aggregation
     BITWISE_AGG,        ///< bitwise aggregation on numeric columns
-    TOP_K               ///< top k elements in a group
+    TOP_K,              ///< top k elements in a group
+    NUM_AGGREGATIONS    ///< Value to count the number of aggregations
   };
 
-  aggregation() = delete;
+  /**
+   * @brief No-parameter constructor.
+   *
+   * This constructor is never called anywhere, and should never be called at all. However, it
+   * cannot be be declared as deleted due to the usage of CRTP (Curiously Recurring Template
+   * Pattern) helper to automatically implement `clone()` method for derived aggregation classes. As
+   * such, definition of this constructor is just to satisfy the compiler requirements.
+   */
+  aggregation() : kind{static_cast<Kind>(-1)} {}
 
   /**
-   * @brief Construct a new aggregation object
+   * @brief Construct a new aggregation object from a given aggregation kind.
    *
-   * @param a aggregation::Kind enum value
+   * @param kind_ aggregation::Kind enum value
    */
-  aggregation(aggregation::Kind a) : kind{a} {}
+  aggregation(Kind kind_) : kind{kind_}
+  {
+    CUDF_EXPECTS(kind_ >= 0 && kind_ < NUM_AGGREGATIONS, "Invalid aggregation kind");
+  }
   Kind kind;  ///< The aggregation to perform
   virtual ~aggregation() = default;
 
@@ -155,75 +168,33 @@ class aggregation {
 
 /**
  * @brief Derived class intended for rolling_window specific aggregation usage.
- *
- * As an example, rolling_window will only accept rolling_aggregation inputs,
- * and the appropriate derived classes (sum_aggregation, mean_aggregation, etc)
- * derive from this interface to represent these valid options.
  */
-class rolling_aggregation : public virtual aggregation {
- public:
-  ~rolling_aggregation() override = default;
-
- protected:
-  rolling_aggregation() {}
-  /// constructor inherited from cudf::aggregation
-  using aggregation::aggregation;
-};
+class rolling_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for groupby specific aggregation usage.
  */
-class groupby_aggregation : public virtual aggregation {
- public:
-  ~groupby_aggregation() override = default;
-
- protected:
-  groupby_aggregation() {}
-};
+class groupby_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for groupby specific scan usage.
  */
-class groupby_scan_aggregation : public virtual aggregation {
- public:
-  ~groupby_scan_aggregation() override = default;
-
- protected:
-  groupby_scan_aggregation() {}
-};
+class groupby_scan_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for reduction usage.
  */
-class reduce_aggregation : public virtual aggregation {
- public:
-  ~reduce_aggregation() override = default;
-
- protected:
-  reduce_aggregation() {}
-};
+class reduce_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for scan usage.
  */
-class scan_aggregation : public virtual aggregation {
- public:
-  ~scan_aggregation() override = default;
-
- protected:
-  scan_aggregation() {}
-};
+class scan_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for segmented reduction usage.
  */
-class segmented_reduce_aggregation : public virtual aggregation {
- public:
-  ~segmented_reduce_aggregation() override = default;
-
- protected:
-  segmented_reduce_aggregation() {}
-};
+class segmented_reduce_aggregation : public virtual aggregation {};
 
 /// Type of code in the user defined function string.
 enum class udf_type : bool { CUDA, PTX };
