@@ -109,14 +109,7 @@ class Serializable:
         header["is-cuda"] = [
             hasattr(f, "__cuda_array_interface__") for f in frames
         ]
-        # Frames can be either Buffer or memoryview objects:
-        # - Buffer (on GPU): use .size property
-        # - memoryview (spilled to CPU): use .nbytes attribute
-        # See SpillableBuffer.serialize() which returns memoryview when spilled
-        header["lengths"] = [
-            f.size if isinstance(f, cudf.core.buffer.Buffer) else f.nbytes
-            for f in frames
-        ]
+        header["lengths"] = [f.nbytes for f in frames]
         return header, frames
 
     @classmethod
