@@ -410,16 +410,19 @@ cpdef Column rsplit_record_re(
 
 cpdef Column split_part(Column input, Scalar delimiter, int index):
     cdef unique_ptr[column] c_result
-    cdef strings_column_view c_input = strings_column_view(input.view())
-    cdef const string_scalar* c_delim = <const string_scalar*>delimiter.c_value()
+    cdef const string_scalar* c_delimiter = <const string_scalar*>(
+        delimiter.c_obj.get()
+    )
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_split_part(
-            c_input,
-            c_delim[0],
+            input.view(),
+            dereference(c_delimiter),
             index,
-            <cuda_stream_view>NULL,
-            <device_memory_resource*>NULL
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result))
