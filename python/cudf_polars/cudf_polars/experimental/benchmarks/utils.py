@@ -912,6 +912,14 @@ def parse_args(
         default=None,
         help="Optional directory to write query results as parquet files.",
     )
+    parser.add_argument(
+        "--spill-to-pinned-memory",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=textwrap.dedent("""\
+            Whether RapidsMPF should spill to pinned host memory when available,
+            or use regular pageable host memory."""),
+    )
 
     parsed_args = parser.parse_args(args)
 
