@@ -129,7 +129,10 @@ class aggregation {
    * Pattern) helper to automatically implement `clone()` method for derived aggregation classes. As
    * such, definition of this constructor is just to satisfy the compiler requirements.
    */
-  aggregation() : kind{static_cast<Kind>(-1)} {}
+  aggregation() : kind{static_cast<Kind>(-1)}
+  {
+    CUDF_FAIL("No-parameter aggregation constructor should never be called");
+  }
 
   /**
    * @brief Construct a new aggregation object from a given aggregation kind.
