@@ -587,6 +587,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             A new pylibcudf.Column with wrapped buffers.
         """
         # Convert unsupported types to supported types
+        # TODO: Removing this conversion causes some pandas tests to fail, but others
+        # pass, so we need to investigate further to understand whether we should be
+        # doing this conversion on a more per-algorithm basis or something.
         if col.type().id() == plc.TypeId.TIMESTAMP_DAYS:
             col = plc.unary.cast(
                 col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS)
