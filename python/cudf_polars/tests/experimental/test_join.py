@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -271,10 +271,12 @@ def test_cache_preserves_partitioning_join():
     joined = left.join(right, on="key")
 
     # Use joined result twice to trigger Cache (CSE)
-    q = pl.concat([
-        joined.group_by("key").agg(pl.col("val_a").sum()),
-        joined.group_by("key").agg(pl.col("val_b").sum()),
-    ])
+    q = pl.concat(
+        [
+            joined.group_by("key").agg(pl.col("val_a").sum()),
+            joined.group_by("key").agg(pl.col("val_b").sum()),
+        ]
+    )
 
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
