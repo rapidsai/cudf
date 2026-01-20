@@ -71,7 +71,6 @@ class CUDF_EXPORT hierarchical_thread_pool {
       // Mark this thread as owned by this pool's level (happens once per thread)
       if (thread_pool_level == THREAD_POOL_LEVEL_NONE) { thread_pool_level = level; }
 
-      // Execute the actual task
       return (*task_ptr)();
     });
   }
