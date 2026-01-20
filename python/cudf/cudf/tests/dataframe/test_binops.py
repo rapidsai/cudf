@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import operator
 
@@ -622,16 +622,17 @@ def test_logical_operator_func_dataframe(comparison_op_method, nulls, other):
 @pytest.mark.parametrize("data", [None, [-9, 7], [12, 18]])
 @pytest.mark.parametrize("scalar", [1, 3, 12, np.nan])
 def test_empty_column(binary_op, data, scalar):
-    gdf = cudf.DataFrame(columns=["a", "b"])
+    pdf = pd.DataFrame(columns=["a", "b"])
     if data is not None:
-        gdf["a"] = data
+        pdf["a"] = data
 
-    pdf = gdf.to_pandas()
-
+    gdf = cudf.DataFrame(pdf)
     got = binary_op(gdf, scalar)
     expected = binary_op(pdf, scalar)
 
-    assert_eq(expected, got)
+    # pandas can still hold an all NA columns with object dtype,
+    # cuDF cannot, and uses StringDtype instead.
+    assert_eq(expected, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(

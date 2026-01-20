@@ -73,4 +73,7 @@ def test_intersection_index_mixed_string_categorical_integer(
         idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
         idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
         actual = idx1.intersection(idx2, sort=sort)
-        assert_eq(expected, actual)
+    # As of pandas 3.0, empty default type of object isn't
+    # necessarily equivalent to cuDF's empty default type of
+    # pandas.StringDtype
+    assert_eq(expected.astype(actual.dtype), actual)
