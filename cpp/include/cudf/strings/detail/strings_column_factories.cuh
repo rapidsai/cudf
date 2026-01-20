@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -125,7 +125,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
 
   // build chars column
   rmm::device_uvector<char> chars_data(bytes, stream, mr);
-  thrust::copy(rmm::exec_policy(stream), chars_begin, chars_end, chars_data.begin());
+  thrust::copy(rmm::exec_policy_nosync(stream), chars_begin, chars_end, chars_data.begin());
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),

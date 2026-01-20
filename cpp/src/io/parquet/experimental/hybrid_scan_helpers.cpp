@@ -73,7 +73,7 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet_metadata,
                                                      bool use_arrow_schema,
                                                      bool has_cols_from_mismatched_srcs)
-  : aggregate_reader_metadata_base({}, false, false)
+  : aggregate_reader_metadata_base(host_span<std::unique_ptr<datasource> const>{}, false, false)
 {
   // Just copy over the FileMetaData struct to the internal metadata struct
   per_file_metadata.emplace_back(metadata{parquet_metadata});
@@ -83,7 +83,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet
 aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
                                                      bool use_arrow_schema,
                                                      bool has_cols_from_mismatched_srcs)
-  : aggregate_reader_metadata_base({}, false, false)
+  : aggregate_reader_metadata_base(host_span<std::unique_ptr<datasource> const>{}, false, false)
 {
   // Re-initialize internal variables here as base class was initialized without a source
   per_file_metadata.emplace_back(metadata{footer_bytes});
@@ -149,9 +149,22 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
   }
 
   // Get the file metadata and setup the page index
-  auto& file_metadata = per_file_metadata.front();
+  auto& file_metadata    = per_file_metadata.front();
+  auto const& row_groups = file_metadata.row_groups;
+
+  // Check for empty parquet file
+  CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),
+               "No column chunks in Parquet schema to read page index for");
+
   // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
-  int64_t const min_offset = file_metadata.row_groups.front().columns.front().column_index_offset;
+  int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
+
+  // Check if the page index buffer is valid
+  {
+    auto const& last_col  = row_groups.back().columns.back();
+    auto const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+    CUDF_EXPECTS(max_offset > min_offset, "Encountered an invalid page index buffer");
+  }
 
   file_metadata.setup_page_index(page_index_bytes, min_offset);
 }
@@ -547,6 +560,94 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
                                                              stream);
 
   return bloom_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
+}
+
+/**
+ * @brief Converts column named expression to column index reference expression
+ */
+named_to_reference_converter::named_to_reference_converter(
+  std::optional<std::reference_wrapper<ast::expression const>> expr,
+  table_metadata const& metadata,
+  std::vector<SchemaElement> const& schema_tree)
+{
+  if (!expr.has_value()) { return; }
+
+  // Map column names to their indices
+  std::transform(metadata.schema_info.cbegin(),
+                 metadata.schema_info.cend(),
+                 thrust::counting_iterator<size_t>(0),
+                 std::inserter(_column_name_to_index, _column_name_to_index.end()),
+                 [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
+
+  // Map column indices to their names
+  auto const& root = schema_tree.front();
+  std::for_each(thrust::counting_iterator<int32_t>(0),
+                thrust::counting_iterator<int32_t>(root.children_idx.size()),
+                [&](int32_t col_idx) {
+                  auto const schema_idx = root.children_idx[col_idx];
+                  _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
+                });
+
+  expr.value().get().accept(*this);
+}
+
+std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
+  ast::column_reference const& expr)
+{
+  // Map the column index to its name
+  auto const col_name = _column_indices_to_names[expr.get_column_index()];
+  // Check if the column name exists in the metadata and map it to its new column index
+  auto col_index_it = _column_name_to_index.find(col_name);
+  if (col_index_it == _column_name_to_index.end()) {
+    CUDF_FAIL("Column name not found in metadata");
+  }
+  auto col_index = col_index_it->second;
+  // Create a new column reference
+  _col_ref.emplace_back(col_index);
+  _converted_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
+  return std::reference_wrapper<ast::expression const>(_col_ref.back());
+}
+
+names_from_expression::names_from_expression(
+  std::optional<std::reference_wrapper<ast::expression const>> expr,
+  std::vector<std::string> const& skip_names,
+  std::optional<std::vector<std::string>> selected_columns,
+  std::vector<SchemaElement> const& schema_tree)
+{
+  if (!expr.has_value()) { return; }
+
+  _skip_names = std::unordered_set<std::string>{skip_names.cbegin(), skip_names.cend()};
+
+  // If we have a column selection, map column indices to the selected names
+  if (selected_columns.has_value()) {
+    std::transform(
+      thrust::counting_iterator<size_t>(0),
+      thrust::counting_iterator(selected_columns->size()),
+      selected_columns->cbegin(),
+      std::inserter(_column_indices_to_names, _column_indices_to_names.end()),
+      [&](auto col_idx, auto const& col_name) { return std::make_pair(col_idx, col_name); });
+  } else {
+    // Otherwise, map all column indices to their names from the schema tree
+    auto const& root = schema_tree.front();
+    std::for_each(thrust::counting_iterator<int32_t>(0),
+                  thrust::counting_iterator<int32_t>(root.children_idx.size()),
+                  [&](int32_t col_idx) {
+                    auto const schema_idx = root.children_idx[col_idx];
+                    _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
+                  });
+  }
+
+  expr.value().get().accept(*this);
+}
+
+std::reference_wrapper<ast::expression const> names_from_expression::visit(
+  ast::column_reference const& expr)
+{
+  // Map the column index to its name
+  auto const col_name = _column_indices_to_names[expr.get_column_index()];
+  // If the column name is not in the skip_names, add it to the set
+  if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
+  return expr;
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

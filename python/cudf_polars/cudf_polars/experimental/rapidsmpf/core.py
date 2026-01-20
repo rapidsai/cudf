@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Core RapidsMPF streaming-engine API."""
 
 from __future__ import annotations
 
+import contextlib
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
@@ -37,6 +38,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
 )
+from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPoolConfig
@@ -171,6 +173,7 @@ def evaluate_pipeline(
         # Always use the RapidsMPF stream pool for now.
         br = rmpf_context.br()
         stream_pool = True
+        rmpf_context_manager = contextlib.nullcontext(rmpf_context)
     else:
         # Using "single" mode.
         # Create a new local RapidsMPF context.
@@ -204,69 +207,83 @@ def evaluate_pipeline(
         br = BufferResource(
             mr, memory_available=memory_available, stream_pool=stream_pool
         )
-        rmpf_context = Context(local_comm, br, options)
+        rmpf_context_manager = Context(local_comm, br, options)
 
-    # Create the IR execution context
-    if stream_pool:
-        ir_context = IRExecutionContext(
-            get_cuda_stream=rmpf_context.get_stream_from_pool
+    with rmpf_context_manager as rmpf_context:
+        # Create the IR execution context
+        if stream_pool:
+            ir_context = IRExecutionContext(
+                get_cuda_stream=rmpf_context.get_stream_from_pool
+            )
+        else:
+            ir_context = IRExecutionContext.from_config_options(config_options)
+
+        # Generate network nodes
+        assert rmpf_context is not None, "RapidsMPF context must defined."
+        metadata_collector: list[Metadata] | None = [] if collect_metadata else None
+        nodes, output = generate_network(
+            rmpf_context,
+            ir,
+            partition_info,
+            config_options,
+            stats,
+            ir_context=ir_context,
+            collective_id_map=collective_id_map,
+            metadata_collector=metadata_collector,
         )
-    else:
-        ir_context = IRExecutionContext.from_config_options(config_options)
 
-    # Generate network nodes
-    assert rmpf_context is not None, "RapidsMPF context must defined."
-    metadata_collector: list[Metadata] | None = [] if collect_metadata else None
-    nodes, output = generate_network(
-        rmpf_context,
-        ir,
-        partition_info,
-        config_options,
-        stats,
-        ir_context=ir_context,
-        collective_id_map=collective_id_map,
-        metadata_collector=metadata_collector,
-    )
+        # Run the network
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
+        run_streaming_pipeline(nodes=nodes, py_executor=executor)
 
-    # Run the network
-    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
-    run_streaming_pipeline(nodes=nodes, py_executor=executor)
+        # Extract/return the concatenated result.
+        # Keep chunks alive until after concatenation to prevent
+        # use-after-free with stream-ordered allocations
+        messages = output.release()
+        chunks = [
+            TableChunk.from_message(msg).make_available_and_spill(
+                br, allow_overbooking=True
+            )
+            for msg in messages
+        ]
+        dfs: list[DataFrame] = []
+        if chunks:
+            dfs = [
+                DataFrame.from_table(
+                    chunk.table_view(),
+                    list(ir.schema.keys()),
+                    list(ir.schema.values()),
+                    chunk.stream,
+                )
+                for chunk in chunks
+            ]
+            df = _concat(*dfs, context=ir_context)
+        else:
+            # No chunks received - create an empty DataFrame with correct schema
+            stream = ir_context.get_cuda_stream()
+            chunk = empty_table_chunk(ir, rmpf_context, stream)
+            df = DataFrame.from_table(
+                chunk.table_view(),
+                list(ir.schema.keys()),
+                list(ir.schema.values()),
+                stream,
+            )
 
-    # Extract/return the concatenated result.
-    # Keep chunks alive until after concatenation to prevent
-    # use-after-free with stream-ordered allocations
-    messages = output.release()
-    chunks = [
-        TableChunk.from_message(msg).make_available_and_spill(
-            br, allow_overbooking=True
-        )
-        for msg in messages
-    ]
-    dfs = [
-        DataFrame.from_table(
-            chunk.table_view(),
-            list(ir.schema.keys()),
-            list(ir.schema.values()),
-            chunk.stream,
-        )
-        for chunk in chunks
-    ]
-    df = _concat(*dfs, context=ir_context)
-    # We need to materialize the polars dataframe before we drop the rapidsmpf
-    # context, which keeps the CUDA streams alive.
-    stream = df.stream
-    result = df.to_polars()
-    stream.synchronize()
+        # We need to materialize the polars dataframe before we drop the rapidsmpf
+        # context, which keeps the CUDA streams alive.
+        stream = df.stream
+        result = df.to_polars()
+        stream.synchronize()
 
-    # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-    # before the Context, which ultimately contains the rmm MR, goes out of scope.
-    del nodes, output, messages, chunks, dfs, df
+        # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
+        # before the Context, which ultimately contains the rmm MR, goes out of scope.
+        del nodes, output, messages, chunks, dfs, df
 
-    # Restore the initial RMM memory resource
-    if _initial_mr is not None:
-        rmm.mr.set_current_device_resource(_original_mr)
+        # Restore the initial RMM memory resource
+        if _initial_mr is not None:
+            rmm.mr.set_current_device_resource(_original_mr)
 
-    return result, metadata_collector
+        return result, metadata_collector
 
 
 def lower_ir_graph(

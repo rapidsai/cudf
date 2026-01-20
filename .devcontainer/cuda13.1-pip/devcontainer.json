@@ -3,15 +3,15 @@
     "context": "${localWorkspaceFolder}/.devcontainer",
     "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
     "args": {
-      "CUDA": "13.0",
+      "CUDA": "13.1",
       "PYTHON_PACKAGE_MANAGER": "pip",
-      "BASE": "rapidsai/devcontainers:26.02-cpp-cuda13.0"
+      "BASE": "rapidsai/devcontainers:26.04-cpp-cuda13.1"
     }
   },
   "runArgs": [
     "--rm",
     "--name",
-    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-26.02-cuda13.0-pip",
+    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-26.04-cuda13.1-pip",
     "--ulimit",
     "nofile=500000"
   ],
@@ -19,7 +19,7 @@
     "gpu": "optional"
   },
   "features": {
-    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:26.2": {}
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:26.4": {}
   },
   "overrideFeatureInstallOrder": [
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
@@ -27,7 +27,7 @@
   "initializeCommand": [
     "/bin/bash",
     "-c",
-    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/share/${localWorkspaceFolderBasename}-cuda13.0-venvs}"
+    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/share/${localWorkspaceFolderBasename}-cuda13.1-venvs}"
   ],
   "postAttachCommand": [
     "/bin/bash",
@@ -40,7 +40,7 @@
     "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../.local/share/${localWorkspaceFolderBasename}-cuda13.0-venvs,target=/home/coder/.local/share/venvs,type=bind,consistency=consistent"
+    "source=${localWorkspaceFolder}/../.local/share/${localWorkspaceFolderBasename}-cuda13.1-venvs,target=/home/coder/.local/share/venvs,type=bind,consistency=consistent"
   ],
   "customizations": {
     "vscode": {

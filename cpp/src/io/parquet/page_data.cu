@@ -6,13 +6,13 @@
 #include "page_data.cuh"
 #include "page_decode.cuh"
 
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/iterator>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
 
@@ -510,12 +510,12 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
                                            rmm::cuda_stream_view stream)
 {
   // determine which kernels to invoke
-  auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
-  return thrust::reduce(rmm::exec_policy(stream),
-                        mask_iter,
-                        mask_iter + pages.size(),
-                        0U,
-                        cuda::std::bit_or<uint32_t>{});
+  return cudf::detail::transform_reduce(pages.device_begin(),
+                                        pages.device_end(),
+                                        mask_tform{},
+                                        uint32_t{0},
+                                        cuda::std::bit_or<uint32_t>{},
+                                        stream);
 }
 
 /**

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +9,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -173,7 +174,8 @@ void reader_impl::setup_next_pass(read_mode mode)
       thrust::make_transform_iterator(pass.chunks.d_begin(), get_chunk_compressed_size{});
     pass.base_mem_size =
       decomp_dict_data_size +
-      thrust::reduce(rmm::exec_policy(_stream), chunk_iter, chunk_iter + pass.chunks.size());
+      cudf::detail::reduce(
+        chunk_iter, chunk_iter + pass.chunks.size(), size_t{0}, cuda::std::plus<size_t>{}, _stream);
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.
@@ -325,7 +327,11 @@ void reader_impl::setup_next_subpass(read_mode mode)
     subpass.pages = subpass.page_buf;
   }
 
-  auto const h_spans = cudf::detail::make_host_vector_async(page_indices, _stream);
+  auto h_spans = cudf::detail::make_pinned_vector_async<page_span>(page_indices.size(), _stream);
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<page_span>{h_spans.data(), page_indices.size()},
+    cudf::device_span<page_span const>{page_indices.data(), page_indices.size()},
+    _stream);
   subpass.pages.device_to_host_async(_stream);
 
   _stream.synchronize();
@@ -688,7 +694,12 @@ void reader_impl::set_subpass_page_mask()
   }
 
   // Use the pass page index mask to gather the subpass page mask from the pass level page mask
-  auto const host_page_src_index = cudf::detail::make_host_vector(subpass->page_src_index, _stream);
+  auto host_page_src_index =
+    cudf::detail::make_pinned_vector_async<size_t>(subpass->page_src_index.size(), _stream);
+  cudf::detail::cuda_memcpy(
+    cudf::host_span<size_t>{host_page_src_index.data(), subpass->page_src_index.size()},
+    cudf::device_span<size_t const>{subpass->page_src_index.data(), subpass->page_src_index.size()},
+    _stream);
   thrust::gather(thrust::seq,
                  host_page_src_index.begin(),
                  host_page_src_index.end(),

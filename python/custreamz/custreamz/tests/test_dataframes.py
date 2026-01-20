@@ -195,10 +195,7 @@ def test_unary_operators(op, getter):
     "func",
     [
         lambda df: df.query("x > 1 and x < 4"),
-        pytest.param(
-            lambda df: df.x.value_counts().nlargest(2).astype(int),
-            marks=pytest.mark.xfail(reason="Index name lost in _getattr_"),
-        ),
+        lambda df: df.x.value_counts().nlargest(2).astype(int),
     ],
 )
 def test_dataframe_simple(func):

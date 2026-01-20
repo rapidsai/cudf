@@ -26,7 +26,7 @@ dependencies:
 - cupy>=13.6.0
 - cxx-compiler
 - cython>=3.0.3,<3.2.0
-- dask-cuda==26.2.*,>=0.0.0a0
+- dask-cuda==26.4.*,>=0.0.0a0
 - dlpack>=0.8,<1.0
 - doxygen=1.9.1
 - fastavro>=0.22.9
@@ -40,11 +40,11 @@ dependencies:
 - jupyter_client
 - libcufile-dev
 - libcurand-dev
-- libkvikio==26.2.*,>=0.0.0a0
+- libkvikio==26.4.*,>=0.0.0a0
 - libnvcomp-dev==5.1.0.21
 - libnvjitlink-dev
 - librdkafka>=2.8.0,<2.9.0
-- librmm==26.2.*,>=0.0.0a0
+- librmm==26.4.*,>=0.0.0a0
 - make
 - mmh3
 - moto>=4.0.8
@@ -56,7 +56,7 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.22.1,<0.23.0
+- numba-cuda>=0.22.2,<0.23.0
 - numba>=0.60.0,<0.62.0
 - numpy>=1.23,<3.0
 - numpydoc
@@ -67,7 +67,7 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.4.0
 - pandoc
-- polars>=1.29,<1.35
+- polars>=1.30,<1.36
 - pre-commit
 - pyarrow>=15.0.0
 - pydata-sphinx-theme>=0.15.4
@@ -83,12 +83,12 @@ dependencies:
 - python>=3.10,<3.14
 - pytorch>=2.4.0
 - rapids-build-backend>=0.4.0,<0.5.0
-- rapids-dask-dependency==26.2.*,>=0.0.0a0
+- rapids-dask-dependency==26.4.*,>=0.0.0a0
 - rapids-logger==0.2.*,>=0.0.0a0
 - rich
-- rmm==26.2.*,>=0.0.0a0
+- rmm==26.4.*,>=0.0.0a0
 - s3fs>=2022.3.0
-- scikit-build-core>=0.10.0
+- scikit-build-core>=0.11.0
 - scipy
 - sphinx-autobuild
 - sphinx-copybutton

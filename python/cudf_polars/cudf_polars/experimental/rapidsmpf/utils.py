@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Utility functions and classes for the RapidsMPF streaming runtime."""
 
@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import operator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any
@@ -17,9 +17,12 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+from cudf_polars.containers import DataFrame
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Callable, Iterator
+
+    from rapidsmpf.memory.memory_reservation import MemoryReservation
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -240,11 +243,9 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
     The empty table chunk.
     """
     # Create an empty table with the correct schema
+    # Use dtype.plc_type to get the full DataType (preserves precision/scale for Decimals)
     empty_columns = [
-        plc.column_factories.make_empty_column(
-            plc.DataType(dtype.id()),
-            stream=stream,
-        )
+        plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
         for dtype in ir.schema.values()
     ]
     empty_table = plc.Table(empty_columns)
@@ -253,6 +254,29 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
         empty_table,
         stream,
         exclusive_view=True,
+    )
+
+
+def chunk_to_frame(chunk: TableChunk, ir: IR) -> DataFrame:
+    """
+    Convert a TableChunk to a DataFrame.
+
+    Parameters
+    ----------
+    chunk
+        The TableChunk to convert.
+    ir
+        The IR node to use for the schema.
+
+    Returns
+    -------
+    A DataFrame.
+    """
+    return DataFrame.from_table(
+        chunk.table_view(),
+        list(ir.schema.keys()),
+        list(ir.schema.values()),
+        chunk.stream,
     )
 
 
@@ -324,3 +348,27 @@ def make_spill_function(
         return spilled
 
     return spill_func
+
+
+@contextmanager
+def opaque_reservation(
+    context: Context,
+    estimated_bytes: int,
+) -> Iterator[MemoryReservation]:
+    """
+    Reserve memory for opaque allocations.
+
+    Parameters
+    ----------
+    context
+        The RapidsMPF context.
+    estimated_bytes
+        The estimated number of bytes to reserve.
+
+    Yields
+    ------
+    The memory reservation.
+    """
+    yield context.br().reserve_device_memory_and_spill(
+        estimated_bytes, allow_overbooking=True
+    )
