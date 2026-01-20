@@ -389,7 +389,7 @@ class StringMethods(BaseAccessor):
         Parameters
         ----------
         delimiter : str, default None
-            The string to split on.
+            The string to split on. If not specified, split on whitespace.
         index : int, default 0
             The index of the token to retrieve.
 
