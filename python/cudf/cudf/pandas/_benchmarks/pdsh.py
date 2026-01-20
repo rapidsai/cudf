@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import date
 from typing import TYPE_CHECKING
-
+from decimal import Decimal
 import cudf.pandas
 
 cudf.pandas.install()
@@ -55,23 +55,21 @@ class PDSHQueries:
         # This is lenient towards pandas as normally an optimizer should decide
         # that this could be computed before the groupby aggregation.
         # Other implementations don't enjoy this benefit.
-        filt["disc_price"] = filt.l_extendedprice * (1.0 - filt.l_discount)
+        filt["disc_price"] = filt.l_extendedprice * (Decimal("1.0") - filt.l_discount)
         filt["charge"] = (
-            filt.l_extendedprice * (1.0 - filt.l_discount) * (1.0 + filt.l_tax)
+            filt.l_extendedprice * (Decimal("1.0") - filt.l_discount) * (Decimal("1.0") + filt.l_tax)
         )
 
         gb = filt.groupby(["l_returnflag", "l_linestatus"], as_index=False)
         agg = gb.agg(
-            sum_qty=pd.NamedAgg(column="l_quantity", aggfunc="sum"),
-            sum_base_price=pd.NamedAgg(
-                column="l_extendedprice", aggfunc="sum"
-            ),
-            sum_disc_price=pd.NamedAgg(column="disc_price", aggfunc="sum"),
-            sum_charge=pd.NamedAgg(column="charge", aggfunc="sum"),
-            avg_qty=pd.NamedAgg(column="l_quantity", aggfunc="mean"),
-            avg_price=pd.NamedAgg(column="l_extendedprice", aggfunc="mean"),
-            avg_disc=pd.NamedAgg(column="l_discount", aggfunc="mean"),
-            count_order=pd.NamedAgg(column="l_orderkey", aggfunc="size"),
+            sum_qty=("l_quantity", "sum"),
+                sum_base_price=("l_extendedprice", "sum"),
+                sum_disc_price=("disc_price", "sum"),
+                sum_charge=("charge", "sum"),
+                avg_qty=("l_quantity", "mean"),
+                avg_price=("l_extendedprice", "mean"),
+                avg_disc=("l_discount", "mean"),
+                count_order=("l_returnflag", "count"),
         )
 
         return agg.sort_values(["l_returnflag", "l_linestatus"])
@@ -190,7 +188,7 @@ class PDSHQueries:
 
         gb = jn.groupby("o_orderpriority", as_index=False)
         agg = gb.agg(
-            order_count=pd.NamedAgg(column="o_orderkey", aggfunc="count")
+            order_count=("o_orderkey", "count")
         )
 
         return agg.sort_values(["o_orderpriority"])
@@ -227,7 +225,7 @@ class PDSHQueries:
 
         jn5 = jn5[jn5["r_name"] == var1]
         jn5 = jn5[(jn5["o_orderdate"] >= var2) & (jn5["o_orderdate"] < var3)]
-        jn5["revenue"] = jn5.l_extendedprice * (1.0 - jn5.l_discount)
+        jn5["revenue"] = jn5.l_extendedprice * (Decimal("1.0") - jn5.l_discount)
 
         gb = jn5.groupby("n_name", as_index=False)["revenue"].sum()
         return gb.sort_values("revenue", ascending=False)
@@ -305,12 +303,13 @@ class PDSHQueries:
         total["volume"] = total["l_extendedprice"] * (
             1.0 - total["l_discount"]
         )
+        total["l_shipdate"] = total["l_shipdate"].astype("datetime64[s]")
         total["l_year"] = total["l_shipdate"].dt.year
 
         gb = total.groupby(
             ["supp_nation", "cust_nation", "l_year"], as_index=False
         )
-        agg = gb.agg(revenue=pd.NamedAgg(column="volume", aggfunc="sum"))
+        agg = gb.agg(revenue=("volume", "sum"))
 
         return agg.sort_values(by=["supp_nation", "cust_nation", "l_year"])
 
@@ -353,7 +352,7 @@ class PDSHQueries:
 
         jn7 = jn7[(jn7["o_orderdate"] >= var4) & (jn7["o_orderdate"] <= var5)]
         jn7 = jn7[jn7["p_type"] == var3]
-
+        jn7["o_orderdate"] = jn7["o_orderdate"].astype('datetime64[s]')
         jn7["o_year"] = jn7["o_orderdate"].dt.year
         jn7["volume"] = jn7["l_extendedprice"] * (1.0 - jn7["l_discount"])
         jn7 = jn7.rename(columns={"n_name": "nation"})
@@ -400,7 +399,7 @@ class PDSHQueries:
         jn5 = jn5.rename(columns={"n_name": "nation"})
 
         gb = jn5.groupby(["nation", "o_year"], as_index=False, sort=False)
-        agg = gb.agg(sum_profit=pd.NamedAgg(column="amount", aggfunc="sum"))
+        agg = gb.agg(sum_profit=("amount",  "sum"))
         sorted_df = agg.sort_values(
             by=["nation", "o_year"], ascending=[True, False]
         )
