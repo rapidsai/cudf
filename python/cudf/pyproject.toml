@@ -29,7 +29,7 @@ dependencies = [
     "numpy>=1.23,<3.0",
     "nvtx>=0.2.1",
     "packaging",
-    "pandas==3.0.0rc1",
+    "pandas==3.0.0rc2",
     "pyarrow>=15.0.0,!=17.0.0; platform_machine=='aarch64'",
     "pyarrow>=15.0.0; platform_machine=='x86_64'",
     "pylibcudf==26.4.*,>=0.0.0a0",
