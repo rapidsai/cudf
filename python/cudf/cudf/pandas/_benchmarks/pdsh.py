@@ -22,7 +22,6 @@ cudf.pandas.install()
 
 import pandas as pd  # noqa: E402
 
-
 from cudf.pandas._benchmarks.utils import (  # noqa: E402
     get_data,
     run_pandas,
