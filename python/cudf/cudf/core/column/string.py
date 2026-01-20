@@ -1223,7 +1223,7 @@ class StringColumn(ColumnBase, Scannable):
 
     def rsplit(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
-    
+
     def split_part(self, delimiter: plc.Scalar, index: int) -> Self:
         with self.access(mode="read", scope="internal"):
             plc_column = plc.strings.split.split.split_part(
@@ -1239,7 +1239,6 @@ class StringColumn(ColumnBase, Scannable):
                     ._with_type_metadata(self.dtype)
                 ),
             )
-
 
     def _partition(
         self,

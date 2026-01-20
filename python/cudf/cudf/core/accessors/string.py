@@ -379,22 +379,24 @@ class StringMethods(BaseAccessor):
             else:
                 out = out[0]
         return out
-    
-    def split_part(self, delimiter: str | None = None, index: int = 0) -> Series | Index:
+
+    def split_part(
+        self, delimiter: str | None = None, index: int = 0
+    ) -> Series | Index:
         """
         Splits the string by delimiter and returns the token at the given index.
-        
+
         Parameters
         ----------
         delimiter : str, default None
             The string to split on.
         index : int, default 0
             The index of the token to retrieve.
-            
+
         Returns
         -------
         Series or Index
-        
+
         Examples
         --------
         >>> import cudf
@@ -405,7 +407,7 @@ class StringMethods(BaseAccessor):
         2    None
         dtype: object
         """
-        
+
         return self._return_or_inplace(
             self._column.split_part(delimiter, index)
         )
