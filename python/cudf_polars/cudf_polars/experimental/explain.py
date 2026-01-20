@@ -103,9 +103,7 @@ def _repr_ir_tree(
     stats: StatsCollector | None = None,
 ) -> str:
     header = _repr_ir(ir, offset=offset)
-    count = (
-        partition_info[ir].count if partition_info and ir in partition_info else None
-    )
+    count = partition_info[ir].count if partition_info else None
     if stats is not None:
         # Include row-count estimate (if available)
         row_count_estimate = _fmt_row_count(

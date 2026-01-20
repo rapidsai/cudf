@@ -8,6 +8,8 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.dsl.ir import Cache
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.testing.asserts import (
@@ -251,3 +253,45 @@ def test_join_maintain_order_fallback_streaming(left, right, maintain_order):
         match=r"Join\(maintain_order=.*\) not supported for multiple partitions\.",
     ):
         assert_gpu_result_equal(q, engine=engine)
+
+
+def test_cache_preserves_partitioning_join():
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 3,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+        },
+    )
+
+    left = pl.LazyFrame({"key": list(range(20)) * 5, "val_a": range(100)})
+    right = pl.LazyFrame({"key": list(range(20)) * 5, "val_b": range(100)})
+    joined = left.join(right, on="key")
+
+    # Use joined result twice to trigger Cache (CSE)
+    q = pl.concat([
+        joined.group_by("key").agg(pl.col("val_a").sum()),
+        joined.group_by("key").agg(pl.col("val_b").sum()),
+    ])
+
+    config_options = ConfigOptions.from_polars_engine(engine)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    lowered_ir, partition_info, _ = lower_ir_graph(ir, config_options)
+
+    # Cache should preserve partitioning on 'key'
+    cache_partitioning = [
+        [ne.name for ne in partition_info[node].partitioned_on]
+        for node in traversal([lowered_ir])
+        if isinstance(node, Cache)
+    ]
+    assert cache_partitioning == [["key"]], (
+        f"Cache should preserve partitioning on 'key', got {cache_partitioning}"
+    )
+
+    # Only 2 shuffles needed (for join sides, not for groupby)
+    num_shuffles = sum(
+        1 for node in traversal([lowered_ir]) if isinstance(node, Shuffle)
+    )
+    assert num_shuffles == 2, f"Expected 2 shuffles, got {num_shuffles}"
