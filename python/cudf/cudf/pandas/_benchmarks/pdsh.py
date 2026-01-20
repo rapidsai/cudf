@@ -22,8 +22,6 @@ cudf.pandas.install()
 
 import pandas as pd  # noqa: E402
 
-# Enable copy-on-write mode
-pd.options.mode.copy_on_write = True
 
 from cudf.pandas._benchmarks.utils import (  # noqa: E402
     get_data,
