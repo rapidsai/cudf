@@ -652,7 +652,7 @@ class StreamingExecutor:
     spill_to_pinned_memory
         Whether RapidsMPF should spill to pinned host memory when available,
         or use regular pageable host memory. Pinned host memory offers higher
-        bandwidth and lower transfer performance for device transfers compared to
+        bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
 
     Notes
