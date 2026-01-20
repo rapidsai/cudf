@@ -117,7 +117,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 )
                 header["dtype-is-cudf-serialized"] = True
             except AttributeError:
-                header["column_label_dtype"] = label_dtype.str
+                if isinstance(label_dtype, pd.StringDtype):
+                    header["column_label_dtype"] = (
+                        label_dtype.storage,
+                        label_dtype.na_value,
+                    )
+                else:
+                    header["column_label_dtype"] = label_dtype.str
 
         header["columns"], column_frames = serialize_columns(self._columns)
         column_names, column_names_numpy_type = (
@@ -155,10 +161,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 header, frames[:count]
             )
             frames = frames[count:]
+        elif isinstance(dtype_header, tuple):
+            kwargs["label_dtype"] = pd.StringDtype(*dtype_header)
+        elif isinstance(dtype_header, str):
+            kwargs["label_dtype"] = np.dtype(dtype_header)
         else:
-            kwargs["label_dtype"] = (
-                np.dtype(dtype_header) if dtype_header is not None else None
-            )
+            kwargs["label_dtype"] = dtype_header
 
         columns = deserialize_columns(header["columns"], frames)
         for metadata in [
