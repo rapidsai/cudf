@@ -144,8 +144,7 @@ def _is_unsupported_agg_for_type(dtype, str_agg: str) -> bool:
 
 
 @_is_unsupported_agg_for_type.register
-def _(dtype: np.dtype, str_agg: str) -> bool:
-    # string specifically
+def _(dtype: pd.StringDtype, str_agg: str) -> bool:
     cumulative_agg = str_agg in {"cumsum", "cummin", "cummax"}
     basic_agg = any(
         a in str_agg
@@ -160,10 +159,8 @@ def _(dtype: np.dtype, str_agg: str) -> bool:
             "nth",
         )
     )
-    return (
-        dtype.kind == "O"
-        and str_agg not in _STRING_AGGS
-        and (cumulative_agg or not (basic_agg or str_agg == "<class 'list'>"))
+    return str_agg not in _STRING_AGGS and (
+        cumulative_agg or not (basic_agg or str_agg == "<class 'list'>")
     )
 
 
