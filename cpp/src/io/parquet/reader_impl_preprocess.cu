@@ -6,6 +6,7 @@
 #include "error.hpp"
 #include "io/comp/common.hpp"
 #include "reader_impl.hpp"
+#include "reader_impl_chunking_utils.cuh"
 #include "reader_impl_preprocess_utils.cuh"
 
 #include <cudf/detail/iterator.cuh>
@@ -265,55 +266,26 @@ void reader_impl::allocate_level_decode_space()
   auto const num_pages = subpass.pages.size();
   if (num_pages == 0) { return; }
 
-  auto const pass_end_row = pass.skip_rows + pass.num_rows;
-
-  // Allocate CPU vector for sizes (only needed for first pass to compute totals)
+  // Note: Uses the common compute_page_level_decode_sizes() function defined in
+  // reader_impl_chunking_utils.cu, which is also used for chunking estimation.
+  // This ensures identical logic and accurate memory estimates.
+  
   std::vector<size_t> def_level_sizes(num_pages);
   std::vector<size_t> rep_level_sizes(num_pages);
 
-  // Loop over pages to compute sizes
+  // Loop over pages to compute sizes using the common function
   size_t total_memory_size = 0;
   for (size_t idx = 0; idx < num_pages; idx++) {
     auto const& p     = subpass.pages[idx];
     auto const& chunk = pass.chunks[p.chunk_idx];
 
-    // Skip dictionary pages - they don't have levels to decode
-    if (p.flags & PAGEINFO_FLAGS_DICTIONARY) {
-      def_level_sizes[idx] = 0;
-      rep_level_sizes[idx] = 0;
-      continue;
-    }
-
-    // Check if this page has lists (repetition levels)
-    bool const has_repetition = chunk.max_level[level_type::REPETITION] > 0;
-    bool const has_definition = chunk.max_level[level_type::DEFINITION] > 0;
-
-    // Determine how many values need to be decoded
-    size_t num_values_to_decode = 0;    
-    if (has_repetition) {
-      // Must decode all values in all pages because we don't know the row boundaries for the pages
-      // until we decode the levels.
-      num_values_to_decode = p.num_input_values;
-    } else {
-      size_t const page_start_row = chunk.start_row + p.chunk_row;
-      size_t const page_end_row   = page_start_row + p.num_rows;
-
-      // if we are totally outside the range of the input, do nothing
-      if ((page_start_row >= pass_end_row) || (page_end_row <= pass.skip_rows)) {
-        num_values_to_decode = 0;
-      } else {
-        // For non-list pages: must still decode the first rows because we need to count nulls.
-        num_values_to_decode = std::min(static_cast<size_t>(p.num_rows), pass_end_row - page_start_row);
-      }
-    }
-    
-    // Allocate space for definition levels (if column is nullable)
-    def_level_sizes[idx] =
-      (has_definition && num_values_to_decode > 0) ? num_values_to_decode * pass.level_type_size : 0;
-
-    // Allocate space for repetition levels (only for list pages)
-    rep_level_sizes[idx] =
-      (has_repetition && num_values_to_decode > 0) ? num_values_to_decode * pass.level_type_size : 0;
+    compute_page_level_decode_sizes(p,
+                                                                chunk,
+                                                                pass.level_type_size,
+                                                                pass.skip_rows,
+                                                                pass.num_rows,
+                                                                def_level_sizes[idx],
+                                                                rep_level_sizes[idx]);
 
     total_memory_size += def_level_sizes[idx] + rep_level_sizes[idx];
   }
