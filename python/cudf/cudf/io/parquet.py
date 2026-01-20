@@ -382,6 +382,7 @@ def write_to_dataset(
     column_type_length: dict | None = None,
     output_as_binary: set[Hashable] | None = None,
     store_schema=False,
+    page_level_compression: bool = False,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -473,6 +474,11 @@ def write_to_dataset(
     store_schema : bool, default False
         If ``True``, enable computing and writing arrow schema to Parquet
         file footer's key-value metadata section for faithful round-tripping.
+    page_level_compression : bool, default False
+        If ``True``, when writing version 2.0 pages (``header_version="2.0"``),
+        allow each page to independently decide whether to compress based on
+        compression ratio. Pages that do not benefit from compression will
+        be written uncompressed.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -517,6 +523,7 @@ def write_to_dataset(
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
             store_schema=store_schema,
+            page_level_compression=page_level_compression,
         )
 
     else:
@@ -545,6 +552,7 @@ def write_to_dataset(
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
             store_schema=store_schema,
+            page_level_compression=page_level_compression,
         )
 
     return metadata
@@ -1579,6 +1587,7 @@ def to_parquet(
                 column_type_length=column_type_length,
                 output_as_binary=output_as_binary,
                 store_schema=store_schema,
+                page_level_compression=page_level_compression,
             )
 
         partition_info = (
