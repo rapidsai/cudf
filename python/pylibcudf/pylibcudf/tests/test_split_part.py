@@ -41,3 +41,23 @@ def test_split_part_out_of_bounds():
     expected = pa.array([None, None], type=pa.string())
 
     assert result_pa.equals(expected)
+
+def test_split_part_whitespace():
+    # Test whitespace splitting when delimiter is empty string
+    # "a b" -> ["a", "b"]
+    # "c  d" -> ["c", "d"] (Multiple spaces treated as one delimiter)
+    # "e\\tf" -> ["e", "f"] (Tabs handled)
+    
+    data = pa.array(["a b", "c  d", "e\\tf"])
+    col = Column.from_arrow(data)
+    
+    # Empty delimiter means whitespace split
+    delimiter = Scalar("") 
+    
+    # Case: Index 1 (Second token)
+    result = split.split_part(col, delimiter, 1)
+    
+    result_pa = result.to_arrow()
+    expected = pa.array(["b", "d", "f"])
+    
+    assert result_pa.equals(expected)

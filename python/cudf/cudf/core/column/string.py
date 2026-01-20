@@ -14,7 +14,6 @@ import pyarrow as pa
 from typing_extensions import Self
 
 import pylibcudf as plc
-from pylibcudf.strings import split as plc_split
 
 import cudf
 from cudf.api.types import is_scalar
@@ -192,7 +191,7 @@ class StringColumn(ColumnBase, Scannable):
         # All null string columns fail to convert in libcudf, so we must short-circuit
         # the call to super().to_arrow().
         # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if len(self.children) == 0 or self.null_count == len(self):
+        if self.plc_column.num_children() == 0 or self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )
@@ -1224,7 +1223,7 @@ class StringColumn(ColumnBase, Scannable):
 
     def rsplit(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
-
+    
     def split_part(self, delimiter: plc.Scalar, index: int) -> Self:
         with self.access(mode="read", scope="internal"):
             plc_column = plc.strings.split.split.split_part(
@@ -1240,6 +1239,7 @@ class StringColumn(ColumnBase, Scannable):
                     ._with_type_metadata(self.dtype)
                 ),
             )
+
 
     def _partition(
         self,

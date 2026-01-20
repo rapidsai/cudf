@@ -65,3 +65,10 @@ def rsplit_record_re(
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
+def split_part(
+    input: Column,
+    delimiter: Scalar,
+    index: int,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...

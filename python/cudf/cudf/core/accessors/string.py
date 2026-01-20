@@ -379,6 +379,36 @@ class StringMethods(BaseAccessor):
             else:
                 out = out[0]
         return out
+    
+    def split_part(self, delimiter: str | None = None, index: int = 0) -> Series | Index:
+        """
+        Splits the string by delimiter and returns the token at the given index.
+        
+        Parameters
+        ----------
+        delimiter : str, default None
+            The string to split on.
+        index : int, default 0
+            The index of the token to retrieve.
+            
+        Returns
+        -------
+        Series or Index
+        
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["a_b_c", "d_e", "f"])
+        >>> s.str.split_part(delimiter="_", index=1)
+        0       b
+        1       e
+        2    None
+        dtype: object
+        """
+        
+        return self._return_or_inplace(
+            self._column.split_part(delimiter, index)
+        )
 
     def join(
         self, sep=None, string_na_rep=None, sep_na_rep=None
