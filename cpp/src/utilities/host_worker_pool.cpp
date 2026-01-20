@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "cudf/utilities/error.hpp"
+#include <cudf/utilities/error.hpp>
 #include "io/utilities/getenv_or.hpp"
 
 #include <cudf/detail/utilities/host_worker_pool.hpp>
