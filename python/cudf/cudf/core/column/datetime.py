@@ -341,12 +341,17 @@ class DatetimeColumn(TemporalBaseColumn):
         self, field: plc.datetime.DatetimeComponent
     ) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            result = type(self).from_pylibcudf(
                 plc.datetime.extract_datetime_component(
                     self.plc_column,
                     field,
                 )
             )
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and result.dtype == np.dtype("int16"):
+                result = result.astype(np.dtype("int32"))
+            return result
 
     def _get_field_names(
         self,
