@@ -389,7 +389,7 @@ def test_serialize_sliced_string():
     # https://github.com/rapidsai/cudf/issues/7735
     data = ["hi", "hello", None]
     pd_series = pd.Series(data, dtype=pd.StringDtype())
-    gd_series = cudf.Series(data, dtype="str")
+    gd_series = cudf.Series(data, dtype=pd_series.dtype)
     sliced = gd_series[0:3]
     serialized_gd_series = gd_series.serialize()
     serialized_sliced = sliced.serialize()
