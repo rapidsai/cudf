@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -13,6 +13,7 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 from numpy import datetime64
