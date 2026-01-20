@@ -1224,26 +1224,25 @@ class StringColumn(ColumnBase, Scannable):
 
     def rsplit(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
-    
+
     def split_part(self, delimiter: str | None = None, index: int = 0) -> Self:
         with self.access(mode="read", scope="internal"):
             if delimiter is None:
                 delimiter = ""
-            
+
             delimiter_scalar = pa_scalar_to_plc_scalar(
                 pa.scalar(delimiter, type=pa.string())
             )
-            
+
             plc_column = plc_split.split_part(
-                self.plc_column, 
-                delimiter_scalar, 
-                index
+                self.plc_column, delimiter_scalar, index
             )
             return cast(
                 Self,
-                type(self).from_pylibcudf(plc_column)._with_type_metadata(self.dtype)
+                type(self)
+                .from_pylibcudf(plc_column)
+                ._with_type_metadata(self.dtype),
             )
-
 
     def _partition(
         self,
