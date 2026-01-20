@@ -758,7 +758,7 @@ class StreamingExecutor:
     )
     spill_to_pinned_memory: bool = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=True
+            f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
 
