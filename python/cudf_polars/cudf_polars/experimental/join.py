@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel Join Logic."""
 
@@ -83,7 +83,9 @@ def _make_hash_join(
         output_count,
         shuffler_insertion_method=shuffler_insertion_method,
     )
-    if left != new_left or right != new_right:
+    # Always reconstruct when a child has changed
+    # (even if the child's hash is the same).
+    if left is not new_left or right is not new_right:
         ir = ir.reconstruct([new_left, new_right])
     left = new_left
     right = new_right

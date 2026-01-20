@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
@@ -103,7 +103,9 @@ def _repr_ir_tree(
     stats: StatsCollector | None = None,
 ) -> str:
     header = _repr_ir(ir, offset=offset)
-    count = partition_info[ir].count if partition_info else None
+    count = (
+        partition_info[ir].count if partition_info and ir in partition_info else None
+    )
     if stats is not None:
         # Include row-count estimate (if available)
         row_count_estimate = _fmt_row_count(
