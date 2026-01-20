@@ -184,9 +184,15 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
     current_row_group_indices = bloom_filtered_row_group_indices;
   }
 
-  // Build row mask using page index stats
-  auto row_mask =
-    reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
+  // Build row mask using page index stats or all true if no filter is provided
+  auto row_mask = [&]() {
+    if (options.get_filter().has_value()) {
+      return reader->build_row_mask_with_page_index_stats(
+        current_row_group_indices, options, stream, mr);
+    } else {
+      return reader->build_all_true_row_mask(current_row_group_indices, stream, mr);
+    }
+  }();
 
   std::vector<cudf::size_type> final_row_group_indices(current_row_group_indices.begin(),
                                                        current_row_group_indices.end());
