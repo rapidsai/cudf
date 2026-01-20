@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -14,8 +14,9 @@ and may be modified or removed at any time.
 from __future__ import annotations
 
 from datetime import date
-from typing import TYPE_CHECKING
 from decimal import Decimal
+from typing import TYPE_CHECKING
+
 import cudf.pandas
 
 cudf.pandas.install()
@@ -55,21 +56,25 @@ class PDSHQueries:
         # This is lenient towards pandas as normally an optimizer should decide
         # that this could be computed before the groupby aggregation.
         # Other implementations don't enjoy this benefit.
-        filt["disc_price"] = filt.l_extendedprice * (Decimal("1.0") - filt.l_discount)
+        filt["disc_price"] = filt.l_extendedprice * (
+            Decimal("1.0") - filt.l_discount
+        )
         filt["charge"] = (
-            filt.l_extendedprice * (Decimal("1.0") - filt.l_discount) * (Decimal("1.0") + filt.l_tax)
+            filt.l_extendedprice
+            * (Decimal("1.0") - filt.l_discount)
+            * (Decimal("1.0") + filt.l_tax)
         )
 
         gb = filt.groupby(["l_returnflag", "l_linestatus"], as_index=False)
         agg = gb.agg(
             sum_qty=("l_quantity", "sum"),
-                sum_base_price=("l_extendedprice", "sum"),
-                sum_disc_price=("disc_price", "sum"),
-                sum_charge=("charge", "sum"),
-                avg_qty=("l_quantity", "mean"),
-                avg_price=("l_extendedprice", "mean"),
-                avg_disc=("l_discount", "mean"),
-                count_order=("l_returnflag", "count"),
+            sum_base_price=("l_extendedprice", "sum"),
+            sum_disc_price=("disc_price", "sum"),
+            sum_charge=("charge", "sum"),
+            avg_qty=("l_quantity", "mean"),
+            avg_price=("l_extendedprice", "mean"),
+            avg_disc=("l_discount", "mean"),
+            count_order=("l_returnflag", "count"),
         )
 
         return agg.sort_values(["l_returnflag", "l_linestatus"])
@@ -187,9 +192,7 @@ class PDSHQueries:
         jn = jn.drop_duplicates(subset=["o_orderpriority", "l_orderkey"])
 
         gb = jn.groupby("o_orderpriority", as_index=False)
-        agg = gb.agg(
-            order_count=("o_orderkey", "count")
-        )
+        agg = gb.agg(order_count=("o_orderkey", "count"))
 
         return agg.sort_values(["o_orderpriority"])
 
@@ -225,7 +228,9 @@ class PDSHQueries:
 
         jn5 = jn5[jn5["r_name"] == var1]
         jn5 = jn5[(jn5["o_orderdate"] >= var2) & (jn5["o_orderdate"] < var3)]
-        jn5["revenue"] = jn5.l_extendedprice * (Decimal("1.0") - jn5.l_discount)
+        jn5["revenue"] = jn5.l_extendedprice * (
+            Decimal("1.0") - jn5.l_discount
+        )
 
         gb = jn5.groupby("n_name", as_index=False)["revenue"].sum()
         return gb.sort_values("revenue", ascending=False)
@@ -352,7 +357,7 @@ class PDSHQueries:
 
         jn7 = jn7[(jn7["o_orderdate"] >= var4) & (jn7["o_orderdate"] <= var5)]
         jn7 = jn7[jn7["p_type"] == var3]
-        jn7["o_orderdate"] = jn7["o_orderdate"].astype('datetime64[s]')
+        jn7["o_orderdate"] = jn7["o_orderdate"].astype("datetime64[s]")
         jn7["o_year"] = jn7["o_orderdate"].dt.year
         jn7["volume"] = jn7["l_extendedprice"] * (1.0 - jn7["l_discount"])
         jn7 = jn7.rename(columns={"n_name": "nation"})
@@ -399,7 +404,7 @@ class PDSHQueries:
         jn5 = jn5.rename(columns={"n_name": "nation"})
 
         gb = jn5.groupby(["nation", "o_year"], as_index=False, sort=False)
-        agg = gb.agg(sum_profit=("amount",  "sum"))
+        agg = gb.agg(sum_profit=("amount", "sum"))
         sorted_df = agg.sort_values(
             by=["nation", "o_year"], ascending=[True, False]
         )
