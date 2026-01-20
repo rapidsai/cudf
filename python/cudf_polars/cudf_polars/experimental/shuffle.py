@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Shuffle Logic."""
 
@@ -177,6 +177,7 @@ class Shuffle(IR):
         schema: Schema,
         keys: tuple[NamedExpr, ...],
         shuffle_method: ShuffleMethod,
+        shuffler_insertion_method: ShufflerInsertionMethod,
         df: DataFrame,
         *,
         context: IRExecutionContext,
