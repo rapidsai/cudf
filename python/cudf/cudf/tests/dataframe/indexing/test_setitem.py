@@ -689,10 +689,6 @@ def test_tupleize_cols_False_set():
         None,
     ],
 )
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_dataframe_assign_scalar(request, col_data, assign_val):
     request.applymarker(
         pytest.mark.xfail(
@@ -710,7 +706,10 @@ def test_dataframe_assign_scalar(request, col_data, assign_val):
         else assign_val
     )
     gdf["b"] = assign_val
-
+    # Assigning None in pandas creates an object column
+    # which cuDF doesn't support
+    if assign_val is None:
+        pdf["b"] = pdf["b"].astype(gdf["b"].dtype)
     assert_eq(pdf, gdf)
 
 
