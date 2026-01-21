@@ -40,6 +40,8 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable
 
+    from typing_extensions import Self
+
     from cudf._typing import (
         ColumnBinaryOperand,
         DtypeObj,
@@ -75,18 +77,7 @@ def _resolve_binop_resolution(
 
 
 class DatetimeColumn(TemporalBaseColumn):
-    """
-    A Column implementation for Date-time types.
-
-    Parameters
-    ----------
-    data : Buffer
-        The datetime values
-    dtype : np.dtype
-        The data type
-    mask : Buffer; optional
-        The validity mask
-    """
+    """A Column implementation for Date-time types."""
 
     _NP_SCALAR = np.datetime64
     _PD_SCALAR = pd.Timestamp
@@ -244,7 +235,7 @@ class DatetimeColumn(TemporalBaseColumn):
             last_day_col = type(self).from_pylibcudf(
                 plc.datetime.last_day_of_month(self.plc_column)
             )
-        return (self.day == last_day_col.day).fillna(False)
+        return (self.day == cast("Self", last_day_col).day).fillna(False)
 
     @functools.cached_property
     def is_quarter_end(self) -> ColumnBase:
@@ -511,12 +502,15 @@ class DatetimeColumn(TemporalBaseColumn):
                 plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)), 0
             )
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                plc.strings.convert.convert_datetime.from_timestamps(
-                    self.plc_column,
-                    format,
-                    names,
-                )
+            return cast(
+                cudf.core.column.string.StringColumn,
+                type(self).from_pylibcudf(
+                    plc.strings.convert.convert_datetime.from_timestamps(
+                        self.plc_column,
+                        format,
+                        names,
+                    )
+                ),
             )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
@@ -675,7 +669,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     def _with_type_metadata(self, dtype: DtypeObj) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
-            return DatetimeTZColumn(
+            return DatetimeTZColumn._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=dtype,
             )
@@ -846,9 +840,8 @@ class DatetimeTZColumn(DatetimeColumn):
     @property
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
-        return DatetimeColumn(
-            plc_column=self.plc_column,
-            dtype=_get_base_dtype(self.dtype),
+        return DatetimeColumn._from_preprocessed(
+            self.plc_column, _get_base_dtype(self.dtype)
         )
 
     @functools.cached_property

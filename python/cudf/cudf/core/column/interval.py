@@ -7,19 +7,18 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import pylibcudf as plc
 
 import cudf
-from cudf.core.column.column import _handle_nulls, as_column
+from cudf.core.column.column import ColumnBase, _handle_nulls, as_column
 from cudf.core.column.struct import StructColumn
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
-
-    from cudf.core.column import ColumnBase
+    from cudf._typing import DtypeObj
 
 
 class IntervalColumn(StructColumn):
@@ -61,7 +60,7 @@ class IntervalColumn(StructColumn):
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()  # type: ignore[union-attr]
         struct_arrow = self.plc_column.to_arrow(
-            metadata=_dtype_to_metadata(self.dtype)  # type: ignore[arg-type]
+            metadata=_dtype_to_metadata(self.dtype)
         )
         possibly_null_struct_arrow = _handle_nulls(struct_arrow)
 
@@ -79,6 +78,16 @@ class IntervalColumn(StructColumn):
 
     def copy(self, deep: bool = True) -> Self:
         return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
+
+    def _adjust_reduce_result(
+        self,
+        result_col: ColumnBase,
+        reduction_op: str,
+        col_dtype: DtypeObj,
+        plc_scalar: plc.Scalar,
+    ) -> ColumnBase:
+        """Preserve IntervalDtype metadata on reduction result."""
+        return result_col._with_type_metadata(col_dtype)
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
@@ -107,7 +116,9 @@ class IntervalColumn(StructColumn):
 
     @property
     def left(self) -> ColumnBase:
-        return self.children[0]
+        return ColumnBase.from_pylibcudf(
+            self.plc_column.children()[0]
+        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
 
     @functools.cached_property
     def mid(self) -> ColumnBase:
@@ -119,7 +130,9 @@ class IntervalColumn(StructColumn):
 
     @property
     def right(self) -> ColumnBase:
-        return self.children[1]
+        return ColumnBase.from_pylibcudf(
+            self.plc_column.children()[1]
+        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
 
     def overlaps(other) -> ColumnBase:
         raise NotImplementedError("overlaps is not currently implemented.")

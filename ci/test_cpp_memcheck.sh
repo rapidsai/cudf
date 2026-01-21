@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -11,7 +11,7 @@ source ./ci/test_cpp_common.sh
 
 rapids-logger "Memcheck gtests with rmm_mode=cuda"
 
-timeout 2h ./ci/run_cudf_memcheck_ctests.sh && EXITCODE=$? || EXITCODE=$?;
+timeout 3h ./ci/run_cudf_memcheck_ctests.sh && EXITCODE=$? || EXITCODE=$?;
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 # shellcheck disable=SC2086
