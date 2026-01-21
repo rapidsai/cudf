@@ -303,14 +303,14 @@ class parquet_reader_options {
    * @brief Sets the indices of top-level columns to be read from all input sources.
    *
    * Applies the same list of top-level column indices across all sources. Unlike `set_row_groups`,
-   * which allows per-source configuration, `set_columns` applies globally.
+   * which allows per-source configuration, `set_column_indices` applies globally.
    *
-   * Note that this overload of `set_columns` can only be used to select top-level columns unlike
-   * the other overload that takes a list of column paths in the schema.
+   * Note that `set_column_indices` can only be used to select top-level columns. unlike
+   * `set_columns` which can also select nested columns.
    *
    * @param col_indices A vector of column indices to attempt to read from each input source.
    */
-  void set_columns(std::vector<cudf::size_type> col_indices)
+  void set_column_indices(std::vector<cudf::size_type> col_indices)
   {
     CUDF_EXPECTS(not _columns.has_value(),
                  "Cannot select columns by indices and names simultaneously");
@@ -498,7 +498,7 @@ class parquet_reader_options_builder {
    * @param col_indices A vector of column indices to attempt to read from each input source.
    * @return this for chaining
    */
-  parquet_reader_options_builder& columns(std::vector<cudf::size_type> col_indices)
+  parquet_reader_options_builder& column_indices(std::vector<cudf::size_type> col_indices)
   {
     CUDF_EXPECTS(not options._columns.has_value(),
                  "Cannot select columns by indices and names simultaneously");

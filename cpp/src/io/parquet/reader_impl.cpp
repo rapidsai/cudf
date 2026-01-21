@@ -551,17 +551,19 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   _reader_column_schema = options.get_column_schema();
 
   // Select only columns required by the options and filter
+  auto select_column_names = get_column_projection(options);
+
   std::optional<std::vector<std::string>> filter_columns_names;
-  if (options.get_filter().has_value() and options.get_columns().has_value()) {
+  if (options.get_filter().has_value() and
+      (options.get_columns().has_value() or options.get_column_indices().has_value())) {
     // list, struct, dictionary are not supported by AST filter yet.
     // extract columns not present in get_columns() & keep count to remove at end.
-    auto select_column_names = get_column_projection(options);
     filter_columns_names =
       get_column_names_in_expression(options.get_filter(), *select_column_names);
     _num_filter_only_columns = filter_columns_names->size();
   }
   std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-    _metadata->select_columns(options.get_columns(),
+    _metadata->select_columns(select_column_names,
                               filter_columns_names,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
@@ -821,13 +823,16 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
 std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   parquet_reader_options const& options) const
 {
-  CUDF_EXPECTS(not(options.get_columns().has_value() and options.get_column_indices().has_value()),
+  auto const has_column_names   = options.get_columns().has_value();
+  auto const has_column_indices = options.get_column_indices().has_value();
+
+  CUDF_EXPECTS(not(has_column_names and has_column_indices),
                "Cannot select columns by both names and indices simultaneously");
 
   // No column selection specified. Return nullopt indicating all columns to be selected
-  if (not options.get_columns().has_value() and not options.get_column_indices().has_value()) {
+  if (not has_column_names and not has_column_indices) {
     return std::nullopt;
-  } else if (options.get_columns().has_value()) {
+  } else if (has_column_names) {
     return options.get_columns();
   } else {
     auto const is_ignore_missing_columns = options.is_enabled_ignore_missing_columns();
