@@ -107,7 +107,6 @@ def test_read_orc_from_device_buffers(
         get_bytes_from_source(source), plc.utils._get_stream(stream)
     )
 
-    # Synchronize the stream before using the device buffer
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:
@@ -185,7 +184,6 @@ def test_roundtrip_pa_table(
 
     plc.io.orc.write_orc(options, stream)
 
-    # Synchronize the stream before reading the output
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:

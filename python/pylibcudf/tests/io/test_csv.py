@@ -314,7 +314,6 @@ def test_read_csv_from_device_buffers(csv_table_data, stream):
         csv_string.encode("utf-8"), plc.utils._get_stream(stream)
     )
 
-    # Synchronize the stream before using the device buffer
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:
@@ -385,7 +384,6 @@ def test_write_csv(
         stream,
     )
 
-    # Synchronize the stream before reading the output
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:
@@ -435,7 +433,6 @@ def test_write_csv_na_rep(na_rep):
         )
     )
 
-    # Synchronize the default stream before reading the output
     plc.utils.DEFAULT_STREAM.synchronize()
 
     # Convert everything to string to make comparisons easier

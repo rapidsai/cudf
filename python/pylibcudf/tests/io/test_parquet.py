@@ -192,7 +192,6 @@ def test_read_parquet_from_device_buffers(
         get_bytes_from_source(source), plc.utils._get_stream(stream)
     )
 
-    # Synchronize the stream before using the device buffer
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:
@@ -296,7 +295,6 @@ def test_write_parquet(
 
     result = plc.io.parquet.write_parquet(options, stream)
 
-    # Synchronize the stream before checking the result
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:

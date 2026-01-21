@@ -156,7 +156,6 @@ def test_read_avro_from_device_buffers(avro_dtypes, avro_dtype_data, stream):
     buf = buffer.getbuffer()
     device_buf = DeviceBuffer.to_device(buf, plc.utils._get_stream(stream))
 
-    # Synchronize the stream before using the device buffer
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:

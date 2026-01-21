@@ -327,7 +327,6 @@ def test_hybrid_scan_materialize_columns(
         for r in filter_ranges
     ]
 
-    # Synchronize the stream before using the device buffers
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:
@@ -343,7 +342,6 @@ def test_hybrid_scan_materialize_columns(
         stream,
     )
 
-    # Synchronize the stream before accessing the result
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:
@@ -368,7 +366,6 @@ def test_hybrid_scan_materialize_columns(
         for r in payload_ranges
     ]
 
-    # Synchronize the stream before using the device buffers
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:
@@ -384,7 +381,6 @@ def test_hybrid_scan_materialize_columns(
         stream,
     )
 
-    # Synchronize the stream before accessing the result
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:
@@ -403,7 +399,6 @@ def test_hybrid_scan_materialize_columns(
     comparison_options.set_filter(filter_expression)
     expected_result = plc.io.parquet.read_parquet(comparison_options, stream)
 
-    # Synchronize the stream before accessing the results
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:
@@ -467,7 +462,6 @@ def test_hybrid_scan_has_next_table_chunk(
         for r in filter_ranges
     ]
 
-    # Synchronize the default stream before using the device buffers
     plc.utils.DEFAULT_STREAM.synchronize()
 
     # Setup chunking first
@@ -536,7 +530,6 @@ def test_hybrid_scan_chunked_reading(
         for r in filter_ranges
     ]
 
-    # Synchronize the stream before using the device buffers
     if stream is None:
         plc.utils.DEFAULT_STREAM.synchronize()
     else:
