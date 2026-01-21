@@ -218,7 +218,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
     // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
 
     // Only process quotes if field started with a quote
-    if (field_starts_with_quote && *current == opts.quotechar and not escape_next) {
+    if (field_starts_with_quote && *current == opts.quotechar && !escape_next) {
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {
