@@ -2500,20 +2500,24 @@ constexpr int decide_compression_block_size =
 
 // blockDim(decide_compression_block_size, 1, 1)
 CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
-  gpuDecideCompression(device_span<EncColumnChunk> chunks, bool page_level_compression)
+  decide_compression_kernel(device_span<EncColumnChunk> chunks, bool page_level_compression)
 {
+  namespace cg = cooperative_groups;
+
   __shared__ __align__(8) EncColumnChunk ck_g[decide_compression_warps_in_block];
   using warp_reduce = cub::WarpReduce<uint32_t>;
   __shared__ typename warp_reduce::TempStorage temp_storage[decide_compression_warps_in_block][2];
 
-  auto const lane_id  = threadIdx.x % cudf::detail::warp_size;
-  auto const warp_id  = threadIdx.x / cudf::detail::warp_size;
-  auto const chunk_id = blockIdx.x * decide_compression_warps_in_block + warp_id;
+  auto const block    = cg::this_thread_block();
+  auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(block);
+  auto const lane_id  = warp.thread_rank();
+  auto const warp_id  = warp.meta_group_rank();
+  auto const chunk_id = block.group_index().x * decide_compression_warps_in_block + warp_id;
 
   if (chunk_id >= chunks.size()) { return; }
 
   if (lane_id == 0) { ck_g[warp_id] = chunks[chunk_id]; }
-  __syncwarp();
+  warp.sync();
 
   // First pass: decide per-page compression for pages with PLC, collect totals for chunk decisions
   // Track PLC (page-level compression) and non-PLC contributions separately
@@ -2563,21 +2567,21 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
     encodings |= encoding_to_mask(curr_page.encoding);
   }
 
-  auto const has_compression_error = __any_sync(0xffffffff, local_compression_error);
-  auto const any_plc_compressed    = __any_sync(0xffffffff, local_any_plc_compressed);
+  auto const has_compression_error = warp.any(local_compression_error);
+  auto const any_plc_compressed    = warp.any(local_any_plc_compressed);
 
   uncompressed_data_size = warp_reduce(temp_storage[warp_id][0]).Sum(uncompressed_data_size);
   plc_actual_size        = warp_reduce(temp_storage[warp_id][1]).Sum(plc_actual_size);
-  __syncwarp();
+  warp.sync();
   non_plc_uncomp_size = warp_reduce(temp_storage[warp_id][0]).Sum(non_plc_uncomp_size);
   non_plc_comp_size   = warp_reduce(temp_storage[warp_id][1]).Sum(non_plc_comp_size);
-  __syncwarp();
+  warp.sync();
   encodings = warp_reduce(temp_storage[warp_id][0]).Reduce(encodings, BitwiseOr{});
-  __syncwarp();
+  warp.sync();
 
   // Decide whether non-PLC pages should be compressed (only lane 0 has correct reduced values)
   auto non_plc_compressed = !has_compression_error and non_plc_comp_size < non_plc_uncomp_size;
-  non_plc_compressed      = __shfl_sync(0xffffffff, non_plc_compressed, 0);
+  non_plc_compressed      = warp.shfl(non_plc_compressed, 0);
 
   // Chunk uses compression if any page is compressed (for codec in metadata)
   auto const write_compressed = any_plc_compressed or non_plc_compressed;
@@ -2598,7 +2602,7 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
     chunks[chunk_id].encodings = encodings;
   }
 
-  __syncwarp();
+  warp.sync();
   // Second pass: set is_compressed for pages that didn't decide in first pass.
   // Dictionary pages MUST be compressed if the chunk is compressed, because
   // dictionary page headers don't have an is_compressed field.
@@ -3553,7 +3557,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
 {
   auto const num_blocks =
     util::div_rounding_up_safe<int>(chunks.size(), decide_compression_warps_in_block);
-  gpuDecideCompression<<<num_blocks, decide_compression_block_size, 0, stream.value()>>>(
+  decide_compression_kernel<<<num_blocks, decide_compression_block_size, 0, stream.value()>>>(
     chunks, page_level_compression);
 }
 
