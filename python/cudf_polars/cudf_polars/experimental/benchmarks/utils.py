@@ -588,16 +588,10 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                 client,
                 options=Options(
                     {
+                        "dask_spill_device": str(run_config.spill_device),
                         "dask_spill_to_pinned_memory": str(
                             run_config.spill_to_pinned_memory
                         ),
-                        "dask_spill_device": str(run_config.spill_device),
-                        "dask_statistics": str(args.rapidsmpf_dask_statistics),
-                        "dask_print_statistics": str(args.rapidsmpf_print_statistics),
-                        "dask_spill_to_pinned_memory": str(
-                            run_config.spill_to_pinned_memory
-                        ),
-                        "dask_spill_device": str(run_config.spill_device),
                         "dask_statistics": str(args.rapidsmpf_dask_statistics),
                         "dask_print_statistics": str(args.rapidsmpf_print_statistics),
                         "dask_oom_protection": str(args.rapidsmpf_oom_protection),
