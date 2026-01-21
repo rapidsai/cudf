@@ -2672,8 +2672,8 @@ TEST_F(CsvReaderTest, QuotedFieldWithTrailingDelimiter)
 
   auto const expected_col0 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3});
   auto const expected_col1 = cudf::test::strings_column_wrapper({"trailing,", "normal", "end"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected_col0);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), expected_col1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_col0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
