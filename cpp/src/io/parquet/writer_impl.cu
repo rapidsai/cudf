@@ -1528,7 +1528,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   // chunk-level
 
   auto d_chunks = chunks.device_view();
-  DecideCompression(d_chunks.flat_view(), page_level_compression, stream);
+  decide_compression(d_chunks.flat_view(), page_level_compression, stream);
   EncodePageHeaders(pages, comp_res, pages_stats, chunk_stats, stream);
   GatherPages(d_chunks.flat_view(), stream);
 
@@ -1633,6 +1633,7 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
  * @param utc_timestamps Flag to indicate if timestamps are UTC
  * @param write_v2_headers True if V2 page headers are to be written
  * @param page_level_compression True if V2 pages can make per-page compression decisions
+ * @param write_arrow_schema True if Arrow schema should be written to the file
  * @param out_sink Sink for checking if device write is supported, should not be used to write any
  *        data in this function
  * @param stream CUDA stream used for device memory operations and kernel launches

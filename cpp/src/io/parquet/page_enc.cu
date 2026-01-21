@@ -3551,9 +3551,9 @@ void EncodePages(device_span<EncPage> pages,
   cudf::detail::join_streams(streams, stream);
 }
 
-void DecideCompression(device_span<EncColumnChunk> chunks,
-                       bool page_level_compression,
-                       rmm::cuda_stream_view stream)
+void decide_compression(device_span<EncColumnChunk> chunks,
+                        bool page_level_compression,
+                        rmm::cuda_stream_view stream)
 {
   auto const num_blocks =
     util::div_rounding_up_safe<int>(chunks.size(), decide_compression_warps_in_block);
