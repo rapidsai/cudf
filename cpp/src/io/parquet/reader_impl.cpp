@@ -823,16 +823,23 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
 {
   CUDF_EXPECTS(not(options.get_columns().has_value() and options.get_column_indices().has_value()),
                "Cannot select columns by both names and indices simultaneously");
-  if (options.get_columns().has_value()) {
+
+  // No column selection specified. Return nullopt indicating all columns to be selected
+  if (not options.get_columns().has_value() and not options.get_column_indices().has_value()) {
+    return std::nullopt;
+  } else if (options.get_columns().has_value()) {
     return options.get_columns();
   } else {
+    auto const is_ignore_missing_columns = options.is_enabled_ignore_missing_columns();
     std::vector<std::string> col_names;
     auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
     for (auto const index : options.get_column_indices().value()) {
-      CUDF_EXPECTS(
-        std::cmp_greater_equal(index, 0) and std::cmp_less(index, top_level_schema_indices.size()),
-        "Invalid column index");
-      col_names.emplace_back(_metadata->get_schema(top_level_schema_indices[index]).name);
+      auto const is_valid_index =
+        std::cmp_greater_equal(index, 0) and std::cmp_less(index, top_level_schema_indices.size());
+      CUDF_EXPECTS(is_ignore_missing_columns or is_valid_index, "Invalid column index");
+      if (is_valid_index) {
+        col_names.emplace_back(_metadata->get_schema(top_level_schema_indices[index]).name);
+      }
     }
     return std::make_optional(std::move(col_names));
   }
