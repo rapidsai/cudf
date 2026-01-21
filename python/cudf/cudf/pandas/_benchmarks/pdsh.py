@@ -13,7 +13,6 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from numpy import datetime64
@@ -418,8 +417,8 @@ class PDSHQueries:
         nation = get_data(path, "nation", suffix)
         orders = get_data(path, "orders", suffix)
 
-        var1 = datetime(1993, 10, 1)
-        var2 = datetime(1994, 1, 1)
+        var1 = datetime64("1993-10-01")
+        var2 = datetime64("1994-01-01")
 
         jn1 = customer.merge(orders, left_on="c_custkey", right_on="o_custkey")
         jn2 = jn1.merge(lineitem, left_on="o_orderkey", right_on="l_orderkey")
@@ -500,8 +499,8 @@ class PDSHQueries:
 
         var1 = "MAIL"
         var2 = "SHIP"
-        var3 = datetime(1994, 1, 1)
-        var4 = datetime(1995, 1, 1)
+        var3 = datetime64("1994-01-01")
+        var4 = datetime64("1995-01-01")
 
         jn = orders.merge(
             lineitem, left_on="o_orderkey", right_on="l_orderkey"
@@ -574,8 +573,8 @@ class PDSHQueries:
         )
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
 
-        var1 = datetime(1995, 9, 1)
-        var2 = datetime(1995, 10, 1)
+        var1 = datetime64("1995-09-01")
+        var2 = datetime64("1995-10-01")
 
         jn = lineitem.merge(part, left_on="l_partkey", right_on="p_partkey")
 
@@ -602,8 +601,8 @@ class PDSHQueries:
             run_config.dataset_path, "supplier", run_config.suffix
         )
 
-        var1 = datetime(1996, 1, 1)
-        var2 = datetime(1996, 4, 1)
+        var1 = datetime64("1996-01-01")
+        var2 = datetime64("1996-04-01")
 
         filtered_lineitem = lineitem[
             (lineitem["l_shipdate"] >= var1) & (lineitem["l_shipdate"] < var2)
@@ -835,8 +834,8 @@ class PDSHQueries:
             run_config.dataset_path, "supplier", run_config.suffix
         )
 
-        var1 = datetime(1994, 1, 1)
-        var2 = datetime(1995, 1, 1)
+        var1 = datetime64("1994-01-01")
+        var2 = datetime64("1995-01-01")
         var3 = "CANADA"
         var4 = "forest"
 
