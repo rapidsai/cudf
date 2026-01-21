@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import io
 
@@ -327,6 +327,12 @@ def test_hybrid_scan_materialize_columns(
         for r in filter_ranges
     ]
 
+    # Synchronize the stream before using the device buffers
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
+
     # Materialize filter columns (mr is optional, defaults to None)
     filter_result = simple_hybrid_scan_reader.materialize_filter_columns(
         filtered_row_groups,
@@ -336,6 +342,12 @@ def test_hybrid_scan_materialize_columns(
         simple_parquet_options,
         stream,
     )
+
+    # Synchronize the stream before accessing the result
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
 
     # Filter column should have 1 column, with rows passing the filter
     expected_result_rows = num_rows - filter_threshold
@@ -356,6 +368,12 @@ def test_hybrid_scan_materialize_columns(
         for r in payload_ranges
     ]
 
+    # Synchronize the stream before using the device buffers
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
+
     # Materialize payload columns (mr is optional, defaults to None)
     payload_result = simple_hybrid_scan_reader.materialize_payload_columns(
         filtered_row_groups,
@@ -365,6 +383,12 @@ def test_hybrid_scan_materialize_columns(
         simple_parquet_options,
         stream,
     )
+
+    # Synchronize the stream before accessing the result
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
 
     assert payload_result.tbl.num_columns() == 2
     assert payload_result.tbl.num_rows() == expected_result_rows
@@ -378,6 +402,12 @@ def test_hybrid_scan_materialize_columns(
     ).build()
     comparison_options.set_filter(filter_expression)
     expected_result = plc.io.parquet.read_parquet(comparison_options, stream)
+
+    # Synchronize the stream before accessing the results
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
 
     # Combine hybrid scan results
     hybrid_columns = filter_result.tbl.columns() + payload_result.tbl.columns()
@@ -436,6 +466,9 @@ def test_hybrid_scan_has_next_table_chunk(
         )
         for r in filter_ranges
     ]
+
+    # Synchronize the default stream before using the device buffers
+    plc.utils.DEFAULT_STREAM.synchronize()
 
     # Setup chunking first
     simple_hybrid_scan_reader.setup_chunking_for_filter_columns(
@@ -502,6 +535,12 @@ def test_hybrid_scan_chunked_reading(
         )
         for r in filter_ranges
     ]
+
+    # Synchronize the stream before using the device buffers
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
 
     # Setup chunking for filter columns with small chunk size
     chunk_read_limit = 512  # Small limit to force multiple chunks

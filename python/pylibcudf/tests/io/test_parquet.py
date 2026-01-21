@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import io
 
@@ -192,6 +192,12 @@ def test_read_parquet_from_device_buffers(
         get_bytes_from_source(source), plc.utils._get_stream(stream)
     )
 
+    # Synchronize the stream before using the device buffer
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
+
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo([buf] * num_buffers)
     ).build()
@@ -289,6 +295,13 @@ def test_write_parquet(
         options.set_max_dictionary_size(max_dictionary_size)
 
     result = plc.io.parquet.write_parquet(options, stream)
+
+    # Synchronize the stream before checking the result
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
+
     assert isinstance(result, memoryview)
 
 

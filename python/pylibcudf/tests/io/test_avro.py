@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import io
@@ -155,6 +155,12 @@ def test_read_avro_from_device_buffers(avro_dtypes, avro_dtype_data, stream):
     buffer, expected = _make_avro_table(avro_dtypes, avro_dtype_data)
     buf = buffer.getbuffer()
     device_buf = DeviceBuffer.to_device(buf, plc.utils._get_stream(stream))
+
+    # Synchronize the stream before using the device buffer
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
 
     options = plc.io.avro.AvroReaderOptions.builder(
         plc.io.types.SourceInfo([device_buf])

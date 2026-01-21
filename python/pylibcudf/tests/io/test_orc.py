@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
@@ -107,6 +107,12 @@ def test_read_orc_from_device_buffers(
         get_bytes_from_source(source), plc.utils._get_stream(stream)
     )
 
+    # Synchronize the stream before using the device buffer
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
+
     options = plc.io.orc.OrcReaderOptions.builder(
         plc.io.types.SourceInfo([buf] * num_buffers)
     ).build()
@@ -178,6 +184,12 @@ def test_roundtrip_pa_table(
         options.set_row_index_stride(row_index_stride)
 
     plc.io.orc.write_orc(options, stream)
+
+    # Synchronize the stream before reading the output
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
 
     read_table = pa.orc.read_table(str(tmpfile_name))
 
