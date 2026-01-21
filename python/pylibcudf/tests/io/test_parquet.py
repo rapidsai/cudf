@@ -170,8 +170,9 @@ def test_read_parquet_filters(
 
 
 class FooSpan:
-    def __init__(self, data):
-        self._data = data
+    def __init__(self, owner):
+        # Keep the owning object alive
+        self._data = owner
 
     @property
     def ptr(self):
