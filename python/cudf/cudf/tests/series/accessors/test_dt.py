@@ -11,6 +11,7 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
     PANDAS_VERSION,
 )
 from cudf.testing import assert_eq
@@ -739,7 +740,9 @@ def test_convert_edge_cases(data, original_timezone, target_timezone):
     "data",
     [
         pd.date_range("2020-01-01", periods=10, freq="D"),
-        pd.date_range("1990-01-01", periods=100, freq="ME"),
+        pd.date_range(
+            "1990-01-01", periods=100, freq="ME" if PANDAS_GE_220 else "M"
+        ),
         pd.to_datetime(["2023-12-25", "2024-01-01", "2024-06-15", None]),
     ],
 )
