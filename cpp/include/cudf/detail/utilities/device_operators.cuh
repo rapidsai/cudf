@@ -165,7 +165,7 @@ struct DeviceMax {
   CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs)
     -> decltype(cudf::detail::max(lhs, rhs))
   {
-    return numeric::detail::max(lhs, rhs);
+    return cudf::detail::max(lhs, rhs);
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() && !cudf::is_fixed_point<T>())>
