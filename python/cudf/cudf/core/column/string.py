@@ -76,20 +76,7 @@ def plc_flags_from_re_flags(
 
 
 class StringColumn(ColumnBase, Scannable):
-    """
-    Implements operations for Columns of String type
-
-    Parameters
-    ----------
-    data : Buffer
-        Buffer of the string data
-    mask : Buffer
-        The validity mask
-    offset : int
-        Data offset
-    children : Tuple[Column]
-        Columns containing the offsets
-    """
+    """Implements operations for Columns of String type"""
 
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
