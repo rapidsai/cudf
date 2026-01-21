@@ -2813,6 +2813,8 @@ class StringMethods(BaseAccessor):
         dtype: object
         """
 
+        if delimiter is None:
+            delimiter = ""
         return self._return_or_inplace(
             self._column.split_part(delimiter, index)
         )
