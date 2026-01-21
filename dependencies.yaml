@@ -878,7 +878,7 @@ dependencies:
           - nanoarrow
           - hypothesis>=6.131.7
           - *numba
-          - pandas
+          - pandas>=2.0,<2.4.0
       - output_types: conda
         packages:
           - python-xxhash
