@@ -46,7 +46,7 @@ target_link_libraries(
                                $<TARGET_OBJECTS:hybrid_scan_io_utils>
 )
 target_compile_features(hybrid_scan_pipeline PRIVATE cxx_std_20)
-install(TARGETS hybrid_scan_pipeline DESTINATION bin/examples/libcudf/hybrid_scan_pipeline)
+install(TARGETS hybrid_scan_pipeline DESTINATION bin/examples/libcudf/hybrid_scan_io)
 
 # Install the example.parquet file
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet
