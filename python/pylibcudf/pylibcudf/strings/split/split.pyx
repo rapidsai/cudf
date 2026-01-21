@@ -417,7 +417,7 @@ cpdef Column split_part(Column input, Scalar delimiter, int index):
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_split_part(
+        c_result = cpp_split.split_part(
             input.view(),
             dereference(c_delimiter),
             index,
