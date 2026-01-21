@@ -60,16 +60,7 @@ if TYPE_CHECKING:
 
 
 class NumericalColumn(NumericalBaseColumn):
-    """
-    A Column object for Numeric types.
-
-    Parameters
-    ----------
-    data : Buffer
-    dtype : np.dtype
-        The dtype associated with the data Buffer
-    mask : Buffer, optional
-    """
+    """A Column object for Numeric types."""
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
     _VALID_PLC_TYPES = {
@@ -85,6 +76,17 @@ class NumericalColumn(NumericalBaseColumn):
         plc.TypeId.FLOAT64,
         plc.TypeId.BOOL8,
     }
+
+    @property
+    def _PANDAS_NA_VALUE(self) -> ScalarLike:
+        """Float columns return np.nan as NA value in pandas compatibility mode."""
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and self.dtype.kind == "f"
+            and not is_pandas_nullable_extension_dtype(self.dtype)
+        ):
+            return np.nan
+        return super()._PANDAS_NA_VALUE
 
     @classmethod
     def _validate_args(
@@ -174,6 +176,73 @@ class NumericalColumn(NumericalBaseColumn):
     def has_nulls(self, include_nan: bool = False) -> bool:
         return bool(self.null_count != 0) or (
             include_nan and bool(self.nan_count != 0)
+        )
+
+    def isnan(self) -> ColumnBase:
+        """Identify NaN values in a Column.
+
+        Only meaningful for float dtypes. For integer and boolean columns,
+        returns a column of False values.
+        """
+        if self.dtype.kind != "f":
+            return as_column(False, length=len(self))
+        with self.access(mode="read", scope="internal"):
+            return type(self).from_pylibcudf(plc.unary.is_nan(self.plc_column))
+
+    def notnan(self) -> ColumnBase:
+        """Identify non-NaN values in a Column.
+
+        Only meaningful for float dtypes. For integer and boolean columns,
+        returns a column of True values.
+        """
+        if self.dtype.kind != "f":
+            return as_column(True, length=len(self))
+        with self.access(mode="read", scope="internal"):
+            return type(self).from_pylibcudf(
+                plc.unary.is_not_nan(self.plc_column)
+            )
+
+    def isnull(self) -> ColumnBase:
+        """Identify missing values in a Column.
+
+        For float columns, NaN values are also considered null.
+        """
+        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+            return as_column(False, length=len(self))
+
+        with self.access(mode="read", scope="internal"):
+            result = type(self).from_pylibcudf(
+                plc.unary.is_null(self.plc_column)
+            )
+
+        if self.dtype.kind == "f":
+            # For floats, NaN should be considered null
+            result = result | self.isnan()
+
+        return result
+
+    def notnull(self) -> ColumnBase:
+        """Identify non-missing values in a Column.
+
+        For float columns, NaN values are considered null and excluded.
+        """
+        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+            result = as_column(True, length=len(self))
+        else:
+            with self.access(mode="read", scope="internal"):
+                result = type(self).from_pylibcudf(
+                    plc.unary.is_valid(self.plc_column)
+                )
+
+            if self.dtype.kind == "f":
+                # For floats, NaN should be considered null
+                result = result & self.notnan()
+
+        if cudf.get_option("mode.pandas_compatible"):
+            return result
+
+        return result._with_type_metadata(
+            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
         )
 
     def element_indexing(self, index: int) -> ScalarLike | None:
@@ -928,12 +997,13 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
+            # TODO: Try to avoid going via ColumnBase methods here
             codes = cast(
                 cudf.core.column.numerical.NumericalColumn,
                 self.astype(codes_dtype),
             )
             return CategoricalColumn._from_preprocessed(
-                codes.plc_column, dtype, (codes,)
+                codes.plc_column, dtype
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)

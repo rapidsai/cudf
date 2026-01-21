@@ -76,20 +76,7 @@ def plc_flags_from_re_flags(
 
 
 class StringColumn(ColumnBase, Scannable):
-    """
-    Implements operations for Columns of String type
-
-    Parameters
-    ----------
-    data : Buffer
-        Buffer of the string data
-    mask : Buffer
-        The validity mask
-    offset : int
-        Data offset
-    children : Tuple[Column]
-        Columns containing the offsets
-    """
+    """Implements operations for Columns of String type"""
 
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
@@ -115,6 +102,15 @@ class StringColumn(ColumnBase, Scannable):
         "cummin",
         "cummax",
     }
+
+    @property
+    def _PANDAS_NA_VALUE(self) -> ScalarLike:
+        """String columns return None as NA value in pandas compatibility mode."""
+        if cudf.get_option("mode.pandas_compatible"):
+            if is_pandas_nullable_extension_dtype(self.dtype):
+                return self.dtype.na_value
+            return None
+        return pd.NA
 
     @classmethod
     def _validate_args(
@@ -182,7 +178,7 @@ class StringColumn(ColumnBase, Scannable):
         # All null string columns fail to convert in libcudf, so we must short-circuit
         # the call to super().to_arrow().
         # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if len(self.children) == 0 or self.null_count == len(self):
+        if self.plc_column.num_children() == 0 or self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )

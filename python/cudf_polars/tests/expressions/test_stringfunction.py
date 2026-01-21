@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_133,
@@ -296,11 +295,7 @@ def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
     if outcome == "translation_error":
         assert_ir_translation_raises(q, NotImplementedError)
     elif outcome == "collect_error":
-        cudf_exc = (
-            pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else pl.exceptions.InvalidOperationError
-        )
+        cudf_exc = pl.exceptions.InvalidOperationError
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
@@ -508,9 +503,7 @@ def test_string_to_numeric_invalid(numeric_type):
     assert_collect_raises(
         q,
         polars_except=pl.exceptions.InvalidOperationError,
-        cudf_except=pl.exceptions.ComputeError
-        if POLARS_VERSION_LT_130
-        else pl.exceptions.InvalidOperationError,
+        cudf_except=pl.exceptions.InvalidOperationError,
     )
 
 
@@ -604,13 +597,7 @@ def test_string_zfill_column(fill):
     q = ldf.select(pl.col("input_strings").str.zfill(pl.col("fill")))
     if fill is not None and fill < 0:
         cudf_except = (
-            (
-                pl.exceptions.InvalidOperationError
-                if not POLARS_VERSION_LT_130
-                else pl.exceptions.ComputeError
-            )
-            if POLARS_VERSION_LT_132
-            else ()
+            pl.exceptions.InvalidOperationError if POLARS_VERSION_LT_132 else ()
         )
         assert_collect_raises(
             q,
@@ -627,9 +614,7 @@ def test_string_zfill_forbidden_chars():
     assert_collect_raises(
         q,
         polars_except=(),
-        cudf_except=pl.exceptions.InvalidOperationError
-        if not POLARS_VERSION_LT_130
-        else pl.exceptions.ComputeError,
+        cudf_except=pl.exceptions.InvalidOperationError,
     )
 
 

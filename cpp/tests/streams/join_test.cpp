@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/join/conditional_join.hpp>
 #include <cudf/join/filtered_join.hpp>
+#include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/join/sort_merge_join.hpp>
@@ -142,6 +143,22 @@ TEST_F(JoinTest, MixedLeftJoin)
                         cudf::null_equality::EQUAL,
                         std::nullopt,
                         cudf::test::get_default_stream());
+}
+
+TEST_F(JoinTest, LeftJoinWithPostFilter)
+{
+  cudf::hash_join hash_joiner(table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
+  auto hash_join_result =
+    hash_joiner.left_join(table0, std::nullopt, cudf::test::get_default_stream());
+
+  auto hash_filter_result =
+    cudf::filter_join_indices(conditional0,
+                              conditional1,
+                              cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+                              cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+                              left_zero_eq_right_zero,
+                              cudf::join_kind::LEFT_JOIN,
+                              cudf::test::get_default_stream());
 }
 
 TEST_F(JoinTest, MixedFullJoin)
