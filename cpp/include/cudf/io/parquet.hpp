@@ -68,6 +68,8 @@ class parquet_reader_options {
 
   // Path in schema of column to read; `nullopt` is all
   std::optional<std::vector<std::string>> _columns;
+  // Indices of top-level columns to read; `nullopt` is all (cannot be used alongside `_columns`)
+  std::optional<std::vector<cudf::size_type>> _column_indices;
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
@@ -229,6 +231,13 @@ class parquet_reader_options {
   [[nodiscard]] auto const& get_columns() const { return _columns; }
 
   /**
+   * @brief Returns indices of top-level columns to be read, if set.
+   *
+   * @return Indices of top-level columns to be read; `nullopt` if the option is not set
+   */
+  [[nodiscard]] auto const& get_column_indices() const { return _column_indices; }
+
+  /**
    * @brief Returns list of individual row groups to be read.
    *
    * @return List of individual row groups to be read
@@ -269,8 +278,9 @@ class parquet_reader_options {
    * Applies the same list of column names across all sources. Unlike `set_row_groups`,
    * which allows per-source configuration, `set_columns` applies globally.
    *
-   * Columns that do not exist in the input files will be ignored silently.
-   * The output table will only include the columns that are actually found.
+   * Columns that do not exist in the input files will be ignored silently and the output table will
+   * only include the columns that are actually found. This behavior can be changed by setting
+   * `enable_ignore_missing_columns` to false.
    *
    * To select a nested column (e.g., a struct member), use dot notation.
    *
@@ -282,7 +292,30 @@ class parquet_reader_options {
    *
    * @param col_names A vector of column names to attempt to read from each input source.
    */
-  void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
+  void set_columns(std::vector<std::string> col_names)
+  {
+    CUDF_EXPECTS(not _column_indices.has_value(),
+                 "Cannot select columns by indices and names simultaneously");
+    _columns = std::move(col_names);
+  }
+
+  /**
+   * @brief Sets the indices of top-level columns to be read from all input sources.
+   *
+   * Applies the same list of top-level column indices across all sources. Unlike `set_row_groups`,
+   * which allows per-source configuration, `set_columns` applies globally.
+   *
+   * Note that this overload of `set_columns` can only be used to select top-level columns unlike
+   * the other overload that takes a list of column paths in the schema.
+   *
+   * @param col_indices A vector of column indices to attempt to read from each input source.
+   */
+  void set_columns(std::vector<cudf::size_type> col_indices)
+  {
+    CUDF_EXPECTS(not _columns.has_value(),
+                 "Cannot select columns by indices and names simultaneously");
+    _column_indices = std::move(col_indices);
+  }
 
   /**
    * @brief Specifies which row groups to read from each input source.
@@ -453,7 +486,23 @@ class parquet_reader_options_builder {
    */
   parquet_reader_options_builder& columns(std::vector<std::string> col_names)
   {
+    CUDF_EXPECTS(not options._column_indices.has_value(),
+                 "Cannot select columns by indices and names simultaneously");
     options._columns = std::move(col_names);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the indices of top-level columns to be read from all input sources.
+   *
+   * @param col_indices A vector of column indices to attempt to read from each input source.
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& columns(std::vector<cudf::size_type> col_indices)
+  {
+    CUDF_EXPECTS(not options._columns.has_value(),
+                 "Cannot select columns by indices and names simultaneously");
+    options._column_indices = std::move(col_indices);
     return *this;
   }
 

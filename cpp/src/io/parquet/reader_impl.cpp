@@ -555,8 +555,9 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   if (options.get_filter().has_value() and options.get_columns().has_value()) {
     // list, struct, dictionary are not supported by AST filter yet.
     // extract columns not present in get_columns() & keep count to remove at end.
+    auto select_column_names = get_column_projection(options);
     filter_columns_names =
-      get_column_names_in_expression(options.get_filter(), *(options.get_columns()));
+      get_column_names_in_expression(options.get_filter(), *select_column_names);
     _num_filter_only_columns = filter_columns_names->size();
   }
   std::tie(_input_columns, _output_buffers, _output_column_schemas) =
@@ -815,6 +816,26 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
   }
 
   return num_rows_per_source;
+}
+
+std::optional<std::vector<std::string>> reader_impl::get_column_projection(
+  parquet_reader_options const& options) const
+{
+  CUDF_EXPECTS(not(options.get_columns().has_value() and options.get_column_indices().has_value()),
+               "Cannot select columns by both names and indices simultaneously");
+  if (options.get_columns().has_value()) {
+    return options.get_columns();
+  } else {
+    std::vector<std::string> col_names;
+    auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
+    for (auto const index : options.get_column_indices().value()) {
+      CUDF_EXPECTS(
+        std::cmp_greater_equal(index, 0) and std::cmp_less(index, top_level_schema_indices.size()),
+        "Invalid column index");
+      col_names.emplace_back(_metadata->get_schema(top_level_schema_indices[index]).name);
+    }
+    return std::make_optional(std::move(col_names));
+  }
 }
 
 table_with_metadata reader_impl::finalize_output(read_mode mode,

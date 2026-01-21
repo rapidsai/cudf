@@ -112,9 +112,11 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     // Using as is from:
     // https://github.com/rapidsai/cudf/blob/a8b25cd205dc5d04b9918dcb0b3abd6b8c4e4a74/cpp/src/io/parquet/reader_impl.cpp#L556-L569
     std::optional<std::vector<std::string>> filter_only_columns_names;
-    if (options.get_filter().has_value() and options.get_columns().has_value()) {
+    if (options.get_filter().has_value() and
+        (options.get_columns().has_value() or options.get_column_indices().has_value())) {
+      auto select_column_names  = get_column_projection(options);
       filter_only_columns_names = cudf::io::parquet::detail::get_column_names_in_expression(
-        options.get_filter(), *(options.get_columns()));
+        options.get_filter(), *select_column_names);
       _num_filter_only_columns = filter_only_columns_names->size();
     }
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
@@ -151,8 +153,9 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   } else {
     if (_is_payload_columns_selected) { return; }
 
+    auto select_column_names = get_column_projection(options);
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _extended_metadata->select_payload_columns(options.get_columns(),
+      _extended_metadata->select_payload_columns(select_column_names,
                                                  _filter_columns_names,
                                                  _use_pandas_metadata,
                                                  _strings_to_categorical,
