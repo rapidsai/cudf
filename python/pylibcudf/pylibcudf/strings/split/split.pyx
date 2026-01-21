@@ -427,4 +427,4 @@ cpdef Column split_part(
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
