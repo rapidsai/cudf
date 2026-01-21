@@ -158,7 +158,9 @@ def _evaluate_pipeline_dask(
         | get_environment_variables()
     )
     dask_context = get_worker_context(dask_worker)
-    with Context(dask_context.comm, dask_context.br, options) as rmpf_context:
+    with Context(
+        dask_context.comm, dask_context.br, options, dask_context.statistics
+    ) as rmpf_context:
         # IDs are already reserved by the caller, just pass them through
         return callback(
             ir,
