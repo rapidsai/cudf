@@ -594,7 +594,13 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                         "dask_spill_device": str(run_config.spill_device),
                         "dask_statistics": str(args.rapidsmpf_dask_statistics),
                         "dask_print_statistics": str(args.rapidsmpf_print_statistics),
-                        "oom_protection": str(args.rapidsmpf_oom_protection),
+                        "dask_spill_to_pinned_memory": str(
+                            run_config.spill_to_pinned_memory
+                        ),
+                        "dask_spill_device": str(run_config.spill_device),
+                        "dask_statistics": str(args.rapidsmpf_dask_statistics),
+                        "dask_print_statistics": str(args.rapidsmpf_print_statistics),
+                        "dask_oom_protection": str(args.rapidsmpf_oom_protection),
                     }
                 ),
             )
