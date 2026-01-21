@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from textwrap import dedent
@@ -56,7 +56,7 @@ def test_categorical_integer():
         3       c
         4       a
         dtype: category
-        Categories (3, object): ['a', 'b', 'c']"""
+        Categories (3, str): ['a', 'b', 'c']"""
     )
     assert str(sr) == expect_str
 
@@ -80,7 +80,11 @@ def test_categorical_empty():
     np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_numpy())
 
     # Test attributes
-    assert_eq(pdsr.cat.categories, sr.cat.categories)
+    assert sr.cat.categories.dtype == pd.StringDtype(na_value=np.nan)
+    assert pdsr.cat.categories.dtype == np.dtype(object)
+    assert_eq(
+        pdsr.cat.categories.astype(sr.cat.categories.dtype), sr.cat.categories
+    )
     assert pdsr.cat.ordered == sr.cat.ordered
 
     np.testing.assert_array_equal(
