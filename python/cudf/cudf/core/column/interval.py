@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 import pyarrow as pa
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
 import pylibcudf as plc
@@ -78,7 +79,7 @@ class IntervalColumn(ColumnBase):
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
-            dtype.pyarrow_dtype, pa.lib.StructType
+            dtype.pyarrow_dtype, ArrowIntervalType
         ):
             self._dtype = dtype
 

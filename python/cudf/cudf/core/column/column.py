@@ -2848,7 +2848,7 @@ def as_column(
                 # Wrap StructColumn as IntervalColumn with proper metadata
                 result = result._with_type_metadata(
                     IntervalDtype(
-                        subtype=cudf.dtype(arbitrary.dtype.subtype),
+                        subtype=arbitrary.dtype.subtype,
                         closed=arbitrary.dtype.closed,
                     )
                 )

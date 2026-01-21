@@ -153,24 +153,20 @@ class StructColumn(ColumnBase):
             # Dispatch to IntervalColumn when given IntervalDtype
             from cudf.core.column.interval import IntervalColumn
 
-            # Apply subtype metadata to children and reconstruct as IntervalColumn
-            new_children = tuple(
-                ColumnBase.from_pylibcudf(child).astype(dtype.subtype)
-                for child in self.plc_column.children()
+            # Determine the current subtype from the first child
+            first_child = ColumnBase.from_pylibcudf(
+                self.plc_column.children()[0]
             )
-            new_plc_column = plc.Column(
-                plc.DataType(plc.TypeId.STRUCT),
-                self.plc_column.size(),
-                self.plc_column.data(),
-                self.plc_column.null_mask(),
-                self.plc_column.null_count(),
-                self.plc_column.offset(),
-                [child.plc_column for child in new_children],
+            current_dtype = IntervalDtype(
+                subtype=first_child.dtype, closed=dtype.closed
             )
-            return IntervalColumn._from_preprocessed(
-                plc_column=new_plc_column,
-                dtype=dtype,
+
+            # Convert to IntervalColumn and apply target metadata
+            interval_col = IntervalColumn._from_preprocessed(
+                plc_column=self.plc_column,
+                dtype=current_dtype,
             )
+            return interval_col._with_type_metadata(dtype)
         elif isinstance(dtype, StructDtype):
             new_children = tuple(
                 ColumnBase.from_pylibcudf(child)._with_type_metadata(
