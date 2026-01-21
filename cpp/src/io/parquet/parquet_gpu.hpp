@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -645,6 +645,7 @@ struct EncPage {
   PageType page_type;      //!< Page type
   Encoding encoding;       //!< Encoding used for page data
   uint16_t num_fragments;  //!< Number of fragments in page
+  bool is_compressed;      //!< Whether this page is compressed (for V2 page-level compression)
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_v2() const
   {
@@ -800,6 +801,7 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
 void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pages,
                                      cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                      cudf::device_span<bool const> page_mask,
+                                     cudf::device_span<size_t const> page_string_offset_indices,
                                      size_t min_row,
                                      size_t num_rows,
                                      uint32_t kernel_mask,
@@ -1115,9 +1117,12 @@ void EncodePages(device_span<EncPage> pages,
  * Also calculates the set of page encodings used for each chunk.
  *
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
+ * @param[in] page_level_compression If true, V2 pages can independently decide compression
  * @param[in] stream CUDA stream to use
  */
-void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
+void decide_compression(device_span<EncColumnChunk> chunks,
+                        bool page_level_compression,
+                        rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to encode page headers

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Join logic for the RapidsMPF streaming runtime."""
 
@@ -25,6 +25,9 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     Metadata,
+    chunk_to_frame,
+    empty_table_chunk,
+    opaque_reservation,
     process_children,
 )
 from cudf_polars.experimental.utils import _concat
@@ -35,49 +38,6 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
-
-
-async def get_small_table(
-    context: Context,
-    small_child: IR,
-    ch_small: ChannelPair,
-) -> tuple[list[DataFrame], int]:
-    """
-    Get the small-table DataFrame partitions from the small-table ChannelPair.
-
-    Parameters
-    ----------
-    context
-        The rapidsmpf context.
-    small_child
-        The small-table child IR node.
-    ch_small
-        The small-table ChannelPair.
-
-    Returns
-    -------
-    The small-table DataFrame partitions and the size of the small-side in bytes.
-    """
-    small_chunks = []
-    small_size = 0
-    while (msg := await ch_small.data.recv(context)) is not None:
-        small_chunks.append(
-            TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            )
-        )
-        small_size += small_chunks[-1].data_alloc_size(MemoryType.DEVICE)
-    assert small_chunks, "Empty small side"
-
-    return [
-        DataFrame.from_table(
-            small_chunk.table_view(),
-            list(small_child.schema.keys()),
-            list(small_child.schema.values()),
-            small_chunk.stream,
-        )
-        for small_chunk in small_chunks
-    ], small_size
 
 
 @define_py_node()
@@ -160,41 +120,83 @@ async def broadcast_join_node(
         )
         await ch_out.send_metadata(context, output_metadata)
 
-        # Collect small-side
-        small_dfs, small_size = await get_small_table(context, small_child, small_ch)
+        # Collect small-side (may be empty if no data received)
+        small_chunks: list[TableChunk] = []
+        small_size = 0
+        while (msg := await small_ch.data.recv(context)) is not None:
+            small_chunks.append(
+                TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+            )
+            del msg
+            small_size += small_chunks[-1].data_alloc_size(MemoryType.DEVICE)
+
+        # Allgather is a collective - all ranks must participate even with no local data
         need_allgather = context.comm().nranks > 1 and not small_duplicated
-        if (
+        if need_allgather:
+            allgather = AllGatherManager(context, collective_id)
+            for s_id in range(len(small_chunks)):
+                allgather.insert(s_id, small_chunks.pop(0))
+            allgather.insert_finished()
+            stream = ir_context.get_cuda_stream()
+            # extract_concatenated returns a plc.Table, not a TableChunk
+            small_dfs = [
+                DataFrame.from_table(
+                    await allgather.extract_concatenated(stream),
+                    list(small_child.schema.keys()),
+                    list(small_child.schema.values()),
+                    stream,
+                )
+            ]
+        elif len(small_chunks) > 1 and (
             ir.options[0] != "Inner" or small_size < target_partition_size
-        ) and not need_allgather:
+        ):
             # Pre-concat for non-inner joins, otherwise
             # we need a local shuffle, and face additional
             # memory pressure anyway.
-            small_dfs = [_concat(*small_dfs, context=ir_context)]
-        if need_allgather:
-            allgather = AllGatherManager(context, collective_id)
-            for s_id, small_df in enumerate(small_dfs):
-                allgather.insert(
-                    s_id,
-                    TableChunk.from_pylibcudf_table(
-                        small_df.table, small_df.stream, exclusive_view=True
-                    ),
-                )
-            allgather.insert_finished()
             small_dfs = [
-                DataFrame.from_table(
-                    await allgather.extract_concatenated(small_df.stream),
-                    list(small_child.schema.keys()),
-                    list(small_child.schema.values()),
-                    small_df.stream,
+                _concat(
+                    *[chunk_to_frame(chunk, small_child) for chunk in small_chunks],
+                    context=ir_context,
                 )
+            ]
+            small_chunks.clear()  # small_dfs is not a view of small_chunks anymore
+        else:
+            small_dfs = [
+                chunk_to_frame(small_chunk, small_child) for small_chunk in small_chunks
             ]
 
         # Stream through large side, joining with the small-side
-        while (msg := await large_ch.data.recv(context)) is not None:
-            large_chunk = TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            )
-            seq_num = msg.sequence_number
+        seq_num = 0
+        large_chunk_processed = False
+        receiving_large_chunks = True
+        while receiving_large_chunks:
+            msg = await large_ch.data.recv(context)
+            if msg is None:
+                receiving_large_chunks = False
+                if large_chunk_processed:
+                    # Normal exit - We've processed all large-table data
+                    break
+                elif small_dfs:
+                    # We received small-table data, but no large-table data.
+                    # This may never happen, but we can handle it by generating
+                    # an empty large-table chunk
+                    stream = ir_context.get_cuda_stream()
+                    large_chunk = empty_table_chunk(large_child, context, stream)
+                else:
+                    # We received no data for either the small or large table.
+                    # Drain the output channel and return
+                    await ch_out.data.drain(context)
+                    return
+            else:
+                large_chunk_processed = True
+                large_chunk = TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+                seq_num = msg.sequence_number
+                del msg
+
             large_df = DataFrame.from_table(
                 large_chunk.table_view(),
                 list(large_child.schema.keys()),
@@ -202,10 +204,17 @@ async def broadcast_join_node(
                 large_chunk.stream,
             )
 
-            # Perform the join
-            df = _concat(
-                *[
-                    (
+            # Lazily create empty small table if small_dfs is empty
+            if not small_dfs:
+                stream = ir_context.get_cuda_stream()
+                empty_small_chunk = empty_table_chunk(small_child, context, stream)
+                small_dfs = [chunk_to_frame(empty_small_chunk, small_child)]
+
+            large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
+            input_bytes = large_chunk_size + small_size
+            with opaque_reservation(context, input_bytes):
+                df = _concat(
+                    *[
                         await asyncio.to_thread(
                             ir.do_evaluate,
                             *ir._non_child_args,
@@ -216,23 +225,24 @@ async def broadcast_join_node(
                             ),
                             context=ir_context,
                         )
-                    )
-                    for small_df in small_dfs
-                ],
-                context=ir_context,
-            )
+                        for small_df in small_dfs
+                    ],
+                    context=ir_context,
+                )
 
-            # Send output chunk
-            await ch_out.data.send(
-                context,
-                Message(
-                    seq_num,
-                    TableChunk.from_pylibcudf_table(
-                        df.table, df.stream, exclusive_view=True
+                # Send output chunk
+                await ch_out.data.send(
+                    context,
+                    Message(
+                        seq_num,
+                        TableChunk.from_pylibcudf_table(
+                            df.table, df.stream, exclusive_view=True
+                        ),
                     ),
-                ),
-            )
+                )
+                del df, large_df, large_chunk
 
+        del small_dfs, small_chunks
         await ch_out.data.drain(context)
 
 

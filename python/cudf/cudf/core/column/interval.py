@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -7,46 +7,37 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
+
+import pylibcudf as plc
 
 import cudf
-from cudf.core.column.column import as_column
+from cudf.core.column.column import ColumnBase, _handle_nulls, as_column
 from cudf.core.column.struct import StructColumn
-from cudf.core.dtypes import IntervalDtype
+from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
-
-    import pylibcudf as plc
-
-    from cudf.core.column import ColumnBase
+    from cudf._typing import DtypeObj
 
 
 class IntervalColumn(StructColumn):
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        size: int,
-        dtype: IntervalDtype,
-        offset: int,
-        null_count: int,
-        exposed: bool,
-    ) -> None:
+    @classmethod
+    def _validate_args(  # type: ignore[override]
+        cls, plc_column: plc.Column, dtype: IntervalDtype
+    ) -> tuple[plc.Column, IntervalDtype]:
+        # Validate plc_column TypeId - IntervalColumn uses STRUCT type
+        if not (
+            isinstance(plc_column, plc.Column)
+            and plc_column.type().id() == plc.TypeId.STRUCT
+        ):
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with TypeId STRUCT"
+            )
         if plc_column.num_children() != 2:
             raise ValueError(
                 "plc_column must have two children (left edges, right edges)."
             )
-        super().__init__(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-
-    @staticmethod
-    def _validate_dtype_instance(dtype: IntervalDtype) -> IntervalDtype:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, IntervalDtype)
@@ -55,7 +46,7 @@ class IntervalColumn(StructColumn):
             and not is_dtype_obj_interval(dtype)
         ):
             raise ValueError("dtype must be a IntervalDtype.")
-        return dtype
+        return plc_column, dtype
 
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
@@ -68,7 +59,17 @@ class IntervalColumn(StructColumn):
 
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()  # type: ignore[union-attr]
-        struct_arrow = super().to_arrow()
+        struct_arrow = self.plc_column.to_arrow(
+            metadata=_dtype_to_metadata(self.dtype)
+        )
+        possibly_null_struct_arrow = _handle_nulls(struct_arrow)
+
+        # Disable null handling for all null arrays because those cannot be
+        # passed to from_storage below, in that case we leave the struct
+        # structure in place.
+        if not isinstance(possibly_null_struct_arrow, pa.lib.NullArray):
+            struct_arrow = possibly_null_struct_arrow
+
         if len(struct_arrow) == 0:
             # struct arrow is pa.struct array with null children types
             # we need to make sure its children have non-null type
@@ -77,6 +78,16 @@ class IntervalColumn(StructColumn):
 
     def copy(self, deep: bool = True) -> Self:
         return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
+
+    def _adjust_reduce_result(
+        self,
+        result_col: ColumnBase,
+        reduction_op: str,
+        col_dtype: DtypeObj,
+        plc_scalar: plc.Scalar,
+    ) -> ColumnBase:
+        """Preserve IntervalDtype metadata on reduction result."""
+        return result_col._with_type_metadata(col_dtype)
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
@@ -105,7 +116,9 @@ class IntervalColumn(StructColumn):
 
     @property
     def left(self) -> ColumnBase:
-        return self.children[0]
+        return ColumnBase.from_pylibcudf(
+            self.plc_column.children()[0]
+        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
 
     @functools.cached_property
     def mid(self) -> ColumnBase:
@@ -117,7 +130,9 @@ class IntervalColumn(StructColumn):
 
     @property
     def right(self) -> ColumnBase:
-        return self.children[1]
+        return ColumnBase.from_pylibcudf(
+            self.plc_column.children()[1]
+        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
 
     def overlaps(other) -> ColumnBase:
         raise NotImplementedError("overlaps is not currently implemented.")

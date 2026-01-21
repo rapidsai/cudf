@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
@@ -97,9 +97,19 @@ def test_json_reader(index, compression, orient, pdf, tmp_path):
         pytest.skip(skip_reason)
     path_df = tmp_path / "test_df.json"
     path_series = tmp_path / "test_series.json"
-    pdf.to_json(path_df, index=index, compression=compression, orient=orient)
+    pdf.to_json(
+        path_df,
+        index=index,
+        compression=compression,
+        orient=orient,
+        date_format="iso",
+    )
     pdf["col_int32"].to_json(
-        path_series, index=index, compression=compression, orient=orient
+        path_series,
+        index=index,
+        compression=compression,
+        orient=orient,
+        date_format="iso",
     )
     expect_df = pd.read_json(path_df, orient=orient, compression=compression)
     got_df = cudf.read_json(path_df, orient=orient, compression=compression)
@@ -133,8 +143,8 @@ def test_json_writer(tmp_path, pdf, gdf):
     pdf_df_fname = tmp_path / "pdf_df.json"
     gdf_df_fname = tmp_path / "gdf_df.json"
 
-    pdf.to_json(pdf_df_fname)
-    gdf.to_json(gdf_df_fname)
+    pdf.to_json(pdf_df_fname, date_format="iso")
+    gdf.to_json(gdf_df_fname, date_format="iso")
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
@@ -148,8 +158,8 @@ def test_json_writer(tmp_path, pdf, gdf):
         pdf_series_fname = tmp_path / f"{column}_pdf_series.json"
         gdf_series_fname = tmp_path / f"{column}_gdf_series.json"
 
-        pdf[column].to_json(pdf_series_fname)
-        gdf[column].to_json(gdf_series_fname)
+        pdf[column].to_json(pdf_series_fname, date_format="iso")
+        gdf[column].to_json(gdf_series_fname, date_format="iso")
 
         assert os.path.exists(pdf_series_fname)
         assert os.path.exists(gdf_series_fname)
@@ -160,8 +170,8 @@ def test_json_writer(tmp_path, pdf, gdf):
         assert_eq(expect_series, got_series)
 
         # Make sure results align for regular strings, not just files
-        pdf_string = pdf[column].to_json()
-        gdf_string = pdf[column].to_json()
+        pdf_string = pdf[column].to_json(date_format="iso")
+        gdf_string = pdf[column].to_json(date_format="iso")
         assert_eq(pdf_string, gdf_string)
 
 
@@ -696,9 +706,13 @@ def test_json_to_json_special_characters():
     ],
 )
 def test_json_to_json_compare_contents(gdf, pdf):
-    expected_json = pdf.to_json(lines=True, orient="records")
+    expected_json = pdf.to_json(
+        lines=True, orient="records", date_format="iso"
+    )
     with pytest.warns(UserWarning):
-        actual_json = gdf().to_json(lines=True, orient="records")
+        actual_json = gdf().to_json(
+            lines=True, orient="records", date_format="iso"
+        )
 
     assert expected_json == actual_json
 

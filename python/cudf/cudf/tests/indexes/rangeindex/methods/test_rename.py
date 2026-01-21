@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
@@ -13,6 +13,4 @@ def test_rename_shallow_copy():
 
     idx = cudf.Index([1])
     result = idx.rename("a")
-    assert idx._column.base_data.get_ptr(
-        mode="read"
-    ) == result._column.base_data.get_ptr(mode="read")
+    assert idx._column.data.ptr == result._column.data.ptr

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Sorting Logic."""
 
@@ -23,7 +23,11 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import _simple_shuffle_graph
 from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 from cudf_polars.utils.config import ShuffleMethod
-from cudf_polars.utils.cuda_stream import get_dask_cuda_stream, get_joined_cuda_stream
+from cudf_polars.utils.cuda_stream import (
+    get_dask_cuda_stream,
+    get_joined_cuda_stream,
+    join_cuda_streams,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
@@ -320,10 +324,11 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         context = get_worker_context()
 
         by = options["by"]
-
-        stream = get_joined_cuda_stream(
-            get_dask_cuda_stream, upstreams=(df.stream, sort_boundaries.stream)
-        )
+        data_streams = [
+            df.stream,
+            sort_boundaries.stream,
+        ]
+        stream = get_joined_cuda_stream(get_dask_cuda_stream, upstreams=data_streams)
 
         splits = find_sort_splits(
             df.select(by).table,
@@ -342,6 +347,8 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         # TODO: figure out handoff with rapidsmpf
         # https://github.com/rapidsai/cudf/issues/20337
         shuffler.insert_chunks(packed_inputs)
+
+        join_cuda_streams(downstreams=data_streams, upstreams=[stream])
 
     @staticmethod
     def extract_partition(
