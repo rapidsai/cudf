@@ -49,6 +49,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     Metadata,
     chunk_to_frame,
     empty_table_chunk,
+    opaque_reservation,
     process_children,
 )
 
@@ -117,7 +118,7 @@ class Lineariser:
 
         # Forward any remaining buffered messages
         for seq in sorted(buffer.keys()):
-            await self.ch_out.send(self.context, buffer[seq])
+            await self.ch_out.send(self.context, buffer.pop(seq))
 
         await self.ch_out.drain(self.context)
 
@@ -152,6 +153,7 @@ async def dataframescan_node(
     *,
     num_producers: int,
     rows_per_partition: int,
+    estimated_chunk_bytes: int,
 ) -> None:
     """
     DataFrameScan node for rapidsmpf.
@@ -170,6 +172,9 @@ async def dataframescan_node(
         The number of producers to use for the DataFrameScan node.
     rows_per_partition
         The number of rows per partition.
+    estimated_chunk_bytes
+        Estimated size of each chunk in bytes. Used for memory reservation
+        with block spilling to avoid thrashing.
     """
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Find local partition count.
@@ -216,6 +221,7 @@ async def dataframescan_node(
                     seq_num,
                     ch_out.data,
                     ir_context,
+                    estimated_chunk_bytes,
                 )
             await ch_out.data.drain(context)
             return
@@ -240,6 +246,7 @@ async def dataframescan_node(
                     task_idx,
                     ch_out,
                     ir_context,
+                    estimated_chunk_bytes,
                 )
             await ch_out.drain(context)
 
@@ -260,6 +267,8 @@ def _(
     )
     rows_per_partition = config_options.executor.max_rows_per_partition
     num_producers = rec.state["max_io_threads"]
+    # Use target_partition_size as the estimated chunk size
+    estimated_chunk_bytes = config_options.executor.target_partition_size
 
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
@@ -273,6 +282,7 @@ def _(
                 channels[ir].reserve_input_slot(),
                 num_producers=num_producers,
                 rows_per_partition=rows_per_partition,
+                estimated_chunk_bytes=estimated_chunk_bytes,
             )
         ]
     }
@@ -317,6 +327,7 @@ async def read_chunk(
     seq_num: int,
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
+    estimated_chunk_bytes: int,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
@@ -333,24 +344,27 @@ async def read_chunk(
         The output channel.
     ir_context
         The execution context for the IR node.
+    estimated_chunk_bytes
+        Estimated size of the chunk in bytes. Used for memory reservation
+        with block spilling to avoid thrashing.
     """
-    # Evaluate and send the Scan-node result
-    df = await asyncio.to_thread(
-        scan.do_evaluate,
-        *scan._non_child_args,
-        context=ir_context,
-    )
-    await ch_out.send(
-        context,
-        Message(
-            seq_num,
-            TableChunk.from_pylibcudf_table(
-                df.table,
-                df.stream,
-                exclusive_view=True,
+    with opaque_reservation(context, estimated_chunk_bytes):
+        df = await asyncio.to_thread(
+            scan.do_evaluate,
+            *scan._non_child_args,
+            context=ir_context,
+        )
+        await ch_out.send(
+            context,
+            Message(
+                seq_num,
+                TableChunk.from_pylibcudf_table(
+                    df.table,
+                    df.stream,
+                    exclusive_view=True,
+                ),
             ),
-        ),
-    )
+        )
 
 
 @define_py_node()
@@ -363,6 +377,7 @@ async def scan_node(
     num_producers: int,
     plan: IOPartitionPlan,
     parquet_options: ParquetOptions,
+    estimated_chunk_bytes: int,
 ) -> None:
     """
     Scan node for rapidsmpf.
@@ -383,6 +398,9 @@ async def scan_node(
         The partitioning plan.
     parquet_options
         The Parquet options.
+    estimated_chunk_bytes
+        Estimated size of each chunk in bytes. Used for memory reservation
+        with block spilling to avoid thrashing.
     """
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Build a list of local Scan operations
@@ -470,6 +488,7 @@ async def scan_node(
                     seq_num,
                     ch_out.data,
                     ir_context,
+                    estimated_chunk_bytes,
                 )
             await ch_out.data.drain(context)
             return
@@ -494,6 +513,7 @@ async def scan_node(
                     task_idx,
                     ch_out,
                     ir_context,
+                    estimated_chunk_bytes,
                 )
             await ch_out.drain(context)
 
@@ -617,7 +637,8 @@ def _(
     ir: Scan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
+    executor = rec.state["config_options"].executor
+    assert executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
     )
     parquet_options = config_options.parquet_options
@@ -679,6 +700,7 @@ def _(
                 num_producers=num_producers,
                 plan=plan,
                 parquet_options=parquet_options,
+                estimated_chunk_bytes=executor.target_partition_size,
             )
         ]
     return nodes, channels

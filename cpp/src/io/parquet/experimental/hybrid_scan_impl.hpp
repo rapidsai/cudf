@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -126,6 +126,14 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::cuda_stream_view stream);
 
   /**
+   * @copydoc cudf::io::experimental::hybrid_scan::build_all_true_row_mask
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
+
+  /**
    * @copydoc cudf::io::experimental::hybrid_scan::build_row_mask_with_page_index_stats
    */
   [[nodiscard]] std::unique_ptr<cudf::column> build_row_mask_with_page_index_stats(
@@ -177,6 +185,27 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     std::vector<rmm::device_buffer>&& column_chunk_buffers,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Fetches byte ranges for all (or selected) column chunks
+   *
+   * @param row_group_indices Input row groups indices
+   * @param options Parquet reader options
+   * @return Pair of a vector of byte ranges to column chunks of all (or selected) columns and a
+   * vector of their corresponding input source file indices
+   */
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
+  all_column_chunks_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                parquet_reader_options const& options);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::materialize_all_columns
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    std::vector<rmm::device_buffer>&& column_chunk_buffers,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 
@@ -242,9 +271,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
  private:
   /**
-   * @brief The enum indicating whether we are reading the filter columns or the payload columns
+   * @brief The enum indicating whether we are reading the filter, payload, or all columns
    */
-  enum class read_columns_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS };
+  enum class read_columns_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS, ALL_COLUMNS };
 
   /**
    * @brief Initialize the necessary options related internal variables for use later on
@@ -439,6 +468,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   bool _is_filter_columns_selected{false};
   bool _is_payload_columns_selected{false};
+  bool _is_all_columns_selected{false};
 };
 
 }  // namespace cudf::io::parquet::experimental::detail

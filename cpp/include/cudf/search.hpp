@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -132,7 +132,7 @@ bool contains(column_view const& haystack,
  * @brief Check if the given `needles` values exists in the `haystack` column.
  *
  * The new column will have type BOOL and have the same size and null mask as the input `needles`
- * column. That is, any null row in the `needles` column will result in a nul row in the output
+ * column. That is, any null row in the `needles` column will result in a null row in the output
  * column.
  *
  * @throws cudf::logic_error If `haystack.type() != needles.type()`

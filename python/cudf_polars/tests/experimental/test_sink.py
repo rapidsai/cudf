@@ -15,7 +15,6 @@ from cudf_polars.testing.asserts import (
     assert_sink_result_equal,
 )
 from cudf_polars.utils.config import ConfigOptions
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -137,12 +136,8 @@ def test_sink_parquet_raises(df, tmp_path):
             "sink_to_directory": True,
         },
     )
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError, match="not supported"):
-            df.sink_parquet(path, engine=engine)
-    else:
-        with pytest.raises(NotImplementedError, match="not supported"):
-            df.sink_parquet(path, engine=engine)
+    with pytest.raises(NotImplementedError, match="not supported"):
+        df.sink_parquet(path, engine=engine)
 
 
 @pytest.mark.parametrize("include_header", [True, False])
