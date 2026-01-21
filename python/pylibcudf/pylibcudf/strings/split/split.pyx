@@ -13,7 +13,6 @@ from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
-from pylibcudf.libcudf.strings.split cimport split_part as cpp_split_part
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
