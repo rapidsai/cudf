@@ -8,7 +8,6 @@ from contextlib import nullcontext as does_not_raise
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
 
 import cudf
@@ -2830,13 +2829,8 @@ def test_string_len(ps_gs):
 
     expect = ps.str.len()
     got = gs.str.len()
-
-    # Can't handle nulls in Pandas so use PyArrow instead
-    # Pandas will return as a float64 so need to typecast to int32
-    expect = pa.array(expect, from_pandas=True).cast(pa.int64())
-    got = got.to_arrow()
-
-    assert pa.Array.equals(expect, got)
+    # pandas returns int64, cuDF returns int32
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_string_concat():
