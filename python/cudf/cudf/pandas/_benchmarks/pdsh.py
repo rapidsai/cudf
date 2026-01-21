@@ -67,14 +67,16 @@ class PDSHQueries:
 
         gb = filt.groupby(["l_returnflag", "l_linestatus"], as_index=False)
         agg = gb.agg(
-            sum_qty=("l_quantity", "sum"),
-            sum_base_price=("l_extendedprice", "sum"),
-            sum_disc_price=("disc_price", "sum"),
-            sum_charge=("charge", "sum"),
-            avg_qty=("l_quantity", "mean"),
-            avg_price=("l_extendedprice", "mean"),
-            avg_disc=("l_discount", "mean"),
-            count_order=("l_returnflag", "count"),
+            sum_qty=pd.NamedAgg(column="l_quantity", aggfunc="sum"),
+            sum_base_price=pd.NamedAgg(
+                column="l_extendedprice", aggfunc="sum"
+            ),
+            sum_disc_price=pd.NamedAgg(column="disc_price", aggfunc="sum"),
+            sum_charge=pd.NamedAgg(column="charge", aggfunc="sum"),
+            avg_qty=pd.NamedAgg(column="l_quantity", aggfunc="mean"),
+            avg_price=pd.NamedAgg(column="l_extendedprice", aggfunc="mean"),
+            avg_disc=pd.NamedAgg(column="l_discount", aggfunc="mean"),
+            count_order=pd.NamedAgg(column="l_orderkey", aggfunc="size"),
         )
 
         return agg.sort_values(["l_returnflag", "l_linestatus"])
@@ -192,7 +194,9 @@ class PDSHQueries:
         jn = jn.drop_duplicates(subset=["o_orderpriority", "l_orderkey"])
 
         gb = jn.groupby("o_orderpriority", as_index=False)
-        agg = gb.agg(order_count=("o_orderkey", "count"))
+        agg = gb.agg(
+            order_count=pd.NamedAgg(column="o_orderkey", aggfunc="count")
+        )
 
         return agg.sort_values(["o_orderpriority"])
 
@@ -314,7 +318,7 @@ class PDSHQueries:
         gb = total.groupby(
             ["supp_nation", "cust_nation", "l_year"], as_index=False
         )
-        agg = gb.agg(revenue=("volume", "sum"))
+        agg = gb.agg(revenue=pd.NamedAgg(column="volume", aggfunc="sum"))
 
         return agg.sort_values(by=["supp_nation", "cust_nation", "l_year"])
 
@@ -404,7 +408,7 @@ class PDSHQueries:
         jn5 = jn5.rename(columns={"n_name": "nation"})
 
         gb = jn5.groupby(["nation", "o_year"], as_index=False, sort=False)
-        agg = gb.agg(sum_profit=("amount", "sum"))
+        agg = gb.agg(sum_profit=pd.NamedAgg(column="amount", aggfunc="sum"))
         sorted_df = agg.sort_values(
             by=["nation", "o_year"], ascending=[True, False]
         )
