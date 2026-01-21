@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import io
 
@@ -169,9 +169,23 @@ def test_read_parquet_filters(
     )
 
 
+class FooSpan:
+    def __init__(self, data):
+        self._data = data
+
+    @property
+    def ptr(self):
+        return self._data.ptr
+
+    @property
+    def size(self):
+        return self._data.size
+
+
 @pytest.mark.parametrize("num_buffers", [1, 2])
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("use_foo_span", [False, True])
 def test_read_parquet_from_device_buffers(
     table_data,
     binary_source_or_sink,
@@ -179,6 +193,7 @@ def test_read_parquet_from_device_buffers(
     stream,
     columns,
     num_buffers,
+    use_foo_span,
 ):
     _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
@@ -188,9 +203,10 @@ def test_read_parquet_from_device_buffers(
         binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
     )
 
-    buf = DeviceBuffer.to_device(
+    rmm_buf = DeviceBuffer.to_device(
         get_bytes_from_source(source), plc.utils._get_stream(stream)
     )
+    buf = FooSpan(rmm_buf) if use_foo_span else rmm_buf
 
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo([buf] * num_buffers)
