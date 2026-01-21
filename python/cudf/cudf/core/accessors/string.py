@@ -380,7 +380,6 @@ class StringMethods(BaseAccessor):
                 out = out[0]
         return out
 
-
     def join(
         self, sep=None, string_na_rep=None, sep_na_rep=None
     ) -> Series | Index:
@@ -2785,7 +2784,7 @@ class StringMethods(BaseAccessor):
                 )
 
         return self._return_or_inplace(result_table, expand=expand)
-    
+
     def split_part(
         self, delimiter: str | None = None, index: int = 0
     ) -> Series | Index:

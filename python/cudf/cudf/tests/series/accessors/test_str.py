@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import json
@@ -1731,12 +1731,13 @@ def test_string_rsplit_re(n, expand):
     got = gs.str.rsplit(pat="\\s", n=n, expand=expand, regex=True)
     assert_eq(expect, got)
 
+
 @pytest.mark.parametrize(
     "data, delimiter, index, expected",
     [
         (["a_b_c", "d_e", "f"], "_", 1, ["b", "e", None]),
         (["a_b_c", "d_e", "f"], "_", 0, ["a", "d", "f"]),
-    ]
+    ],
 )
 def test_split_part(data, delimiter, index, expected):
     s = cudf.Series(data)
@@ -1750,13 +1751,14 @@ def test_split_part(data, delimiter, index, expected):
     [
         (["a b c", "d  e", "f\tg", " h "], 0, ["a", "d", "f", "h"]),
         (["a b c", "d  e", "f\tg", " h "], 1, ["b", "e", "g", None]),
-    ]
+    ],
 )
 def test_split_part_whitespace(data, index, expected):
     s = cudf.Series(data)
     got = s.str.split_part(delimiter="", index=index)
     expect = cudf.Series(expected)
     assert_eq(got, expect)
+
 
 @pytest.mark.parametrize(
     "data",
