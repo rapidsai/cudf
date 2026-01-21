@@ -593,6 +593,8 @@ class StreamingExecutor:
         column. By default, ``1.0`` is used for any column not included in
         ``unique_fraction``.
     selectivity_hints
+        **Experimental**: This feature may change at any time.
+
         A dictionary mapping IR node prefixes to selectivity factors between
         0 and 1 (exclusive on the left, inclusive on the right).
 
