@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
@@ -130,7 +130,8 @@ def test_rsplit_record_re(data_col, re_delimiter):
     )
     expect = pc.split_pattern_regex(pa_array, re_delimiter)
     assert_column_eq(expect, got)
-    
+
+
 def test_split_part(data_col, delimiter):
     # Using existing fixtures (data_col has ["a_b_c", "d-e-f", None], delimiter is "_")
     _, plc_column = data_col
@@ -152,7 +153,7 @@ def test_split_part_whitespace():
     # Standalone test for whitespace because fixtures use "_"
     data = pa.array(["a b", "c  d", "e\\tf", None])
     plc_column = plc.Column.from_arrow(data)
-    
+
     # Empty delimiter for whitespace split
     plc_delimiter = plc.Scalar.from_arrow(pa.scalar(""))
 
