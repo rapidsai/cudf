@@ -889,10 +889,10 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   // compute output column sizes by examining the pages of the -input- columns
   if (has_lists) {
     auto h_cols_info =
-      cudf::detail::make_empty_host_vector<input_col_info>(_input_columns.size(), _stream);
+      cudf::detail::make_pinned_vector_async<input_col_info>(_input_columns.size(), _stream);
     std::transform(_input_columns.cbegin(),
                    _input_columns.cend(),
-                   std::back_inserter(h_cols_info),
+                   h_cols_info.begin(),
                    [](auto& col) -> input_col_info {
                      return {col.schema_idx, static_cast<size_type>(col.nesting_depth())};
                    });
@@ -1008,8 +1008,10 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   }
 
   // Need to set null mask bufs to all high bits
+  auto pinned_nullmask_bufs = cudf::detail::make_pinned_vector(
+    cudf::host_span<cudf::device_span<cudf::bitmask_type> const>{nullmask_bufs}, _stream);
   cudf::detail::batched_memset<cudf::bitmask_type>(
-    nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
+    pinned_nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
 cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
@@ -1042,7 +1044,7 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               cuda::std::plus<>{},
                               _stream);
 
-  return cudf::detail::make_host_vector(d_col_sizes, _stream);
+  return cudf::detail::make_pinned_vector(d_col_sizes, _stream);
 }
 
 }  // namespace cudf::io::parquet::detail
