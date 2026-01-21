@@ -463,6 +463,10 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   if (has_repetition) {
     decoders[level_type::REPETITION].decode_next(t, num_values_to_decode);
   }
+
+  //Must sync as shared variables in decode_next() are shared between decoders!!
+  block.sync();
+
   if (should_process_def) {
     decoders[level_type::DEFINITION].decode_next(t, num_values_to_decode);
   }
