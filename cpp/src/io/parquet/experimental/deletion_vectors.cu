@@ -38,10 +38,10 @@ using roaring_bitmap_type =
  */
 struct chunked_parquet_reader::roaring_bitmap_impl {
   std::unique_ptr<roaring_bitmap_type> roaring_bitmap;
-  std::vector<cuda::std::byte> const roaring_bitmap_data;
+  cudf::host_span<cuda::std::byte> const roaring_bitmap_data;
 
-  explicit roaring_bitmap_impl(std::vector<cuda::std::byte>&& serialized_roaring_bitmap)
-    : roaring_bitmap_data{std::move(serialized_roaring_bitmap)}
+  explicit roaring_bitmap_impl(cudf::host_span<cuda::std::byte> serialized_roaring_bitmap)
+    : roaring_bitmap_data{serialized_roaring_bitmap}
   {
   }
 
@@ -402,10 +402,10 @@ chunked_parquet_reader::chunked_parquet_reader(
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
   parquet_reader_options const& options,
-  cudf::host_span<std::vector<cuda::std::byte>> serialized_roaring_bitmaps,
-  cudf::host_span<size_type const> deletion_vector_row_counts,
-  cudf::host_span<size_t const> row_group_offsets,
-  cudf::host_span<size_type const> row_group_num_rows,
+  std::vector<cudf::host_span<cuda::std::byte>>&& serialized_roaring_bitmaps,
+  std::vector<size_type>&& deletion_vector_row_counts,
+  std::vector<size_t>&& row_group_offsets,
+  std::vector<size_type>&& row_group_num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
   : _start_row{0},
@@ -439,10 +439,10 @@ chunked_parquet_reader::chunked_parquet_reader(
   });
 
   if (not serialized_roaring_bitmaps.empty()) {
-    auto iter =
-      thrust::make_zip_iterator(thrust::counting_iterator(0), deletion_vector_row_counts.begin());
+    auto iter = thrust::make_zip_iterator(serialized_roaring_bitmaps.begin(),
+                                          deletion_vector_row_counts.begin());
     std::for_each(iter, iter + serialized_roaring_bitmaps.size(), [&](auto const& elem) {
-      _deletion_vectors.emplace(std::move(serialized_roaring_bitmaps[cuda::std::get<0>(elem)]));
+      _deletion_vectors.emplace(cuda::std::get<0>(elem));
       _deletion_vector_row_counts.push(cuda::std::get<1>(elem));
     });
   }
@@ -455,19 +455,19 @@ chunked_parquet_reader::chunked_parquet_reader(
 chunked_parquet_reader::chunked_parquet_reader(
   std::size_t chunk_read_limit,
   parquet_reader_options const& options,
-  cudf::host_span<std::vector<cuda::std::byte>> serialized_roaring_bitmaps,
-  cudf::host_span<size_type const> deletion_vector_row_counts,
-  cudf::host_span<size_t const> row_group_offsets,
-  cudf::host_span<size_type const> row_group_num_rows,
+  std::vector<cudf::host_span<cuda::std::byte>>&& serialized_roaring_bitmaps,
+  std::vector<size_type>&& deletion_vector_row_counts,
+  std::vector<size_t>&& row_group_offsets,
+  std::vector<size_type>&& row_group_num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
   : chunked_parquet_reader(chunk_read_limit,
                            std::size_t{0},
                            options,
-                           serialized_roaring_bitmaps,
-                           deletion_vector_row_counts,
-                           row_group_offsets,
-                           row_group_num_rows,
+                           std::move(serialized_roaring_bitmaps),
+                           std::move(deletion_vector_row_counts),
+                           std::move(row_group_offsets),
+                           std::move(row_group_num_rows),
                            stream,
                            mr)
 {
@@ -532,26 +532,24 @@ table_with_metadata chunked_parquet_reader::read_chunk()
  * @copydoc cudf::io::parquet::experimental::read_parquet
  */
 table_with_metadata read_parquet(parquet_reader_options const& options,
-                                 std::vector<cuda::std::byte>&& serialized_roaring_bitmap,
-                                 cudf::host_span<size_t const> row_group_offsets,
-                                 cudf::host_span<size_type const> row_group_num_rows,
+                                 cudf::host_span<cuda::std::byte> serialized_roaring_bitmap,
+                                 std::vector<size_t>&& row_group_offsets,
+                                 std::vector<size_type>&& row_group_num_rows,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
-  std::vector<std::vector<cuda::std::byte>> serialized_roaring_bitmaps;
+  std::vector<cudf::host_span<cuda::std::byte>> serialized_roaring_bitmaps;
   std::vector<size_type> deletion_vector_row_counts;
   if (not serialized_roaring_bitmap.empty()) {
-    serialized_roaring_bitmaps.emplace_back(std::move(serialized_roaring_bitmap));
+    serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmap);
     deletion_vector_row_counts.emplace_back(std::numeric_limits<size_type>::max());
-  } else {
-    CUDF_EXPECTS(serialized_roaring_bitmaps.empty(), "serialized_roaring_bitmap is empty");
   }
 
   return read_parquet(options,
-                      serialized_roaring_bitmaps,
-                      deletion_vector_row_counts,
-                      row_group_offsets,
-                      row_group_num_rows,
+                      std::move(serialized_roaring_bitmaps),
+                      std::move(deletion_vector_row_counts),
+                      std::move(row_group_offsets),
+                      std::move(row_group_num_rows),
                       stream,
                       mr);
 }
@@ -561,10 +559,10 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
  */
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
-  cudf::host_span<std::vector<cuda::std::byte>> serialized_roaring_bitmaps,
-  cudf::host_span<size_type const> deletion_vector_row_counts,
-  cudf::host_span<size_t const> row_group_offsets,
-  cudf::host_span<size_type const> row_group_num_rows,
+  std::vector<cudf::host_span<cuda::std::byte>>&& serialized_roaring_bitmaps,
+  std::vector<size_type>&& deletion_vector_row_counts,
+  std::vector<size_t>&& row_group_offsets,
+  std::vector<size_type>&& row_group_num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {

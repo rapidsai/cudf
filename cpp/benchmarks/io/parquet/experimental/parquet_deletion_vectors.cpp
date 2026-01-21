@@ -158,7 +158,7 @@ auto setup_table_and_deletion_vector(nvbench::state& state)
   }
 
   // Row offsets for each row group - arbitrary, only used to build the index column
-  auto row_group_offsets = thrust::host_vector<size_t>(num_row_groups);
+  auto row_group_offsets = std::vector<size_t>(num_row_groups);
   row_group_offsets[0]   = static_cast<size_t>(std::llround(2e9));
   std::for_each(
     thrust::counting_iterator<size_t>(1),
@@ -166,7 +166,7 @@ auto setup_table_and_deletion_vector(nvbench::state& state)
     [&](auto i) { row_group_offsets[i] = std::llround(row_group_offsets[i - 1] + 0.5e9); });
 
   // Row group splits
-  auto row_group_splits = thrust::host_vector<cudf::size_type>(num_row_groups - 1);
+  auto row_group_splits = std::vector<cudf::size_type>(num_row_groups - 1);
   {
     std::mt19937 engine{0xf00d};
     std::uniform_int_distribution<cudf::size_type> dist{1, num_rows};
@@ -175,7 +175,7 @@ auto setup_table_and_deletion_vector(nvbench::state& state)
   }
 
   // Number of rows in each row group
-  auto row_group_num_rows = thrust::host_vector<cudf::size_type>{};
+  auto row_group_num_rows = std::vector<cudf::size_type>{};
   {
     row_group_num_rows.reserve(num_row_groups);
     auto previous_split = cudf::size_type{0};
@@ -211,28 +211,20 @@ void BM_parquet_deletion_vectors(nvbench::state& state)
   auto [source_sink, row_group_offsets, row_group_num_rows, deletion_vector] =
     setup_table_and_deletion_vector(state);
 
-  auto rows_per_deletion_vector =
-    std::vector<cudf::size_type>{std::numeric_limits<cudf::size_type>::max()};
-  auto deletion_vectors = std::vector<std::vector<cuda::std::byte>>{};
-  deletion_vectors.emplace_back(deletion_vector);
-
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();
 
-               timer.start();
-               std::ignore = cudf::io::parquet::experimental::read_parquet(read_opts,
-                                                                           deletion_vectors,
-                                                                           rows_per_deletion_vector,
-                                                                           row_group_offsets,
-                                                                           row_group_num_rows);
-               timer.stop();
-             });
+      timer.start();
+      std::ignore = cudf::io::parquet::experimental::read_parquet(
+        read_opts, deletion_vector, std::move(row_group_offsets), std::move(row_group_num_rows));
+      timer.stop();
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(num_rows) / time, "rows_per_second");
@@ -255,7 +247,7 @@ void BM_parquet_chunked_deletion_vectors(nvbench::state& state)
 
   auto rows_per_deletion_vector =
     std::vector<cudf::size_type>{std::numeric_limits<cudf::size_type>::max()};
-  auto deletion_vectors = std::vector<std::vector<cuda::std::byte>>{};
+  auto deletion_vectors = std::vector<cudf::host_span<cuda::std::byte>>{};
   deletion_vectors.emplace_back(deletion_vector);
 
   cudf::io::parquet_reader_options read_opts =
@@ -264,25 +256,25 @@ void BM_parquet_chunked_deletion_vectors(nvbench::state& state)
   auto num_chunks       = 0;
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();
 
-               timer.start();
-               auto reader =
-                 cudf::io::parquet::experimental::chunked_parquet_reader(chunk_read_limit,
-                                                                         pass_read_limit,
-                                                                         read_opts,
-                                                                         deletion_vectors,
-                                                                         rows_per_deletion_vector,
-                                                                         row_group_offsets,
-                                                                         row_group_num_rows);
-               do {
-                 auto const result = reader.read_chunk();
-                 num_chunks++;
-               } while (reader.has_next());
-               timer.stop();
-             });
+      timer.start();
+      auto reader =
+        cudf::io::parquet::experimental::chunked_parquet_reader(chunk_read_limit,
+                                                                pass_read_limit,
+                                                                read_opts,
+                                                                std::move(deletion_vectors),
+                                                                std::move(rows_per_deletion_vector),
+                                                                std::move(row_group_offsets),
+                                                                std::move(row_group_num_rows));
+      do {
+        auto const result = reader.read_chunk();
+        num_chunks++;
+      } while (reader.has_next());
+      timer.stop();
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(num_chunks, "num_table_chunks");
