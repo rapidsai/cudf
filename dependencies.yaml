@@ -694,7 +694,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - pandas>=2.0,<2.4.0
+          - &pandas pandas>=2.0,<2.4.0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -878,7 +878,7 @@ dependencies:
           - nanoarrow
           - hypothesis>=6.131.7
           - *numba
-          - pandas>=2.0,<2.4.0
+          - *pandas
       - output_types: conda
         packages:
           - python-xxhash
