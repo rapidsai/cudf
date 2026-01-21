@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -68,6 +68,13 @@ def test_select_reduce():
         (pl.col("a") * 2 + pl.col("b")).alias("d").mean(),
     )
 
+    assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("expr", [pl.col("a").first(), pl.col("a").last()])
+def test_select_first_last_empty(expr):
+    ldf = pl.LazyFrame({"a": []}, schema={"a": pl.Int64})
+    query = ldf.select(expr)
     assert_gpu_result_equal(query)
 
 
