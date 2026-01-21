@@ -403,7 +403,7 @@ def _lower_ir_pwise(
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
 lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
-lower_ir_node.register(Cache, _lower_ir_pwise)
+lower_ir_node.register(Cache, _lower_ir_pwise_preserve)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
 
 
