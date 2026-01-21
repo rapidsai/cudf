@@ -51,19 +51,6 @@ class IntervalColumn(ColumnBase):
             raise ValueError("dtype must be a IntervalDtype.")
         return plc_column, dtype
 
-    def _get_sliced_child(self, idx: int) -> ColumnBase:
-        """Get a child column properly sliced to match the parent's view."""
-        if idx < 0 or idx >= self.plc_column.num_children():
-            raise IndexError(
-                f"Index {idx} out of range for {self.plc_column.num_children()} children"
-            )
-
-        sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
-        sub_dtype = self.dtype.subtype  # type: ignore[union-attr]
-        return ColumnBase.from_pylibcudf(sliced_plc_col)._with_type_metadata(
-            sub_dtype
-        )
-
     def _with_type_metadata(self, dtype: DtypeObj) -> ColumnBase:
         """
         Apply IntervalDtype metadata to this column.
