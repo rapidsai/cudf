@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import datetime
@@ -113,7 +113,6 @@ def build_pdf(num_columns, day_resolution_timestamps):
         "float64",
         "datetime64[ms]",
         "datetime64[us]",
-        "str",
     ]
     nrows = num_columns
 
@@ -159,11 +158,21 @@ def build_pdf(num_columns, day_resolution_timestamps):
 
     # Create non-numeric categorical data otherwise parquet may typecast it
     data = [ascii_letters[rng.integers(0, 52)] for i in range(nrows)]
-    test_pdf["col_category"] = pd.Series(data, dtype="category")
+    test_pdf["col_category"] = pd.Series(
+        data,
+        dtype=pd.CategoricalDtype(
+            categories=pd.Index(
+                list(dict.fromkeys(data)),
+                dtype=pd.StringDtype(na_value=np.nan),
+            )
+        ),
+    )
 
     # Create non-numeric str data
     data = [ascii_letters[rng.integers(0, 52)] for i in range(nrows)]
-    test_pdf["col_str"] = pd.Series(data, dtype="str")
+    test_pdf["col_str"] = pd.Series(
+        data, dtype=pd.StringDtype(na_value=np.nan)
+    )
 
     return test_pdf
 
@@ -246,14 +255,29 @@ def test_parquet_reader_basic(tmp_path, pdf, columns, engine, compression):
     expect = pd.read_parquet(parquet_file, columns=columns)
     got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
 
-    # PANDAS returns category objects whereas cuDF returns hashes
+    # pandas returns category objects whereas cuDF returns hashes
     if engine == "cudf":
         if "col_category" in expect.columns:
             expect = expect.drop(columns=["col_category"])
         if "col_category" in got.columns:
             got = got.drop(columns=["col_category"])
 
-    assert_eq(expect, got)
+    # As of pandas 3.0, empty default type of object isn't
+    # necessarily equivalent to cuDF's empty default type of
+    # pandas.StringDtype
+    if len(pdf.index) == 0:
+        expect.index = expect.index.astype(got.index.dtype)
+    expect.columns = expect.columns.astype(got.columns.dtype)
+
+    if "col_category" in expect.columns:
+        # pyarrow read_parquet reader returns category[object] instead of category[pd.StringDtype]
+        casted_categories = expect["col_category"].dtype.categories.astype(
+            got["col_category"].dtype.categories.dtype
+        )
+        expect["col_category"] = expect["col_category"].cat.set_categories(
+            casted_categories
+        )
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -283,8 +307,6 @@ def test_parquet_reader_strings(tmp_path, has_null):
     assert os.path.exists(fname)
 
     gdf = cudf.read_parquet(fname, engine="cudf")
-
-    assert gdf["b"].dtype == np.dtype("object")
     assert_eq(gdf["b"], df["b"])
 
 
@@ -312,6 +334,8 @@ def test_parquet_reader_index_col(tmp_path, index_col, columns):
 
     pdf = pd.read_parquet(fname, columns=columns)
     gdf = cudf.read_parquet(fname, engine="cudf", columns=columns)
+    # pyarrow read_parquet reader returns Index[object] instead of Index[pd.StringDtype]
+    pdf.columns = pdf.columns.astype(gdf.columns.dtype)
 
     assert_eq(pdf, gdf, check_categorical=False)
 
@@ -343,11 +367,7 @@ def test_parquet_reader_pandas_metadata(tmp_path, columns, pandas_compat):
     got = cudf.read_parquet(
         fname, columns=columns, use_pandas_metadata=pandas_compat
     )
-
-    if pandas_compat or columns is None or "b" in columns:
-        assert got.index.name == "b"
-    else:
-        assert got.index.name is None
+    assert got.index.name == "b"
     assert_eq(expect, got, check_categorical=False)
 
 
@@ -2893,6 +2913,11 @@ def test_parquet_writer_nulls_pandas_read(tmp_path, pdf):
         gdf = gdf.drop(columns="col_datetime64[us]")
         got = got.drop(columns="col_datetime64[ms]")
         got = got.drop(columns="col_datetime64[us]")
+    if len(got.index) == 0:
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        got.index = got.index.astype(gdf.index.dtype)
 
     assert_eq(gdf.to_pandas(nullable=nullable), got)
 
@@ -4686,6 +4711,11 @@ def test_parquet_decompression(
     # Read the Parquet file back into a DataFrame
     got = cudf.read_parquet(buffer)
 
+    # As of pandas 3.0, empty default type of object isn't
+    # necessarily equivalent to cuDF's empty default type of
+    # pandas.StringDtype
+    if len(pdf_day_timestamps.index) == 0:
+        expect.index = expect.index.astype(got.index.dtype)
     assert_eq(expect, got)
 
 
