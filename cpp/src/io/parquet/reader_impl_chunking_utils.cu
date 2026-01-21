@@ -546,7 +546,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
       auto& page                = pages[page_idx];
       auto const is_page_needed = page_mask_iter[page_idx];
       // If this is a V2 page, use the `is_compressed` field to determine if it's compressed.
-      // For non-V2 pages (dictionary and V1 data pages), they're compressed if chunk.codec is set.
+      // For dictionary and V1 data pages, they're compressed if chunk.codec is set.
       auto const is_page_compressed = (page.flags & PAGEINFO_FLAGS_V2) ? page.is_compressed : true;
       if (is_page_needed && chunks[page.chunk_idx].codec == codec.compression_type &&
           (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages and is_page_compressed) {
