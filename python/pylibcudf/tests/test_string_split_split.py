@@ -130,3 +130,33 @@ def test_rsplit_record_re(data_col, re_delimiter):
     )
     expect = pc.split_pattern_regex(pa_array, re_delimiter)
     assert_column_eq(expect, got)
+    
+def test_split_part(data_col, delimiter):
+    # Using existing fixtures (data_col has ["a_b_c", "d-e-f", None], delimiter is "_")
+    _, plc_column = data_col
+    _, plc_delimiter = delimiter
+
+    # Case 1: Index 0
+    got = plc.strings.split.split.split_part(plc_column, plc_delimiter, 0)
+    expect = pa.array(["a", "d-e-f", None])
+    assert_column_eq(expect, got)
+
+    # Case 2: Index 1
+    got = plc.strings.split.split.split_part(plc_column, plc_delimiter, 1)
+    # "d-e-f" has no delimiter, so index 1 is null
+    expect = pa.array(["b", None, None])
+    assert_column_eq(expect, got)
+
+
+def test_split_part_whitespace():
+    # Standalone test for whitespace because fixtures use "_"
+    data = pa.array(["a b", "c  d", "e\\tf", None])
+    plc_column = plc.Column.from_arrow(data)
+    
+    # Empty delimiter for whitespace split
+    plc_delimiter = plc.Scalar.from_arrow(pa.scalar(""))
+
+    # Index 1
+    got = plc.strings.split.split.split_part(plc_column, plc_delimiter, 1)
+    expect = pa.array(["b", "d", "f", None])
+    assert_column_eq(expect, got)
