@@ -468,12 +468,11 @@ def test_dataframe_constructor_nan_as_null(data, nan_as_null):
 def test_dataframe_init_from_series(data, columns, index):
     expected = pd.DataFrame(data, columns=columns, index=index)
     actual = cudf.DataFrame(data, columns=columns, index=index)
-
-    assert_eq(
-        expected,
-        actual,
-        check_index_type=len(expected) != 0,
-    )
+    if columns == ["abc", "b"]:
+        # In pandas, new columns are object types with NaN
+        # which cuDF doesn't support
+        expected["b"] = expected["b"].astype(actual["b"].dtype)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
