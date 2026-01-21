@@ -2307,6 +2307,11 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
   CUDF_EXPECTS(is_supported_write_parquet(_compression),
                "Compression type not supported for Parquet writer");
 
+  if (_page_level_compression and not _write_v2_headers) {
+    CUDF_LOG_WARN(
+      "page_level_compression is only supported with V2 page headers; the option will be ignored");
+  }
+
   init_state();
 }
 
@@ -2342,6 +2347,11 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
 
   CUDF_EXPECTS(is_supported_write_parquet(_compression),
                "Compression type not supported for Parquet writer");
+
+  if (_page_level_compression and not _write_v2_headers) {
+    CUDF_LOG_WARN(
+      "page_level_compression is only supported with V2 page headers; the option will be ignored");
+  }
 
   init_state();
 }
