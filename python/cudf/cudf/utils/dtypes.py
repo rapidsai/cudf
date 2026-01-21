@@ -339,6 +339,22 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             )
         else:
             return CUDF_STRING_DTYPE
+    elif any(isinstance(dtype, cudf.IntervalDtype) for dtype in dtypes):
+        # Handle IntervalDtype: all must have the same closed parameter
+        if all(isinstance(dtype, cudf.IntervalDtype) for dtype in dtypes):
+            # Check if all have the same closed parameter
+            closed_values = {dtype.closed for dtype in dtypes}  # type: ignore[union-attr]
+            if len(closed_values) == 1:
+                # Find common type of subtypes
+                subtypes = [dtype.subtype for dtype in dtypes]  # type: ignore[union-attr]
+                common_subtype = find_common_type(subtypes)
+                return cudf.IntervalDtype(common_subtype, closed=closed_values.pop())
+            else:
+                # Different closed parameters, can't combine
+                return CUDF_STRING_DTYPE
+        else:
+            # Mix of IntervalDtype and non-IntervalDtype
+            return CUDF_STRING_DTYPE
     elif any(
         isinstance(dtype, (cudf.ListDtype, cudf.StructDtype))
         for dtype in dtypes
