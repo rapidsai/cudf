@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import cudf
 from cudf.api.types import infer_dtype, is_scalar
 from cudf.core import column
 from cudf.errors import MixedTypeError
-from cudf.utils.dtypes import is_mixed_with_object_dtype
+from cudf.utils.dtypes import DEFAULT_STRING_DTYPE, is_mixed_with_object_dtype
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -320,11 +320,17 @@ class ColumnAccessor(MutableMapping):
                             diff,
                         )
                         return pd.RangeIndex(new_range, name=self.name)
+            # Avoid pandas returning Index[object]
+            dtype = (
+                self.label_dtype
+                if len(self.names) > 0
+                else DEFAULT_STRING_DTYPE
+            )
             result = pd.Index(
                 self.names,
                 name=self.name,
                 tupleize_cols=False,
-                dtype=self.label_dtype,
+                dtype=dtype,
             )
         return result
 
