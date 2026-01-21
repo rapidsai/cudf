@@ -13,8 +13,8 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-from decimal import Decimal
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import cudf.pandas
