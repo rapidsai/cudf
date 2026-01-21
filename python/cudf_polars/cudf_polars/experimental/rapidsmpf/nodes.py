@@ -168,7 +168,7 @@ async def default_node_multi(
         ch_out.data,
     ):
         # Merge and forward basic metadata.
-        metadata = Metadata(local_count=1)
+        metadata = Metadata(local_count=1, duplicated=True)
         for idx, ch_in in enumerate(chs_in):
             md_child = await ch_in.recv_metadata(context)
             metadata.local_count = max(md_child.local_count, metadata.local_count)
