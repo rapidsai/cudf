@@ -61,6 +61,7 @@ async def union_node(
     ):
         # Merge and forward metadata.
         # Union loses partitioning/ordering info since sources may differ.
+        # TODO: Warn users that Union does NOT preserve order?
         total_local_count = 0
         total_global_count: int | None = None
         duplicated = True

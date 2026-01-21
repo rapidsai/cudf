@@ -119,7 +119,11 @@ class Metadata:
         partitioning: HashPartitioned | None = None,
         duplicated: bool = False,
     ):
+        if local_count < 0:  # pragma: no cover
+            raise ValueError(f"Local count must be non-negative. Got: {local_count}")
         self.local_count = local_count
+        if global_count is not None and global_count < 0:  # pragma: no cover
+            raise ValueError(f"Global count must be non-negative. Got: {global_count}")
         self.global_count = global_count
         self.partitioning = partitioning
         self.duplicated = duplicated

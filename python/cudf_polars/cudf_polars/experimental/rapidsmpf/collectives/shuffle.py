@@ -132,7 +132,7 @@ async def shuffle_node(
     collective_id: int,
 ) -> None:
     """
-    Execute a shuffle pipeline in a single node.
+    Execute a global shuffle pipeline within a single node.
 
     This node combines partition_and_pack, shuffler, and unpack_and_concat
     into a single Python node using rapidsmpf.shuffler.Shuffler and utilities

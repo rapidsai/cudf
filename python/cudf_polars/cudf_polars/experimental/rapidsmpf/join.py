@@ -98,9 +98,11 @@ async def broadcast_join_node(
             large_ch = ch_left
             small_child = ir.children[1]
             large_child = ir.children[0]
+            # Preserve left-side partitioning metadata
             local_count = left_metadata.local_count
             global_count = left_metadata.global_count
             partitioning = left_metadata.partitioning
+            # Check if the right-side is already broadcasted
             small_duplicated = right_metadata.duplicated
         else:
             # Broadcast left, stream right
@@ -108,17 +110,20 @@ async def broadcast_join_node(
             large_ch = ch_right
             small_child = ir.children[0]
             large_child = ir.children[1]
+            # Preserve right-side partitioning metadata
             local_count = right_metadata.local_count
             global_count = right_metadata.global_count
-            small_duplicated = left_metadata.duplicated
             if ir.options[0] == "Right":
                 partitioning = right_metadata.partitioning
+            # Check if the right-side is already broadcasted
+            small_duplicated = left_metadata.duplicated
 
         # Send metadata.
         output_metadata = Metadata(
             local_count=local_count,
             global_count=global_count,
             partitioning=partitioning,
+            # The result is only "duplicated" if both sides are duplicated
             duplicated=left_metadata.duplicated and right_metadata.duplicated,
         )
         await ch_out.send_metadata(context, output_metadata)

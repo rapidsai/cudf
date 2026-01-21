@@ -171,11 +171,14 @@ async def default_node_multi(
         metadata = Metadata(local_count=1, duplicated=True)
         for idx, ch_in in enumerate(chs_in):
             md_child = await ch_in.recv_metadata(context)
+            # Use simple "max" rule to determine counts.
             metadata.local_count = max(md_child.local_count, metadata.local_count)
             if md_child.global_count is not None:
                 metadata.global_count = max(
                     md_child.global_count, metadata.global_count or 0
                 )
+            # Set "duplicated" to False as soon as we
+            # find a non-duplicated child.
             metadata.duplicated = metadata.duplicated and md_child.duplicated
             if idx == partitioning_index:
                 metadata.partitioning = md_child.partitioning
@@ -595,7 +598,9 @@ async def empty_node(
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Send metadata indicating a single empty chunk
         await ch_out.send_metadata(
-            context, Metadata(local_count=1, global_count=1, duplicated=True)
+            # All ranks generate the same "empty" data.
+            context,
+            Metadata(local_count=1, global_count=1, duplicated=True),
         )
 
         # Evaluate the IR node to create an empty DataFrame

@@ -99,6 +99,13 @@ async def concatenate_node(
             local_output_count = max(1, math.ceil(output_count / nranks))
             output_duplicated = False
 
+        # NOTE: For now, Repartiton (e.g. concatenate_node) always destroys
+        # partitioning metadata. However, this may change when we support
+        # partitioning types other than HashPartitioned. For example, when
+        # we adopt multi-stage shuffling (a global shuffle between ranks,
+        # followed by a local shuffle within each rank), some cases will
+        # preserve global partitioning.
+
         # max_chunks corresponds to the number of input chunks we can
         # concatenate together per output chunk.
         # If None, we must concatenate everything into a single chunk.
