@@ -407,7 +407,10 @@ cpdef Column rsplit_record_re(
     return Column.from_libcudf(move(c_result), stream, mr)
 
 
-cpdef Column split_part(Column input, Scalar delimiter, int index):
+cpdef Column split_part(
+    Column input, Scalar delimiter, size_type index, Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
     cdef unique_ptr[column] c_result
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
