@@ -13,7 +13,7 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from numpy import datetime64
@@ -46,13 +46,13 @@ class PDSHQueries:
     @staticmethod
     def q1(run_config: RunConfig) -> pd.DataFrame:
         """Query 1."""
-        line_item_ds = get_data(
+        lineitem = get_data(
             run_config.dataset_path, "lineitem", run_config.suffix
         )
 
-        var1 = date(1998, 9, 2)
+        var1 = datetime(1998, 9, 2)
 
-        filt = line_item_ds[line_item_ds["l_shipdate"] <= var1]
+        filt = lineitem[lineitem["l_shipdate"] <= var1]
 
         # This is lenient towards pandas as normally an optimizer should decide
         # that this could be computed before the groupby aggregation.
@@ -142,7 +142,7 @@ class PDSHQueries:
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
 
         var1 = "BUILDING"
-        var2 = date(1995, 3, 15)
+        var2 = datetime(1995, 3, 15)
 
         fcustomer = customer[customer["c_mktsegment"] == var1]
 
@@ -178,8 +178,8 @@ class PDSHQueries:
         )
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
 
-        var1 = date(1993, 7, 1)
-        var2 = date(1993, 10, 1)
+        var1 = datetime(1993, 7, 1)
+        var2 = datetime(1993, 10, 1)
 
         jn = lineitem.merge(
             orders, left_on="l_orderkey", right_on="o_orderkey"
@@ -210,8 +210,8 @@ class PDSHQueries:
         supplier = get_data(path, "supplier", suffix)
 
         var1 = "ASIA"
-        var2 = date(1994, 1, 1)
-        var3 = date(1995, 1, 1)
+        var2 = datetime(1994, 1, 1)
+        var3 = datetime(1995, 1, 1)
 
         jn1 = region.merge(
             nation, left_on="r_regionkey", right_on="n_regionkey"
@@ -241,8 +241,8 @@ class PDSHQueries:
         suffix = run_config.suffix
         lineitem = get_data(path, "lineitem", suffix)
 
-        var1 = date(1994, 1, 1)
-        var2 = date(1995, 1, 1)
+        var1 = datetime(1994, 1, 1)
+        var2 = datetime(1995, 1, 1)
         var3 = 0.05
         var4 = 0.07
         var5 = 24
@@ -274,8 +274,8 @@ class PDSHQueries:
 
         var1 = "FRANCE"
         var2 = "GERMANY"
-        var3 = date(1995, 1, 1)
-        var4 = date(1996, 12, 31)
+        var3 = datetime(1995, 1, 1)
+        var4 = datetime(1996, 12, 31)
 
         n1 = nation[(nation["n_name"] == var1)]
         n2 = nation[(nation["n_name"] == var2)]
@@ -336,8 +336,8 @@ class PDSHQueries:
         var1 = "BRAZIL"
         var2 = "AMERICA"
         var3 = "ECONOMY ANODIZED STEEL"
-        var4 = date(1995, 1, 1)
-        var5 = date(1996, 12, 31)
+        var4 = datetime(1995, 1, 1)
+        var5 = datetime(1996, 12, 31)
 
         n1 = nation.loc[:, ["n_nationkey", "n_regionkey"]]
         n2 = nation.loc[:, ["n_nationkey", "n_name"]]
