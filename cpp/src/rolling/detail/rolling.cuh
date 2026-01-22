@@ -93,8 +93,7 @@ static std::unique_ptr<column> empty_output_for_rolling_aggregation(column_view 
 struct rolling_preprocessor {
   // Default case: return clone of the aggregation
   template <aggregation::Kind k>
-  std::vector<std::unique_ptr<aggregation>> operator()(data_type col_type,
-                                                       aggregation const& agg) const
+  std::vector<std::unique_ptr<aggregation>> operator()(data_type, aggregation const& agg) const
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(agg.clone());
@@ -219,7 +218,7 @@ struct rolling_postprocess_params {
 template <aggregation::Kind k>
 struct rolling_postprocessor {
   template <typename Params>
-  std::unique_ptr<column> operator()(Params const& params,
+  std::unique_ptr<column> operator()(Params const&,
                                      aggregation const&,
                                      std::unique_ptr<column>& intermediate) const
   {
