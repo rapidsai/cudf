@@ -82,6 +82,8 @@ def dtype(arbitrary: Any) -> DtypeObj:
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
     if isinstance(pd_dtype, pd.StringDtype):
         return pd_dtype
+    elif isinstance(pd_dtype, pd.CategoricalDtype):
+        return CategoricalDtype(pd_dtype.categories, pd_dtype.ordered)
     elif is_pandas_nullable_extension_dtype(pd_dtype):
         if isinstance(pd_dtype, pd.ArrowDtype):
             arrow_type = pd_dtype.pyarrow_dtype
@@ -103,8 +105,6 @@ def dtype(arbitrary: Any) -> DtypeObj:
             return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.core.dtypes.dtypes.NumpyEADtype):
         return dtype(pd_dtype.numpy_dtype)
-    elif isinstance(pd_dtype, pd.CategoricalDtype):
-        return CategoricalDtype(pd_dtype.categories, pd_dtype.ordered)
     elif isinstance(pd_dtype, pd.IntervalDtype):
         return IntervalDtype(pd_dtype.subtype, pd_dtype.closed)
     elif isinstance(pd_dtype, pd.DatetimeTZDtype):
