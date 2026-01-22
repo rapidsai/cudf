@@ -828,13 +828,14 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   } else if (has_column_names) {
     return options.get_columns();
   } else {
-    auto const is_ignore_missing_columns = options.is_enabled_ignore_missing_columns();
+    auto const ignore_missing_columns = options.is_enabled_ignore_missing_columns();
     std::vector<std::string> col_names;
     auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
     for (auto const index : options.get_column_indices().value()) {
       auto const is_valid_index =
         std::cmp_greater_equal(index, 0) and std::cmp_less(index, top_level_schema_indices.size());
-      CUDF_EXPECTS(is_ignore_missing_columns or is_valid_index, "Invalid column index");
+      CUDF_EXPECTS(ignore_missing_columns or is_valid_index,
+                   "Encountered an invalid col index in the top-level column selection");
       if (is_valid_index) {
         col_names.emplace_back(_metadata->get_schema(top_level_schema_indices[index]).name);
       }
