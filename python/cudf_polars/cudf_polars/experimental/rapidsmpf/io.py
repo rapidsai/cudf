@@ -713,6 +713,7 @@ async def sink_node(
     ir_context: IRExecutionContext,
     ch_in: ChannelPair,
     ch_out: ChannelPair,
+    partition_info: PartitionInfo,
 ) -> None:
     """
     Sink node for rapidsmpf - writes data chunks to a file.
@@ -729,31 +730,28 @@ async def sink_node(
         The input ChannelPair.
     ch_out
         The output ChannelPair for returning an empty result DataFrame.
+    partition_info
+        The partition information.
     """
+    child_ir = ir.children[0]
+    count = partition_info.count
+
     async with shutdown_on_error(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
     ):
         # Drain the metadata channel (we don't need it for sinking)
         await ch_in.recv_metadata(context)
 
-        child_ir = ir.children[0]
-
-        chunks: list[TableChunk] = []
-        while (msg := await ch_in.data.recv(context)) is not None:
-            chunk = TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            )
-            chunks.append(chunk)
-
-        count = len(chunks)
-        if count == 0:  # pragma: no cover
-            raise ValueError("Expected at least one chunk in sink_node.")
-
         if ir.executor_options.sink_to_directory:
             _prepare_sink_directory(ir.sink.path)
-            suffix = ir.sink.kind.lower()
-            width = math.ceil(math.log10(count)) if count > 1 else 1
-            for i, chunk in enumerate(chunks):
+            i = 0
+            while (msg := await ch_in.data.recv(context)) is not None:
+                chunk = TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+                i += 1
+                suffix = ir.sink.kind.lower()
+                width = math.ceil(math.log10(count)) if count > 1 else 1
                 df = chunk_to_frame(chunk, child_ir)
                 part_path = f"{ir.sink.path}/part.{str(i).zfill(width)}.{suffix}"
                 await asyncio.to_thread(
@@ -768,6 +766,13 @@ async def sink_node(
                 )
         else:
             # Write chunks to a single file
+            chunks: list[TableChunk] = []
+            while (msg := await ch_in.data.recv(context)) is not None:
+                chunk = TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+                chunks.append(chunk)
+
             if count == 1:
                 df = chunk_to_frame(chunks[0], child_ir)
                 await asyncio.to_thread(
@@ -814,6 +819,7 @@ def _(
             rec.state["ir_context"],
             channels[ir.children[0]].reserve_output_slot(),
             channels[ir].reserve_input_slot(),
+            rec.state["partition_info"][ir],
         )
     ]
 
