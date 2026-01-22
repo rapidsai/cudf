@@ -150,7 +150,7 @@ def test_split_part(data_col, delimiter):
 
 
 def test_split_part_whitespace():
-    # Standalone test for whitespace because fixtures use "_"
+    # Standalone test for whitespace because fixtures use "_" 
     data = pa.array(["a b", "c  d", "e f", None])
     plc_column = plc.Column.from_arrow(data)
 
