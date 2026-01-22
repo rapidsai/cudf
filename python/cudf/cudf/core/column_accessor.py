@@ -61,7 +61,7 @@ class _NestedGetItemDict(dict):
     def __getitem__(self, key):
         """Recursively apply dict.__getitem__ for nested elements."""
         # As described in the pandas docs
-        # https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#advanced-indexing-with-hierarchical-index
+        # https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/advanced.html#advanced-indexing-with-hierarchical-index
         # accessing nested elements of a multiindex must be done using a tuple.
         # Lists and other sequences are treated as accessing multiple elements
         # at the top level of the index.

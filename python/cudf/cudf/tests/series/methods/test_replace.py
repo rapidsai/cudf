@@ -179,7 +179,7 @@ def test_series_fillna_numerical(
         psr = psr.copy(deep=True)
     # TODO: These tests should use Pandas' nullable int type
     # when we support a recent enough version of Pandas
-    # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
+    # https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/integer_na.html
     if np.dtype(numeric_types_as_str).kind != "f" and psr.dtype.kind == "i":
         psr = psr.astype(
             cudf.utils.dtypes.np_dtypes_to_pandas_dtypes[

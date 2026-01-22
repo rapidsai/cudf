@@ -930,7 +930,7 @@ Parameters
 ----------
 path_or_buf : string, buffer or path object
     Path to the file to open, or an open `HDFStore
-    <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+    <https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#hdf5-pytables>`_.
     object.
     Supports any object implementing the ``__fspath__`` protocol.
     This includes :class:`pathlib.Path` and py._path.local.LocalPath
@@ -941,7 +941,7 @@ key : object, optional
 mode : {'r', 'r+', 'a'}, optional
     Mode to use when opening the file. Ignored if path_or_buf is a
     `Pandas HDFS
-    <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+    <https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#hdf5-pytables>`_.
     Default is 'r'.
 where : list, optional
     A list of Term (or convertible) objects.
@@ -985,7 +985,7 @@ In order to add another DataFrame or Series to an existing HDF file
 please use append mode and a different a key.
 
 For more information see the `user guide
-<https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+<https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#hdf5-pytables>`_.
 
 Parameters
 ----------
@@ -1015,7 +1015,7 @@ data_columns :  list of columns or True, optional
     List of columns to create as indexed data columns for on-disk
     queries, or True to use all columns. By default only the axes
     of the object are indexed. See `Query via Data Columns
-    <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#io-hdf5-query-data-columns>`_.
+    <https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#io-hdf5-query-data-columns>`_.
     Applicable only to format='table'.
 complevel : {0-9}, optional
     Specifies a compression level for data.
