@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: Apache-2.0 
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -155,7 +155,7 @@ def test_split_part_whitespace():
     plc_column = plc.Column.from_arrow(data)
 
     # Empty delimiter for whitespace split    
-    plc_delimiter = plc.Scalar.from_arrow(pa.scalar(""))
+    plc_delimiter = plc.Scalar.from_arrow(pa.scalar(""))   
 
     # Index 1
     got = plc.strings.split.split.split_part(plc_column, plc_delimiter, 1)
