@@ -26,17 +26,18 @@ namespace io::parquet::experimental {
  * experimental parquet reader
  */
 struct deletion_vector_info {
-  // Following vectors specify the data spans of input deletion vectors and the number
-  // of rows spanned by each deletion vector in order. Deletion vectors are applied in order of
-  // their appearance in the vectors
+  // Following vectors specify the data spans of input deletion vectors and the number of rows
+  // spanned by each deletion vector in order. Deletion vectors are applied in order of their
+  // appearance in the vectors. These vectors if empty will result in no table filtration.
 
   /// Host spans of 64-bit roaring bitmaps serialized in `portable` format
   std::vector<cudf::host_span<cuda::std::byte const>> serialized_roaring_bitmaps;
   /// Number of rows spanned by each deletion vector
   std::vector<size_type> deletion_vector_row_counts;
 
-  // Following vectors customize the row index column prepended to the read table from
-  // the Parquet source(s)
+  // Following vectors customize the row index column prepended to the read table from the Parquet
+  // source(s). These vectors if empty will result in an index column that is a sequence from 0 to
+  // the total number of rows in the table.
 
   /// Row index offset for each row group to be read from the Parquet source(s)
   std::vector<size_t> row_group_offsets;
