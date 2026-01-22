@@ -174,16 +174,29 @@ def initialize_join_info(node: Join, stats: StatsCollector) -> None:
     """
     left, right = node.children
     join_info = stats.join_info
-    right_keys = [stats.column_stats[right][n.name] for n in node.right_on]
-    left_keys = [stats.column_stats[left][n.name] for n in node.left_on]
-    lkey = JoinKey(*right_keys)
-    rkey = JoinKey(*left_keys)
-    join_info.key_map[lkey].add(rkey)
-    join_info.key_map[rkey].add(lkey)
-    join_info.join_map[node] = [lkey, rkey]
-    for u, v in zip(left_keys, right_keys, strict=True):
-        join_info.column_map[u].add(v)
-        join_info.column_map[v].add(u)
+    left_column_stats = stats.column_stats.get(left, {})
+    right_column_stats = stats.column_stats.get(right, {})
+
+    # Build key lists, filtering out keys that don't correspond to actual columns
+    # (e.g., computed expressions like struct field access).
+    # We must filter pairs together to keep left/right keys aligned.
+    left_keys = []
+    right_keys = []
+    for l_on, r_on in zip(node.left_on, node.right_on, strict=True):
+        if l_on.name in left_column_stats and r_on.name in right_column_stats:
+            left_keys.append(left_column_stats[l_on.name])
+            right_keys.append(right_column_stats[r_on.name])
+
+    if left_keys:
+        # If we have valid keys, build join info.
+        lkey = JoinKey(*right_keys)
+        rkey = JoinKey(*left_keys)
+        join_info.key_map[lkey].add(rkey)
+        join_info.key_map[rkey].add(lkey)
+        join_info.join_map[node] = [lkey, rkey]
+        for u, v in zip(left_keys, right_keys, strict=True):
+            join_info.column_map[u].add(v)
+            join_info.column_map[v].add(u)
 
 
 T = TypeVar("T")
@@ -361,13 +374,20 @@ def _(
 
     # Update children
     for p_key, o_key in zip(*on, strict=True):
-        column_stats[p_key.name].children = (
-            primary_child_stats[p_key.name],
-            other_child_stats[o_key.name],
-        )
-        # Add key columns to set of unique-stats columns.
-        primary_child_stats[p_key.name].source_info.add_unique_stats_column()
-        other_child_stats[o_key.name].source_info.add_unique_stats_column()
+        # Skip if key names don't correspond to actual columns
+        # (e.g., when join key is a computed expression like struct field access)
+        if (
+            p_key.name in column_stats
+            and p_key.name in primary_child_stats
+            and o_key.name in other_child_stats
+        ):
+            column_stats[p_key.name].children = (
+                primary_child_stats[p_key.name],
+                other_child_stats[o_key.name],
+            )
+            # Add key columns to set of unique-stats columns.
+            primary_child_stats[p_key.name].source_info.add_unique_stats_column()
+            other_child_stats[o_key.name].source_info.add_unique_stats_column()
 
     return column_stats
 
