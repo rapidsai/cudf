@@ -1008,10 +1008,8 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   }
 
   // Need to set null mask bufs to all high bits
-  auto pinned_nullmask_bufs =
-    cudf::detail::make_pinned_vector_async<cudf::device_span<cudf::bitmask_type>>(
-      nullmask_bufs.size(), _stream);
-  std::move(nullmask_bufs.begin(), nullmask_bufs.end(), pinned_nullmask_bufs.begin());
+  auto pinned_nullmask_bufs = cudf::detail::make_pinned_vector(
+    cudf::host_span<cudf::device_span<cudf::bitmask_type> const>{nullmask_bufs}, _stream);
   cudf::detail::batched_memset<cudf::bitmask_type>(
     pinned_nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
@@ -1046,12 +1044,7 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               cuda::std::plus<>{},
                               _stream);
 
-  auto col_string_sizes =
-    cudf::detail::make_pinned_vector_async<size_t>(d_col_sizes.size(), _stream);
-  cudf::detail::cuda_memcpy(cudf::host_span<size_t>{col_string_sizes},
-                            cudf::device_span<size_t const>{d_col_sizes.data(), d_col_sizes.size()},
-                            _stream);
-  return col_string_sizes;
+  return cudf::detail::make_pinned_vector(d_col_sizes, _stream);
 }
 
 }  // namespace cudf::io::parquet::detail
