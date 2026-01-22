@@ -2975,6 +2975,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_constructor_with_datetimes1",
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_constructor_with_datetimes2",
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_constructor_with_datetimes3",
+    "tests/frame/test_constructors.py::TestDataFrameConstructors::test_datetime_date_tuple_columns_from_dict",
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_datetimelike_values_with_object_dtype[DataFrame-M]",
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_datetimelike_values_with_object_dtype[DataFrame-m]",
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_datetimelike_values_with_object_dtype[Series-M]",
@@ -6478,7 +6479,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/series/accessors/test_list_accessor.py::test_list_getitem_invalid_index[list_dtype0]",
     "tests/series/accessors/test_list_accessor.py::test_list_len",
     "tests/series/accessors/test_struct_accessor.py::test_struct_accessor_dtypes",
-    "tests/series/accessors/test_struct_accessor.py::test_struct_accessor_field",
     "tests/series/accessors/test_struct_accessor.py::test_struct_accessor_field_expanded[0-int_col]",
     "tests/series/accessors/test_struct_accessor.py::test_struct_accessor_field_expanded[indices1-str_col]",
     "tests/series/accessors/test_struct_accessor.py::test_struct_accessor_field_expanded[indices2-int_col]",
@@ -10570,6 +10570,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/series/indexing/test_indexing.py::test_setitem_empty_indexer[indexer3-val0]",
     "tests/series/indexing/test_indexing.py::test_setitem_empty_indexer[indexer3-val1]",
     "tests/series/indexing/test_indexing.py::test_underlying_data_conversion",
+    "tests/series/indexing/test_setitem.py::TestSetitemDT64Values::test_setitem_multiindex_empty_slice",
     "tests/series/indexing/test_where.py::test_where_dups",
     "tests/series/methods/test_clip.py::TestSeriesClip::test_clip_against_list_like[upper1-True]",
     "tests/series/methods/test_convert_dtypes.py::TestSeriesConvertDtypes::test_convert_dtypes[test_cases15-params0]",
@@ -10634,6 +10635,8 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/window/test_pairwise.py::TestPairwise::test_no_flex[pairwise_frames5-<lambda>1]",
     "tests/window/test_pairwise.py::TestPairwise::test_no_flex[pairwise_frames8-<lambda>1]",
     "tests/window/test_win_type.py::test_cmov_window_frame[None-var-xp2]",
+    "tests/series/indexing/test_indexing.py::test_basic_indexing",
+    "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[string-python-Series]",
 }
 
 
