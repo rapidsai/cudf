@@ -766,27 +766,26 @@ async def sink_node(
                 )
         else:
             # Write chunks to a single file
-            chunks: list[TableChunk] = []
+            i = 0
+            writer_state = None
             while (msg := await ch_in.data.recv(context)) is not None:
                 chunk = TableChunk.from_message(msg).make_available_and_spill(
                     context.br(), allow_overbooking=True
                 )
-                chunks.append(chunk)
+                i += 1
 
-            if count == 1:
-                df = chunk_to_frame(chunks[0], child_ir)
-                await asyncio.to_thread(
-                    Sink.do_evaluate,
-                    *ir.sink._non_child_args,
-                    df,
-                    context=ir_context,
-                )
-            else:
-                # Multiple chunks - use chunked writer
-                writer_state = None
-                for i, chunk in enumerate(chunks):
+                if count == 1:
                     df = chunk_to_frame(chunk, child_ir)
-                    finalize = i == count - 1
+                    await asyncio.to_thread(
+                        Sink.do_evaluate,
+                        *ir.sink._non_child_args,
+                        df,
+                        context=ir_context,
+                    )
+                else:
+                    # Multiple chunks - use chunked writer
+                    df = chunk_to_frame(chunk, child_ir)
+                    finalize = i == count
                     writer_state = await asyncio.to_thread(
                         _sink_to_file,
                         ir.sink.kind,
