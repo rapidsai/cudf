@@ -10453,6 +10453,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[nullable_int-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[nullable_uint-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[object-Series]",
+    "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[string-python-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[tuples-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[uint64-Series]",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_setitem_mix_of_nan_and_interval[NAType-a]",
