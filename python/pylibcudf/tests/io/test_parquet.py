@@ -30,12 +30,14 @@ _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
 
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_indices", [None, [2, 0]])
 @pytest.mark.parametrize("source_strategy", ["inline", "set_source"])
 def test_read_parquet_basic(
     table_data,
     binary_source_or_sink,
     nrows_skiprows,
     columns,
+    column_indices,
     stream,
     source_strategy,
 ):
@@ -60,11 +62,16 @@ def test_read_parquet_basic(
         options.set_skip_rows(skiprows)
     if columns is not None:
         options.set_columns(columns)
+    elif column_indices is not None:
+        options.set_column_indices(column_indices)
 
     res = plc.io.parquet.read_parquet(options, stream)
 
     if columns is not None:
         pa_table = pa_table.select(columns)
+    elif column_indices is not None:
+        column_names = [pa_table.column_names[idx] for idx in column_indices]
+        pa_table = pa_table.select(column_names)
 
     # Adapt to nrows/skiprows
     pa_table = pa_table.slice(
@@ -172,12 +179,14 @@ def test_read_parquet_filters(
 @pytest.mark.parametrize("num_buffers", [1, 2])
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_indices", [None, [2, 0]])
 def test_read_parquet_from_device_buffers(
     table_data,
     binary_source_or_sink,
     nrows_skiprows,
     stream,
     columns,
+    column_indices,
     num_buffers,
 ):
     _, pa_table = table_data
@@ -201,6 +210,8 @@ def test_read_parquet_from_device_buffers(
         options.set_skip_rows(skiprows)
     if columns is not None:
         options.set_columns(columns)
+    elif column_indices is not None:
+        options.set_column_indices(column_indices)
 
     res = plc.io.parquet.read_parquet(options, stream)
 
@@ -211,6 +222,10 @@ def test_read_parquet_from_device_buffers(
     )
     if columns is not None:
         expected = expected.select(columns)
+    elif column_indices is not None:
+        column_names = [expected.column_names[idx] for idx in column_indices]
+        expected = expected.select(column_names)
+
     expected = expected.slice(skiprows, nrows if nrows > -1 else None)
 
     assert_table_and_meta_eq(expected, res, check_field_nullability=False)
