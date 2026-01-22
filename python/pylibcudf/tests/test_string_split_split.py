@@ -154,7 +154,7 @@ def test_split_part_whitespace():
     data = pa.array(["a b", "c  d", "e f", None])
     plc_column = plc.Column.from_arrow(data)
 
-    # Empty delimiter for whitespace split
+    # Empty delimiter for whitespace split    
     plc_delimiter = plc.Scalar.from_arrow(pa.scalar(""))
 
     # Index 1
