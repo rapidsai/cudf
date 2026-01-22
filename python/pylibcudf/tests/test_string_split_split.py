@@ -134,7 +134,7 @@ def test_rsplit_record_re(data_col, re_delimiter):
 
 def test_split_part(data_col, delimiter):
     # Using existing fixtures (data_col has ["a_b_c", "d-e-f", None], delimiter is "_")
-    _, plc_column = data_col
+    _, plc_column = data_col   
     _, plc_delimiter = delimiter
 
     # Case 1: Index 0
