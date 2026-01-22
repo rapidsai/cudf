@@ -115,7 +115,6 @@ def test_json_reader(index, compression, orient, pdf, tmp_path):
     got_df = cudf.read_json(path_df, orient=orient, compression=compression)
     if len(expect_df) == 0:
         expect_df = expect_df.reset_index(drop=True)
-        expect_df.columns = expect_df.columns.astype("object")
     if len(got_df) == 0:
         got_df = got_df.reset_index(drop=True)
 

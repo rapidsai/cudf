@@ -1786,10 +1786,9 @@ def test_csv_writer_empty_dataframe(tmp_path):
 
     gdf.to_csv(df_fname, index=False)
 
-    df = cudf.read_csv(df_fname)
-
-    assert df.shape == (0, 2)
-    assert all(df.dtypes == ["object", "object"])
+    result = cudf.read_csv(df_fname)
+    expect = cudf.DataFrame({"float_point": [], "integer": []})
+    assert_eq(expect, result)
 
 
 def test_csv_write_chunksize_corner_case(tmp_path):
