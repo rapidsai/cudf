@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
-# SPDX-License-Identifier: Apache-2.0 
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -134,7 +134,7 @@ def test_rsplit_record_re(data_col, re_delimiter):
 
 def test_split_part(data_col, delimiter):
     # Using existing fixtures (data_col has ["a_b_c", "d-e-f", None], delimiter is "_")
-    _, plc_column = data_col   
+    _, plc_column = data_col
     _, plc_delimiter = delimiter
 
     # Case 1: Index 0
@@ -150,12 +150,12 @@ def test_split_part(data_col, delimiter):
 
 
 def test_split_part_whitespace():
-    # Standalone test for whitespace because fixtures use "_" 
+    # Standalone test for whitespace because fixtures use "_"
     data = pa.array(["a b", "c  d", "e\tf", None])
     plc_column = plc.Column.from_arrow(data)
 
-    # Empty delimiter for whitespace split    
-    plc_delimiter = plc.Scalar.from_arrow(pa.scalar(""))   
+    # Empty delimiter for whitespace split
+    plc_delimiter = plc.Scalar.from_arrow(pa.scalar(""))
 
     # Index 1
     got = plc.strings.split.split.split_part(plc_column, plc_delimiter, 1)

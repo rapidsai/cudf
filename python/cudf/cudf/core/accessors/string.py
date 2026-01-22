@@ -2815,7 +2815,7 @@ class StringMethods(BaseAccessor):
 
         if delimiter is None:
             delimiter = ""
-        delim_scalar=plc.Scalar.from_py(delimiter)
+        delim_scalar = plc.Scalar.from_py(delimiter)
         return self._return_or_inplace(
             self._column.split_part(delim_scalar, index)
         )
