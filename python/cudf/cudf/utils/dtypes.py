@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -340,7 +340,9 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
         else:
             return CUDF_STRING_DTYPE
     elif any(
-        isinstance(dtype, (cudf.ListDtype, cudf.StructDtype))
+        isinstance(
+            dtype, (cudf.ListDtype, cudf.StructDtype, cudf.IntervalDtype)
+        )
         for dtype in dtypes
     ):
         # TODO: As list dtypes allow casting
@@ -480,6 +482,8 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
         dtype = pyarrow_dtype_to_cudf_dtype(dtype)
     if isinstance(dtype, cudf.ListDtype):
         return plc.DataType(plc.TypeId.LIST)
+    elif isinstance(dtype, cudf.IntervalDtype):
+        return plc.DataType(plc.TypeId.STRUCT)
     elif isinstance(dtype, cudf.StructDtype):
         return plc.DataType(plc.TypeId.STRUCT)
     elif isinstance(dtype, cudf.Decimal128Dtype):
