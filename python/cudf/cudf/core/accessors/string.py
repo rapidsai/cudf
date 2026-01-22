@@ -2815,8 +2815,9 @@ class StringMethods(BaseAccessor):
 
         if delimiter is None:
             delimiter = ""
+        delim_scalar=plc.Scalar.from_py(delimiter)
         return self._return_or_inplace(
-            self._column.split_part(delimiter, index)
+            self._column.split_part(delim_scalar, index)
         )
 
     def partition(self, sep: str = " ", expand: bool = True) -> Series | Index:
@@ -4664,7 +4665,9 @@ class StringMethods(BaseAccessor):
         2    .
         dtype: object
         """
-        result_col = self._column.character_tokenize().children[1]
+        result_col = ColumnBase.from_pylibcudf(
+            self._column.character_tokenize().plc_column.children()[1]
+        )
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)
