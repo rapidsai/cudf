@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -uo pipefail
@@ -16,6 +16,7 @@ popd || exit
 
 pushd hybrid_scan_io || exit
 compute-sanitizer --tool memcheck hybrid_scan_io example.parquet string_col 0000001  PINNED_BUFFER
+compute-sanitizer --tool memcheck hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS
 popd || exit
 
 pushd nested_types || exit
