@@ -713,10 +713,10 @@ struct copy_subpass_page {
  * @param num_rows Number of rows to read in the pass
  * @return Number of values to process (0 if page is outside the row range)
  */
-CUDF_HOST_DEVICE inline size_t compute_page_num_values_in_range(PageInfo const& page,
-                                                                ColumnChunkDesc const& chunk,
-                                                                size_t skip_rows,
-                                                                size_t num_rows)
+CUDF_HOST_DEVICE inline size_t precompute_page_num_values_in_range(PageInfo const& page,
+                                                                   ColumnChunkDesc const& chunk,
+                                                                   size_t skip_rows,
+                                                                   size_t num_rows)
 {
   // Check if this page has lists (repetition levels)
   bool const has_repetition = chunk.max_level[level_type::REPETITION] > 0;
@@ -737,6 +737,7 @@ CUDF_HOST_DEVICE inline size_t compute_page_num_values_in_range(PageInfo const& 
   if ((page_start_row >= pass_end_row) || (page_end_row <= skip_rows)) { return 0; }
 
   // For non-list pages: only process values within the pass range
+  // If skipping rows, still need to process the first rows to (e.g.) count skipped nulls.
   size_t const pass_rows_from_page = pass_end_row - page_start_row;
   return (page_rows > pass_rows_from_page) ? pass_rows_from_page : page_rows;
 }
@@ -763,7 +764,8 @@ CUDF_HOST_DEVICE inline void compute_page_level_decode_sizes(PageInfo const& pag
   if (!has_repetition && !has_definition) { return; }
 
   // Determine how many values need to be decoded using the common helper
-  size_t const num_to_decode = compute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
+  size_t const num_to_decode =
+    precompute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
 
   // Compute space for definition levels
   def_level_size = has_definition ? num_to_decode * level_type_size : 0;

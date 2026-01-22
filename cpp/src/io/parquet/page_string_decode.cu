@@ -74,7 +74,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
   auto const pp   = &s->page;
   auto const col  = &s->col;
 
-  // initialize the stream decoders (requires values computed in setup_local_page_info)
+  // get the level data
   bool const should_process_def = is_nullable(s) && maybe_has_nulls(s);
   auto const def_decode = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
   auto const rep_decode = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
@@ -139,8 +139,8 @@ __device__ cuda::std::pair<int, int> page_bounds(
       }
 
       // get absolute thread row index
-      int idx_t = processed + t;
-      int is_new_row =
+      int const idx_t = processed + t;
+      int const is_new_row =
         idx_t < s->page.num_input_values && (!has_repetition || rep_decode[idx_t] == 0);
       int thread_row_count, block_row_count;
       block_scan(temp_storage.scan_storage)

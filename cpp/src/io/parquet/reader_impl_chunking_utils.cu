@@ -859,7 +859,7 @@ struct compute_page_string_offset_size {
     if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
 
     // Determine how many values need offsets
-    size_t const num_values = compute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
+    size_t const num_values = precompute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
     if (num_values == 0) { return 0; }
 
     // We need num_values + 1 offsets (one extra for the final offset)

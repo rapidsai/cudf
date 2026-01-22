@@ -367,11 +367,14 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
  * @brief Kernel for preprocessing definition and repetition levels
  *
  * This kernel decodes definition and repetition levels for all pages in advance,
- * storing them in the pre-allocated level decode buffers. This allows the main
- * decode kernel to skip RLE decoding and directly access the decoded levels.
+ * storing them in the pre-allocated level decode buffers. This allows other
+ * kernels to skip RLE decoding and directly access the decoded levels.
  *
  * @param pages List of pages
  * @param chunks List of column chunks
+ * @param page_mask Boolean vector indicating which pages need to be processed
+ * @param min_row Minimum row index to read
+ * @param num_rows Number of rows to read starting from min_row
  */
 template <typename level_t, int level_decode_block_size>
 CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
@@ -406,7 +409,7 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   constexpr int rle_run_buffer_size =
     rle_stream_required_run_buffer_size<level_decode_block_size>();
 
-  // the level stream decoders
+  // the level stream decoders. max_output_values is max to remove rolling buffer
   __shared__ rle_run def_runs[rle_run_buffer_size];
   __shared__ rle_run rep_runs[rle_run_buffer_size];
   static constexpr int max_output_values = std::numeric_limits<int>::max();
@@ -418,8 +421,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // Determine how many values need to be decoded
-  size_t num_to_decode =
-    compute_page_num_values_in_range(*pp, chunks[pp->chunk_idx], min_row, num_rows);
+  size_t const num_to_decode =
+    precompute_page_num_values_in_range(*pp, chunks[pp->chunk_idx], min_row, num_rows);
   if (num_to_decode == 0) { return; }
 
   // Initialize the stream decoders

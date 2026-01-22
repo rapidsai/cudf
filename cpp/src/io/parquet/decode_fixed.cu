@@ -272,15 +272,14 @@ __device__ inline void decode_fixed_width_split_values(
  *
  * @tparam decode_block_size Size of the thread block
  * @tparam level_t Definition level type
- * @tparam state_buf State buffer type
+ * @tparam is_nested Whether the type is nested
  *
  * @param target_value_count The target value count to process
- * @param s Pointer to  page state
- * @param sb Pointer to  state buffer
+ * @param s Pointer to page state
  * @param def Pointer to the definition levels
  * @param t Thread index
  *
- * @return Maximum depth valid count after processing
+ * @return Maximum depth valid count after skipping
  */
 template <int decode_block_size, typename level_t, bool is_nested>
 __device__ int skip_validity_and_row_indices_nonlist(int32_t target_value_count,
@@ -880,13 +879,11 @@ __device__ void skip_ahead_in_decoding(page_state_s* s,
 
   // Count the number of valids we're skipping.
   processed_count = first_row;
-  if (!should_process_nulls) {
-    valid_count = first_row;
-  } else {
-    valid_count =
-      skip_validity_and_row_indices_nonlist<decode_block_size_t, level_t, has_nesting_t>(
-        first_row, s, def, t);
-  }
+  valid_count =
+    !should_process_nulls
+      ? first_row
+      : skip_validity_and_row_indices_nonlist<decode_block_size_t, level_t, has_nesting_t>(
+          first_row, s, def, t);
 
   if constexpr (has_dict_t) {
     skip_decode<rolling_buf_size>(dict_stream, valid_count, t);

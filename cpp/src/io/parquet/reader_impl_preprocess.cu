@@ -262,8 +262,9 @@ void reader_impl::allocate_level_decode_space()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
+  auto& pages   = subpass.pages;
 
-  auto const num_pages = subpass.pages.size();
+  auto const num_pages = pages.size();
   if (num_pages == 0) { return; }
 
   std::vector<size_t> def_level_sizes(num_pages);
@@ -272,7 +273,7 @@ void reader_impl::allocate_level_decode_space()
   // Loop over pages to compute sizes
   size_t total_memory_size = 0;
   for (size_t idx = 0; idx < num_pages; idx++) {
-    auto const& p     = subpass.pages[idx];
+    auto const& p     = pages[idx];
     auto const& chunk = pass.chunks[p.chunk_idx];
 
     compute_page_level_decode_sizes(p,
@@ -294,16 +295,16 @@ void reader_impl::allocate_level_decode_space()
   auto* current_ptr = static_cast<uint8_t*>(subpass.level_decode_data.data());
   for (size_t idx = 0; idx < num_pages; idx++) {
     if (def_level_sizes[idx] == 0) {
-      subpass.pages[idx].lvl_decode_buf[level_type::DEFINITION] = nullptr;
+      pages[idx].lvl_decode_buf[level_type::DEFINITION] = nullptr;
     } else {
-      subpass.pages[idx].lvl_decode_buf[level_type::DEFINITION] = current_ptr;
+      pages[idx].lvl_decode_buf[level_type::DEFINITION] = current_ptr;
       current_ptr += def_level_sizes[idx];
     }
 
     if (rep_level_sizes[idx] == 0) {
-      subpass.pages[idx].lvl_decode_buf[level_type::REPETITION] = nullptr;
+      pages[idx].lvl_decode_buf[level_type::REPETITION] = nullptr;
     } else {
-      subpass.pages[idx].lvl_decode_buf[level_type::REPETITION] = current_ptr;
+      pages[idx].lvl_decode_buf[level_type::REPETITION] = current_ptr;
       current_ptr += rep_level_sizes[idx];
     }
   }

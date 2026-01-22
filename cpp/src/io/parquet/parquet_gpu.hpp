@@ -987,9 +987,9 @@ void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
 /**
  * @brief Launches pre-processing kernel to decode definition and repetition levels
  *
- * This kernel runs before the main decode kernel to pre-decode all definition and
+ * This kernel runs before most preprocessing to pre-decode all definition and
  * repetition levels, storing them in the pre-allocated level decode buffers. This
- * allows the main decode kernel to skip RLE decoding and directly access decoded levels.
+ * allows other kernels to skip RLE decoding and directly access decoded levels.
  *
  * @param[in,out] pages All pages to be processed
  * @param[in] chunks All chunks to be processed
