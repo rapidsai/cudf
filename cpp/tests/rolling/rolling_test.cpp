@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -815,7 +815,7 @@ TYPED_TEST_SUITE(RollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 // simple example from Pandas docs
 TYPED_TEST(RollingTest, SimpleStatic)
 {
-  // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
+  // https://pandas.pydata.org/pandas-docs/version/2.3.3/reference/api/pandas.DataFrame.rolling.html
   auto const col_data              = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 0, 4});
   const std::vector<bool> col_mask = {1, 1, 1, 0, 1};
 
@@ -962,7 +962,7 @@ TYPED_TEST(RollingTest, NegativeWindowSizes)
 // simple example from Pandas docs:
 TYPED_TEST(RollingTest, SimpleDynamic)
 {
-  // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
+  // https://pandas.pydata.org/pandas-docs/version/2.3.3/reference/api/pandas.DataFrame.rolling.html
   auto const col_data              = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 0, 4});
   const std::vector<bool> col_mask = {1, 1, 1, 0, 1};
 
