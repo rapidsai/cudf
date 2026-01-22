@@ -1339,7 +1339,7 @@ TEST_F(ParquetReaderTest, ReorderedReadMultipleFiles)
   {
     auto read_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{{filepath1, filepath2}})
-        .columns(std::vector<std::string>{"_col1", "_col0"});
+        .columns({"_col1", "_col0"});
     auto result = cudf::io::read_parquet(read_opts);
     auto sliced = cudf::slice(result.tbl->view(), {0, num_rows, num_rows, 2 * num_rows});
     CUDF_TEST_EXPECT_TABLES_EQUAL(sliced[0], swapped1);
@@ -1515,7 +1515,7 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
       auto col_index2    = cudf::ast::column_reference{index};
       auto read_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_index2, lit);
       auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                         .columns(std::vector<std::string>{"col_double", "col_uint32"})
+                         .columns({"col_double", "col_uint32"})
                          .filter(read_ref_expr);
       EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
 
