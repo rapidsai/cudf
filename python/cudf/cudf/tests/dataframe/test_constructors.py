@@ -468,12 +468,11 @@ def test_dataframe_constructor_nan_as_null(data, nan_as_null):
 def test_dataframe_init_from_series(data, columns, index):
     expected = pd.DataFrame(data, columns=columns, index=index)
     actual = cudf.DataFrame(data, columns=columns, index=index)
-
-    assert_eq(
-        expected,
-        actual,
-        check_index_type=len(expected) != 0,
-    )
+    if columns == ["abc", "b"]:
+        # In pandas, new columns are object types with NaN
+        # which cuDF doesn't support
+        expected["b"] = expected["b"].astype(actual["b"].dtype)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -565,9 +564,16 @@ def test_dataframe_dict_like_with_columns(columns, index):
     data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
     expect = pd.DataFrame(data, columns=columns, index=index)
     actual = cudf.DataFrame(data, columns=columns, index=index)
-    if index is None and len(columns) == 0:
-        # We make an empty range index, pandas makes an empty index
-        expect = expect.reset_index(drop=True)
+    if isinstance(columns, list):
+        if columns == []:
+            # As of pandas 3.0, empty columns are returned as Index[object]
+            # which cuDF doesn't support
+            expect.columns = expect.columns.astype(actual.columns.dtype)
+        elif columns == ["a", "d", "b", "e", "c"]:
+            # In pandas, new columns are object types with NaN
+            # which cuDF doesn't support
+            expect["d"] = expect["d"].astype(actual["d"].dtype)
+            expect["e"] = expect["e"].astype(actual["e"].dtype)
     assert_eq(expect, actual)
 
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import operator
 from contextlib import contextmanager
@@ -689,10 +689,6 @@ def test_tupleize_cols_False_set():
         None,
     ],
 )
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_dataframe_assign_scalar(request, col_data, assign_val):
     request.applymarker(
         pytest.mark.xfail(
@@ -710,7 +706,10 @@ def test_dataframe_assign_scalar(request, col_data, assign_val):
         else assign_val
     )
     gdf["b"] = assign_val
-
+    # Assigning None in pandas creates an object column
+    # which cuDF doesn't support
+    if assign_val is None:
+        pdf["b"] = pdf["b"].astype(gdf["b"].dtype)
     assert_eq(pdf, gdf)
 
 
@@ -765,5 +764,10 @@ def test_dataframe_assign_scalar_with_scalar_cols(col_data, assign_val):
         else assign_val
     )
     gdf["b"] = assign_val
-
+    # Assigning None in pandas creates an object column
+    # which cuDF doesn't support
+    if col_data is None:
+        pdf["a"] = pdf["a"].astype(gdf["a"].dtype)
+    if assign_val is None:
+        pdf["b"] = pdf["b"].astype(gdf["b"].dtype)
     assert_eq(pdf, gdf)

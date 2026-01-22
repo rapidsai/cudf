@@ -8,7 +8,6 @@ from contextlib import nullcontext as does_not_raise
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
 
 import cudf
@@ -2675,21 +2674,36 @@ def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
 )
 @pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
 @pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
-@pytest.mark.parametrize(
-    "index",
-    [["1", "2", "3", "4", "5"]],
-)
-def test_string_cat(ps_gs, others, sep, na_rep, index):
+def test_string_cat(ps_gs, others, sep, na_rep, index, request):
     # https://github.com/pandas-dev/pandas/issues/63371
     ps, gs = ps_gs
-
+    is_any_others_ndarray = isinstance(others, (list, tuple)) and any(
+        isinstance(item, np.ndarray) for item in others
+    )
+    is_any_others_series_with_string_index = isinstance(
+        others, (list, tuple)
+    ) and any(
+        isinstance(item, pd.Series)
+        and isinstance(item.index.dtype, pd.StringDtype)
+        for item in others
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            is_any_others_series_with_string_index,
+            reason="https://github.com/rapidsai/cudf/issues/21123",
+        )
+    )
     pd_others = others
     gd_others = _cat_convert_seq_to_cudf(others)
 
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
     got = gs.str.cat(others=gd_others, sep=sep, na_rep=na_rep)
+    if is_any_others_ndarray:
+        # pandas returns Index[object] which cuDF doesn't support
+        expect.index = expect.index.astype(got.index.dtype)
     assert_eq(expect, got)
 
+    index = ["1", "2", "3", "4", "5"]
     ps.index = index
     gs.index = index
 
@@ -2815,13 +2829,8 @@ def test_string_len(ps_gs):
 
     expect = ps.str.len()
     got = gs.str.len()
-
-    # Can't handle nulls in Pandas so use PyArrow instead
-    # Pandas will return as a float64 so need to typecast to int32
-    expect = pa.array(expect, from_pandas=True).cast(pa.int64())
-    got = got.to_arrow()
-
-    assert pa.Array.equals(expect, got)
+    # pandas returns int64, cuDF returns int32
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_string_concat():
