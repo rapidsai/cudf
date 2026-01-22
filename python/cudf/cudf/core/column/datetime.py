@@ -77,18 +77,7 @@ def _resolve_binop_resolution(
 
 
 class DatetimeColumn(TemporalBaseColumn):
-    """
-    A Column implementation for Date-time types.
-
-    Parameters
-    ----------
-    data : Buffer
-        The datetime values
-    dtype : np.dtype
-        The data type
-    mask : Buffer; optional
-        The validity mask
-    """
+    """A Column implementation for Date-time types."""
 
     _NP_SCALAR = np.datetime64
     _PD_SCALAR = pd.Timestamp
@@ -341,12 +330,17 @@ class DatetimeColumn(TemporalBaseColumn):
         self, field: plc.datetime.DatetimeComponent
     ) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            result = type(self).from_pylibcudf(
                 plc.datetime.extract_datetime_component(
                     self.plc_column,
                     field,
                 )
             )
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and result.dtype == np.dtype("int16"):
+                result = result.astype(np.dtype("int32"))
+            return result
 
     def _get_field_names(
         self,
@@ -383,7 +377,7 @@ class DatetimeColumn(TemporalBaseColumn):
         ],
         freq: str,
     ) -> ColumnBase:
-        # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
+        # https://pandas.pydata.org/pandas-docs/version/2.3.3/reference/api/pandas.Timedelta.resolution_string.html
         old_to_new_freq_map = {
             "H": "h",
             "N": "ns",
@@ -683,7 +677,6 @@ class DatetimeColumn(TemporalBaseColumn):
             return DatetimeTZColumn._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=dtype,
-                children=self.children,
             )
         if cudf.get_option("mode.pandas_compatible"):
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
@@ -853,7 +846,7 @@ class DatetimeTZColumn(DatetimeColumn):
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
         return DatetimeColumn._from_preprocessed(
-            self.plc_column, _get_base_dtype(self.dtype), self.children
+            self.plc_column, _get_base_dtype(self.dtype)
         )
 
     @functools.cached_property

@@ -183,7 +183,10 @@ async def dataframescan_node(
             local_offset = local_count * context.comm().rank
 
         # Send basic metadata
-        await ch_out.send_metadata(context, Metadata(max(1, local_count)))
+        await ch_out.send_metadata(
+            context,
+            Metadata(local_count=local_count, global_count=global_count),
+        )
 
         # Build list of IR slices to read
         ir_slices = []
@@ -485,7 +488,10 @@ async def scan_node(
                     )
 
         # Send basic metadata
-        await ch_out.send_metadata(context, Metadata(max(1, len(scans))))
+        await ch_out.send_metadata(
+            context,
+            Metadata(local_count=len(scans), global_count=count),
+        )
 
         # If there is nothing to scan, drain the channel and return
         if len(scans) == 0:
@@ -708,7 +714,14 @@ def _(
         metadata_node = metadata_feeder_node(
             rec.state["context"],
             ch_pair,
-            Metadata(partition_info.count),
+            Metadata(
+                # partition_info.count is the estimated "global" count.
+                # Just estimate the local count as well.
+                local_count=math.ceil(
+                    partition_info.count / rec.state["context"].comm().nranks
+                ),
+                global_count=partition_info.count,
+            ),
         )
         nodes[ir] = [metadata_node, native_node]
     else:

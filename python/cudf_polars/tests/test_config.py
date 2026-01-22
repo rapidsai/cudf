@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -31,7 +31,6 @@ from cudf_polars.utils.config import (
     MemoryResourceConfig,
 )
 from cudf_polars.utils.cuda_stream import get_cuda_stream, get_new_cuda_stream
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(params=[False, True], ids=["norapidsmpf.single", "rapidsmpf.single"])
@@ -97,10 +96,7 @@ def test_use_device_not_current(monkeypatch):
 def test_invalid_device_raises(device, monkeypatch):
     monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", None)
     q = pl.LazyFrame({})
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(device=device))
-    elif isinstance(device, int):
+    if isinstance(device, int):
         with pytest.raises(rmm._cuda.gpu.CUDARuntimeError):
             q.collect(engine=pl.GPUEngine(device=device))
     elif isinstance(device, str):
@@ -112,24 +108,16 @@ def test_multiple_devices_in_same_process_raise(monkeypatch):
     # A device we haven't already seen
     monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", 4)
     q = pl.LazyFrame({})
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine())
-    else:
-        with pytest.raises(RuntimeError):
-            q.collect(engine=pl.GPUEngine())
+    with pytest.raises(RuntimeError):
+        q.collect(engine=pl.GPUEngine())
 
 
 @pytest.mark.parametrize("mr", [1, object()])
 def test_invalid_memory_resource_raises(mr, monkeypatch):
     monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", None)
     q = pl.LazyFrame({})
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(memory_resource=mr))
-    else:
-        with pytest.raises(TypeError):
-            q.collect(engine=pl.GPUEngine(memory_resource=mr))
+    with pytest.raises(TypeError):
+        q.collect(engine=pl.GPUEngine(memory_resource=mr))
 
 
 @pytest.mark.skipif(
@@ -454,6 +442,7 @@ def test_validate_shuffle_insertion_method() -> None:
         "sink_to_directory",
         "client_device_threshold",
         "max_io_threads",
+        "spill_to_pinned_memory",
     ],
 )
 def test_validate_streaming_executor_options(option: str) -> None:
