@@ -37,7 +37,7 @@ struct simple_aggregation_collector_fn {
 
 // Specialization for MIN aggregation
 template <>
-inline std::vector<std::unique_ptr<aggregation>>
+std::vector<std::unique_ptr<aggregation>>
 simple_aggregation_collector_fn::operator()<aggregation::MIN>(data_type col_type,
                                                               aggregation const&) const
 {
@@ -49,7 +49,7 @@ simple_aggregation_collector_fn::operator()<aggregation::MIN>(data_type col_type
 
 // Specialization for MAX aggregation
 template <>
-inline std::vector<std::unique_ptr<aggregation>>
+std::vector<std::unique_ptr<aggregation>>
 simple_aggregation_collector_fn::operator()<aggregation::MAX>(data_type col_type,
                                                               aggregation const&) const
 {
@@ -61,7 +61,7 @@ simple_aggregation_collector_fn::operator()<aggregation::MAX>(data_type col_type
 
 // Specialization for MEAN aggregation
 template <>
-inline std::vector<std::unique_ptr<aggregation>>
+std::vector<std::unique_ptr<aggregation>>
 simple_aggregation_collector_fn::operator()<aggregation::MEAN>(data_type col_type,
                                                                aggregation const&) const
 {
@@ -74,7 +74,7 @@ simple_aggregation_collector_fn::operator()<aggregation::MEAN>(data_type col_typ
 }
 
 // Helper for M2/VARIANCE/STD - they all need the same simple aggregations
-inline std::vector<std::unique_ptr<aggregation>> collect_m2_simple_aggs()
+std::vector<std::unique_ptr<aggregation>> collect_m2_simple_aggs()
 {
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(make_sum_of_squares_aggregation());
@@ -86,7 +86,7 @@ inline std::vector<std::unique_ptr<aggregation>> collect_m2_simple_aggs()
 
 // Specialization for M2 aggregation
 template <>
-inline std::vector<std::unique_ptr<aggregation>>
+std::vector<std::unique_ptr<aggregation>>
 simple_aggregation_collector_fn::operator()<aggregation::M2>(data_type, aggregation const&) const
 {
   return collect_m2_simple_aggs();
@@ -94,7 +94,7 @@ simple_aggregation_collector_fn::operator()<aggregation::M2>(data_type, aggregat
 
 // Specialization for VARIANCE aggregation
 template <>
-inline std::vector<std::unique_ptr<aggregation>>
+std::vector<std::unique_ptr<aggregation>>
 simple_aggregation_collector_fn::operator()<aggregation::VARIANCE>(data_type,
                                                                    aggregation const&) const
 {
@@ -103,7 +103,7 @@ simple_aggregation_collector_fn::operator()<aggregation::VARIANCE>(data_type,
 
 // Specialization for STD aggregation
 template <>
-inline std::vector<std::unique_ptr<aggregation>>
+std::vector<std::unique_ptr<aggregation>>
 simple_aggregation_collector_fn::operator()<aggregation::STD>(data_type, aggregation const&) const
 {
   return collect_m2_simple_aggs();
