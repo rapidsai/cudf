@@ -9,7 +9,7 @@ import operator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from functools import reduce
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
 from rapidsmpf.streaming.core.message import Message
@@ -55,26 +55,77 @@ async def shutdown_on_error(
         raise
 
 
-class Metadata:
-    """Metadata payload for an individual ChannelPair."""
+class HashPartitioned:
+    """
+    Hash-partitioned metadata.
 
-    __slots__ = ("count", "duplicated", "partitioned_on")
+    Attributes
+    ----------
+    columns
+        Columns the data is hash-partitioned on.
+    scope
+        Whether data is partitioned locally (within a rank) or
+        globally (across all ranks).
+    count
+        The modulus used for hash partitioning (number of partitions).
+    """
+
+    __slots__ = ("columns", "count", "scope")
+
+    columns: tuple[str, ...]
+    scope: Literal["local", "global"]
     count: int
-    """Chunk-count estimate."""
-    partitioned_on: tuple[str, ...]
-    """Partitioned-on columns."""
-    duplicated: bool
-    """Whether the data is duplicated on all workers."""
 
     def __init__(
         self,
+        columns: tuple[str, ...],
+        scope: Literal["local", "global"],
         count: int,
+    ):
+        self.columns = columns
+        self.scope = scope
+        self.count = count
+
+
+class Metadata:
+    """Metadata payload for an individual ChannelPair."""
+
+    __slots__ = (
+        "duplicated",
+        "global_count",
+        "local_count",
+        "partitioning",
+    )
+
+    # Chunk counts
+    local_count: int
+    """Local chunk-count estimate for the current rank."""
+    global_count: int | None
+    """Global chunk-count estimate across all ranks."""
+
+    # Partitioning
+    partitioning: HashPartitioned | None
+    """How the data is hash-partitioned, or None if not partitioned."""
+
+    # Duplication
+    duplicated: bool
+    """Whether the data is duplicated (identical) on all workers."""
+
+    def __init__(
+        self,
+        local_count: int,
         *,
-        partitioned_on: tuple[str, ...] = (),
+        global_count: int | None = None,
+        partitioning: HashPartitioned | None = None,
         duplicated: bool = False,
     ):
-        self.count = count
-        self.partitioned_on = partitioned_on
+        if local_count < 0:  # pragma: no cover
+            raise ValueError(f"Local count must be non-negative. Got: {local_count}")
+        self.local_count = local_count
+        if global_count is not None and global_count < 0:  # pragma: no cover
+            raise ValueError(f"Global count must be non-negative. Got: {global_count}")
+        self.global_count = global_count
+        self.partitioning = partitioning
         self.duplicated = duplicated
 
 
