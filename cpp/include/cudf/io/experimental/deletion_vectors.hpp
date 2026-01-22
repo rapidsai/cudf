@@ -22,6 +22,29 @@ namespace io::parquet::experimental {
  */
 
 /**
+ * @brief Struct used to specify information about deletion vectors and the index column to the
+ * experimental parquet reader
+ */
+struct deletion_vector_info {
+  // Following vectors specify the data spans of input deletion vectors and the number
+  // of rows spanned by each deletion vector in order. Deletion vectors are applied in order of
+  // their appearance in the vectors
+
+  /// Host spans of 64-bit roaring bitmaps serialized in `portable` format
+  std::vector<cudf::host_span<cuda::std::byte const>> serialized_roaring_bitmaps;
+  /// Number of rows spanned by each deletion vector
+  std::vector<size_type> deletion_vector_row_counts;
+
+  // Following vectors customize the row index column prepended to the read table from
+  // the Parquet source(s)
+
+  /// Row index offset for each row group to be read from the Parquet source(s)
+  std::vector<size_t> row_group_offsets;
+  /// Number of rows in each row group to be read from the Parquet source(s)
+  std::vector<size_type> row_group_num_rows;
+};
+
+/**
  * @brief The chunked parquet reader class to read a Parquet source iteratively in a series of
  * tables, chunk by chunk. Each chunk is prepended with a row index column built using the specified
  * row group offsets and row counts. The resultant table chunk is filtered using the supplied
@@ -47,21 +70,14 @@ class chunked_parquet_reader {
    *
    * @param chunk_read_limit Byte limit on the returned table chunk size, `0` if there is no limit
    * @param options Parquet reader options
-   * @param serialized_roaring_bitmaps Vector of spans of `portable` serialized 64-bit roaring
-   * bitmaps
-   * @param deletion_vector_row_counts Vector of number of rows in each deletion vector
-   * @param row_group_offsets Vector of row offsets of each row group
-   * @param row_group_num_rows Vector of number of rows in each row group
+   * @param deletion_vector_info Information about the deletion vectors and the index column
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
     parquet_reader_options const& options,
-    std::vector<cudf::host_span<cuda::std::byte>>&& serialized_roaring_bitmaps,
-    std::vector<size_type>&& deletion_vector_row_counts,
-    std::vector<size_t>&& row_group_offsets,
-    std::vector<size_type>&& row_group_num_rows,
+    deletion_vector_info const& deletion_vector_info,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -81,11 +97,7 @@ class chunked_parquet_reader {
    * @param pass_read_limit Byte limit on the amount of memory used for decompressing and decoding
    * data, `0` if there is no limit
    * @param options Parquet reader options
-   * @param serialized_roaring_bitmaps Vector of spans of `portable` serialized 64-bit roaring
-   * bitmaps
-   * @param deletion_vector_row_counts Vector of number of rows in each deletion vector
-   * @param row_group_offsets Vector of row offsets of each row group
-   * @param row_group_num_rows Vector of number of rows in each row group
+   * @param deletion_vector_info Information about the deletion vectors and the index column
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -93,10 +105,7 @@ class chunked_parquet_reader {
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     parquet_reader_options const& options,
-    std::vector<cudf::host_span<cuda::std::byte>>&& serialized_roaring_bitmaps,
-    std::vector<size_type>&& deletion_vector_row_counts,
-    std::vector<size_t>&& row_group_offsets,
-    std::vector<size_type>&& row_group_num_rows,
+    deletion_vector_info const& deletion_vector_info,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -142,37 +151,6 @@ class chunked_parquet_reader {
 
 /**
  * @brief Reads a table from parquet source, prepends an index column to it, deserializes the
- * specified 64-bit roaring bitmap deletion vector and applies it to the read table
- *
- * Reads a table from a parquet source, builds a row index column to the table using the specified
- * row group offsets and row counts and prepends it to the table, deserializes the specified
- * roaring64 deletion vector and applies it to the read table. If the row group offsets and row
- * counts are empty, the index column is simply a sequence of UINT64 from 0 to the total number of
- * rows in the table. If the serialized roaring64 bitmap span is empty, the read table (prepended
- * with the index column) is returned as is.
- *
- * @ingroup io_readers
- *
- * @param options Parquet reader options
- * @param serialized_roaring_bitmap Span of `portable` serialized 64-bit roaring bitmap
- * @param row_group_offsets Vector of row index offsets for each row group
- * @param row_group_num_rows Vector of number of rows in each row group
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate device memory of the returned table
- *
- * @return Read table with a prepended index column filtered using the deletion vector, along with
- * its metadata
- */
-table_with_metadata read_parquet(
-  parquet_reader_options const& options,
-  cudf::host_span<cuda::std::byte> serialized_roaring_bitmap,
-  std::vector<size_t>&& row_group_offsets,
-  std::vector<size_type>&& row_group_num_rows,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource_ref());
-
-/**
- * @brief Reads a table from parquet source, prepends an index column to it, deserializes the
  * specified 64-bit roaring bitmap deletion vectors and applies them to the read table
  *
  * Reads a table from a parquet source, builds a row index column to the table using the specified
@@ -186,11 +164,7 @@ table_with_metadata read_parquet(
  * @ingroup io_readers
  *
  * @param options Parquet reader options
- * @param serialized_roaring_bitmaps Vector of spans of `portable` serialized 64-bit roaring
- * bitmaps
- * @param deletion_vector_row_counts Vector of number of rows in each deletion vector
- * @param row_group_offsets Vector of row index offsets for each row group
- * @param row_group_num_rows Vector of number of rows in each row group
+ * @param deletion_vector_info Information about the deletion vectors and the index column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned table
  *
@@ -199,10 +173,7 @@ table_with_metadata read_parquet(
  */
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
-  std::vector<cudf::host_span<cuda::std::byte>>&& serialized_roaring_bitmaps,
-  std::vector<size_type>&& deletion_vector_row_counts,
-  std::vector<size_t>&& row_group_offsets,
-  std::vector<size_type>&& row_group_num_rows,
+  deletion_vector_info const& deletion_vector_info,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource_ref());
 

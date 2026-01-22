@@ -258,15 +258,15 @@ void test_read_parquet_and_apply_deletion_vector(
   }
 
   // Vector to store serialized roaring bitmap data and spans
-  auto serialized_roaring_bitmaps      = std::vector<std::vector<cuda::std::byte>>{};
-  auto serialized_roaring_bitmap_spans = std::vector<cudf::host_span<cuda::std::byte>>{};
+  auto serialized_roaring_bitmaps_data = std::vector<std::vector<cuda::std::byte>>{};
+  auto serialized_roaring_bitmaps      = std::vector<cudf::host_span<cuda::std::byte const>>{};
+  serialized_roaring_bitmaps_data.reserve(num_concat);
   serialized_roaring_bitmaps.reserve(num_concat);
-  serialized_roaring_bitmap_spans.reserve(num_concat);
 
   // Insert the first serialized roaring bitmap span if non-empty
   if (not serialized_roaring_bitmap.empty()) {
-    serialized_roaring_bitmaps.emplace_back(std::move(serialized_roaring_bitmap));
-    serialized_roaring_bitmap_spans.emplace_back(serialized_roaring_bitmaps.back());
+    serialized_roaring_bitmaps_data.emplace_back(std::move(serialized_roaring_bitmap));
+    serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmaps_data.back());
   } else {
     CUDF_EXPECTS(num_concat == 1, "num_concat must be 1 if serialized_roaring_bitmap is empty");
   }
@@ -304,8 +304,8 @@ void test_read_parquet_and_apply_deletion_vector(
                                                  stream,
                                                  mr));
         table_views.emplace_back(tables.back()->view());
-        serialized_roaring_bitmaps.emplace_back(std::move(local_deletion_vector));
-        serialized_roaring_bitmap_spans.emplace_back(serialized_roaring_bitmaps.back());
+        serialized_roaring_bitmaps_data.emplace_back(std::move(local_deletion_vector));
+        serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmaps_data.back());
       }
 
       return cudf::concatenate(table_views, stream, mr);
@@ -318,16 +318,15 @@ void test_read_parquet_and_apply_deletion_vector(
       cudf::io::source_info{cudf::host_span<cudf::host_span<char const>>{input_buffers}})
       .build();
 
+  auto deletion_vector_info = cudf::io::parquet::experimental::deletion_vector_info{
+    .serialized_roaring_bitmaps = std::move(serialized_roaring_bitmaps),
+    .deletion_vector_row_counts = std::move(deletion_vector_row_counts),
+    .row_group_offsets          = std::move(row_group_row_offsets),
+    .row_group_num_rows         = std::move(row_group_num_counts),
+  };
+
   auto const table_with_deletion_vector =
-    cudf::io::parquet::experimental::read_parquet(
-      in_opts,
-      std::vector(serialized_roaring_bitmap_spans.begin(), serialized_roaring_bitmap_spans.end()),
-      std::vector(deletion_vector_row_counts.begin(), deletion_vector_row_counts.end()),
-      std::vector(row_group_row_offsets.begin(), row_group_row_offsets.end()),
-      std::vector(row_group_num_counts.begin(), row_group_num_counts.end()),
-      stream,
-      mr)
-      .tbl;
+    cudf::io::parquet::experimental::read_parquet(in_opts, deletion_vector_info, stream, mr).tbl;
 
   // Check
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_with_deletion_vector->view(), expected_table->view());
@@ -336,15 +335,7 @@ void test_read_parquet_and_apply_deletion_vector(
   auto const test_chunked_table_with_deletion_vector = [&](size_t chunk_read_limit,
                                                            size_t pass_read_limit) {
     auto const reader = std::make_unique<cudf::io::parquet::experimental::chunked_parquet_reader>(
-      chunk_read_limit,
-      pass_read_limit,
-      in_opts,
-      std::vector(serialized_roaring_bitmap_spans.begin(), serialized_roaring_bitmap_spans.end()),
-      std::vector(deletion_vector_row_counts.begin(), deletion_vector_row_counts.end()),
-      std::vector(row_group_row_offsets.begin(), row_group_row_offsets.end()),
-      std::vector(row_group_num_counts.begin(), row_group_num_counts.end()),
-      stream,
-      mr);
+      chunk_read_limit, pass_read_limit, in_opts, deletion_vector_info, stream, mr);
 
     auto table_chunks      = std::vector<std::unique_ptr<cudf::table>>{};
     auto table_chunk_views = std::vector<cudf::table_view>{};
