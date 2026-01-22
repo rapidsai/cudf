@@ -332,6 +332,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
 
   // Must be evaluated after setup_local_page_info
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
@@ -350,8 +351,10 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
 
-  __shared__ level_t rep[delta_rolling_buf_size];  // circular buffer of repetition level values
-  __shared__ level_t def[delta_rolling_buf_size];  // circular buffer of definition level values
+  // Get the level decode buffers for this page
+  PageInfo* pp          = &pages[page_idx];
+  level_t* const def    = !should_process_nulls ? nullptr : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -492,6 +495,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
@@ -524,8 +528,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // copying logic from decode_page_data.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
 
-  __shared__ level_t rep[delta_rolling_buf_size];  // circular buffer of repetition level values
-  __shared__ level_t def[delta_rolling_buf_size];  // circular buffer of definition level values
+  // Get the level decode buffers for this page
+  PageInfo* pp          = &pages[page_idx];
+  level_t* const def    = !should_process_nulls ? nullptr : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -702,6 +708,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
@@ -731,8 +738,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
 
-  __shared__ level_t rep[delta_rolling_buf_size];  // circular buffer of repetition level values
-  __shared__ level_t def[delta_rolling_buf_size];  // circular buffer of definition level values
+  // Get the level decode buffers for this page
+  PageInfo* pp          = &pages[page_idx];
+  level_t* const def    = !should_process_nulls ? nullptr : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;

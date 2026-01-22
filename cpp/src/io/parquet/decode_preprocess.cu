@@ -25,10 +25,6 @@ namespace {
 constexpr int preprocess_block_size = 512;
 constexpr int level_decode_block_size = 128;
 
-// the required number of runs in shared memory we will need to provide the
-// rle_stream object
-constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<level_decode_block_size>();
-
 using unused_state_buf = page_state_buffers_s<0, 0, 0>;
 
 /**
@@ -82,7 +78,7 @@ __device__ void update_page_sizes(page_state_s* s,
 
     // start/end depth
     int start_depth, end_depth, d;
-    get_nesting_bounds<0, level_t>(
+    get_nesting_bounds<level_t>(
       start_depth, end_depth, d, s, rep, def, value_count, value_count + batch_size, t);
 
     // is this thread within row bounds? in the non skip_rows/num_rows case this will always
@@ -406,6 +402,10 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
 
   // whether or not we have repetition levels (lists)
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+
+  // the required number of runs in shared memory we will need to provide the
+  // rle_stream object
+  constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<level_decode_block_size>();
 
   // the level stream decoders
   __shared__ rle_run def_runs[rle_run_buffer_size];
