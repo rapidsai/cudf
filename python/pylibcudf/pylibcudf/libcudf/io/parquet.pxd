@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
@@ -150,6 +150,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_max_dictionary_size(size_t val) except +libcudf_exception_handler
         void enable_write_v2_headers(bool val) except +libcudf_exception_handler
         void enable_write_arrow_schema(bool val) except +libcudf_exception_handler
+        void enable_page_level_compression(bool val) except +libcudf_exception_handler
         void set_dictionary_policy(
             dictionary_policy policy
         ) except +libcudf_exception_handler
@@ -211,6 +212,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             size_t val
         ) except +libcudf_exception_handler
         BuilderT& write_v2_headers(
+            bool enabled
+        ) except +libcudf_exception_handler
+        BuilderT& page_level_compression(
             bool enabled
         ) except +libcudf_exception_handler
         BuilderT& dictionary_policy(

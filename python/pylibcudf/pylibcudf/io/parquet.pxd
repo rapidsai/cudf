@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int64_t, uint8_t
 
@@ -159,6 +159,8 @@ cdef class ParquetWriterOptionsBuilder:
     cpdef ParquetWriterOptionsBuilder int96_timestamps(self, bool enabled)
 
     cpdef ParquetWriterOptionsBuilder write_v2_headers(self, bool enabled)
+
+    cpdef ParquetWriterOptionsBuilder page_level_compression(self, bool enabled)
 
     cpdef ParquetWriterOptionsBuilder dictionary_policy(self, dictionary_policy val)
 

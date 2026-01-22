@@ -16,6 +16,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/io/parquet_schema.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -348,6 +349,18 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
     _output_column_schemas,
     expr_conv.get_converted_expr().value(),
     stream);
+}
+
+std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_all_true_row_mask(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+
+  auto const num_rows = total_rows_in_row_groups(row_group_indices);
+  auto true_scalar    = cudf::numeric_scalar<bool>(true, true, stream);
+  return cudf::make_column_from_scalar(true_scalar, num_rows, stream, mr);
 }
 
 std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_row_mask_with_page_index_stats(

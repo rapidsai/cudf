@@ -397,12 +397,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   update_output_nullmasks_for_pruned_pages(_subpass_page_mask, skip_rows, num_rows);
 
   // Copy over initial string offsets from device
-  auto h_initial_str_offsets =
-    cudf::detail::make_pinned_vector_async<size_t>(initial_str_offsets.size(), _stream);
-  cudf::detail::cuda_memcpy_async(
-    cudf::host_span<size_t>{h_initial_str_offsets},
-    cudf::device_span<size_t const>{initial_str_offsets.data(), initial_str_offsets.size()},
-    _stream);
+  auto h_initial_str_offsets = cudf::detail::make_pinned_vector_async(initial_str_offsets, _stream);
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
@@ -451,12 +446,10 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     }
   }
   // Write the final offsets for list and string columns in a batched manner
-  auto pinned_final_offsets =
-    cudf::detail::make_pinned_vector_async<cudf::size_type>(final_offsets.size(), _stream);
+  auto pinned_final_offsets = cudf::detail::make_pinned_vector(
+    cudf::host_span<cudf::size_type const>{final_offsets}, _stream);
   auto pinned_out_buffers =
-    cudf::detail::make_pinned_vector_async<cudf::size_type*>(out_buffers.size(), _stream);
-  std::move(final_offsets.begin(), final_offsets.end(), pinned_final_offsets.begin());
-  std::move(out_buffers.begin(), out_buffers.end(), pinned_out_buffers.begin());
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type* const>{out_buffers}, _stream);
   write_final_offsets(pinned_final_offsets, pinned_out_buffers, _stream);
 
   // update null counts in the final column buffers
@@ -1041,18 +1034,15 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
 
   // Use a bounce buffer to avoid pageable copies
   auto pinned_null_masks =
-    cudf::detail::make_pinned_vector_async<bitmask_type*>(null_masks.size(), _stream);
-  auto pinned_begin_bits =
-    cudf::detail::make_pinned_vector_async<cudf::size_type>(begin_bits.size(), _stream);
-  auto pinned_end_bits =
-    cudf::detail::make_pinned_vector_async<cudf::size_type>(end_bits.size(), _stream);
-  std::move(null_masks.begin(), null_masks.end(), pinned_null_masks.begin());
-  std::move(begin_bits.begin(), begin_bits.end(), pinned_begin_bits.begin());
-  std::move(end_bits.begin(), end_bits.end(), pinned_end_bits.begin());
+    cudf::detail::make_pinned_vector(cudf::host_span<bitmask_type* const>{null_masks}, _stream);
+  auto const pinned_begin_bits =
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type const>{begin_bits}, _stream);
+  auto const pinned_end_bits =
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type const>{end_bits}, _stream);
 
   // Bulk update the nullmasks if the number of pages is above the threshold
-  if (null_masks.size() >= min_nullmasks_for_bulk_update) {
-    auto pinned_valids = cudf::detail::make_pinned_vector_async<bool>(null_masks.size(), _stream);
+  if (pinned_null_masks.size() >= min_nullmasks_for_bulk_update) {
+    auto pinned_valids = cudf::detail::make_pinned_vector<bool>(pinned_null_masks.size(), _stream);
     std::fill(pinned_valids.begin(), pinned_valids.end(), false);
     cudf::set_null_masks_safe(
       pinned_null_masks, pinned_begin_bits, pinned_end_bits, pinned_valids, _stream);
@@ -1062,7 +1052,7 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
     auto nullmask_iter = thrust::make_zip_iterator(cuda::std::make_tuple(
       pinned_null_masks.begin(), pinned_begin_bits.begin(), pinned_end_bits.begin()));
     std::for_each(
-      nullmask_iter, nullmask_iter + null_masks.size(), [&](auto const& nullmask_tuple) {
+      nullmask_iter, nullmask_iter + pinned_null_masks.size(), [&](auto const& nullmask_tuple) {
         cudf::set_null_mask(cuda::std::get<0>(nullmask_tuple),
                             cuda::std::get<1>(nullmask_tuple),
                             cuda::std::get<2>(nullmask_tuple),
