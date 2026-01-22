@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair, HashPartitioned
 
 
 @define_py_node()
@@ -91,15 +91,18 @@ async def broadcast_join_node(
             ch_right.recv_metadata(context),
         )
 
-        partitioned_on: tuple[str, ...] = ()
+        partitioning: HashPartitioned | None = None
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
             large_ch = ch_left
             small_child = ir.children[1]
             large_child = ir.children[0]
-            chunk_count = left_metadata.count
-            partitioned_on = left_metadata.partitioned_on
+            # Preserve left-side partitioning metadata
+            local_count = left_metadata.local_count
+            global_count = left_metadata.global_count
+            partitioning = left_metadata.partitioning
+            # Check if the right-side is already broadcasted
             small_duplicated = right_metadata.duplicated
         else:
             # Broadcast left, stream right
@@ -107,15 +110,20 @@ async def broadcast_join_node(
             large_ch = ch_right
             small_child = ir.children[0]
             large_child = ir.children[1]
-            chunk_count = right_metadata.count
-            small_duplicated = left_metadata.duplicated
+            # Preserve right-side partitioning metadata
+            local_count = right_metadata.local_count
+            global_count = right_metadata.global_count
             if ir.options[0] == "Right":
-                partitioned_on = right_metadata.partitioned_on
+                partitioning = right_metadata.partitioning
+            # Check if the right-side is already broadcasted
+            small_duplicated = left_metadata.duplicated
 
         # Send metadata.
         output_metadata = Metadata(
-            chunk_count,
-            partitioned_on=partitioned_on,
+            local_count=local_count,
+            global_count=global_count,
+            partitioning=partitioning,
+            # The result is only "duplicated" if both sides are duplicated
             duplicated=left_metadata.duplicated and right_metadata.duplicated,
         )
         await ch_out.send_metadata(context, output_metadata)
