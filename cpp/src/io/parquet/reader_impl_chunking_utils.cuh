@@ -229,6 +229,13 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
  *
  * For non-dictionary, non-FLBA string columns, this computes the size needed
  * to store string offsets (uint32_t per value) for each page.
+ *
+ * @param chunks List of column chunk descriptors
+ * @param pages List of page information
+ * @param skip_rows Starting row for the pass
+ * @param num_rows Number of rows to read in the pass
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @returns A vector of size_t values, one for each page, indicating the size needed for string offsets
  */
 rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkDesc const> chunks,
                                                         device_span<PageInfo const> pages,
@@ -241,6 +248,14 @@ rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkD
  *
  * This computes the memory needed to store decoded definition and repetition levels
  * during the preprocessing step. This memory is used by preprocess_levels_kernel().
+ * 
+ * @param chunks List of column chunk descriptors
+ * @param pages List of page information
+ * @param level_type_size Size in bytes for each level value
+ * @param skip_rows Starting row for the pass
+ * @param num_rows Number of rows to read in the pass
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @returns A vector of size_t values, one for each page, indicating the size needed for level decode preprocessing
  */
 rmm::device_uvector<size_t> compute_level_decode_sizes(device_span<ColumnChunkDesc const> chunks,
                                                         device_span<PageInfo const> pages,
@@ -259,7 +274,7 @@ rmm::device_uvector<size_t> compute_level_decode_sizes(device_span<ColumnChunkDe
  * @param chunk The column chunk descriptor for this page
  * @param level_type_size Size in bytes for each level value
  * @param skip_rows Starting row for the pass
- * @param pass_end_row Ending row for the pass (skip_rows + num_rows)
+ * @param num_rows Number of rows to read in the pass
  * @param def_level_size[out] Size needed for definition levels
  * @param rep_level_size[out] Size needed for repetition levels
  */
@@ -696,9 +711,8 @@ struct copy_subpass_page {
  * @param num_rows Number of rows to read in the pass
  * @return Number of values to process (0 if page is outside the row range)
  */
-template <typename PageType, typename ChunkType>
-CUDF_HOST_DEVICE inline size_t compute_page_num_values_in_range(PageType const& page,
-                                                                 ChunkType const& chunk,
+CUDF_HOST_DEVICE inline size_t compute_page_num_values_in_range(PageInfo const& page,
+                                                                 ColumnChunkDesc const& chunk,
                                                                  size_t skip_rows,
                                                                  size_t num_rows)
 {
@@ -712,25 +726,21 @@ CUDF_HOST_DEVICE inline size_t compute_page_num_values_in_range(PageType const& 
   }
 
   // For non-list pages: can optimize based on skip_rows and num_rows
+  size_t const page_rows = page.num_rows;
   size_t const page_start_row = chunk.start_row + page.chunk_row;
-  size_t const page_end_row   = page_start_row + page.num_rows;
+  size_t const page_end_row   = page_start_row + page_rows;
   size_t const pass_end_row   = skip_rows + num_rows;
 
   // if we are totally outside the range of the input, do nothing
   if ((page_start_row >= pass_end_row) || (page_end_row <= skip_rows)) { return 0; }
 
   // For non-list pages: only process values within the pass range
-#ifdef __CUDA_ARCH__
-  return cuda::std::min(static_cast<size_t>(page.num_rows), pass_end_row - page_start_row);
-#else
-  return std::min(static_cast<size_t>(page.num_rows), pass_end_row - page_start_row);
-#endif
+  size_t const pass_rows_from_page = pass_end_row - page_start_row;
+  return (page_rows > pass_rows_from_page) ? pass_rows_from_page : page_rows;
 }
 
-// Template implementation for compute_page_level_decode_sizes
-template <typename PageType, typename ChunkType>
-CUDF_HOST_DEVICE inline void compute_page_level_decode_sizes(PageType const& page,
-                                                              ChunkType const& chunk,
+CUDF_HOST_DEVICE inline void compute_page_level_decode_sizes(PageInfo const& page,
+                                                              ColumnChunkDesc const& chunk,
                                                               int level_type_size,
                                                               size_t skip_rows,
                                                               size_t num_rows,
@@ -751,16 +761,14 @@ CUDF_HOST_DEVICE inline void compute_page_level_decode_sizes(PageType const& pag
   if (!has_repetition && !has_definition) { return; }
 
   // Determine how many values need to be decoded using the common helper
-  size_t const num_values_to_decode =
+  size_t const num_to_decode =
     compute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
 
-  if (num_values_to_decode == 0) { return; }
-
   // Compute space for definition levels
-  def_level_size = has_definition ? num_values_to_decode * level_type_size : 0;
+  def_level_size = has_definition ? num_to_decode * level_type_size : 0;
 
   // Compute space for repetition levels
-  rep_level_size = has_repetition ? num_values_to_decode * level_type_size : 0;
+  rep_level_size = has_repetition ? num_to_decode * level_type_size : 0;
 }
 
 }  // namespace cudf::io::parquet::detail

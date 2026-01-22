@@ -300,14 +300,7 @@ __device__ int skip_validity_and_row_indices_nonlist(
     int const batch_size = min(decode_block_size, target_value_count - value_count);
 
     // definition level
-    int const is_valid = [&]() {
-      if (t >= batch_size) {
-        return 0;
-      } else {
-        int const def_level = static_cast<int>(def[value_count + t]);
-        return (def_level >= max_def_level) ? 1 : 0;
-      }
-    }();
+    int const is_valid = (t >= batch_size) ? 0 : ((def[value_count + t] >= max_def_level) ? 1 : 0);
 
     // thread and block validity count
     using block_scan = cub::BlockScan<int, decode_block_size>;
@@ -362,13 +355,7 @@ __device__ int update_validity_and_row_indices_nested(
     int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
 
     // definition level
-    int const d = [&]() {
-      if (t >= batch_size) {
-        return -1;
-      } else {
-        return static_cast<int>(def[value_count + t]);
-      }
-    }();
+    int const def_level = (t >= batch_size) ? -1 : def[value_count + t];
 
     int const thread_value_count = t;
     int const block_value_count  = batch_size;
@@ -387,7 +374,7 @@ __device__ int update_validity_and_row_indices_nested(
     for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
       auto& ni = s->nesting_info[d_idx];
 
-      int const is_valid = ((d >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
+      int const is_valid = ((def_level >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
 
       // thread and block validity count
       using block_scan = cub::BlockScan<int, decode_block_size>;
@@ -499,14 +486,7 @@ __device__ int update_validity_and_row_indices_flat(
     int const in_row_bounds = (row_index < last_row);
 
     // use definition level & row bounds to determine if is valid
-    int const is_valid = [&]() {
-      if (t >= batch_size) {
-        return 0;
-      } else {
-        int const def_level = static_cast<int>(def[value_count + t]);
-        return ((def_level > 0) && in_row_bounds) ? 1 : 0;
-      }
-    }();
+    int const is_valid = ((t >= batch_size) || !in_row_bounds) ? 0 : ((def[value_count + t] > 0) ? 1 : 0);
 
     // thread and block validity count
     using block_scan = cub::BlockScan<int, decode_block_size>;
@@ -620,13 +600,13 @@ __device__ int update_validity_and_row_indices_lists(int32_t target_value_count,
     auto const [def_level, start_depth, end_depth] = [&]() {
       if (!within_batch) { return cuda::std::make_tuple(-1, -1, -1); }
 
-      int const rep_level   = static_cast<int>(rep[value_count + t]);
+      auto const rep_level = rep[value_count + t];
       int const start_depth = s->nesting_info[rep_level].start_depth;
 
       if constexpr (!nullable) {
         return cuda::std::make_tuple(-1, start_depth, max_depth);
       } else {
-        int const def_level = static_cast<int>(def[value_count + t]);
+        int const def_level = def[value_count + t];
         return cuda::std::make_tuple(
           def_level, start_depth, s->nesting_info[def_level].end_depth);
       }

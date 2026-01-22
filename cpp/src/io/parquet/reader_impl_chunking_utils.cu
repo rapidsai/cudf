@@ -858,11 +858,8 @@ struct compute_page_string_offset_size {
     // Fixed length byte array: Offsets are fixed, no need to allocate offset buffer
     if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
 
-    // Determine how many values need offsets, respecting skip_rows and num_rows
-    // Use the common helper function to compute this
-    size_t const num_values =
-      cudf::io::parquet::detail::compute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
-
+    // Determine how many values need offsets
+    size_t const num_values = compute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
     if (num_values == 0) { return 0; }
 
     // We need num_values + 1 offsets (one extra for the final offset)
@@ -876,8 +873,7 @@ struct compute_page_string_offset_size {
 /**
  * @brief Functor to compute the level decode buffer size needed for a page.
  *
- * This computes the memory needed to store decoded definition and repetition levels
- * for preprocessing. Uses the common compute_page_level_decode_sizes() function.
+ * This computes the memory needed to store definition and repetition levels. 
  */
  struct compute_page_level_decode_size {
   cudf::device_span<PageInfo const> pages;

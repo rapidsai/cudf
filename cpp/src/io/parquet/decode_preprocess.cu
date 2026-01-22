@@ -6,6 +6,7 @@
 #include "delta_binary.cuh"
 #include "io/utilities/column_buffer.hpp"
 #include "page_decode.cuh"
+#include "reader_impl_chunking_utils.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
@@ -281,11 +282,6 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     return;
   }
 
-  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
-  bool const should_process_def = is_nullable(s) && maybe_has_nulls(s);
-  level_t* const def = !should_process_def ? nullptr : 
-    reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-
   // in the trim pass, for anything with lists, we only need to fully process bounding pages (those
   // at the beginning or the end of the row bounds)
   if (!is_base_pass && !is_bounds_page(s, min_row, num_rows, has_repetition)) {
@@ -314,6 +310,11 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     }
     depth += blockDim.x;
   }
+
+  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  bool const should_process_def = is_nullable(s) && maybe_has_nulls(s);
+  level_t* const def = !should_process_def ? nullptr : 
+    reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
 
   if (!t) {
     s->page.skipped_values      = -1;
@@ -419,24 +420,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // Determine how many values need to be decoded
-  size_t num_values_to_decode = 0;    
-  if (has_repetition) {
-    // Must decode all values in all pages because we don't know the row boundaries for the pages
-    // until we decode the levels.
-    num_values_to_decode = pp->num_input_values;
-  } else {
-    size_t const page_start_row = chunks[pp->chunk_idx].start_row + pp->chunk_row;
-    size_t const page_end_row   = page_start_row + pp->num_rows;
-    size_t const pass_end_row   = min_row + num_rows;
-  
-    // if we are totally outside the range of the input, do nothing
-    if ((page_start_row >= pass_end_row) || (page_end_row <= min_row)) {
-      num_values_to_decode = 0;
-    } else {
-      // For non-list pages: must still decode the first rows because we need to count nulls.
-      num_values_to_decode = std::min(static_cast<size_t>(pp->num_rows), pass_end_row - page_start_row);
-    }
-  }
+  size_t num_to_decode = compute_page_num_values_in_range(*pp, chunks[pp->chunk_idx], min_row, num_rows);    
+  if (num_to_decode == 0) { return; }
 
   // Initialize the stream decoders
   bool const should_process_def = is_nullable(s) && maybe_has_nulls(s);
@@ -445,14 +430,14 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
                                           s->abs_lvl_start[level_type::DEFINITION],
                                           s->abs_lvl_end[level_type::DEFINITION],
                                           def,
-                                          num_values_to_decode);
+                                          num_to_decode);
   }
   if (has_repetition) {
     decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
                                           s->abs_lvl_start[level_type::REPETITION],
                                           s->abs_lvl_end[level_type::REPETITION],
                                           rep,
-                                          num_values_to_decode);
+                                          num_to_decode);
   }
   block.sync();
 
@@ -461,14 +446,14 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   // This is because we need to determine the number of non-null values we skipped. 
   // Note that for lists we haven't computed skipped_leaf_values yet; this is used as input for that. 
   if (has_repetition) {
-    decoders[level_type::REPETITION].decode_next(t, num_values_to_decode);
+    decoders[level_type::REPETITION].decode_next(t, num_to_decode);
   }
 
   //Must sync as shared variables in decode_next() are shared between decoders!!
   block.sync();
 
   if (should_process_def) {
-    decoders[level_type::DEFINITION].decode_next(t, num_values_to_decode);
+    decoders[level_type::DEFINITION].decode_next(t, num_to_decode);
   }
 }
 

@@ -266,14 +266,10 @@ void reader_impl::allocate_level_decode_space()
   auto const num_pages = subpass.pages.size();
   if (num_pages == 0) { return; }
 
-  // Note: Uses the common compute_page_level_decode_sizes() function defined in
-  // reader_impl_chunking_utils.cu, which is also used for chunking estimation.
-  // This ensures identical logic and accurate memory estimates.
-  
   std::vector<size_t> def_level_sizes(num_pages);
   std::vector<size_t> rep_level_sizes(num_pages);
 
-  // Loop over pages to compute sizes using the common function
+  // Loop over pages to compute sizes
   size_t total_memory_size = 0;
   for (size_t idx = 0; idx < num_pages; idx++) {
     auto const& p     = subpass.pages[idx];
@@ -689,9 +685,9 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   // figure out which kernels to run
   subpass.kernel_mask = get_aggregated_decode_kernel_mask(subpass.pages, _stream);
 
-  // Preprocess definition and repetition levels for all subpass pages
-  // This decodes all RLE levels in advance so they're available to compute_page_sizes and decode kernels
-  // We haven't determined subpass skip_rows & num_rows yet, so we use the pass values. 
+  // Decode definition and repetition levels for all subpass pages
+  // so they're available to compute_page_sizes and decode kernels. 
+  // We can't determine subpass skip_rows & num_rows yet, so we use the pass values. 
   detail::preprocess_levels(
     subpass.pages, pass.chunks, _subpass_page_mask, pass.skip_rows, pass.num_rows, 
     pass.level_type_size, _stream);
