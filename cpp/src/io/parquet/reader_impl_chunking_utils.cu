@@ -873,9 +873,9 @@ struct compute_page_string_offset_size {
 /**
  * @brief Functor to compute the level decode buffer size needed for a page.
  *
- * This computes the memory needed to store definition and repetition levels. 
+ * This computes the memory needed to store definition and repetition levels.
  */
- struct compute_page_level_decode_size {
+struct compute_page_level_decode_size {
   cudf::device_span<PageInfo const> pages;
   cudf::device_span<ColumnChunkDesc const> chunks;
   int level_type_size;
@@ -886,14 +886,13 @@ struct compute_page_string_offset_size {
   {
     size_t def_level_size = 0;
     size_t rep_level_size = 0;
-    compute_page_level_decode_sizes(
-      pages[page_idx],
-      chunks[pages[page_idx].chunk_idx],
-      level_type_size,
-      skip_rows,
-      num_rows,
-      def_level_size,
-      rep_level_size);
+    compute_page_level_decode_sizes(pages[page_idx],
+                                    chunks[pages[page_idx].chunk_idx],
+                                    level_type_size,
+                                    skip_rows,
+                                    num_rows,
+                                    def_level_size,
+                                    rep_level_size);
     return def_level_size + rep_level_size;
   }
 };
@@ -919,20 +918,21 @@ rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkD
 }
 
 rmm::device_uvector<size_t> compute_level_decode_sizes(device_span<ColumnChunkDesc const> chunks,
-                                                        device_span<PageInfo const> pages,
-                                                        int level_type_size,
-                                                        size_t skip_rows,
-                                                        size_t num_rows,
-                                                        rmm::cuda_stream_view stream)
+                                                       device_span<PageInfo const> pages,
+                                                       int level_type_size,
+                                                       size_t skip_rows,
+                                                       size_t num_rows,
+                                                       rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<size_t> level_decode_sizes(pages.size(), stream);
 
   auto iter = thrust::make_counting_iterator(size_t{0});
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    iter,
-                    iter + pages.size(),
-                    level_decode_sizes.begin(),
-                    compute_page_level_decode_size{pages, chunks, level_type_size, skip_rows, num_rows});
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    iter,
+    iter + pages.size(),
+    level_decode_sizes.begin(),
+    compute_page_level_decode_size{pages, chunks, level_type_size, skip_rows, num_rows});
 
   return level_decode_sizes;
 }

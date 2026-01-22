@@ -273,12 +273,8 @@ void reader_impl::setup_next_subpass(read_mode mode)
         compute_decompression_scratch_sizes(pass.chunks, pass.pages, _stream);
       pass.string_offset_sizes = compute_string_offset_sizes(
         pass.chunks, pass.pages, pass.skip_rows, pass.num_rows, _stream);
-      pass.level_decode_sizes = compute_level_decode_sizes(pass.chunks,
-                                                            pass.pages,
-                                                            pass.level_type_size,
-                                                            pass.skip_rows,
-                                                            pass.num_rows,
-                                                            _stream);
+      pass.level_decode_sizes = compute_level_decode_sizes(
+        pass.chunks, pass.pages, pass.level_type_size, pass.skip_rows, pass.num_rows, _stream);
     }
     include_scratch_size(pass.decomp_scratch_sizes, c_info, _stream);
     include_scratch_size(pass.string_offset_sizes, c_info, _stream);

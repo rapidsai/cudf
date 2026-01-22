@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -235,7 +235,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
  * @param skip_rows Starting row for the pass
  * @param num_rows Number of rows to read in the pass
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @returns A vector of size_t values, one for each page, indicating the size needed for string offsets
+ * @returns A vector of size_t values, one for each page, indicating the size needed for string
+ * offsets
  */
 rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkDesc const> chunks,
                                                         device_span<PageInfo const> pages,
@@ -248,21 +249,22 @@ rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkD
  *
  * This computes the memory needed to store decoded definition and repetition levels
  * during the preprocessing step. This memory is used by preprocess_levels_kernel().
- * 
+ *
  * @param chunks List of column chunk descriptors
  * @param pages List of page information
  * @param level_type_size Size in bytes for each level value
  * @param skip_rows Starting row for the pass
  * @param num_rows Number of rows to read in the pass
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @returns A vector of size_t values, one for each page, indicating the size needed for level decode preprocessing
+ * @returns A vector of size_t values, one for each page, indicating the size needed for level
+ * decode preprocessing
  */
 rmm::device_uvector<size_t> compute_level_decode_sizes(device_span<ColumnChunkDesc const> chunks,
-                                                        device_span<PageInfo const> pages,
-                                                        int level_type_size,
-                                                        size_t skip_rows,
-                                                        size_t num_rows,
-                                                        rmm::cuda_stream_view stream);
+                                                       device_span<PageInfo const> pages,
+                                                       int level_type_size,
+                                                       size_t skip_rows,
+                                                       size_t num_rows,
+                                                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Computes the level decode buffer sizes for a single page.
@@ -280,12 +282,12 @@ rmm::device_uvector<size_t> compute_level_decode_sizes(device_span<ColumnChunkDe
  */
 template <typename PageType, typename ChunkType>
 CUDF_HOST_DEVICE inline void compute_page_level_decode_sizes(PageType const& page,
-                                                              ChunkType const& chunk,
-                                                              int level_type_size,
-                                                              size_t skip_rows,
-                                                              size_t num_rows,
-                                                              size_t& def_level_size,
-                                                              size_t& rep_level_size);
+                                                             ChunkType const& chunk,
+                                                             int level_type_size,
+                                                             size_t skip_rows,
+                                                             size_t num_rows,
+                                                             size_t& def_level_size,
+                                                             size_t& rep_level_size);
 
 /**
  * @brief Add the cost of decompression codec scratch space to the per-page cumulative
@@ -712,9 +714,9 @@ struct copy_subpass_page {
  * @return Number of values to process (0 if page is outside the row range)
  */
 CUDF_HOST_DEVICE inline size_t compute_page_num_values_in_range(PageInfo const& page,
-                                                                 ColumnChunkDesc const& chunk,
-                                                                 size_t skip_rows,
-                                                                 size_t num_rows)
+                                                                ColumnChunkDesc const& chunk,
+                                                                size_t skip_rows,
+                                                                size_t num_rows)
 {
   // Check if this page has lists (repetition levels)
   bool const has_repetition = chunk.max_level[level_type::REPETITION] > 0;
@@ -726,7 +728,7 @@ CUDF_HOST_DEVICE inline size_t compute_page_num_values_in_range(PageInfo const& 
   }
 
   // For non-list pages: can optimize based on skip_rows and num_rows
-  size_t const page_rows = page.num_rows;
+  size_t const page_rows      = page.num_rows;
   size_t const page_start_row = chunk.start_row + page.chunk_row;
   size_t const page_end_row   = page_start_row + page_rows;
   size_t const pass_end_row   = skip_rows + num_rows;
@@ -740,12 +742,12 @@ CUDF_HOST_DEVICE inline size_t compute_page_num_values_in_range(PageInfo const& 
 }
 
 CUDF_HOST_DEVICE inline void compute_page_level_decode_sizes(PageInfo const& page,
-                                                              ColumnChunkDesc const& chunk,
-                                                              int level_type_size,
-                                                              size_t skip_rows,
-                                                              size_t num_rows,
-                                                              size_t& def_level_size,
-                                                              size_t& rep_level_size)
+                                                             ColumnChunkDesc const& chunk,
+                                                             int level_type_size,
+                                                             size_t skip_rows,
+                                                             size_t num_rows,
+                                                             size_t& def_level_size,
+                                                             size_t& rep_level_size)
 {
   def_level_size = 0;
   rep_level_size = 0;
@@ -761,8 +763,7 @@ CUDF_HOST_DEVICE inline void compute_page_level_decode_sizes(PageInfo const& pag
   if (!has_repetition && !has_definition) { return; }
 
   // Determine how many values need to be decoded using the common helper
-  size_t const num_to_decode =
-    compute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
+  size_t const num_to_decode = compute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
 
   // Compute space for definition levels
   def_level_size = has_definition ? num_to_decode * level_type_size : 0;

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -74,7 +74,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   // Must be evaluated after setup_local_page_info
-  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const has_repetition       = s->col.max_level[level_type::REPETITION] > 0;
   bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
   // Write list offsets and exit if the page does not need to be decoded
@@ -96,9 +96,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
   // Get the level decode buffers for this page
-  PageInfo* pp          = &pages[page_idx];
-  level_t* const def    = !should_process_nulls ? nullptr : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  level_t* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  PageInfo* pp       = &pages[page_idx];
+  level_t* const def = !should_process_nulls
+                         ? nullptr
+                         : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
@@ -278,7 +280,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   // Must be evaluated after setup_local_page_info
-  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const has_repetition       = s->col.max_level[level_type::REPETITION] > 0;
   bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
   // Write list offsets and exit if the page does not need to be decoded
@@ -339,9 +341,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   // Get the level decode buffers for this page
-  PageInfo* pp          = &pages[page_idx];
-  level_t* const def    = !should_process_nulls ? nullptr : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  level_t* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  PageInfo* pp       = &pages[page_idx];
+  level_t* const def = !should_process_nulls
+                         ? nullptr
+                         : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   auto const is_decimal =
     s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;

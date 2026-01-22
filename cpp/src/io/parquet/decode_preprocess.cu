@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,7 +23,7 @@ namespace cg = cooperative_groups;
 namespace {
 
 // # of threads we're decoding with
-constexpr int preprocess_block_size = 512;
+constexpr int preprocess_block_size   = 512;
 constexpr int level_decode_block_size = 128;
 
 using unused_state_buf = page_state_buffers_s<0, 0, 0>;
@@ -313,8 +313,9 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
   bool const should_process_def = is_nullable(s) && maybe_has_nulls(s);
-  level_t* const def = !should_process_def ? nullptr : 
-    reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t* const def            = !should_process_def
+                                    ? nullptr
+                                    : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
 
   if (!t) {
     s->page.skipped_values      = -1;
@@ -374,8 +375,11 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
  */
 template <typename level_t, int level_decode_block_size>
 CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
-  preprocess_levels_kernel(PageInfo* pages, device_span<ColumnChunkDesc const> chunks, cudf::device_span<bool const> page_mask,
-    size_t min_row, size_t num_rows)
+  preprocess_levels_kernel(PageInfo* pages,
+                           device_span<ColumnChunkDesc const> chunks,
+                           cudf::device_span<bool const> page_mask,
+                           size_t min_row,
+                           size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -386,18 +390,11 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   PageInfo* pp          = &pages[page_idx];
 
   // Return early if this page is pruned
-  if (not page_mask.empty() and not page_mask[page_idx]) {
-    return;
-  }
+  if (not page_mask.empty() and not page_mask[page_idx]) { return; }
 
   // setup page info - use all_types_filter since we need to preprocess levels for all page types
-  if (!setup_local_page_info(s,
-                             pp,
-                             chunks,
-                             min_row, 
-                             num_rows,
-                             all_types_filter{},
-                             page_processing_stage::PREPROCESS)) {
+  if (!setup_local_page_info(
+        s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
     return;
   }
 
@@ -406,7 +403,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
 
   // the required number of runs in shared memory we will need to provide the
   // rle_stream object
-  constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<level_decode_block_size>();
+  constexpr int rle_run_buffer_size =
+    rle_stream_required_run_buffer_size<level_decode_block_size>();
 
   // the level stream decoders
   __shared__ rle_run def_runs[rle_run_buffer_size];
@@ -420,7 +418,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // Determine how many values need to be decoded
-  size_t num_to_decode = compute_page_num_values_in_range(*pp, chunks[pp->chunk_idx], min_row, num_rows);    
+  size_t num_to_decode =
+    compute_page_num_values_in_range(*pp, chunks[pp->chunk_idx], min_row, num_rows);
   if (num_to_decode == 0) { return; }
 
   // Initialize the stream decoders
@@ -441,20 +440,17 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   }
   block.sync();
 
-  // Decode levels for this page up to the last row needed. 
-  // If skipping the first rows, we still need to decode their levels. 
-  // This is because we need to determine the number of non-null values we skipped. 
-  // Note that for lists we haven't computed skipped_leaf_values yet; this is used as input for that. 
-  if (has_repetition) {
-    decoders[level_type::REPETITION].decode_next(t, num_to_decode);
-  }
+  // Decode levels for this page up to the last row needed.
+  // If skipping the first rows, we still need to decode their levels.
+  // This is because we need to determine the number of non-null values we skipped.
+  // Note that for lists we haven't computed skipped_leaf_values yet; this is used as input for
+  // that.
+  if (has_repetition) { decoders[level_type::REPETITION].decode_next(t, num_to_decode); }
 
-  //Must sync as shared variables in decode_next() are shared between decoders!!
+  // Must sync as shared variables in decode_next() are shared between decoders!!
   block.sync();
 
-  if (should_process_def) {
-    decoders[level_type::DEFINITION].decode_next(t, num_to_decode);
-  }
+  if (should_process_def) { decoders[level_type::DEFINITION].decode_next(t, num_to_decode); }
 }
 
 }  // anonymous namespace

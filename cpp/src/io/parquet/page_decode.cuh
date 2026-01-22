@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -116,43 +116,43 @@ struct null_count_back_copier {
  * @param s Page state
  * @return True if the page is nullable (max definition level > 0)
  */
- __device__ inline bool is_nullable(page_state_s* s)
- {
-   auto const lvl           = level_type::DEFINITION;
-   auto const max_def_level = s->col.max_level[lvl];
-   return max_def_level > 0;
- }
- 
- /**
-  * @brief For a nullable page, check if it could have nulls
-  *
-  * This function performs a quick check based on the initial RLE run to determine
-  * if the page could potentially contain null values. It returns true if:
-  * - The initial run is a literal run (could contain mixed values)
-  * - The repeated run count doesn't match the page's input value count
-  * - The repeated run value indicates nulls (not equal to max definition level)
-  *
-  * @param s Page state
-  * @return True if the page could contain null values
-  */
- __device__ inline bool maybe_has_nulls(page_state_s* s)
- {
-   auto const lvl      = level_type::DEFINITION;
-   auto const init_run = s->initial_rle_run[lvl];
-   // literal runs, lets assume they could hold nulls
-   if (is_literal_run(init_run)) { return true; }
- 
-   // repeated run with number of items in the run not equal
-   // to the rows in the page, assume that means we could have nulls
-   if (s->page.num_input_values != (init_run >> 1)) { return true; }
- 
-   auto const lvl_bits = s->col.level_bits[lvl];
-   auto const run_val  = lvl_bits == 0 ? 0 : s->initial_rle_value[lvl];
- 
-   // the encoded repeated value isn't valid, we have (all) nulls
-   return run_val != s->col.max_level[lvl];
- }
- 
+__device__ inline bool is_nullable(page_state_s* s)
+{
+  auto const lvl           = level_type::DEFINITION;
+  auto const max_def_level = s->col.max_level[lvl];
+  return max_def_level > 0;
+}
+
+/**
+ * @brief For a nullable page, check if it could have nulls
+ *
+ * This function performs a quick check based on the initial RLE run to determine
+ * if the page could potentially contain null values. It returns true if:
+ * - The initial run is a literal run (could contain mixed values)
+ * - The repeated run count doesn't match the page's input value count
+ * - The repeated run value indicates nulls (not equal to max definition level)
+ *
+ * @param s Page state
+ * @return True if the page could contain null values
+ */
+__device__ inline bool maybe_has_nulls(page_state_s* s)
+{
+  auto const lvl      = level_type::DEFINITION;
+  auto const init_run = s->initial_rle_run[lvl];
+  // literal runs, lets assume they could hold nulls
+  if (is_literal_run(init_run)) { return true; }
+
+  // repeated run with number of items in the run not equal
+  // to the rows in the page, assume that means we could have nulls
+  if (s->page.num_input_values != (init_run >> 1)) { return true; }
+
+  auto const lvl_bits = s->col.level_bits[lvl];
+  auto const run_val  = lvl_bits == 0 ? 0 : s->initial_rle_value[lvl];
+
+  // the encoded repeated value isn't valid, we have (all) nulls
+  return run_val != s->col.max_level[lvl];
+}
+
 /**
  * @brief Test if the given page is in a string column
  */
@@ -637,7 +637,7 @@ inline __device__ void get_nesting_bounds(int& start_depth,
   d           = -1;
   if (input_value_count + t < target_input_value_count) {
     int const index = input_value_count + t;
-    d = (def != nullptr) ? def[index] : s->col.max_level[level_type::DEFINITION];
+    d               = (def != nullptr) ? def[index] : s->col.max_level[level_type::DEFINITION];
 
     // if we have repetition (there are list columns involved) we have to
     // bound what nesting levels we apply values to
@@ -901,7 +901,6 @@ __device__ void gpuDecodeLevels(
   auto cur_leaf_count = target_leaf_count;
   while (s->error == 0 && s->nz_count < target_leaf_count &&
          s->input_value_count < s->num_input_values) {
-
     // because the rep and def streams are encoded separately, we cannot request an exact
     // # of values to be decoded at once. we can only process the lowest # of decoded rep/def
     // levels we get.
@@ -1364,10 +1363,10 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
       s->set_error_code(decode_error::EMPTY_PAGE);
     }
 
-    s->nz_count                          = 0;
-    s->num_input_values                  = s->page.num_input_values;
-    s->dict_pos                          = 0;
-    s->src_pos                           = 0;
+    s->nz_count         = 0;
+    s->num_input_values = s->page.num_input_values;
+    s->dict_pos         = 0;
+    s->src_pos          = 0;
 
     // for flat hierarchies, we can't know how many leaf values to skip unless we do a full
     // preprocess of the definition levels (since nulls will have no actual decodable value, there

@@ -46,11 +46,7 @@ constexpr int delta_length_block_size  = 32;
  */
 template <typename level_t>
 __device__ cuda::std::pair<int, int> page_bounds(
-  page_state_s* const s,
-  size_t min_row,
-  size_t num_rows,
-  bool is_bounds_pg,
-  bool has_repetition)
+  page_state_s* const s, size_t min_row, size_t num_rows, bool is_bounds_pg, bool has_repetition)
 {
   using block_reduce = cub::BlockReduce<int, preprocess_block_size>;
   using block_scan   = cub::BlockScan<int, preprocess_block_size>;
@@ -136,7 +132,6 @@ __device__ cuda::std::pair<int, int> page_bounds(
 
     int processed = 0;
     while (processed < s->page.num_input_values) {
-
       if (has_repetition && (processed == 0) && (rep_decode[0] != 0)) {
         // special case where page does not begin at a row boundary
         end_row++;  // need to finish off the previous row
@@ -145,14 +140,17 @@ __device__ cuda::std::pair<int, int> page_bounds(
 
       // get absolute thread row index
       int idx_t = processed + t;
-      int is_new_row = idx_t < s->page.num_input_values && (!has_repetition || rep_decode[idx_t] == 0);
+      int is_new_row =
+        idx_t < s->page.num_input_values && (!has_repetition || rep_decode[idx_t] == 0);
       int thread_row_count, block_row_count;
       block_scan(temp_storage.scan_storage)
         .InclusiveSum(is_new_row, thread_row_count, block_row_count);
       __syncthreads();
 
       // get absolute thread leaf index
-      int const is_new_leaf = should_process_def ? idx_t < s->page.num_input_values && (def_decode[idx_t] >= max_def) : idx_t < s->page.num_input_values;
+      int const is_new_leaf = should_process_def
+                                ? idx_t < s->page.num_input_values && (def_decode[idx_t] >= max_def)
+                                : idx_t < s->page.num_input_values;
       int thread_leaf_count, block_leaf_count;
       block_scan(temp_storage.scan_storage)
         .InclusiveSum(is_new_leaf, thread_leaf_count, block_leaf_count);
@@ -162,8 +160,8 @@ __device__ cuda::std::pair<int, int> page_bounds(
       if (!skipped_values_set && row_count + block_row_count > begin_row) {
         // if this thread is in row bounds
         int const row_index = thread_row_count + row_count - 1;
-          int const in_row_bounds =
-            idx_t < s->page.num_input_values && (row_index >= begin_row) && (row_index < end_row);
+        int const in_row_bounds =
+          idx_t < s->page.num_input_values && (row_index >= begin_row) && (row_index < end_row);
 
         int local_count, global_count;
         block_scan(temp_storage.scan_storage)
@@ -228,7 +226,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
   // already filtered out unwanted pages, so need to count all non-null values in this page
   else if (should_process_def) {
     int num_nulls = 0;
-    int idx_t = t;
+    int idx_t     = t;
     while (idx_t < s->page.num_input_values) {
       if (def_decode[idx_t] < max_def) { num_nulls++; }
       idx_t += preprocess_block_size;
@@ -246,7 +244,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
     if (t == 0) {
       pp->num_nulls  = 0;
       pp->num_valids = pp->num_input_values;
-    }    
+    }
   }
 
   return {start_value, end_value};

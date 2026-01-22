@@ -276,12 +276,12 @@ void reader_impl::allocate_level_decode_space()
     auto const& chunk = pass.chunks[p.chunk_idx];
 
     compute_page_level_decode_sizes(p,
-                                                                chunk,
-                                                                pass.level_type_size,
-                                                                pass.skip_rows,
-                                                                pass.num_rows,
-                                                                def_level_sizes[idx],
-                                                                rep_level_sizes[idx]);
+                                    chunk,
+                                    pass.level_type_size,
+                                    pass.skip_rows,
+                                    pass.num_rows,
+                                    def_level_sizes[idx],
+                                    rep_level_sizes[idx]);
 
     total_memory_size += def_level_sizes[idx] + rep_level_sizes[idx];
   }
@@ -686,11 +686,15 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   subpass.kernel_mask = get_aggregated_decode_kernel_mask(subpass.pages, _stream);
 
   // Decode definition and repetition levels for all subpass pages
-  // so they're available to compute_page_sizes and decode kernels. 
-  // We can't determine subpass skip_rows & num_rows yet, so we use the pass values. 
-  detail::preprocess_levels(
-    subpass.pages, pass.chunks, _subpass_page_mask, pass.skip_rows, pass.num_rows, 
-    pass.level_type_size, _stream);
+  // so they're available to compute_page_sizes and decode kernels.
+  // We can't determine subpass skip_rows & num_rows yet, so we use the pass values.
+  detail::preprocess_levels(subpass.pages,
+                            pass.chunks,
+                            _subpass_page_mask,
+                            pass.skip_rows,
+                            pass.num_rows,
+                            pass.level_type_size,
+                            _stream);
 
   // iterate over all input columns and determine if they contain lists.
   // TODO: we could do this once at the file level instead of every time we get in here. the set of

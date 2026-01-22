@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "page_data.cuh"
@@ -283,8 +283,10 @@ __device__ inline void decode_fixed_width_split_values(
  * @return Maximum depth valid count after processing
  */
 template <int decode_block_size, typename level_t, bool is_nested>
-__device__ int skip_validity_and_row_indices_nonlist(
-  int32_t target_value_count, page_state_s* s, level_t const* const def, int t)
+__device__ int skip_validity_and_row_indices_nonlist(int32_t target_value_count,
+                                                     page_state_s* s,
+                                                     level_t const* const def,
+                                                     int t)
 {
   int const max_def_level = [&]() {
     if constexpr (is_nested) {
@@ -295,7 +297,7 @@ __device__ int skip_validity_and_row_indices_nonlist(
   }();
 
   int max_depth_valid_count = 0;
-  int value_count = 0;
+  int value_count           = 0;
   while (value_count < target_value_count) {
     int const batch_size = min(decode_block_size, target_value_count - value_count);
 
@@ -486,7 +488,8 @@ __device__ int update_validity_and_row_indices_flat(
     int const in_row_bounds = (row_index < last_row);
 
     // use definition level & row bounds to determine if is valid
-    int const is_valid = ((t >= batch_size) || !in_row_bounds) ? 0 : ((def[value_count + t] > 0) ? 1 : 0);
+    int const is_valid =
+      ((t >= batch_size) || !in_row_bounds) ? 0 : ((def[value_count + t] > 0) ? 1 : 0);
 
     // thread and block validity count
     using block_scan = cub::BlockScan<int, decode_block_size>;
@@ -600,15 +603,14 @@ __device__ int update_validity_and_row_indices_lists(int32_t target_value_count,
     auto const [def_level, start_depth, end_depth] = [&]() {
       if (!within_batch) { return cuda::std::make_tuple(-1, -1, -1); }
 
-      auto const rep_level = rep[value_count + t];
+      auto const rep_level  = rep[value_count + t];
       int const start_depth = s->nesting_info[rep_level].start_depth;
 
       if constexpr (!nullable) {
         return cuda::std::make_tuple(-1, start_depth, max_depth);
       } else {
         int const def_level = def[value_count + t];
-        return cuda::std::make_tuple(
-          def_level, start_depth, s->nesting_info[def_level].end_depth);
+        return cuda::std::make_tuple(def_level, start_depth, s->nesting_info[def_level].end_depth);
       }
     }();
 
@@ -874,17 +876,16 @@ __device__ void skip_ahead_in_decoding(page_state_s* s,
 
   // Non-lists
   int const first_row = s->first_row;
-  if (first_row <= 0) { return; } //Nothing to skip
+  if (first_row <= 0) { return; }  // Nothing to skip
 
-  // Count the number of valids we're skipping. 
+  // Count the number of valids we're skipping.
   processed_count = first_row;
   if (!should_process_nulls) {
     valid_count = first_row;
   } else {
-    valid_count = skip_validity_and_row_indices_nonlist<decode_block_size_t,
-                                                        level_t,
-                                                        has_nesting_t>(
-      first_row, s, def, t);
+    valid_count =
+      skip_validity_and_row_indices_nonlist<decode_block_size_t, level_t, has_nesting_t>(
+        first_row, s, def, t);
   }
 
   if constexpr (has_dict_t) {
@@ -1064,8 +1065,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // shared buffer. all shared memory is suballocated out of here
   constexpr int rle_run_buffer_bytes =
     cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run), size_t{16});
-  constexpr int shared_buf_size =
-    cuda::std::max(1, rle_run_buffer_bytes * (static_cast<int>(has_dict_t) + static_cast<int>(has_bools_t)));
+  constexpr int shared_buf_size = cuda::std::max(
+    1, rle_run_buffer_bytes * (static_cast<int>(has_dict_t) + static_cast<int>(has_bools_t)));
   __shared__ __align__(16) uint8_t shared_buf[shared_buf_size];
 
   // setup all shared memory buffers
@@ -1076,11 +1077,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   auto bool_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
 
-
   // get the level data
   level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
   level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
-  
+
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
     dict_stream.init(
@@ -1140,7 +1140,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
     // only need to process definition levels if this is a nullable column
     if (should_process_nulls) {
-
       if constexpr (has_lists_t) {
         next_valid_count =
           update_validity_and_row_indices_lists<decode_block_size_t, true, level_t>(
