@@ -405,6 +405,7 @@ add_library(
   src/dictionary/dictionary_column_view.cpp
   src/dictionary/dictionary_factories.cu
   src/dictionary/encode.cu
+  src/dictionary/match_keys.cu
   src/dictionary/remove_keys.cu
   src/dictionary/replace.cu
   src/dictionary/search.cu

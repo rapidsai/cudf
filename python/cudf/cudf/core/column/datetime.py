@@ -372,7 +372,7 @@ class DatetimeColumn(TemporalBaseColumn):
         ],
         freq: str,
     ) -> ColumnBase:
-        # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
+        # https://pandas.pydata.org/pandas-docs/version/2.3.3/reference/api/pandas.Timedelta.resolution_string.html
         old_to_new_freq_map = {
             "H": "h",
             "N": "ns",
