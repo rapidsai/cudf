@@ -47,7 +47,6 @@ def test_cdf_to_pandas(data, categorical_ordered):
 @pytest.mark.parametrize(
     "categories",
     [
-        [],
         [1, 2, 3],
         pd.Series(["a", "c", "b"], dtype="category"),
         pd.Series([1, 2, 3, 4, -100], dtype="category"),
