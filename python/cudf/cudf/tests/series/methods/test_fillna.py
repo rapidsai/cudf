@@ -173,7 +173,7 @@ def test_timedelta_fillna(data, timedelta_types_as_str, fill_value):
 )
 def test_fillna_decimal(gsr_data, dtype, fill_value, inplace):
     gsr = cudf.Series(gsr_data).astype(dtype)
-    psr = gsr.to_pandas()
+    psr = gsr.to_pandas(arrow_type=True)
     fill_value = fill_value()
     if isinstance(fill_value, cudf.Series):
         p_fill_value = fill_value.to_pandas()
@@ -381,7 +381,7 @@ def test_fillna_datetime(psr, fill_value, inplace):
     "psr",
     [
         pd.Series(["a", "b", "c", "d"]),
-        pd.Series([None] * 4, dtype="object"),
+        pd.Series([None] * 4, dtype="str"),
         pd.Series(["z", None, "z", None]),
         pd.Series(["x", "y", None, None, None]),
         pd.Series([None, None, None, "i", "P"]),
