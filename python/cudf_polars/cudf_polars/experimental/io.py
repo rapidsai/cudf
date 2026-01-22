@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition IO Logic."""
 
@@ -502,6 +502,17 @@ def _sink_to_file(
     return df if finalize else True
 
 
+def _finalize_file_sink(
+    kind: str,
+    writer_state: Any,
+    df: DataFrame,
+) -> DataFrame:
+    """Finalize the file sink by closing the writer."""
+    if kind == "Parquet" and writer_state is not None:
+        writer_state.close([])
+    return df.slice((0, 0))
+
+
 def _file_sink_graph(
     ir: StreamingSink,
     partition_info: MutableMapping[IR, PartitionInfo],
@@ -528,15 +539,23 @@ def _file_sink_graph(
             sink.kind,
             sink.path,
             sink.options,
-            i == count - 1,  # Whether to finalize
+            False,  # Never finalize in individual tasks
             None if i == 0 else (sink_name, i - 1),  # Writer state
             (child_name, i),
         )
         for i in range(count)
     }
 
-    # Make sure final tasks point to empty DataFrame output
-    graph.update({(name, i): (sink_name, count - 1) for i in range(count)})
+    # Finalize task closes the writer after all chunks are written
+    graph[(sink_name, "finalize")] = (
+        _finalize_file_sink,
+        sink.kind,
+        (sink_name, count - 1),  # Writer state from last task
+        (child_name, count - 1),  # Last source df for creating empty result
+    )
+
+    # Make sure final tasks point to finalize task
+    graph.update({(name, i): (sink_name, "finalize") for i in range(count)})
     return graph
 
 
