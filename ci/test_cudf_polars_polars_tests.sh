@@ -49,7 +49,10 @@ sed -i '/PydanticDeprecatedSince212/a \    warnings.simplefilter("ignore", Depre
 sed -i 's/^aiosqlite/aiosqlite>=0.21.0,<0.22.0/' polars/py-polars/requirements-dev.txt
 
 # Remove upper bound on pandas once we support 3.0.0+
-sed -i 's/^pandas/pandas>=2.0,<2.4.0/' polars/py-polars/requirements-dev.txt
+sed -i 's/^pandas$/pandas>=2.0,<2.4.0/' polars/py-polars/requirements-dev.txt
+
+# Remove upper bound on pandas-stubs once we support 3.0.0+
+sed -i 's/^pandas-stubs/pandas-stubs<3/' polars/py-polars/requirements-dev.txt
 
 # Pyparsing release 3.3.0 deprecates the enablePackrat method, which is used by the
 # version of pyiceberg that polars is currently pinned to. We can remove this skip
