@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,11 +18,13 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_vector.hpp>
 
+#include <cuda/std/span>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
 #include <cstddef>
 #include <cstring>
+#include <span>
 #include <string>
 
 using cudf::device_span;
@@ -216,6 +218,16 @@ TEST(SpanTest, CanConstructFromHostContainers)
   (void)host_span<int const>(h_vector_c);
 }
 
+TEST(SpanTest, CanUseStdSpan)
+{
+  auto message            = create_hello_world_message();
+  auto const message_span = host_span<char>(message.data(), message.size());
+
+  std::span std_span = message_span;
+  EXPECT_EQ(std_span.data(), message_span.data());
+  EXPECT_EQ(std_span.size(), message_span.size());
+}
+
 // This test is the only place in libcudf's test suite where using a
 // thrust::device_vector (and therefore the CUDA default stream) is acceptable
 // since we are explicitly testing conversions from thrust::device_vector.
@@ -250,6 +262,18 @@ TEST(SpanTest, CanUseDeviceSpan)
   simple_device_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(d_span);
 
   ASSERT_TRUE(d_message.element(0, cudf::get_default_stream()));
+}
+
+TEST(SpanTest, CanUseCudaStdSpan)
+{
+  auto d_message = cudf::detail::make_zeroed_device_uvector_async<int>(
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+
+  auto const d_span = device_span<int const>(d_message.data(), d_message.size());
+
+  cuda::std::span std_span = d_span;
+  EXPECT_EQ(std_span.data(), d_span.data());
+  EXPECT_EQ(std_span.size(), d_span.size());
 }
 
 class MdSpanTest : public cudf::test::BaseFixture {};
