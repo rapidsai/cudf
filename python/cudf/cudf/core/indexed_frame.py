@@ -2981,11 +2981,17 @@ class IndexedFrame(Frame):
         )
         return self._from_columns_like_self(
             [
-                ColumnBase.from_pylibcudf(col)
-                for col in copying.gather(
+                ColumnBase.from_pylibcudf(col)._with_type_metadata(
+                    orig_col.dtype
+                )
+                for col, orig_col in zip(
+                    copying.gather(
+                        columns_to_gather,
+                        gather_map.column,
+                        nullify=gather_map.nullify,
+                    ),
                     columns_to_gather,
-                    gather_map.column,
-                    nullify=gather_map.nullify,
+                    strict=True,
                 )
             ],
             self._column_names,
