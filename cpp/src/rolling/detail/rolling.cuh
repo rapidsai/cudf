@@ -104,9 +104,9 @@ struct rolling_preprocessor {
 
 // Helper for MIN/MAX preprocessing - strings/structs use ARG variants
 template <typename MakeArgAggFn, typename MakeDirectAggFn>
-inline std::vector<std::unique_ptr<aggregation>> preprocess_minmax(data_type col_type,
-                                                                   MakeArgAggFn make_arg_agg,
-                                                                   MakeDirectAggFn make_direct_agg)
+std::vector<std::unique_ptr<aggregation>> preprocess_minmax(data_type col_type,
+                                                            MakeArgAggFn make_arg_agg,
+                                                            MakeDirectAggFn make_direct_agg)
 {
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(col_type.id() == type_id::STRING || col_type.id() == type_id::STRUCT
@@ -119,14 +119,14 @@ inline std::vector<std::unique_ptr<aggregation>> preprocess_minmax(data_type col
 // the rolling operation on a ARG(MIN/MAX) aggregation to generate indices instead of values.
 // Then a second pass uses those indices to gather the final strings/structs.
 template <>
-inline std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator()<aggregation::MIN>(
+std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator()<aggregation::MIN>(
   data_type col_type, aggregation const&) const
 {
   return preprocess_minmax(col_type, make_argmin_aggregation<>, make_min_aggregation<>);
 }
 
 template <>
-inline std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator()<aggregation::MAX>(
+std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator()<aggregation::MAX>(
   data_type col_type, aggregation const&) const
 {
   return preprocess_minmax(col_type, make_argmax_aggregation<>, make_max_aggregation<>);
@@ -135,14 +135,14 @@ inline std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator(
 // COLLECT_LIST, COLLECT_SET, and NTH_ELEMENT aggregations do not perform a rolling operation.
 // They get processed entirely in the postprocessing step.
 template <>
-inline std::vector<std::unique_ptr<aggregation>>
+std::vector<std::unique_ptr<aggregation>>
 rolling_preprocessor::operator()<aggregation::COLLECT_LIST>(data_type, aggregation const&) const
 {
   return {};
 }
 
 template <>
-inline std::vector<std::unique_ptr<aggregation>>
+std::vector<std::unique_ptr<aggregation>>
 rolling_preprocessor::operator()<aggregation::COLLECT_SET>(data_type, aggregation const&) const
 {
   return {};
@@ -152,7 +152,7 @@ rolling_preprocessor::operator()<aggregation::COLLECT_SET>(data_type, aggregatio
 // STD aggregations depend on VARIANCE aggregation. Each element is applied
 // with square-root in the postprocessing step.
 template <>
-inline std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator()<aggregation::STD>(
+std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator()<aggregation::STD>(
   data_type, aggregation const& agg) const
 {
   // Dynamic cast needed due to virtual inheritance
@@ -164,18 +164,7 @@ inline std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator(
 
 // LEAD/LAG have custom behaviors for non fixed-width types - no rolling op, just postprocess.
 template <>
-inline std::vector<std::unique_ptr<aggregation>>
-rolling_preprocessor::operator()<aggregation::LEAD>(data_type col_type,
-                                                    aggregation const& agg) const
-{
-  if (!cudf::is_fixed_width(col_type)) { return {}; }
-  std::vector<std::unique_ptr<aggregation>> aggs;
-  aggs.push_back(agg.clone());
-  return aggs;
-}
-
-template <>
-inline std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator()<aggregation::LAG>(
+std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator()<aggregation::LEAD>(
   data_type col_type, aggregation const& agg) const
 {
   if (!cudf::is_fixed_width(col_type)) { return {}; }
@@ -185,7 +174,17 @@ inline std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator(
 }
 
 template <>
-inline std::vector<std::unique_ptr<aggregation>>
+std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator()<aggregation::LAG>(
+  data_type col_type, aggregation const& agg) const
+{
+  if (!cudf::is_fixed_width(col_type)) { return {}; }
+  std::vector<std::unique_ptr<aggregation>> aggs;
+  aggs.push_back(agg.clone());
+  return aggs;
+}
+
+template <>
+std::vector<std::unique_ptr<aggregation>>
 rolling_preprocessor::operator()<aggregation::NTH_ELEMENT>(data_type, aggregation const&) const
 {
   return {};
