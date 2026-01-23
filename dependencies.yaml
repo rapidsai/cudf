@@ -828,11 +828,11 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.60.0
-              - pandas==2.0.*
+              - pandas==3.0.*
               - numba-cuda==0.22.2
           - matrix: {dependencies: "latest"}
             packages:
-              - pandas==2.3.3
+              - pandas==3.0.0
           - matrix:
             packages:
       - output_types: conda
