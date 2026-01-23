@@ -131,16 +131,13 @@ def test_range_index_from_range(data):
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize("name", [1, "a", None])
 def test_index_basic(data, all_supported_types_as_str, name, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            len(data) > 0
-            and all_supported_types_as_str
-            in {"timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"},
-            reason=f"wrong result for {all_supported_types_as_str}",
-        )
-    )
     pdi = pd.Index(data, dtype=all_supported_types_as_str, name=name)
     gdi = cudf.Index(data, dtype=all_supported_types_as_str, name=name)
+    if all_supported_types_as_str == "category" and len(data) == 0:
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        pdi = pdi.set_categories(pd.Index([], dtype=gdi.categories.dtype))
 
     assert_eq(pdi, gdi)
 
