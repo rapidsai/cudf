@@ -1005,6 +1005,11 @@ SECTIONS
 ]=]
 )
 target_link_options(cudf PRIVATE "$<HOST_LINK:${CUDF_BINARY_DIR}/fatbin.ld>")
+# Hide RMM pool_memory_resource symbols to avoid ODR violations with nvcomp. See
+# https://github.com/rapidsai/rmm/issues/2219
+target_link_options(
+  cudf PRIVATE "LINKER:--version-script=${CUDF_SOURCE_DIR}/src/utilities/symbols.map"
+)
 
 add_library(cudf::cudf ALIAS cudf)
 

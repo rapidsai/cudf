@@ -1,0 +1,5 @@
+{
+  local:
+    *rmm*pool_memory_resource*pinned_host_memory_resource*;
+    *rmm*stream_ordered_memory_resource*pool_memory_resource*pinned_host_memory_resource*;
+};
