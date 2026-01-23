@@ -191,14 +191,17 @@ rolling_preprocessor::operator()<aggregation::NTH_ELEMENT>(data_type, aggregatio
 }
 
 /**
- * @brief Parameters for rolling window postprocessing.
+ * @brief Functor for rolling window postprocessing.
  *
- * This struct holds all parameters that may be needed by any postprocessor
- * specialization. Individual specializations will use only the subset of
- * parameters they require.
+ * This functor holds all parameters needed for postprocessing and provides
+ * constrained operator() overloads for different aggregation kinds.
+ * The default case passes through the intermediate result unchanged.
+ *
+ * @tparam PrecedingWindowIterator Type of iterator for preceding window bounds
+ * @tparam FollowingWindowIterator Type of iterator for following window bounds
  */
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
-struct rolling_postprocess_params {
+struct rolling_postprocessor {
   column_view const& input;
   column_view const& default_outputs;
   data_type result_type;
@@ -207,213 +210,120 @@ struct rolling_postprocess_params {
   int min_periods;
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
-};
 
-/**
- * @brief Functor for rolling window postprocessing.
- *
- * Primary template: default case passes through intermediate result.
- * Partial specializations handle specific aggregation kinds.
- */
-template <aggregation::Kind k>
-struct rolling_postprocessor {
-  template <typename Params>
-  std::unique_ptr<column> operator()(Params const&,
-                                     aggregation const&,
+  // Default case: pass through the intermediate result unchanged
+  template <aggregation::Kind k>
+  std::unique_ptr<column> operator()(aggregation const&,
                                      std::unique_ptr<column>& intermediate) const
   {
     return std::move(intermediate);
   }
-};
 
-// Helper for MIN/MAX postprocessing - gather-based finalization for strings/structs
-template <typename Params>
-std::unique_ptr<column> postprocess_minmax(Params const& params,
-                                           std::unique_ptr<column>& intermediate)
-{
-  if (params.result_type.id() == type_id::STRING || params.result_type.id() == type_id::STRUCT) {
-    auto output_table = detail::gather(table_view{{params.input}},
-                                       intermediate->view(),
-                                       cudf::out_of_bounds_policy::NULLIFY,
-                                       detail::negative_index_policy::NOT_ALLOWED,
-                                       params.stream,
-                                       params.mr);
-    return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
-  } else {
-    return std::move(intermediate);
-  }
-}
-
-// MIN/MAX partial specializations - perform final gather on ARG(MIN/MAX) data for strings/structs
-template <>
-struct rolling_postprocessor<aggregation::MIN> {
-  template <typename Params>
-  std::unique_ptr<column> operator()(Params const& params,
-                                     aggregation const&,
+  template <aggregation::Kind k>
+    requires(k == aggregation::MIN || k == aggregation::MAX)
+  std::unique_ptr<column> operator()(aggregation const&,
                                      std::unique_ptr<column>& intermediate) const
   {
-    return postprocess_minmax(params, intermediate);
+    if (result_type.id() == type_id::STRING || result_type.id() == type_id::STRUCT) {
+      auto output_table = detail::gather(table_view{{input}},
+                                         intermediate->view(),
+                                         cudf::out_of_bounds_policy::NULLIFY,
+                                         detail::negative_index_policy::NOT_ALLOWED,
+                                         stream,
+                                         mr);
+      return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
+    } else {
+      return std::move(intermediate);
+    }
   }
-};
 
-template <>
-struct rolling_postprocessor<aggregation::MAX> {
-  template <typename Params>
-  std::unique_ptr<column> operator()(Params const& params,
-                                     aggregation const&,
-                                     std::unique_ptr<column>& intermediate) const
-  {
-    return postprocess_minmax(params, intermediate);
-  }
-};
-
-// Partial specialization for COLLECT_LIST aggregation
-template <>
-struct rolling_postprocessor<aggregation::COLLECT_LIST> {
-  template <typename Params>
-  std::unique_ptr<column> operator()(Params const& params,
-                                     aggregation const& agg,
-                                     std::unique_ptr<column>&) const
+  template <aggregation::Kind k>
+    requires(k == aggregation::COLLECT_LIST)
+  std::unique_ptr<column> operator()(aggregation const& agg, std::unique_ptr<column>&) const
   {
     auto const& collect_agg = dynamic_cast<cudf::detail::collect_list_aggregation const&>(agg);
-    return rolling_collect_list(params.input,
-                                params.default_outputs,
-                                params.preceding_window_begin,
-                                params.following_window_begin,
-                                params.min_periods,
+    return rolling_collect_list(input,
+                                default_outputs,
+                                preceding_window_begin,
+                                following_window_begin,
+                                min_periods,
                                 collect_agg._null_handling,
-                                params.stream,
-                                params.mr);
+                                stream,
+                                mr);
   }
-};
 
-// Partial specialization for COLLECT_SET aggregation
-template <>
-struct rolling_postprocessor<aggregation::COLLECT_SET> {
-  template <typename Params>
-  std::unique_ptr<column> operator()(Params const& params,
-                                     aggregation const& agg,
-                                     std::unique_ptr<column>&) const
+  template <aggregation::Kind k>
+    requires(k == aggregation::COLLECT_SET)
+  std::unique_ptr<column> operator()(aggregation const& agg, std::unique_ptr<column>&) const
   {
     auto const& collect_agg   = dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg);
-    auto const collected_list = rolling_collect_list(params.input,
-                                                     params.default_outputs,
-                                                     params.preceding_window_begin,
-                                                     params.following_window_begin,
-                                                     params.min_periods,
+    auto const collected_list = rolling_collect_list(input,
+                                                     default_outputs,
+                                                     preceding_window_begin,
+                                                     following_window_begin,
+                                                     min_periods,
                                                      collect_agg._null_handling,
-                                                     params.stream,
+                                                     stream,
                                                      cudf::get_current_device_resource_ref());
 
     return lists::detail::distinct(lists_column_view{collected_list->view()},
                                    collect_agg._nulls_equal,
                                    collect_agg._nans_equal,
                                    duplicate_keep_option::KEEP_ANY,
-                                   params.stream,
-                                   params.mr);
+                                   stream,
+                                   mr);
   }
-};
 
-// Partial specialization for STD aggregation
-template <>
-struct rolling_postprocessor<aggregation::STD> {
-  template <typename Params>
-  std::unique_ptr<column> operator()(Params const& params,
-                                     aggregation const&,
+  template <aggregation::Kind k>
+    requires(k == aggregation::STD)
+  std::unique_ptr<column> operator()(aggregation const&,
                                      std::unique_ptr<column>& intermediate) const
   {
-    return detail::unary_operation(
-      intermediate->view(), unary_operator::SQRT, params.stream, params.mr);
+    return detail::unary_operation(intermediate->view(), unary_operator::SQRT, stream, mr);
   }
-};
 
-// Helper for LEAD/LAG postprocessing - custom handling for non-fixed-width types
-template <typename Params>
-std::unique_ptr<column> postprocess_lead_lag(Params const& params,
-                                             cudf::detail::lead_lag_aggregation const& agg,
-                                             std::unique_ptr<column>& intermediate)
-{
-  if (!cudf::is_fixed_width(params.result_type)) {
-    return cudf::detail::compute_lead_lag_for_nested<decltype(params.preceding_window_begin),
-                                                     decltype(params.following_window_begin)>(
-      agg.kind,
-      params.input,
-      params.default_outputs,
-      params.preceding_window_begin,
-      params.following_window_begin,
-      agg.row_offset,
-      params.stream,
-      params.mr);
-  } else {
-    return std::move(intermediate);
-  }
-}
-
-// LEAD/LAG partial specializations
-template <>
-struct rolling_postprocessor<aggregation::LEAD> {
-  template <typename Params>
-  std::unique_ptr<column> operator()(Params const& params,
-                                     aggregation const& agg,
+  template <aggregation::Kind k>
+    requires(k == aggregation::LEAD || k == aggregation::LAG)
+  std::unique_ptr<column> operator()(aggregation const& agg,
                                      std::unique_ptr<column>& intermediate) const
   {
-    return postprocess_lead_lag(
-      params, dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg), intermediate);
+    auto const& lead_lag_agg = dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg);
+    if (!cudf::is_fixed_width(result_type)) {
+      return cudf::detail::compute_lead_lag_for_nested<PrecedingWindowIterator,
+                                                       FollowingWindowIterator>(
+        lead_lag_agg.kind,
+        input,
+        default_outputs,
+        preceding_window_begin,
+        following_window_begin,
+        lead_lag_agg.row_offset,
+        stream,
+        mr);
+    } else {
+      return std::move(intermediate);
+    }
   }
-};
 
-template <>
-struct rolling_postprocessor<aggregation::LAG> {
-  template <typename Params>
-  std::unique_ptr<column> operator()(Params const& params,
-                                     aggregation const& agg,
-                                     std::unique_ptr<column>& intermediate) const
-  {
-    return postprocess_lead_lag(
-      params, dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg), intermediate);
-  }
-};
-
-// Partial specialization for NTH_ELEMENT aggregation
-template <>
-struct rolling_postprocessor<aggregation::NTH_ELEMENT> {
-  template <typename Params>
-  std::unique_ptr<column> operator()(Params const& params,
-                                     aggregation const& agg,
-                                     std::unique_ptr<column>&) const
+  template <aggregation::Kind k>
+    requires(k == aggregation::NTH_ELEMENT)
+  std::unique_ptr<column> operator()(aggregation const& agg, std::unique_ptr<column>&) const
   {
     auto const& nth_agg = dynamic_cast<cudf::detail::nth_element_aggregation const&>(agg);
     return nth_agg._null_handling == null_policy::EXCLUDE
              ? rolling::nth_element<null_policy::EXCLUDE>(nth_agg._n,
-                                                          params.input,
-                                                          params.preceding_window_begin,
-                                                          params.following_window_begin,
-                                                          params.min_periods,
-                                                          params.stream,
-                                                          params.mr)
+                                                          input,
+                                                          preceding_window_begin,
+                                                          following_window_begin,
+                                                          min_periods,
+                                                          stream,
+                                                          mr)
              : rolling::nth_element<null_policy::INCLUDE>(nth_agg._n,
-                                                          params.input,
-                                                          params.preceding_window_begin,
-                                                          params.following_window_begin,
-                                                          params.min_periods,
-                                                          params.stream,
-                                                          params.mr);
-  }
-};
-
-/**
- * @brief Dispatcher functor for rolling window postprocessing.
- *
- * This functor is passed to aggregation_dispatcher to dispatch to the
- * appropriate rolling_postprocessor specialization.
- */
-struct postprocess_dispatcher {
-  template <aggregation::Kind k, typename Params>
-  std::unique_ptr<column> operator()(Params const& params,
-                                     aggregation const& agg,
-                                     std::unique_ptr<column>& intermediate) const
-  {
-    return rolling_postprocessor<k>{}(params, agg, intermediate);
+                                                          input,
+                                                          preceding_window_begin,
+                                                          following_window_begin,
+                                                          min_periods,
+                                                          stream,
+                                                          mr);
   }
 };
 
@@ -633,17 +543,16 @@ struct dispatch_rolling {
                           : nullptr;
 
     // finalize.
-    auto const result_type = target_type(input.type(), agg.kind);
-    auto const params      = rolling_postprocess_params{input,
-                                                   default_outputs,
-                                                   result_type,
-                                                   preceding_window_begin,
-                                                   following_window_begin,
-                                                   min_periods,
-                                                   stream,
-                                                   mr};
-    return cudf::detail::aggregation_dispatcher(
-      agg.kind, postprocess_dispatcher{}, params, agg, intermediate);
+    auto const result_type   = target_type(input.type(), agg.kind);
+    auto const postprocessor = rolling_postprocessor{input,
+                                                     default_outputs,
+                                                     result_type,
+                                                     preceding_window_begin,
+                                                     following_window_begin,
+                                                     min_periods,
+                                                     stream,
+                                                     mr};
+    return cudf::detail::aggregation_dispatcher(agg.kind, postprocessor, agg, intermediate);
   }
 };
 
