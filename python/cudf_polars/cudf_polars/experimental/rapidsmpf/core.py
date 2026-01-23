@@ -13,6 +13,7 @@ from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
+from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
@@ -201,11 +202,19 @@ def evaluate_pipeline(
             }
             | get_environment_variables()
         )
+        pinned_mr = (
+            PinnedMemoryResource.make_if_available()
+            if config_options.executor.spill_to_pinned_memory
+            else None
+        )
         if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
             stream_pool = config_options.cuda_stream_policy.build()
         local_comm = new_communicator(options)
         br = BufferResource(
-            mr, memory_available=memory_available, stream_pool=stream_pool
+            mr,
+            pinned_mr=pinned_mr,
+            memory_available=memory_available,
+            stream_pool=stream_pool,
         )
         rmpf_context_manager = Context(local_comm, br, options)
 
