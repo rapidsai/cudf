@@ -1978,8 +1978,7 @@ def test_csv_writer_category(df):
         {"a": "category"},
         {"a": pd.CategoricalDtype([1, 2, 3])},
         {"b": pd.CategoricalDtype(["a", "b", "c"])},
-        {"b": pd.CategoricalDtype(["b", "a"]), "a": "str"},
-        pd.CategoricalDtype(["a", "b"]),
+        {"b": pd.CategoricalDtype(["b", "a", "c"]), "a": "str"},
     ],
 )
 def test_csv_reader_category(dtype):

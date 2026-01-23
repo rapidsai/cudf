@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -149,7 +149,7 @@ def test_dataframe_describe_include_all():
 )
 @pytest.mark.parametrize(
     "include",
-    [None, "all", ["object"], ["int"], ["object", "int", "category"]],
+    [None, "all", ["str"], ["int"], ["str", "int", "category"]],
 )
 def test_describe_misc_include(pdf, include):
     df = cudf.DataFrame(pdf)
@@ -209,7 +209,7 @@ def test_describe_misc_include(pdf, include):
     ],
 )
 @pytest.mark.parametrize(
-    "exclude", [None, ["object"], ["int"], ["object", "int", "category"]]
+    "exclude", [None, ["str"], ["int"], ["str", "int", "category"]]
 )
 def test_describe_misc_exclude(pdf, exclude):
     df = cudf.DataFrame(pdf)
