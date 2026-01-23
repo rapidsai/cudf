@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -326,11 +326,6 @@ def test_join_multi(how, column_a, column_b, column_c):
 
     gdf_result = gdf1.join(gdf2, how=how, sort=True)
     pdf_result = df1.join(df2, how=how, sort=True)
-
-    # Make sure columns are in the same order
-    columns = pdf_result.columns.values
-    gdf_result = gdf_result[columns]
-    pdf_result = pdf_result[columns]
 
     assert_join_results_equal(pdf_result, gdf_result, how="inner")
 
