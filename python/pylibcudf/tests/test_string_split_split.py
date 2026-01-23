@@ -135,10 +135,10 @@ def test_rsplit_record_re(data_col, re_delimiter):
 @pytest.mark.parametrize(
     "index, expected_data",
     [
-        (0, ["a", "d-e-f", None]),# Index 0: First token
-        (1, ["b", None, None]),# Index 1: Second token or None if missing
-        (2, ["c", None, None]),# Index 2: Third token
-    ]
+        (0, ["a", "d-e-f", None]),  # Index 0: First token
+        (1, ["b", None, None]),  # Index 1: Second token or None if missing
+        (2, ["c", None, None]),  # Index 2: Third token
+    ],
 )
 def test_split_part(data_col, delimiter, index, expected_data):
     _, plc_column = data_col
@@ -146,7 +146,7 @@ def test_split_part(data_col, delimiter, index, expected_data):
 
     # Call wrapper
     got = plc.strings.split.split.split_part(plc_column, plc_delimiter, index)
-    
+
     # Verify
     expect = pa.array(expected_data)
     assert_column_eq(expect, got)
