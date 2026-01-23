@@ -52,23 +52,6 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, cudaMemcpyDefault, stream));
 }
 
-bool is_memcpy_batch_async_supported()
-{
-#if CUDART_VERSION >= 13000
-  // cudaMemcpyBatchAsync is supported on all CUDA 13 versions
-  return true;
-#else
-  // For CUDA 12, we check for CUDA runtime >=12.8 and cache the result
-  static auto supports_memcpy_batch_async{[] {
-    // CUDA 12.8 or higher is required for cudaMemcpyBatchAsync
-    int cuda_runtime_version{};
-    auto runtime_result = cudaRuntimeGetVersion(&cuda_runtime_version);
-    return runtime_result == cudaSuccess and cuda_runtime_version >= 12080;
-  }()};
-  return supports_memcpy_batch_async;
-#endif
-}
-
 };  // namespace
 
 cudaError_t memcpy_batch_async(
@@ -103,25 +86,19 @@ cudaError_t memcpy_batch_async(
     count = valid_count;
   }
 
-  // The cudaMemcpyBatchAsync API requires CUDA >= 12.8 and does not support the default stream
-  if (is_memcpy_batch_async_supported() && !stream.is_default()) {
-#if CUDART_VERSION >= 12080
+  // Uses cudaMemcpyBatchAsync for CUDA 13.0+ to avoid driver-side locking overhead.
+  // cudaMemcpyBatchAsync does not support the default stream.
+#if CUDART_VERSION >= 13000
+  if (!stream.is_default()) {
     cudaMemcpyAttributes attrs[1] = {};  // zero-initialize all fields
     attrs[0].srcAccessOrder       = cudaMemcpySrcAccessOrderStream;
     attrs[0].flags                = cudaMemcpyFlagPreferOverlapWithCompute;
     std::size_t attrs_idxs[1]     = {0};
     std::size_t num_attrs{1};
-#if CUDART_VERSION >= 13000
     return cudaMemcpyBatchAsync(
       dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, stream.value());
-#else
-    std::size_t fail_idx;
-    return cudaMemcpyBatchAsync(
-      dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, &fail_idx, stream.value());
-#endif  // CUDART_VERSION >= 13000
-#endif  // CUDART_VERSION >= 12080
   }
-  // Implement a compatible API for CUDA < 12.8
+#endif  // CUDART_VERSION >= 13000
   for (std::size_t i = 0; i < count; ++i) {
     cudaError_t status =
       cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDefault, stream.value());
@@ -136,7 +113,7 @@ cudaError_t memcpy_async(
   if (count == 0) { return cudaSuccess; }
 
   // Use batch API with size 1 to prefer cudaMemcpyBatchAsync over
-  // cudaMemcpyAsync. The batched API can be more efficient.
+  // cudaMemcpyAsync. The batched API is more efficient.
   void* dsts[1]   = {dst};
   void* srcs[1]   = {const_cast<void*>(src)};
   size_t sizes[1] = {count};
