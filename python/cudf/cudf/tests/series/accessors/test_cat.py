@@ -255,6 +255,13 @@ def test_categorical_set_categories_categoricals(data, new_categories):
     expected = pd_data.cat.set_categories(new_categories=new_categories)
     actual = gd_data.cat.set_categories(new_categories=new_categories)
 
+    if isinstance(new_categories, list) and len(new_categories) == 0:
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        expected = expected.cat.set_categories(
+            pd.Index([], dtype=actual.cat.categories.dtype)
+        )
     assert_eq(expected, actual)
 
     expected = pd_data.cat.set_categories(
@@ -263,6 +270,13 @@ def test_categorical_set_categories_categoricals(data, new_categories):
     actual = gd_data.cat.set_categories(
         new_categories=cudf.Series(new_categories, dtype="category")
     )
+    if isinstance(new_categories, list) and len(new_categories) == 0:
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        expected = expected.cat.set_categories(
+            pd.Index([], dtype=actual.cat.categories.dtype)
+        )
 
     assert_eq(expected, actual)
 
