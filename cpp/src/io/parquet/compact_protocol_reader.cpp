@@ -137,21 +137,21 @@ class parquet_field_list : public parquet_field {
 
   parquet_field_list(int f, std::vector<T>& v) : parquet_field(f), val(v) {}
 
-  inline void read_list(CompactProtocolReader* cpr, uint32_t n)
-  {
-    val.resize(n);
-    for (uint32_t i = 0; i < n; i++) {
-      _read_value(i, cpr);
-    }
-  }
-
  public:
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
     assert_field_type(field_type, FieldType::LIST);
     auto const [t, n] = cpr->get_listh();
-    assert_field_type(t, EXPECTED_ELEM_TYPE);
-    read_list(cpr, n);
+    if constexpr (EXPECTED_ELEM_TYPE == FieldType::BOOLEAN_TRUE or
+                  EXPECTED_ELEM_TYPE == FieldType::BOOLEAN_FALSE) {
+      assert_bool_field_type(t);
+    } else {
+      assert_field_type(t, EXPECTED_ELEM_TYPE);
+    }
+    val.resize(n);
+    for (uint32_t i = 0; i < n; i++) {
+      _read_value(i, cpr);
+    }
   }
 };
 
@@ -191,14 +191,6 @@ struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOL
       val[i] = current_byte == static_cast<int>(FieldType::BOOLEAN_TRUE);
     };
     bind_read_func(read_value);
-  }
-
-  inline void operator()(CompactProtocolReader* cpr, int field_type)
-  {
-    assert_field_type(field_type, FieldType::LIST);
-    auto const [t, n] = cpr->get_listh();
-    assert_bool_field_type(t);
-    read_list(cpr, n);
   }
 };
 
@@ -453,7 +445,7 @@ class parquet_field_struct_list : public parquet_field {
           all_ranges.emplace_back(start, static_cast<size_t>(cpr->m_cur - start));
         }
 
-        // Launch task immediately to parse the structs  in parallel while the main thread collects
+        // Launch task immediately to parse the structs in parallel while the main thread collects
         // the remaining ranges
         tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
           [&val = this->val, &all_ranges, start_idx, end_idx]() {
