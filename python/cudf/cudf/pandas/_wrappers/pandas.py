@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import copyreg
@@ -2065,10 +2065,10 @@ Flags = make_final_proxy_type(
 
 NamedAgg = make_final_proxy_type(
     "NamedAgg",
-    _Unusable,
     pd.NamedAgg,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
+    pd.NamedAgg,
+    fast_to_slow=lambda fast: fast,
+    slow_to_fast=lambda slow: slow,
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },

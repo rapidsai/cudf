@@ -2644,9 +2644,9 @@ def column_empty(
     dtype : Dtype
         Type of the column.
     """
-    if (is_struct := isinstance(dtype, StructDtype)) or isinstance(
-        dtype, ListDtype
-    ):
+    if (
+        is_struct := isinstance(dtype, (StructDtype, IntervalDtype))
+    ) or isinstance(dtype, ListDtype):
         if is_struct:
             children = tuple(
                 column_empty(row_count, field_dtype)
@@ -2843,7 +2843,15 @@ def as_column(
                 dtype=dtype,
                 length=length,
             )
-            if (
+            if isinstance(arbitrary.dtype, pd.IntervalDtype):
+                # Wrap StructColumn as IntervalColumn with proper metadata
+                result = result._with_type_metadata(
+                    IntervalDtype(
+                        subtype=arbitrary.dtype.subtype,
+                        closed=arbitrary.dtype.closed,
+                    )
+                )
+            elif (
                 cudf.get_option("mode.pandas_compatible")
                 and isinstance(arbitrary.dtype, pd.CategoricalDtype)
                 and is_pandas_nullable_extension_dtype(
@@ -3265,12 +3273,14 @@ def as_column(
                     length=length,
                 )
             elif (
-                isinstance(element, (pd.Timestamp, pd.Timedelta))
+                isinstance(element, (pd.Timestamp, pd.Timedelta, pd.Interval))
                 or element is pd.NaT
             ):
                 # TODO: Remove this after
                 # https://github.com/apache/arrow/issues/26492
                 # is fixed.
+                # Note: pd.Interval also requires pandas Series conversion
+                # because PyArrow cannot infer interval type from raw list
                 return as_column(
                     pd.Series(arbitrary),
                     dtype=dtype,

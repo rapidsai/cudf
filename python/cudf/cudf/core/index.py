@@ -153,8 +153,10 @@ def _index_from_data(data: MutableMapping, name: Any = no_default):
             index_class_type = Index
         elif isinstance(values, CategoricalColumn):
             index_class_type = CategoricalIndex
-        elif isinstance(values, (IntervalColumn, StructColumn)):
+        elif isinstance(values, IntervalColumn):
             index_class_type = IntervalIndex
+        elif isinstance(values, StructColumn):
+            index_class_type = Index
         else:
             raise NotImplementedError(
                 "Unsupported column type passed to "
