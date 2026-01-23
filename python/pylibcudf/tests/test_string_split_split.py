@@ -132,20 +132,23 @@ def test_rsplit_record_re(data_col, re_delimiter):
     assert_column_eq(expect, got)
 
 
-def test_split_part(data_col, delimiter):
-    # Using existing fixtures (data_col has ["a_b_c", "d-e-f", None], delimiter is "_")
+@pytest.mark.parametrize(
+    "index, expected_data",
+    [
+        (0, ["a", "d-e-f", None]),# Index 0: First token
+        (1, ["b", None, None]),# Index 1: Second token or None if missing
+        (2, ["c", None, None]),# Index 2: Third token
+    ]
+)
+def test_split_part(data_col, delimiter, index, expected_data):
     _, plc_column = data_col
     _, plc_delimiter = delimiter
 
-    # Case 1: Index 0
-    got = plc.strings.split.split.split_part(plc_column, plc_delimiter, 0)
-    expect = pa.array(["a", "d-e-f", None])
-    assert_column_eq(expect, got)
-
-    # Case 2: Index 1
-    got = plc.strings.split.split.split_part(plc_column, plc_delimiter, 1)
-    # "d-e-f" has no delimiter, so index 1 is null
-    expect = pa.array(["b", None, None])
+    # Call wrapper
+    got = plc.strings.split.split.split_part(plc_column, plc_delimiter, index)
+    
+    # Verify
+    expect = pa.array(expected_data)
     assert_column_eq(expect, got)
 
 
