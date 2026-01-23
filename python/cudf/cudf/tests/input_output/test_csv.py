@@ -372,7 +372,7 @@ def test_csv_reader_strings(tmp_path):
     )
 
     assert len(df.columns) == 2
-    assert df["text"].dtype == np.dtype("object")
+    assert df["text"].dtype == pd.StringDtype(na_value=np.nan)
     assert df["int"].dtype == np.dtype("int64")
     assert df["text"][0] == "a"
     assert df["text"][1] == "b"
@@ -400,7 +400,7 @@ def test_csv_reader_strings_quotechars(tmp_path):
     )
 
     assert len(df.columns) == 2
-    assert df["text"].dtype == np.dtype("object")
+    assert df["text"].dtype == pd.StringDtype(na_value=np.nan)
     assert df["int"].dtype == np.dtype("int64")
     assert df["text"][0] == "a,\n"
     assert df["text"][1] == 'b "c" d'
@@ -545,9 +545,9 @@ def test_csv_reader_NaN_values():
     assert gdf.dtypes.iloc[0] == "int8"
     assert all(gdf["0"][idx] is cudf.NA for idx in range(len(gdf["0"])))
 
-    # data type detection should evaluate the column to object if some nulls
+    # data type detection should evaluate the column to StringDtype if some nulls
     gdf = read_csv(StringIO(all_cells), header=None)
-    assert gdf.dtypes.iloc[0] == np.dtype("object")
+    assert gdf.dtypes.iloc[0] == pd.StringDtype(na_value=np.nan)
 
 
 def test_csv_reader_thousands(tmp_path):
@@ -599,7 +599,7 @@ def test_csv_reader_buffer_strings():
 
     df = read_csv(StringIO(buffer), names=names, dtype=dtypes, skiprows=1)
     assert len(df.columns) == 2
-    assert df["text"].dtype == np.dtype("object")
+    assert df["text"].dtype == pd.StringDtype(na_value=np.nan)
     assert df["int"].dtype == np.dtype("int64")
     assert df["text"][0] == "a"
     assert df["text"][1] == "b"
@@ -610,7 +610,7 @@ def test_csv_reader_buffer_strings():
         BytesIO(str.encode(buffer)), names=names, dtype=dtypes, skiprows=1
     )
     assert len(df2.columns) == 2
-    assert df2["text"].dtype == np.dtype("object")
+    assert df2["text"].dtype == pd.StringDtype(na_value=np.nan)
     assert df2["int"].dtype == np.dtype("int64")
     assert df2["text"][0] == "a"
     assert df2["text"][1] == "b"
