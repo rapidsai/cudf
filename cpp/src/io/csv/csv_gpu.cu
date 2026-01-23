@@ -686,18 +686,19 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
           ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE, 1, 0, 1);
         }
       } else if (c == quotechar) {
-        if (c_prev == delimiter || c_prev == quotechar) {
-          // Quote after delimiter or quote after quote: both toggle quote mode
-          // (start/end of quoted field, including escaped quote sequences (""))
-          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
+        if (c_prev == delimiter) {
+          // Quote after delimiter: start field or pending exit
+          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_COMMENT, ROW_CTX_QUOTE);
+        } else if (c_prev == quotechar) {
+          // Quote after quote: "" escape or stay NONE (Spark compatibility)
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT, ROW_CTX_QUOTE);
         } else {
-          // Quote in middle of unquoted field (ignored for Spark compatibility)
-          // or closing quote of a quoted field
-          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_NONE);
+          // Quote after regular char: pending exit or stay NONE
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT, ROW_CTX_NONE);
         }
       } else {
-        // Neutral character
-        ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE);
+        // Non-quote char: stay in current state, or exit from pending
+        ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE);
       }
     } else {
       char const* data_end = start + data_size - start_offset;
