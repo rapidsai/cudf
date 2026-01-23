@@ -181,11 +181,8 @@ class parquet_field_bool : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * bool fails
  */
-struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOLEAN_TRUE>,
-                                 public parquet_field_list<bool, FieldType::BOOLEAN_FALSE> {
-  parquet_field_bool_list(int f, std::vector<bool>& v)
-    : parquet_field_list<bool, FieldType::BOOLEAN_TRUE>(f, v),
-      parquet_field_list<bool, FieldType::BOOLEAN_FALSE>(f, v)
+struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOLEAN_TRUE> {
+  parquet_field_bool_list(int f, std::vector<bool>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const current_byte = cpr->getb();
@@ -193,13 +190,7 @@ struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOL
       CUDF_EXPECTS(i < val.size(), "Index out of bounds");
       val[i] = current_byte == static_cast<int>(FieldType::BOOLEAN_TRUE);
     };
-    parquet_field_list<bool, FieldType::BOOLEAN_TRUE>::bind_read_func(read_value);
-    parquet_field_list<bool, FieldType::BOOLEAN_FALSE>::bind_read_func(read_value);
-  }
-
-  [[nodiscard]] int field() const
-  {
-    return parquet_field_list<bool, FieldType::BOOLEAN_TRUE>::field();
+    bind_read_func(read_value);
   }
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
@@ -207,7 +198,7 @@ struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOL
     assert_field_type(field_type, FieldType::LIST);
     auto const [t, n] = cpr->get_listh();
     assert_bool_field_type(t);
-    parquet_field_list<bool, FieldType::BOOLEAN_TRUE>::read_list(cpr, n);
+    read_list(cpr, n);
   }
 };
 
