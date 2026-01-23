@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
@@ -31,7 +31,8 @@ def test_null_dataframe(ncols):
     pdf = gdf.to_pandas()
     with pd.option_context("display.max_columns", int(ncols)):
         pdf_repr = repr(pdf).replace("NaN", "<NA>").replace("None", "<NA>")
-        assert pdf_repr.split() == repr(gdf).split()
+        gdf_repr = repr(gdf).replace("NaN", "<NA>")
+        assert pdf_repr.split() == gdf_repr.split()
 
 
 @pytest.mark.parametrize("nrows", [5, 10, 15])
@@ -245,7 +246,7 @@ def test_dataframe_sliced(gdf, slc, max_seq_items, max_rows):
                 {
                     "a": [1, 2, None],
                     "v": ["n", "c", "a"],
-                    "p": [None, None, None],
+                    "p": pd.Series([None, None, None], dtype="str"),
                 }
             ).set_index(["a", "v"]),
             False,
@@ -255,19 +256,20 @@ def test_dataframe_sliced(gdf, slc, max_seq_items, max_rows):
                 {
                     "a": np.array([1, None, None], dtype="datetime64[ns]"),
                     "v": ["n", "c", "a"],
-                    "p": [None, None, None],
-                }
+                    "p": pd.Series([None, None, None], dtype="str"),
+                },
             ).set_index(["a", "v"]),
             False,
         ),
     ],
 )
 def test_dataframe_null_index_repr(df, pandas_special_case):
-    pdf = df
-    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        pdf = df
+        gdf = cudf.from_pandas(pdf)
 
-    expected_repr = repr(pdf).replace("NaN", "<NA>").replace("None", "<NA>")
-    actual_repr = repr(gdf)
+        expected_repr = repr(pdf)
+        actual_repr = repr(gdf)
 
     if pandas_special_case:
         # Pandas inconsistently print Index null values
