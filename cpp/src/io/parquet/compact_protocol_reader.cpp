@@ -118,7 +118,7 @@ class parquet_field {
 
  public:
   virtual ~parquet_field() = default;
-  [[nodiscard]] virtual int field() const { return _field_val; }
+  [[nodiscard]] int field() const { return _field_val; }
 };
 
 /**
@@ -197,7 +197,7 @@ struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOL
     parquet_field_list<bool, FieldType::BOOLEAN_FALSE>::bind_read_func(read_value);
   }
 
-  [[nodiscard]] int field() const override
+  [[nodiscard]] int field() const
   {
     return parquet_field_list<bool, FieldType::BOOLEAN_TRUE>::field();
   }
