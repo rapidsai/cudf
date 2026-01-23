@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -202,8 +202,8 @@ def test_dataframe_join_combine_cats():
     lhs_pd = lhs.to_pandas()
     rhs_pd = rhs.to_pandas()
 
-    lhs_pd.index = lhs_pd.index.astype("object")
-    rhs_pd.index = rhs_pd.index.astype("object")
+    lhs_pd.index = lhs_pd.index.astype(pd.StringDtype(na_value=np.nan))
+    rhs_pd.index = rhs_pd.index.astype(pd.StringDtype(na_value=np.nan))
 
     expect = lhs_pd.join(rhs_pd, how="outer")
     expect.index = expect.index.astype("category")
