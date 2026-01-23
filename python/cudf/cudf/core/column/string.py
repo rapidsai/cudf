@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import itertools
 import re
+import warnings
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, cast
 
@@ -721,6 +722,10 @@ class StringColumn(ColumnBase, Scannable):
             )
 
     def edit_distance_matrix(self) -> ListColumn:
+        warnings.warn(
+            "edit_distance_matrix is deprecated.",
+            FutureWarning,
+        )
         with self.access(mode="read", scope="internal"):
             result = plc.nvtext.edit_distance.edit_distance_matrix(
                 self.plc_column

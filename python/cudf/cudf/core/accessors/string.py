@@ -5252,6 +5252,9 @@ class StringMethods(BaseAccessor):
     def edit_distance_matrix(self) -> Series | Index:
         """Computes the edit distance between strings in the series.
 
+        .. deprecated:: 25.04
+            edit_distance_matrix is deprecated.
+
         The series to compute the matrix should have more than 2 strings and
         should not contain nulls.
 
@@ -5277,6 +5280,10 @@ class StringMethods(BaseAccessor):
         2    [2, 2, 0]
         dtype: list
         """
+        warnings.warn(
+            "edit_distance_matrix is deprecated.",
+            FutureWarning,
+        )
         if self._column.size < 2:
             raise ValueError(
                 "Require size >= 2 to compute edit distance matrix."
