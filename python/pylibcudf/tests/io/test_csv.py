@@ -11,6 +11,7 @@ from utils import (
     assert_table_and_meta_eq,
     make_source,
     sink_to_str,
+    synchronize_stream,
     write_source_str,
 )
 
@@ -314,10 +315,7 @@ def test_read_csv_from_device_buffers(csv_table_data, stream):
         csv_string.encode("utf-8"), plc.utils._get_stream(stream)
     )
 
-    if stream is None:
-        plc.utils.DEFAULT_STREAM.synchronize()
-    else:
-        stream.synchronize()
+    synchronize_stream(stream)
 
     options = plc.io.csv.CsvReaderOptions.builder(
         plc.io.SourceInfo([buf])
@@ -384,10 +382,7 @@ def test_write_csv(
         stream,
     )
 
-    if stream is None:
-        plc.utils.DEFAULT_STREAM.synchronize()
-    else:
-        stream.synchronize()
+    synchronize_stream(stream)
 
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)
@@ -433,7 +428,7 @@ def test_write_csv_na_rep(na_rep):
         )
     )
 
-    plc.utils.DEFAULT_STREAM.synchronize()
+    synchronize_stream()
 
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)

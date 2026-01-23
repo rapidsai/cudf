@@ -9,6 +9,7 @@ from utils import (
     assert_table_and_meta_eq,
     make_source,
     sink_to_str,
+    synchronize_stream,
     write_source_str,
 )
 
@@ -44,10 +45,7 @@ def test_write_json_basic(
 
     plc.io.json.write_json(options, stream)
 
-    if stream is None:
-        plc.utils.DEFAULT_STREAM.synchronize()
-    else:
-        stream.synchronize()
+    synchronize_stream(stream)
 
     exp = pa_table.to_pandas()
 
@@ -87,7 +85,7 @@ def test_write_json_nulls(na_rep, include_nulls):
 
     plc.io.json.write_json(options)
 
-    plc.utils.DEFAULT_STREAM.synchronize()
+    synchronize_stream()
 
     exp = pa_tbl.to_pandas()
 
@@ -140,7 +138,7 @@ def test_write_json_bool_opts(true_value, false_value):
 
     plc.io.json.write_json(options)
 
-    plc.utils.DEFAULT_STREAM.synchronize()
+    synchronize_stream()
 
     exp = pa_tbl.to_pandas()
 
@@ -437,10 +435,7 @@ def test_read_json_from_device_buffers(table_data, num_buffers, stream):
         json_str.encode("utf-8"), plc.utils._get_stream(stream)
     )
 
-    if stream is None:
-        plc.utils.DEFAULT_STREAM.synchronize()
-    else:
-        stream.synchronize()
+    synchronize_stream(stream)
 
     options = (
         plc.io.json.JsonReaderOptions.builder(
@@ -485,7 +480,7 @@ def test_utf8_escaped_json_writer(tmp_path):
     )
     plc.io.json.write_json(options)
 
-    plc.utils.DEFAULT_STREAM.synchronize()
+    synchronize_stream()
 
     output_string = path.read_text(encoding="utf-8").strip()
 

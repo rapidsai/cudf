@@ -7,7 +7,7 @@ import itertools
 import fastavro
 import pyarrow as pa
 import pytest
-from utils import assert_table_and_meta_eq
+from utils import assert_table_and_meta_eq, synchronize_stream
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.stream import Stream
@@ -156,10 +156,7 @@ def test_read_avro_from_device_buffers(avro_dtypes, avro_dtype_data, stream):
     buf = buffer.getbuffer()
     device_buf = DeviceBuffer.to_device(buf, plc.utils._get_stream(stream))
 
-    if stream is None:
-        plc.utils.DEFAULT_STREAM.synchronize()
-    else:
-        stream.synchronize()
+    synchronize_stream(stream)
 
     options = plc.io.avro.AvroReaderOptions.builder(
         plc.io.types.SourceInfo([device_buf])

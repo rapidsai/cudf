@@ -10,6 +10,7 @@ from utils import (
     assert_table_and_meta_eq,
     get_bytes_from_source,
     make_source,
+    synchronize_stream,
 )
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
@@ -192,10 +193,7 @@ def test_read_parquet_from_device_buffers(
         get_bytes_from_source(source), plc.utils._get_stream(stream)
     )
 
-    if stream is None:
-        plc.utils.DEFAULT_STREAM.synchronize()
-    else:
-        stream.synchronize()
+    synchronize_stream(stream)
 
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo([buf] * num_buffers)
@@ -295,10 +293,7 @@ def test_write_parquet(
 
     result = plc.io.parquet.write_parquet(options, stream)
 
-    if stream is None:
-        plc.utils.DEFAULT_STREAM.synchronize()
-    else:
-        stream.synchronize()
+    synchronize_stream(stream)
 
     assert isinstance(result, memoryview)
 
