@@ -142,8 +142,7 @@ class parquet_field_list : public parquet_field {
   {
     assert_field_type(field_type, FieldType::LIST);
     auto const [t, n] = cpr->get_listh();
-    if constexpr (EXPECTED_ELEM_TYPE == FieldType::BOOLEAN_TRUE or
-                  EXPECTED_ELEM_TYPE == FieldType::BOOLEAN_FALSE) {
+    if constexpr (cuda::std::is_same_v<T, bool>) {
       assert_bool_field_type(t);
     } else {
       assert_field_type(t, EXPECTED_ELEM_TYPE);
