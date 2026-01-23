@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -126,7 +126,7 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
   std::for_each(zip_iter, zip_iter + pages.size(), [&](auto const& item) {
     auto& [page, is_page_needed] = item;
     // If this is a V2 page, use the `is_compressed` field to determine if it's compressed.
-    // For V1 pages, it's always compressed if the chunk.codec is specified.
+    // For dictionary and V1 data pages, they're compressed if chunk.codec is set.
     auto const is_page_compressed = (page.flags & PAGEINFO_FLAGS_V2) ? page.is_compressed : true;
     if (is_page_needed && chunks[page.chunk_idx].codec == compression_type &&
         (page.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) ==
@@ -363,7 +363,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
+  auto h_aggregated_info = cudf::detail::make_pinned_vector(aggregated_info, stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -415,7 +415,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
+  auto h_aggregated_info = cudf::detail::make_pinned_vector(aggregated_info, stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -510,15 +510,17 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     mr);
 
   auto comp_in =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t const>>(num_comp_pages, stream);
   auto comp_out =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t>>(num_comp_pages, stream);
+  auto curr_comp_page = 0;
 
   // vectors to save v2 def and rep level data, if any
   auto copy_in =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t const>>(num_comp_pages, stream);
   auto copy_out =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t>>(num_comp_pages, stream);
+  auto curr_copy_page = 0;
 
   auto set_parameters = [&](codec_stats& codec,
                             host_span<PageInfo> pages,
@@ -534,7 +536,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
       auto& page                = pages[page_idx];
       auto const is_page_needed = page_mask_iter[page_idx];
       // If this is a V2 page, use the `is_compressed` field to determine if it's compressed.
-      // For V1 pages, it's always compressed if the chunk.codec is specified.
+      // For dictionary and V1 data pages, they're compressed if chunk.codec is set.
       auto const is_page_compressed = (page.flags & PAGEINFO_FLAGS_V2) ? page.is_compressed : true;
       if (is_page_needed && chunks[page.chunk_idx].codec == codec.compression_type &&
           (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages and is_page_compressed) {
@@ -546,15 +548,17 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
         // input and output buffers. otherwise we'd have to keep both the compressed
         // and decompressed data.
         if (offset != 0) {
-          copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
-          copy_out.push_back({dst_base, static_cast<size_t>(offset)});
+          copy_in[curr_copy_page]  = {page.page_data, static_cast<size_t>(offset)};
+          copy_out[curr_copy_page] = {dst_base, static_cast<size_t>(offset)};
+          ++curr_copy_page;
         }
         // Only decompress if the page contains data after the def/rep levels
         if (page.compressed_page_size > offset) {
-          comp_in.push_back(
-            {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
-          comp_out.push_back(
-            {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
+          comp_in[curr_comp_page]  = {page.page_data + offset,
+                                      static_cast<size_t>(page.compressed_page_size - offset)};
+          comp_out[curr_comp_page] = {dst_base + offset,
+                                      static_cast<size_t>(page.uncompressed_page_size - offset)};
+          ++curr_comp_page;
         } else {
           // If the page wasn't included in the decompression parameters, we need to adjust the
           // page count to allocate results and perform decompression correctly
@@ -663,11 +667,15 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   auto const compacted_row_counts_end   = cudf::detail::copy_if(
     row_counts_begin, row_counts_end, compacted_row_counts_begin, row_counts_nonzero{}, stream);
   if (compacted_row_counts_end != compacted_row_counts_begin) {
-    auto const found_row_count = static_cast<size_t>(compacted_row_counts.element(0, stream));
+    auto const found_row_count = [&]() {
+      auto found_row_count = cudf::detail::make_pinned_vector(
+        cudf::device_span<size_type const>{compacted_row_counts.data(), 1}, stream);
+      return found_row_count.front();
+    }();
 
     // if we somehow don't match the expected row count from the row groups themselves
     if (expected_row_count.has_value()) {
-      CUDF_EXPECTS(expected_row_count.value() == found_row_count,
+      CUDF_EXPECTS(std::cmp_equal(expected_row_count.value(), found_row_count),
                    "Encountered malformed parquet page data (unexpected row count in page data)");
     }
 
@@ -701,8 +709,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
                                 decomp_sum{});
 
   // retrieve to host so we can get compression scratch sizes
-  auto h_decomp_info = cudf::detail::make_host_vector(decomp_info, stream);
-  auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
+  auto temp_cost     = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
+  auto h_decomp_info = cudf::detail::make_pinned_vector(decomp_info, stream);
   std::transform(h_decomp_info.begin(), h_decomp_info.end(), temp_cost.begin(), [](auto const& d) {
     return cudf::io::detail::get_decompression_scratch_size(d);
   });

@@ -156,6 +156,7 @@ struct delta_byte_array_decoder {
 
       // copy prefixes into string data.
       string_scan(out, last_string, idx, end, string_off, lane_id);
+      __syncwarp();
 
       // save the position of the last computed string. this will be used in
       // the next iteration to reconstruct the string in lane 0.
@@ -751,7 +752,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
     return;
   }
-
+  // db->init_binary_block below resets db->values_per_mb
+  block.sync();
   // if this is a bounds page, then we need to decode up to the first mini-block
   // that has a value we need, and set string_offset to the position of the first value in the
   // string data block.
@@ -760,6 +762,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     if (warp.meta_group_rank() == 0) {
       // string_off is only valid on thread 0
       auto const string_off = db->skip_values_and_sum(s->page.start_val);
+      // Threads in the warp might diverge and read in skip_values_and_sum
+      // after lane 0 reinits below.
+      warp.sync();
       if (warp.thread_rank() == 0) {
         string_offset = string_off;
 
