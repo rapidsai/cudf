@@ -968,14 +968,11 @@ class StringColumn(ColumnBase, Scannable):
         # Handle Greek final sigma (ς) special case
         # Greek capital sigma (Σ) lowercases to regular sigma (σ) at libcudf level,  # noqa: RUF003
         # but should become final sigma (ς) when at the end of a word.
-        has_sigma = result.contains_re(r"σ", flags=0)
+        # Replace σ with ς when followed by end-of-string or non-letter character.  # noqa: RUF003
+        has_sigma = result.str_contains("σ")
         if has_sigma.any():
-            # sigma at end of string
-            result = result.replace_re(r"σ$", pa.scalar("ς", type=pa.string()))
-
-            # handle sigma followed by any non-letter character
             result = result.replace_with_backrefs(
-                r"σ([^a-zA-Zα-ωΑ-Ωά-ώΆ-Ώ])", r"ς\1"
+                r"σ($|[^a-zA-Zα-ωΑ-Ωά-ώΆ-Ώ])", r"ς\1"
             )
 
         return result
