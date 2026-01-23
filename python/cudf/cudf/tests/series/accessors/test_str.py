@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import json
@@ -2218,6 +2218,30 @@ def test_string_split_re(data, pat, n, expand):
 
 def test_string_lower(ps_gs):
     ps, gs = ps_gs
+
+    expect = ps.str.lower()
+    got = gs.str.lower()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        "ΦΘΣ",  # Sigma at end -> should become final sigma ς
+        "ΦΘΣ.",  # Sigma before punctuation -> should become final sigma ς
+        "ΦΘΣ ",  # Sigma before space -> should become final sigma ς
+        "ΦΘΣq",  # Sigma before letter -> should stay regular sigma σ  # noqa: RUF003
+        "ΣΗΜΑ",  # Sigma at beginning -> should become regular sigma σ  # noqa: RUF003
+        "ΘΕΣΣ",  # Two sigmas at end -> last should become final sigma ς
+        "ΘΕΣΣαλονίκη",  # Sigma before Greek letter -> should stay regular sigma σ  # noqa: RUF003
+        "ΦΘΣ!",  # Sigma before exclamation -> should become final sigma ς
+        "ΦΘΣ123",  # Sigma before number -> should become final sigma ς
+    ],
+)
+def test_string_lower_greek_final_sigma(data):
+    ps = pd.Series([data])
+    gs = cudf.Series([data])
 
     expect = ps.str.lower()
     got = gs.str.lower()
