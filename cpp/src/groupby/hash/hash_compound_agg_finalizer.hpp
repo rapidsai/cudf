@@ -12,35 +12,21 @@
 namespace cudf::groupby::detail::hash {
 
 /**
- * @brief Context structure for hash compound aggregation finalization.
- *
- * Contains the state needed to finalize compound aggregations in hash groupby.
- */
-struct hash_compound_agg_finalizer_context {
-  column_view col;
-  data_type input_type;
-  cudf::detail::result_cache* cache;
-  bitmask_type const* d_row_bitmask;
-  rmm::cuda_stream_view stream;
-  rmm::device_async_resource_ref mr;
-
-  hash_compound_agg_finalizer_context(column_view col,
-                                      cudf::detail::result_cache* cache,
-                                      bitmask_type const* d_row_bitmask,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr);
-
-  // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
-  auto gather_argminmax(cudf::aggregation const& agg);
-};
-
-/**
  * @brief Functor to finalize compound aggregations in hash groupby.
  */
-struct hash_compound_agg_finalizer_fn {
-  hash_compound_agg_finalizer_context& ctx;
+struct hash_compound_agg_finalizer {
+  column_view const col;
+  data_type const input_type;
+  cudf::detail::result_cache* const cache;
+  bitmask_type const* const d_row_bitmask;
+  rmm::cuda_stream_view const stream;
+  rmm::device_async_resource_ref const mr;
 
-  explicit hash_compound_agg_finalizer_fn(hash_compound_agg_finalizer_context& ctx) : ctx(ctx) {}
+  hash_compound_agg_finalizer(column_view const& col,
+                              cudf::detail::result_cache* cache,
+                              bitmask_type const* d_row_bitmask,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr);
 
   // Default case: no-op
   template <aggregation::Kind k>
@@ -51,22 +37,21 @@ struct hash_compound_agg_finalizer_fn {
 
 // Declare specializations
 template <>
-void hash_compound_agg_finalizer_fn::operator()<aggregation::MIN>(aggregation const& agg) const;
+void hash_compound_agg_finalizer::operator()<aggregation::MIN>(aggregation const& agg) const;
 
 template <>
-void hash_compound_agg_finalizer_fn::operator()<aggregation::MAX>(aggregation const& agg) const;
+void hash_compound_agg_finalizer::operator()<aggregation::MAX>(aggregation const& agg) const;
 
 template <>
-void hash_compound_agg_finalizer_fn::operator()<aggregation::MEAN>(aggregation const& agg) const;
+void hash_compound_agg_finalizer::operator()<aggregation::MEAN>(aggregation const& agg) const;
 
 template <>
-void hash_compound_agg_finalizer_fn::operator()<aggregation::M2>(aggregation const& agg) const;
+void hash_compound_agg_finalizer::operator()<aggregation::M2>(aggregation const& agg) const;
 
 template <>
-void hash_compound_agg_finalizer_fn::operator()<aggregation::VARIANCE>(
-  aggregation const& agg) const;
+void hash_compound_agg_finalizer::operator()<aggregation::VARIANCE>(aggregation const& agg) const;
 
 template <>
-void hash_compound_agg_finalizer_fn::operator()<aggregation::STD>(aggregation const& agg) const;
+void hash_compound_agg_finalizer::operator()<aggregation::STD>(aggregation const& agg) const;
 
 }  // namespace cudf::groupby::detail::hash
