@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -905,6 +905,8 @@ class parquet_writer_options_base {
   std::shared_ptr<writer_compression_statistics> _compression_stats;
   // write V2 page headers?
   bool _v2_page_headers = false;
+  // enable per-page compression decision for V2?
+  bool _page_level_compression = false;
   // Which columns in _table are used for sorting
   std::optional<std::vector<sorting_column>> _sorting_columns;
 
@@ -1071,6 +1073,17 @@ class parquet_writer_options_base {
   [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
 
   /**
+   * @brief Returns `true` if per-page compression is enabled for V2 pages.
+   *
+   * When enabled, each V2 data page can independently decide whether to store
+   * compressed or uncompressed based on compression effectiveness. This may
+   * produce files that are not readable by all Parquet implementations.
+   *
+   * @return `true` if per-page compression decision is enabled.
+   */
+  [[nodiscard]] auto is_enabled_page_level_compression() const { return _page_level_compression; }
+
+  /**
    * @brief Returns the sorting_columns.
    *
    * @return Column sort order metadata
@@ -1195,6 +1208,17 @@ class parquet_writer_options_base {
    * @param val Boolean value to enable/disable writing of V2 page headers.
    */
   void enable_write_v2_headers(bool val);
+
+  /**
+   * @brief Sets preference for per-page compression decision in V2 pages.
+   *
+   * When enabled, each V2 data page can independently decide whether to store
+   * compressed or uncompressed based on compression effectiveness. This may
+   * produce files that are not readable by all Parquet implementations (e.g., PyArrow).
+   *
+   * @param val Boolean value to enable/disable per-page compression decisions.
+   */
+  void enable_page_level_compression(bool val);
 
   /**
    * @brief Sets sorting columns.
@@ -1402,6 +1426,18 @@ class parquet_writer_options_builder_base {
    * @return this for chaining
    */
   BuilderT& write_v2_headers(bool enabled);
+
+  /**
+   * @brief Set to true to enable per-page compression decisions for V2 pages.
+   *
+   * When enabled, each V2 data page can independently decide whether to store
+   * compressed or uncompressed based on compression effectiveness. This may
+   * produce files that are not readable by all Parquet implementations.
+   *
+   * @param enabled Boolean value to enable/disable per-page compression decisions.
+   * @return this for chaining
+   */
+  BuilderT& page_level_compression(bool enabled);
 
   /**
    * @brief Sets column sorting metadata.

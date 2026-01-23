@@ -22,6 +22,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    HashPartitioned,
     Metadata,
 )
 from cudf_polars.experimental.shuffle import Shuffle
@@ -131,7 +132,7 @@ async def shuffle_node(
     collective_id: int,
 ) -> None:
     """
-    Execute a local shuffle pipeline in a single node.
+    Execute a global shuffle pipeline within a single node.
 
     This node combines partition_and_pack, shuffler, and unpack_and_concat
     into a single Python node using rapidsmpf.shuffler.Shuffler and utilities
@@ -164,8 +165,13 @@ async def shuffle_node(
         column_names = list(ir.schema.keys())
         partitioned_on = tuple(column_names[i] for i in columns_to_hash)
         output_metadata = Metadata(
-            max(1, num_partitions // context.comm().nranks),
-            partitioned_on=partitioned_on,
+            local_count=max(1, num_partitions // context.comm().nranks),
+            global_count=num_partitions,
+            partitioning=HashPartitioned(
+                columns=partitioned_on,
+                scope="global",
+                count=num_partitions,
+            ),
         )
         await ch_out.send_metadata(context, output_metadata)
 
