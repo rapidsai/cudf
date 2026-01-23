@@ -77,7 +77,8 @@ class aggregation {
    * @brief Possible aggregation operations.
    */
   enum Kind : int32_t {
-    SUM = 0,            ///< sum reduction
+    INVALID = -1,       ///< invalid aggregation, used as a placeholder
+    SUM,                ///< sum reduction
     SUM_WITH_OVERFLOW,  ///< sum reduction with overflow detection
     PRODUCT,            ///< product reduction
     MIN,                ///< min reduction
@@ -118,18 +119,16 @@ class aggregation {
     MERGE_HISTOGRAM,    ///< merge partial values of HISTOGRAM aggregation
     BITWISE_AGG,        ///< bitwise aggregation on numeric columns
     TOP_K,              ///< top k elements in a group
-    NUM_AGGREGATIONS    ///< Value to count the number of aggregations
+    NUM_AGGREGATIONS    ///< Value to count the number of supported aggregations
   };
 
   /**
-   * @brief No-parameter constructor.
+   * @brief Default constructor.
    *
-   * This constructor is never called anywhere, and should never be called at all. However, it
-   * cannot be be declared as deleted due to the usage of CRTP (Curiously Recurring Template
-   * Pattern) helper to automatically implement `clone()` method for derived aggregation classes. As
-   * such, definition of this constructor is just to satisfy the compiler requirements.
+   * This constructor should not be called at all. It only exists to satisfy the compiler
+   * requirements.
    */
-  aggregation() : kind{static_cast<Kind>(-1)}
+  aggregation() : kind{Kind::INVALID}
   {
     CUDF_FAIL("No-parameter aggregation constructor should never be called");
   }
@@ -139,12 +138,20 @@ class aggregation {
    *
    * @param kind_ aggregation::Kind enum value
    */
-  aggregation(Kind kind_) : kind{kind_}
-  {
-    CUDF_EXPECTS(kind_ >= 0 && kind_ < NUM_AGGREGATIONS, "Invalid aggregation kind");
-  }
+  aggregation(Kind kind_) : kind{kind_} { CUDF_EXPECTS(is_valid(), "Invalid aggregation kind"); }
   Kind kind;  ///< The aggregation to perform
   virtual ~aggregation() = default;
+
+  /**
+   * @brief Checks if the aggregation is valid, i.e. it was constructed with a valid value for the
+   * aggregation kind.
+   *
+   * @return True if the aggregation is valid, false otherwise
+   */
+  [[nodiscard]] bool is_valid() const
+  {
+    return kind > Kind::INVALID && kind < Kind::NUM_AGGREGATIONS;
+  }
 
   /**
    * @brief Compares two aggregation objects for equality
