@@ -264,8 +264,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   }
 
   auto const num_tokens = tokens.size();
-  auto const num_nodes =
-    thrust::count_if(rmm::exec_policy_nosync(stream), tokens.begin(), tokens.end(), is_node);
+  auto const num_nodes  = cudf::detail::count_if(tokens.begin(), tokens.end(), is_node, stream);
 
   // Node levels: transform_exclusive_scan, copy_if.
   rmm::device_uvector<TreeDepthT> node_levels(num_nodes, stream, mr);
@@ -286,7 +285,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                                             node_levels.begin(),
                                                             is_node,
                                                             stream);
-    CUDF_EXPECTS(cuda::std::distance(node_levels.begin(), node_levels_end) == num_nodes,
+    CUDF_EXPECTS(cuda::std::distance(node_levels.begin(), node_levels_end) ==
+                   static_cast<std::ptrdiff_t>(num_nodes),
                  "node level count mismatch");
   }
 
@@ -352,7 +352,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
   auto const node_categories_end =
     cudf::detail::copy_if(tokens.begin(), tokens.end(), node_categories_it, is_node, stream);
-  CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
+  CUDF_EXPECTS(cuda::std::distance(node_categories_it, node_categories_end) ==
+                 static_cast<std::ptrdiff_t>(num_nodes),
                "node category count mismatch");
 
   // Node ranges: copy_if with transform.
@@ -374,7 +375,9 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       return is_node(tokens_gpu[i]);
     },
     stream);
-  CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
+  CUDF_EXPECTS(cuda::std::distance(node_range_out_it, node_range_out_end) ==
+                 static_cast<std::ptrdiff_t>(num_nodes),
+               "node range count mismatch");
 
   // Extract Struct, List range_end:
   // 1. Extract Struct, List - begin & end separately, their token ids
@@ -393,8 +396,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         default: return false;
       };
     };
-    auto const num_nested =
-      thrust::count_if(rmm::exec_policy_nosync(stream), tokens.begin(), tokens.end(), is_nested);
+    auto const num_nested = cudf::detail::count_if(tokens.begin(), tokens.end(), is_nested, stream);
     rmm::device_uvector<TreeDepthT> token_levels(num_nested, stream);
     rmm::device_uvector<NodeIndexT> token_id(num_nested, stream);
     rmm::device_uvector<NodeIndexT> parent_node_ids(num_nested, stream);
