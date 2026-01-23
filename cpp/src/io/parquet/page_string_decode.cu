@@ -210,6 +210,8 @@ __device__ cuda::std::pair<int, int> page_bounds(
       processed += preprocess_block_size;
     }
 
+    // Sync shared variables like end_val_idx, skipped_leaf_values, etc.
+    __syncthreads();
     start_value = skipped_values_set ? skipped_leaf_values : 0;
     end_value   = end_value_set ? end_val_idx : leaf_count;
 
