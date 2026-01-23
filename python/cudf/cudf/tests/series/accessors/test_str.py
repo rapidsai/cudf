@@ -2240,13 +2240,14 @@ def test_string_lower(ps_gs):
     ],
 )
 def test_string_lower_greek_final_sigma(data):
-    ps = pd.Series([data])
-    gs = cudf.Series([data])
+    with cudf.option_context("mode.pandas_compatible", True):
+        ps = pd.Series([data])
+        gs = cudf.Series([data])
 
-    expect = ps.str.lower()
-    got = gs.str.lower()
+        expect = ps.str.lower()
+        got = gs.str.lower()
 
-    assert_eq(expect, got)
+        assert_eq(expect, got)
 
 
 def test_string_upper(ps_gs):
