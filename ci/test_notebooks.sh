@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -11,8 +11,14 @@ conda config --set channel_priority strict
 
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
-PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf)")
 PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf --pure --cuda "${RAPIDS_CUDA_VERSION}")")
+
+# Only use stable ABI package naming for Python >= 3.11
+if [[ "${RAPIDS_PY_VERSION}" != "3.10" ]]; then
+  PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf --stable --cuda "${RAPIDS_CUDA_VERSION}")")
+else
+  PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf)")
+fi
 
 rapids-logger "Generate notebook testing dependencies"
 

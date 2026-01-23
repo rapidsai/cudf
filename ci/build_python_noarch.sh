@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -15,8 +15,13 @@ rapids-generate-version > ./python/cudf/cudf/VERSION
 
 rapids-logger "Begin py build"
 
+# Only use stable ABI package naming for Python >= 3.11
+if [[ "${RAPIDS_PY_VERSION}" != "3.10" ]]; then
+  PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf --stable --cuda "${RAPIDS_CUDA_VERSION}")")
+else
+  PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf)")
+fi
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
-PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf)")
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
 export RAPIDS_PACKAGE_VERSION
