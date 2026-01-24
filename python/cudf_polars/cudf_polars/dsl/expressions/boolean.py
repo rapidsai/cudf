@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document BooleanFunction to remove noqa
 # ruff: noqa: D101
@@ -351,16 +351,22 @@ class BooleanFunction(Expr):
         elif self.name is BooleanFunction.Name.IsIn:
             needles, haystack = columns
             if haystack.obj.type().id() == plc.TypeId.LIST:
-                # Unwrap values from the list column
-                # .inner returns DataTypeClass | DataType, need to cast to DataType
-                haystack = Column(
-                    haystack.obj.children()[1],
-                    dtype=DataType(
+                needles_casted = needles.astype(
+                    DataType(
                         cast(
                             pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner
                         )
                     ),
-                ).astype(needles.dtype, stream=df.stream)
+                    stream=df.stream,
+                )
+                return Column(
+                    plc.lists.contains(
+                        haystack.obj,
+                        needles_casted.obj,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
             if haystack.size:
                 return Column(
                     plc.search.contains(

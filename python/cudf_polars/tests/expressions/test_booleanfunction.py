@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -228,11 +228,10 @@ def test_boolean_is_in_raises_unsupported():
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_boolean_is_in_with_nested_list_raises():
+def test_boolean_is_in_with_list_column():
     ldf = pl.LazyFrame({"x": [1, 2, 3], "y": [[1, 2], [2, 3], [4]]})
     q = ldf.select(pl.col("x").is_in(pl.col("y")))
-    with pytest.raises(AssertionError, match="DataFrames are different"):
-        assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q)
 
 
 def test_expr_is_in_empty_list():
