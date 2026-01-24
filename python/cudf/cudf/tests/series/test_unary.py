@@ -1,11 +1,13 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from decimal import Decimal
 
 import numpy as np
+import pandas as pd
+import pyarrow as pa
 
-from cudf import Series
+from cudf import Series, from_pandas, option_context
 from cudf.testing import assert_eq
 
 
@@ -41,3 +43,15 @@ def test_series_decimal_neg():
     sr = Series([Decimal("0.0"), Decimal("1.23"), Decimal("4.567")])
     psr = sr.to_pandas()
     assert_eq((-sr).to_pandas(), -psr, check_dtype=True)
+
+
+def test_series_invert_arrow_dtype():
+    ps = pd.Series(
+        pa.array([1, 0, 1, 0, None, 2, 1, 2], type=pa.uint32()),
+        dtype="uint32[pyarrow]",
+    )
+    with option_context("mode.pandas_compatible", True):
+        psr = (~from_pandas(ps)).to_pandas()
+        sr = ~ps
+
+        assert_eq(psr, sr)
