@@ -118,7 +118,7 @@ class aggregation {
     MERGE_HISTOGRAM,    ///< merge partial values of HISTOGRAM aggregation
     BITWISE_AGG,        ///< bitwise aggregation on numeric columns
     TOP_K,              ///< top k elements in a group
-    INVALID,            ///< invalid aggregation, used as a placeholder when default-constructed
+    INVALID             ///< invalid aggregation, used as a placeholder when default-constructed
   };
 
   /**
