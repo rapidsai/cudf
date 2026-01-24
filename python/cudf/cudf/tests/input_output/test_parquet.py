@@ -480,9 +480,9 @@ def test_parquet_read_filtered_everything(tmp_path):
 
     # Check filter
     df_filtered = cudf.read_parquet(fname, filters=[("x", "==", 12)])
-    assert_eq(len(df_filtered), 0)
-    assert_eq(df_filtered["x"].dtype, "int64")
-    assert_eq(df_filtered["y"].dtype, "object")
+    assert len(df_filtered) == 0
+    assert df_filtered["x"].dtype == "int64"
+    assert df_filtered["y"].dtype == pd.StringDtype(na_value=np.nan)
 
 
 def test_parquet_read_filtered_multiple_files(tmp_path):
@@ -2314,7 +2314,7 @@ def test_read_parquet_partitioned_filtered(
         # Check that we didn't get categorical
         # columns, but convert back to categorical
         # for comparison with pandas
-        assert got.dtypes["b"] == "object"
+        assert got.dtypes["b"] == pd.StringDtype(na_value=np.nan)
         assert got.dtypes["c"] == "int"
     assert_eq(expect, got)
 

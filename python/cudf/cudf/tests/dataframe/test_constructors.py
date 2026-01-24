@@ -663,12 +663,18 @@ def test_series_data_with_name_with_columns_matching():
 def test_series_data_with_name_with_columns_not_matching():
     gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1])
     pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1])
+    # As of pandas 3.0, pandas returns object for empty columns
+    # which cuDF doesn't support
+    pdf = gdf.astype(gdf.iloc[:, 0].dtype)
     assert_eq(gdf, pdf)
 
 
 def test_series_data_with_name_with_columns_matching_align():
     gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1, 2])
     pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1, 2])
+    # As of pandas 3.0, pandas returns object for a new broadcasted column
+    # which cuDF doesn't support
+    pdf[1] = pdf[1].astype(gdf[1].dtype)
     assert_eq(gdf, pdf)
 
 
@@ -709,7 +715,9 @@ def test_create_dataframe_from_list_like(data):
 def test_create_dataframe_column():
     pdf = pd.DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
     gdf = cudf.DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
-
+    # As of pandas 3.0, pandas returns object for broadcasted columns
+    # which cuDF doesn't support
+    pdf = gdf.astype(gdf.iloc[:, 0].dtype)
     assert_eq(pdf, gdf)
 
     pdf = pd.DataFrame(
@@ -722,7 +730,9 @@ def test_create_dataframe_column():
         columns=["a", "b", "c"],
         index=["A", "Z", "X"],
     )
-
+    # As of pandas 3.0, pandas returns object for broadcasted columns
+    # which cuDF doesn't support
+    pdf["c"] = pdf["c"].astype(gdf["c"].dtype)
     assert_eq(pdf, gdf)
 
 
@@ -910,6 +920,10 @@ def test_construct_dict_scalar_values_raises():
 def test_construct_empty_listlike_index_and_columns(columns, index):
     result = cudf.DataFrame([], columns=columns, index=index)
     expected = pd.DataFrame([], columns=columns, index=index)
+    if columns is not None:
+        # As of pandas 3.0, pandas returns object for empty columns
+        # which cuDF doesn't support
+        expected = expected.astype(result.iloc[:, 0].dtype)
     assert_eq(result, expected)
 
 
@@ -1267,6 +1281,10 @@ def test_dataframe_from_dict_cp_np_arrays(
 def test_df_list_dtypes(data):
     expect = pd.DataFrame(data)
     got = cudf.DataFrame(data)
+    if isinstance(data, dict) and "c" in data:
+        # As of pandas 3.0, pandas returns object for broadcasted columns
+        # which cuDF doesn't support
+        expect["c"] = expect["c"].astype(got["c"].dtype)
     assert_eq(expect, got)
 
 

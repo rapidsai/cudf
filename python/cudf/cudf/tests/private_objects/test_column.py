@@ -45,7 +45,10 @@ def pandas_input(all_supported_types_as_str):
             data = random_ints(np.int64, size)
         elif dtype.kind == "U":
             # Unicode strings of integers like "12345"
+            # As of pandas 3.0, pandas interprets numpy string type as object
             data = random_ints(np.int64, size).astype(dtype.str)
+            data = pd.array(data, dtype=pd.StringDtype(na_value=np.nan))
+            dtype = None
         elif dtype.kind == "f":
             # floats in [0.0, 1.0)
             data = rng.random(size=size, dtype=dtype)

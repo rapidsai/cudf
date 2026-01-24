@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -15,7 +15,7 @@ from cudf.testing import assert_eq
         (np.dtype("int8"), np.dtype("int8")),
         (np.int8, np.dtype("int8")),
         (pd.Int8Dtype(), np.dtype("int8")),
-        (pd.StringDtype(), np.dtype("object")),
+        (pd.StringDtype(), pd.StringDtype()),
         ("int8", np.dtype("int8")),
         ("boolean", np.dtype("bool")),
         ("bool_", np.dtype("bool")),
@@ -23,7 +23,7 @@ from cudf.testing import assert_eq
         (int, np.dtype("int64")),
         (float, np.dtype("float64")),
         (cudf.ListDtype("int64"), cudf.ListDtype("int64")),
-        (np.dtype("U"), np.dtype("object")),
+        (np.dtype("U"), pd.StringDtype(na_value=np.nan)),
         ("timedelta64[ns]", np.dtype("<m8[ns]")),
         ("timedelta64[ms]", np.dtype("<m8[ms]")),
         ("<m8[s]", np.dtype("<m8[s]")),
