@@ -784,6 +784,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
         from cudf.core.column.column import ColumnBase
 
+        # Use gmt_data's actual time unit to match the plc_column type
+        dtype = get_compatible_timezone(
+            pd.DatetimeTZDtype(gmt_data.time_unit, tz)
+        )
         return cast(
             DatetimeColumn, ColumnBase.create(gmt_data.plc_column, dtype)
         )
@@ -937,6 +941,6 @@ class DatetimeTZColumn(DatetimeColumn):
         return cast(
             DatetimeColumn,
             ColumnBase.create(
-                utc_time.plc_column, pd.DatetimeTZDtype(self.time_unit, tz)
+                utc_time.plc_column, pd.DatetimeTZDtype(utc_time.time_unit, tz)
             ),
         )

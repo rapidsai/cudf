@@ -895,9 +895,11 @@ def _dtype_to_pylibcudf_typeid(dtype: DtypeObj) -> plc.TypeId:
     if isinstance(dtype, Decimal128Dtype):
         return plc.TypeId.DECIMAL128
 
-    # DatetimeTZ is stored as TIMESTAMP_NANOSECONDS with separate timezone metadata
+    # DatetimeTZ is stored as TIMESTAMP_* based on the unit
     if isinstance(dtype, pd.DatetimeTZDtype):
-        return plc.TypeId.TIMESTAMP_NANOSECONDS
+        # Map the unit to the corresponding TIMESTAMP TypeId
+        base_dtype = _get_base_dtype(dtype)
+        return SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[base_dtype]
 
     # String types
     if (
@@ -1097,11 +1099,12 @@ def _validate_dtype_compatibility(col: plc.Column, dtype: DtypeObj) -> None:
             )
         return
 
-    # DatetimeTZ: Verify TIMESTAMP_NANOSECONDS TypeId
+    # DatetimeTZ: Verify TIMESTAMP TypeId matches the unit
     if isinstance(dtype, pd.DatetimeTZDtype):
-        if col_tid != plc.TypeId.TIMESTAMP_NANOSECONDS:
+        expected_tid = _dtype_to_pylibcudf_typeid(dtype)
+        if col_tid != expected_tid:
             raise ValueError(
-                f"DatetimeTZDtype requires TIMESTAMP_NANOSECONDS column, "
+                f"DatetimeTZDtype with unit='{dtype.unit}' requires {expected_tid} column, "
                 f"but got pylibcudf TypeId: {col_tid}"
             )
         return
