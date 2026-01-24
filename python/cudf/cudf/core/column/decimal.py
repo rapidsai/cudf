@@ -328,12 +328,17 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 if isinstance(rhs, (int, Decimal))
                 else rhs
             )
-            return binaryop.binaryop(
+            result = binaryop.binaryop(
                 lhs_comp,
                 rhs_comp,
                 op,
                 get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
             )
+            if cudf.get_option("mode.pandas_compatible") and not isinstance(
+                self.dtype, pd.ArrowDtype
+            ):
+                result = result.fillna(op == "__ne__")
+            return result
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "
