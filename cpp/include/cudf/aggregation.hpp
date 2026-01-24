@@ -77,8 +77,7 @@ class aggregation {
    * @brief Possible aggregation operations.
    */
   enum Kind : int32_t {
-    INVALID = -1,       ///< invalid aggregation, used as a placeholder
-    SUM,                ///< sum reduction
+    SUM = 0,            ///< sum reduction
     SUM_WITH_OVERFLOW,  ///< sum reduction with overflow detection
     PRODUCT,            ///< product reduction
     MIN,                ///< min reduction
@@ -119,7 +118,7 @@ class aggregation {
     MERGE_HISTOGRAM,    ///< merge partial values of HISTOGRAM aggregation
     BITWISE_AGG,        ///< bitwise aggregation on numeric columns
     TOP_K,              ///< top k elements in a group
-    NUM_AGGREGATIONS    ///< Value to count the number of supported aggregations
+    INVALID,            ///< invalid aggregation, used as a placeholder when default-constructed
   };
 
   /**
@@ -148,10 +147,7 @@ class aggregation {
    *
    * @return True if the aggregation is valid, false otherwise
    */
-  [[nodiscard]] bool is_valid() const
-  {
-    return kind > Kind::INVALID && kind < Kind::NUM_AGGREGATIONS;
-  }
+  [[nodiscard]] bool is_valid() const { return kind >= 0 && kind < Kind::INVALID; }
 
   /**
    * @brief Compares two aggregation objects for equality
