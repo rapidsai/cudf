@@ -90,8 +90,8 @@ class IntervalColumn(ColumnBase):
         if not isinstance(array, pa.ExtensionArray):
             raise ValueError("Expected ExtensionArray for interval data")
         new_col = super().from_arrow(array.storage)
-        return new_col._with_type_metadata(
-            IntervalDtype.from_arrow(array.type)
+        return ColumnBase.create(
+            new_col.plc_column, IntervalDtype.from_arrow(array.type)
         )  # type: ignore[return-value]
 
     def to_arrow(self) -> pa.Array:
@@ -144,7 +144,8 @@ class IntervalColumn(ColumnBase):
         )
 
     def copy(self, deep: bool = True) -> Self:
-        return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
+        copied = super().copy(deep=deep)
+        return ColumnBase.create(copied.plc_column, self.dtype)  # type: ignore[return-value]
 
     def _adjust_reduce_result(
         self,
@@ -154,7 +155,7 @@ class IntervalColumn(ColumnBase):
         plc_scalar: plc.Scalar,
     ) -> ColumnBase:
         """Preserve IntervalDtype metadata on reduction result."""
-        return result_col._with_type_metadata(col_dtype)
+        return ColumnBase.create(result_col.plc_column, col_dtype)
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
@@ -183,9 +184,10 @@ class IntervalColumn(ColumnBase):
 
     @property
     def left(self) -> ColumnBase:
-        return ColumnBase.from_pylibcudf(
-            self.plc_column.children()[0]
-        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
+        return ColumnBase.create(
+            self.plc_column.children()[0],
+            self.dtype.subtype,  # type: ignore[union-attr]
+        )
 
     @functools.cached_property
     def mid(self) -> ColumnBase:
@@ -197,9 +199,10 @@ class IntervalColumn(ColumnBase):
 
     @property
     def right(self) -> ColumnBase:
-        return ColumnBase.from_pylibcudf(
-            self.plc_column.children()[1]
-        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
+        return ColumnBase.create(
+            self.plc_column.children()[1],
+            self.dtype.subtype,  # type: ignore[union-attr]
+        )
 
     @property
     def __cuda_array_interface__(self) -> dict[str, Any]:

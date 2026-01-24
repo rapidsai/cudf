@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import functools
 import warnings
 from typing import TYPE_CHECKING, Any, TypeGuard
 
@@ -830,3 +831,296 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING] = np.dtype(
 
 SIZE_TYPE_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.SIZE_TYPE_ID]
 CUDF_STRING_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING]
+
+
+@functools.lru_cache(maxsize=128)
+def _dtype_to_pylibcudf_typeid(dtype: DtypeObj) -> plc.TypeId:
+    """
+    Convert a cudf dtype to the corresponding pylibcudf TypeId.
+
+    This is the inverse of PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES mapping
+    and is used for validation in ColumnBase.create().
+
+    Parameters
+    ----------
+    dtype : DtypeObj
+        The cudf dtype to convert.
+
+    Returns
+    -------
+    plc.TypeId
+        The corresponding pylibcudf TypeId.
+
+    Raises
+    ------
+    TypeError
+        If the dtype cannot be mapped to a pylibcudf TypeId.
+    """
+    from cudf.core.dtypes import (
+        CategoricalDtype,
+        Decimal32Dtype,
+        Decimal64Dtype,
+        Decimal128Dtype,
+        IntervalDtype,
+        ListDtype,
+        StructDtype,
+    )
+
+    # Categorical columns are stored as integer codes
+    if isinstance(dtype, (pd.CategoricalDtype, CategoricalDtype)):
+        # Categorical is stored as codes which are integers
+        # The actual type depends on the number of categories
+        # but we'll return a generic INT type for validation purposes
+        # The actual validation will check that it's an integer type
+        return plc.TypeId.INT32  # Default, actual may vary
+
+    # Nested types
+    if isinstance(dtype, ListDtype):
+        return plc.TypeId.LIST
+
+    if isinstance(dtype, StructDtype):
+        return plc.TypeId.STRUCT
+
+    if isinstance(dtype, IntervalDtype):
+        # IntervalColumn is stored as a StructColumn
+        return plc.TypeId.STRUCT
+
+    # Decimal types
+    if isinstance(dtype, Decimal32Dtype):
+        return plc.TypeId.DECIMAL32
+
+    if isinstance(dtype, Decimal64Dtype):
+        return plc.TypeId.DECIMAL64
+
+    if isinstance(dtype, Decimal128Dtype):
+        return plc.TypeId.DECIMAL128
+
+    # DatetimeTZ is stored as TIMESTAMP_NANOSECONDS with separate timezone metadata
+    if isinstance(dtype, pd.DatetimeTZDtype):
+        return plc.TypeId.TIMESTAMP_NANOSECONDS
+
+    # String types
+    if (
+        dtype == CUDF_STRING_DTYPE
+        or (hasattr(dtype, "kind") and dtype.kind == "U")
+        or isinstance(dtype, pd.StringDtype)
+        or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
+    ):
+        return plc.TypeId.STRING
+
+    # Try to look up in the numpy to pylibcudf mapping
+    if isinstance(dtype, np.dtype):
+        if dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
+            return SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype]
+
+    # Handle pandas nullable dtypes by converting to numpy first
+    if isinstance(dtype, pd.core.dtypes.base.ExtensionDtype):
+        if hasattr(dtype, "numpy_dtype"):
+            np_dtype = dtype.numpy_dtype
+            if np_dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
+                return SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np_dtype]
+
+    # Handle pandas ArrowDtype
+    if isinstance(dtype, pd.ArrowDtype):
+        # Try to extract the numpy equivalent
+        try:
+            np_dtype = dtype.numpy_dtype
+            if np_dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
+                return SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np_dtype]
+        except (TypeError, NotImplementedError):
+            pass
+
+    raise TypeError(
+        f"Cannot convert dtype {dtype} (type: {type(dtype)}) to pylibcudf TypeId"
+    )
+
+
+def _validate_dtype_compatibility(col: plc.Column, dtype: DtypeObj) -> None:
+    """
+    Validate that a cudf dtype is structurally compatible with a pylibcudf Column.
+
+    This function performs structural validation to ensure that the provided dtype
+    matches the structure of the pylibcudf Column. It checks:
+    - Basic type compatibility (TypeId matching)
+    - Nested structure validation (List, Struct, Interval)
+    - Decimal scale matching
+    - Categorical codes validation
+
+    Parameters
+    ----------
+    col : plc.Column
+        The pylibcudf Column to validate against.
+    dtype : DtypeObj
+        The cudf dtype to validate.
+
+    Raises
+    ------
+    ValueError
+        If the dtype is incompatible with the Column's structure.
+
+    Examples
+    --------
+    >>> # Valid: dtype matches column structure
+    >>> _validate_dtype_compatibility(int_col, np.dtype('int64'))
+
+    >>> # Invalid: dtype mismatch
+    >>> _validate_dtype_compatibility(int_col, np.dtype('float64'))  # Raises ValueError
+
+    >>> # Valid: nested type with matching structure
+    >>> _validate_dtype_compatibility(list_col, ListDtype(np.dtype('int64')))
+    """
+    from cudf.core.dtypes import (
+        CategoricalDtype,
+        Decimal32Dtype,
+        Decimal64Dtype,
+        Decimal128Dtype,
+        IntervalDtype,
+        ListDtype,
+        StructDtype,
+    )
+
+    col_type = col.type()
+    col_tid = col_type.id()
+
+    # Categorical: Verify column is integer type (codes)
+    if isinstance(dtype, (pd.CategoricalDtype, CategoricalDtype)):
+        # Categorical is stored as integer codes
+        if col_tid not in {
+            plc.TypeId.INT8,
+            plc.TypeId.INT16,
+            plc.TypeId.INT32,
+            plc.TypeId.INT64,
+            plc.TypeId.UINT8,
+            plc.TypeId.UINT16,
+            plc.TypeId.UINT32,
+            plc.TypeId.UINT64,
+        }:
+            raise ValueError(
+                f"Categorical dtype requires integer column for codes, "
+                f"but got pylibcudf TypeId: {col_tid}"
+            )
+        return
+
+    # List: Verify LIST TypeId and recursively validate element type
+    if isinstance(dtype, ListDtype):
+        if col_tid != plc.TypeId.LIST:
+            raise ValueError(
+                f"ListDtype requires LIST column, but got pylibcudf TypeId: {col_tid}"
+            )
+        # Recursively validate the child column
+        child = col.list_view().child()
+        _validate_dtype_compatibility(child, dtype.element_type)
+        return
+
+    # Struct: Verify STRUCT TypeId, field count, and recursively validate fields
+    if isinstance(dtype, StructDtype):
+        if col_tid != plc.TypeId.STRUCT:
+            raise ValueError(
+                f"StructDtype requires STRUCT column, but got pylibcudf TypeId: {col_tid}"
+            )
+        # Check field count
+        if len(dtype.fields) != col.num_children():
+            raise ValueError(
+                f"StructDtype has {len(dtype.fields)} fields, "
+                f"but column has {col.num_children()} children"
+            )
+        # Recursively validate each field
+        for i, (field_name, field_dtype) in enumerate(dtype.fields.items()):
+            child = col.child(i)
+            try:
+                _validate_dtype_compatibility(child, field_dtype)
+            except ValueError as e:
+                raise ValueError(
+                    f"Field '{field_name}' (index {i}) validation failed: {e}"
+                ) from e
+        return
+
+    # Interval: Verify STRUCT TypeId with exactly 2 children of matching subtype
+    if isinstance(dtype, IntervalDtype):
+        if col_tid != plc.TypeId.STRUCT:
+            raise ValueError(
+                f"IntervalDtype requires STRUCT column, but got pylibcudf TypeId: {col_tid}"
+            )
+        if col.num_children() != 2:
+            raise ValueError(
+                f"IntervalDtype requires exactly 2 children (left and right bounds), "
+                f"but got {col.num_children()}"
+            )
+        # Both children should match the subtype
+        for i in range(2):
+            child = col.child(i)
+            try:
+                _validate_dtype_compatibility(child, dtype.subtype)
+            except ValueError as e:
+                raise ValueError(
+                    f"Interval bound {i} validation failed: {e}"
+                ) from e
+        return
+
+    # Decimal: Verify correct DECIMAL TypeId and scale
+    if isinstance(dtype, Decimal32Dtype):
+        if col_tid != plc.TypeId.DECIMAL32:
+            raise ValueError(
+                f"Decimal32Dtype requires DECIMAL32 column, "
+                f"but got pylibcudf TypeId: {col_tid}"
+            )
+        if -col_type.scale() != dtype.scale:
+            raise ValueError(
+                f"Decimal32Dtype scale mismatch: dtype has scale={dtype.scale}, "
+                f"but column has scale={-col_type.scale()}"
+            )
+        return
+
+    if isinstance(dtype, Decimal64Dtype):
+        if col_tid != plc.TypeId.DECIMAL64:
+            raise ValueError(
+                f"Decimal64Dtype requires DECIMAL64 column, "
+                f"but got pylibcudf TypeId: {col_tid}"
+            )
+        if -col_type.scale() != dtype.scale:
+            raise ValueError(
+                f"Decimal64Dtype scale mismatch: dtype has scale={dtype.scale}, "
+                f"but column has scale={-col_type.scale()}"
+            )
+        return
+
+    if isinstance(dtype, Decimal128Dtype):
+        if col_tid != plc.TypeId.DECIMAL128:
+            raise ValueError(
+                f"Decimal128Dtype requires DECIMAL128 column, "
+                f"but got pylibcudf TypeId: {col_tid}"
+            )
+        if -col_type.scale() != dtype.scale:
+            raise ValueError(
+                f"Decimal128Dtype scale mismatch: dtype has scale={dtype.scale}, "
+                f"but column has scale={-col_type.scale()}"
+            )
+        return
+
+    # DatetimeTZ: Verify TIMESTAMP_NANOSECONDS TypeId
+    if isinstance(dtype, pd.DatetimeTZDtype):
+        if col_tid != plc.TypeId.TIMESTAMP_NANOSECONDS:
+            raise ValueError(
+                f"DatetimeTZDtype requires TIMESTAMP_NANOSECONDS column, "
+                f"but got pylibcudf TypeId: {col_tid}"
+            )
+        return
+
+    # Basic types: Map dtype to expected pylibcudf TypeId and verify match
+    try:
+        expected_tid = _dtype_to_pylibcudf_typeid(dtype)
+    except TypeError as e:
+        raise ValueError(f"Cannot validate dtype {dtype}: {e}") from e
+
+    # Special case: _wrap_buffers() converts EMPTY columns to INT8 with all nulls.
+    # If we expect a different type but got INT8 with all nulls, this is likely
+    # an EMPTY→INT8 conversion and should be allowed.
+    if col_tid != expected_tid:
+        if col_tid == plc.TypeId.INT8 and col.null_count() == col.size():
+            # This is likely an EMPTY column converted to INT8 by _wrap_buffers
+            # Allow it regardless of expected type
+            return
+        raise ValueError(
+            f"Dtype {dtype} expects pylibcudf TypeId {expected_tid}, "
+            f"but column has TypeId {col_tid}"
+        )

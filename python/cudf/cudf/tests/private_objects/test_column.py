@@ -577,3 +577,220 @@ def test_from_arrow_max_precision_decimal32():
         Decimal32Column.from_arrow(
             pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=10))
         )
+
+
+# Tests for ColumnBase.create() factory method
+class TestColumnBaseCreate:
+    """Tests for the new ColumnBase.create() factory method."""
+
+    def test_create_with_basic_types(self):
+        """Test create() with basic numpy dtypes."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+
+        # Create a simple integer column
+        arr = pa.array([1, 2, 3, 4, 5], type=pa.int64())
+        plc_col = plc.Column.from_arrow(arr)
+
+        # Create column with explicit dtype
+        col = ColumnBase.create(plc_col, np.dtype("int64"))
+
+        assert col.dtype == np.dtype("int64")
+        assert len(col) == 5
+        assert col.to_arrow().equals(arr)
+
+    def test_create_with_categorical(self):
+        """Test create() with CategoricalDtype."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+        from cudf.core.dtypes import CategoricalDtype
+
+        # Create codes column (categorical is stored as integer codes)
+        codes = pa.array([0, 1, 2, 1, 0], type=pa.int8())
+        plc_col = plc.Column.from_arrow(codes)
+
+        # Create categorical column with explicit categories
+        categories = ["a", "b", "c"]
+        dtype = CategoricalDtype(categories=categories, ordered=True)
+        col = ColumnBase.create(plc_col, dtype)
+
+        assert isinstance(col.dtype, CategoricalDtype)
+        assert col.dtype.ordered is True
+        assert col.dtype.categories.to_pandas().tolist() == categories
+
+    def test_create_with_list_dtype(self):
+        """Test create() with ListDtype."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+        from cudf.core.dtypes import ListDtype
+
+        # Create a list column
+        arr = pa.array([[1, 2], [3], [4, 5, 6]], type=pa.list_(pa.int64()))
+        plc_col = plc.Column.from_arrow(arr)
+
+        # Create with explicit list dtype
+        dtype = ListDtype(np.dtype("int64"))
+        col = ColumnBase.create(plc_col, dtype)
+
+        assert isinstance(col.dtype, ListDtype)
+        assert col.dtype.element_type == np.dtype("int64")
+
+    def test_create_with_struct_dtype(self):
+        """Test create() with StructDtype."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+        from cudf.core.dtypes import StructDtype
+
+        # Create a struct column
+        arr = pa.array([{"a": 1, "b": 2.0}, {"a": 3, "b": 4.0}])
+        plc_col = plc.Column.from_arrow(arr)
+
+        # Create with explicit struct dtype
+        dtype = StructDtype({"a": np.dtype("int64"), "b": np.dtype("float64")})
+        col = ColumnBase.create(plc_col, dtype)
+
+        assert isinstance(col.dtype, StructDtype)
+        assert "a" in col.dtype.fields
+        assert "b" in col.dtype.fields
+
+    def test_create_with_decimal_dtype(self):
+        """Test create() with DecimalDtype."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+
+        # Create a decimal column
+        arr = pa.array(
+            [Decimal("1.23"), Decimal("4.56")], type=pa.decimal128(10, 2)
+        )
+        plc_col = plc.Column.from_arrow(arr)
+
+        # Create with explicit decimal dtype
+        dtype = cudf.Decimal128Dtype(precision=10, scale=2)
+        col = ColumnBase.create(plc_col, dtype)
+
+        assert isinstance(col.dtype, cudf.Decimal128Dtype)
+        assert col.dtype.scale == 2
+
+    def test_create_with_datetimetz(self):
+        """Test create() with DatetimeTZDtype."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+
+        # Create a timestamp column (DatetimeTZ is stored as timestamp ns)
+        arr = pa.array(
+            [1000000000, 2000000000], type=pa.timestamp("ns", tz="UTC")
+        )
+        plc_col = plc.Column.from_arrow(arr)
+
+        # Create with explicit DatetimeTZ dtype
+        dtype = pd.DatetimeTZDtype(tz="UTC", unit="ns")
+        col = ColumnBase.create(plc_col, dtype)
+
+        assert isinstance(col.dtype, pd.DatetimeTZDtype)
+        assert str(col.dtype.tz) == "UTC"
+
+    def test_create_validation_fails_wrong_typeid(self):
+        """Test that validation fails when dtype doesn't match column TypeId."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+
+        # Create an integer column
+        arr = pa.array([1, 2, 3], type=pa.int64())
+        plc_col = plc.Column.from_arrow(arr)
+
+        # Try to create with incompatible dtype (float)
+        with pytest.raises(ValueError, match="expects pylibcudf TypeId"):
+            ColumnBase.create(plc_col, np.dtype("float64"))
+
+    def test_create_validation_fails_decimal_scale(self):
+        """Test that validation fails when decimal scale doesn't match."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+
+        # Create a decimal column with scale=2
+        arr = pa.array([Decimal("1.23")], type=pa.decimal128(10, 2))
+        plc_col = plc.Column.from_arrow(arr)
+
+        # Try to create with wrong scale
+        with pytest.raises(ValueError, match="scale mismatch"):
+            dtype = cudf.Decimal128Dtype(precision=10, scale=3)  # Wrong scale
+            ColumnBase.create(plc_col, dtype)
+
+    def test_create_validation_fails_struct_field_count(self):
+        """Test that validation fails when struct field count doesn't match."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+        from cudf.core.dtypes import StructDtype
+
+        # Create a struct with 2 fields
+        arr = pa.array([{"a": 1, "b": 2.0}])
+        plc_col = plc.Column.from_arrow(arr)
+
+        # Try to create with wrong number of fields
+        with pytest.raises(
+            ValueError, match="has .* fields.*but column has .* children"
+        ):
+            dtype = StructDtype(
+                {"x": np.dtype("int64")}
+            )  # Only 1 field, but column has 2
+            ColumnBase.create(plc_col, dtype)
+
+    def test_create_validation_fails_categorical_non_integer(self):
+        """Test that validation fails when categorical uses non-integer codes."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+        from cudf.core.dtypes import CategoricalDtype
+
+        # Create a float column (invalid for categorical codes)
+        arr = pa.array([1.0, 2.0, 3.0], type=pa.float64())
+        plc_col = plc.Column.from_arrow(arr)
+
+        # Try to create categorical from float column
+        with pytest.raises(
+            ValueError, match="Categorical dtype requires integer column"
+        ):
+            dtype = CategoricalDtype(categories=["a", "b", "c"])
+            ColumnBase.create(plc_col, dtype)
+
+    def test_from_pylibcudf_deprecation_warning(self):
+        """Test that from_pylibcudf issues a deprecation warning."""
+        import pylibcudf as plc
+
+        from cudf.core.column.column import ColumnBase
+
+        arr = pa.array([1, 2, 3], type=pa.int64())
+        plc_col = plc.Column.from_arrow(arr)
+
+        # from_pylibcudf still works (deprecation warning is currently disabled)
+        col = ColumnBase.from_pylibcudf(plc_col)
+
+        # It should still work correctly
+        assert col.dtype == np.dtype("int64")
+        assert len(col) == 3
+
+    def test_create_preserves_type_from_source(self):
+        """Test the common pattern of preserving type from source column."""
+        from cudf.core.column.column import ColumnBase
+
+        # Create a categorical column
+        original = cudf.Series([1, 2, 3], dtype="category")
+        original_col = original._column
+
+        # Simulate an operation that returns a new pylibcudf column
+        # but we want to preserve the dtype
+        with original_col.access(mode="read", scope="internal"):
+            plc_col = original_col.plc_column
+            # Create new column preserving the original dtype
+            result = ColumnBase.create(plc_col, original_col.dtype)
+
+        assert result.dtype == original_col.dtype

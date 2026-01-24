@@ -73,11 +73,7 @@ class StructColumn(ColumnBase):
         sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
         dtype = cast(StructDtype, self.dtype)
         sub_dtype = list(dtype.fields.values())[idx]
-        return (
-            type(self)
-            .from_pylibcudf(sliced_plc_col)
-            ._with_type_metadata(sub_dtype)
-        )
+        return ColumnBase.create(sliced_plc_col, sub_dtype)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
@@ -169,9 +165,7 @@ class StructColumn(ColumnBase):
             return interval_col._with_type_metadata(dtype)
         elif isinstance(dtype, StructDtype):
             new_children = tuple(
-                ColumnBase.from_pylibcudf(child)._with_type_metadata(
-                    dtype.fields[f]
-                )
+                ColumnBase.create(child, dtype.fields[f])
                 for child, f in zip(
                     self.plc_column.children(),
                     dtype.fields.keys(),

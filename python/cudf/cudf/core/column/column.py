@@ -618,32 +618,115 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             validate=False,
         )
 
-    @staticmethod
-    def from_pylibcudf(col: plc.Column) -> ColumnBase:
-        """Create a Column from a pylibcudf.Column.
+    @classmethod
+    def create(cls, col: plc.Column, dtype: DtypeObj) -> ColumnBase:
+        """
+        Create a Column from a pylibcudf.Column with an explicit cudf dtype.
 
-        This function will generate a Column pointing to the provided pylibcudf
-        Column.  It will directly access the data and mask buffers of the
-        pylibcudf Column, so the newly created object is not tied to the
-        lifetime of the original pylibcudf.Column.
+        This is the primary factory for ColumnBase construction. It always requires
+        an explicit dtype to ensure type safety. If you need to infer the dtype from
+        the pylibcudf Column, use dtype_from_pylibcudf_column() first:
+
+            dtype = dtype_from_pylibcudf_column(plc_col)
+            col = ColumnBase.create(plc_col, dtype)
 
         Parameters
         ----------
         col : pylibcudf.Column
-            The object to copy.
+            The pylibcudf column to wrap.
+        dtype : DtypeObj
+            The cudf dtype to apply. Must be compatible with col's structure.
 
         Returns
         -------
-        pylibcudf.Column
-            A new pylibcudf.Column referencing the same data.
+        ColumnBase
+            A properly typed Column object of the appropriate subclass.
+
+        Raises
+        ------
+        ValueError
+            If dtype is incompatible with the pylibcudf Column's type.
+
+        Examples
+        --------
+        # Preserving type from self
+        result = ColumnBase.create(plc_col, self.dtype)
+
+        # Inferring dtype from pylibcudf
+        dtype = dtype_from_pylibcudf_column(plc_col)
+        result = ColumnBase.create(plc_col, dtype)
+
+        # Categorical with categories
+        result = ColumnBase.create(
+            codes_col,
+            CategoricalDtype(categories=cats, ordered=True)
+        )
         """
+        from cudf.utils.dtypes import _validate_dtype_compatibility
+
+        # Wrap buffers recursively
         wrapped = ColumnBase._wrap_buffers(col)
 
-        dtype = dtype_from_pylibcudf_column(wrapped)
+        # Special case: EMPTY columns are converted to INT8-all-nulls by _wrap_buffers.
+        # For these columns, we should infer the dtype from the converted column rather
+        # than using the provided dtype, because no column class can handle the mismatch
+        # between INT8 type and non-numeric dtype.
+        wrapped_tid = wrapped.type().id()
+        if (
+            wrapped_tid == plc.TypeId.INT8
+            and wrapped.null_count() == wrapped.size()
+        ):
+            # This is an EMPTY→INT8 conversion, infer dtype from the INT8 column
+            dtype = dtype_from_pylibcudf_column(wrapped)
+
+        # Validate dtype compatibility with the column structure
+        _validate_dtype_compatibility(wrapped, dtype)
+
+        # Dispatch to the appropriate subclass based on dtype
+        target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
+
+        # Construct the instance using the subclass's _from_preprocessed method
+        return target_cls._from_preprocessed(
+            plc_column=wrapped,
+            dtype=dtype,
+        )
+
+    @staticmethod
+    def _dispatch_subclass_from_dtype(dtype: DtypeObj) -> type[ColumnBase]:
+        """
+        Dispatch to the appropriate ColumnBase subclass based on dtype.
+
+        This function determines which ColumnBase subclass should be used
+        to construct a column with the given dtype.
+
+        Parameters
+        ----------
+        dtype : DtypeObj
+            The cudf dtype to dispatch on.
+
+        Returns
+        -------
+        type[ColumnBase]
+            The appropriate ColumnBase subclass for this dtype.
+
+        Raises
+        ------
+        TypeError
+            If the dtype is not recognized or supported.
+        """
+        from cudf.core.dtypes import (
+            CategoricalDtype,
+            IntervalDtype,
+            ListDtype,
+            StructDtype,
+        )
+        from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
         cls: type[ColumnBase]
         if isinstance(dtype, pd.DatetimeTZDtype):
             cls = cudf.core.column.datetime.DatetimeTZColumn
+        elif isinstance(dtype, (pd.CategoricalDtype, CategoricalDtype)):
+            cls = cudf.core.column.CategoricalColumn
         elif dtype.kind == "M":
             cls = cudf.core.column.DatetimeColumn
         elif dtype.kind == "m":
@@ -672,10 +755,38 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             raise TypeError(f"Unrecognized dtype: {dtype}")
 
-        return cls._from_preprocessed(
-            plc_column=wrapped,
-            dtype=dtype,
-        )
+        return cls
+
+    @staticmethod
+    def from_pylibcudf(col: plc.Column) -> ColumnBase:
+        """Create a Column from a pylibcudf.Column.
+
+        .. deprecated::
+            `from_pylibcudf` is deprecated and will be removed in a future version.
+            Use `ColumnBase.create(col, dtype)` instead. If you need to infer dtype,
+            use: `dtype = dtype_from_pylibcudf_column(col)`
+
+        This function will generate a Column pointing to the provided pylibcudf
+        Column.  It will directly access the data and mask buffers of the
+        pylibcudf Column, so the newly created object is not tied to the
+        lifetime of the original pylibcudf.Column.
+
+        Parameters
+        ----------
+        col : pylibcudf.Column
+            The object to copy.
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        """
+        # TODO: Add deprecation warning in future release
+        # Wrap buffers first to handle type conversions (TIMESTAMP_DAYS -> TIMESTAMP_SECONDS, EMPTY -> INT8)
+        # This ensures dtype_from_pylibcudf_column sees the canonical form
+        wrapped = ColumnBase._wrap_buffers(col)
+        dtype = dtype_from_pylibcudf_column(wrapped)
+        return ColumnBase.create(wrapped, dtype)
 
     @classmethod
     def _from_preprocessed(

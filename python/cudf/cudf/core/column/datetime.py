@@ -151,9 +151,10 @@ class DatetimeColumn(TemporalBaseColumn):
             raise TypeError(
                 f"Accumulation {op} not supported for {self.dtype}"
             )
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
-        )
+        from cudf.core.column.column import ColumnBase
+
+        scan_result = self.scan(op.replace("cum", ""), True)
+        return ColumnBase.create(scan_result.plc_column, self.dtype)
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -779,7 +780,13 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-        return gmt_data._with_type_metadata(dtype)
+        from typing import cast
+
+        from cudf.core.column.column import ColumnBase
+
+        return cast(
+            DatetimeColumn, ColumnBase.create(gmt_data.plc_column, dtype)
+        )
 
     def tz_convert(self, tz: str | None) -> DatetimeColumn:
         raise TypeError(
@@ -922,7 +929,14 @@ class DatetimeTZColumn(DatetimeColumn):
             return self._utc_time
         elif tz == str(self.dtype.tz):  # type: ignore[union-attr]
             return self.copy()
+        from typing import cast
+
+        from cudf.core.column.column import ColumnBase
+
         utc_time = self._utc_time
-        return utc_time._with_type_metadata(
-            pd.DatetimeTZDtype(self.time_unit, tz)
+        return cast(
+            DatetimeColumn,
+            ColumnBase.create(
+                utc_time.plc_column, pd.DatetimeTZDtype(self.time_unit, tz)
+            ),
         )

@@ -59,9 +59,7 @@ class ListColumn(ColumnBase):
         """Get a child column properly sliced to match the parent's view."""
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
         dtype = cast("ListDtype", self.dtype)
-        return ColumnBase.from_pylibcudf(sliced_plc_col)._with_type_metadata(
-            dtype.element_type
-        )
+        return ColumnBase.create(sliced_plc_col, dtype.element_type)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
