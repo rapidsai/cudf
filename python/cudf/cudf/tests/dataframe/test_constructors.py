@@ -663,12 +663,18 @@ def test_series_data_with_name_with_columns_matching():
 def test_series_data_with_name_with_columns_not_matching():
     gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1])
     pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1])
+    # As of pandas 3.0, pandas returns object for empty columns
+    # which cuDF doesn't support
+    pdf = gdf.astype(gdf.iloc[:, 0].dtype)
     assert_eq(gdf, pdf)
 
 
 def test_series_data_with_name_with_columns_matching_align():
     gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1, 2])
     pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1, 2])
+    # As of pandas 3.0, pandas returns object for a new broadcasted column
+    # which cuDF doesn't support
+    pdf[1] = pdf[1].astype(gdf[1].dtype)
     assert_eq(gdf, pdf)
 
 
