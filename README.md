@@ -94,7 +94,7 @@ With a Python file containing pandas code:
 ```python
 import pandas as pd
 
-df = cudf.read_parquet("data.parquet")
+df = pd.read_parquet("data.parquet")
 df.dropna().groupby(["A", "B"]).mean()
 ```
 
@@ -112,7 +112,7 @@ In [1]: %load_ext cudf.pandas
 
 In [2]: import pandas as pd
 
-In [3]: df = cudf.read_parquet("data.parquet")
+In [3]: df = pd.read_parquet("data.parquet")
 
 In [4]: df.dropna().groupby(["A", "B"]).mean()
 ```
