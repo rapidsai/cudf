@@ -579,9 +579,30 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
 named_to_reference_converter::named_to_reference_converter(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
   table_metadata const& metadata,
-  std::vector<SchemaElement> const& schema_tree)
+  std::vector<SchemaElement> const& schema_tree,
+  std::optional<std::vector<std::string>> selected_columns)
 {
   if (!expr.has_value()) { return; }
+
+  // Map indices from the column selection to their names
+  if (selected_columns.has_value()) {
+    std::transform(selected_columns->begin(),
+                   selected_columns->end(),
+                   thrust::counting_iterator<cudf::size_type>(0),
+                   std::inserter(_column_indices_to_names, _column_indices_to_names.end()),
+                   [](auto const& col_name, auto const col_index) {
+                     return std::make_pair(col_index, col_name);
+                   });
+  } else {
+    // Map top-level column indices from the schema tree to their names
+    auto const& root = schema_tree.front();
+    std::for_each(thrust::counting_iterator<int32_t>(0),
+                  thrust::counting_iterator<int32_t>(root.children_idx.size()),
+                  [&](int32_t col_idx) {
+                    auto const schema_idx = root.children_idx[col_idx];
+                    _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
+                  });
+  }
 
   // Map column names to their indices
   std::transform(metadata.schema_info.cbegin(),
@@ -589,15 +610,6 @@ named_to_reference_converter::named_to_reference_converter(
                  thrust::counting_iterator<size_t>(0),
                  std::inserter(_column_name_to_index, _column_name_to_index.end()),
                  [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
-
-  // Map column indices to their names
-  auto const& root = schema_tree.front();
-  std::for_each(thrust::counting_iterator<int32_t>(0),
-                thrust::counting_iterator<int32_t>(root.children_idx.size()),
-                [&](int32_t col_idx) {
-                  auto const schema_idx = root.children_idx[col_idx];
-                  _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
-                });
 
   expr.value().get().accept(*this);
 }
@@ -629,16 +641,17 @@ names_from_expression::names_from_expression(
 
   _skip_names = std::unordered_set<std::string>{skip_names.cbegin(), skip_names.cend()};
 
-  // If we have a column selection, map column indices to the selected names
+  // Map indices from the column selection to their names
   if (selected_columns.has_value()) {
-    std::transform(
-      thrust::counting_iterator<size_t>(0),
-      thrust::counting_iterator(selected_columns->size()),
-      selected_columns->cbegin(),
-      std::inserter(_column_indices_to_names, _column_indices_to_names.end()),
-      [&](auto col_idx, auto const& col_name) { return std::make_pair(col_idx, col_name); });
+    std::transform(selected_columns->begin(),
+                   selected_columns->end(),
+                   thrust::counting_iterator<cudf::size_type>(0),
+                   std::inserter(_column_indices_to_names, _column_indices_to_names.end()),
+                   [](auto const& col_name, auto const col_index) {
+                     return std::make_pair(col_index, col_name);
+                   });
   } else {
-    // Otherwise, map all column indices to their names from the schema tree
+    // Map top-level column indices from the schema tree to their names
     auto const& root = schema_tree.front();
     std::for_each(thrust::counting_iterator<int32_t>(0),
                   thrust::counting_iterator<int32_t>(root.children_idx.size()),

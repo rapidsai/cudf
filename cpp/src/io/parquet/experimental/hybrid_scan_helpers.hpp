@@ -362,7 +362,8 @@ class named_to_reference_converter : public parquet::detail::named_to_reference_
  public:
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata,
-                               std::vector<SchemaElement> const& schema_tree);
+                               std::vector<SchemaElement> const& schema_tree,
+                               std::optional<std::vector<std::string>> selected_columns);
 
   using parquet::detail::named_to_reference_converter::visit;
 
