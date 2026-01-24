@@ -2003,6 +2003,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def __array_ufunc__(
         self, ufunc: Callable, method: str, *inputs: Any, **kwargs: Any
     ) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
     def __invert__(self) -> ColumnBase:

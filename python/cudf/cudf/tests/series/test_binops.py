@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import decimal
@@ -545,12 +545,12 @@ def test_datetime_series_binops_pandas(
     datetime_types_as_str, datetime_types_as_str2
 ):
     dti = pd.date_range("20010101", "20020215", freq="400h", name="times")
-    pd_data_1 = pd.Series(dti)
-    pd_data_2 = pd_data_1
+    pd_data_1 = pd.Series(dti).astype(datetime_types_as_str)
+    pd_data_2 = pd_data_1.copy().astype(datetime_types_as_str2)
     gdf_data_1 = cudf.Series(pd_data_1).astype(datetime_types_as_str)
     gdf_data_2 = cudf.Series(pd_data_2).astype(datetime_types_as_str2)
-    assert_eq(pd_data_1, gdf_data_1.astype("datetime64[ns]"))
-    assert_eq(pd_data_2, gdf_data_2.astype("datetime64[ns]"))
+    assert_eq(pd_data_1, gdf_data_1)
+    assert_eq(pd_data_2, gdf_data_2)
     assert_eq(pd_data_1 < pd_data_2, gdf_data_1 < gdf_data_2)
     assert_eq(pd_data_1 > pd_data_2, gdf_data_1 > gdf_data_2)
     assert_eq(pd_data_1 == pd_data_2, gdf_data_1 == gdf_data_2)
@@ -704,6 +704,7 @@ def test_datetime_series_ops_with_scalars(
 
     if op == "add":
         expected = psr + other_scalars
+        # import pdb;pdb.set_trace()
         actual = gsr + other_scalars
     elif op == "sub":
         expected = psr - other_scalars
@@ -718,6 +719,7 @@ def test_datetime_series_ops_with_scalars(
         assert_eq(expected, actual)
 
     elif op == "sub":
+        # import pdb;pdb.set_trace()
         assert_exceptions_equal(
             lfunc=operator.sub,
             rfunc=operator.sub,
@@ -1364,37 +1366,24 @@ def test_operator_func_series_and_scalar(
 def test_operator_func_between_series_logical(
     float_types_as_str, comparison_op_method, scalar_a, scalar_b, fill_value
 ):
-    gdf_series_a = cudf.Series([scalar_a], nan_as_null=False).astype(
-        float_types_as_str
-    )
-    gdf_series_b = cudf.Series([scalar_b], nan_as_null=False).astype(
-        float_types_as_str
-    )
+    with cudf.option_context("mode.pandas_compatible", True):
+        gdf_series_a = cudf.Series([scalar_a], nan_as_null=False).astype(
+            float_types_as_str.capitalize()
+        )
+        gdf_series_b = cudf.Series([scalar_b], nan_as_null=False).astype(
+            float_types_as_str.capitalize()
+        )
 
-    pdf_series_a = gdf_series_a.to_pandas(nullable=True)
-    pdf_series_b = gdf_series_b.to_pandas(nullable=True)
+        pdf_series_a = gdf_series_a.to_pandas()
+        pdf_series_b = gdf_series_b.to_pandas()
 
-    gdf_series_result = getattr(gdf_series_a, comparison_op_method)(
-        gdf_series_b, fill_value=fill_value
-    )
-    pdf_series_result = getattr(pdf_series_a, comparison_op_method)(
-        pdf_series_b, fill_value=fill_value
-    )
-    expect = pdf_series_result
-    got = gdf_series_result.to_pandas(nullable=True)
+        expect = getattr(pdf_series_a, comparison_op_method)(
+            pdf_series_b, fill_value=fill_value
+        )
+        got = getattr(gdf_series_a, comparison_op_method)(
+            gdf_series_b, fill_value=fill_value
+        ).to_pandas()
 
-    # If fill_value is np.nan, things break down a bit,
-    # because setting a NaN into a pandas nullable float
-    # array still gets transformed to <NA>. As such,
-    # pd_series_with_nulls.fillna(np.nan) has no effect.
-    if (
-        (pdf_series_a.isnull().sum() != pdf_series_b.isnull().sum())
-        and np.isscalar(fill_value)
-        and np.isnan(fill_value)
-    ):
-        with pytest.raises(AssertionError):
-            assert_eq(expect, got)
-        return
     assert_eq(expect, got)
 
 
@@ -1758,7 +1747,7 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     # __eq__ operator and avoid a DeprecationWarning from numpy.
     expected = data.to_pandas() == val
     got = data == val
-
+    # import pdb;pdb.set_trace()
     assert_eq(expected, got)
 
 

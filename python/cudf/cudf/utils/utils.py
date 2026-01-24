@@ -11,6 +11,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
 
 import cudf
 
@@ -176,6 +178,7 @@ def is_na_like(obj: Any) -> bool:
         or obj is pd.NaT
         or (isinstance(obj, (np.datetime64, np.timedelta64)) and np.isnat(obj))
         or obj is pd.NaT
+        or (isinstance(obj, pa.Scalar) and pc.is_null(obj).as_py())
     )
 
 
