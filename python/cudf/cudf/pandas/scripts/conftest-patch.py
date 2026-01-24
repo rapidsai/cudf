@@ -10436,6 +10436,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[nullable_uint-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[object-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[string-python-Series]",
+    "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[string-python-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[tuples-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[uint64-Series]",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_setitem_mix_of_nan_and_interval[NAType-a]",
@@ -10540,8 +10541,10 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/resample/test_base.py::test_first_last_skipna[uint8[pyarrow]-False-last]",
     "tests/resample/test_base.py::test_first_last_skipna[uint8[pyarrow]-True-first]",
     "tests/resample/test_base.py::test_first_last_skipna[uint8[pyarrow]-True-last]",
+    "tests/series/indexing/test_datetime.py::test_indexing_with_duplicate_datetimeindex",
     "tests/series/indexing/test_getitem.py::TestGetitemBooleanMask::test_getitem_boolean_object",
     "tests/series/indexing/test_getitem.py::TestGetitemBooleanMask::test_getitem_boolean_object",
+    "tests/series/indexing/test_indexing.py::test_basic_indexing",
     "tests/series/indexing/test_indexing.py::test_getitem_setitem_ellipsis",
     "tests/series/indexing/test_indexing.py::test_setitem_empty_indexer[indexer0-val0]",
     "tests/series/indexing/test_indexing.py::test_setitem_empty_indexer[indexer0-val1]",
@@ -10617,8 +10620,6 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/window/test_pairwise.py::TestPairwise::test_no_flex[pairwise_frames5-<lambda>1]",
     "tests/window/test_pairwise.py::TestPairwise::test_no_flex[pairwise_frames8-<lambda>1]",
     "tests/window/test_win_type.py::test_cmov_window_frame[None-var-xp2]",
-    "tests/series/indexing/test_indexing.py::test_basic_indexing",
-    "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[string-python-Series]",
 }
 
 
