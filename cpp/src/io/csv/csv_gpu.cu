@@ -697,13 +697,13 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
         // counting. Mid-row, COMMENT is purely used for this pending exit mechanism.
         if (c_prev == delimiter) {
           // Quote after delimiter: start field or pending exit
-          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_COMMENT, ROW_CTX_QUOTE);
+          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_COMMENT);
         } else if (c_prev == quotechar) {
           // Quote after quote: "" escape or stay NONE (Spark compatibility)
           ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT, ROW_CTX_QUOTE);
         } else {
           // Quote after regular char: pending exit or stay NONE
-          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT, ROW_CTX_NONE);
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT);
         }
       } else {
         // Non-quote char: stay in current state, or exit from pending
