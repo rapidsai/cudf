@@ -151,8 +151,6 @@ class DatetimeColumn(TemporalBaseColumn):
             raise TypeError(
                 f"Accumulation {op} not supported for {self.dtype}"
             )
-        from cudf.core.column.column import ColumnBase
-
         scan_result = self.scan(op.replace("cum", ""), True)
         return ColumnBase.create(scan_result.plc_column, self.dtype)
 
@@ -780,9 +778,6 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-        from typing import cast
-
-        from cudf.core.column.column import ColumnBase
 
         # Use gmt_data's actual time unit to match the plc_column type
         dtype = get_compatible_timezone(
@@ -933,9 +928,6 @@ class DatetimeTZColumn(DatetimeColumn):
             return self._utc_time
         elif tz == str(self.dtype.tz):  # type: ignore[union-attr]
             return self.copy()
-        from typing import cast
-
-        from cudf.core.column.column import ColumnBase
 
         utc_time = self._utc_time
         return cast(

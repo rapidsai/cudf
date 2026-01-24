@@ -66,7 +66,9 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _get_nan_for_dtype,
+    _is_empty_to_int8_conversion,
     _maybe_convert_to_default_type,
+    _validate_dtype_compatibility,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
@@ -81,6 +83,7 @@ from cudf.utils.dtypes import (
     is_dtype_obj_struct,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
+    is_string_dtype,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
 )
@@ -662,21 +665,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             CategoricalDtype(categories=cats, ordered=True)
         )
         """
-        from cudf.utils.dtypes import _validate_dtype_compatibility
-
         # Wrap buffers recursively
         wrapped = ColumnBase._wrap_buffers(col)
 
-        # Special case: EMPTY columns are converted to INT8-all-nulls by _wrap_buffers.
-        # For these columns, we should infer the dtype from the converted column rather
-        # than using the provided dtype, because no column class can handle the mismatch
-        # between INT8 type and non-numeric dtype.
-        wrapped_tid = wrapped.type().id()
-        if (
-            wrapped_tid == plc.TypeId.INT8
-            and wrapped.null_count() == wrapped.size()
-        ):
-            # This is an EMPTY→INT8 conversion, infer dtype from the INT8 column
+        # Special case: EMPTY columns → INT8-all-nulls by _wrap_buffers.
+        # Infer dtype from converted column since no class handles INT8/non-numeric mismatch.
+        if _is_empty_to_int8_conversion(wrapped):
             dtype = dtype_from_pylibcudf_column(wrapped)
 
         # Validate dtype compatibility with the column structure
@@ -720,42 +714,44 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             ListDtype,
             StructDtype,
         )
-        from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
-        cls: type[ColumnBase]
+        # Special pandas extension types
         if isinstance(dtype, pd.DatetimeTZDtype):
-            cls = cudf.core.column.datetime.DatetimeTZColumn
-        elif isinstance(dtype, (pd.CategoricalDtype, CategoricalDtype)):
-            cls = cudf.core.column.CategoricalColumn
-        elif dtype.kind == "M":
-            cls = cudf.core.column.DatetimeColumn
-        elif dtype.kind == "m":
-            cls = cudf.core.column.TimeDeltaColumn
-        elif (
-            dtype == CUDF_STRING_DTYPE
-            or dtype.kind == "U"
-            or isinstance(dtype, pd.StringDtype)
-            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
-        ):
-            cls = cudf.core.column.StringColumn
-        elif isinstance(dtype, ListDtype):
-            cls = cudf.core.column.ListColumn
-        elif isinstance(dtype, IntervalDtype):
-            cls = cudf.core.column.IntervalColumn
-        elif isinstance(dtype, StructDtype):
-            cls = cudf.core.column.StructColumn
-        elif isinstance(dtype, cudf.Decimal64Dtype):
-            cls = cudf.core.column.Decimal64Column
-        elif isinstance(dtype, cudf.Decimal32Dtype):
-            cls = cudf.core.column.Decimal32Column
-        elif isinstance(dtype, cudf.Decimal128Dtype):
-            cls = cudf.core.column.Decimal128Column
-        elif dtype.kind in "iufb":
-            cls = cudf.core.column.NumericalColumn
-        else:
-            raise TypeError(f"Unrecognized dtype: {dtype}")
+            return cudf.core.column.datetime.DatetimeTZColumn
+        if isinstance(dtype, (pd.CategoricalDtype, CategoricalDtype)):
+            return cudf.core.column.CategoricalColumn
 
-        return cls
+        # Temporal types (by kind)
+        if dtype.kind == "M":
+            return cudf.core.column.DatetimeColumn
+        if dtype.kind == "m":
+            return cudf.core.column.TimeDeltaColumn
+
+        # String types
+        if is_string_dtype(dtype):
+            return cudf.core.column.StringColumn
+
+        # cuDF custom types
+        if isinstance(dtype, ListDtype):
+            return cudf.core.column.ListColumn
+        if isinstance(dtype, IntervalDtype):
+            return cudf.core.column.IntervalColumn
+        if isinstance(dtype, StructDtype):
+            return cudf.core.column.StructColumn
+
+        # Decimal types
+        if isinstance(dtype, cudf.Decimal128Dtype):
+            return cudf.core.column.Decimal128Column
+        if isinstance(dtype, cudf.Decimal64Dtype):
+            return cudf.core.column.Decimal64Column
+        if isinstance(dtype, cudf.Decimal32Dtype):
+            return cudf.core.column.Decimal32Column
+
+        # Numerical types
+        if dtype.kind in "iufb":
+            return cudf.core.column.NumericalColumn
+
+        raise TypeError(f"Unrecognized dtype: {dtype}")
 
     @staticmethod
     def from_pylibcudf(col: plc.Column) -> ColumnBase:
