@@ -66,7 +66,6 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _get_nan_for_dtype,
-    _is_empty_to_int8_conversion,
     _maybe_convert_to_default_type,
     _validate_dtype_compatibility,
     cudf_dtype_from_pa_type,
@@ -667,11 +666,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         # Wrap buffers recursively
         wrapped = ColumnBase._wrap_buffers(col)
-
-        # Special case: EMPTY columns → INT8-all-nulls by _wrap_buffers.
-        # Infer dtype from converted column since no class handles INT8/non-numeric mismatch.
-        if _is_empty_to_int8_conversion(wrapped):
-            dtype = dtype_from_pylibcudf_column(wrapped)
 
         # Validate dtype compatibility with the column structure
         _validate_dtype_compatibility(wrapped, dtype)

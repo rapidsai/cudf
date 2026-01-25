@@ -144,8 +144,10 @@ class IntervalColumn(ColumnBase):
         )
 
     def copy(self, deep: bool = True) -> Self:
-        copied = super().copy(deep=deep)
-        return ColumnBase.create(copied.plc_column, self.dtype)  # type: ignore[return-value]
+        plc_col = self.plc_column
+        if deep:
+            plc_col = plc_col.copy()
+        return ColumnBase.create(plc_col, self.dtype)  # type: ignore[return-value]
 
     def _adjust_reduce_result(
         self,
