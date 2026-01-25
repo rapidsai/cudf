@@ -18,7 +18,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-from cudf.core._internals import binaryop
+from cudf.core._internals import aggregation, binaryop
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
     get_compatible_timezone,
@@ -151,8 +151,15 @@ class DatetimeColumn(TemporalBaseColumn):
             raise TypeError(
                 f"Accumulation {op} not supported for {self.dtype}"
             )
-        scan_result = self.scan(op.replace("cum", ""), True)
-        return ColumnBase.create(scan_result.plc_column, self.dtype)
+        with self.access(mode="read", scope="internal"):
+            plc_result = plc.reduce.scan(
+                self.plc_column,
+                aggregation.make_aggregation(
+                    op.replace("cum", ""), {}
+                ).plc_obj,
+                plc.reduce.ScanType.INCLUSIVE,
+            )
+        return ColumnBase.create(plc_result, self.dtype)
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
