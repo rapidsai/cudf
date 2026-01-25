@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import functools
 import warnings
 from typing import TYPE_CHECKING, Any, TypeGuard
 
@@ -869,103 +868,6 @@ def _is_empty_to_int8_conversion(col: plc.Column) -> bool:
     )
 
 
-@functools.lru_cache(maxsize=128)
-def _dtype_to_pylibcudf_typeid(dtype: DtypeObj) -> plc.TypeId:
-    """
-    Convert a cudf dtype to the corresponding pylibcudf TypeId.
-
-    This is the inverse of PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES mapping
-    and is used for validation in ColumnBase.create().
-
-    Parameters
-    ----------
-    dtype : DtypeObj
-        The cudf dtype to convert.
-
-    Returns
-    -------
-    plc.TypeId
-        The corresponding pylibcudf TypeId.
-
-    Raises
-    ------
-    TypeError
-        If the dtype cannot be mapped to a pylibcudf TypeId.
-    """
-    from cudf.core.dtypes import (
-        CategoricalDtype,
-        Decimal32Dtype,
-        Decimal64Dtype,
-        Decimal128Dtype,
-        IntervalDtype,
-        ListDtype,
-        StructDtype,
-    )
-
-    # Categorical: stored as integer codes (actual width varies by category count)
-    if isinstance(dtype, (pd.CategoricalDtype, CategoricalDtype)):
-        return (
-            plc.TypeId.INT32
-        )  # Generic int for validation; actual type varies
-
-    # Nested types
-    if isinstance(dtype, ListDtype):
-        return plc.TypeId.LIST
-
-    if isinstance(dtype, StructDtype):
-        return plc.TypeId.STRUCT
-
-    if isinstance(dtype, IntervalDtype):
-        # IntervalColumn is stored as a StructColumn
-        return plc.TypeId.STRUCT
-
-    # Decimal types
-    if isinstance(dtype, Decimal32Dtype):
-        return plc.TypeId.DECIMAL32
-
-    if isinstance(dtype, Decimal64Dtype):
-        return plc.TypeId.DECIMAL64
-
-    if isinstance(dtype, Decimal128Dtype):
-        return plc.TypeId.DECIMAL128
-
-    # DatetimeTZ is stored as TIMESTAMP_* based on the unit
-    if isinstance(dtype, pd.DatetimeTZDtype):
-        # Map the unit to the corresponding TIMESTAMP TypeId
-        base_dtype = _get_base_dtype(dtype)
-        return SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[base_dtype]
-
-    # String types
-    if is_string_dtype(dtype):
-        return plc.TypeId.STRING
-
-    # Try to look up in the numpy to pylibcudf mapping
-    if isinstance(dtype, np.dtype):
-        if dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
-            return SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype]
-
-    # Handle pandas nullable dtypes by converting to numpy first
-    if isinstance(dtype, pd.core.dtypes.base.ExtensionDtype):
-        if hasattr(dtype, "numpy_dtype"):
-            np_dtype = dtype.numpy_dtype
-            if np_dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
-                return SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np_dtype]
-
-    # Handle pandas ArrowDtype
-    if isinstance(dtype, pd.ArrowDtype):
-        # Try to extract the numpy equivalent
-        try:
-            np_dtype = dtype.numpy_dtype
-            if np_dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
-                return SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np_dtype]
-        except (TypeError, NotImplementedError):
-            pass
-
-    raise TypeError(
-        f"Cannot convert dtype {dtype} (type: {type(dtype)}) to pylibcudf TypeId"
-    )
-
-
 def _validate_dtype_compatibility(col: plc.Column, dtype: DtypeObj) -> None:
     """
     Validate that a cudf dtype is structurally compatible with a pylibcudf Column.
@@ -1100,7 +1002,8 @@ def _validate_dtype_compatibility(col: plc.Column, dtype: DtypeObj) -> None:
 
     # DatetimeTZ: Verify TIMESTAMP TypeId matches the unit
     if isinstance(dtype, pd.DatetimeTZDtype):
-        expected_tid = _dtype_to_pylibcudf_typeid(dtype)
+        base_dtype = _get_base_dtype(dtype)
+        expected_tid = SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[base_dtype]
         if col_tid != expected_tid:
             raise ValueError(
                 f"DatetimeTZDtype with unit='{dtype.unit}' requires {expected_tid} column, "
@@ -1108,11 +1011,53 @@ def _validate_dtype_compatibility(col: plc.Column, dtype: DtypeObj) -> None:
             )
         return
 
+    # String types
+    if is_string_dtype(dtype):
+        expected_tid = plc.TypeId.STRING
+        if col_tid != expected_tid:
+            if _is_empty_to_int8_conversion(col):
+                return
+            raise ValueError(
+                f"String dtype expects pylibcudf TypeId {expected_tid}, "
+                f"but column has TypeId {col_tid}"
+            )
+        return
+
     # Basic types: Map dtype to expected pylibcudf TypeId and verify match
-    try:
-        expected_tid = _dtype_to_pylibcudf_typeid(dtype)
-    except TypeError as e:
-        raise ValueError(f"Cannot validate dtype {dtype}: {e}") from e
+    # Handle pandas ArrowDtype
+    if isinstance(dtype, pd.ArrowDtype):
+        try:
+            dtype = dtype.numpy_dtype
+        except (TypeError, NotImplementedError):
+            raise ValueError(
+                f"Cannot validate ArrowDtype {dtype}: no numpy equivalent"
+            )
+
+    # Handle pandas nullable dtypes
+    if isinstance(dtype, pd.core.dtypes.base.ExtensionDtype):
+        if hasattr(dtype, "numpy_dtype"):
+            dtype = dtype.numpy_dtype
+        else:
+            raise ValueError(
+                f"Cannot validate dtype {dtype}: unsupported ExtensionDtype"
+            )
+
+    # Convert to numpy dtype if needed
+    if not isinstance(dtype, np.dtype):
+        try:
+            dtype = np.dtype(dtype)
+        except TypeError:
+            raise ValueError(
+                f"Cannot validate dtype {dtype}: cannot convert to numpy dtype"
+            )
+
+    # Look up expected TypeId
+    if dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
+        raise ValueError(
+            f"Cannot validate dtype {dtype}: unsupported numpy dtype"
+        )
+
+    expected_tid = SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype]
 
     # Special case: _wrap_buffers() converts EMPTY columns to INT8 with all nulls.
     # Allow these regardless of expected type.
