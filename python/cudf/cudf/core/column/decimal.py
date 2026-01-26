@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from packaging import version
 from typing_extensions import Self
 
 import pylibcudf as plc
@@ -362,6 +363,31 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
+
+    # This overload can be removed once we require pyarrow 20, see
+    # https://github.com/apache/arrow/issues/45570
+    def to_pandas(
+        self,
+        *,
+        nullable: bool = False,
+        arrow_type: bool = False,
+    ) -> pd.Index:
+        col = self
+        if version.parse(pa.__version__) < version.parse("20") and isinstance(
+            col, (Decimal32Column, Decimal64Column)
+        ):
+            col = cast(
+                "Decimal128Column",
+                self.astype(
+                    cudf.Decimal128Dtype(
+                        self.dtype.precision,  # type: ignore[union-attr]
+                        self.dtype.scale,  # type: ignore[union-attr]
+                    )
+                ),
+            )
+        return super(DecimalBaseColumn, col).to_pandas(
+            nullable=nullable, arrow_type=arrow_type
+        )
 
 
 class Decimal32Column(DecimalBaseColumn):
