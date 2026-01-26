@@ -5165,9 +5165,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         size: int,
         by_hash: bool,
     ) -> list[Self]:
-        # we need to remove first & last elements in offsets.
-        # TODO: Remove this after https://github.com/rapidsai/cudf/issues/4607 is fixed.
-        offsets = offsets[slice(1, None if by_hash else -1)]
+        # Remove first element (always 0) and last element (total row count) from offsets
+        offsets = offsets[1:-1]
         output_columns = [
             ColumnBase.from_pylibcudf(col) for col in table.columns()
         ]
