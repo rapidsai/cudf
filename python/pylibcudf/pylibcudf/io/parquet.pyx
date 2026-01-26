@@ -168,6 +168,24 @@ cdef class ParquetReaderOptions:
             vec.push_back(<string>str(name).encode())
         self.c_obj.set_columns(vec)
 
+    cpdef void set_column_indices(self, list col_indices):
+        """
+        Sets indices of the top-level columns to be read.
+
+        Parameters
+        ----------
+        col_names : list
+            List of top-level column indices
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[size_type] vec
+        for idx in col_indices:
+            vec.push_back(idx)
+        self.c_obj.set_column_indices(vec)
+
     cpdef void set_filter(self, Expression filter):
         """
         Sets AST based filter for predicate pushdown.
@@ -320,6 +338,25 @@ cdef class ParquetReaderOptionsBuilder:
         for name in col_names:
             vec.push_back(<string>str(name).encode())
         self.c_obj.columns(vec)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder column_indices(self, list col_indices):
+        """
+        Sets indices of the top-level columns to be read.
+
+        Parameters
+        ----------
+        col_names : list[int]
+            List of top-level column indices
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        cdef vector[size_type] vec
+        for idx in col_indices:
+            vec.push_back(idx)
+        self.c_obj.column_indices(vec)
         return self
 
     cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter):

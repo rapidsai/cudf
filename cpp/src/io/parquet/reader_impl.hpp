@@ -415,6 +415,15 @@ class reader_impl {
   [[nodiscard]] std::vector<size_t> calculate_output_num_rows_per_source(size_t chunk_start_row,
                                                                          size_t chunk_num_rows);
 
+  /**
+   * @brief Computes the names of columns to be read from the file, if specified.
+   *
+   * @param options The reader options
+   * @return Names of columns to be read from the file if specified, `nullopt` otherwise
+   */
+  [[nodiscard]] std::optional<std::vector<std::string>> get_column_projection(
+    parquet_reader_options const& options) const;
+
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
