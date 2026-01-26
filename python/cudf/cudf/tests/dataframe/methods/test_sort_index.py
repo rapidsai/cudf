@@ -59,11 +59,12 @@ def test_dataframe_sort_index(
         inplace=inplace,
         na_position=na_position,
     )
-
+    # As of pandas 3.0, pandas sometimes returns a RangeIndex
+    # instead of an Index[int64]
     if inplace is True:
-        assert_eq(pdf, gdf, check_index_type=True)
+        assert_eq(pdf, gdf)
     else:
-        assert_eq(expected, got, check_index_type=True)
+        assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
