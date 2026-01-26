@@ -768,7 +768,7 @@ def test_csv_reader_bools_NA():
         false_values=falses,
     )
     assert len(df.columns) == 2
-    assert df["text"].dtype == np.dtype("object")
+    assert df["text"].dtype == pd.StringDtype(na_value=np.nan)
     assert df["int"].dtype == np.dtype("int64")
     expected = pd.DataFrame(
         {
@@ -898,7 +898,7 @@ def test_csv_reader_gzip_compression_strings(tmp_path):
     )
 
     assert len(df.columns) == 2
-    assert df["text"].dtype == np.dtype("object")
+    assert df["text"].dtype == pd.StringDtype(na_value=np.nan)
     assert df["int"].dtype == np.dtype("int64")
     assert df["text"][0] == "a"
     assert df["text"][1] == "b"
@@ -1474,7 +1474,7 @@ def test_csv_empty_file(tmp_path, contents):
 
     col_names = ["col1", "col2", "col3", "col4"]
     in_dtypes = ["int", "str", "float", "short"]
-    out_dtypes = ["int64", "object", "float64", "int16"]
+    out_dtypes = ["int64", pd.StringDtype(na_value=np.nan), "float64", "int16"]
 
     # Empty dataframe if no columns names specified or inferred
     df = read_csv(str(fname))
@@ -1490,7 +1490,7 @@ def test_csv_empty_file(tmp_path, contents):
 def test_csv_empty_buffer(contents):
     col_names = ["col1", "col2", "col3", "col4"]
     in_dtypes = ["int", "str", "float", "short"]
-    out_dtypes = ["int64", "object", "float64", "int16"]
+    out_dtypes = ["int64", pd.StringDtype(na_value=np.nan), "float64", "int16"]
 
     # Empty dataframe if no columns names specified or inferred
     df = read_csv(StringIO(contents))
@@ -1896,7 +1896,7 @@ def test_csv_write_dataframe_na_rep(df, na_rep):
         {"a": "int32", "b": "float64", "c": "uint8"},
         int,
         str,
-        object,
+        pd.StringDtype(na_value=np.nan),
     ],
 )
 def test_csv_reader_dtypes(dtype):

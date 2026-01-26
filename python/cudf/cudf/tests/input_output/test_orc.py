@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import datetime
@@ -1845,7 +1845,7 @@ def test_reader_empty_stripe(datadir, fname):
 # needs enough data for multiple row groups
 @pytest.mark.parametrize("data", [["*"] * 10001, ["**", None] * 5001])
 def test_reader_row_index_order(data):
-    expected = cudf.DataFrame({"str": data}, dtype="string")
+    expected = cudf.DataFrame({"str": data})
 
     buffer = BytesIO()
     expected.to_pandas().to_orc(buffer)
