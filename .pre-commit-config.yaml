@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 ci:
@@ -27,14 +27,22 @@ repos:
             ^python/cudf/cudf/tests/data/vocab.txt
           )
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.17.0
+    rev: v0.18.1
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: 'v1.13.0'
     hooks:
       - id: mypy
-        additional_dependencies: [types-cachetools, pyarrow-stubs, numpy]
+        additional_dependencies: [
+          polars,
+          "numpy",
+          pyarrow-stubs,
+          pytest,
+          types-cachetools,
+          "rmm-cu12==26.2.*,>=0.0.0a0; sys_platform=='linux'",
+          "--extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/"
+        ]
         args: ["--config-file=pyproject.toml",
                "python/cudf/cudf",
                "python/pylibcudf/pylibcudf",
@@ -81,7 +89,8 @@ repos:
         exclude: |
           (?x)^(
             ^python/cudf/cudf/core/dtypes.py|
-            ^python/cudf/cudf/tests/pytest.ini
+            ^python/cudf/cudf/tests/pytest.ini|
+            ^python/cudf/cudf/tests/series/test_binops.py
           )
       - id: no-programmatic-xfail
         name: no-programmatic-xfail
@@ -89,6 +98,12 @@ repos:
         entry: 'pytest\.xfail'
         language: pygrep
         types: [python]
+      - id: use-exec-policy-nosync
+        name: use-exec-policy-nosync
+        description: 'Enforce that rmm::exec_policy_nosync is used instead of rmm::exec_policy (see developer guide)'
+        entry: 'rmm::exec_policy\('
+        language: pygrep
+        types_or: [c, c++, cuda]
       - id: no-unseeded-default-rng
         name: no-unseeded-default-rng
         description: 'Enforce that no non-seeded default_rng is used and default_rng is used instead of np.random.seed'
@@ -147,7 +162,7 @@ repos:
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v1.2.0
+    rev: v1.3.1
     hooks:
       - id: verify-copyright
         name: verify-copyright-cudf
@@ -223,8 +238,21 @@ repos:
       - id: verify-alpha-spec
       - id: verify-codeowners
         args: [--fix, --project-prefix=cudf]
+      - id: verify-hardcoded-version
+        exclude: |
+          (?x)
+            devcontainer[.]json$|
+            dependencies[.]yaml$|
+            ^[.]github/workflows/|
+            [.]md$|
+            pom[.]xml$|
+            ^[.]pre-commit-config[.]yaml$|
+            [.]rst$|
+            [.](avro|parquet|png|orc|gz|pkl|sas7bdat)$|
+            ^conda/environments/|
+            ^python/cudf/cudf/VERSION$
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.20.0
+    rev: v1.20.2
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean", "--warn-all", "--strict"]

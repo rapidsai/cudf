@@ -18,6 +18,9 @@
 
 #include <src/io/parquet/parquet_gpu.hpp>
 
+#include <filesystem>
+#include <fstream>
+
 namespace {
 
 /**
@@ -225,6 +228,80 @@ TEST_F(HybridScanFiltersTest, TestExternalMetadata)
   EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 2 * rows_per_row_group);
 }
 
+TEST_F(HybridScanFiltersTest, FilterRowGroupsWithByteRanges)
+{
+  using T                      = cudf::string_view;
+  auto const [table, filepath] = create_parquet_typed_with_stats<T>("ByteBounds.parquet");
+
+  auto const file_size = std::filesystem::file_size(filepath);
+  std::vector<char> file_buffer(file_size);
+  std::ifstream file{filepath, std::ifstream::binary};
+  file.read(file_buffer.data(), file_size);
+  file.close();
+
+  // Input file buffer span
+  auto const file_buffer_span = cudf::host_span<uint8_t const>(
+    reinterpret_cast<uint8_t const*>(file_buffer.data()), file_buffer.size());
+
+  // Fetch footer and page index bytes from the buffer.
+  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+
+  // Create hybrid scan reader with footer bytes
+  auto options = cudf::io::parquet_reader_options::builder().build();
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+
+  auto const input_row_group_indices = reader->all_row_groups(options);
+
+  // @note: In the above parquet file, the row groups start at the following byte offsets: 4, 75224,
+  // 150332, 225561. The `skip_bytes` and `num_bytes` have been chosen to have enough cushion but
+  // may need to be adjusted in the future if this test suddenly starts failing.
+
+  {
+    // Start with all row groups and only read row group 0 as only it will start in [0, 1000) byte
+    // range
+    auto constexpr num_bytes = 1000;
+    options.set_num_bytes(num_bytes);
+    auto const filtered_row_group_indices =
+      reader->filter_row_groups_with_byte_range(input_row_group_indices, options);
+    auto const expected_row_group_indices = std::vector<cudf::size_type>{0};
+    EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
+  }
+
+  {
+    // Start with all row groups and skip row group 0 as it won't start in [1000, inf) byte range
+    auto skip_bytes = 1000;
+    options.set_skip_bytes(skip_bytes);
+    options.set_num_bytes(std::numeric_limits<size_t>::max());
+    auto filtered_row_group_indices =
+      reader->filter_row_groups_with_byte_range(input_row_group_indices, options);
+    auto expected_row_group_indices = std::vector<cudf::size_type>{1, 2, 3};
+    EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
+
+    // Now start with filtered row groups and only read row group 1 as only it starts in [50000,
+    // 100000) byte range
+    skip_bytes               = 50000;
+    auto constexpr num_bytes = 50000;
+    options.set_skip_bytes(skip_bytes);
+    options.set_num_bytes(num_bytes);
+    filtered_row_group_indices =
+      reader->filter_row_groups_with_byte_range(filtered_row_group_indices, options);
+    expected_row_group_indices = std::vector<cudf::size_type>{1};
+    EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
+  }
+
+  {
+    // Start with all row groups and skip all row groups as [500000, inf) byte range is beyond the
+    // file size
+    auto constexpr skip_bytes = 500'000;
+    options.set_skip_bytes(skip_bytes);
+    auto const filtered_row_group_indices =
+      reader->filter_row_groups_with_byte_range(input_row_group_indices, options);
+    auto const expected_row_group_indices = std::vector<cudf::size_type>{};
+    EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
+  }
+}
+
 TEST_F(HybridScanFiltersTest, FilterRowGroupsWithStats)
 {
   srand(0xc001);
@@ -235,11 +312,19 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithStats)
   auto constexpr rows_per_row_group = page_size_for_ordered_tests;
   auto [written_table, file_buffer] = create_parquet_with_stats<T, num_concat, false>();
 
-  // Filtering AST - table[0] < 50
-  auto literal_value     = cudf::numeric_scalar<T>(50);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_name_reference("col0");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  // Filtering AST - table[0] < 50 and table[2] < "000010000"
+  auto literal_value1     = cudf::numeric_scalar<T>(50);
+  auto literal1           = cudf::ast::literal(literal_value1);
+  auto col_ref0           = cudf::ast::column_reference(0);
+  auto filter_expression1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal1);
+
+  auto literal_value2     = cudf::string_scalar("000010000");
+  auto literal2           = cudf::ast::literal(literal_value2);
+  auto col_ref2           = cudf::ast::column_reference(2);
+  auto filter_expression2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
+
+  auto filter_expression = cudf::ast::operation(
+    cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
 
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
@@ -716,11 +801,14 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
   srand(0xace);
   using T = TypeParam;
 
-  auto constexpr num_concat = 1;
+  auto constexpr num_concat          = 1;
+  auto constexpr is_constant_strings = true;
+  auto constexpr is_nullable         = true;
 
   // Specifying ZSTD compression to explicitly test decompression of dictionary pages
   auto const buffer =
-    std::get<1>(create_parquet_with_stats<T, num_concat>(100, cudf::io::compression_type::ZSTD));
+    std::get<1>(create_parquet_with_stats<T, num_concat, is_constant_strings, is_nullable>(
+      100, cudf::io::compression_type::ZSTD));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`
@@ -788,7 +876,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
     // Build the filter expression
     auto const literal = cudf::ast::literal(literal_value);
     auto const filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal);
 
     // Check the results
     EXPECT_EQ(filter_row_groups_with_dictionaries(file_buffer_span, filter_expression, stream, mr),
@@ -822,10 +910,14 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
   srand(0xcabab);
   using T = TypeParam;
 
-  auto constexpr num_concat = 1;
+  auto constexpr num_concat          = 1;
+  auto constexpr is_constant_strings = true;
+  auto constexpr is_nullable         = false;
+
   // Specifying no compression to explicitly test uncompressed dictionary pages
   auto const buffer =
-    std::get<1>(create_parquet_with_stats<T, num_concat>(100, cudf::io::compression_type::NONE));
+    std::get<1>(create_parquet_with_stats<T, num_concat, is_constant_strings, is_nullable>(
+      100, cudf::io::compression_type::NONE));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`
@@ -936,9 +1028,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
     auto const filter_expression1 =
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal1);
     auto const filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal2);
     auto const filter_expression3 =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal3);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal3);
     auto const filter_expression12 = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_OR, filter_expression1, filter_expression2);
     auto const filter_expression = cudf::ast::operation(
@@ -966,9 +1058,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
     auto const literal3 = cudf::ast::literal(literal_value3);
 
     auto const filter_expression1 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal1);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_ref, literal1);
     auto const filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_ref, literal2);
     auto const filter_expression3 =
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal3);
     auto const filter_expression12 = cudf::ast::operation(

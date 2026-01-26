@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,7 +7,6 @@
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -15,28 +14,23 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cooperative_groups.h>
 #include <cub/cub.cuh>
 #include <cuda/atomic>
-#include <thrust/binary_search.h>
-#include <thrust/copy.h>
-#include <thrust/device_ptr.h>
-#include <thrust/extrema.h>
+#include <thrust/execution_policy.h>
 #include <thrust/tabulate.h>
 
 #include <algorithm>
 #include <limits>
 #include <numeric>
-#include <type_traits>
 
 namespace cg = cooperative_groups;
 
@@ -205,7 +199,8 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
 
   size_t average_nullmask_words     = 0;
   size_t cumulative_null_mask_words = 0;
-  auto h_number_of_mask_words = cudf::detail::make_host_vector<size_type>(num_bitmasks, stream);
+  auto h_number_of_mask_words =
+    cudf::detail::make_pinned_vector_async<size_type>(num_bitmasks, stream);
   thrust::tabulate(
     thrust::host, h_number_of_mask_words.begin(), h_number_of_mask_words.end(), [&](auto i) {
       CUDF_EXPECTS(begin_bits[i] >= 0, "Invalid range.");
@@ -395,30 +390,40 @@ rmm::device_buffer copy_bitmask(column_view const& view,
 }
 
 namespace {
+
 /**
- * @brief Counts the number of non-zero bits in a bitmask in the range
+ * @brief Counts the number of non-zero bits for a list of bitmasks in the range
  * `[first_bit_index, last_bit_index]`.
  *
  * Expects `0 <= first_bit_index <= last_bit_index`.
  *
- * @param[in] bitmask The bitmask whose non-zero bits will be counted.
- * @param[in] first_bit_index The index (inclusive) of the first bit to count
- * @param[in] last_bit_index The index (inclusive) of the last bit to count
- * @param[out] global_count The number of non-zero bits in the specified range
+ * @tparam block_size Number of threads in each thread block
+ *
+ * @param bitmasks Array of bitmask pointers
+ * @param first_bit_index The index (inclusive) of the first bit to count
+ * @param last_bit_index The index (inclusive) of the last bit to count
+ * @param global_count Output array of set bit counts for each bitmask
  */
 template <size_type block_size>
-CUDF_KERNEL void count_set_bits_kernel(bitmask_type const* bitmask,
+CUDF_KERNEL void count_set_bits_kernel(device_span<bitmask_type const* const> bitmasks,
                                        size_type first_bit_index,
                                        size_type last_bit_index,
                                        size_type* global_count)
 {
-  constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
+  auto const bitmask_idx = blockIdx.y;
+  if (bitmask_idx >= bitmasks.size()) { return; }
+  auto const bitmask = bitmasks[bitmask_idx];
+  if (bitmask == nullptr) { return; }
 
+  constexpr auto word_size{detail::size_in_bits<bitmask_type>()};
   auto const first_word_index{word_index(first_bit_index)};
   auto const last_word_index{word_index(last_bit_index)};
-  thread_index_type const tid         = grid_1d::global_thread_id<block_size>();
-  thread_index_type const stride      = grid_1d::grid_stride<block_size>();
-  thread_index_type thread_word_index = tid + first_word_index;
+
+  // Although we use a 2D grid for launching the kernel, elements of each bitmask are indexed by
+  // the first dimension.
+  auto const tid         = grid_1d::global_thread_id<block_size>();
+  auto const stride      = grid_1d::grid_stride<block_size>();
+  auto thread_word_index = tid + first_word_index;
   size_type thread_count{0};
 
   // First, just count the bits in all words
@@ -450,77 +455,103 @@ CUDF_KERNEL void count_set_bits_kernel(bitmask_type const* bitmask,
 
   using BlockReduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
-  size_type block_count{BlockReduce(temp_storage).Sum(thread_count)};
+  auto const block_count = BlockReduce(temp_storage).Sum(thread_count);
 
-  if (threadIdx.x == 0) { atomicAdd(global_count, block_count); }
+  if (threadIdx.x == 0) {
+    cuda::atomic_ref<size_type, cuda::thread_scope_device>{global_count[bitmask_idx]}.fetch_add(
+      block_count, cuda::std::memory_order_relaxed);
+  }
+}
+
+// Count null elements in the specified range of multiple validity bitmasks
+std::vector<size_type> batch_count_set_bits(host_span<bitmask_type const* const> bitmasks,
+                                            size_type start,
+                                            size_type stop,
+                                            rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.", std::invalid_argument);
+
+  auto const num_bitmasks      = bitmasks.size();
+  auto const num_bits_to_count = stop - start;
+
+  std::vector<size_type> output(num_bitmasks, 0);
+  if (num_bitmasks == 0 || num_bits_to_count == 0) { return output; }
+
+  auto const has_bitmask =
+    std::any_of(bitmasks.begin(), bitmasks.end(), [](auto p) { return p != nullptr; });
+  if (!has_bitmask) { return output; }
+
+  auto const tmp_mr     = cudf::get_current_device_resource_ref();
+  auto const d_bitmasks = cudf::detail::make_device_uvector_async(bitmasks, stream, tmp_mr);
+  auto const num_words  = num_bitmask_words(num_bits_to_count);
+  auto d_non_zero_count =
+    cudf::detail::make_zeroed_device_uvector_async<size_type>(num_bitmasks, stream, tmp_mr);
+
+  constexpr size_type block_size{256};
+  // We use a 2D grid to launch the kernel, where the first dimension is to access elements in each
+  // single bitmask while the second dimension is to access the bitmask indices.
+  auto const grid = grid_1d{num_words, block_size};
+  auto const kernel_grid =
+    dim3{static_cast<unsigned int>(grid.num_blocks), static_cast<unsigned int>(num_bitmasks), 1};
+  count_set_bits_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
+    d_bitmasks, start, stop - 1, d_non_zero_count.data());
+
+  // Use pinned memory to copy the result back to the host, then copy again to the output vector.
+  auto h_non_zero_count = cudf::detail::make_pinned_vector<size_type>(num_bitmasks, stream);
+  cudf::detail::cuda_memcpy(host_span<size_type>{h_non_zero_count.data(), num_bitmasks},
+                            device_span<size_type const>{d_non_zero_count.data(), num_bitmasks},
+                            stream);
+  std::copy(h_non_zero_count.begin(), h_non_zero_count.end(), output.begin());
+
+  return output;
 }
 
 }  // namespace
 
 // Count non-zero bits in the specified range
-cudf::size_type count_set_bits(bitmask_type const* bitmask,
-                               size_type start,
-                               size_type stop,
-                               rmm::cuda_stream_view stream)
+size_type count_set_bits(bitmask_type const* bitmask,
+                         size_type start,
+                         size_type stop,
+                         rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(bitmask != nullptr, "Invalid bitmask.");
-  CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
-
-  auto const num_bits_to_count = stop - start;
-  if (num_bits_to_count == 0) { return 0; }
-
-  auto const num_words = num_bitmask_words(num_bits_to_count);
-
-  constexpr size_type block_size{256};
-
-  cudf::detail::grid_1d grid(num_words, block_size);
-
-  cudf::detail::device_scalar<size_type> non_zero_count(0, stream);
-
-  count_set_bits_kernel<block_size>
-    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      bitmask, start, stop - 1, non_zero_count.data());
-
-  return non_zero_count.value(stream);
+  auto const bitmasks = std::vector<bitmask_type const*>{bitmask};
+  return detail::batch_count_set_bits(bitmasks, start, stop, stream).front();
 }
 
 // Count zero bits in the specified range
-cudf::size_type count_unset_bits(bitmask_type const* bitmask,
-                                 size_type start,
-                                 size_type stop,
-                                 rmm::cuda_stream_view stream)
+size_type count_unset_bits(bitmask_type const* bitmask,
+                           size_type start,
+                           size_type stop,
+                           rmm::cuda_stream_view stream)
 {
   auto const num_set_bits   = detail::count_set_bits(bitmask, start, stop, stream);
-  auto const total_num_bits = (stop - start);
+  auto const total_num_bits = stop - start;
   return total_num_bits - num_set_bits;
 }
 
 // Count valid elements in the specified range of a validity bitmask
-cudf::size_type valid_count(bitmask_type const* bitmask,
-                            size_type start,
-                            size_type stop,
-                            rmm::cuda_stream_view stream)
+size_type valid_count(bitmask_type const* bitmask,
+                      size_type start,
+                      size_type stop,
+                      rmm::cuda_stream_view stream)
 {
   if (bitmask == nullptr) {
     CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
     return stop - start;
   }
-
   return detail::count_set_bits(bitmask, start, stop, stream);
 }
 
 // Count null elements in the specified range of a validity bitmask
-cudf::size_type null_count(bitmask_type const* bitmask,
-                           size_type start,
-                           size_type stop,
-                           rmm::cuda_stream_view stream)
+size_type null_count(bitmask_type const* bitmask,
+                     size_type start,
+                     size_type stop,
+                     rmm::cuda_stream_view stream)
 {
-  if (bitmask == nullptr) {
-    CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
-    return 0;
-  }
-
-  return detail::count_unset_bits(bitmask, start, stop, stream);
+  auto const valid_count = detail::valid_count(bitmask, start, stop, stream);
+  auto const size        = stop - start;
+  return size - valid_count;
 }
 
 // Count non-zero bits in the specified ranges of a bitmask
@@ -752,6 +783,21 @@ cudf::size_type null_count(bitmask_type const* bitmask,
 {
   CUDF_FUNC_RANGE();
   return detail::null_count(bitmask, start, stop, stream);
+}
+
+std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bitmasks,
+                                        size_type start,
+                                        size_type stop,
+                                        rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+
+  auto counts                  = detail::batch_count_set_bits(bitmasks, start, stop, stream);
+  auto const num_bits_to_count = stop - start;
+  for (std::size_t i = 0; i < bitmasks.size(); ++i) {
+    if (bitmasks[i] != nullptr) { counts[i] = num_bits_to_count - counts[i]; }
+  }
+  return counts;
 }
 
 }  // namespace cudf

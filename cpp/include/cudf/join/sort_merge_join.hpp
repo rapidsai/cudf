@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -78,6 +78,27 @@ class sort_merge_join {
              sorted is_left_sorted,
              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Returns the row indices that can be used to construct the result of performing
+   * a left join between the right table passed while creating the sort_merge_join object, and the
+   * left table.
+   * @see cudf::left_join().
+   *
+   * @param left The left table
+   * @param is_left_sorted Enum to indicate if left table is pre-sorted
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] that can be used to
+   * construct the result of performing a left join between two tables
+   */
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  left_join(table_view const& left,
+            sorted is_left_sorted,
+            rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+            rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Returns context information about matches between the left and right tables.
@@ -209,7 +230,7 @@ class sort_merge_join {
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
      */
-    void get_sorted_order(rmm::cuda_stream_view stream);
+    void compute_sorted_order(rmm::cuda_stream_view stream);
 
     /**
      * @brief Create mapping from processed table indices to unprocessed table indices
@@ -255,12 +276,16 @@ class sort_merge_join {
    * @param right_view The preprocessed right table view
    * @param left_view The preprocessed left table view
    * @param op The merge operation functor to execute during the merge
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The result of the merge operation as defined by the MergeOperation functor
    *         (typically pairs of join indices or match counts)
    */
   template <typename MergeOperation>
-  auto invoke_merge(table_view right_view, table_view left_view, MergeOperation&& op);
+  auto invoke_merge(table_view right_view,
+                    table_view left_view,
+                    MergeOperation&& op,
+                    rmm::cuda_stream_view stream);
 };
 
 /**
@@ -271,6 +296,9 @@ class sort_merge_join {
  * table that have a match in the right table (in unspecified order).
  * The corresponding values in the second returned vector are
  * the matched row indices from the right table.
+ *
+ * @deprecated Use the object-oriented sort_merge_join API `cudf::sort_merge_join::inner_join`
+ * instead
  *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
@@ -296,8 +324,8 @@ class sort_merge_join {
  * the result of performing an inner join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
+[[deprecated]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                         std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_inner_join(cudf::table_view const& left_keys,
                       cudf::table_view const& right_keys,
                       null_equality compare_nulls       = null_equality::EQUAL,
@@ -314,6 +342,9 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
  * The corresponding values in the second returned vector are
  * the matched row indices from the right table.
  *
+ * @deprecated Use the object-oriented sort_merge_join API `cudf::sort_merge_join::inner_join`
+ * instead
+ *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
  * Right: {{1, 2, 3}}
@@ -338,8 +369,8 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
  * the result of performing an inner join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
+[[deprecated]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                         std::unique_ptr<rmm::device_uvector<size_type>>>
 merge_inner_join(cudf::table_view const& left_keys,
                  cudf::table_view const& right_keys,
                  null_equality compare_nulls       = null_equality::EQUAL,

@@ -4,7 +4,6 @@
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/detail/null_mask.hpp>
@@ -24,6 +23,7 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/permutation_iterator.h>
@@ -87,16 +87,17 @@ std::vector<std::string> copy_strings_to_host_sync(
   rmm::device_uvector<size_type> string_offsets(num_strings, stream);
   rmm::device_uvector<size_type> string_lengths(num_strings, stream);
   auto d_offset_pairs = thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    d_offset_pairs,
-                    d_offset_pairs + num_strings,
-                    thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
-                    [] __device__(auto const& offsets) {
-                      // Note: first character for non-field columns
-                      return thrust::make_tuple(
-                        static_cast<size_type>(thrust::get<0>(offsets)),
-                        static_cast<size_type>(thrust::get<1>(offsets) - thrust::get<0>(offsets)));
-                    });
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    d_offset_pairs,
+    d_offset_pairs + num_strings,
+    thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
+    [] __device__(auto const& offsets) {
+      // Note: first character for non-field columns
+      return cuda::std::make_tuple(
+        static_cast<size_type>(cuda::std::get<0>(offsets)),
+        static_cast<size_type>(cuda::std::get<1>(offsets) - cuda::std::get<0>(offsets)));
+    });
 
   cudf::io::parse_options_view options_view{};
   options_view.quotechar  = '\0';  // no quotes
@@ -429,7 +430,7 @@ std::
         rmm::exec_policy_nosync(stream),
         thrust::make_zip_iterator(col.string_offsets.begin(), col.string_lengths.begin()),
         thrust::make_zip_iterator(col.string_offsets.end(), col.string_lengths.end()),
-        thrust::make_tuple(0, 0));
+        cuda::std::make_tuple(0, 0));
     } else if (column_category == NC_LIST) {
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
       thrust::uninitialized_fill(
@@ -446,7 +447,7 @@ std::
   auto h_range_col_id_it =
     thrust::make_zip_iterator(column_range_beg.begin(), unique_col_ids.begin());
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
-    return thrust::get<0>(a) < thrust::get<0>(b);
+    return cuda::std::get<0>(a) < cuda::std::get<0>(b);
   });
   // adjacency list construction
   std::map<NodeIndexT, std::vector<NodeIndexT>> adj;

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
@@ -37,6 +37,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         bool is_enabled_use_pandas_metadata() except +libcudf_exception_handler
         bool is_enabled_arrow_schema() except +libcudf_exception_handler
         bool is_enabled_allow_mismatched_pq_schemas() except +libcudf_exception_handler
+        bool is_enabled_ignore_missing_columns() except +libcudf_exception_handler
+        bool is_enabled_use_jit_filter() noexcept
         # setter
 
         void set_source(source_info src) except +libcudf_exception_handler
@@ -49,6 +51,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_skip_rows(int64_t val) except +libcudf_exception_handler
         void enable_use_arrow_schema(bool val) except +libcudf_exception_handler
         void enable_allow_mismatched_pq_schemas(
+            bool val
+        ) except +libcudf_exception_handler
+        void enable_ignore_missing_columns(
             bool val
         ) except +libcudf_exception_handler
         void enable_use_pandas_metadata(bool val) except +libcudf_exception_handler
@@ -82,12 +87,18 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options_builder& allow_mismatched_pq_schemas(
             bool val
         ) except +libcudf_exception_handler
+        parquet_reader_options_builder& ignore_missing_columns(
+            bool val
+        ) except +libcudf_exception_handler
         parquet_reader_options_builder& timestamp_type(
             data_type type
         ) except +libcudf_exception_handler
         parquet_reader_options_builder& filter(
             const expression & f
         ) except +libcudf_exception_handler
+        parquet_reader_options_builder& use_jit_filter(
+            bool use_jit_filter
+        ) noexcept
         parquet_reader_options build() except +libcudf_exception_handler
 
     cdef table_with_metadata read_parquet(
@@ -135,6 +146,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_max_dictionary_size(size_t val) except +libcudf_exception_handler
         void enable_write_v2_headers(bool val) except +libcudf_exception_handler
         void enable_write_arrow_schema(bool val) except +libcudf_exception_handler
+        void enable_page_level_compression(bool val) except +libcudf_exception_handler
         void set_dictionary_policy(
             dictionary_policy policy
         ) except +libcudf_exception_handler
@@ -196,6 +208,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             size_t val
         ) except +libcudf_exception_handler
         BuilderT& write_v2_headers(
+            bool enabled
+        ) except +libcudf_exception_handler
+        BuilderT& page_level_compression(
             bool enabled
         ) except +libcudf_exception_handler
         BuilderT& dictionary_policy(

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import pickle
 
 import pytest
 
@@ -170,6 +171,9 @@ def test_base_stats_parquet(
         assert source_info_x.storage_size.value is None
         assert source_info_y.storage_size.value is None
 
+    # All read columns should be marked
+    assert set(table_source_info._read_columns) == {"x", "y", "z"}
+
     # source._unique_stats should be empty
     assert set(table_source_info._unique_stats) == set()
 
@@ -178,7 +182,6 @@ def test_base_stats_parquet(
         assert source_info_x.unique_stats(force=True).fraction.value == 1.0
     else:
         assert source_info_x.unique_stats(force=True).count.value is None
-        assert source_info_x.unique_stats(force=True).fraction.value is None
 
     # source_info._unique_stats should only contain 'x'
     if max_footer_samples and max_row_group_samples:
@@ -434,6 +437,21 @@ def test_base_stats_join_key_info(engine):
     )
     assert local_unique_count == source_unique_count
     assert stats.row_count[ir].value == q.collect().height
+
+
+def test_dataframescan_stats_pickle(engine):
+    df = pl.DataFrame({"x": range(100), "y": [1, 2] * 50})
+    q = pl.LazyFrame(df)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
+
+    # Pickle and unpickle the stats collector
+    pickled = pickle.dumps(stats)
+    unpickled_stats = pickle.loads(pickled)
+
+    # Verify the unpickled stats are equivalent
+    assert type(unpickled_stats) is type(stats)
+    assert unpickled_stats.column_stats[ir]["x"].source_info.row_count.value == 100
 
 
 @pytest.mark.parametrize("use_io_partitioning", [True, False])

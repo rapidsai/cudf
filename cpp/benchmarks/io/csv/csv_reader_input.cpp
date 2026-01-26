@@ -1,10 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -16,11 +16,15 @@
 constexpr size_t data_size         = 256 << 20;
 constexpr cudf::size_type num_cols = 64;
 
+// Use alphanumeric character range to avoid CSV special characters (comma, quote, hash)
+// that can trigger quoting issues.
+data_profile const profile = data_profile_builder().string_char_range('0', 'z');  // ASCII 48-122
+
 template <typename DataType>
 void csv_read_common(DataType const& data_types, io_type const& source_type, nvbench::state& state)
 {
   auto const tbl =
-    create_random_table(cycle_dtypes(data_types, num_cols), table_size_bytes{data_size});
+    create_random_table(cycle_dtypes(data_types, num_cols), table_size_bytes{data_size}, profile);
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(source_type);
@@ -29,8 +33,18 @@ void csv_read_common(DataType const& data_types, io_type const& source_type, nvb
 
   cudf::io::write_csv(options);
 
+  // Extract column types from the source table to avoid type inference issues
+  // (e.g., timestamp/duration columns being inferred as strings)
+  std::vector<cudf::data_type> column_types;
+  column_types.reserve(view.num_columns());
+  for (cudf::size_type i = 0; i < view.num_columns(); ++i) {
+    column_types.push_back(view.column(i).type());
+  }
+
   cudf::io::csv_reader_options const read_options =
-    cudf::io::csv_reader_options::builder(source_sink.make_source_info());
+    cudf::io::csv_reader_options::builder(source_sink.make_source_info())
+      .compression(cudf::io::compression_type::NONE)
+      .dtypes(column_types);
 
   auto const mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));

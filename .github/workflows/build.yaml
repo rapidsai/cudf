@@ -51,9 +51,10 @@ jobs:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
+      node_type: cpu16
       script: ci/build_cpp.sh
       sha: ${{ inputs.sha }}
-      node_type: "cpu16"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   python-build:
     needs: [telemetry-setup, cpp-build]
     secrets: inherit
@@ -64,8 +65,20 @@ jobs:
       date: ${{ inputs.date }}
       script: ci/build_python.sh
       sha: ${{ inputs.sha }}
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
+  python-build-noarch:
+    needs: [telemetry-setup, cpp-build, python-build]
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      script: ci/build_python_noarch.sh
+      sha: ${{ inputs.sha }}
+      pure-conda: cuda_major
   upload-conda:
-    needs: [cpp-build, python-build]
+    needs: [cpp-build, python-build, python-build-noarch]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@main
     with:
@@ -75,14 +88,14 @@ jobs:
       sha: ${{ inputs.sha }}
   docs-build:
     if: github.ref_type == 'branch'
-    needs: python-build
+    needs: [python-build, python-build-noarch]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       arch: "amd64"
       branch: ${{ inputs.branch }}
       build_type: ${{ inputs.build_type || 'branch' }}
-      container_image: "rapidsai/ci-conda:25.12-latest"
+      container_image: "rapidsai/ci-conda:26.04-latest"
       date: ${{ inputs.date }}
       node_type: "gpu-l4-latest-1"
       script: "ci/build_docs.sh"
@@ -98,10 +111,11 @@ jobs:
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
-      node_type: "cpu16"
+      node_type: cpu16
       script: ci/build_wheel_libcudf.sh
       package-name: libcudf
       package-type: cpp
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-libcudf:
     needs: wheel-build-libcudf
     secrets: inherit
@@ -122,9 +136,11 @@ jobs:
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
+      node_type: cpu8
       script: ci/build_wheel_pylibcudf.sh
       package-name: pylibcudf
       package-type: python
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-pylibcudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
@@ -145,9 +161,11 @@ jobs:
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
+      node_type: cpu8
       script: ci/build_wheel_cudf.sh
       package-name: cudf
       package-type: python
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
@@ -170,10 +188,12 @@ jobs:
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
+      node_type: cpu8
       script: ci/build_wheel_dask_cudf.sh
       package-name: dask_cudf
       package-type: python
       pure-wheel: true
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
@@ -196,10 +216,12 @@ jobs:
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
+      node_type: cpu8
       script: ci/build_wheel_cudf_polars.sh
       package-name: cudf_polars
       package-type: python
       pure-wheel: true
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-cudf-polars:
     needs: wheel-build-cudf-polars
     secrets: inherit

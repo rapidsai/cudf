@@ -73,6 +73,10 @@ class GenState(TypedDict):
     max_io_threads
         The maximum number of IO threads to use for
         a single IO node.
+    stats
+        Statistics collector.
+    collective_id_map
+        The mapping of IR nodes to collective IDs.
     """
 
     context: Context
@@ -81,10 +85,12 @@ class GenState(TypedDict):
     fanout_nodes: dict[IR, FanoutInfo]
     ir_context: IRExecutionContext
     max_io_threads: int
+    stats: StatsCollector
+    collective_id_map: dict[IR, int]
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[
-    "IR", "tuple[list[Any], dict[IR, ChannelManager]]", GenState
+    "IR", "tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]", GenState
 ]
 """Protocol for Generating a streaming sub-network."""
 
@@ -125,7 +131,7 @@ def lower_ir_node(
 @singledispatch
 def generate_ir_sub_network(
     ir: IR, rec: SubNetGenerator
-) -> tuple[list[Any], dict[IR, ChannelManager]]:
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     """
     Generate a sub-network for the RapidsMPF streaming runtime.
 
@@ -139,7 +145,7 @@ def generate_ir_sub_network(
     Returns
     -------
     nodes
-        List of streaming-network node(s).
+        Dictionary mapping each IR node to its list of streaming-network node(s).
     channels
         Dictionary mapping between each IR node and its
         corresponding output ChannelManager object.

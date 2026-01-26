@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,11 +14,14 @@
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/filtered_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cuco/bucket_storage.cuh>
@@ -29,6 +32,8 @@
 #include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+
+#include <memory>
 
 namespace cudf {
 namespace detail {
@@ -78,15 +83,15 @@ struct gather_mask {
 
 auto filtered_join::compute_bucket_storage_size(cudf::table_view tbl, double load_factor)
 {
-  auto const size_with_primitive_probe = static_cast<cudf::size_type>(
-    cuco::make_valid_extent<primitive_probing_scheme, storage_type, cudf::size_type>(tbl.num_rows(),
-                                                                                     load_factor));
-  auto const size_with_nested_probe = static_cast<cudf::size_type>(
-    cuco::make_valid_extent<nested_probing_scheme, storage_type, cudf::size_type>(tbl.num_rows(),
-                                                                                  load_factor));
-  auto const size_with_simple_probe = static_cast<cudf::size_type>(
-    cuco::make_valid_extent<simple_probing_scheme, storage_type, cudf::size_type>(tbl.num_rows(),
-                                                                                  load_factor));
+  auto const size_with_primitive_probe = static_cast<std::size_t>(
+    cuco::make_valid_extent<primitive_probing_scheme, storage_type, std::size_t>(tbl.num_rows(),
+                                                                                 load_factor));
+  auto const size_with_nested_probe = static_cast<std::size_t>(
+    cuco::make_valid_extent<nested_probing_scheme, storage_type, std::size_t>(tbl.num_rows(),
+                                                                              load_factor));
+  auto const size_with_simple_probe = static_cast<std::size_t>(
+    cuco::make_valid_extent<simple_probing_scheme, storage_type, std::size_t>(tbl.num_rows(),
+                                                                              load_factor));
   return std::max({size_with_primitive_probe, size_with_nested_probe, size_with_simple_probe});
 }
 
@@ -198,7 +203,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
     query_set(probe_iter, contains_map.begin());
   }
   rmm::device_uvector<size_type> gather_map(probe.num_rows(), stream, mr);
-  auto gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
+  auto gather_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
                                         thrust::counting_iterator<size_type>(0),
                                         thrust::counting_iterator<size_type>(probe.num_rows()),
                                         gather_map.begin(),
@@ -215,7 +220,7 @@ filtered_join::filtered_join(cudf::table_view const& build,
     _nulls_equal{compare_nulls},
     _build{build},
     _preprocessed_build{cudf::detail::row::equality::preprocessed_table::create(_build, stream)},
-    _bucket_storage{cuco::extent<cudf::size_type>{compute_bucket_storage_size(build, load_factor)},
+    _bucket_storage{cuco::extent<std::size_t>{compute_bucket_storage_size(build, load_factor)},
                     rmm::mr::polymorphic_allocator<char>{},
                     stream.value()}
 {

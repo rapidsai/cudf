@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,9 +12,9 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/optional>
+#include <cuda/std/utility>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace detail {
@@ -120,7 +120,7 @@ struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
  * Example output iterator usage.
  * @code
  *  auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
- *  thrust::lower_bound(rmm::exec_policy(stream),
+ *  thrust::lower_bound(rmm::exec_policy_nosync(stream),
  *                      input->begin<Element>(),
  *                      input->end<Element>(),
  *                      values->begin<Element>(),
@@ -298,7 +298,7 @@ struct indexalator_factory {
       iter = make_input_iterator(col);
     }
 
-    __device__ thrust::pair<size_type, bool> operator()(size_type i) const
+    __device__ cuda::std::pair<size_type, bool> operator()(size_type i) const
     {
       return {iter[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
     }
@@ -321,7 +321,7 @@ struct indexalator_factory {
       iter = indexalator_factory::make_input_iterator(input);
     }
 
-    __device__ thrust::pair<size_type, bool> operator()(size_type) const
+    __device__ cuda::std::pair<size_type, bool> operator()(size_type) const
     {
       return {*iter, is_null};
     }

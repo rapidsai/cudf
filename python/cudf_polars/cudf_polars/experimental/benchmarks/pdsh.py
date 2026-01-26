@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -610,7 +610,7 @@ class PDSHQueries:
         q1 = (
             part.filter(pl.col("p_brand") == var1)
             .filter(pl.col("p_container") == var2)
-            .join(lineitem, how="left", left_on="p_partkey", right_on="l_partkey")
+            .join(lineitem, how="inner", left_on="p_partkey", right_on="l_partkey")
         )
 
         return (
@@ -648,16 +648,16 @@ class PDSHQueries:
             .group_by(
                 "c_name", "o_custkey", "o_orderkey", "o_orderdate", "o_totalprice"
             )
-            .agg(pl.col("l_quantity").sum().alias("col6"))
+            .agg(pl.col("l_quantity").sum().alias("sum(l_quantity)"))
             .select(
                 pl.col("c_name"),
                 pl.col("o_custkey").alias("c_custkey"),
                 pl.col("o_orderkey"),
-                pl.col("o_orderdate").alias("o_orderdat"),
+                pl.col("o_orderdate"),
                 pl.col("o_totalprice"),
-                pl.col("col6"),
+                pl.col("sum(l_quantity)"),
             )
-            .sort(by=["o_totalprice", "o_orderdat"], descending=[True, False])
+            .sort(by=["o_totalprice", "o_orderdate"], descending=[True, False])
             .head(100)
         )
 
@@ -1373,9 +1373,9 @@ class PDSHDuckDBQueries:
                 c_name,
                 c_custkey,
                 o_orderkey,
-                o_orderdate as o_orderdat,
+                o_orderdate,
                 o_totalprice,
-                sum(l_quantity) as col6
+                sum(l_quantity)
             from
                 customer,
                 orders,

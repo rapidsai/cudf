@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
 from cudf_polars.utils.config import ConfigOptions
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 def test_evaluate_streaming():
@@ -146,7 +145,7 @@ def test_preserve_partitioning():
     )
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    ir, partition_info, _ = lower_ir_graph(ir, config_options)
     expect_dtype = ir.schema["a"]
     expect_expr = (NamedExpr("a", Col(expect_dtype, "a")),)
     assert partition_info[ir].partitioned_on == expect_expr
@@ -187,7 +186,7 @@ def test_single_cluster():
 
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    ir, partition_info, _ = lower_ir_graph(ir, config_options)
     graph, key = task_graph(
         ir,
         partition_info,
@@ -229,7 +228,7 @@ def test_task_graph_is_pickle_serializable(engine):
 
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    ir, partition_info, _ = lower_ir_graph(ir, config_options)
     graph, _ = task_graph(
         ir,
         partition_info,
@@ -259,14 +258,7 @@ def test_fallback_on_concat_zlice(engine: pl.GPUEngine) -> None:
         ]
     ).tail(1)
 
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(
-            pl.exceptions.ComputeError,
-            match="This slice not supported for multiple partitions.",
-        ):
-            assert_gpu_result_equal(q, engine=engine)
-    else:
-        with pytest.raises(
-            UserWarning, match="This slice not supported for multiple partitions."
-        ):
-            assert_gpu_result_equal(q, engine=engine)
+    with pytest.raises(
+        UserWarning, match="This slice not supported for multiple partitions."
+    ):
+        assert_gpu_result_equal(q, engine=engine)

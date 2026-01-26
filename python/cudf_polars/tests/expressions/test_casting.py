@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import (
+    assert_collect_raises,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -52,3 +53,37 @@ def test_cast_unsupported(tests):
     assert_ir_translation_raises(
         df.select(pl.col("a").cast(totype)), NotImplementedError
     )
+
+
+def test_allow_double_cast():
+    df = pl.LazyFrame({"c0": [1000]})
+    query = df.select(pl.col("c0").cast(pl.Boolean).cast(pl.Int8))
+    assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("dtype", [pl.Int64(), pl.Float64()])
+@pytest.mark.parametrize("strict", [True, False])
+def test_cast_strict_false_string_to_numeric(dtype, strict):
+    df = pl.LazyFrame({"c0": ["1969-12-08 17:00:01", "1", None]})
+    query = df.with_columns(pl.col("c0").cast(dtype, strict=strict))
+    if strict:
+        cudf_except = pl.exceptions.InvalidOperationError
+        assert_collect_raises(
+            query,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_except,
+        )
+    else:
+        assert_gpu_result_equal(query)
+
+
+def test_cast_from_string_unsupported():
+    df = pl.LazyFrame({"a": ["True"]})
+    query = df.select(pl.col("a").cast(pl.Boolean()))
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+def test_cast_to_string_unsupported():
+    df = pl.LazyFrame({"a": [True]})
+    query = df.select(pl.col("a").cast(pl.String()))
+    assert_ir_translation_raises(query, NotImplementedError)

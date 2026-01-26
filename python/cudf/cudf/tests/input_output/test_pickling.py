@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import io
@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import DataFrame, Index, RangeIndex, Series
+from cudf import DataFrame, Index, RangeIndex, Series, date_range
 from cudf.core.buffer import as_buffer
 from cudf.testing import assert_eq
 
@@ -77,7 +77,7 @@ def test_pickle_index():
 
 def test_pickle_buffer():
     arr = np.arange(10).view("|u1")
-    buf = as_buffer(arr)
+    buf = as_buffer(memoryview(arr))
     assert buf.size == arr.nbytes
     pickled = pickle.dumps(buf)
     unpacked = pickle.loads(pickled)
@@ -163,3 +163,9 @@ def test_pickle_roundtrip_multiindex(names):
     local_file.seek(0)
     actual_df = pickle.load(local_file)
     assert_eq(expected_df, actual_df)
+
+
+def test_pickle_dataframe_with_datetime_index():
+    idx = date_range(start="1/1/2018", end="1/08/2018")
+    df = DataFrame({"a": range(len(idx))}, index=idx)
+    assert_eq(df, pickle.loads(pickle.dumps(df)))

@@ -1,13 +1,14 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import io
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from utils import synchronize_stream
 
 from rmm import DeviceBuffer
-from rmm.pylibrmm.stream import DEFAULT_STREAM, Stream
+from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
 from pylibcudf.expressions import (
@@ -322,10 +323,12 @@ def test_hybrid_scan_materialize_columns(
     filter_buffers = [
         DeviceBuffer.to_device(
             simple_parquet_bytes[r.offset : r.offset + r.size],
-            stream or DEFAULT_STREAM,
+            plc.utils._get_stream(stream),
         )
         for r in filter_ranges
     ]
+
+    synchronize_stream(stream)
 
     # Materialize filter columns (mr is optional, defaults to None)
     filter_result = simple_hybrid_scan_reader.materialize_filter_columns(
@@ -336,6 +339,8 @@ def test_hybrid_scan_materialize_columns(
         simple_parquet_options,
         stream,
     )
+
+    synchronize_stream(stream)
 
     # Filter column should have 1 column, with rows passing the filter
     expected_result_rows = num_rows - filter_threshold
@@ -351,10 +356,12 @@ def test_hybrid_scan_materialize_columns(
     payload_buffers = [
         DeviceBuffer.to_device(
             simple_parquet_bytes[r.offset : r.offset + r.size],
-            stream or DEFAULT_STREAM,
+            plc.utils._get_stream(stream),
         )
         for r in payload_ranges
     ]
+
+    synchronize_stream(stream)
 
     # Materialize payload columns (mr is optional, defaults to None)
     payload_result = simple_hybrid_scan_reader.materialize_payload_columns(
@@ -365,6 +372,8 @@ def test_hybrid_scan_materialize_columns(
         simple_parquet_options,
         stream,
     )
+
+    synchronize_stream(stream)
 
     assert payload_result.tbl.num_columns() == 2
     assert payload_result.tbl.num_rows() == expected_result_rows
@@ -378,6 +387,8 @@ def test_hybrid_scan_materialize_columns(
     ).build()
     comparison_options.set_filter(filter_expression)
     expected_result = plc.io.parquet.read_parquet(comparison_options, stream)
+
+    synchronize_stream(stream)
 
     # Combine hybrid scan results
     hybrid_columns = filter_result.tbl.columns() + payload_result.tbl.columns()
@@ -431,10 +442,13 @@ def test_hybrid_scan_has_next_table_chunk(
     )
     filter_buffers = [
         DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size]
+            simple_parquet_bytes[r.offset : r.offset + r.size],
+            plc.utils._get_stream(),
         )
         for r in filter_ranges
     ]
+
+    synchronize_stream()
 
     # Setup chunking first
     simple_hybrid_scan_reader.setup_chunking_for_filter_columns(
@@ -497,10 +511,12 @@ def test_hybrid_scan_chunked_reading(
     filter_buffers = [
         DeviceBuffer.to_device(
             simple_parquet_bytes[r.offset : r.offset + r.size],
-            stream or DEFAULT_STREAM,
+            plc.utils._get_stream(stream),
         )
         for r in filter_ranges
     ]
+
+    synchronize_stream(stream)
 
     # Setup chunking for filter columns with small chunk size
     chunk_read_limit = 512  # Small limit to force multiple chunks

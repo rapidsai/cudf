@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
@@ -22,6 +23,15 @@
 #include <cuco/static_set.cuh>
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <memory>
+#include <span>
+#include <utility>
+#include <vector>
 
 namespace cudf::groupby::detail::hash {
 namespace {
@@ -46,12 +56,14 @@ struct result_column_creator {
   {
   }
 
-  std::unique_ptr<column> operator()(column_view const& col, aggregation::Kind const& agg) const
+  std::unique_ptr<column> operator()(column_view const& col,
+                                     aggregation::Kind const& agg,
+                                     bool is_agg_intermediate) const
   {
     auto const col_type =
       is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
-    auto const nullable =
-      agg != aggregation::COUNT_VALID && agg != aggregation::COUNT_ALL && col.has_nulls();
+    auto const nullable = !is_agg_intermediate && agg != aggregation::COUNT_VALID &&
+                          agg != aggregation::COUNT_ALL && col.has_nulls();
     // TODO: Remove adjusted buffer size workaround once https://github.com/NVIDIA/cccl/issues/6430
     // is fixed. Use adjusted buffer size for small data types to ensure atomic operation safety.
     auto const make_uninitialized_column = [&](data_type d_type, size_type size, mask_state state) {
@@ -97,15 +109,22 @@ struct result_column_creator {
 std::unique_ptr<table> create_results_table(size_type output_size,
                                             table_view const& values,
                                             host_span<aggregation::Kind const> agg_kinds,
+                                            std::span<int8_t const> is_agg_intermediate,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(agg_kinds.size()),
+               "The number of values columns and size of agg_kinds vector must be the same.");
+  CUDF_EXPECTS(
+    values.num_columns() == static_cast<size_type>(is_agg_intermediate.size()),
+    "The number of values columns and size of is_agg_intermediate vector must be the same.");
+
+  auto const column_creator = result_column_creator{output_size, stream, mr};
   std::vector<std::unique_ptr<column>> output_cols;
-  std::transform(values.begin(),
-                 values.end(),
-                 agg_kinds.begin(),
-                 std::back_inserter(output_cols),
-                 result_column_creator{output_size, stream, mr});
+  for (size_t i = 0; i < agg_kinds.size(); i++) {
+    output_cols.emplace_back(
+      column_creator(values.column(i), agg_kinds[i], static_cast<bool>(is_agg_intermediate[i])));
+  }
   auto result_table = std::make_unique<table>(std::move(output_cols));
   cudf::detail::initialize_with_identity(result_table->mutable_view(), agg_kinds, stream);
   return result_table;
@@ -176,16 +195,23 @@ void finalize_output(table_view const& values,
                      cudf::detail::result_cache* cache,
                      rmm::cuda_stream_view stream)
 {
-  auto result_cols = agg_results->release();
+  auto result_cols       = agg_results->release();
+  auto const null_counts = [&]() -> std::vector<size_type> {
+    auto const has_null_masks = std::any_of(
+      result_cols.begin(), result_cols.end(), [](auto const& col) { return col->nullable(); });
+    if (!has_null_masks) { return {}; }
+
+    auto null_masks =
+      cudf::detail::make_pinned_vector<bitmask_type const*>(aggregations.size(), stream);
+    std::ranges::transform(result_cols, null_masks.begin(), [](auto const& result) {
+      return result->view().null_mask();
+    });
+    return cudf::batch_null_count(null_masks, 0, result_cols.front()->size(), stream);
+  }();
+
   for (size_t i = 0; i < aggregations.size(); i++) {
     auto& result = result_cols[i];
-    if (result->nullable()) {
-      // Call `null_count` triggers a stream sync for each output column.
-      // This needs to be improved by a batch processing kernel, which is requested
-      // in https://github.com/rapidsai/cudf/issues/19878.
-      result->set_null_count(
-        cudf::null_count(result->view().null_mask(), 0, result->size(), stream));
-    }
+    if (result->nullable()) { result->set_null_count(null_counts[i]); }
     cache->add_result(values.column(i), *aggregations[i], std::move(result));
   }
   agg_results.reset();  // to make sure any subsequent use will trigger exception

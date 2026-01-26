@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "reader_impl_helpers.hpp"
@@ -18,7 +18,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -283,16 +283,18 @@ aggregate_reader_metadata::filter_row_groups(
      std::make_optional(num_bloom_filtered_row_groups)}};
 }
 
-// convert column named expression to column index reference expression
+/**
+ * @brief Converts column named expression to column index reference expression
+ */
 named_to_reference_converter::named_to_reference_converter(
   std::optional<std::reference_wrapper<ast::expression const>> expr, table_metadata const& metadata)
 {
-  if (!expr.has_value()) return;
+  if (!expr.has_value()) { return; }
   // create map for column name.
   std::transform(metadata.schema_info.cbegin(),
                  metadata.schema_info.cend(),
                  thrust::counting_iterator<size_t>(0),
-                 std::inserter(column_name_to_index, column_name_to_index.end()),
+                 std::inserter(_column_name_to_index, _column_name_to_index.end()),
                  [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
 
   expr.value().get().accept(*this);
@@ -316,8 +318,8 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   ast::column_name_reference const& expr)
 {
   // check if column name is in metadata
-  auto col_index_it = column_name_to_index.find(expr.get_column_name());
-  if (col_index_it == column_name_to_index.end()) {
+  auto col_index_it = _column_name_to_index.find(expr.get_column_name());
+  if (col_index_it == _column_name_to_index.end()) {
     CUDF_FAIL("Column name not found in metadata");
   }
   auto col_index = col_index_it->second;
@@ -354,76 +356,55 @@ named_to_reference_converter::visit_operands(
   return transformed_operands;
 }
 
-/**
- * @brief Converts named columns to index reference columns
- *
- */
-class names_from_expression : public ast::detail::expression_transformer {
- public:
-  names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                        std::vector<std::string> const& skip_names)
-    : _skip_names(skip_names.cbegin(), skip_names.cend())
-  {
-    if (!expr.has_value()) return;
-    expr.value().get().accept(*this);
-  }
+names_from_expression::names_from_expression(
+  std::optional<std::reference_wrapper<ast::expression const>> expr,
+  std::vector<std::string> const& skip_names)
+  : _skip_names(skip_names.cbegin(), skip_names.cend())
+{
+  if (!expr.has_value()) { return; }
+  expr.value().get().accept(*this);
+}
 
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override
-  {
-    return expr;
-  }
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override
-  {
-    return expr;
-  }
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(
-    ast::column_name_reference const& expr) override
-  {
-    // collect column names
-    auto col_name = expr.get_column_name();
-    if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
-    return expr;
-  }
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
-  {
-    visit_operands(expr.get_operands());
-    return expr;
-  }
+std::reference_wrapper<ast::expression const> names_from_expression::visit(ast::literal const& expr)
+{
+  return expr;
+}
 
-  /**
-   * @brief Returns the column names in AST.
-   *
-   * @return AST operation expression
-   */
-  [[nodiscard]] std::vector<std::string> to_vector() &&
-  {
-    return {std::make_move_iterator(_column_names.begin()),
-            std::make_move_iterator(_column_names.end())};
-  }
+std::reference_wrapper<ast::expression const> names_from_expression::visit(
+  ast::column_reference const& expr)
+{
+  return expr;
+}
 
- private:
-  void visit_operands(cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
-  {
-    for (auto const& operand : operands) {
-      operand.get().accept(*this);
-    }
-  }
+std::reference_wrapper<ast::expression const> names_from_expression::visit(
+  ast::column_name_reference const& expr)
+{
+  // collect column names
+  auto col_name = expr.get_column_name();
+  if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
+  return expr;
+}
 
-  std::unordered_set<std::string> _column_names;
-  std::unordered_set<std::string> _skip_names;
-};
+std::reference_wrapper<ast::expression const> names_from_expression::visit(
+  ast::operation const& expr)
+{
+  visit_operands(expr.get_operands());
+  return expr;
+}
+
+std::vector<std::string> names_from_expression::to_vector() &&
+{
+  return {std::make_move_iterator(_column_names.begin()),
+          std::make_move_iterator(_column_names.end())};
+}
+
+void names_from_expression::visit_operands(
+  cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
+{
+  for (auto const& operand : operands) {
+    operand.get().accept(*this);
+  }
+}
 
 [[nodiscard]] std::vector<std::string> get_column_names_in_expression(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
@@ -445,13 +426,13 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
                "Filter expression must return a boolean column");
 
-  auto const host_bitmask = [&] {
-    auto const num_bitmasks = num_bitmask_words(predicate.size());
+  auto host_bitmask = [&] {
+    std::size_t const num_bitmasks = num_bitmask_words(predicate.size());
     if (predicate.nullable()) {
-      return cudf::detail::make_host_vector(
-        device_span<bitmask_type const>(predicate.null_mask(), num_bitmasks), stream);
+      return cudf::detail::make_pinned_vector(
+        cudf::device_span<bitmask_type const>{predicate.null_mask(), num_bitmasks}, stream);
     } else {
-      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
+      auto bitmask = cudf::detail::make_pinned_vector<bitmask_type>(num_bitmasks, stream);
       std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
       return bitmask;
     }
@@ -461,8 +442,10 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
     0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
 
   // Return only filtered row groups based on predicate
-  auto const is_row_group_required = cudf::detail::make_host_vector(
-    device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
+  auto is_row_group_required = cudf::detail::make_pinned_vector(
+    cudf::device_span<uint8_t const>{predicate.data<uint8_t>(),
+                                     static_cast<size_t>(predicate.size())},
+    stream);
 
   // Return if all are required, or all are nulls.
   if (predicate.null_count() == predicate.size() or std::all_of(is_row_group_required.cbegin(),

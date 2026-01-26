@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -234,7 +234,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                                                   stream,
                                                   cudf::get_current_device_resource_ref());
 
-      auto const max_count = thrust::reduce(rmm::exec_policy(stream),
+      auto const max_count = thrust::reduce(rmm::exec_policy_nosync(stream),
                                             counts.begin(),
                                             counts.end(),
                                             size_type{0},
@@ -244,7 +244,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
 
       // adjust values in each segment to match the new scale
       auto const d_col = column_device_view::create(col, stream);
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         d_col->begin<InputType>(),
                         d_col->end<InputType>(),
                         d_col->begin<InputType>(),

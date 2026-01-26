@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
-    return Union.do_evaluate(None, *dfs, context=context)
+    return dfs[0] if len(dfs) == 1 else Union.do_evaluate(None, *dfs, context=context)
 
 
 def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:

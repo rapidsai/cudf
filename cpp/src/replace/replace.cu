@@ -3,7 +3,7 @@
  * SPDX-FileCopyrightText: Copyright 2018 BlazingDB, Inc.
  * SPDX-FileCopyrightText: Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
  * SPDX-FileCopyrightText: Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 // clang-format on
@@ -51,9 +51,10 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/pair.h>
+#include <thrust/tuple.h>
 
 namespace {  // anonymous
 
@@ -80,7 +81,7 @@ __device__ auto get_new_value(cudf::size_type idx,
   } else {
     new_value = input_data[idx];
   }
-  return thrust::make_pair(new_value, output_is_valid);
+  return cuda::std::make_pair(new_value, output_is_valid);
 }
 
 /**
@@ -275,15 +276,10 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
     cudf::dictionary_column_view(matched_replacements->view()).get_indices_annotated(),
     stream,
     mr);
-  auto null_count     = new_indices->null_count();
-  auto contents       = new_indices->release();
-  auto indices_column = std::make_unique<cudf::column>(
-    indices_type, input.size(), std::move(*(contents.data.release())), rmm::device_buffer{}, 0);
+
   std::unique_ptr<cudf::column> keys_column(std::move(matched_input->release().children.back()));
-  return cudf::make_dictionary_column(std::move(keys_column),
-                                      std::move(indices_column),
-                                      std::move(*(contents.null_mask.release())),
-                                      null_count);
+
+  return cudf::make_dictionary_column(std::move(keys_column), std::move(new_indices), stream, mr);
 }
 
 }  // end anonymous namespace

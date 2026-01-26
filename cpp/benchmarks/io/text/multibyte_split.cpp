@@ -1,12 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/io/cuio_common.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/file_utilities.hpp>
 
@@ -120,10 +119,9 @@ static void bench_multibyte_split(nvbench::state& state,
 
   auto const delim_factor = static_cast<double>(delim_percent) / 100;
   std::unique_ptr<cudf::io::datasource> datasource;
-  auto device_input = create_random_input(file_size_approx, delim_factor, 0.05, delim);
-  auto host_input   = std::vector<char>{};
-  auto host_pinned_input =
-    cudf::detail::make_pinned_vector_async<char>(0, cudf::get_default_stream());
+  auto device_input      = create_random_input(file_size_approx, delim_factor, 0.05, delim);
+  auto host_input        = std::vector<char>{};
+  auto host_pinned_input = cudf::detail::make_host_vector<char>(0, cudf::get_default_stream());
 
   if (source_type != data_chunk_source_type::device &&
       source_type != data_chunk_source_type::host_pinned) {
@@ -132,9 +130,10 @@ static void bench_multibyte_split(nvbench::state& state,
       cudf::get_default_stream());
   }
   if (source_type == data_chunk_source_type::host_pinned) {
-    host_pinned_input.resize(static_cast<std::size_t>(device_input.size()));
-    CUDF_CUDA_TRY(cudaMemcpy(
-      host_pinned_input.data(), device_input.data(), host_pinned_input.size(), cudaMemcpyDefault));
+    host_pinned_input = cudf::detail::make_pinned_vector(
+      cudf::device_span<char const>{device_input.data(),
+                                    static_cast<std::size_t>(device_input.size())},
+      cudf::get_default_stream());
   }
 
   auto source = [&] {

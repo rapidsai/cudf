@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,9 +14,9 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/aligned.hpp>
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <thrust/host_vector.h>
 
@@ -195,9 +195,9 @@ auto hybrid_scan(io_source const& io_source,
     timer.print_elapsed_millis();
   } else {
     std::cout << "SKIP: Filter column data page filtering with page index stats...\n\n";
-    auto num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
-    row_mask      = cudf::make_numeric_column(
-      cudf::data_type{cudf::type_id::BOOL8}, num_rows, rmm::device_buffer{}, 0, stream, mr);
+    timer.reset();
+    row_mask = reader->build_all_true_row_mask(current_row_group_indices, stream, mr);
+    timer.print_elapsed_millis();
   }
 
   std::cout << "READER: Materialize filter columns...\n";

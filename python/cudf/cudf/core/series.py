@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -75,12 +75,12 @@ from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Iterable, MutableMapping
+    from types import NotImplementedType
 
     from cudf._typing import (
         Axis,
         DataFrameOrSeries,
         Dtype,
-        NotImplementedType,
         ScalarLike,
     )
     from cudf.core.dataframe import DataFrame
@@ -268,6 +268,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
         self._frame._column[key] = value
 
 
+class _SeriesiAtIndexer(_SeriesIlocIndexer):
+    pass
+
+
 class _SeriesLocIndexer(_FrameIndexer):
     """
     Label-based selection
@@ -306,7 +310,6 @@ class _SeriesLocIndexer(_FrameIndexer):
             arg = self._loc_to_iloc(arg)
         except (TypeError, KeyError, IndexError, ValueError) as err:
             raise KeyError(arg) from err
-
         return self._frame.iloc[arg]
 
     @_performance_tracking
@@ -407,6 +410,10 @@ class _SeriesLocIndexer(_FrameIndexer):
                     )
                     raise KeyError(f"{missing} not in the index.")
                 return indices
+
+
+class _SeriesAtIndexer(_SeriesLocIndexer):
+    pass
 
 
 class Series(SingleColumnFrame, IndexedFrame):
@@ -511,7 +518,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         data=None,
         index=None,
-        dtype=None,
+        dtype: Dtype | None = None,
         name=None,
         copy=False,
         nan_as_null=no_default,
@@ -640,59 +647,19 @@ class Series(SingleColumnFrame, IndexedFrame):
     def __contains__(self, item) -> bool:
         return item in self.index
 
-    @classmethod
-    @_performance_tracking
-    def from_pandas(cls, s: pd.Series, nan_as_null=no_default) -> Series:
+    @property
+    def iat(self):
         """
-        Convert from a Pandas Series.
-
-        Parameters
-        ----------
-        s : Pandas Series object
-            A Pandas Series object which has to be converted
-            to cuDF Series.
-        nan_as_null : bool, Default None
-            If ``None``/``True``, converts ``np.nan`` values to
-            ``null`` values.
-            If ``False``, leaves ``np.nan`` values as is.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> import numpy as np
-        >>> data = [10, 20, 30, np.nan]
-        >>> pds = pd.Series(data, dtype='float64')
-        >>> cudf.Series.from_pandas(pds)
-        0    10.0
-        1    20.0
-        2    30.0
-        3    <NA>
-        dtype: float64
-        >>> cudf.Series.from_pandas(pds, nan_as_null=False)
-        0    10.0
-        1    20.0
-        2    30.0
-        3     NaN
-        dtype: float64
+        Alias for ``Series.iloc``; provided for compatibility with Pandas.
         """
-        warnings.warn(
-            "from_pandas is deprecated and will be removed in a future version. "
-            "Use the Series constructor instead.",
-            FutureWarning,
-        )
-        if nan_as_null is no_default:
-            nan_as_null = (
-                False if cudf.get_option("mode.pandas_compatible") else None
-            )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            result = cls(s, nan_as_null=nan_as_null)
-        return result
+        return _SeriesiAtIndexer(self)
+
+    @property
+    def at(self):
+        """
+        Alias for ``Series.loc``; provided for compatibility with Pandas.
+        """
+        return _SeriesAtIndexer(self)
 
     @property
     @_performance_tracking
@@ -1291,18 +1258,28 @@ class Series(SingleColumnFrame, IndexedFrame):
         inputs.
         """
         if isinstance(spec, indexing_utils.MapIndexer):
-            return self._gather(spec.key, keep_index=True)
+            result = self._gather(spec.key, keep_index=True)
         elif isinstance(spec, indexing_utils.MaskIndexer):
-            return self._apply_boolean_mask(spec.key, keep_index=True)
+            result = self._apply_boolean_mask(spec.key, keep_index=True)
         elif isinstance(spec, indexing_utils.SliceIndexer):
-            return self._slice(spec.key)
+            result = self._slice(spec.key)
         elif isinstance(spec, indexing_utils.ScalarIndexer):
             return self._gather(
                 spec.key, keep_index=False
             )._column.element_indexing(0)
         elif isinstance(spec, indexing_utils.EmptyIndexer):
             return self._empty_like(keep_index=True)
-        assert_never(spec)
+        else:
+            assert_never(spec)
+
+        if isinstance(result.index, cudf.DatetimeIndex):
+            result.index._freq = (
+                result.index._get_slice_frequency(spec.key)
+                if isinstance(spec, indexing_utils.SliceIndexer)
+                else None
+            )
+
+        return result
 
     @_performance_tracking
     def __getitem__(self, arg):
@@ -1553,7 +1530,14 @@ class Series(SingleColumnFrame, IndexedFrame):
         if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
-        return cls._from_column(col, name=name, index=result_index)
+        result = cls._from_column(col, name=name, index=result_index)
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(result.index, DatetimeIndex):
+                try:
+                    result.index._freq = result.index.inferred_freq
+                except NotImplementedError:
+                    result.index._freq = None
+        return result
 
     @property
     @_performance_tracking
@@ -1889,12 +1873,19 @@ class Series(SingleColumnFrame, IndexedFrame):
         bool_only: bool | None = None,
         skipna: bool = True,
         **kwargs,
-    ) -> bool:
+    ) -> bool | np.bool_:
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().all(axis, skipna, **kwargs)
+        result = super().all(axis, skipna, **kwargs)
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(result, bool)
+            and not isinstance(self.dtype, pd.ArrowDtype)
+        ):
+            return np.bool_(result)
+        return result
 
     @_performance_tracking
     def any(
@@ -1903,12 +1894,19 @@ class Series(SingleColumnFrame, IndexedFrame):
         bool_only: bool | None = None,
         skipna: bool = True,
         **kwargs,
-    ) -> bool:
+    ) -> bool | np.bool_:
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().any(axis, skipna, **kwargs)
+        result = super().any(axis, skipna, **kwargs)
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(result, bool)
+            and not isinstance(self.dtype, pd.ArrowDtype)
+        ):
+            return np.bool_(result)
+        return result
 
     @_performance_tracking
     def to_pandas(
@@ -2002,36 +2000,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         )
         res.attrs = self.attrs
         return res
-
-    @property
-    @_performance_tracking
-    def data(self):
-        """The gpu buffer for the data
-
-        Returns
-        -------
-        out : The GPU buffer of the Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2, 3, 4])
-        >>> series
-        0    1
-        1    2
-        2    3
-        3    4
-        dtype: int64
-        >>> np.array(series.data.memoryview())
-        array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
-               0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
-        """
-        warnings.warn(
-            "Series.data is deprecated and will be removed in a future version. "
-            "Use Series.to_pylibcudf()[0].data() instead.",
-            FutureWarning,
-        )
-        return self._column.data
 
     @_performance_tracking
     def astype(
@@ -3175,17 +3143,17 @@ class Series(SingleColumnFrame, IndexedFrame):
         6     3.0
         7    <NA>
         dtype: float64
-        >>> sr.value_counts(dropna=False)
-        3.0     3
-        2.0     2
-        <NA>    2
+        >>> sr.value_counts(dropna=False).sort_index()
         1.0     1
+        2.0     2
+        3.0     3
+        <NA>    2
         Name: count, dtype: int64
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])
-        >>> s.value_counts(bins=3)
-        (2.0, 3.0]      2
+        >>> s.value_counts(bins=3).sort_index()
         (0.996, 2.0]    2
+        (2.0, 3.0]      2
         (3.0, 4.0]      1
         Name: count, dtype: int64
         """
@@ -3821,31 +3789,25 @@ class Series(SingleColumnFrame, IndexedFrame):
         )
 
     @_performance_tracking
-    def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
+    def to_pylibcudf(self) -> tuple[plc.Column, dict]:
         """
         Convert this Series to a pylibcudf.Column.
-
-        Parameters
-        ----------
-        copy : bool
-            Whether or not to generate a new copy of the underlying device data
 
         Returns
         -------
         pylibcudf.Column
-            A new pylibcudf.Column referencing the same data.
+            A pylibcudf.Column referencing the same data.
         dict
             Dict of metadata (includes name and series indices)
 
         Notes
         -----
-        User requests to convert to pylibcudf must assume that the
-        data may be modified afterwards.
+        This is always a zero-copy operation. The result is a view of the
+        existing data. Changes to the pylibcudf data will be reflected back
+        to the cudf object and vice versa.
         """
-        if copy:
-            raise NotImplementedError("copy=True is not supported")
         metadata = {"name": self.name, "index": self.index}
-        return self._column.to_pylibcudf(mode="write"), metadata
+        return self._column.to_pylibcudf(), metadata
 
     @classmethod
     @_performance_tracking
@@ -3888,7 +3850,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             name = metadata.get("name")
             index = metadata.get("index")
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True),
+            ColumnBase.from_pylibcudf(col),
             name=name,
             index=index,
         )

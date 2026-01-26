@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -113,17 +113,24 @@ enum class use_data_page_mask : bool {
  * @endcode
  *
  * Row group pruning (OPTIONAL): Start with either a list of custom or all row group indices in the
- * parquet file and optionally filter it subject to filter expression using column chunk statistics,
- * dictionaries and bloom filters. Byte ranges for column chunk dictionary pages and bloom filters
- * within parquet file may be obtained via `secondary_filters_byte_ranges()` function. The byte
- * ranges may be read into a corresponding vector of device buffers and passed to the corresponding
- * row group filtration function.
+ * parquet file and optionally filter it using a byte range and/or the filter expression using
+ * column chunk statistics, dictionaries and bloom filters. Byte ranges for column chunk dictionary
+ * pages and bloom filters within parquet file may be obtained via `secondary_filters_byte_ranges()`
+ * function. The byte ranges may be read into a corresponding vector of device buffers and passed to
+ * the corresponding row group filtration function.
  * @code{.cpp}
  * // Start with a list of all parquet row group indices from the file footer
  * auto all_row_group_indices = reader->all_row_groups(options);
  *
  * // Span to track the indices of row groups currently at hand
  * auto current_row_group_indices = cudf::host_span<size_type>(all_row_group_indices);
+ *
+ * // Optional: Prune row group indices to the ones that start within the byte range
+ * auto byte_range_filtered_row_group_indices = reader->filter_row_groups_with_byte_range(
+ *   current_row_group_indices, options);
+ *
+ * // Update current row group indices to byte range filtered row group indices
+ * current_row_group_indices = byte_range_filtered_row_group_indices;
  *
  * // Optional: Prune row group indices subject to filter expression using row group statistics
  * auto stats_filtered_row_group_indices =
@@ -169,15 +176,13 @@ enum class use_data_page_mask : bool {
  * }
  * @endcode
  *
- * Build an initial row mask: Once the row groups are filtered, the next step is to build an
- * initial row mask column to indicate which rows in the current span of row groups will survive in
- * the read table. This initial row mask may be a BOOL8 cudf column of size equal to the
- * total number of rows in the current span of row groups (computed by `total_rows_in_row_groups()`)
- * containing all `true` values. Alternatively, the row mask may be built with
- * the `build_row_mask_with_page_index_stats()` function and contain a `true` value for only the
- * rows that survive the page-level statistics from the page index subject to the same filter as row
- * groups. Note that this step requires the page index to be set up using the `setup_page_index()`
- * function.
+ * Build an initial row mask: Once the row groups are filtered, the next step is to build an initial
+ * BOOL8 row mask column indicating which rows in the current span of row groups survive in the
+ * final table. This row mask column may contain all `true` values built using the
+ * `build_all_true_row_mask()` function or it may contain a `true` value for only the rows that
+ * survive the page-level statistics from the page index subject to the same filter as row groups
+ * (needs page index to be set up using the `setup_page_index()` function). The size of this row
+ * mask column must be equal to the total number of rows in the current span of row groups.
  * @code{.cpp}
  * // If not already done, get the page index byte range
  * auto page_index_byte_range = reader->page_index_byte_range();
@@ -336,6 +341,21 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices) const;
 
   /**
+   * @brief Filter the row groups using the specified byte range specified by [`bytes_to_skip`,
+   * `bytes_to_skip + bytes_to_read`)
+   *
+   * Filters the row groups such that only the row groups that start within the byte range are
+   * selected. Note that the last selected row group may end beyond the byte range.
+   *
+   * @param row_group_indices Input row groups indices
+   * @param options Parquet reader options
+   * @return Filtered row group indices
+   */
+  [[nodiscard]] std::vector<size_type> filter_row_groups_with_byte_range(
+    cudf::host_span<size_type const> row_group_indices,
+    parquet_reader_options const& options) const;
+
+  /**
    * @brief Filter the input row groups using column chunk statistics
    *
    * @param row_group_indices Input row groups indices
@@ -400,8 +420,23 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Builds a boolean column indicating which rows survive the page statistics in the page
-   * index
+   * @brief Builds a boolean (survival) column of size equal to the total number of rows in the row
+   * groups containing all `true` values
+   *
+   * @param row_group_indices Input row groups indices
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @return An all-true boolean (survival) column of size equal to the total number of rows in the
+   * row groups
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
+    cudf::host_span<size_type const> row_group_indices,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Builds a boolean column indicating surviving rows using page-level statistics in the
+   * page index
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
@@ -477,6 +512,31 @@ class hybrid_scan_reader {
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
+  /**
+   * @brief Get byte ranges of column chunks of all (or selected) columns
+   *
+   * @param row_group_indices Input row groups indices
+   * @param options Parquet reader options
+   * @return Vector of byte ranges to column chunks of all (or selected) columns
+   */
+  [[nodiscard]] std::vector<byte_range_info> all_column_chunks_byte_ranges(
+    cudf::host_span<size_type const> row_group_indices,
+    parquet_reader_options const& options) const;
+
+  /**
+   * @brief Materializes all (or selected) columns and returns the final output table
+   *
+   * @param row_group_indices Input row groups indices
+   * @param column_chunk_buffers Device buffers containing column chunk data of all columns
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Table of all materialized columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns(
+    cudf::host_span<size_type const> row_group_indices,
+    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream) const;
   /**
    * @brief Setup chunking information for filter columns and preprocess the input data pages
    *

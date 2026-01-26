@@ -11,6 +11,7 @@ import textwrap
 import time
 import warnings
 from functools import cache, partial
+from threading import Lock
 from typing import TYPE_CHECKING, Literal, overload
 
 import nvtx
@@ -26,7 +27,10 @@ import cudf_polars.dsl.tracing
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.utils.config import _env_get_int, get_total_device_memory
+from cudf_polars.utils.config import (
+    _env_get_int,
+    get_total_device_memory,
+)
 from cudf_polars.utils.timer import Timer
 
 if TYPE_CHECKING:
@@ -37,7 +41,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, MemoryResourceConfig
 
 __all__: list[str] = ["execute_with_cudf"]
 
@@ -46,6 +50,7 @@ __all__: list[str] = ["execute_with_cudf"]
 def default_memory_resource(
     device: int,
     cuda_managed_memory: bool,  # noqa: FBT001
+    memory_resource_config: MemoryResourceConfig | None,
 ) -> rmm.mr.DeviceMemoryResource:
     """
     Return the default memory resource for cudf-polars.
@@ -57,6 +62,9 @@ def default_memory_resource(
         the active device when this function is called.
     cuda_managed_memory
         Whether to use managed memory or not.
+    memory_resource_config
+        Memory resource configuration to use. If ``None``, the default
+        memory resource is used.
 
     Returns
     -------
@@ -66,7 +74,9 @@ def default_memory_resource(
         else, an async pool resource is returned.
     """
     try:
-        if (
+        if memory_resource_config is not None:
+            mr = memory_resource_config.create_memory_resource()
+        elif (
             cuda_managed_memory
             and pylibcudf.utils._is_concurrent_managed_access_supported()
         ):
@@ -102,6 +112,7 @@ def default_memory_resource(
 @contextlib.contextmanager
 def set_memory_resource(
     mr: rmm.mr.DeviceMemoryResource | None,
+    memory_resource_config: MemoryResourceConfig | None,
 ) -> Generator[rmm.mr.DeviceMemoryResource, None, None]:
     """
     Set the current memory resource for an execution block.
@@ -111,6 +122,9 @@ def set_memory_resource(
     mr
         Memory resource to use. If `None`, calls :func:`default_memory_resource`
         to obtain an mr on the currently active device.
+    memory_resource_config
+        Memory resource configuration to use when a concrete memory resource.
+        is not provided. If ``None``, the default memory resource is used.
 
     Returns
     -------
@@ -134,6 +148,7 @@ def set_memory_resource(
                 )
                 != 0
             ),
+            memory_resource_config=memory_resource_config,
         )
 
     if (
@@ -146,6 +161,11 @@ def set_memory_resource(
         yield mr
     finally:
         rmm.mr.set_current_device_resource(previous)
+
+
+# libcudf doesn't support executing on multiple devices from within the same process.
+SEEN_DEVICE = None
+SEEN_DEVICE_LOCK = Lock()
 
 
 @contextlib.contextmanager
@@ -166,13 +186,28 @@ def set_device(device: int | None) -> Generator[int, None, None]:
     -----
     At exit, the device is restored to whatever was current at entry.
     """
-    previous: int = gpu.getDevice()
-    if device is not None:
-        gpu.setDevice(device)
-    try:
-        yield previous
-    finally:
-        gpu.setDevice(previous)
+    global SEEN_DEVICE  # noqa: PLW0603
+    current: int = gpu.getDevice()
+    to_use = device if device is not None else current
+    with SEEN_DEVICE_LOCK:
+        if (
+            SEEN_DEVICE is not None and to_use != SEEN_DEVICE
+        ):  # pragma: no cover; requires multiple GPUs in CI
+            raise RuntimeError(
+                "cudf-polars does not support running queries on "
+                "multiple devices in the same process. "
+                f"A previous query used device-{SEEN_DEVICE}, "
+                f"the current query is using device-{to_use}."
+            )
+        SEEN_DEVICE = to_use
+    if to_use != current:
+        gpu.setDevice(to_use)
+        try:
+            yield to_use
+        finally:
+            gpu.setDevice(current)
+    else:
+        yield to_use
 
 
 @overload
@@ -224,7 +259,7 @@ def _callback(
         nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),
         # Device must be set before memory resource is obtained.
         set_device(config_options.device),
-        set_memory_resource(memory_resource),
+        set_memory_resource(memory_resource, config_options.memory_resource_config),
     ):
         if config_options.executor.name == "in-memory":
             context = IRExecutionContext.from_config_options(config_options)
@@ -246,7 +281,7 @@ def _callback(
                     """)
                 raise NotImplementedError(msg)
 
-            return evaluate_streaming(ir, config_options).to_polars()
+            return evaluate_streaming(ir, config_options)
         assert_never(f"Unknown executor '{config_options.executor}'")
 
 

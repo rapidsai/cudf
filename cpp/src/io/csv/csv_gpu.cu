@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -295,6 +295,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
  * @param[out] columns The output column data
  * @param[out] valids The bitmaps indicating whether column fields are valid
  * @param[out] valid_counts The number of valid fields in each column
+ * @param[out] is_quoted_flags Per-column boolean arrays tracking which rows were quoted fields
  */
 CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   convert_csv_to_cudf(cudf::io::parse_options_view options,
@@ -304,7 +305,8 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<cudf::data_type const> dtypes,
                       device_span<void* const> columns,
                       device_span<cudf::bitmask_type* const> valids,
-                      device_span<size_type> valid_counts)
+                      device_span<size_type> valid_counts,
+                      device_span<bool* const> is_quoted_flags)
 {
   auto const raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
@@ -338,15 +340,19 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         field_start = trimmed_field.first;
         field_end   = trimmed_field.second;
       }
+      bool* const is_quoted_output =
+        is_quoted_flags.empty() ? nullptr : is_quoted_flags[actual_col];
       if (is_valid) {
         // Type dispatcher does not handle STRING
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
-          auto end = next_delimiter;
+          auto end        = next_delimiter;
+          bool was_quoted = false;
           if (not options.keepquotes) {
             if (not options.detect_whitespace_around_quotes) {
               if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
                 ++field_start;
                 --end;
+                was_quoted = true;
               }
             } else {
               // If the string is quoted, whitespace around the quotes get removed as well
@@ -355,9 +361,12 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                   (*(trimmed_field.second - 1) == options.quotechar)) {
                 field_start = trimmed_field.first + 1;
                 end         = trimmed_field.second - 1;
+                was_quoted  = true;
               }
             }
           }
+          // Track whether this field was quoted (for doublequote unescaping)
+          if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = was_quoted; }
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
           str_list[rec_id].first  = field_start;
           str_list[rec_id].second = end - field_start;
@@ -380,6 +389,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         auto str_list           = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
         str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
+        if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = false; }
       }
       ++actual_col;
     }
@@ -677,10 +687,12 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
         }
       } else if (c == quotechar) {
         if (c_prev == delimiter || c_prev == quotechar) {
-          // Quoted string after delimiter, quoted string ending in delimiter, or double-quote
+          // Quote after delimiter or quote after quote: both toggle quote mode
+          // (start/end of quoted field, including escaped quote sequences (""))
           ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
         } else {
-          // Closing or ignored quote
+          // Quote in middle of unquoted field (ignored for Spark compatibility)
+          // or closing quote of a quoted field
           ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_NONE);
         }
       } else {
@@ -759,7 +771,7 @@ size_t __host__ count_blank_rows(cudf::io::parse_options_view const& opts,
   auto const comment  = opts.comment != '\0' ? opts.comment : newline;
   auto const carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
   return thrust::count_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, newline, comment, carriage] __device__(uint64_t const pos) {
@@ -778,7 +790,7 @@ device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view co
   auto const comment  = options.comment != '\0' ? options.comment : newline;
   auto const carriage = (options.skipblanklines && options.terminator == '\n') ? '\r' : comment;
   auto new_end        = thrust::remove_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, d_size, newline, comment, carriage] __device__(uint64_t const pos) {
@@ -800,13 +812,13 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   int const block_size = csvparse_block_dim;
   int const grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
-  auto d_stats = detail::make_zeroed_device_uvector_async<column_type_histogram>(
+  auto d_stats = cudf::detail::make_zeroed_device_uvector_async<column_type_histogram>(
     num_active_columns, stream, cudf::get_current_device_resource_ref());
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
-  return detail::make_host_vector(d_stats, stream);
+  return cudf::detail::make_host_vector(d_stats, stream);
 }
 
 void decode_row_column_data(cudf::io::parse_options_view const& options,
@@ -817,6 +829,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
+                            device_span<bool* const> is_quoted_flags,
                             rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count
@@ -824,8 +837,15 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
   auto const num_rows   = row_offsets.size() - 1;
   auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
 
-  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(
-    options, data, column_flags, row_offsets, dtypes, columns, valids, valid_counts);
+  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(options,
+                                                                    data,
+                                                                    column_flags,
+                                                                    row_offsets,
+                                                                    dtypes,
+                                                                    columns,
+                                                                    valids,
+                                                                    valid_counts,
+                                                                    is_quoted_flags);
 }
 
 uint32_t __host__ gather_row_offsets(parse_options_view const& options,

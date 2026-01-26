@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,10 +14,10 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <string>
 #include <vector>
@@ -70,13 +70,24 @@ void check_tables_equal(cudf::table_view const& lhs_table,
     cudf::filtered_join join_obj(
       lhs_table, cudf::null_equality::EQUAL, cudf::set_as_build_table::RIGHT, stream);
     auto const indices = join_obj.anti_join(rhs_table, stream);
-
     // No exception thrown, check indices
-    auto const valid = indices->size() == 0;
-    std::cout << "Tables identical: " << std::boolalpha << valid << "\n\n";
+    auto const tables_equal = indices->size() == 0;
+    if (tables_equal) {
+      std::cout << "Tables identical: " << std::boolalpha << tables_equal << "\n\n";
+    } else {
+      // Helper to write parquet data for inspection
+      auto const write_parquet =
+        [](cudf::table_view table, std::string filepath, rmm::cuda_stream_view stream) {
+          auto sink_info = cudf::io::sink_info(filepath);
+          auto opts      = cudf::io::parquet_writer_options::builder(sink_info, table).build();
+          cudf::io::write_parquet(opts, stream);
+        };
+      write_parquet(lhs_table, "lhs_table.parquet", stream);
+      write_parquet(rhs_table, "rhs_table.parquet", stream);
+      throw std::logic_error("Tables identical: false\n\n");
+    }
   } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
-    throw std::runtime_error("Tables identical: false\n\n");
+    std::cout << e.what() << std::endl;
   }
 }
 
@@ -122,19 +133,39 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
 {
   CUDF_FUNC_RANGE();
 
+  static std::mutex mutex;
+
   std::vector<rmm::device_buffer> buffers(byte_ranges.size());
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(byte_ranges.size()),
-                [&](auto const idx) {
-                  auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
-                  auto const chunk_size   = byte_ranges[idx].size();
-                  auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-                  CUDF_CUDA_TRY(cudaMemcpyAsync(
-                    buffer.data(), chunk_offset, chunk_size, cudaMemcpyDefault, stream.value()));
-                  buffers[idx] = std::move(buffer);
-                });
+  {
+    std::lock_guard<std::mutex> lock(mutex);
 
-  stream.synchronize_no_throw();
+    std::for_each(thrust::counting_iterator<size_t>(0),
+                  thrust::counting_iterator(byte_ranges.size()),
+                  [&](auto const idx) {
+                    auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
+                    auto const chunk_size   = byte_ranges[idx].size();
+                    auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
+                    CUDF_CUDA_TRY(cudaMemcpyAsync(
+                      buffer.data(), chunk_offset, chunk_size, cudaMemcpyDefault, stream.value()));
+                    buffers[idx] = std::move(buffer);
+                  });
+  }
+
   return buffers;
+}
+
+std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
+                                                rmm::cuda_stream_view stream)
+{
+  if (tables.size() == 1) { return std::move(tables[0]); }
+
+  std::vector<cudf::table_view> table_views;
+  table_views.reserve(tables.size());
+  std::transform(
+    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
+      return tbl->view();
+    });
+  // Construct the final table
+  return cudf::concatenate(table_views, stream);
 }

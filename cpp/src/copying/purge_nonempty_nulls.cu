@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/copying.hpp>
@@ -45,7 +45,7 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
 
   auto const row_begin = thrust::counting_iterator<cudf::size_type>(0);
   auto const row_end   = row_begin + input.size();
-  return thrust::count_if(rmm::exec_policy(stream), row_begin, row_end, is_dirty_row) > 0;
+  return thrust::count_if(rmm::exec_policy_nosync(stream), row_begin, row_end, is_dirty_row) > 0;
 }
 
 }  // namespace

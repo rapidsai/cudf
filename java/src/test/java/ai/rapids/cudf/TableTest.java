@@ -2453,9 +2453,9 @@ public class TableTest extends CudfTestBase {
          Table expected = new Table.TestBuilder()
              .column(  0,   1, 2,   3,   4,   5,   6, 7, 8,   9)
              .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, inv)
-             .build()) {
-      MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
-          condition, NullEquality.UNEQUAL);
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
       assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedLeftJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
           NullEquality.UNEQUAL, sizeInfo);
@@ -2489,9 +2489,9 @@ public class TableTest extends CudfTestBase {
          Table expected = new Table.TestBuilder()
              .column(0,   1,   2,   3,   4,   5,   6, 7, 7, 8,   9)
              .column(0, inv, inv, inv, inv, inv, inv, 0, 2, 1, inv)
-             .build()) {
-      MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
-          condition, NullEquality.EQUAL);
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
       assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedLeftJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
               NullEquality.EQUAL, sizeInfo);
@@ -2968,9 +2968,9 @@ public class TableTest extends CudfTestBase {
          Table expected = new Table.TestBuilder()
              .column(2, 7, 8)
              .column(2, 0, 1)
-             .build()) {
-      MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
-          condition, NullEquality.UNEQUAL);
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
       assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedInnerJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
           NullEquality.UNEQUAL, sizeInfo);
@@ -3003,9 +3003,9 @@ public class TableTest extends CudfTestBase {
          Table expected = new Table.TestBuilder()
              .column(0, 7, 7, 8)
              .column(0, 0, 2, 1)
-             .build()) {
-      MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
-          condition, NullEquality.EQUAL);
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
       assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedInnerJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
           NullEquality.EQUAL, sizeInfo);
@@ -4160,11 +4160,13 @@ public class TableTest extends CudfTestBase {
     int expectedPart = -1;
     try (Table start = new Table.TestBuilder().column(0).build();
          PartitionedTable out = start.onColumns(0).hashPartition(PARTS)) {
-      // Lets figure out what partitions this is a part of.
+      // Lets figure out what partition this is a part of.
+      // With num_partitions + 1 offsets, partition i has size = parts[i+1] - parts[i]
       int[] parts = out.getPartitions();
-      for (int i = 0; i < parts.length; i++) {
-        if (parts[i] > 0) {
+      for (int i = 0; i < PARTS; i++) {
+        if (parts[i + 1] - parts[i] > 0) {
           expectedPart = i;
+          break;
         }
       }
     }
@@ -4175,9 +4177,10 @@ public class TableTest extends CudfTestBase {
            PartitionedTable out = t.onColumns(0).hashPartition(PARTS);
            HostColumnVector tmp = out.getColumn(0).copyToHost()) {
         // Now we need to get the range out for the partition we expect
+        // With num_partitions + 1 offsets, partition i spans [parts[i], parts[i+1])
         int[] parts = out.getPartitions();
-        int start = expectedPart == 0 ? 0 : parts[expectedPart - 1];
-        int end = parts[expectedPart];
+        int start = parts[expectedPart];
+        int end = parts[expectedPart + 1];
         boolean found = false;
         for (int i = start; i < end; i++) {
           if (tmp.getInt(i) == 0) {
@@ -4239,7 +4242,7 @@ public class TableTest extends CudfTestBase {
       try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
            PartitionedTable output = input.onColumns(0).hashPartition(HashType.IDENTITY, 5)) {
         int[] parts = output.getPartitions();
-        assertEquals(5, parts.length);
+        assertEquals(6, parts.length);
         assertEquals(0, parts[0]);
         int previous = 0;
         long rows = 0;
@@ -4289,7 +4292,7 @@ public class TableTest extends CudfTestBase {
       try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
            PartitionedTable output = input.onColumns(0).hashPartition(5)) {
         int[] parts = output.getPartitions();
-        assertEquals(5, parts.length);
+        assertEquals(6, parts.length);
         assertEquals(0, parts[0]);
         int previous = 0;
         long rows = 0;
@@ -4485,10 +4488,11 @@ public class TableTest extends CudfTestBase {
            PartitionedTable pt = t.roundRobinPartition(3, 0)) {
         assertTablesAreEqual(expectedTable, pt.getTable());
         int[] parts = pt.getPartitions();
-        assertEquals(3, parts.length);
+        assertEquals(4, parts.length);
         assertEquals(0, parts[0]);
         assertEquals(7, parts[1]);
         assertEquals(14, parts[2]);
+        assertEquals(21, parts[3]);
       }
 
       try (Table expectedTable = new Table.TestBuilder()
@@ -4510,10 +4514,11 @@ public class TableTest extends CudfTestBase {
            PartitionedTable pt = t.roundRobinPartition(3, 1)) {
         assertTablesAreEqual(expectedTable, pt.getTable());
         int[] parts = pt.getPartitions();
-        assertEquals(3, parts.length);
+        assertEquals(4, parts.length);
         assertEquals(0, parts[0]);
         assertEquals(7, parts[1]);
         assertEquals(14, parts[2]);
+        assertEquals(21, parts[3]);
       }
 
       try (Table expectedTable = new Table.TestBuilder()
@@ -4535,10 +4540,11 @@ public class TableTest extends CudfTestBase {
            PartitionedTable pt = t.roundRobinPartition(3, 2)) {
         assertTablesAreEqual(expectedTable, pt.getTable());
         int[] parts = pt.getPartitions();
-        assertEquals(3, parts.length);
+        assertEquals(4, parts.length);
         assertEquals(0, parts[0]);
         assertEquals(7, parts[1]);
         assertEquals(14, parts[2]);
+        assertEquals(21, parts[3]);
       }
     }
   }
@@ -4803,7 +4809,7 @@ public class TableTest extends CudfTestBase {
                .column(  "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
                .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
                .column(12.0, 14.0, 13.0, 30.0, 17.0, 34.0, null, null, 11.0, null, 21.0)
-               .column(   0,    0,    0,    1,    0,    1,    2,    0,    1,    2,    3) // odd why is this not 1 based?
+               .column(   1,    1,    1,    2,    1,    2,    3,    1,    2,    3,    4)
                .column(12.0, 14.0, 13.0, 13.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
                .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 11.0)
                .column(   1,    1,    1,    2,    1,    1,    3,    1,    1,    1,    4)
@@ -7804,7 +7810,7 @@ public class TableTest extends CudfTestBase {
              .onColumn(1));
          Table resultsSorted = results.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder().column(1, 2, 3, 4, 5)
-             .column(0.0, 2.0, 8.0, 0.0, null)
+             .column(0.0, 2.0, 8.0, 0.0, 0.0)
              .build()) {
       assertTablesAreEqual(expected, resultsSorted);
     }
@@ -8232,6 +8238,72 @@ public class TableTest extends CudfTestBase {
 
         assertEquals(1, splits2.length);
         assertEquals(0, splits2[0].getTable().getRowCount());
+        assertEquals(0, uniqKeys.getRowCount());
+      }
+
+      // table has 4 columns, but input keys has 5 columns, should throw exception
+      assertThrows(IllegalArgumentException.class,
+          () -> table.groupBy(0, 1, 1, 2, 3).contiguousSplitGroupsAndGenUniqKeys());
+    }
+  }
+
+  @Test
+  void testGroupByContiguousSplitGroupsSpecifyProjectionIndices() throws Exception {
+    try (Table table = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1)
+        .column(1, 3, 3, 5, 5, 5)
+        .column(12, 14, 13, 17, 16, 18)
+        .column("s1", "s2", "s3", "s4", "s5", "s6")
+        .build()) {
+      // Normal case with primitive types.
+      try (Table expected1 = new Table.TestBuilder()
+          .column(12)
+          .column("s1").build();
+           Table expected2 = new Table.TestBuilder()
+               .column(14, 13)
+               .column("s2", "s3").build();
+           Table expected3 = new Table.TestBuilder()
+               .column(17, 16, 18)
+               .column("s4", "s5", "s6").build();
+           Table expectedUniqKeys = new Table.TestBuilder()
+               .column(1, 1, 1)
+               .column(1, 3, 5).build();
+           ContigSplitGroupByResult r =
+               table.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys(new int[]{2, 3})) {
+        ContiguousTable[] splits = r.getGroups();
+        Table uniqKeys = r.getUniqKeyTable();
+
+        for (ContiguousTable ct : splits) {
+          if (ct.getRowCount() == 1) {
+            assertTablesAreEqual(expected1, ct.getTable());
+          } else if (ct.getRowCount() == 2) {
+            assertTablesAreEqual(expected2, ct.getTable());
+          } else if (ct.getRowCount() == 3) {
+            assertTablesAreEqual(expected3, ct.getTable());
+          } else {
+            throw new RuntimeException("unexpected behavior: contiguousSplitGroups");
+          }
+        }
+
+        // verify uniq keys table
+        assertTablesAreEqual(expectedUniqKeys, uniqKeys);
+      }
+
+      // Row count is 0
+      try (
+          Table emptyTable = new Table.TestBuilder()
+              .column(new Integer[0])
+              .column(new Integer[0])
+              .column(new Integer[0])
+              .column(new String[0]).build();
+          ContigSplitGroupByResult r =
+              emptyTable.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys(new int[]{2, 3})) {
+        ContiguousTable[] splits = r.getGroups();
+        Table uniqKeys = r.getUniqKeyTable();
+
+        assertEquals(0, emptyTable.getRowCount());
+        assertEquals(1, splits.length);
+        assertEquals(0, splits[0].getTable().getRowCount());
         assertEquals(0, uniqKeys.getRowCount());
       }
     }
@@ -9220,7 +9292,8 @@ public class TableTest extends CudfTestBase {
       assertEquals(OriginalType.MAP, schema.getType("my_map").getOriginalType());
     }
     try (ColumnVector cv = Table.readParquet(f).getColumn(0);
-         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         Scalar aString = Scalar.fromString("a");
+         ColumnVector res = cv.getMapValue(aString);
          ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
       assertColumnsAreEqual(expected, res);
     }

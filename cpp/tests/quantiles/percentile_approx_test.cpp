@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -31,24 +31,29 @@ std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _
 {
   static auto const _arrow_init_status = arrow::compute::Initialize();
   EXPECT_TRUE(_arrow_init_status.ok());
+
+  auto stream = cudf::get_default_stream();
+
   // sort the incoming values using the same settings that groupby does.
   // this is a little weak because null_order::AFTER is hardcoded internally to groupby.
   cudf::table_view t({_values});
-  auto sorted_t      = cudf::sort(t, {}, {cudf::null_order::AFTER});
+  auto sorted_t      = cudf::sort(t, {}, {cudf::null_order::AFTER}, stream);
   auto sorted_values = sorted_t->get_column(0).view();
 
   std::vector<double> h_values(sorted_values.size());
-  CUDF_CUDA_TRY(cudaMemcpy(h_values.data(),
-                           sorted_values.data<double>(),
-                           sizeof(double) * sorted_values.size(),
-                           cudaMemcpyDefault));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_values.data(),
+                                sorted_values.data<double>(),
+                                sizeof(double) * sorted_values.size(),
+                                cudaMemcpyDefault,
+                                stream.value()));
   std::vector<char> h_validity(sorted_values.size());
   if (sorted_values.null_mask() != nullptr) {
-    auto validity = cudf::mask_to_bools(sorted_values.null_mask(), 0, sorted_values.size());
-    CUDF_CUDA_TRY(cudaMemcpy(h_validity.data(),
-                             (validity->view().data<char>()),
-                             sizeof(char) * sorted_values.size(),
-                             cudaMemcpyDefault));
+    auto validity = cudf::mask_to_bools(sorted_values.null_mask(), 0, sorted_values.size(), stream);
+    CUDF_CUDA_TRY(cudaMemcpyAsync(h_validity.data(),
+                                  (validity->view().data<char>()),
+                                  sizeof(char) * sorted_values.size(),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
   }
 
   // generate the tdigest
@@ -78,6 +83,7 @@ std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _
   cudf::test::fixed_width_column_wrapper<double> result(h_result.begin(), h_result.end());
   cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{
     0, static_cast<cudf::size_type>(percentages.size())};
+  stream.synchronize();
   return cudf::make_lists_column(1, offsets.release(), result.release(), 0, {});
 }
 
@@ -90,15 +96,6 @@ struct percentile_approx_dispatch {
                                            cudf::size_type ulps)
     requires(cudf::is_numeric<T>() || cudf::is_fixed_point<T>())
   {
-    // arrow implementation.
-    auto expected = [&]() {
-      // we're explicitly casting back to doubles here but this is ok because that is
-      // exactly what happens inside of the cudf implementation as values are processed as well. so
-      // this should not affect results.
-      auto as_doubles = cudf::cast(values, cudf::data_type{cudf::type_id::FLOAT64});
-      return arrow_percentile_approx(*as_doubles, delta, percentages);
-    }();
-
     // gpu implementation
     auto agg_result = op(values, delta);
 
@@ -107,6 +104,17 @@ struct percentile_approx_dispatch {
     cudf::tdigest::tdigest_column_view tdv(*agg_result);
     auto result = cudf::percentile_approx(tdv, g_percentages);
 
+    // disable checking logic during a racecheck run
+    if (getenv("LIBCUDF_RACECHECK_ENABLED")) { return result; }
+
+    // arrow implementation.
+    auto expected = [&]() {
+      // we're explicitly casting back to doubles here but this is ok because that is
+      // exactly what happens inside of the cudf implementation as values are processed as well.
+      // so this should not affect results.
+      auto as_doubles = cudf::cast(values, cudf::data_type{cudf::type_id::FLOAT64});
+      return arrow_percentile_approx(*as_doubles, delta, percentages);
+    }();
     cudf::test::detail::expect_columns_equivalent(
       *expected, *result, cudf::test::debug_output_level::FIRST_ERROR, ulps);
 
@@ -131,6 +139,7 @@ void percentile_approx_test(cudf::column_view const& _keys,
                             std::vector<double> const& percentages,
                             cudf::size_type ulps)
 {
+  auto stream                                 = cudf::get_default_stream();
   bool is_cpu_cluster_computation_disabled[2] = {true, false};
   for (int idx = 0; idx < 2; idx++) {
     cudf::tdigest::detail::is_cpu_cluster_computation_disabled =
@@ -142,17 +151,17 @@ void percentile_approx_test(cudf::column_view const& _keys,
     cudf::table_view k({_keys});
     cudf::groupby::groupby pass1_gb(k);
     cudf::table_view v({_values});
-    auto groups = pass1_gb.get_groups(v);
+    auto groups = pass1_gb.get_groups(v, stream);
     // slice it all up so we have keys/columns for everything.
     std::vector<cudf::column_view> keys;
     std::vector<cudf::column_view> values;
     for (size_t g_idx = 0; g_idx < groups.offsets.size() - 1; g_idx++) {
-      auto k =
-        cudf::slice(groups.keys->get_column(0), {groups.offsets[g_idx], groups.offsets[g_idx + 1]});
+      auto k = cudf::slice(
+        groups.keys->get_column(0), {groups.offsets[g_idx], groups.offsets[g_idx + 1]}, stream);
       keys.push_back(k[0]);
 
-      auto v = cudf::slice(groups.values->get_column(0),
-                           {groups.offsets[g_idx], groups.offsets[g_idx + 1]});
+      auto v = cudf::slice(
+        groups.values->get_column(0), {groups.offsets[g_idx], groups.offsets[g_idx + 1]}, stream);
       values.push_back(v[0]);
     }
 
@@ -167,7 +176,9 @@ void percentile_approx_test(cudf::column_view const& _keys,
         std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
         aggregations.push_back(cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta));
         requests.push_back({values, std::move(aggregations)});
-        return std::move(gb.aggregate(requests).second[0].results[0]);
+        auto result = std::move(gb.aggregate(requests, stream).second[0].results[0]);
+        stream.synchronize();
+        return result;
       };
       groupby_parts.push_back(cudf::type_dispatcher(values[v_idx].type(),
                                                     percentile_approx_dispatch{},
@@ -178,13 +189,15 @@ void percentile_approx_test(cudf::column_view const& _keys,
                                                     ulps));
 
       // via reduce
-      auto reduce = [](cudf::column_view const& values, int delta) {
+      auto reduce = [stream](cudf::column_view const& values, int delta) {
         // result is a scalar, but we want to extract out the underlying column
         auto scalar_result =
           cudf::reduce(values,
                        *cudf::make_tdigest_aggregation<cudf::reduce_aggregation>(delta),
-                       cudf::data_type{cudf::type_id::STRUCT});
+                       cudf::data_type{cudf::type_id::STRUCT},
+                       stream);
         auto tbl = static_cast<cudf::struct_scalar const*>(scalar_result.get())->view();
+        stream.synchronize();
         std::vector<std::unique_ptr<cudf::column>> cols;
         std::transform(
           tbl.begin(), tbl.end(), std::back_inserter(cols), [](cudf::column_view const& col) {
@@ -200,6 +213,7 @@ void percentile_approx_test(cudf::column_view const& _keys,
                                                    delta,
                                                    percentages,
                                                    ulps));
+      stream.synchronize();
     }
 
     // second pass. run the percentile_approx with all the keys in one pass and make sure we get the
@@ -216,12 +230,13 @@ void percentile_approx_test(cudf::column_view const& _keys,
     std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
     aggregations.push_back(cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta));
     requests.push_back({_values, std::move(aggregations)});
-    auto gb_result = gb.aggregate(requests);
+    auto gb_result = gb.aggregate(requests, stream);
 
     cudf::test::fixed_width_column_wrapper<double> g_percentages(percentages.begin(),
                                                                  percentages.end());
     cudf::tdigest::tdigest_column_view tdv(*(gb_result.second[0].results[0]));
-    auto result = cudf::percentile_approx(tdv, g_percentages);
+    auto result = cudf::percentile_approx(tdv, g_percentages, stream);
+    stream.synchronize();
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
   }
@@ -229,12 +244,13 @@ void percentile_approx_test(cudf::column_view const& _keys,
 
 void simple_test(cudf::data_type input_type, std::vector<std::pair<int, int>> params)
 {
+  auto stream = cudf::get_default_stream();
   auto values = cudf::test::generate_standardized_percentile_distribution(input_type);
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, values->size(), cudf::mask_state::UNALLOCATED);
-  CUDF_CUDA_TRY(
-    cudaMemset(keys->mutable_view().data<int32_t>(), 0, values->size() * sizeof(int32_t)));
+  CUDF_CUDA_TRY(cudaMemsetAsync(
+    keys->mutable_view().data<int32_t>(), 0, values->size() * sizeof(int32_t), stream.value()));
 
   // runs both groupby and reduce paths
   std::for_each(params.begin(), params.end(), [&](std::pair<int, int> const& params) {
@@ -249,6 +265,7 @@ struct group_index {
 
 void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> params)
 {
+  auto stream = cudf::get_default_stream();
   auto values = cudf::test::generate_standardized_percentile_distribution(input_type);
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
@@ -256,10 +273,11 @@ void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> p
   auto i      = thrust::make_counting_iterator(0);
   auto h_keys = std::vector<int32_t>(values->size());
   std::transform(i, i + values->size(), h_keys.begin(), group_index{});
-  CUDF_CUDA_TRY(cudaMemcpy(keys->mutable_view().data<int32_t>(),
-                           h_keys.data(),
-                           h_keys.size() * sizeof(int32_t),
-                           cudaMemcpyDefault));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(keys->mutable_view().data<int32_t>(),
+                                h_keys.data(),
+                                h_keys.size() * sizeof(int32_t),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   std::for_each(params.begin(), params.end(), [&](std::pair<int, int> const& params) {
     percentile_approx_test(
@@ -294,6 +312,7 @@ void simple_with_nulls_test(cudf::data_type input_type, std::vector<std::pair<in
 
 void grouped_with_nulls_test(cudf::data_type input_type, std::vector<std::pair<int, int>> params)
 {
+  auto stream = cudf::get_default_stream();
   auto values = cudf::test::generate_standardized_percentile_distribution(input_type);
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
@@ -301,10 +320,11 @@ void grouped_with_nulls_test(cudf::data_type input_type, std::vector<std::pair<i
   auto i      = thrust::make_counting_iterator(0);
   auto h_keys = std::vector<int32_t>(values->size());
   std::transform(i, i + values->size(), h_keys.begin(), group_index{});
-  CUDF_CUDA_TRY(cudaMemcpy(keys->mutable_view().data<int32_t>(),
-                           h_keys.data(),
-                           h_keys.size() * sizeof(int32_t),
-                           cudaMemcpyDefault));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(keys->mutable_view().data<int32_t>(),
+                                h_keys.data(),
+                                h_keys.size() * sizeof(int32_t),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   // add a null mask
   auto mask = make_null_mask(*values);
@@ -353,7 +373,14 @@ TYPED_TEST(PercentileApproxInputTypesTest, Grouped)
                 {10, cudf::test::default_ulp * 10}});
 }
 
-TYPED_TEST(PercentileApproxInputTypesTest, SimpleWithNulls)
+using PercentileApproxMinimalTypes = testing::Types<int32_t, double, numeric::decimal64>;
+
+// no need to recheck all types to verify null handling
+template <typename T>
+struct PercentileApproxInputMinimalTypesTest : public cudf::test::BaseFixture {};
+TYPED_TEST_SUITE(PercentileApproxInputMinimalTypesTest, PercentileApproxMinimalTypes);
+
+TYPED_TEST(PercentileApproxInputMinimalTypesTest, SimpleWithNulls)
 {
   using T               = TypeParam;
   auto const input_type = get_appropriate_type<T>();
@@ -364,7 +391,7 @@ TYPED_TEST(PercentileApproxInputTypesTest, SimpleWithNulls)
                           {10, cudf::test::default_ulp * 11}});
 }
 
-TYPED_TEST(PercentileApproxInputTypesTest, GroupedWithNulls)
+TYPED_TEST(PercentileApproxInputMinimalTypesTest, GroupedWithNulls)
 {
   using T               = TypeParam;
   auto const input_type = get_appropriate_type<T>();

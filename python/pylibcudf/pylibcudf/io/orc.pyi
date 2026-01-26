@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any
@@ -36,8 +36,8 @@ class OrcReaderOptionsBuilder:
 
 def read_orc(
     options: OrcReaderOptions,
-    stream: Stream = None,
-    mr: DeviceMemoryResource = None,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 
 class OrcColumnStatistics:
@@ -80,7 +80,9 @@ class OrcWriterOptionsBuilder:
     def metadata(self, meta: TableInputMetadata) -> Self: ...
     def build(self) -> OrcWriterOptions: ...
 
-def write_orc(options: OrcWriterOptions, stream: Stream = None) -> None: ...
+def write_orc(
+    options: OrcWriterOptions, stream: Stream | None = None
+) -> None: ...
 def is_supported_read_orc(compression: CompressionType) -> bool: ...
 def is_supported_write_orc(compression: CompressionType) -> bool: ...
 
@@ -90,7 +92,7 @@ class OrcChunkedWriter:
     def write(self, table: Table) -> None: ...
     @staticmethod
     def from_options(
-        options: ChunkedOrcWriterOptions, stream: Stream = None
+        options: ChunkedOrcWriterOptions, stream: Stream | None = None
     ) -> OrcChunkedWriter: ...
 
 class ChunkedOrcWriterOptions:

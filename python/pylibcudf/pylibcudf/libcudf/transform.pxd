@@ -12,7 +12,8 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport bitmask_type, data_type, size_type, null_aware
+from pylibcudf.libcudf.types cimport bitmask_type, data_type, size_type
+from pylibcudf.libcudf.types cimport null_aware, output_nullability
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
@@ -40,13 +41,6 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         device_memory_resource* mr
     ) except +libcudf_exception_handler
 
-    cdef unique_ptr[column] compute_column(
-        table_view table,
-        expression expr,
-        cuda_stream_view stream,
-        device_memory_resource* mr
-    ) except +libcudf_exception_handler
-
     cdef unique_ptr[column] transform(
         const vector[column_view] & inputs,
         const string & transform_udf,
@@ -54,6 +48,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         bool is_ptx,
         optional[void *] user_data,
         null_aware is_null_aware,
+        output_nullability null_policy,
         cuda_stream_view stream,
         device_memory_resource* mr
     ) except +libcudf_exception_handler
@@ -72,6 +67,13 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] compute_column(
+        const table_view table,
+        const expression& expr,
+        cuda_stream_view stream,
+        device_memory_resource* mr
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[column] compute_column_jit(
         const table_view table,
         const expression& expr,
         cuda_stream_view stream,

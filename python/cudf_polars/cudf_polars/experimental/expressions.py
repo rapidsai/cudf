@@ -41,12 +41,11 @@ from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
-from cudf_polars.dsl.expressions.unary import Cast, UnaryFunction
+from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
 from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
-from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _get_unique_fractions, _leaf_column_names
@@ -237,7 +236,7 @@ def _decompose_unique(
 
 
 def _decompose_agg_node(
-    agg: Agg,
+    agg: Agg | Len,
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
@@ -273,7 +272,7 @@ def _decompose_agg_node(
     """
     expr: Expr
     exprs: list[Expr]
-    if agg.name == "count":
+    if isinstance(agg, Len) or agg.name == "count":
         # Chunkwise stage
         columns, input_ir, partition_info = select(
             [agg],
@@ -351,6 +350,7 @@ def _decompose_agg_node(
                 input_ir.schema,
                 shuffle_on,
                 config_options.executor.shuffle_method,
+                config_options.executor.shuffler_insertion_method,
                 input_ir,
             )
             partition_info[input_ir] = PartitionInfo(
@@ -360,7 +360,7 @@ def _decompose_agg_node(
 
         # Chunkwise stage
         columns, input_ir, partition_info = select(
-            [Cast(agg.dtype, agg)],
+            [Cast(agg.dtype, True, agg)],  # noqa: FBT003
             input_ir,
             partition_info,
             names=names,
@@ -454,7 +454,9 @@ def _decompose_expr_node(
     if partition_count == 1 or expr.is_pointwise:
         # Single-partition and pointwise expressions are always supported.
         return expr, input_ir, partition_info
-    elif isinstance(expr, Agg) and expr.name in _SUPPORTED_AGGS:
+    elif isinstance(expr, Len) or (
+        isinstance(expr, Agg) and expr.name in _SUPPORTED_AGGS
+    ):
         # This is a supported Agg expression.
         return _decompose_agg_node(
             expr, input_ir, partition_info, config_options, names=names
@@ -518,8 +520,15 @@ def _decompose(
             *unique_input_irs,
         )
         partition_info[input_ir] = PartitionInfo(count=partition_count)
-    else:
+    elif len(unique_input_irs) == 1:
         input_ir = unique_input_irs[0]
+    else:
+        # All child IRs were Empty. Use an Empty({}) with
+        # count=1 to ensure that scalar expressions still
+        # produce one output partition with a single row
+        # See: https://github.com/rapidsai/cudf/pull/20409
+        input_ir = Empty({})
+        partition_info[input_ir] = PartitionInfo(count=1)
 
     # Call into class-specific logic to decompose ``expr``
     return _decompose_expr_node(
@@ -540,6 +549,7 @@ def decompose_expr_graph(
     config_options: ConfigOptions,
     row_count_estimate: ColumnStat[int],
     column_stats: dict[str, ColumnStats],
+    unique_names: Generator[str, None, None],
 ) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
     """
     Decompose a NamedExpr into stages.
@@ -560,6 +570,8 @@ def decompose_expr_graph(
         Row-count estimate for the input IR.
     column_stats
         Column statistics for the input IR.
+    unique_names
+        Generator of unique names for temporaries.
 
     Returns
     -------
@@ -584,7 +596,7 @@ def decompose_expr_graph(
             "input_ir": input_ir,
             "input_partition_info": partition_info[input_ir],
             "config_options": config_options,
-            "unique_names": unique_names((named_expr.name, *input_ir.schema.keys())),
+            "unique_names": unique_names,
             "row_count_estimate": row_count_estimate,
             "column_stats": column_stats,
         },

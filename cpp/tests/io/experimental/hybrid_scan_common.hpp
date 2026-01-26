@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,7 +19,7 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
 
 auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
 
@@ -118,11 +118,20 @@ cudf::test::fixed_width_column_wrapper<T> descending_low_cardinality()
  * @tparam T Data type for columns 0 and 1
  * @tparam NumTableConcats Number of times to concatenate the base table (must be >= 1)
  * @tparam IsConstantStrings Whether to use constant strings for column 2
+ * @tparam IsNullable Whether to create nullable columns
+ *
+ * @param str_col_value Value for the constant string column used when IsConstantStrings is true
+ * @param compression Compression type
+ * @param stream CUDA stream
+ *
  * @return Tuple of table and Parquet host buffer
  */
-template <typename T, size_t NumTableConcats, bool IsConstantStrings = true>
+template <typename T,
+          size_t NumTableConcats,
+          bool IsConstantStrings = true,
+          bool IsNullable        = false>
 auto create_parquet_with_stats(
-  cudf::size_type col2_value             = 100,
+  cudf::size_type str_col_value          = 100,
   cudf::io::compression_type compression = cudf::io::compression_type::AUTO,
   rmm::cuda_stream_view stream           = cudf::get_default_stream())
 {
@@ -139,25 +148,56 @@ auto create_parquet_with_stats(
 
   auto col2 = [&]() {
     if constexpr (IsConstantStrings) {
-      return constant_strings(col2_value);  // constant stringified value
+      return constant_strings(str_col_value);  // constant stringified value
     } else {
       return testdata::ascending<cudf::string_view>();  // ascending strings
     }
   }();
 
-  auto expected = table_view{{col0, col1, col2}};
-  auto table    = cudf::concatenate(std::vector<table_view>(NumTableConcats, expected));
-  expected      = table->view();
+  // Output table view
+  auto output = table_view{{col0, col1, col2}};
 
-  cudf::io::table_input_metadata expected_metadata(expected);
-  expected_metadata.column_metadata[0].set_name("col0");
-  expected_metadata.column_metadata[1].set_name("col1");
-  expected_metadata.column_metadata[2].set_name("col2");
+  // Add nullmasks to the columns if specified
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  if constexpr (IsNullable) {
+    std::mt19937 gen(0xc0ffee);
+    std::bernoulli_distribution bn(0.7f);
+    auto valids =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+    auto const num_rows = static_cast<cudf::column_view>(col0).size();
+
+    columns.emplace_back(col0.release());
+    auto [nullmask, nullcount] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+    columns.back()->set_null_mask(std::move(nullmask), nullcount);
+
+    columns.emplace_back(col1.release());
+    std::tie(nullmask, nullcount) =
+      cudf::test::detail::make_null_mask(valids + num_rows, valids + 2 * num_rows);
+    columns.back()->set_null_mask(std::move(nullmask), nullcount);
+
+    columns.emplace_back(col2.release());
+    std::tie(nullmask, nullcount) =
+      cudf::test::detail::make_null_mask(valids + 2 * num_rows, valids + 3 * num_rows);
+    columns.back()->set_null_mask(std::move(nullmask), nullcount);
+
+    // Purge non-empty nulls from the strings column only
+    cudf::purge_nonempty_nulls(columns.back()->view());
+
+    // Update the output table view with the nullable columns
+    output = table_view{{columns[0]->view(), columns[1]->view(), columns[2]->view()}};
+  }
+
+  auto table = cudf::concatenate(std::vector<table_view>(NumTableConcats, output));
+  output     = table->view();
+  cudf::io::table_input_metadata output_metadata(output);
+  output_metadata.column_metadata[0].set_name("col0");
+  output_metadata.column_metadata[1].set_name("col1");
+  output_metadata.column_metadata[2].set_name("col2");
 
   std::vector<char> buffer;
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
-      .metadata(std::move(expected_metadata))
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, output)
+      .metadata(std::move(output_metadata))
       .row_group_size_rows(page_size_for_ordered_tests)
       .max_page_size_rows(page_size_for_ordered_tests / 5)
       .compression(compression)
@@ -204,7 +244,7 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
 /**
  * @brief Read parquet file with the hybrid scan reader
  *
- * @param buffer Buffer containing the parquet file
+ * @param file_buffer_span Input parquet buffer span
  * @param filter_expression Filter expression
  * @param num_filter_columns Number of filter columns
  * @param payload_column_names List of paths of select payload column names, if any
@@ -219,7 +259,7 @@ std::tuple<std::unique_ptr<cudf::table>,
            cudf::io::table_metadata,
            cudf::io::table_metadata,
            std::unique_ptr<cudf::column>>
-hybrid_scan(std::vector<char>& buffer,
+hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
             cudf::ast::operation const& filter_expression,
             cudf::size_type num_filter_columns,
             std::optional<std::vector<std::string>> const& payload_column_names,
@@ -230,7 +270,7 @@ hybrid_scan(std::vector<char>& buffer,
 /**
  * @brief Read parquet file with the hybrid scan reader
  *
- * @param buffer Buffer containing the parquet file
+ * @param file_buffer_span Input parquet buffer span
  * @param filter_expression Filter expression
  * @param num_filter_columns Number of filter columns
  * @param payload_column_names List of paths of select payload column names, if any
@@ -245,10 +285,28 @@ std::tuple<std::unique_ptr<cudf::table>,
            cudf::io::table_metadata,
            cudf::io::table_metadata,
            std::unique_ptr<cudf::column>>
-chunked_hybrid_scan(std::vector<char> const& buffer,
+chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
                     cudf::ast::operation const& filter_expression,
                     cudf::size_type num_filter_columns,
                     std::optional<std::vector<std::string>> const& payload_column_names,
                     rmm::cuda_stream_view stream,
                     rmm::device_async_resource_ref mr,
                     rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
+
+/**
+ * @brief Read parquet file with the hybrid scan reader in a single step
+ *
+ * @param file_buffer_span Input parquet buffer span
+ * @param filter_expression Filter expression, if any
+ * @param column_names List of column names to read, if any
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ *
+ * @return Read table and metadata
+ */
+cudf::io::table_with_metadata hybrid_scan_single_step(
+  cudf::host_span<uint8_t const> file_buffer_span,
+  std::optional<cudf::ast::operation> filter_expression,
+  std::optional<std::vector<std::string>> const& column_names,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);

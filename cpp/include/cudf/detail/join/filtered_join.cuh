@@ -15,6 +15,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cuco/bucket_storage.cuh>
@@ -164,7 +165,7 @@ class filtered_join {
   using storage_type =
     cuco::bucket_storage<key,
                          1,  /// fixing bucket size to be 1 i.e each thread handles one slot
-                         cuco::extent<cudf::size_type>,
+                         cuco::extent<std::size_t>,
                          rmm::mr::polymorphic_allocator<char>>;
 
   // Hasher for primitive row types

@@ -1,10 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -15,6 +15,10 @@
 #include <nvbench/nvbench.cuh>
 
 constexpr size_t data_size = 256 << 20;
+
+// Use alphanumeric character range to avoid CSV special characters (comma, quote, hash)
+// that can trigger quoting issues.
+data_profile const profile = data_profile_builder().string_char_range('0', 'z');  // ASCII 48-122
 
 template <column_selection ColSelection, row_selection RowSelection>
 void BM_csv_read_varying_options(
@@ -33,7 +37,7 @@ void BM_csv_read_varying_options(
   cudf::size_type const expected_num_cols = cols_to_read.size();
   size_t const num_chunks                 = state.get_int64("num_chunks");
 
-  auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
+  auto const tbl  = create_random_table(data_types, table_size_bytes{data_size}, profile);
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
@@ -45,6 +49,7 @@ void BM_csv_read_varying_options(
 
   cudf::io::csv_reader_options read_options =
     cudf::io::csv_reader_options::builder(source_sink.make_source_info())
+      .compression(cudf::io::compression_type::NONE)
       .use_cols_indexes(cols_to_read)
       .thousands('\'')
       .windowslinetermination(true)

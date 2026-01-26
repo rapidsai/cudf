@@ -1,10 +1,9 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -27,6 +26,7 @@
 #include <cub/cub.cuh>
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
@@ -603,8 +603,9 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
         using ErrorReduce = cub::BlockReduce<bool, BLOCK_SIZE>;
         __shared__ typename ErrorReduce::TempStorage temp_storage_error;
         __shared__ bool error_reduced;
-        error_reduced = ErrorReduce(temp_storage_error).Sum(error);  // TODO use cub::LogicalOR.
+        auto berr = ErrorReduce(temp_storage_error).Sum(error);  // TODO use cub::LogicalOR.
         // only valid in thread0, so shared memory is used for broadcast.
+        if (lane == 0) error_reduced = berr;
         __syncthreads();
         error = error_reduced;
       }
@@ -779,11 +780,11 @@ template <typename SymbolT>
 struct to_string_view_pair {
   SymbolT const* data;
   to_string_view_pair(SymbolT const* _data) : data(_data) {}
-  __device__ thrust::pair<char const*, std::size_t> operator()(
-    thrust::tuple<size_type, size_type> ip)
+  __device__ cuda::std::pair<char const*, std::size_t> operator()(
+    cuda::std::tuple<size_type, size_type> ip)
   {
-    return thrust::pair<char const*, std::size_t>{data + thrust::get<0>(ip),
-                                                  static_cast<std::size_t>(thrust::get<1>(ip))};
+    return cuda::std::pair<char const*, std::size_t>{
+      data + cuda::std::get<0>(ip), static_cast<std::size_t>(cuda::std::get<1>(ip))};
   }
 };
 
@@ -799,7 +800,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   //  CUDF_FUNC_RANGE();
 
   auto const max_length = thrust::transform_reduce(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     str_tuples,
     str_tuples + col_size,
     cuda::proclaim_return_type<std::size_t>([] __device__(auto t) { return t.second; }),
@@ -812,7 +813,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 
   auto single_thread_fn = string_parse<decltype(str_tuples)>{
     str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options, d_sizes};
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      col_size,
                      single_thread_fn);
@@ -864,7 +865,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   single_thread_fn.d_chars   = d_chars;
   single_thread_fn.d_offsets = d_offsets;
 
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      col_size,
                      single_thread_fn);
@@ -909,7 +910,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 
 std::unique_ptr<column> parse_data(
   char const* data,
-  thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
+  thrust::zip_iterator<cuda::std::tuple<size_type const*, size_type const*>> offset_length_begin,
   size_type col_size,
   data_type col_type,
   rmm::device_buffer&& null_mask,
@@ -941,7 +942,7 @@ std::unique_ptr<column> parse_data(
 
   // use `ConvertFunctor` to convert non-string values
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     col_size,
     [str_tuples, col = *output_dv_ptr, options, col_type, null_count_data] __device__(

@@ -10,6 +10,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -32,8 +33,8 @@ using parquet::detail::pass_intermediate_data;
 
 void hybrid_scan_reader_impl::handle_chunking(
   read_mode mode,
-  std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::host_span<std::vector<bool> const> data_page_mask)
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<bool const> data_page_mask)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
@@ -77,7 +78,8 @@ void hybrid_scan_reader_impl::handle_chunking(
   setup_next_subpass(mode);
 }
 
-void hybrid_scan_reader_impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers)
+void hybrid_scan_reader_impl::setup_next_pass(
+  std::vector<rmm::device_buffer>&& column_chunk_buffers)
 {
   auto const num_passes = _file_itm_data.num_passes();
   CUDF_EXPECTS(num_passes == 1,
@@ -151,7 +153,8 @@ void hybrid_scan_reader_impl::setup_next_pass(std::vector<rmm::device_buffer> co
                                                       parquet::detail::get_chunk_compressed_size{});
     pass.base_mem_size =
       decomp_dict_data_size +
-      thrust::reduce(rmm::exec_policy(_stream), chunk_iter, chunk_iter + pass.chunks.size());
+      cudf::detail::reduce(
+        chunk_iter, chunk_iter + pass.chunks.size(), size_t{0}, cuda::std::plus<size_t>{}, _stream);
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.

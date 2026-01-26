@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -99,8 +99,8 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
   }();
   auto const end = d_str.data() + d_str.size_bytes();
 
-  auto start_counts = thrust::make_pair(0, 0);
-  auto stop_counts  = thrust::make_pair(0, 0);
+  auto start_counts = cuda::std::make_pair(0, 0);
+  auto stop_counts  = cuda::std::make_pair(0, 0);
 
   auto itr = d_str.data() + warp.thread_rank();
 
@@ -247,7 +247,7 @@ std::unique_ptr<column> compute_substrings_from_fn(strings_column_view const& in
   auto const d_column = column_device_view::create(input.parent(), stream);
 
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::counting_iterator<size_type>(0),
                       thrust::counting_iterator<size_type>(input.size()),
                       results.begin(),
