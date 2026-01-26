@@ -1167,6 +1167,16 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result
 
+    def _wrap_idxmin_idxmax(self, result: DataFrame | Series, *, skipna: bool):
+        if skipna and (
+            (result.ndim == 2 and result.isna().any().any())
+            or (result.ndim == 1 and result.isna().any())
+        ):
+            raise ValueError(
+                "Encountered all NA values in a group with skipna=True"
+            )
+        return result
+
     def _reduce_numeric_only(self, op: str):
         raise NotImplementedError(
             f"numeric_only is not implemented for {type(self)}"
@@ -2925,6 +2935,18 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
             as_index=self._as_index,
         )
 
+    def idxmin(
+        self, skipna: bool = True, numeric_only: bool = False
+    ) -> DataFrame:
+        result = self._reduce("idxmin", numeric_only=numeric_only)
+        return self._wrap_idxmin_idxmax(result, skipna=skipna)
+
+    def idxmax(
+        self, skipna: bool = True, numeric_only: bool = False
+    ) -> DataFrame:
+        result = self._reduce("idxmax", numeric_only=numeric_only)
+        return self._wrap_idxmin_idxmax(result, skipna=skipna)
+
     def value_counts(
         self,
         subset=None,
@@ -3225,6 +3247,14 @@ class SeriesGroupBy(GroupBy):
         result.name = self.obj.name
 
         return result
+
+    def idxmin(self, skipna: bool = True) -> Series:
+        result = self._reduce("idxmin")
+        return self._wrap_idxmin_idxmax(result, skipna=skipna)
+
+    def idxmax(self, skipna: bool = True) -> Series:
+        result = self._reduce("idxmax")
+        return self._wrap_idxmin_idxmax(result, skipna=skipna)
 
     @property
     def dtype(self) -> pd.Series:
