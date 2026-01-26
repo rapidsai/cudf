@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 schema_version: 1
 
@@ -28,15 +28,15 @@ requirements:
   host:
     - python >=3.10
     - pip
-    - rapids-build-backend >=0.4.0,<0.5.0.dev0
-    - setuptools
+    - rapids-build-backend >=0.4.0,<0.5.0
+    - setuptools>=77.0.0
     - cuda-version =${{ cuda_version }}
   run:
     # 'nvidia-ml-py' provides the 'pynvml' module
     - nvidia-ml-py>=12
     - python
     - pylibcudf =${{ version }}
-    - polars >=1.29,<1.35
+    - polars>=1.30,<1.36
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
     - if: python == "3.10"
       then: typing_extensions
@@ -57,5 +57,5 @@ tests:
 
 about:
   homepage: ${{ load_from_file("python/cudf_polars/pyproject.toml").project.urls.Homepage }}
-  license: ${{ load_from_file("python/cudf_polars/pyproject.toml").project.license.text }}
+  license: ${{ load_from_file("python/cudf_polars/pyproject.toml").project.license }}
   summary: ${{ load_from_file("python/cudf_polars/pyproject.toml").project.description }}

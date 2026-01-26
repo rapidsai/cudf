@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 #
 # cudf documentation build configuration file, created by
@@ -326,7 +326,7 @@ intersphinx_mapping = {
     "nanoarrow": ("https://arrow.apache.org/nanoarrow/latest", None),
     "numpy": ("https://numpy.org/doc/stable", None),
     "pandas": (
-        "https://pandas.pydata.org/pandas-docs/stable/",
+        "https://pandas.pydata.org/pandas-docs/version/2.3.3/",
         None,
     ),
     "polars": ("https://docs.pola.rs/api/python/stable/", None),
@@ -394,6 +394,7 @@ _all_namespaces = _generate_namespaces(
         "cudf": {
             "io",
             "io::datasource",
+            "io::experimental",
             "strings",
             "ast",
             "ast::expression",
@@ -455,9 +456,6 @@ _names_to_skip_in_cpp = {
     "deprecated",
     # TODO: This is currently in a src file but perhaps should be public
     "orc::column_statistics",
-    # Sphinx doesn't know how to distinguish between the ORC and Parquet
-    # definitions because Breathe doesn't to preserve namespaces for enums.
-    "TypeKind",
     # Span subclasses access base class members
     "base::",
 }

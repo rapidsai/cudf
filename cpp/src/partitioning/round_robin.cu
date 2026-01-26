@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -86,8 +86,9 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
       }));
 
   if (num_partitions == nrows) {
-    rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
-    thrust::sequence(rmm::exec_policy(stream), partition_offsets.begin(), partition_offsets.end());
+    rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions + 1, stream);
+    thrust::sequence(
+      rmm::exec_policy_nosync(stream), partition_offsets.begin(), partition_offsets.end());
 
     auto uniq_tbl = cudf::detail::gather(input,
                                          rotated_iter_begin,
@@ -96,14 +97,14 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                                          stream,
                                          mr);
 
-    return std::pair(std::move(uniq_tbl), cudf::detail::make_std_vector(partition_offsets, stream));
+    return std::pair{std::move(uniq_tbl), cudf::detail::make_std_vector(partition_offsets, stream)};
   } else {  //( num_partitions > nrows )
     rmm::device_uvector<cudf::size_type> d_row_indices(nrows, stream);
 
     // copy rotated right partition indexes that
     // fall in the interval [0, nrows):
     //(this relies on a _stable_ copy_if())
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
                     rotated_iter_begin,
                     rotated_iter_begin + num_partitions,
                     d_row_indices.begin(),
@@ -127,13 +128,15 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
         [nrows] __device__(auto index) { return (index < nrows ? 1 : 0); }));
 
     // offsets (part 2: compute partition offsets):
-    rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream),
+    rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions + 1, stream);
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                            nedges_iter_begin,
                            nedges_iter_begin + num_partitions,
                            partition_offsets.begin());
+    // Add the total row count as the last offset
+    thrust::fill_n(rmm::exec_policy_nosync(stream), partition_offsets.end() - 1, 1, nrows);
 
-    return std::pair(std::move(uniq_tbl), cudf::detail::make_std_vector(partition_offsets, stream));
+    return std::pair{std::move(uniq_tbl), cudf::detail::make_std_vector(partition_offsets, stream)};
   }
 }
 }  // namespace
@@ -158,7 +161,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
                                                             // int32_t, it _can_ be negative
 
   if (nrows == 0) {
-    return std::pair(empty_like(input), std::vector<size_type>(num_partitions, 0));
+    return std::pair{empty_like(input), std::vector<size_type>(num_partitions + 1, 0)};
   }
 
   // handle degenerate case:
@@ -226,7 +229,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
 
   auto uniq_tbl = cudf::detail::gather(
     input, iter_begin, iter_begin + nrows, cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
-  auto ret_pair = std::pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
+  auto ret_pair = std::pair{std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions + 1)};
 
   // this has the effect of rotating the set of partition sizes
   // right by start_partition positions:
@@ -249,6 +252,8 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
   //
   thrust::exclusive_scan(
     thrust::host, rotated_iter_begin, rotated_iter_begin + num_partitions, ret_pair.second.begin());
+  // Add the total row count as the last offset
+  ret_pair.second[num_partitions] = nrows;
 
   return ret_pair;
 }

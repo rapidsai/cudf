@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Re-chunking logic for the RapidsMPF streaming runtime."""
 
@@ -7,6 +7,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -15,7 +16,12 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, Metadata
+from cudf_polars.experimental.rapidsmpf.utils import (
+    ChannelManager,
+    Metadata,
+    empty_table_chunk,
+    opaque_reservation,
+)
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
@@ -41,6 +47,16 @@ async def concatenate_node(
     """
     Concatenate node for rapidsmpf.
 
+    This node reduces the number of chunks via tree-like concatenation.
+    The interpretation of output_count depends on whether input is duplicated:
+
+    - Duplicated input: Each rank reduces locally to output_count chunks.
+      Output remains duplicated.
+    - Non-duplicated, output_count=1: AllGather to produce single duplicated
+      chunk across all ranks.
+    - Non-duplicated, output_count>1: Local reduction, distribute chunks
+      across ranks (local_count = ceil(output_count / nranks)).
+
     Parameters
     ----------
     context
@@ -54,7 +70,7 @@ async def concatenate_node(
     ch_in
         The input ChannelPair.
     output_count
-        The expected number of output chunks.
+        The expected global number of output chunks.
     collective_id
         Pre-allocated collective ID for this operation.
     """
@@ -63,30 +79,59 @@ async def concatenate_node(
     ):
         # Receive metadata.
         input_metadata = await ch_in.recv_metadata(context)
-        metadata = Metadata(output_count)
+        nranks = context.comm().nranks
 
-        # max_chunks corresponds to the number of chunks we can
-        # concatenate together. If None, we must concatenate everything.
-        # Since a single-partition operation gets "special treatment",
-        # we must make sure `output_count == 1` is always satisfied.
+        # Interpret output_count as the GLOBAL target chunk count.
+        # Calculate local target based on whether data is duplicated.
+        if input_metadata.duplicated:
+            # Duplicated input: each rank reduces locally to output_count chunks.
+            # Output remains duplicated (identical on all ranks).
+            local_output_count = output_count
+            output_duplicated = True
+        elif output_count == 1 and nranks > 1:
+            # Special case: non-duplicated input reducing to 1 global chunk.
+            # Requires AllGather, output becomes duplicated.
+            local_output_count = 1
+            output_duplicated = True
+        else:
+            # Non-duplicated input with output_count > 1 (or single rank).
+            # Distribute chunks across ranks.
+            local_output_count = max(1, math.ceil(output_count / nranks))
+            output_duplicated = False
+
+        # NOTE: For now, Repartiton (e.g. concatenate_node) always destroys
+        # partitioning metadata. However, this may change when we support
+        # partitioning types other than HashPartitioned. For example, when
+        # we adopt multi-stage shuffling (a global shuffle between ranks,
+        # followed by a local shuffle within each rank), some cases will
+        # preserve global partitioning.
+
+        # max_chunks corresponds to the number of input chunks we can
+        # concatenate together per output chunk.
+        # If None, we must concatenate everything into a single chunk.
         max_chunks: int | None = None
-        if output_count > 1:
+        if local_output_count > 1:
             # Make sure max_chunks is at least 2.
-            max_chunks = max(2, math.ceil(input_metadata.count / output_count))
+            max_chunks = max(
+                2, math.ceil(input_metadata.local_count / local_output_count)
+            )
 
-        # Check if we need global communication.
+        # Check if we need global communication (AllGather).
         need_global_repartition = (
-            # Avoid allgather of already-duplicated data
-            not input_metadata.duplicated and output_count == 1
+            nranks > 1 and not input_metadata.duplicated and output_count == 1
         )
 
         chunks: list[TableChunk]
         msg: TableChunk | None
         if need_global_repartition:
-            # Assume this means "global repartitioning" for now
+            # Global repartitioning via AllGather to single duplicated chunk.
 
             # Send metadata.
-            metadata.duplicated = True
+            metadata = Metadata(
+                local_count=local_output_count,
+                global_count=output_count,
+                duplicated=output_duplicated,
+            )
             await ch_out.send_metadata(context, metadata)
 
             allgather = AllGatherManager(context, collective_id)
@@ -95,67 +140,83 @@ async def concatenate_node(
             while (msg := await ch_in.data.recv(context)) is not None:
                 allgather.insert(seq_num, TableChunk.from_message(msg))
                 seq_num += 1
+                del msg
             allgather.insert_finished()
-            await ch_out.data.send(
-                context,
-                Message(
-                    0,
-                    TableChunk.from_pylibcudf_table(
-                        await allgather.extract_concatenated(stream),
-                        stream,
-                        exclusive_view=True,
-                    ),
-                ),
-            )
+
+            # Extract concatenated result
+            result_table = await allgather.extract_concatenated(stream)
+
+            # If no chunks were gathered, result_table has 0 columns.
+            # We need to create an empty table with the correct schema.
+            if result_table.num_columns() == 0 and len(ir.schema) > 0:
+                output_chunk = empty_table_chunk(ir, context, stream)
+            else:
+                output_chunk = TableChunk.from_pylibcudf_table(
+                    result_table, stream, exclusive_view=True
+                )
+
+            await ch_out.data.send(context, Message(0, output_chunk))
         else:
+            # Local repartitioning (tree reduction).
+
             # Send metadata.
-            metadata.duplicated = input_metadata.duplicated
+            metadata = Metadata(
+                local_count=local_output_count,
+                global_count=output_count,
+                duplicated=output_duplicated,
+            )
             await ch_out.send_metadata(context, metadata)
 
             # Local repartitioning
             seq_num = 0
             while True:
                 chunks = []
-                msg = None
+                done_receiving = False
 
                 # Collect chunks up to max_chunks or until end of stream
                 while len(chunks) < (max_chunks or float("inf")):
                     msg = await ch_in.data.recv(context)
                     if msg is None:
+                        done_receiving = True
                         break
                     chunks.append(
                         TableChunk.from_message(msg).make_available_and_spill(
                             context.br(), allow_overbooking=True
                         )
                     )
+                    del msg
 
-                # Process collected chunks
                 if chunks:
-                    df = _concat(
-                        *(
-                            DataFrame.from_table(
-                                chunk.table_view(),
-                                list(ir.schema.keys()),
-                                list(ir.schema.values()),
-                                chunk.stream,
-                            )
-                            for chunk in chunks
-                        ),
-                        context=ir_context,
+                    input_bytes = sum(
+                        chunk.data_alloc_size(MemoryType.DEVICE) for chunk in chunks
                     )
-                    await ch_out.data.send(
-                        context,
-                        Message(
-                            seq_num,
-                            TableChunk.from_pylibcudf_table(
-                                df.table, df.stream, exclusive_view=True
+                    with opaque_reservation(context, input_bytes):
+                        df = _concat(
+                            *(
+                                DataFrame.from_table(
+                                    chunk.table_view(),
+                                    list(ir.schema.keys()),
+                                    list(ir.schema.values()),
+                                    chunk.stream,
+                                )
+                                for chunk in chunks
                             ),
-                        ),
-                    )
-                    seq_num += 1
+                            context=ir_context,
+                        )
+                        await ch_out.data.send(
+                            context,
+                            Message(
+                                seq_num,
+                                TableChunk.from_pylibcudf_table(
+                                    df.table, df.stream, exclusive_view=True
+                                ),
+                            ),
+                        )
+                        seq_num += 1
+                        del df, chunks
 
                 # Break if we reached end of stream
-                if msg is None:
+                if done_receiving:
                     break
 
         await ch_out.data.drain(context)

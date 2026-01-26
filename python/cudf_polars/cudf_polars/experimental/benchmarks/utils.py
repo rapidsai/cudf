@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utility functions/classes for running the PDS-H and PDS-DS benchmarks."""
@@ -257,6 +257,8 @@ class RunConfig:
     collect_traces: bool = False
     stats_planning: bool
     max_io_threads: int
+    native_parquet: bool
+    spill_to_pinned_memory: bool
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -373,6 +375,8 @@ class RunConfig:
             collect_traces=args.collect_traces,
             stats_planning=args.stats_planning,
             max_io_threads=args.max_io_threads,
+            native_parquet=args.native_parquet,
+            spill_to_pinned_memory=args.spill_to_pinned_memory,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -402,6 +406,8 @@ class RunConfig:
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
                 print(f"stats_planning: {self.stats_planning}")
+                if self.runtime == "rapidsmpf":
+                    print(f"native_parquet: {self.native_parquet}")
                 if self.cluster == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
@@ -462,6 +468,7 @@ def get_executor_options(
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
+        executor_options["spill_to_pinned_memory"] = run_config.spill_to_pinned_memory
 
     if (
         benchmark
@@ -510,26 +517,67 @@ def print_query_plan(
 
 
 def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
-    """Initialize a Dask distributed cluster."""
+    """
+    Initialize a Dask distributed cluster.
+
+    This function either creates a new LocalCUDACluster or connects to an
+    existing Dask cluster depending on the provided arguments.
+
+    Parameters
+    ----------
+    run_config : RunConfig
+        The run configuration.
+    args : argparse.Namespace
+        Parsed command line arguments. If ``args.scheduler_address`` or
+        ``args.scheduler_file`` is provided, we connect to an existing
+        cluster instead of creating a LocalCUDACluster.
+
+    Returns
+    -------
+    Client or None
+        A Dask distributed Client, or None if not using distributed mode.
+    """
     if run_config.cluster != "distributed":
         return None
 
-    from dask_cuda import LocalCUDACluster
     from distributed import Client
 
-    kwargs = {
-        "n_workers": run_config.n_workers,
-        "dashboard_address": ":8585",
-        "protocol": args.protocol,
-        "rmm_pool_size": args.rmm_pool_size,
-        "rmm_async": args.rmm_async,
-        "rmm_release_threshold": args.rmm_release_threshold,
-        "threads_per_worker": run_config.threads,
-    }
+    # Check if we should connect to an existing cluster
+    scheduler_address = args.scheduler_address
+    scheduler_file = args.scheduler_file
 
-    # Avoid UVM in distributed cluster
-    client = Client(LocalCUDACluster(**kwargs))
-    client.wait_for_workers(run_config.n_workers)
+    if scheduler_address is not None:
+        # Connect to existing cluster via scheduler address
+        client = Client(address=scheduler_address)
+        n_workers = len(client.scheduler_info().get("workers", {}))
+        print(
+            f"Connected to existing Dask cluster at {scheduler_address} "
+            f"with {n_workers} workers"
+        )
+    elif scheduler_file is not None:
+        # Connect to existing cluster via scheduler file
+        client = Client(scheduler_file=scheduler_file)
+        n_workers = len(client.scheduler_info().get("workers", {}))
+        print(
+            f"Connected to existing Dask cluster via scheduler file: {scheduler_file} "
+            f"with {n_workers} workers"
+        )
+    else:
+        # Create a new LocalCUDACluster
+        from dask_cuda import LocalCUDACluster
+
+        kwargs = {
+            "n_workers": run_config.n_workers,
+            "dashboard_address": ":8585",
+            "protocol": args.protocol,
+            "rmm_pool_size": args.rmm_pool_size,
+            "rmm_async": args.rmm_async,
+            "rmm_release_threshold": args.rmm_release_threshold,
+            "threads_per_worker": run_config.threads,
+        }
+
+        client = Client(LocalCUDACluster(**kwargs))
+        client.wait_for_workers(run_config.n_workers)
 
     if run_config.shuffle != "tasks":
         try:
@@ -541,9 +589,12 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                 options=Options(
                     {
                         "dask_spill_device": str(run_config.spill_device),
+                        "dask_spill_to_pinned_memory": str(
+                            run_config.spill_to_pinned_memory
+                        ),
                         "dask_statistics": str(args.rapidsmpf_dask_statistics),
                         "dask_print_statistics": str(args.rapidsmpf_print_statistics),
-                        "oom_protection": str(args.rapidsmpf_oom_protection),
+                        "dask_oom_protection": str(args.rapidsmpf_oom_protection),
                     }
                 ),
             )
@@ -726,6 +777,27 @@ def parse_args(
         type=int,
         help="Number of Dask-CUDA workers (requires 'distributed' cluster).",
     )
+    external_cluster_group = parser.add_mutually_exclusive_group()
+    external_cluster_group.add_argument(
+        "--scheduler-address",
+        default=None,
+        type=str,
+        help=textwrap.dedent("""\
+            Scheduler address for connecting to an existing Dask cluster.
+            If provided, a cluster is not created and worker
+            configuration options (--n-workers, --rmm-pool-size, etc.)
+            are ignored since the workers are assumed to be started separately."""),
+    )
+    external_cluster_group.add_argument(
+        "--scheduler-file",
+        default=None,
+        type=str,
+        help=textwrap.dedent("""\
+            Path to a scheduler file for connecting to an existing Dask cluster.
+            If provided, a cluster is not created and worker
+            configuration options (--n-workers, --rmm-pool-size, etc.)
+            are ignored since the workers are assumed to be started separately."""),
+    )
     parser.add_argument(
         "--blocksize",
         default=None,
@@ -893,6 +965,26 @@ def parse_args(
         type=int,
         help="Maximum number of IO threads for rapidsmpf runtime.",
     )
+    parser.add_argument(
+        "--native-parquet",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use C++ read_parquet nodes for the rapidsmpf runtime.",
+    )
+    parser.add_argument(
+        "--results-directory",
+        type=Path,
+        default=None,
+        help="Optional directory to write query results as parquet files.",
+    )
+    parser.add_argument(
+        "--spill-to-pinned-memory",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=textwrap.dedent("""\
+            Whether RapidsMPF should spill to pinned host memory when available,
+            or use regular pageable host memory."""),
+    )
 
     parsed_args = parser.parse_args(args)
 
@@ -917,11 +1009,22 @@ def run_polars(
 
     client = initialize_dask_cluster(run_config, args)
 
+    # Update n_workers from the actual cluster when using scheduler file/address
+    if client is not None:
+        actual_n_workers = len(client.scheduler_info().get("workers", {}))
+        run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
+
     records: defaultdict[int, list[Record]] = defaultdict(list)
     engine: pl.GPUEngine | None = None
 
     if run_config.executor != "cpu":
         executor_options = get_executor_options(run_config, benchmark=benchmark)
+        if run_config.runtime == "rapidsmpf":
+            parquet_options = {
+                "use_rapidsmpf_native": run_config.native_parquet,
+            }
+        else:
+            parquet_options = {}
         engine = pl.GPUEngine(
             raise_on_fail=True,
             memory_resource=rmm.mr.CudaAsyncMemoryResource()
@@ -930,6 +1033,7 @@ def run_polars(
             cuda_stream_policy=run_config.stream_policy,
             executor=run_config.executor,
             executor_options=executor_options,
+            parquet_options=parquet_options,
         )
 
     for q_id in run_config.queries:
@@ -986,6 +1090,12 @@ def run_polars(
             )
             if args.print_results:
                 print(result)
+
+            if args.results_directory is not None and i == 0:
+                results_dir = Path(args.results_directory)
+                results_dir.mkdir(parents=True, exist_ok=True)
+                output_path = results_dir / f"q_{q_id:02d}.parquet"
+                result.write_parquet(output_path)
 
             print(
                 f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",

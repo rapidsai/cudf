@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel Join Logic."""
 
@@ -12,7 +12,7 @@ from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.shuffle import Shuffle, _hash_partition_dataframe
 from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.parallel import LowerIRTransformer
-    from cudf_polars.utils.config import ShuffleMethod
+    from cudf_polars.utils.config import ShuffleMethod, ShufflerInsertionMethod
 
 
 def _maybe_shuffle_frame(
@@ -30,6 +30,8 @@ def _maybe_shuffle_frame(
     partition_info: MutableMapping[IR, PartitionInfo],
     shuffle_method: ShuffleMethod,
     output_count: int,
+    *,
+    shuffler_insertion_method: ShufflerInsertionMethod,
 ) -> IR:
     # Shuffle `frame` if it isn't already shuffled.
     if (
@@ -44,6 +46,7 @@ def _maybe_shuffle_frame(
             frame.schema,
             on,
             shuffle_method,
+            shuffler_insertion_method,
             frame,
         )
         partition_info[frame] = PartitionInfo(
@@ -60,26 +63,28 @@ def _make_hash_join(
     left: IR,
     right: IR,
     shuffle_method: ShuffleMethod,
+    *,
+    shuffler_insertion_method: ShufflerInsertionMethod,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Shuffle left and right dataframes (if necessary)
-    new_left = _maybe_shuffle_frame(
+    left = _maybe_shuffle_frame(
         left,
         ir.left_on,
         partition_info,
         shuffle_method,
         output_count,
+        shuffler_insertion_method=shuffler_insertion_method,
     )
-    new_right = _maybe_shuffle_frame(
+    right = _maybe_shuffle_frame(
         right,
         ir.right_on,
         partition_info,
         shuffle_method,
         output_count,
+        shuffler_insertion_method=shuffler_insertion_method,
     )
-    if left != new_left or right != new_right:
-        ir = ir.reconstruct([new_left, new_right])
-    left = new_left
-    right = new_right
+    # Always reconstruct in case children contain Cache nodes
+    ir = ir.reconstruct([left, right])
 
     # Record new partitioning info
     partitioned_on: tuple[NamedExpr, ...] = ()
@@ -144,7 +149,9 @@ def _make_bcast_join(
     left: IR,
     right: IR,
     shuffle_method: ShuffleMethod,
+    *,
     streaming_runtime: str,
+    shuffler_insertion_method: ShufflerInsertionMethod,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
         left_count = partition_info[left].count
@@ -171,6 +178,7 @@ def _make_bcast_join(
                     partition_info,
                     shuffle_method,
                     right_count,
+                    shuffler_insertion_method=shuffler_insertion_method,
                 )
             else:
                 left = _maybe_shuffle_frame(
@@ -179,6 +187,7 @@ def _make_bcast_join(
                     partition_info,
                     shuffle_method,
                     left_count,
+                    shuffler_insertion_method=shuffler_insertion_method,
                 )
 
     new_node = ir.reconstruct([left, right])
@@ -290,7 +299,8 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
-            config_options.executor.runtime,
+            streaming_runtime=config_options.executor.runtime,
+            shuffler_insertion_method=config_options.executor.shuffler_insertion_method,
         )
     else:
         # Create a hash join
@@ -301,6 +311,7 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
+            shuffler_insertion_method=config_options.executor.shuffler_insertion_method,
         )
 
 
@@ -344,36 +355,65 @@ def _(
             small_name = get_key_name(right)
             small_size = partition_info[right].count
             large_name = get_key_name(left)
+            large_on = ir.left_on
         else:
             small_side = "Left"
             small_name = get_key_name(left)
             small_size = partition_info[left].count
             large_name = get_key_name(right)
+            large_on = ir.right_on
 
         graph: MutableMapping[Any, Any] = {}
 
         out_name = get_key_name(ir)
         out_size = partition_info[ir].count
-        concat_name = f"concat-{out_name}"
+        split_name = f"split-{out_name}"
+        getit_name = f"getit-{out_name}"
+        inter_name = f"inter-{out_name}"
 
-        # Concatenate the small partitions
-        if small_size > 1:
-            graph[(concat_name, 0)] = (
-                partial(_concat, context=context),
-                *((small_name, j) for j in range(small_size)),
-            )
-            small_name = concat_name
+        # Split each large partition if we have
+        # multiple small partitions (unless this
+        # is an inner join)
+        split_large = ir.options[0] != "Inner" and small_size > 1
 
         for part_out in range(out_size):
-            join_children = [(large_name, part_out), (small_name, 0)]
-            if small_side == "Left":
-                join_children.reverse()
-            graph[(out_name, part_out)] = (
-                partial(ir.do_evaluate, context=context),
-                ir.left_on,
-                ir.right_on,
-                ir.options,
-                *join_children,
-            )
+            if split_large:
+                graph[(split_name, part_out)] = (
+                    _hash_partition_dataframe,
+                    (large_name, part_out),
+                    part_out,
+                    small_size,
+                    None,
+                    large_on,
+                )
+
+            _concat_list = []
+            for j in range(small_size):
+                left_key: tuple[str, int] | tuple[str, int, int]
+                if split_large:
+                    left_key = (getit_name, part_out, j)
+                    graph[left_key] = (operator.getitem, (split_name, part_out), j)
+                else:
+                    left_key = (large_name, part_out)
+                join_children = [left_key, (small_name, j)]
+                if small_side == "Left":
+                    join_children.reverse()
+
+                inter_key = (inter_name, part_out, j)
+                graph[(inter_name, part_out, j)] = (
+                    partial(ir.do_evaluate, context=context),
+                    ir.left_on,
+                    ir.right_on,
+                    ir.options,
+                    *join_children,
+                )
+                _concat_list.append(inter_key)
+            if len(_concat_list) == 1:
+                graph[(out_name, part_out)] = graph.pop(_concat_list[0])
+            else:
+                graph[(out_name, part_out)] = (
+                    partial(_concat, context=context),
+                    *_concat_list,
+                )
 
         return graph

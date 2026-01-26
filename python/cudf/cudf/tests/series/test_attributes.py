@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import re
 
@@ -291,13 +291,6 @@ def test_timedelta_contains(data, timedelta_types_as_str, scalar):
     assert_eq(expected, actual)
 
 
-# TODO: This test _should_ be made CoW-safe, but it is acceptable to fail for now
-# because its failure indicates a performance issue rather than a correctness issue.
-# The problem is that accessing the `data` attribute of a Series creates a separate
-# buffer for Column._data that becomes a second reference because Column._base_data
-# exists. That means that any attempt to access a writeable pointer on the data
-# immediately triggers a copy when in fact we really only have a single reference.
-@pytest.mark.no_copy_on_write
 def test_cai_after_indexing():
     df = cudf.DataFrame({"a": [1, 2, 3]})
     cai1 = df["a"].__cuda_array_interface__
@@ -437,9 +430,3 @@ def test_series_values_property(data):
     gds_vals = gds.values
     assert isinstance(gds_vals, cp.ndarray)
     np.testing.assert_array_equal(gds_vals.get(), pds.values)
-
-
-def test_series_data_property_deprecated():
-    s = cudf.Series([1, 2, 3])
-    with pytest.warns(FutureWarning, match="Series.data is deprecated"):
-        s.data

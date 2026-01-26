@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 """Base class for Frame types that have an index."""
 
@@ -40,11 +40,10 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, stream_compaction
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
-    NumericalColumn,
+    access_columns,
     as_column,
     column_empty,
 )
@@ -2932,7 +2931,7 @@ class IndexedFrame(Frame):
                 "Provided seed value has no effect for the hash method "
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
-        with acquire_spill_lock():
+        with access_columns(*self._columns, mode="read", scope="internal"):
             plc_table = plc.Table([c.plc_column for c in self._columns])
             if method == "murmur3":
                 plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
@@ -2975,15 +2974,24 @@ class IndexedFrame(Frame):
         """
         if not gather_map.nullify and len(self) != gather_map.nrows:
             raise IndexError("Gather map is out of bounds")
+        columns_to_gather = (
+            list(itertools.chain(self.index._columns, self._columns))
+            if keep_index
+            else self._columns
+        )
         return self._from_columns_like_self(
             [
-                ColumnBase.from_pylibcudf(col)
-                for col in copying.gather(
-                    itertools.chain(self.index._columns, self._columns)
-                    if keep_index
-                    else self._columns,
-                    gather_map.column,
-                    nullify=gather_map.nullify,
+                ColumnBase.from_pylibcudf(col)._with_type_metadata(
+                    orig_col.dtype
+                )
+                for col, orig_col in zip(
+                    copying.gather(
+                        columns_to_gather,
+                        gather_map.column,
+                        nullify=gather_map.nullify,
+                    ),
+                    columns_to_gather,
+                    strict=True,
                 )
             ],
             self._column_names,
@@ -3052,7 +3060,7 @@ class IndexedFrame(Frame):
             return self._gather(
                 GatherMap.from_column_unchecked(
                     cast(
-                        NumericalColumn,
+                        cudf.core.column.numerical.NumericalColumn,
                         as_column(
                             range(start, stop, stride),
                             dtype=SIZE_TYPE_DTYPE,
@@ -3069,11 +3077,13 @@ class IndexedFrame(Frame):
             if keep_index and not has_range_index
             else self._columns
         )
-        with acquire_spill_lock():
+        # Materialize iterator to avoid consuming it during access context setup
+        cols_list = list(columns_to_slice)
+        with access_columns(  # type: ignore[assignment]
+            *cols_list, mode="read", scope="internal"
+        ) as cols_list:
             plc_tables = plc.copying.slice(
-                plc.Table(
-                    [col.to_pylibcudf(mode="read") for col in columns_to_slice]
-                ),
+                plc.Table([col.plc_column for col in cols_list]),
                 [start, stop],
             )
             sliced = [
@@ -3270,7 +3280,7 @@ class IndexedFrame(Frame):
         if (keep_option := _keep_options.get(keep)) is None:
             raise ValueError('keep must be either "first", "last" or False')
 
-        with acquire_spill_lock():
+        with access_columns(*columns, mode="read", scope="internal"):
             plc_column = plc.stream_compaction.distinct_indices(
                 plc.Table([col.plc_column for col in columns]),
                 keep_option,
@@ -3281,7 +3291,7 @@ class IndexedFrame(Frame):
         result = as_column(
             True, length=len(self), dtype=bool
         )._scatter_by_column(
-            distinct,  # type: ignore[arg-type]
+            cast(cudf.core.column.NumericalColumn, distinct),
             pa_scalar_to_plc_scalar(pa.scalar(False)),
             bounds_check=False,
         )
@@ -3291,7 +3301,12 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def _empty_like(self, keep_index: bool = True) -> Self:
-        with acquire_spill_lock():
+        columns_to_access = (
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index
+            else self._columns
+        )
+        with access_columns(*columns_to_access, mode="read", scope="internal"):
             plc_table = plc.copying.empty_like(
                 plc.Table(
                     [
@@ -3320,25 +3335,33 @@ class IndexedFrame(Frame):
         if self._num_rows == 0:
             return []
 
-        columns_split = copying.columns_split(
+        # Materialize the iterator and enter contexts
+        source_columns_list = list(
             itertools.chain(self.index._columns, self._columns)
             if keep_index
-            else self._columns,
-            splits,
+            else self._columns
         )
-
-        @acquire_spill_lock()
-        def split_from_pylibcudf(split: list[plc.Column]) -> list[ColumnBase]:
-            return [ColumnBase.from_pylibcudf(col) for col in split]
-
-        return [
-            self._from_columns_like_self(
-                split_from_pylibcudf(split),
-                self._column_names,
-                self.index.names if keep_index else None,
+        with access_columns(
+            *source_columns_list, mode="read", scope="internal"
+        ):
+            columns_split = copying.columns_split(
+                source_columns_list,
+                splits,
             )
-            for split in columns_split
-        ]
+
+            def split_from_pylibcudf(
+                split: list[plc.Column],
+            ) -> list[ColumnBase]:
+                return [ColumnBase.from_pylibcudf(col) for col in split]
+
+            return [
+                self._from_columns_like_self(
+                    split_from_pylibcudf(split),
+                    self._column_names,
+                    self.index.names if keep_index else None,
+                )
+                for split in columns_split
+            ]
 
     @_performance_tracking
     def bfill(
@@ -3559,7 +3582,6 @@ class IndexedFrame(Frame):
         """
         raise NotImplementedError
 
-    @acquire_spill_lock()
     @_performance_tracking
     def _apply(self, func, kernel_class, *args, **kwargs):
         """Apply `func` across the rows of the frame."""
@@ -4900,7 +4922,7 @@ class IndexedFrame(Frame):
         try:
             gather_map = GatherMap.from_column_unchecked(
                 cast(
-                    NumericalColumn,
+                    cudf.core.column.numerical.NumericalColumn,
                     as_column(
                         random_state.choice(
                             len(self), size=n, replace=replace, p=weights
@@ -5435,7 +5457,12 @@ class IndexedFrame(Frame):
         # specified nested column. Other columns' corresponding rows are
         # duplicated. If ignore_index is set, the original index is not
         # exploded and will be replaced with a `RangeIndex`.
-        if not isinstance(self._data[explode_column].dtype, ListDtype):
+        dtype = self._data[explode_column].dtype
+        is_list_dtype = isinstance(dtype, ListDtype) or (
+            isinstance(dtype, pd.ArrowDtype)
+            and isinstance(dtype.pyarrow_dtype, pa.ListType)
+        )
+        if not is_list_dtype:
             result = self.copy()
             if ignore_index:
                 result.index = RangeIndex(len(result))
@@ -5447,7 +5474,11 @@ class IndexedFrame(Frame):
         else:
             idx_cols = ()
 
-        with acquire_spill_lock():
+        with access_columns(
+            *itertools.chain(idx_cols, self._columns),
+            mode="read",
+            scope="internal",
+        ):
             plc_table = plc.lists.explode_outer(
                 plc.Table(
                     [
@@ -5539,7 +5570,11 @@ class IndexedFrame(Frame):
         -------
         The indexed frame containing the tiled "rows".
         """
-        with acquire_spill_lock():
+        with access_columns(
+            *itertools.chain(self.index._columns, self._columns),
+            mode="read",
+            scope="internal",
+        ):
             plc_table = plc.reshape.tile(
                 plc.Table(
                     [

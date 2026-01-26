@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import copyreg
@@ -2068,10 +2068,10 @@ Flags = make_final_proxy_type(
 
 NamedAgg = make_final_proxy_type(
     "NamedAgg",
-    _Unusable,
     pd.NamedAgg,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
+    pd.NamedAgg,
+    fast_to_slow=lambda fast: fast,
+    slow_to_fast=lambda slow: slow,
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -2223,10 +2223,6 @@ _original_Series_init = cudf.Series.__init__
 _original_DataFrame_init = cudf.DataFrame.__init__
 _original_Index_init = cudf.Index.__init__
 _original_from_pandas = cudf.from_pandas
-_original_DataFrame_from_pandas = cudf.DataFrame.from_pandas
-_original_Series_from_pandas = cudf.Series.from_pandas
-_original_Index_from_pandas = cudf.Index.from_pandas
-_original_MultiIndex_from_pandas = cudf.MultiIndex.from_pandas
 
 
 def wrap_init(original_init):
@@ -2358,18 +2354,6 @@ def initial_setup():
     cudf.Index.__init__ = wrap_init(_original_Index_init)
     cudf.DataFrame.__init__ = DataFrame_init_
     cudf.from_pandas = wrap_from_pandas(_original_from_pandas)
-    cudf.DataFrame.from_pandas = wrap_from_pandas_dataframe(
-        _original_DataFrame_from_pandas
-    )
-    cudf.Series.from_pandas = wrap_from_pandas_series(
-        _original_Series_from_pandas
-    )
-    cudf.Index.from_pandas = wrap_from_pandas_index(
-        _original_Index_from_pandas
-    )
-    cudf.MultiIndex.from_pandas = wrap_from_pandas_multiindex(
-        _original_MultiIndex_from_pandas
-    )
     cudf.set_option("mode.pandas_compatible", True)
 
 

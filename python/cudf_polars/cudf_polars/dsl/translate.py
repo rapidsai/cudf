@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Translate polars IR representation to ours."""
@@ -102,7 +102,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (10, 1):
+        if (version := self.visitor.version()) >= (11, 1):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -379,12 +379,12 @@ def _align_decimal_scales(
         if (
             left_type.id() != target.id() or left_type.scale() != target.scale()
         ):  # pragma: no cover; no test yet
-            left = expr.Cast(target, left)
+            left = expr.Cast(target, True, left)  # noqa: FBT003
 
         if (
             right_type.id() != target.id() or right_type.scale() != target.scale()
         ):  # pragma: no cover; no test yet
-            right = expr.Cast(target, right)
+            right = expr.Cast(target, True, right)  # noqa: FBT003
 
     return left, right
 
@@ -746,7 +746,7 @@ def _(
             *(translator.translate_expr(n=n, schema=schema) for n in node.input),
         )
         if name in needs_cast:
-            return expr.Cast(dtype, result_expr)
+            return expr.Cast(dtype, True, result_expr)  # noqa: FBT003
         return result_expr
     elif not POLARS_VERSION_LT_131 and isinstance(
         name, plrs._expr_nodes.StructFunction
@@ -787,6 +787,7 @@ def _(
                     if not POLARS_VERSION_LT_134
                     else expr.Cast(
                         DataType(pl.Float64()),
+                        True,  # noqa: FBT003
                         res,
                     )
                 )
@@ -996,6 +997,9 @@ def _(
 def _(
     node: plrs._expr_nodes.Cast, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
+    # TODO: node.options can be 2 meaning wrap_numerical=True
+    # don't necessarily raise because wrapping isn't always needed, but it's unhandled
+    strict = node.options != 1
     inner = translator.translate_expr(n=node.expr, schema=schema)
 
     if plc.traits.is_floating_point(inner.dtype.plc_type) and plc.traits.is_fixed_point(
@@ -1003,6 +1007,7 @@ def _(
     ):
         return expr.Cast(
             dtype,
+            strict,
             expr.UnaryFunction(
                 inner.dtype, "round", (-dtype.plc_type.scale(), "half_to_even"), inner
             ),
@@ -1012,7 +1017,7 @@ def _(
     if isinstance(inner, expr.Literal):
         return inner.astype(dtype)
     else:
-        return expr.Cast(dtype, inner)
+        return expr.Cast(dtype, strict, inner)
 
 
 @_translate_expr.register
@@ -1034,7 +1039,7 @@ def _(
 
     if agg_name not in ("count", "n_unique", "mean", "median", "quantile"):
         args = [
-            expr.Cast(dtype, arg)
+            expr.Cast(dtype, True, arg)  # noqa: FBT003
             if plc.traits.is_fixed_point(arg.dtype.plc_type)
             and arg.dtype.plc_type != dtype.plc_type
             else arg
@@ -1044,7 +1049,7 @@ def _(
     value = expr.Agg(dtype, agg_name, node.options, translator._expr_context, *args)
 
     if agg_name in ("count", "n_unique") and value.dtype.id() != plc.TypeId.INT32:
-        return expr.Cast(value.dtype, value)
+        return expr.Cast(value.dtype, True, value)  # noqa: FBT003
     return value
 
 
@@ -1085,11 +1090,12 @@ def _(
         f64 = DataType(pl.Float64())
         return expr.Cast(
             dtype,
+            True,  # noqa: FBT003
             expr.BinOp(
                 f64,
                 expr.BinOp._MAPPING[node.op],
-                expr.Cast(f64, left),
-                expr.Cast(f64, right),
+                expr.Cast(f64, True, left),  # noqa: FBT003
+                expr.Cast(f64, True, right),  # noqa: FBT003
             ),
         )
 
@@ -1129,5 +1135,5 @@ def _(
 ) -> expr.Expr:
     value = expr.Len(dtype)
     if dtype.id() != plc.TypeId.INT32:
-        return expr.Cast(dtype, value)
+        return expr.Cast(dtype, True, value)  # noqa: FBT003
     return value  # pragma: no cover; never reached since polars len has uint32 dtype

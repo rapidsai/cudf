@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 """DSL nodes for unary operations."""
@@ -25,11 +25,12 @@ __all__ = ["Cast", "Len", "UnaryFunction"]
 class Cast(Expr):
     """Class representing a cast of an expression."""
 
-    __slots__ = ()
-    _non_child = ("dtype",)
+    __slots__ = ("strict",)
+    _non_child = ("dtype", "strict")
 
-    def __init__(self, dtype: DataType, value: Expr) -> None:
+    def __init__(self, dtype: DataType, strict: bool, value: Expr) -> None:  # noqa: FBT001
         self.dtype = dtype
+        self.strict = strict
         self.children = (value,)
         self.is_pointwise = True
         if not dtypes.can_cast(value.dtype.plc_type, self.dtype.plc_type):
@@ -43,7 +44,7 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context)
-        return column.astype(self.dtype, stream=df.stream)
+        return column.astype(self.dtype, stream=df.stream, strict=self.strict)
 
 
 class Len(Expr):
@@ -240,7 +241,9 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
-        elif self.name == "set_sorted":
+        elif self.name == "set_sorted":  # pragma: no cover
+            # TODO: LazyFrame.set_sorted is proper IR concept (ie. FunctionIR::Hint)
+            # and is is currently not implemented. We should reimplement it as a MapFunction.
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             (asc,) = self.options
             order = (

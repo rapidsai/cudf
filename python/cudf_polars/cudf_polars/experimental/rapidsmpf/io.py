@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """IO logic for the RapidsMPF streaming runtime."""
 
@@ -40,7 +40,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     Metadata,
-    empty_table_chunk,
+    opaque_reservation,
 )
 
 if TYPE_CHECKING:
@@ -108,7 +108,7 @@ class Lineariser:
 
         # Forward any remaining buffered messages
         for seq in sorted(buffer.keys()):
-            await self.ch_out.send(self.context, buffer[seq])
+            await self.ch_out.send(self.context, buffer.pop(seq))
 
         await self.ch_out.drain(self.context)
 
@@ -143,6 +143,7 @@ async def dataframescan_node(
     *,
     num_producers: int,
     rows_per_partition: int,
+    estimated_chunk_bytes: int,
 ) -> None:
     """
     DataFrameScan node for rapidsmpf.
@@ -161,11 +162,14 @@ async def dataframescan_node(
         The number of producers to use for the DataFrameScan node.
     rows_per_partition
         The number of rows per partition.
+    estimated_chunk_bytes
+        Estimated size of each chunk in bytes. Used for memory reservation
+        with block spilling to avoid thrashing.
     """
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Find local partition count.
-        nrows = max(ir.df.shape()[0], 1)
-        global_count = math.ceil(nrows / rows_per_partition)
+        nrows = ir.df.shape()[0]
+        global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
 
         # For single rank, simplify the logic
         if context.comm().nranks == 1:
@@ -176,7 +180,10 @@ async def dataframescan_node(
             local_offset = local_count * context.comm().rank
 
         # Send basic metadata
-        await ch_out.send_metadata(context, Metadata(local_count))
+        await ch_out.send_metadata(
+            context,
+            Metadata(local_count=local_count, global_count=global_count),
+        )
 
         # Build list of IR slices to read
         ir_slices = []
@@ -192,17 +199,23 @@ async def dataframescan_node(
                 )
             )
 
-        # If there are no slices, send an empty chunk for now.
-        # TODO: We shouldn't need to do this.
+        # If there are no slices, drain the channel and return
         if len(ir_slices) == 0:
-            stream = ir_context.get_cuda_stream()
-            await ch_out.data.send(
-                context,
-                Message(
-                    0,
-                    empty_table_chunk(ir, context, stream),
-                ),
-            )
+            await ch_out.data.drain(context)
+            return
+
+        # If there is only one ir_slices or one producer, we can
+        # skip the lineariser and read the chunks directly
+        if len(ir_slices) == 1 or num_producers == 1:
+            for seq_num, ir_slice in enumerate(ir_slices):
+                await read_chunk(
+                    context,
+                    ir_slice,
+                    seq_num,
+                    ch_out.data,
+                    ir_context,
+                    estimated_chunk_bytes,
+                )
             await ch_out.data.drain(context)
             return
 
@@ -226,6 +239,7 @@ async def dataframescan_node(
                     task_idx,
                     ch_out,
                     ir_context,
+                    estimated_chunk_bytes,
                 )
             await ch_out.drain(context)
 
@@ -246,6 +260,8 @@ def _(
     )
     rows_per_partition = config_options.executor.max_rows_per_partition
     num_producers = rec.state["max_io_threads"]
+    # Use target_partition_size as the estimated chunk size
+    estimated_chunk_bytes = config_options.executor.target_partition_size
 
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
@@ -259,6 +275,7 @@ def _(
                 channels[ir].reserve_input_slot(),
                 num_producers=num_producers,
                 rows_per_partition=rows_per_partition,
+                estimated_chunk_bytes=estimated_chunk_bytes,
             )
         ]
     }
@@ -303,6 +320,7 @@ async def read_chunk(
     seq_num: int,
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
+    estimated_chunk_bytes: int,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
@@ -319,24 +337,27 @@ async def read_chunk(
         The output channel.
     ir_context
         The execution context for the IR node.
+    estimated_chunk_bytes
+        Estimated size of the chunk in bytes. Used for memory reservation
+        with block spilling to avoid thrashing.
     """
-    # Evaluate and send the Scan-node result
-    df = await asyncio.to_thread(
-        scan.do_evaluate,
-        *scan._non_child_args,
-        context=ir_context,
-    )
-    await ch_out.send(
-        context,
-        Message(
-            seq_num,
-            TableChunk.from_pylibcudf_table(
-                df.table,
-                df.stream,
-                exclusive_view=True,
+    with opaque_reservation(context, estimated_chunk_bytes):
+        df = await asyncio.to_thread(
+            scan.do_evaluate,
+            *scan._non_child_args,
+            context=ir_context,
+        )
+        await ch_out.send(
+            context,
+            Message(
+                seq_num,
+                TableChunk.from_pylibcudf_table(
+                    df.table,
+                    df.stream,
+                    exclusive_view=True,
+                ),
             ),
-        ),
-    )
+        )
 
 
 @define_py_node()
@@ -349,6 +370,7 @@ async def scan_node(
     num_producers: int,
     plan: IOPartitionPlan,
     parquet_options: ParquetOptions,
+    estimated_chunk_bytes: int,
 ) -> None:
     """
     Scan node for rapidsmpf.
@@ -369,6 +391,9 @@ async def scan_node(
         The partitioning plan.
     parquet_options
         The Parquet options.
+    estimated_chunk_bytes
+        Estimated size of each chunk in bytes. Used for memory reservation
+        with block spilling to avoid thrashing.
     """
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Build a list of local Scan operations
@@ -439,19 +464,28 @@ async def scan_node(
                     )
 
         # Send basic metadata
-        await ch_out.send_metadata(context, Metadata(max(1, len(scans))))
+        await ch_out.send_metadata(
+            context,
+            Metadata(local_count=len(scans), global_count=count),
+        )
 
-        # If there are no scans, send an empty chunk for now.
-        # TODO: We shouldn't need to do this.
+        # If there is nothing to scan, drain the channel and return
         if len(scans) == 0:
-            stream = ir_context.get_cuda_stream()
-            await ch_out.data.send(
-                context,
-                Message(
-                    0,
-                    empty_table_chunk(ir, context, stream),
-                ),
-            )
+            await ch_out.data.drain(context)
+            return
+
+        # If there is only one scan or one producer, we can
+        # skip the lineariser and read the chunks directly
+        if len(scans) == 1 or num_producers == 1:
+            for seq_num, scan in enumerate(scans):
+                await read_chunk(
+                    context,
+                    scan,
+                    seq_num,
+                    ch_out.data,
+                    ir_context,
+                    estimated_chunk_bytes,
+                )
             await ch_out.data.drain(context)
             return
 
@@ -475,6 +509,7 @@ async def scan_node(
                     task_idx,
                     ch_out,
                     ir_context,
+                    estimated_chunk_bytes,
                 )
             await ch_out.drain(context)
 
@@ -598,7 +633,8 @@ def _(
     ir: Scan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
+    executor = rec.state["config_options"].executor
+    assert executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
     )
     parquet_options = config_options.parquet_options
@@ -615,12 +651,13 @@ def _(
         and rec.state["context"].comm().nranks > 1
     )
 
-    # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
+    # Use rapidsmpf native read_parquet node if possible
     ch_pair = channels[ir].reserve_input_slot()
     nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
     if (
-        partition_info.count > 1
+        parquet_options.use_rapidsmpf_native
+        and partition_info.count > 1
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None
@@ -643,7 +680,14 @@ def _(
         metadata_node = metadata_feeder_node(
             rec.state["context"],
             ch_pair,
-            Metadata(partition_info.count),
+            Metadata(
+                # partition_info.count is the estimated "global" count.
+                # Just estimate the local count as well.
+                local_count=math.ceil(
+                    partition_info.count / rec.state["context"].comm().nranks
+                ),
+                global_count=partition_info.count,
+            ),
         )
         nodes[ir] = [metadata_node, native_node]
     else:
@@ -659,6 +703,7 @@ def _(
                 num_producers=num_producers,
                 plan=plan,
                 parquet_options=parquet_options,
+                estimated_chunk_bytes=executor.target_partition_size,
             )
         ]
     return nodes, channels

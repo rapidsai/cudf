@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -4160,11 +4160,13 @@ public class TableTest extends CudfTestBase {
     int expectedPart = -1;
     try (Table start = new Table.TestBuilder().column(0).build();
          PartitionedTable out = start.onColumns(0).hashPartition(PARTS)) {
-      // Lets figure out what partitions this is a part of.
+      // Lets figure out what partition this is a part of.
+      // With num_partitions + 1 offsets, partition i has size = parts[i+1] - parts[i]
       int[] parts = out.getPartitions();
-      for (int i = 0; i < parts.length; i++) {
-        if (parts[i] > 0) {
+      for (int i = 0; i < PARTS; i++) {
+        if (parts[i + 1] - parts[i] > 0) {
           expectedPart = i;
+          break;
         }
       }
     }
@@ -4175,9 +4177,10 @@ public class TableTest extends CudfTestBase {
            PartitionedTable out = t.onColumns(0).hashPartition(PARTS);
            HostColumnVector tmp = out.getColumn(0).copyToHost()) {
         // Now we need to get the range out for the partition we expect
+        // With num_partitions + 1 offsets, partition i spans [parts[i], parts[i+1])
         int[] parts = out.getPartitions();
-        int start = expectedPart == 0 ? 0 : parts[expectedPart - 1];
-        int end = parts[expectedPart];
+        int start = parts[expectedPart];
+        int end = parts[expectedPart + 1];
         boolean found = false;
         for (int i = start; i < end; i++) {
           if (tmp.getInt(i) == 0) {
@@ -4239,7 +4242,7 @@ public class TableTest extends CudfTestBase {
       try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
            PartitionedTable output = input.onColumns(0).hashPartition(HashType.IDENTITY, 5)) {
         int[] parts = output.getPartitions();
-        assertEquals(5, parts.length);
+        assertEquals(6, parts.length);
         assertEquals(0, parts[0]);
         int previous = 0;
         long rows = 0;
@@ -4289,7 +4292,7 @@ public class TableTest extends CudfTestBase {
       try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
            PartitionedTable output = input.onColumns(0).hashPartition(5)) {
         int[] parts = output.getPartitions();
-        assertEquals(5, parts.length);
+        assertEquals(6, parts.length);
         assertEquals(0, parts[0]);
         int previous = 0;
         long rows = 0;
@@ -4485,10 +4488,11 @@ public class TableTest extends CudfTestBase {
            PartitionedTable pt = t.roundRobinPartition(3, 0)) {
         assertTablesAreEqual(expectedTable, pt.getTable());
         int[] parts = pt.getPartitions();
-        assertEquals(3, parts.length);
+        assertEquals(4, parts.length);
         assertEquals(0, parts[0]);
         assertEquals(7, parts[1]);
         assertEquals(14, parts[2]);
+        assertEquals(21, parts[3]);
       }
 
       try (Table expectedTable = new Table.TestBuilder()
@@ -4510,10 +4514,11 @@ public class TableTest extends CudfTestBase {
            PartitionedTable pt = t.roundRobinPartition(3, 1)) {
         assertTablesAreEqual(expectedTable, pt.getTable());
         int[] parts = pt.getPartitions();
-        assertEquals(3, parts.length);
+        assertEquals(4, parts.length);
         assertEquals(0, parts[0]);
         assertEquals(7, parts[1]);
         assertEquals(14, parts[2]);
+        assertEquals(21, parts[3]);
       }
 
       try (Table expectedTable = new Table.TestBuilder()
@@ -4535,10 +4540,11 @@ public class TableTest extends CudfTestBase {
            PartitionedTable pt = t.roundRobinPartition(3, 2)) {
         assertTablesAreEqual(expectedTable, pt.getTable());
         int[] parts = pt.getPartitions();
-        assertEquals(3, parts.length);
+        assertEquals(4, parts.length);
         assertEquals(0, parts[0]);
         assertEquals(7, parts[1]);
         assertEquals(14, parts[2]);
+        assertEquals(21, parts[3]);
       }
     }
   }

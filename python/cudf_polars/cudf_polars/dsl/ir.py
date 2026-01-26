@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """
 DSL nodes for the LogicalPlan of polars.
@@ -13,6 +13,7 @@ can be considered as functions:
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import json
 import random
@@ -53,7 +54,7 @@ from cudf_polars.utils.cuda_stream import (
 from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_134
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable, Iterable, Sequence
+    from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
     from typing import Literal
 
     from typing_extensions import Self
@@ -124,6 +125,50 @@ class IRExecutionContext:
                 raise ValueError(
                     f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
                 )
+
+    @contextlib.contextmanager
+    def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:
+        """
+        Get a joined CUDA stream with safe stream ordering for deallocation of inputs.
+
+        Parameters
+        ----------
+        dfs
+            The dataframes being provided to stream-ordered operations.
+
+        Yields
+        ------
+        A CUDA stream that is downstream of the given dataframes.
+
+        Notes
+        -----
+        This context manager provides two useful guarantees when working with
+        objects holding references to stream-ordered objects:
+
+        1. The stream yield upon entering the context manager is *downstream* of
+           all the input dataframes.  This ensures that you can safely perform
+           stream-ordered operations on any input using the yielded stream.
+        2. The stream-ordered CUDA deallocation of the inputs happens *after* the
+           context manager exits. This ensures that all stream-ordered operations
+           submitted inside the context manager can complete before the memory
+           referenced by the inputs is deallocated.
+
+        Note that this does (deliberately) disconnect the dropping of the Python
+        object (by its refcount dropping to 0) from the actual stream-ordered
+        deallocation of the CUDA memory. This is precisely what we need to ensure
+        that the inputs are valid long enough for the stream-ordered operations to
+        complete.
+        """
+        result_stream = get_joined_cuda_stream(
+            self.get_cuda_stream, upstreams=[df.stream for df in dfs]
+        )
+
+        yield result_stream
+
+        # ensure that the inputs are downstream of result_stream (so that deallocation happens after the result is ready)
+        join_cuda_streams(
+            downstreams=[df.stream for df in dfs], upstreams=[result_stream]
+        )
 
 
 _BINOPS = {
@@ -320,7 +365,11 @@ def _cast_literal_to_decimal(
         name = side.name
     if (type_ := phys_type_map[name]).id() in _DECIMAL_IDS:
         scale = abs(type_.scale())
-        return expr.Cast(side.dtype, expr.Cast(DataType(pl.Decimal(38, scale)), lit))
+        return expr.Cast(
+            side.dtype,
+            True,  # noqa: FBT003
+            expr.Cast(DataType(pl.Decimal(38, scale)), True, lit),  # noqa: FBT003
+        )
     return lit
 
 
@@ -1808,7 +1857,12 @@ class GroupBy(IR):
                 col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
             else:
                 # Anything else, we pre-evaluate
-                col = value.evaluate(df, context=ExecutionContext.GROUPBY).obj
+                column = value.evaluate(df, context=ExecutionContext.GROUPBY)
+                if column.size != keys[0].size:
+                    column = broadcast(
+                        column, target_length=keys[0].size, stream=df.stream
+                    )[0]
+                col = column.obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
@@ -2077,54 +2131,48 @@ class ConditionalJoin(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(
-            context.get_cuda_stream,
-            upstreams=(
-                left.stream,
-                right.stream,
-            ),
-        )
-        left_casts, right_casts = _collect_decimal_binop_casts(
-            predicate_wrapper.predicate
-        )
-        _, _, zlice, suffix, _, _ = options
+        with context.stream_ordered_after(left, right) as stream:
+            left_casts, right_casts = _collect_decimal_binop_casts(
+                predicate_wrapper.predicate
+            )
+            _, _, zlice, suffix, _, _ = options
 
-        lg, rg = plc.join.conditional_inner_join(
-            _apply_casts(left, left_casts).table,
-            _apply_casts(right, right_casts).table,
-            predicate_wrapper.ast,
-            stream=stream,
-        )
-        left_result = DataFrame.from_table(
-            plc.copying.gather(
-                left.table, lg, plc.copying.OutOfBoundsPolicy.DONT_CHECK, stream=stream
-            ),
-            left.column_names,
-            left.dtypes,
-            stream=stream,
-        )
-        right_result = DataFrame.from_table(
-            plc.copying.gather(
-                right.table, rg, plc.copying.OutOfBoundsPolicy.DONT_CHECK, stream=stream
-            ),
-            right.column_names,
-            right.dtypes,
-            stream=stream,
-        )
-        right_result = right_result.rename_columns(
-            {
-                name: f"{name}{suffix}"
-                for name in right.column_names
-                if name in left.column_names_set
-            }
-        )
-        result = left_result.with_columns(right_result.columns, stream=stream)
-
-        # Join the original streams back into the result stream to ensure that the
-        # deallocations (on the original streams) happen after the result is ready
-        join_cuda_streams(
-            downstreams=(left.stream, right.stream), upstreams=(result.stream,)
-        )
+            lg, rg = plc.join.conditional_inner_join(
+                _apply_casts(left, left_casts).table,
+                _apply_casts(right, right_casts).table,
+                predicate_wrapper.ast,
+                stream=stream,
+            )
+            left_result = DataFrame.from_table(
+                plc.copying.gather(
+                    left.table,
+                    lg,
+                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                    stream=stream,
+                ),
+                left.column_names,
+                left.dtypes,
+                stream=stream,
+            )
+            right_result = DataFrame.from_table(
+                plc.copying.gather(
+                    right.table,
+                    rg,
+                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                    stream=stream,
+                ),
+                right.column_names,
+                right.dtypes,
+                stream=stream,
+            )
+            right_result = right_result.rename_columns(
+                {
+                    name: f"{name}{suffix}"
+                    for name in right.column_names
+                    if name in left.column_names_set
+                }
+            )
+            result = left_result.with_columns(right_result.columns, stream=stream)
 
         return result.slice(zlice)
 
@@ -2375,162 +2423,162 @@ class Join(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(
-            context.get_cuda_stream, upstreams=(left.stream, right.stream)
-        )
-        how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
-        if how == "Cross":
-            # Separate implementation, since cross_join returns the
-            # result, not the gather maps
-            if right.num_rows == 0:
-                left_cols = Join._build_columns(
-                    [], left.columns, empty=True, stream=stream
-                )
-                right_cols = Join._build_columns(
-                    [],
-                    right.columns,
-                    left=False,
-                    empty=True,
-                    rename=lambda name: name
-                    if name not in left.column_names_set
-                    else f"{name}{suffix}",
-                    stream=stream,
-                )
-                result = DataFrame([*left_cols, *right_cols], stream=stream)
-            else:
-                columns = plc.join.cross_join(
-                    left.table, right.table, stream=stream
-                ).columns()
-                left_cols = Join._build_columns(
-                    columns[: left.num_columns], left.columns, stream=stream
-                )
-                right_cols = Join._build_columns(
-                    columns[left.num_columns :],
-                    right.columns,
-                    rename=lambda name: name
-                    if name not in left.column_names_set
-                    else f"{name}{suffix}",
-                    left=False,
-                    stream=stream,
-                )
-                result = DataFrame([*left_cols, *right_cols], stream=stream).slice(
-                    zlice
-                )
-
-        else:
-            # how != "Cross"
-            # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
-            left_on = DataFrame(
-                broadcast(*(e.evaluate(left) for e in left_on_exprs), stream=stream),
-                stream=stream,
-            )
-            right_on = DataFrame(
-                broadcast(*(e.evaluate(right) for e in right_on_exprs), stream=stream),
-                stream=stream,
-            )
-            null_equality = (
-                plc.types.NullEquality.EQUAL
-                if nulls_equal
-                else plc.types.NullEquality.UNEQUAL
-            )
-            join_fn, left_policy, right_policy = cls._joiners(how)
-            if right_policy is None:
-                # Semi join
-                lg = join_fn(left_on.table, right_on.table, null_equality, stream)
-                table = plc.copying.gather(left.table, lg, left_policy, stream=stream)
-                result = DataFrame.from_table(
-                    table, left.column_names, left.dtypes, stream=stream
-                )
-            else:
-                if how == "Right":
-                    # Right join is a left join with the tables swapped
-                    left, right = right, left
-                    left_on, right_on = right_on, left_on
-                    maintain_order = Join.SWAPPED_ORDER[maintain_order]
-
-                lg, rg = join_fn(
-                    left_on.table, right_on.table, null_equality, stream=stream
-                )
-                if (
-                    how in ("Inner", "Left", "Right", "Full")
-                    and maintain_order != "none"
-                ):
-                    lg, rg = cls._reorder_maps(
-                        left.num_rows,
-                        lg,
-                        left_policy,
-                        right.num_rows,
-                        rg,
-                        right_policy,
-                        left_primary=maintain_order.startswith("left"),
+        with context.stream_ordered_after(left, right) as stream:
+            how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
+            if how == "Cross":
+                # Separate implementation, since cross_join returns the
+                # result, not the gather maps
+                if right.num_rows == 0:
+                    left_cols = Join._build_columns(
+                        [], left.columns, empty=True, stream=stream
+                    )
+                    right_cols = Join._build_columns(
+                        [],
+                        right.columns,
+                        left=False,
+                        empty=True,
+                        rename=lambda name: name
+                        if name not in left.column_names_set
+                        else f"{name}{suffix}",
                         stream=stream,
                     )
-                if coalesce:
-                    if how == "Full":
-                        # In this case, keys must be column references,
-                        # possibly with dtype casting. We should use them in
-                        # preference to the columns from the original tables.
+                    result = DataFrame([*left_cols, *right_cols], stream=stream)
+                else:
+                    columns = plc.join.cross_join(
+                        left.table, right.table, stream=stream
+                    ).columns()
+                    left_cols = Join._build_columns(
+                        columns[: left.num_columns], left.columns, stream=stream
+                    )
+                    right_cols = Join._build_columns(
+                        columns[left.num_columns :],
+                        right.columns,
+                        rename=lambda name: name
+                        if name not in left.column_names_set
+                        else f"{name}{suffix}",
+                        left=False,
+                        stream=stream,
+                    )
+                    result = DataFrame([*left_cols, *right_cols], stream=stream).slice(
+                        zlice
+                    )
 
-                        # We need to specify `stream` here. We know that `{left,right}_on`
-                        # is valid on `stream`, which is ordered after `{left,right}.stream`.
-                        left = left.with_columns(
-                            left_on.columns, replace_only=True, stream=stream
-                        )
-                        right = right.with_columns(
-                            right_on.columns, replace_only=True, stream=stream
-                        )
-                    else:
-                        right = right.discard_columns(right_on.column_names_set)
-                left = DataFrame.from_table(
-                    plc.copying.gather(left.table, lg, left_policy, stream=stream),
-                    left.column_names,
-                    left.dtypes,
+            else:
+                # how != "Cross"
+                # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
+                left_on = DataFrame(
+                    broadcast(
+                        *(e.evaluate(left) for e in left_on_exprs), stream=stream
+                    ),
                     stream=stream,
                 )
-                right = DataFrame.from_table(
-                    plc.copying.gather(right.table, rg, right_policy, stream=stream),
-                    right.column_names,
-                    right.dtypes,
+                right_on = DataFrame(
+                    broadcast(
+                        *(e.evaluate(right) for e in right_on_exprs), stream=stream
+                    ),
                     stream=stream,
                 )
-                if coalesce and how == "Full":
-                    left = left.with_columns(
-                        (
-                            Column(
-                                plc.replace.replace_nulls(
-                                    left_col.obj, right_col.obj, stream=stream
-                                ),
-                                name=left_col.name,
-                                dtype=left_col.dtype,
+                null_equality = (
+                    plc.types.NullEquality.EQUAL
+                    if nulls_equal
+                    else plc.types.NullEquality.UNEQUAL
+                )
+                join_fn, left_policy, right_policy = cls._joiners(how)
+                if right_policy is None:
+                    # Semi join
+                    lg = join_fn(left_on.table, right_on.table, null_equality, stream)
+                    table = plc.copying.gather(
+                        left.table, lg, left_policy, stream=stream
+                    )
+                    result = DataFrame.from_table(
+                        table, left.column_names, left.dtypes, stream=stream
+                    )
+                else:
+                    if how == "Right":
+                        # Right join is a left join with the tables swapped
+                        left, right = right, left
+                        left_on, right_on = right_on, left_on
+                        maintain_order = Join.SWAPPED_ORDER[maintain_order]
+
+                    lg, rg = join_fn(
+                        left_on.table, right_on.table, null_equality, stream=stream
+                    )
+                    if (
+                        how in ("Inner", "Left", "Right", "Full")
+                        and maintain_order != "none"
+                    ):
+                        lg, rg = cls._reorder_maps(
+                            left.num_rows,
+                            lg,
+                            left_policy,
+                            right.num_rows,
+                            rg,
+                            right_policy,
+                            left_primary=maintain_order.startswith("left"),
+                            stream=stream,
+                        )
+                    if coalesce:
+                        if how == "Full":
+                            # In this case, keys must be column references,
+                            # possibly with dtype casting. We should use them in
+                            # preference to the columns from the original tables.
+
+                            # We need to specify `stream` here. We know that `{left,right}_on`
+                            # is valid on `stream`, which is ordered after `{left,right}.stream`.
+                            left = left.with_columns(
+                                left_on.columns, replace_only=True, stream=stream
                             )
-                            for left_col, right_col in zip(
-                                left.select_columns(left_on.column_names_set),
-                                right.select_columns(right_on.column_names_set),
-                                strict=True,
+                            right = right.with_columns(
+                                right_on.columns, replace_only=True, stream=stream
                             )
+                        else:
+                            right = right.discard_columns(right_on.column_names_set)
+                    left = DataFrame.from_table(
+                        plc.copying.gather(left.table, lg, left_policy, stream=stream),
+                        left.column_names,
+                        left.dtypes,
+                        stream=stream,
+                    )
+                    right = DataFrame.from_table(
+                        plc.copying.gather(
+                            right.table, rg, right_policy, stream=stream
                         ),
-                        replace_only=True,
+                        right.column_names,
+                        right.dtypes,
                         stream=stream,
                     )
-                    right = right.discard_columns(right_on.column_names_set)
-                if how == "Right":
-                    # Undo the swap for right join before gluing together.
-                    left, right = right, left
-                right = right.rename_columns(
-                    {
-                        name: f"{name}{suffix}"
-                        for name in right.column_names
-                        if name in left.column_names_set
-                    }
-                )
-                result = left.with_columns(right.columns, stream=stream)
-            result = result.slice(zlice)
-
-        # Join the original streams back into the result stream to ensure that the
-        # deallocations (on the original streams) happen after the result is ready
-        join_cuda_streams(
-            downstreams=(left.stream, right.stream), upstreams=(result.stream,)
-        )
+                    if coalesce and how == "Full":
+                        left = left.with_columns(
+                            (
+                                Column(
+                                    plc.replace.replace_nulls(
+                                        left_col.obj, right_col.obj, stream=stream
+                                    ),
+                                    name=left_col.name,
+                                    dtype=left_col.dtype,
+                                )
+                                for left_col, right_col in zip(
+                                    left.select_columns(left_on.column_names_set),
+                                    right.select_columns(right_on.column_names_set),
+                                    strict=True,
+                                )
+                            ),
+                            replace_only=True,
+                            stream=stream,
+                        )
+                        right = right.discard_columns(right_on.column_names_set)
+                    if how == "Right":
+                        # Undo the swap for right join before gluing together.
+                        left, right = right, left
+                    right = right.rename_columns(
+                        {
+                            name: f"{name}{suffix}"
+                            for name in right.column_names
+                            if name in left.column_names_set
+                        }
+                    )
+                    result = left.with_columns(right.columns, stream=stream)
+                result = result.slice(zlice)
 
         return result
 
@@ -2873,33 +2921,25 @@ class MergeSorted(IR):
         cls, key: str, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(
-            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
-        )
-        left, right = dfs
-        right = right.discard_columns(right.column_names_set - left.column_names_set)
-        on_col_left = left.select_columns({key})[0]
-        on_col_right = right.select_columns({key})[0]
-        result = DataFrame.from_table(
-            plc.merge.merge(
-                [right.table, left.table],
-                [left.column_names.index(key), right.column_names.index(key)],
-                [on_col_left.order, on_col_right.order],
-                [on_col_left.null_order, on_col_right.null_order],
+        with context.stream_ordered_after(*dfs) as stream:
+            left, right = dfs
+            right = right.discard_columns(
+                right.column_names_set - left.column_names_set
+            )
+            on_col_left = left.select_columns({key})[0]
+            on_col_right = right.select_columns({key})[0]
+            return DataFrame.from_table(
+                plc.merge.merge(
+                    [right.table, left.table],
+                    [left.column_names.index(key), right.column_names.index(key)],
+                    [on_col_left.order, on_col_right.order],
+                    [on_col_left.null_order, on_col_right.null_order],
+                    stream=stream,
+                ),
+                left.column_names,
+                left.dtypes,
                 stream=stream,
-            ),
-            left.column_names,
-            left.dtypes,
-            stream=stream,
-        )
-
-        # Join the original streams back into the result stream to ensure that the
-        # deallocations (on the original streams) happen after the result is ready
-        join_cuda_streams(
-            downstreams=[df.stream for df in dfs], upstreams=(result.stream,)
-        )
-
-        return result
+            )
 
 
 class MapFunction(IR):
@@ -2975,6 +3015,8 @@ class MapFunction(IR):
             )
         elif self.name == "row_index":
             col_name, offset = options
+            if col_name in df.schema:
+                raise NotImplementedError("Duplicate row index name")
             self.options = (col_name, offset)
         elif self.name == "fast_count":
             # TODO: Remove this once all scan types support projections
@@ -3125,26 +3167,14 @@ class Union(IR):
         cls, zlice: Zlice | None, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(
-            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
-        )
-
-        # TODO: only evaluate what we need if we have a slice?
-        result = DataFrame.from_table(
-            plc.concatenate.concatenate([df.table for df in dfs], stream=stream),
-            dfs[0].column_names,
-            dfs[0].dtypes,
-            stream=stream,
-        ).slice(zlice)
-
-        # now join the original streams *back* to the new result stream
-        # to ensure that the deallocations (on the original streams)
-        # happen after the result is ready
-        join_cuda_streams(
-            downstreams=[df.stream for df in dfs], upstreams=(result.stream,)
-        )
-
-        return result
+        with context.stream_ordered_after(*dfs) as stream:
+            # TODO: only evaluate what we need if we have a slice?
+            return DataFrame.from_table(
+                plc.concatenate.concatenate([df.table for df in dfs], stream=stream),
+                dfs[0].column_names,
+                dfs[0].dtypes,
+                stream=stream,
+            ).slice(zlice)
 
 
 class HConcat(IR):
@@ -3207,48 +3237,41 @@ class HConcat(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(
-            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
-        )
-
-        # Special should_broadcast case.
-        # Used to recombine decomposed expressions
-        if should_broadcast:
-            result = DataFrame(
-                broadcast(
-                    *itertools.chain.from_iterable(df.columns for df in dfs),
+        with context.stream_ordered_after(*dfs) as stream:
+            # Special should_broadcast case.
+            # Used to recombine decomposed expressions
+            if should_broadcast:
+                result = DataFrame(
+                    broadcast(
+                        *itertools.chain.from_iterable(df.columns for df in dfs),
+                        stream=stream,
+                    ),
                     stream=stream,
-                ),
-                stream=stream,
-            )
-        else:
-            max_rows = max(df.num_rows for df in dfs)
-            # Horizontal concatenation extends shorter tables with nulls
-            result = DataFrame(
-                itertools.chain.from_iterable(
-                    df.columns
-                    for df in (
-                        df
-                        if df.num_rows == max_rows
-                        else DataFrame.from_table(
-                            cls._extend_with_nulls(
-                                df.table, nrows=max_rows - df.num_rows, stream=stream
-                            ),
-                            df.column_names,
-                            df.dtypes,
-                            stream=stream,
+                )
+            else:
+                max_rows = max(df.num_rows for df in dfs)
+                # Horizontal concatenation extends shorter tables with nulls
+                result = DataFrame(
+                    itertools.chain.from_iterable(
+                        df.columns
+                        for df in (
+                            df
+                            if df.num_rows == max_rows
+                            else DataFrame.from_table(
+                                cls._extend_with_nulls(
+                                    df.table,
+                                    nrows=max_rows - df.num_rows,
+                                    stream=stream,
+                                ),
+                                df.column_names,
+                                df.dtypes,
+                                stream=stream,
+                            )
+                            for df in dfs
                         )
-                        for df in dfs
-                    )
-                ),
-                stream=stream,
-            )
-
-        # Join the original streams back into the result stream to ensure that the
-        # deallocations (on the original streams) happen after the result is ready
-        join_cuda_streams(
-            downstreams=[df.stream for df in dfs], upstreams=(result.stream,)
-        )
+                    ),
+                    stream=stream,
+                )
 
         return result
 

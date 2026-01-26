@@ -1,5 +1,5 @@
 /*
- *  SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION
+ *  SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION
  *  SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <limits>
 #include <new>  // for bad_alloc
+#include <span>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -52,10 +53,6 @@ class rmm_host_allocator<void> {
     using other = rmm_host_allocator<U>;  ///< The rebound type
   };
 };
-
-template <class DesiredProperty, class... Properties>
-inline constexpr bool contains_property =
-  (cuda::std::is_same_v<DesiredProperty, Properties> || ... || false);
 
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c `cudf::host_async_resource_ref` for allocation.
@@ -102,11 +99,12 @@ class rmm_host_allocator {
 #ifdef __CUDACC__
 #pragma nv_exec_check_disable
 #endif
-  template <class... Properties>
-  rmm_host_allocator(async_host_resource_ref<Properties...> _mr, rmm::cuda_stream_view _stream)
-    : mr(_mr),
-      stream(_stream),
-      _is_device_accessible{contains_property<cuda::mr::device_accessible, Properties...>}
+  template <typename ResourceType>
+  rmm_host_allocator(ResourceType _mr, rmm::cuda_stream_view _stream)
+    : mr(std::move(_mr)),
+      stream(std::move(_stream)),
+      _is_device_accessible{
+        cuda::mr::synchronous_resource_with<ResourceType, cuda::mr::device_accessible>}
   {
   }
 
@@ -226,6 +224,16 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
   [[nodiscard]] operator host_span<T>()
   {
     return host_span<T>{base::data(), base::size(), base::get_allocator().is_device_accessible()};
+  }
+
+  [[nodiscard]] operator std::span<T const>() const noexcept
+  {
+    return std::span<T const>(base::data(), base::size());
+  }
+
+  [[nodiscard]] operator std::span<T>() noexcept
+  {
+    return std::span<T>(base::data(), base::size());
   }
 };
 
