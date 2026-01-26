@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -236,7 +236,7 @@ class ExponentialMovingWindow(_RollingBase):
         # TODO: Use libcudf to match pandas' semantics instead of
         # removing the leading nulls, computing ewm, and stitching
         # the columns back together
-        plc_col = to_libcudf_column.to_pylibcudf(mode="read")
+        plc_col = to_libcudf_column.to_pylibcudf()
         leading_nulls = _leading_nulls_count(plc_col, size)
 
         if leading_nulls == 0:
