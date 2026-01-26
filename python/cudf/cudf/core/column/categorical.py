@@ -452,11 +452,10 @@ class CategoricalColumn(column.ColumnBase):
 
         replaced_codes = column.as_column(replaced.codes)
         new_codes = replaced_codes.replace(to_replace_col, replacement_col)
-        result = column.ColumnBase.create(
-            new_codes.plc_column,
+        result = new_codes._with_type_metadata(
             CategoricalDtype(
                 categories=new_cats["cats"], ordered=self.dtype.ordered
-            ),
+            )
         )
         if result.dtype != self.dtype:
             warnings.warn(
@@ -646,9 +645,7 @@ class CategoricalColumn(column.ColumnBase):
         else:
             codes_col = column.concat_columns(codes)
 
-        return column.ColumnBase.create(
-            codes_col.plc_column, CategoricalDtype(categories=cats)
-        )  # type: ignore[return-value]
+        return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, CategoricalDtype):
@@ -699,11 +696,10 @@ class CategoricalColumn(column.ColumnBase):
                         dtype=self.codes.dtype,
                     ),
                 )
-                out_col = column.ColumnBase.create(  # type: ignore[assignment]
-                    new_codes.plc_column,
+                out_col = new_codes._with_type_metadata(  # type: ignore[assignment]
                     CategoricalDtype(
                         categories=new_categories, ordered=ordered
-                    ),
+                    )
                 )
             elif (
                 not out_col._categories_equal(new_categories, ordered=True)
@@ -791,9 +787,8 @@ class CategoricalColumn(column.ColumnBase):
         new_codes = cast(
             "cudf.core.column.numerical.NumericalColumn", df._data["new_codes"]
         )
-        return column.ColumnBase.create(  # type: ignore[return-value]
-            new_codes.plc_column,
-            CategoricalDtype(categories=new_cats, ordered=ordered),
+        return new_codes._with_type_metadata(  # type: ignore[return-value]
+            CategoricalDtype(categories=new_cats, ordered=ordered)
         )
 
     def add_categories(self, new_categories: Any) -> Self:
