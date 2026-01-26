@@ -1203,6 +1203,22 @@ class StringColumn(ColumnBase, Scannable):
     def rsplit(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
 
+    def split_part(self, delimiter: plc.Scalar, index: int) -> Self:
+        with self.access(mode="read", scope="internal"):
+            plc_column = plc.strings.split.split.split_part(
+                self.plc_column,
+                delimiter,
+                index,
+            )
+            return cast(
+                Self,
+                (
+                    type(self)
+                    .from_pylibcudf(plc_column)
+                    ._with_type_metadata(self.dtype)
+                ),
+            )
+
     def _partition(
         self,
         delimiter: plc.Scalar,
