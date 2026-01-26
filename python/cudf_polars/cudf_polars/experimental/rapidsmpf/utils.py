@@ -7,7 +7,6 @@ from __future__ import annotations
 import asyncio
 import operator
 from contextlib import asynccontextmanager, contextmanager
-from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -88,7 +87,7 @@ class HashPartitioned:
 
 
 class Metadata:
-    """Metadata payload for an individual ChannelWrapper."""
+    """Metadata payload for a channel."""
 
     __slots__ = (
         "duplicated",
@@ -129,86 +128,74 @@ class Metadata:
         self.duplicated = duplicated
 
 
-@dataclass
-class ChannelWrapper:
+async def send_metadata(
+    ch: Channel[TableChunk], ctx: Context, metadata: Metadata
+) -> None:
     """
-    A wrapper around a RapidsMPF Channel.
+    Send metadata and drain the metadata queue.
 
-    This abstraction provides convenience methods for sending and receiving
-    metadata alongside data, using the channel's native metadata stream.
-
-    Attributes
+    Parameters
     ----------
-    data :
-        The underlying channel for both metadata and table data.
+    ch :
+        The channel to send metadata on.
+    ctx :
+        The streaming context.
+    metadata :
+        The metadata to send.
     """
+    msg = Message(0, ArbitraryChunk(metadata))
+    await ch.send_metadata(ctx, msg)
+    await ch.drain_metadata(ctx)
 
-    data: Channel[TableChunk]
 
-    @classmethod
-    def create(cls, context: Context) -> ChannelWrapper:
-        """Create a new ChannelWrapper with a fresh channel."""
-        return cls(data=context.create_channel())
+async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> Metadata:
+    """
+    Receive metadata from a channel's metadata queue.
 
-    async def send_metadata(self, ctx: Context, metadata: Metadata) -> None:
-        """
-        Send metadata and drain the metadata stream.
+    Parameters
+    ----------
+    ch :
+        The channel to receive metadata from.
+    ctx :
+        The streaming context.
 
-        Parameters
-        ----------
-        ctx :
-            The streaming context.
-        metadata :
-            The metadata to send.
-        """
-        msg = Message(0, ArbitraryChunk(metadata))
-        await self.data.send_metadata(ctx, msg)
-        await self.data.drain_metadata(ctx)
-
-    async def recv_metadata(self, ctx: Context) -> Metadata:
-        """
-        Receive metadata from the channel's metadata stream.
-
-        Parameters
-        ----------
-        ctx :
-            The streaming context.
-
-        Returns
-        -------
-        Metadata
-            The received metadata.
-        """
-        msg = await self.data.recv_metadata(ctx)
-        assert msg is not None, f"Expected Metadata message, got {msg}."
-        return ArbitraryChunk.from_message(msg).release()
+    Returns
+    -------
+    Metadata
+        The received metadata.
+    """
+    msg = await ch.recv_metadata(ctx)
+    assert msg is not None, f"Expected Metadata message, got {msg}."
+    return ArbitraryChunk.from_message(msg).release()
 
 
 class ChannelManager:
-    """A utility class for managing ChannelWrapper objects."""
+    """A utility class for managing Channel objects."""
 
     def __init__(self, context: Context, *, count: int = 1):
         """
-        Initialize the ChannelManager with a given number of ChannelWrapper slots.
+        Initialize the ChannelManager with a given number of channel slots.
 
         Parameters
         ----------
         context
             The rapidsmpf context.
         count: int
-            The number of ChannelWrapper slots to allocate.
+            The number of channel slots to allocate.
         """
-        self._channel_slots = [ChannelWrapper.create(context) for _ in range(count)]
+        self._channel_slots: list[Channel[TableChunk]] = [
+            context.create_channel() for _ in range(count)
+        ]
         self._reserved_output_slots: int = 0
         self._reserved_input_slots: int = 0
 
-    def reserve_input_slot(self) -> ChannelWrapper:
+    def reserve_input_slot(self) -> Channel[TableChunk]:
         """
         Reserve an input channel slot.
 
         Returns
         -------
-        The reserved ChannelWrapper.
+        The reserved Channel.
         """
         if self._reserved_input_slots >= len(self._channel_slots):
             raise ValueError("No more input channel slots available")
@@ -216,13 +203,13 @@ class ChannelManager:
         self._reserved_input_slots += 1
         return slot
 
-    def reserve_output_slot(self) -> ChannelWrapper:
+    def reserve_output_slot(self) -> Channel[TableChunk]:
         """
         Reserve an output channel slot.
 
         Returns
         -------
-        The reserved ChannelWrapper.
+        The reserved Channel.
         """
         if self._reserved_output_slots >= len(self._channel_slots):
             raise ValueError("No more output channel slots available")
