@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import io
 
@@ -10,6 +10,7 @@ from utils import (
     assert_table_and_meta_eq,
     get_bytes_from_source,
     make_source,
+    synchronize_stream,
 )
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
@@ -192,6 +193,8 @@ def test_read_parquet_from_device_buffers(
         get_bytes_from_source(source), plc.utils._get_stream(stream)
     )
 
+    synchronize_stream(stream)
+
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo([buf] * num_buffers)
     ).build()
@@ -289,6 +292,9 @@ def test_write_parquet(
         options.set_max_dictionary_size(max_dictionary_size)
 
     result = plc.io.parquet.write_parquet(options, stream)
+
+    synchronize_stream(stream)
+
     assert isinstance(result, memoryview)
 
 
