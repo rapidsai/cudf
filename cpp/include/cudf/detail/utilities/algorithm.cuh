@@ -16,6 +16,7 @@
 #include <cuda/std/functional>
 #include <cuda/stream_ref>
 #include <thrust/copy.h>
+#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf::detail {
 
@@ -352,7 +353,7 @@ cuda::std::pair<KeysOutputIterator, ValuesOutputIterator> reduce_by_key(
  * @copydoc cudf::detail::reduce_by_key
  *
  * This function performs the reduce-by-key operation asynchronously.
- * It is useful when the calling application does not need the returned result
+ * It is useful when the calling function does not need the returned result
  * and therefore prevents a stream synchronization.
  *
  */
@@ -371,9 +372,6 @@ void reduce_by_key_async(KeysInputIterator keys_begin,
 {
   auto const num_items = cuda::std::distance(keys_begin, keys_end);
 
-  auto d_num_runs =
-    cudf::detail::device_scalar<cuda::std::size_t>(stream, cudf::get_current_device_resource_ref());
-
   size_t temp_storage_bytes = 0;
   CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(nullptr,
                                                temp_storage_bytes,
@@ -381,7 +379,7 @@ void reduce_by_key_async(KeysInputIterator keys_begin,
                                                keys_output,
                                                values_begin,
                                                values_output,
-                                               d_num_runs.data(),
+                                               thrust::make_discard_iterator(),
                                                op,
                                                num_items,
                                                stream.value()));
@@ -395,7 +393,7 @@ void reduce_by_key_async(KeysInputIterator keys_begin,
                                                keys_output,
                                                values_begin,
                                                values_output,
-                                               d_num_runs.data(),
+                                               thrust::make_discard_iterator(),
                                                op,
                                                num_items,
                                                stream.value()));
