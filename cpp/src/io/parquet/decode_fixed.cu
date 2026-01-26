@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "page_data.cuh"
@@ -17,6 +17,21 @@
 namespace cudf::io::parquet::detail {
 
 namespace {
+
+enum class decode_fixed_type {
+  DECIMAL_INT32,
+  DECIMAL_INT64,
+  DECIMAL_BYTE_ARRAY_INT32,
+  DECIMAL_BYTE_ARRAY_INT64,
+  DECIMAL_BYTE_ARRAY_INT128,
+  BOOLEAN,
+  INT96_TIMESTAMP,
+  INT64_TIME_MILLIS,
+  INT64_TIMESTAMP_SCALED,
+  INT64_GENERIC,
+  INT32_GENERIC,
+  NBYTE_GENERIC
+};
 
 // Unlike cub's algorithm, this provides warp-wide and block-wide results simultaneously.
 // Also, this provides the ability to compute warp_bits & lane_mask manually, which we need for
@@ -81,7 +96,11 @@ __device__ static void scan_block_exclusive_sum(
   }
 }
 
-template <int block_size, bool has_lists_t, copy_mode copy_mode_t, typename state_buf>
+template <int block_size,
+          bool has_lists_t,
+          copy_mode copy_mode_t,
+          decode_fixed_type decode_type,
+          typename state_buf>
 __device__ void decode_fixed_width_values(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
 {
@@ -92,7 +111,6 @@ __device__ void decode_fixed_width_values(
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
-  Type const dtype         = s->col.physical_type;
   uint32_t const dtype_len = s->dtype_len;
 
   int const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -124,49 +142,160 @@ __device__ void decode_fixed_width_values(
 
     void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
 
-    if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
-      switch (dtype) {
-        case Type::INT32:
-          read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
-          break;
-        case Type::INT64:
-          read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
-          break;
-        default:
-          if (s->dtype_len_in <= sizeof(int32_t)) {
-            read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int32_t*>(dst));
-          } else if (s->dtype_len_in <= sizeof(int64_t)) {
-            read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int64_t*>(dst));
-          } else {
-            read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<__int128_t*>(dst));
-          }
-          break;
-      }
-    } else if (dtype == Type::BOOLEAN) {
-      read_boolean(sb, src_pos, static_cast<uint8_t*>(dst));
-    } else if (dtype == Type::INT96) {
-      read_int96_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
-    } else if (dtype_len == 8) {
-      if (s->dtype_len_in == 4) {
-        // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
-        // TIME_MILLIS is the only duration type stored as int32:
-        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-        auto const dst_ptr = static_cast<uint32_t*>(dst);
-        read_fixed_width_value_fast(s, sb, src_pos, dst_ptr);
-        // zero out most significant bytes
-        cuda::std::memset(dst_ptr + 1, 0, sizeof(int32_t));
-      } else if (s->ts_scale) {
-        read_int64_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
-      } else {
-        read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
-      }
-    } else if (dtype_len == 4) {
+    if constexpr (decode_type == decode_fixed_type::DECIMAL_INT32) {
       read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
-    } else {
+    } else if constexpr (decode_type == decode_fixed_type::DECIMAL_INT64) {
+      read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
+    } else if constexpr (decode_type == decode_fixed_type::DECIMAL_BYTE_ARRAY_INT32) {
+      read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int32_t*>(dst));
+    } else if constexpr (decode_type == decode_fixed_type::DECIMAL_BYTE_ARRAY_INT64) {
+      read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int64_t*>(dst));
+    } else if constexpr (decode_type == decode_fixed_type::DECIMAL_BYTE_ARRAY_INT128) {
+      read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<__int128_t*>(dst));
+    } else if constexpr (decode_type == decode_fixed_type::BOOLEAN) {
+      read_boolean(sb, src_pos, static_cast<uint8_t*>(dst));
+    } else if constexpr (decode_type == decode_fixed_type::INT96_TIMESTAMP) {
+      read_int96_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
+    } else if constexpr (decode_type == decode_fixed_type::INT64_TIME_MILLIS) {
+      // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+      // TIME_MILLIS is the only duration type stored as int32:
+      // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+      auto const dst_ptr = static_cast<uint32_t*>(dst);
+      read_fixed_width_value_fast(s, sb, src_pos, dst_ptr);
+      // zero out most significant bytes
+      cuda::std::memset(dst_ptr + 1, 0, sizeof(int32_t));
+    } else if constexpr (decode_type == decode_fixed_type::INT64_TIMESTAMP_SCALED) {
+      read_int64_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
+    } else if constexpr (decode_type == decode_fixed_type::INT64_GENERIC) {
+      read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
+    } else if constexpr (decode_type == decode_fixed_type::INT32_GENERIC) {
+      read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+    } else if constexpr (decode_type == decode_fixed_type::NBYTE_GENERIC) {
       read_nbyte_fixed_width_value(s, sb, src_pos, static_cast<uint8_t*>(dst), dtype_len);
     }
 
     thread_pos += max_batch_size;
+  }
+}
+
+// Helper function to determine the decode type directly from column metadata
+// This avoids needing to call setup_local_page_info
+__device__ inline decode_fixed_type get_decode_fixed_type(page_state_s* s)
+{
+  auto const dtype = s->col.physical_type;
+  auto const is_decimal =
+    s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+  auto const dtype_len    = s->dtype_len;
+  auto const dtype_len_in = s->dtype_len_in;
+
+  if (is_decimal) {
+    switch (dtype) {
+      case Type::INT32: return decode_fixed_type::DECIMAL_INT32;
+      case Type::INT64: return decode_fixed_type::DECIMAL_INT64;
+      default:
+        if (dtype_len_in <= sizeof(int32_t)) {
+          return decode_fixed_type::DECIMAL_BYTE_ARRAY_INT32;
+        } else if (dtype_len_in <= sizeof(int64_t)) {
+          return decode_fixed_type::DECIMAL_BYTE_ARRAY_INT64;
+        } else {
+          return decode_fixed_type::DECIMAL_BYTE_ARRAY_INT128;
+        }
+    }
+  } else if (dtype == Type::BOOLEAN) {
+    return decode_fixed_type::BOOLEAN;
+  } else if (dtype == Type::INT96) {
+    return decode_fixed_type::INT96_TIMESTAMP;
+  } else if (dtype_len == 8) {
+    if (dtype_len_in == 4) {
+      return decode_fixed_type::INT64_TIME_MILLIS;
+    } else if (s->ts_scale) {
+      return decode_fixed_type::INT64_TIMESTAMP_SCALED;
+    } else {
+      return decode_fixed_type::INT64_GENERIC;
+    }
+  } else if (dtype_len == 4) {
+    return decode_fixed_type::INT32_GENERIC;
+  } else {
+    return decode_fixed_type::NBYTE_GENERIC;
+  }
+}
+
+// Dispatcher function that takes runtime decode type and calls the appropriate template
+template <int block_size, bool has_lists_t, copy_mode copy_mode_t, typename state_buf>
+__device__ void decode_fixed_width_values_dispatcher(
+  page_state_s* s, state_buf* const sb, int start, int end, int t, decode_fixed_type decode_type)
+{
+  switch (decode_type) {
+    case decode_fixed_type::DECIMAL_INT32:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::DECIMAL_INT32>(s, sb, start, end, t);
+      break;
+    case decode_fixed_type::DECIMAL_INT64:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::DECIMAL_INT64>(s, sb, start, end, t);
+      break;
+    case decode_fixed_type::DECIMAL_BYTE_ARRAY_INT32:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::DECIMAL_BYTE_ARRAY_INT32>(s, sb, start, end, t);
+      break;
+    case decode_fixed_type::DECIMAL_BYTE_ARRAY_INT64:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::DECIMAL_BYTE_ARRAY_INT64>(s, sb, start, end, t);
+      break;
+    case decode_fixed_type::DECIMAL_BYTE_ARRAY_INT128:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::DECIMAL_BYTE_ARRAY_INT128>(s, sb, start, end, t);
+      break;
+    case decode_fixed_type::BOOLEAN:
+      decode_fixed_width_values<block_size, has_lists_t, copy_mode_t, decode_fixed_type::BOOLEAN>(
+        s, sb, start, end, t);
+      break;
+    case decode_fixed_type::INT96_TIMESTAMP:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::INT96_TIMESTAMP>(s, sb, start, end, t);
+      break;
+    case decode_fixed_type::INT64_TIME_MILLIS:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::INT64_TIME_MILLIS>(s, sb, start, end, t);
+      break;
+    case decode_fixed_type::INT64_TIMESTAMP_SCALED:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::INT64_TIMESTAMP_SCALED>(s, sb, start, end, t);
+      break;
+    case decode_fixed_type::INT64_GENERIC:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::INT64_GENERIC>(s, sb, start, end, t);
+      break;
+    case decode_fixed_type::INT32_GENERIC:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::INT32_GENERIC>(s, sb, start, end, t);
+      break;
+    case decode_fixed_type::NBYTE_GENERIC:
+      decode_fixed_width_values<block_size,
+                                has_lists_t,
+                                copy_mode_t,
+                                decode_fixed_type::NBYTE_GENERIC>(s, sb, start, end, t);
+      break;
   }
 }
 
@@ -1222,6 +1351,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                                   processed_count,
                                   valid_count);
 
+  // Determine the decode type once before the loop from column metadata
+  auto const decode_type = [&]() {
+    if constexpr (has_strings_t || split_decode_t) {
+      return decode_fixed_type::NBYTE_GENERIC;
+    } else {
+      return get_decode_fixed_type(s);
+    }
+  }();
+
   // the core loop. decode batches of level stream data using rle_stream objects
   // and pass the results to decode_values
   // For chunked reads we may not process all of the rows on the page; if not stop early
@@ -1298,8 +1436,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
         decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode_t>(
           s, sb, valid_count, next_valid_count, t);
       } else {
-        decode_fixed_width_values<decode_block_size_t, has_lists_t, copy_mode_t>(
-          s, sb, valid_count, next_valid_count, t);
+        decode_fixed_width_values_dispatcher<decode_block_size_t, has_lists_t, copy_mode_t>(
+          s, sb, valid_count, next_valid_count, t, decode_type);
       }
     };
 
