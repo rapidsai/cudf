@@ -785,14 +785,7 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-
-        # Use gmt_data's actual time unit to match the plc_column type
-        dtype = get_compatible_timezone(
-            pd.DatetimeTZDtype(gmt_data.time_unit, tz)
-        )
-        return cast(
-            DatetimeColumn, ColumnBase.create(gmt_data.plc_column, dtype)
-        )
+        return gmt_data._with_type_metadata(dtype)
 
     def tz_convert(self, tz: str | None) -> DatetimeColumn:
         raise TypeError(

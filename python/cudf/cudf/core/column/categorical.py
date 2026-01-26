@@ -138,7 +138,7 @@ class CategoricalColumn(column.ColumnBase):
             value = value.codes
         codes = self.codes
         codes[key] = value
-        out = column.ColumnBase.create(codes.plc_column, self.dtype)
+        out = codes._with_type_metadata(self.dtype)
         self._mimic_inplace(out, inplace=True)  # type: ignore[arg-type]
 
     def _fill(
@@ -162,8 +162,9 @@ class CategoricalColumn(column.ColumnBase):
         return result
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
-        codes_slice = self.codes.slice(start, stop, stride)
-        return column.ColumnBase.create(codes_slice.plc_column, self.dtype)  # type: ignore[return-value]
+        return self.codes.slice(start, stop, stride)._with_type_metadata(  # type: ignore[return-value]
+            self.dtype
+        )
 
     def _reduce(
         self,
@@ -199,10 +200,9 @@ class CategoricalColumn(column.ColumnBase):
                     )
             # We'll compare self's decategorized values later for non-CategoricalColumn
         else:
-            codes = column.as_column(
+            other = column.as_column(
                 self._encode(other), length=len(self), dtype=self.codes.dtype
-            )
-            other = column.ColumnBase.create(codes.plc_column, self.dtype)
+            )._with_type_metadata(self.dtype)
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
         if not self.ordered and op not in equality_ops:
             raise TypeError(
@@ -229,8 +229,9 @@ class CategoricalColumn(column.ColumnBase):
         ascending: bool = True,
         na_position: Literal["first", "last"] = "last",
     ) -> Self:
-        sorted_codes = self.codes.sort_values(ascending, na_position)
-        return column.ColumnBase.create(sorted_codes.plc_column, self.dtype)  # type: ignore[return-value]
+        return self.codes.sort_values(  # type: ignore[return-value]
+            ascending, na_position
+        )._with_type_metadata(self.dtype)
 
     def element_indexing(self, index: int) -> ScalarLike:
         val = self.codes.element_indexing(index)
@@ -302,8 +303,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def unique(self) -> Self:
-        unique_codes = self.codes.unique()
-        return column.ColumnBase.create(unique_codes.plc_column, self.dtype)  # type: ignore[return-value]
+        return self.codes.unique()._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
     def _cast_self_and_other_for_where(
         self, other: ScalarLike | ColumnBase, inplace: bool
@@ -562,7 +562,7 @@ class CategoricalColumn(column.ColumnBase):
                         dtype=self.codes.dtype,
                     ),
                 )
-                return column.ColumnBase.create(codes.plc_column, dtype)  # type: ignore[return-value]
+                return codes._with_type_metadata(dtype)  # type: ignore[return-value]
 
         return self.set_categories(
             new_categories=self.dtype.categories
@@ -609,8 +609,7 @@ class CategoricalColumn(column.ColumnBase):
                 ordered=self.ordered,
             )
             result_col = cast(
-                "Self",
-                column.ColumnBase.create(result_col.plc_column, dtype_copy),
+                "Self", result_col._with_type_metadata(dtype_copy)
             )
         return result_col
 

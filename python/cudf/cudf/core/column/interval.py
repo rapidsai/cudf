@@ -157,7 +157,7 @@ class IntervalColumn(ColumnBase):
         plc_scalar: plc.Scalar,
     ) -> ColumnBase:
         """Preserve IntervalDtype metadata on reduction result."""
-        return ColumnBase.create(result_col.plc_column, col_dtype)
+        return result_col._with_type_metadata(col_dtype)
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
