@@ -74,8 +74,9 @@ async def default_node_single(
         # Recv/send metadata.
         metadata_in = await ch_in.recv_metadata(context)
         metadata_out = Metadata(
-            metadata_in.count,
-            partitioned_on=metadata_in.partitioned_on if preserve_partitioning else (),
+            local_count=metadata_in.local_count,
+            global_count=metadata_in.global_count,
+            partitioning=metadata_in.partitioning if preserve_partitioning else None,
             duplicated=metadata_in.duplicated,
         )
         await ch_out.send_metadata(context, metadata_out)
@@ -167,13 +168,20 @@ async def default_node_multi(
         ch_out.data,
     ):
         # Merge and forward basic metadata.
-        metadata = Metadata(1)
+        metadata = Metadata(local_count=1, duplicated=True)
         for idx, ch_in in enumerate(chs_in):
             md_child = await ch_in.recv_metadata(context)
-            metadata.count = max(md_child.count, metadata.count)
+            # Use simple "max" rule to determine counts.
+            metadata.local_count = max(md_child.local_count, metadata.local_count)
+            if md_child.global_count is not None:
+                metadata.global_count = max(
+                    md_child.global_count, metadata.global_count or 0
+                )
+            # Set "duplicated" to False as soon as we
+            # find a non-duplicated child.
             metadata.duplicated = metadata.duplicated and md_child.duplicated
             if idx == partitioning_index:
-                metadata.partitioned_on = md_child.partitioned_on
+                metadata.partitioning = md_child.partitioning
         await ch_out.send_metadata(context, metadata)
 
         seq_num = 0
@@ -589,7 +597,11 @@ async def empty_node(
     """
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Send metadata indicating a single empty chunk
-        await ch_out.send_metadata(context, Metadata(1, duplicated=True))
+        await ch_out.send_metadata(
+            # All ranks generate the same "empty" data.
+            context,
+            Metadata(local_count=1, global_count=1, duplicated=True),
+        )
 
         # Evaluate the IR node to create an empty DataFrame
         df: DataFrame = ir.do_evaluate(*ir._non_child_args, context=ir_context)
