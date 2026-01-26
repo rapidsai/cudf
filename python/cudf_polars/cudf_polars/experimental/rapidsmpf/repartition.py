@@ -74,9 +74,7 @@ async def concatenate_node(
     collective_id
         Pre-allocated collective ID for this operation.
     """
-    async with shutdown_on_error(
-        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
-    ):
+    async with shutdown_on_error(context, ch_in.data, ch_out.data):
         # Receive metadata.
         input_metadata = await ch_in.recv_metadata(context)
         nranks = context.comm().nranks

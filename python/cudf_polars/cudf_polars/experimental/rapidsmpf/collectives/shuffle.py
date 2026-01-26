@@ -157,9 +157,7 @@ async def shuffle_node(
     collective_id
         The collective ID.
     """
-    async with shutdown_on_error(
-        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
-    ):
+    async with shutdown_on_error(context, ch_in.data, ch_out.data):
         # Receive and send updated metadata.
         _ = await ch_in.recv_metadata(context)
         column_names = list(ir.schema.keys())

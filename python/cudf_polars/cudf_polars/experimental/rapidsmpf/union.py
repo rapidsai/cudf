@@ -52,13 +52,7 @@ async def union_node(
     chs_in
         The input ChannelPairs.
     """
-    async with shutdown_on_error(
-        context,
-        *[ch.metadata for ch in chs_in],
-        *[ch.data for ch in chs_in],
-        ch_out.metadata,
-        ch_out.data,
-    ):
+    async with shutdown_on_error(context, *[ch.data for ch in chs_in], ch_out.data):
         # Merge and forward metadata.
         # Union loses partitioning/ordering info since sources may differ.
         # TODO: Warn users that Union does NOT preserve order?

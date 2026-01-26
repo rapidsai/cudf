@@ -132,39 +132,27 @@ class Metadata:
 @dataclass
 class ChannelPair:
     """
-    A pair of channels for metadata and table data.
+    A wrapper around a RapidsMPF Channel.
 
-    This abstraction ensures that metadata and data are kept separate,
-    avoiding ordering issues and making the code more type-safe.
+    This abstraction provides convenience methods for sending and receiving
+    metadata alongside data, using the channel's native metadata stream.
 
     Attributes
     ----------
-    metadata :
-        Channel for metadata.
     data :
-        Channel for table data chunks.
-
-    Notes
-    -----
-    This is a placeholder implementation. The metadata channel exists
-    but is not used yet. Metadata handling will be fully implemented
-    in follow-up work.
+        The underlying channel for both metadata and table data.
     """
 
-    metadata: Channel[ArbitraryChunk]
     data: Channel[TableChunk]
 
     @classmethod
     def create(cls, context: Context) -> ChannelPair:
-        """Create a new ChannelPair with fresh channels."""
-        return cls(
-            metadata=context.create_channel(),
-            data=context.create_channel(),
-        )
+        """Create a new ChannelPair with a fresh channel."""
+        return cls(data=context.create_channel())
 
     async def send_metadata(self, ctx: Context, metadata: Metadata) -> None:
         """
-        Send metadata and drain the metadata channel.
+        Send metadata and drain the metadata stream.
 
         Parameters
         ----------
@@ -174,12 +162,12 @@ class ChannelPair:
             The metadata to send.
         """
         msg = Message(0, ArbitraryChunk(metadata))
-        await self.metadata.send(ctx, msg)
-        await self.metadata.drain(ctx)
+        await self.data.send_metadata(ctx, msg)
+        await self.data.drain_metadata(ctx)
 
     async def recv_metadata(self, ctx: Context) -> Metadata:
         """
-        Receive metadata from the metadata channel.
+        Receive metadata from the channel's metadata stream.
 
         Parameters
         ----------
@@ -188,10 +176,10 @@ class ChannelPair:
 
         Returns
         -------
-        ChunkMetadata
-            The metadata, or None if channel is drained.
+        Metadata
+            The received metadata.
         """
-        msg = await self.metadata.recv(ctx)
+        msg = await self.data.recv_metadata(ctx)
         assert msg is not None, f"Expected Metadata message, got {msg}."
         return ArbitraryChunk.from_message(msg).release()
 

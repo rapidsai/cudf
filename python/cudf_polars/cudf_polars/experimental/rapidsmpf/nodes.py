@@ -68,9 +68,7 @@ async def default_node_single(
     -----
     Chunks are processed in the order they are received.
     """
-    async with shutdown_on_error(
-        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
-    ):
+    async with shutdown_on_error(context, ch_in.data, ch_out.data):
         # Recv/send metadata.
         metadata_in = await ch_in.recv_metadata(context)
         metadata_out = Metadata(
@@ -160,13 +158,7 @@ async def default_node_multi(
         Index of the input channel to preserve partitioning information for.
         If None, no partitioning information is preserved.
     """
-    async with shutdown_on_error(
-        context,
-        *[ch.metadata for ch in chs_in],
-        ch_out.metadata,
-        *[ch.data for ch in chs_in],
-        ch_out.data,
-    ):
+    async with shutdown_on_error(context, *[ch.data for ch in chs_in], ch_out.data):
         # Merge and forward basic metadata.
         metadata = Metadata(local_count=1, duplicated=True)
         for idx, ch_in in enumerate(chs_in):
@@ -289,13 +281,7 @@ async def fanout_node_bounded(
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
-    async with shutdown_on_error(
-        context,
-        ch_in.metadata,
-        ch_in.data,
-        *[ch.metadata for ch in chs_out],
-        *[ch.data for ch in chs_out],
-    ):
+    async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
         # Forward metadata to all outputs.
         metadata = await ch_in.recv_metadata(context)
         await asyncio.gather(*(ch.send_metadata(context, metadata) for ch in chs_out))
@@ -354,13 +340,7 @@ async def fanout_node_unbounded(
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
-    async with shutdown_on_error(
-        context,
-        ch_in.metadata,
-        ch_in.data,
-        *[ch.metadata for ch in chs_out],
-        *[ch.data for ch in chs_out],
-    ):
+    async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
         # Forward metadata to all outputs.
         metadata = await ch_in.recv_metadata(context)
         await asyncio.gather(*(ch.send_metadata(context, metadata) for ch in chs_out))
@@ -595,7 +575,7 @@ async def empty_node(
     ch_out
         The output ChannelPair.
     """
-    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
+    async with shutdown_on_error(context, ch_out.data):
         # Send metadata indicating a single empty chunk
         await ch_out.send_metadata(
             # All ranks generate the same "empty" data.
@@ -692,7 +672,7 @@ async def metadata_feeder_node(
     metadata
         The metadata to feed.
     """
-    async with shutdown_on_error(context, channel.metadata, channel.data):
+    async with shutdown_on_error(context, channel.data):
         await channel.send_metadata(context, metadata)
 
 
@@ -725,7 +705,7 @@ async def metadata_drain_node(
         This list will be mutated when the network is executed.
         If None, metadata will not be collected.
     """
-    async with shutdown_on_error(context, ch_in.metadata, ch_in.data, ch_out):
+    async with shutdown_on_error(context, ch_in.data, ch_out):
         # Drain metadata channel (we don't need it after this point)
         metadata = await ch_in.recv_metadata(context)
         send_empty = metadata.duplicated and context.comm().rank != 0

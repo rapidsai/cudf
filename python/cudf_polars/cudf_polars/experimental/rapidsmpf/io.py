@@ -166,7 +166,7 @@ async def dataframescan_node(
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
+    async with shutdown_on_error(context, ch_out.data):
         # Find local partition count.
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
@@ -395,7 +395,7 @@ async def scan_node(
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
+    async with shutdown_on_error(context, ch_out.data):
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
