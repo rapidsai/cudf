@@ -745,13 +745,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def from_pylibcudf(col: plc.Column) -> ColumnBase:
         """Create a Column from a pylibcudf.Column.
 
-        .. deprecated::
-            `from_pylibcudf` is deprecated and will be removed in a future version.
-            Use `ColumnBase.create(col, dtype)` instead. If you need to infer dtype,
-            use: `dtype = dtype_from_pylibcudf_column(col)`
-
         This function will generate a Column pointing to the provided pylibcudf
-        Column.  It will directly access the data and mask buffers of the
+        Column. It will directly access the data and mask buffers of the
         pylibcudf Column, so the newly created object is not tied to the
         lifetime of the original pylibcudf.Column.
 
@@ -765,7 +760,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        # TODO: Add deprecation warning in future release
         # Wrap buffers first to handle type conversions (TIMESTAMP_DAYS -> TIMESTAMP_SECONDS, EMPTY -> INT8)
         # This ensures dtype_from_pylibcudf_column sees the canonical form
         wrapped = ColumnBase._wrap_buffers(col)
