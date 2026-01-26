@@ -14,7 +14,11 @@ from cudf.core._compat import (
     PANDAS_VERSION,
 )
 from cudf.core.column.column import _can_values_be_equal, as_column
-from cudf.core.column.decimal import Decimal32Column, Decimal64Column
+from cudf.core.column.decimal import (
+    Decimal32Column,
+    Decimal64Column,
+    Decimal128Column,
+)
 from cudf.testing import assert_eq
 
 
@@ -551,33 +555,26 @@ def test_datetime_can_cast_safely():
     ],
 )
 @pytest.mark.parametrize(
-    "typ_",
+    "col,typ_",
     [
-        pa.decimal128(precision=4, scale=2),
-        pa.decimal128(precision=5, scale=3),
-        pa.decimal128(precision=6, scale=4),
+        (Decimal32Column, pa.decimal32(precision=4, scale=2)),
+        (Decimal32Column, pa.decimal32(precision=5, scale=3)),
+        (Decimal32Column, pa.decimal32(precision=6, scale=4)),
+        (Decimal64Column, pa.decimal64(precision=4, scale=2)),
+        (Decimal64Column, pa.decimal64(precision=5, scale=3)),
+        (Decimal64Column, pa.decimal64(precision=6, scale=4)),
+        (Decimal128Column, pa.decimal128(precision=4, scale=2)),
+        (Decimal128Column, pa.decimal128(precision=5, scale=3)),
+        (Decimal128Column, pa.decimal128(precision=6, scale=4)),
     ],
 )
-@pytest.mark.parametrize("col", [Decimal32Column, Decimal64Column])
 def test_round_trip_decimal_column(data_, typ_, col):
     pa_arr = pa.array(data_, type=typ_)
     decimal_col = col.from_arrow(pa_arr)
     result = decimal_col.to_arrow()
 
-    # After PyArrow 19, Decimal32/64Column.to_arrow() returns native
-    # decimal32/64 types instead of converting to decimal128
-    if col is Decimal32Column:
-        expected = pa.array(
-            data_, type=pa.decimal32(typ_.precision, typ_.scale)
-        )
-    elif col is Decimal64Column:
-        expected = pa.array(
-            data_, type=pa.decimal64(typ_.precision, typ_.scale)
-        )
-    else:
-        expected = pa_arr
-
-    assert result.equals(expected)
+    # Round-trip should preserve the exact PyArrow decimal type
+    assert result.equals(pa_arr)
 
 
 def test_from_arrow_max_precision_decimal64():

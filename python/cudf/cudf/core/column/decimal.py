@@ -133,32 +133,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
     @classmethod
     def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
         result = cast(Self, super().from_arrow(data))
-        # Support for this conversion can be removed when we drop support for
-        # pyarrow<19, but until then we must support constructing
-        # Decimal32Column and Decimal64Column from Decimal128 pyarrow arrays
-        if cls in (Decimal32Column, Decimal64Column) and isinstance(
-            data.type, pa.Decimal128Type
-        ):
-            dtype_cls = (
-                Decimal32Dtype if cls is Decimal32Column else Decimal64Dtype
-            )
-            type_id = (
-                plc.TypeId.DECIMAL32
-                if cls is Decimal32Column
-                else plc.TypeId.DECIMAL64
-            )
-            dtype = dtype_cls(
-                precision=data.type.precision, scale=data.type.scale
-            )
-            plc_column = plc.unary.cast(
-                result.plc_column,
-                plc.DataType(
-                    type_id,
-                    -data.type.scale,
-                ),
-            )
-            result = cast(Self, cls.from_pylibcudf(plc_column))
-            result._dtype = dtype
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
 
