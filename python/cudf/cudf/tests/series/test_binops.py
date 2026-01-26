@@ -704,7 +704,6 @@ def test_datetime_series_ops_with_scalars(
 
     if op == "add":
         expected = psr + other_scalars
-        # import pdb;pdb.set_trace()
         actual = gsr + other_scalars
     elif op == "sub":
         expected = psr - other_scalars
@@ -719,7 +718,6 @@ def test_datetime_series_ops_with_scalars(
         assert_eq(expected, actual)
 
     elif op == "sub":
-        # import pdb;pdb.set_trace()
         assert_exceptions_equal(
             lfunc=operator.sub,
             rfunc=operator.sub,
@@ -1098,20 +1096,21 @@ def test_str_series_compare_str(comparison_op):
     str_series_cmp_data = pd.Series(
         ["a", "b", None, "d", "e", None], dtype="string"
     )
-    expect = comparison_op(str_series_cmp_data, "a")
-    got = comparison_op(cudf.Series(str_series_cmp_data), "a")
-
-    assert_eq(expect, got.to_pandas(nullable=True))
+    with cudf.option_context("mode.pandas_compatible", True):
+        expect = comparison_op(str_series_cmp_data, "a")
+        got = comparison_op(cudf.Series(str_series_cmp_data), "a")
+        assert_eq(expect, got)
 
 
 def test_str_series_compare_str_reflected(comparison_op):
     str_series_cmp_data = pd.Series(
         ["a", "b", None, "d", "e", None], dtype="string"
     )
-    expect = comparison_op("a", str_series_cmp_data)
-    got = comparison_op("a", cudf.Series(str_series_cmp_data))
+    with cudf.option_context("mode.pandas_compatible", True):
+        expect = comparison_op("a", str_series_cmp_data)
+        got = comparison_op("a", cudf.Series(str_series_cmp_data))
 
-    assert_eq(expect, got.to_pandas(nullable=True))
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("cmp_scalar", [1, 1.5, True])
@@ -1121,10 +1120,11 @@ def test_str_series_compare_num(comparison_op, cmp_scalar):
     str_series_cmp_data = pd.Series(
         ["a", "b", None, "d", "e", None], dtype="string"
     )
-    expect = comparison_op(str_series_cmp_data, cmp_scalar)
-    got = comparison_op(cudf.Series(str_series_cmp_data), cmp_scalar)
+    with cudf.option_context("mode.pandas_compatible", True):
+        expect = comparison_op(str_series_cmp_data, cmp_scalar)
+        got = comparison_op(cudf.Series(str_series_cmp_data), cmp_scalar)
 
-    assert_eq(expect, got.to_pandas(nullable=True))
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("cmp_scalar", [1, 1.5, True])
@@ -1134,10 +1134,11 @@ def test_str_series_compare_num_reflected(comparison_op, cmp_scalar):
     str_series_cmp_data = pd.Series(
         ["a", "b", None, "d", "e", None], dtype="string"
     )
-    expect = comparison_op(cmp_scalar, str_series_cmp_data)
-    got = comparison_op(cmp_scalar, cudf.Series(str_series_cmp_data))
+    with cudf.option_context("mode.pandas_compatible", True):
+        expect = comparison_op(cmp_scalar, str_series_cmp_data)
+        got = comparison_op(cmp_scalar, cudf.Series(str_series_cmp_data))
 
-    assert_eq(expect, got.to_pandas(nullable=True))
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -1747,7 +1748,6 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     # __eq__ operator and avoid a DeprecationWarning from numpy.
     expected = data.to_pandas() == val
     got = data == val
-    # import pdb;pdb.set_trace()
     assert_eq(expected, got)
 
 
@@ -2217,9 +2217,11 @@ def test_binops_decimal_pow(powers):
             decimal.Decimal("5"),
         ]
     )
-    ps = s.to_pandas()
-
-    assert_eq(s**powers, ps**powers, check_dtype=False)
+    ps = s.to_pandas(arrow_type=True)
+    got = s**powers
+    expect = ps**powers
+    expect = expect.astype(pd.ArrowDtype(got.dtype.to_arrow()))
+    assert_eq(got, expect, check_dtype=False)
 
 
 def test_binops_raise_error():
