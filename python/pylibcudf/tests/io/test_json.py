@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import io
 
@@ -9,6 +9,7 @@ from utils import (
     assert_table_and_meta_eq,
     make_source,
     sink_to_str,
+    synchronize_stream,
     write_source_str,
 )
 
@@ -43,6 +44,8 @@ def test_write_json_basic(
     options.set_rows_per_chunk(rows_per_chunk)
 
     plc.io.json.write_json(options, stream)
+
+    synchronize_stream(stream)
 
     exp = pa_table.to_pandas()
 
@@ -81,6 +84,8 @@ def test_write_json_nulls(na_rep, include_nulls):
     )
 
     plc.io.json.write_json(options)
+
+    synchronize_stream()
 
     exp = pa_tbl.to_pandas()
 
@@ -132,6 +137,8 @@ def test_write_json_bool_opts(true_value, false_value):
     options.set_false_value(false_value)
 
     plc.io.json.write_json(options)
+
+    synchronize_stream()
 
     exp = pa_tbl.to_pandas()
 
@@ -428,6 +435,8 @@ def test_read_json_from_device_buffers(table_data, num_buffers, stream):
         json_str.encode("utf-8"), plc.utils._get_stream(stream)
     )
 
+    synchronize_stream(stream)
+
     options = (
         plc.io.json.JsonReaderOptions.builder(
             plc.io.SourceInfo([buf] * num_buffers)
@@ -470,6 +479,8 @@ def test_utf8_escaped_json_writer(tmp_path):
         .build()
     )
     plc.io.json.write_json(options)
+
+    synchronize_stream()
 
     output_string = path.read_text(encoding="utf-8").strip()
 
