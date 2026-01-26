@@ -18,6 +18,7 @@ import pandas as pd
 # with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
 import pyarrow.dataset as ds  # noqa: F401
 from pandas._testing import at, getitem, iat, iloc, loc, setitem
+from pandas.compat._optional import import_optional_dependency
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
@@ -316,13 +317,17 @@ def _DataFrame_columns(self):
 
 
 def _to_xarray(self):
-    # Call to_xarray directly on the slow object, not via _FastSlowAttribute.
-    # This keeps the module accelerator enabled so pandas returns proxy
-    # Index/ExtensionArray objects that inherit from ExtensionArray and pass
-    # xarray's isinstance checks. If those checks fail, xarray falls back to
-    # np.issubdtype(array.dtype, ...), which raises TypeError for unsupported
-    # extension dtypes.
-    return self._fsproxy_slow.to_xarray()
+    # Call xarray conversion functions directly with self (the proxy object).
+    # We must pass the proxy (self), not the slow pandas object, because xarray
+    # does isinstance checks against pd.MultiIndex and pd.api.extensions.ExtensionArray.
+    # After cudf.pandas.install(), these refer to proxy classes. The slow object
+    # contains real pandas types that don't pass isinstance checks against the proxy
+    # classes.
+    xr = import_optional_dependency("xarray")
+    if self.ndim == 1:
+        return xr.DataArray.from_series(self)
+    else:
+        return xr.Dataset.from_dataframe(self)
 
 
 DataFrame = make_final_proxy_type(
@@ -821,6 +826,7 @@ StringArray = make_final_proxy_type(
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__array__": _FastSlowAttribute("__array__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__arrow_array__": _FastSlowAttribute("__arrow_array__"),
     },
 )
 
@@ -864,6 +870,7 @@ ArrowStringArray = make_final_proxy_type(
         "__abs__": _FastSlowAttribute("__abs__"),
         "__contains__": _FastSlowAttribute("__contains__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__arrow_array__": _FastSlowAttribute("__arrow_array__"),
     },
 )
 
