@@ -55,8 +55,9 @@ def test_series_invert_arrow_dtype(request):
         )
     )
     ps = pd.Series(
-        pa.array([1, 0, 1, 0, None, 2, 1, 2], type=pa.uint32()),
-        dtype="uint32[pyarrow]",
+        pd.arrays.ArrowExtensionArray(
+            pa.array([1, 0, 1, 0, None, 2, 1, 2], type=pa.uint32())
+        ),
     )
     with option_context("mode.pandas_compatible", True):
         psr = (~from_pandas(ps)).to_pandas()
