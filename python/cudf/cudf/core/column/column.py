@@ -434,13 +434,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         new_plc_column = self.plc_column.with_mask(new_mask, new_null_count)
         return cast(
             "Self",
-            (
-                type(self)
-                .from_pylibcudf(
-                    new_plc_column,
-                )
-                ._with_type_metadata(self.dtype)
-            ),
+            ColumnBase.create(new_plc_column, self.dtype),
         )
 
     @property
@@ -1023,9 +1017,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             return cast(
                 "Self",
-                ColumnBase.from_pylibcudf(
-                    stream_compaction.drop_nulls([self])[0]
-                )._with_type_metadata(self.dtype),
+                ColumnBase.create(
+                    stream_compaction.drop_nulls([self])[0], self.dtype
+                ),
             )
         else:
             return self.copy()
@@ -1126,13 +1120,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if version.parse(pa.__version__) < version.parse(
                 "16"
             ) and isinstance(array, pa.ChunkedArray):
-                result = cls.from_pylibcudf(
-                    plc.Table.from_arrow(pa.table({None: array})).columns()[0]
-                )
+                plc_col = plc.Table.from_arrow(
+                    pa.table({None: array})
+                ).columns()[0]
             else:
-                result = cls.from_pylibcudf(plc.Column.from_arrow(array))
-            return result._with_type_metadata(
-                cudf_dtype_from_pa_type(array.type)
+                plc_col = plc.Column.from_arrow(array)
+            return ColumnBase.create(
+                plc_col, cudf_dtype_from_pa_type(array.type)
             )
 
     def _get_mask_as_column(self) -> ColumnBase:
@@ -1245,11 +1239,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             plc_col = plc_col.copy()
         return cast(
             "Self",
-            (
-                type(self)
-                .from_pylibcudf(plc_col)
-                ._with_type_metadata(self.dtype)
-            ),
+            ColumnBase.create(plc_col, self.dtype),
         )
 
     def element_indexing(self, index: int) -> ScalarLike:
@@ -1483,7 +1473,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return cast(
                 "Self",
-                ColumnBase.from_pylibcudf(
+                ColumnBase.create(
                     copying.scatter(
                         cast("list[plc.Scalar]", [value])
                         if isinstance(value, plc.Scalar)
@@ -1491,8 +1481,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         key,
                         [self],
                         bounds_check=bounds_check,
-                    )[0]
-                )._with_type_metadata(self.dtype),
+                    )[0],
+                    self.dtype,
+                ),
             )
 
     def _check_scatter_key_length(
@@ -1591,10 +1582,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 input_col.plc_column,
                 plc_replace,
             )
-            result = type(self).from_pylibcudf(plc_column)
         return cast(
             "Self",
-            result._with_type_metadata(self.dtype),
+            ColumnBase.create(plc_column, self.dtype),
         )
 
     def is_valid(self) -> ColumnBase:
@@ -1901,11 +1891,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             return cast(
                 "Self",
-                (
-                    type(self)
-                    .from_pylibcudf(plc_table.columns()[0])
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_table.columns()[0], self.dtype),
             )
 
     def distinct_count(self, dropna: bool = True) -> int:
@@ -2025,9 +2011,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
-        return ColumnBase.from_pylibcudf(
-            stream_compaction.apply_boolean_mask([self], mask)[0]
-        )._with_type_metadata(self.dtype)
+        return ColumnBase.create(
+            stream_compaction.apply_boolean_mask([self], mask)[0], self.dtype
+        )
 
     def argsort(
         self,
@@ -2152,9 +2138,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return cast(
                 "Self",
-                ColumnBase.from_pylibcudf(
-                    stream_compaction.drop_duplicates([self], keep="first")[0]
-                )._with_type_metadata(self.dtype),
+                ColumnBase.create(
+                    stream_compaction.drop_duplicates([self], keep="first")[0],
+                    self.dtype,
+                ),
             )
 
     @staticmethod
@@ -2297,7 +2284,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         assert len(frames) == 0, (
             f"{len(frames)} frame(s) remaining after deserialization"
         )
-        return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
+        return ColumnBase.create(plc_column, dtype)
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
         raise TypeError(
@@ -2492,9 +2479,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             for col in cols:
                 yield cast(
                     "Self",
-                    type(self)
-                    .from_pylibcudf(col)
-                    ._with_type_metadata(self.dtype),
+                    ColumnBase.create(col, self.dtype),
                 )
 
     def one_hot_encode(self, categories: ColumnBase) -> Generator[ColumnBase]:
@@ -3544,8 +3529,9 @@ def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
     with access_columns(  # type: ignore[assignment]
         *objs_with_len, mode="read", scope="internal"
     ) as objs_with_len:
-        return ColumnBase.from_pylibcudf(
+        return ColumnBase.create(
             plc.concatenate.concatenate(
                 [col.plc_column for col in objs_with_len]
-            )
-        )._with_type_metadata(objs_with_len[0].dtype)
+            ),
+            objs_with_len[0].dtype,
+        )
