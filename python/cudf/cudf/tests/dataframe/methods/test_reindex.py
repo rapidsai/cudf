@@ -106,12 +106,10 @@ def test_series_categorical_reindex(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
     gdf = cudf.datasets.randomdata(nrows=6, dtypes={"a": "category"})
     pdf = gdf.to_pandas()
-    assert_eq(pdf["a"].reindex(copy=True), gdf["a"].reindex(copy=copy))
+    assert_eq(pdf["a"].reindex(), gdf["a"].reindex(copy=copy))
+    assert_eq(pdf["a"].reindex(index), gdf["a"].reindex(index, copy=copy))
     assert_eq(
-        pdf["a"].reindex(index, copy=True), gdf["a"].reindex(index, copy=copy)
-    )
-    assert_eq(
-        pdf["a"].reindex(index=index, copy=True),
+        pdf["a"].reindex(index=index),
         gdf["a"].reindex(index=index, copy=copy),
     )
 
@@ -134,12 +132,10 @@ def test_series_string_reindex(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
     gdf = cudf.datasets.randomdata(nrows=6, dtypes={"d": str})
     pdf = gdf.to_pandas()
-    assert_eq(pdf["d"].reindex(copy=True), gdf["d"].reindex(copy=copy))
+    assert_eq(pdf["d"].reindex(), gdf["d"].reindex(copy=copy))
+    assert_eq(pdf["d"].reindex(index), gdf["d"].reindex(index, copy=copy))
     assert_eq(
-        pdf["d"].reindex(index, copy=True), gdf["d"].reindex(index, copy=copy)
-    )
-    assert_eq(
-        pdf["d"].reindex(index=index, copy=True),
+        pdf["d"].reindex(index=index),
         gdf["d"].reindex(index=index, copy=copy),
     )
 
