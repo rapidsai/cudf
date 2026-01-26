@@ -1114,13 +1114,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if version.parse(pa.__version__) < version.parse(
                 "16"
             ) and isinstance(array, pa.ChunkedArray):
-                plc_col = plc.Table.from_arrow(
-                    pa.table({None: array})
-                ).columns()[0]
+                result = cls.from_pylibcudf(
+                    plc.Table.from_arrow(pa.table({None: array})).columns()[0]
+                )
             else:
-                plc_col = plc.Column.from_arrow(array)
-            return ColumnBase.create(
-                plc_col, cudf_dtype_from_pa_type(array.type)
+                result = cls.from_pylibcudf(plc.Column.from_arrow(array))
+            return result._with_type_metadata(
+                cudf_dtype_from_pa_type(array.type)
             )
 
     def _get_mask_as_column(self) -> ColumnBase:
@@ -1233,7 +1233,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             plc_col = plc_col.copy()
         return cast(
             "Self",
-            ColumnBase.create(plc_col, self.dtype),
+            (
+                type(self)
+                .from_pylibcudf(plc_col)
+                ._with_type_metadata(self.dtype)
+            ),
         )
 
     def element_indexing(self, index: int) -> ScalarLike:
