@@ -128,7 +128,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         # will only have values in range [0, 1]
         if len(self) == 0:
             result = cast(
-                NumericalBaseColumn,
+                cudf.core.column.numerical_base.NumericalBaseColumn,
                 column_empty(row_count=len(q), dtype=self.dtype),
             )
         else:
@@ -149,7 +149,10 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     indices.plc_column,
                     exact,
                 )
-                result = type(self).from_pylibcudf(plc_column)
+                result = cast(
+                    cudf.core.column.numerical_base.NumericalBaseColumn,
+                    type(self).from_pylibcudf(plc_column),
+                )
         if return_scalar:
             scalar_result = result.element_indexing(0)
             if interpolation in {"lower", "higher", "nearest"}:
@@ -256,8 +259,11 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.round.round(self.plc_column, decimals, plc_how)
+            return cast(
+                cudf.core.column.numerical_base.NumericalBaseColumn,
+                type(self).from_pylibcudf(
+                    plc.round.round(self.plc_column, decimals, plc_how)
+                ),
             )
 
     def _scan(self, op: str) -> ColumnBase:
@@ -270,6 +276,10 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.unary.unary_operation(self.plc_column, unaryop_enum)
+            return (
+                type(self)
+                .from_pylibcudf(
+                    plc.unary.unary_operation(self.plc_column, unaryop_enum)
+                )
+                ._with_type_metadata(self.dtype)
             )

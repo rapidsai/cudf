@@ -10,6 +10,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
@@ -22,6 +23,15 @@
 #include <cuco/static_set.cuh>
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <memory>
+#include <span>
+#include <utility>
+#include <vector>
 
 namespace cudf::groupby::detail::hash {
 namespace {
@@ -185,16 +195,23 @@ void finalize_output(table_view const& values,
                      cudf::detail::result_cache* cache,
                      rmm::cuda_stream_view stream)
 {
-  auto result_cols = agg_results->release();
+  auto result_cols       = agg_results->release();
+  auto const null_counts = [&]() -> std::vector<size_type> {
+    auto const has_null_masks = std::any_of(
+      result_cols.begin(), result_cols.end(), [](auto const& col) { return col->nullable(); });
+    if (!has_null_masks) { return {}; }
+
+    auto null_masks =
+      cudf::detail::make_pinned_vector<bitmask_type const*>(aggregations.size(), stream);
+    std::ranges::transform(result_cols, null_masks.begin(), [](auto const& result) {
+      return result->view().null_mask();
+    });
+    return cudf::batch_null_count(null_masks, 0, result_cols.front()->size(), stream);
+  }();
+
   for (size_t i = 0; i < aggregations.size(); i++) {
     auto& result = result_cols[i];
-    if (result->nullable()) {
-      // Call `null_count` triggers a stream sync for each output column.
-      // This needs to be improved by a batch processing kernel, which is requested
-      // in https://github.com/rapidsai/cudf/issues/19878.
-      result->set_null_count(
-        cudf::null_count(result->view().null_mask(), 0, result->size(), stream));
-    }
+    if (result->nullable()) { result->set_null_count(null_counts[i]); }
     cache->add_result(values.column(i), *aggregations[i], std::move(result));
   }
   agg_results.reset();  // to make sure any subsequent use will trigger exception

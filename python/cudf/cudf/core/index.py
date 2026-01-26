@@ -153,8 +153,10 @@ def _index_from_data(data: MutableMapping, name: Any = no_default):
             index_class_type = Index
         elif isinstance(values, CategoricalColumn):
             index_class_type = CategoricalIndex
-        elif isinstance(values, (IntervalColumn, StructColumn)):
+        elif isinstance(values, IntervalColumn):
             index_class_type = IntervalIndex
+        elif isinstance(values, StructColumn):
+            index_class_type = Index
         else:
             raise NotImplementedError(
                 "Unsupported column type passed to "
@@ -324,31 +326,25 @@ class Index(SingleColumnFrame):
         return _index_from_data(data, self.name)
 
     @_performance_tracking
-    def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
+    def to_pylibcudf(self) -> tuple[plc.Column, dict]:
         """
         Convert this Index to a pylibcudf.Column.
-
-        Parameters
-        ----------
-        copy : bool
-            Whether or not to generate a new copy of the underlying device data
 
         Returns
         -------
         pylibcudf.Column
-            A new pylibcudf.Column referencing the same data.
+            A pylibcudf.Column referencing the same data.
         dict
             Dict of metadata (includes name)
 
         Notes
         -----
-        User requests to convert to pylibcudf must assume that the
-        data may be modified afterwards.
+        This is always a zero-copy operation. The result is a view of the
+        existing data. Changes to the pylibcudf data will be reflected back
+        to the cudf object and vice versa.
         """
-        if copy:
-            raise NotImplementedError("copy=True is not supported")
         metadata = {"name": self.name}
-        return self._column.to_pylibcudf(mode="write"), metadata
+        return self._column.to_pylibcudf(), metadata
 
     @classmethod
     @_performance_tracking
@@ -387,7 +383,7 @@ class Index(SingleColumnFrame):
                 raise ValueError("Metadata dict must only contain a name")
             name = metadata.get("name")
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True),
+            ColumnBase.from_pylibcudf(col),
             name=name,
         )
 
