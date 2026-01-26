@@ -354,7 +354,7 @@ class Column:
                 return from_floats(self.obj, stream=stream)
             elif plc.traits.is_integral_not_bool(self.obj.type()):
                 return from_integers(self.obj, stream=stream)
-            elif self.obj.type().id() == plc.TypeId.BOOL8:
+            elif plc.traits.is_boolean(self.obj.type()):  # pragma: no cover
                 return from_booleans(
                     self.obj,
                     plc.Scalar.from_py("true", dtype, stream=stream),
