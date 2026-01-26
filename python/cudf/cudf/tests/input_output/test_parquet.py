@@ -4811,3 +4811,8 @@ def test_read_many_colchunks_with_threadpool():
     pq.write_table(expected, buffer, row_group_size=100, write_page_index=True)
 
     assert_eq(expected, cudf.read_parquet(buffer))
+
+
+def test_parquet_decode_column_index_thrift_bool_list(datadir):
+    fname = datadir / "column_index_thrift_bool_list.parquet"
+    cudf.read_parquet(fname)
