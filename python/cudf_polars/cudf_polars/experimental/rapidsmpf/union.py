@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelWrapper
 
 
 @define_py_node()
@@ -33,8 +33,8 @@ async def union_node(
     context: Context,
     ir: Union,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    *chs_in: ChannelPair,
+    ch_out: ChannelWrapper,
+    *chs_in: ChannelWrapper,
 ) -> None:
     """
     Union node for rapidsmpf.
@@ -48,9 +48,9 @@ async def union_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output ChannelWrapper.
     chs_in
-        The input ChannelPairs.
+        The input ChannelWrappers.
     """
     async with shutdown_on_error(context, *[ch.data for ch in chs_in], ch_out.data):
         # Merge and forward metadata.

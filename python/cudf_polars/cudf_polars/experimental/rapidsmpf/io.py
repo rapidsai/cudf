@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import ColumnStat, StatsCollector
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelWrapper
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -139,7 +139,7 @@ async def dataframescan_node(
     context: Context,
     ir: DataFrameScan,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
+    ch_out: ChannelWrapper,
     *,
     num_producers: int,
     rows_per_partition: int,
@@ -157,7 +157,7 @@ async def dataframescan_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output ChannelWrapper.
     num_producers
         The number of producers to use for the DataFrameScan node.
     rows_per_partition
@@ -365,7 +365,7 @@ async def scan_node(
     context: Context,
     ir: Scan,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
+    ch_out: ChannelWrapper,
     *,
     num_producers: int,
     plan: IOPartitionPlan,
@@ -384,7 +384,7 @@ async def scan_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output ChannelWrapper.
     num_producers
         The number of producers to use for the scan node.
     plan
@@ -524,7 +524,7 @@ def make_rapidsmpf_read_parquet_node(
     context: Context,
     ir: Scan,
     num_producers: int,
-    ch_out: ChannelPair,
+    ch_out: ChannelWrapper,
     stats: StatsCollector,
     partition_info: PartitionInfo,
 ) -> Any | None:
@@ -540,7 +540,7 @@ def make_rapidsmpf_read_parquet_node(
     num_producers
         The number of producers to use for the scan node.
     ch_out
-        The output ChannelPair.
+        The output ChannelWrapper.
     stats
         The statistics collector.
     partition_info
@@ -652,7 +652,7 @@ def _(
     )
 
     # Use rapidsmpf native read_parquet node if possible
-    ch_pair = channels[ir].reserve_input_slot()
+    ch_out = channels[ir].reserve_input_slot()
     nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
     if (
@@ -669,7 +669,7 @@ def _(
             rec.state["context"],
             ir,
             num_producers,
-            ch_pair,
+            ch_out,
             rec.state["stats"],
             partition_info,
         )
@@ -679,7 +679,7 @@ def _(
         # node does not send metadata.
         metadata_node = metadata_feeder_node(
             rec.state["context"],
-            ch_pair,
+            ch_out,
             Metadata(
                 # partition_info.count is the estimated "global" count.
                 # Just estimate the local count as well.
@@ -699,7 +699,7 @@ def _(
                 rec.state["context"],
                 ir,
                 rec.state["ir_context"],
-                ch_pair,
+                ch_out,
                 num_producers=num_producers,
                 plan=plan,
                 parquet_options=parquet_options,

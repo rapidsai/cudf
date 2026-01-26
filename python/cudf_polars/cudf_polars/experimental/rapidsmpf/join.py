@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair, HashPartitioned
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelWrapper, HashPartitioned
 
 
 @define_py_node()
@@ -45,9 +45,9 @@ async def broadcast_join_node(
     context: Context,
     ir: Join,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    ch_left: ChannelPair,
-    ch_right: ChannelPair,
+    ch_out: ChannelWrapper,
+    ch_left: ChannelWrapper,
+    ch_right: ChannelWrapper,
     broadcast_side: Literal["left", "right"],
     collective_id: int,
     target_partition_size: int,
@@ -64,11 +64,11 @@ async def broadcast_join_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output ChannelWrapper.
     ch_left
-        The left input ChannelPair.
+        The left input ChannelWrapper.
     ch_right
-        The right input ChannelPair.
+        The right input ChannelWrapper.
     broadcast_side
         The side to broadcast.
     collective_id

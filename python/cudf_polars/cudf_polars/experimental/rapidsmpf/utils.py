@@ -88,7 +88,7 @@ class HashPartitioned:
 
 
 class Metadata:
-    """Metadata payload for an individual ChannelPair."""
+    """Metadata payload for an individual ChannelWrapper."""
 
     __slots__ = (
         "duplicated",
@@ -130,7 +130,7 @@ class Metadata:
 
 
 @dataclass
-class ChannelPair:
+class ChannelWrapper:
     """
     A wrapper around a RapidsMPF Channel.
 
@@ -146,8 +146,8 @@ class ChannelPair:
     data: Channel[TableChunk]
 
     @classmethod
-    def create(cls, context: Context) -> ChannelPair:
-        """Create a new ChannelPair with a fresh channel."""
+    def create(cls, context: Context) -> ChannelWrapper:
+        """Create a new ChannelWrapper with a fresh channel."""
         return cls(data=context.create_channel())
 
     async def send_metadata(self, ctx: Context, metadata: Metadata) -> None:
@@ -185,50 +185,50 @@ class ChannelPair:
 
 
 class ChannelManager:
-    """A utility class for managing ChannelPair objects."""
+    """A utility class for managing ChannelWrapper objects."""
 
     def __init__(self, context: Context, *, count: int = 1):
         """
-        Initialize the ChannelManager with a given number of ChannelPair slots.
+        Initialize the ChannelManager with a given number of ChannelWrapper slots.
 
         Parameters
         ----------
         context
             The rapidsmpf context.
         count: int
-            The number of ChannelPair slots to allocate.
+            The number of ChannelWrapper slots to allocate.
         """
-        self._channel_slots = [ChannelPair.create(context) for _ in range(count)]
+        self._channel_slots = [ChannelWrapper.create(context) for _ in range(count)]
         self._reserved_output_slots: int = 0
         self._reserved_input_slots: int = 0
 
-    def reserve_input_slot(self) -> ChannelPair:
+    def reserve_input_slot(self) -> ChannelWrapper:
         """
-        Reserve an input channel-pair slot.
+        Reserve an input channel slot.
 
         Returns
         -------
-        The reserved ChannelPair.
+        The reserved ChannelWrapper.
         """
         if self._reserved_input_slots >= len(self._channel_slots):
-            raise ValueError("No more input channel-pair slots available")
-        pair = self._channel_slots[self._reserved_input_slots]
+            raise ValueError("No more input channel slots available")
+        slot = self._channel_slots[self._reserved_input_slots]
         self._reserved_input_slots += 1
-        return pair
+        return slot
 
-    def reserve_output_slot(self) -> ChannelPair:
+    def reserve_output_slot(self) -> ChannelWrapper:
         """
-        Reserve an output channel-pair slot.
+        Reserve an output channel slot.
 
         Returns
         -------
-        The reserved ChannelPair.
+        The reserved ChannelWrapper.
         """
         if self._reserved_output_slots >= len(self._channel_slots):
-            raise ValueError("No more output channel-pair slots available")
-        pair = self._channel_slots[self._reserved_output_slots]
+            raise ValueError("No more output channel slots available")
+        slot = self._channel_slots[self._reserved_output_slots]
         self._reserved_output_slots += 1
-        return pair
+        return slot
 
 
 def process_children(

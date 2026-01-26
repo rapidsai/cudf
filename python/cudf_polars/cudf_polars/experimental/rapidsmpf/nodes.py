@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelWrapper
 
 
 @define_py_node()
@@ -41,8 +41,8 @@ async def default_node_single(
     context: Context,
     ir: IR,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    ch_in: ChannelPair,
+    ch_out: ChannelWrapper,
+    ch_in: ChannelWrapper,
     *,
     preserve_partitioning: bool = False,
 ) -> None:
@@ -58,9 +58,9 @@ async def default_node_single(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output ChannelWrapper.
     ch_in
-        The input ChannelPair.
+        The input ChannelWrapper.
     preserve_partitioning
         Whether to preserve the partitioning metadata of the input chunks.
 
@@ -134,8 +134,8 @@ async def default_node_multi(
     context: Context,
     ir: IR,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    chs_in: tuple[ChannelPair, ...],
+    ch_out: ChannelWrapper,
+    chs_in: tuple[ChannelWrapper, ...],
     *,
     partitioning_index: int | None = None,
 ) -> None:
@@ -151,9 +151,9 @@ async def default_node_multi(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output ChannelWrapper.
     chs_in
-        Tuple of input ChannelPairs.
+        Tuple of input ChannelWrappers.
     partitioning_index
         Index of the input channel to preserve partitioning information for.
         If None, no partitioning information is preserved.
@@ -261,8 +261,8 @@ async def default_node_multi(
 @define_py_node()
 async def fanout_node_bounded(
     context: Context,
-    ch_in: ChannelPair,
-    *chs_out: ChannelPair,
+    ch_in: ChannelWrapper,
+    *chs_out: ChannelWrapper,
 ) -> None:
     """
     Bounded fanout node for rapidsmpf.
@@ -275,9 +275,9 @@ async def fanout_node_bounded(
     context
         The rapidsmpf context.
     ch_in
-        The input ChannelPair.
+        The input ChannelWrapper.
     chs_out
-        The output ChannelPairs.
+        The output ChannelWrappers.
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
@@ -312,8 +312,8 @@ async def fanout_node_bounded(
 @define_py_node()
 async def fanout_node_unbounded(
     context: Context,
-    ch_in: ChannelPair,
-    *chs_out: ChannelPair,
+    ch_in: ChannelWrapper,
+    *chs_out: ChannelWrapper,
 ) -> None:
     """
     Unbounded fanout node for rapidsmpf with spilling support.
@@ -334,9 +334,9 @@ async def fanout_node_unbounded(
     context
         The rapidsmpf context.
     ch_in
-        The input ChannelPair.
+        The input ChannelWrapper.
     chs_out
-        The output ChannelPairs.
+        The output ChannelWrappers.
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
@@ -559,7 +559,7 @@ async def empty_node(
     context: Context,
     ir: Empty,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
+    ch_out: ChannelWrapper,
 ) -> None:
     """
     Empty node for rapidsmpf - produces a single empty chunk.
@@ -573,7 +573,7 @@ async def empty_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output ChannelWrapper.
     """
     async with shutdown_on_error(context, ch_out.data):
         # Send metadata indicating a single empty chunk
@@ -657,18 +657,18 @@ def generate_ir_sub_network_wrapper(
 @define_py_node()
 async def metadata_feeder_node(
     context: Context,
-    channel: ChannelPair,
+    channel: ChannelWrapper,
     metadata: Metadata,
 ) -> None:
     """
-    Feed metadata to a channel pair.
+    Feed metadata to a channel.
 
     Parameters
     ----------
     context
         The rapidsmpf context.
     channel
-        The channel pair.
+        The channel wrapper.
     metadata
         The metadata to feed.
     """
@@ -681,7 +681,7 @@ async def metadata_drain_node(
     context: Context,
     ir: IR,
     ir_context: IRExecutionContext,
-    ch_in: ChannelPair,
+    ch_in: ChannelWrapper,
     ch_out: Any,
     metadata_collector: list[Metadata] | None,
 ) -> None:
@@ -697,7 +697,7 @@ async def metadata_drain_node(
     ir_context
         The execution context for the IR node.
     ch_in
-        The input ChannelPair (with metadata and data channels).
+        The input ChannelWrapper (with metadata and data channels).
     ch_out
         The output data channel.
     metadata_collector

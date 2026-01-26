@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelWrapper
 
 
 class ShuffleManager:
@@ -125,8 +125,8 @@ async def shuffle_node(
     context: Context,
     ir: Shuffle,
     ir_context: IRExecutionContext,
-    ch_in: ChannelPair,
-    ch_out: ChannelPair,
+    ch_in: ChannelWrapper,
+    ch_out: ChannelWrapper,
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
     collective_id: int,
@@ -147,9 +147,9 @@ async def shuffle_node(
     ir_context
         The execution context for the IR node.
     ch_in
-        Input ChannelPair with metadata and data channels.
+        Input ChannelWrapper with metadata and data channels.
     ch_out
-        Output ChannelPair with metadata and data channels.
+        Output ChannelWrapper with metadata and data channels.
     columns_to_hash
         Tuple of column indices to use for hashing.
     num_partitions

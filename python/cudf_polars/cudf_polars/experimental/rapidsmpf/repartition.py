@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelWrapper
 
 
 @define_py_node()
@@ -38,8 +38,8 @@ async def concatenate_node(
     context: Context,
     ir: Repartition,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    ch_in: ChannelPair,
+    ch_out: ChannelWrapper,
+    ch_in: ChannelWrapper,
     *,
     output_count: int,
     collective_id: int,
@@ -66,9 +66,9 @@ async def concatenate_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output ChannelWrapper.
     ch_in
-        The input ChannelPair.
+        The input ChannelWrapper.
     output_count
         The expected global number of output chunks.
     collective_id
