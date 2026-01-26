@@ -395,23 +395,11 @@ class Decimal32Column(DecimalBaseColumn):
     _decimal_cls = Decimal32Dtype
     _decimal_check = is_decimal32_dtype
 
-    # When we drop support for pyarrow<19 we should match pyarrow decimal types, but
-    # until then we retain the legacy behavior of always returning Decimal128
-    def to_arrow(self) -> pa.Array:
-        return self.astype(
-            cudf.Decimal128Dtype(self.dtype.precision, self.dtype.scale)  # type: ignore[union-attr]
-        ).to_arrow()
-
 
 class Decimal64Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL64}
     _decimal_cls = Decimal64Dtype
     _decimal_check = is_decimal64_dtype
-
-    def to_arrow(self) -> pa.Array:
-        return self.astype(
-            cudf.Decimal128Dtype(self.dtype.precision, self.dtype.scale)  # type: ignore[union-attr]
-        ).to_arrow()
 
 
 class Decimal128Column(DecimalBaseColumn):
