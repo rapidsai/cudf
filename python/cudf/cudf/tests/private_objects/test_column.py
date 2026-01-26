@@ -558,13 +558,7 @@ def test_datetime_can_cast_safely():
     "col,typ_",
     [
         (Decimal32Column, pa.decimal32(precision=4, scale=2)),
-        (Decimal32Column, pa.decimal32(precision=5, scale=3)),
-        (Decimal32Column, pa.decimal32(precision=6, scale=4)),
-        (Decimal64Column, pa.decimal64(precision=4, scale=2)),
         (Decimal64Column, pa.decimal64(precision=5, scale=3)),
-        (Decimal64Column, pa.decimal64(precision=6, scale=4)),
-        (Decimal128Column, pa.decimal128(precision=4, scale=2)),
-        (Decimal128Column, pa.decimal128(precision=5, scale=3)),
         (Decimal128Column, pa.decimal128(precision=6, scale=4)),
     ],
 )

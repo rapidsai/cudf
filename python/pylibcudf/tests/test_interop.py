@@ -8,7 +8,6 @@ import nanoarrow
 import nanoarrow.device
 import numpy as np
 import pyarrow as pa
-import pyarrow.compute as pc
 import pytest
 from utils import assert_column_eq, assert_table_eq
 
@@ -103,8 +102,13 @@ def test_decimal_other(data_type):
 )
 def test_decimal_respect_metadata_precision(plc_type):
     precision, scale = 3, 2
+    pa_type = {
+        plc.TypeId.DECIMAL128: pa.decimal128,
+        plc.TypeId.DECIMAL64: pa.decimal64,
+        plc.TypeId.DECIMAL32: pa.decimal32,
+    }[plc_type]
     expected = pa.array(
-        [decimal.Decimal("1.23"), None], type=pa.decimal128(precision, scale)
+        [decimal.Decimal("1.23"), None], type=pa_type(precision, scale)
     )
     plc_column = plc.unary.cast(
         plc.Column.from_arrow(expected), plc.DataType(plc_type, scale=-scale)
@@ -112,10 +116,6 @@ def test_decimal_respect_metadata_precision(plc_type):
     result = plc_column.to_arrow(
         metadata=plc.interop.ColumnMetadata(precision=precision)
     )
-    if plc_type == plc.TypeId.DECIMAL64:
-        expected = pc.cast(expected, pa.decimal64(precision, scale))
-    elif plc_type == plc.TypeId.DECIMAL32:
-        expected = pc.cast(expected, pa.decimal32(precision, scale))
     assert result.equals(expected)
 
 

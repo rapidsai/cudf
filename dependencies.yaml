@@ -918,8 +918,6 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.23.*
-              # We require pyarrow 19 for native Decimal32/64 support and
-              # to enable various code simplifications.
               - pyarrow==19.*
           - matrix:
             packages:
