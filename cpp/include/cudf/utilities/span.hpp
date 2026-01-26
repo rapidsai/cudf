@@ -129,7 +129,7 @@ class span_base {
    * @param count Number of elements from the beginning of this span to put in the subspan.
    * @return A subspan of the first N elements of the sequence
    */
-  [[nodiscard]] constexpr Derived first(size_type count) const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr Derived first(size_type count) const noexcept
   {
     return Derived(_data, count);
   }
@@ -140,7 +140,7 @@ class span_base {
    * @param count Number of elements from the end of this span to put in the subspan
    * @return A subspan of the last N elements of the sequence
    */
-  [[nodiscard]] constexpr Derived last(size_type count) const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr Derived last(size_type count) const noexcept
   {
     return Derived(_data + _size - count, count);
   }
@@ -185,7 +185,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;  ///< Base type
   using base::base;
 
-  constexpr host_span() noexcept : base() {}  // required to compile on centos
+  CUDF_HOST_DEVICE constexpr host_span() noexcept : base() {}  // required to compile on centos
 
   /**
    * @brief Constructor from pointer and size
@@ -234,7 +234,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
             std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
                                std::is_convertible_v<OtherT (*)[], T (*)[]>,  // NOLINT
                              void>* = nullptr>
-  constexpr host_span(host_span<OtherT, OtherExtent> const& other) noexcept
+  CUDF_HOST_DEVICE constexpr host_span(host_span<OtherT, OtherExtent> const& other) noexcept
     : base(other.data(), other.size()), _is_device_accessible{other.is_device_accessible()}
   {
   }
@@ -281,7 +281,10 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
    *
    * @return true if the data is device accessible
    */
-  [[nodiscard]] bool is_device_accessible() const { return _is_device_accessible; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_device_accessible() const
+  {
+    return _is_device_accessible;
+  }
 
   /**
    * @brief Obtains a span that is a view over the `count` elements of this span starting at offset
@@ -455,14 +458,14 @@ class base_2dspan {
   using size_type =
     std::pair<size_t, size_t>;  ///< Type used to represent the dimension of the span
 
-  constexpr base_2dspan() noexcept = default;
+  CUDF_HOST_DEVICE constexpr base_2dspan() noexcept = default;
   /**
    * @brief Constructor from a span and number of elements in each row.
    *
    * @param flat_view The flattened 2D span
    * @param columns Number of columns
    */
-  constexpr base_2dspan(RowType<T, dynamic_extent> flat_view, size_t columns)
+  CUDF_HOST_DEVICE constexpr base_2dspan(RowType<T, dynamic_extent> flat_view, size_t columns)
     : _flat{flat_view}, _size{columns == 0 ? 0 : flat_view.size() / columns, columns}
   {
 #ifndef __CUDA_ARCH__
@@ -534,7 +537,7 @@ class base_2dspan {
             std::enable_if_t<std::is_convertible_v<OtherRowType<OtherT, dynamic_extent>,
                                                    RowType<T, dynamic_extent>>,
                              void>* = nullptr>
-  constexpr base_2dspan(base_2dspan<OtherT, OtherRowType> const& other) noexcept
+  CUDF_HOST_DEVICE constexpr base_2dspan(base_2dspan<OtherT, OtherRowType> const& other) noexcept
     : _flat{other.flat_view()}, _size{other.size()}
   {
   }
