@@ -258,6 +258,7 @@ class RunConfig:
     stats_planning: bool
     max_io_threads: int
     native_parquet: bool
+    spill_to_pinned_memory: bool
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -375,6 +376,7 @@ class RunConfig:
             stats_planning=args.stats_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
+            spill_to_pinned_memory=args.spill_to_pinned_memory,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -463,6 +465,7 @@ def get_executor_options(
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
+        executor_options["spill_to_pinned_memory"] = run_config.spill_to_pinned_memory
 
     if (
         benchmark
@@ -615,9 +618,12 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                 options=Options(
                     {
                         "dask_spill_device": str(run_config.spill_device),
+                        "dask_spill_to_pinned_memory": str(
+                            run_config.spill_to_pinned_memory
+                        ),
                         "dask_statistics": str(args.rapidsmpf_dask_statistics),
                         "dask_print_statistics": str(args.rapidsmpf_print_statistics),
-                        "oom_protection": str(args.rapidsmpf_oom_protection),
+                        "dask_oom_protection": str(args.rapidsmpf_oom_protection),
                     }
                 ),
             )
@@ -999,6 +1005,14 @@ def parse_args(
         type=Path,
         default=None,
         help="Optional directory to write query results as parquet files.",
+    )
+    parser.add_argument(
+        "--spill-to-pinned-memory",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=textwrap.dedent("""\
+            Whether RapidsMPF should spill to pinned host memory when available,
+            or use regular pageable host memory."""),
     )
 
     parsed_args = parser.parse_args(args)
