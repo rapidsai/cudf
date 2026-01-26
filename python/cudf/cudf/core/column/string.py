@@ -966,9 +966,22 @@ class StringColumn(ColumnBase, Scannable):
             return cast(Self, ColumnBase.from_pylibcudf(plc_column))
 
     def to_lower(self) -> Self:
-        return self._modify_characters(
+        result = self._modify_characters(
             plc.strings.case.to_lower
         )._with_type_metadata(self.dtype)
+
+        # Handle Greek final sigma (ς) special case in pandas compatibility mode
+        # Greek capital sigma (Σ) lowercases to regular sigma (σ) at libcudf level,  # noqa: RUF003
+        # but should become final sigma (ς) when at the end of a word.
+        # Replace σ with ς when followed by end-of-string or non-letter character.  # noqa: RUF003
+        if cudf.get_option("mode.pandas_compatible"):
+            has_sigma = result.str_contains("σ")
+            if has_sigma.any():
+                result = result.replace_with_backrefs(
+                    r"σ($|[^a-zA-Zα-ωΑ-Ωά-ώΆ-Ώ])", r"ς\1"
+                )
+
+        return result
 
     def to_upper(self) -> Self:
         return self._modify_characters(
@@ -1215,6 +1228,22 @@ class StringColumn(ColumnBase, Scannable):
 
     def rsplit(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
+
+    def split_part(self, delimiter: plc.Scalar, index: int) -> Self:
+        with self.access(mode="read", scope="internal"):
+            plc_column = plc.strings.split.split.split_part(
+                self.plc_column,
+                delimiter,
+                index,
+            )
+            return cast(
+                Self,
+                (
+                    type(self)
+                    .from_pylibcudf(plc_column)
+                    ._with_type_metadata(self.dtype)
+                ),
+            )
 
     def _partition(
         self,
