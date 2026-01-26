@@ -2170,11 +2170,11 @@ public final class Table implements AutoCloseable {
    * {@link Table} class
    */
   public PartitionedTable partition(ColumnView partitionMap, int numberOfPartitions) {
-    int[] partitionOffsets = new int[numberOfPartitions];
+    int[] partitionOffsets = new int[numberOfPartitions + 1];
     return new PartitionedTable(new Table(partition(
         getNativeView(),
         partitionMap.getNativeView(),
-        partitionOffsets.length,
+        numberOfPartitions,
         partitionOffsets)), partitionOffsets);
   }
 
