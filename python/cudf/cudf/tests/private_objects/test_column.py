@@ -561,8 +561,23 @@ def test_datetime_can_cast_safely():
 @pytest.mark.parametrize("col", [Decimal32Column, Decimal64Column])
 def test_round_trip_decimal_column(data_, typ_, col):
     pa_arr = pa.array(data_, type=typ_)
-    col_32 = col.from_arrow(pa_arr)
-    assert pa_arr.equals(col_32.to_arrow())
+    decimal_col = col.from_arrow(pa_arr)
+    result = decimal_col.to_arrow()
+
+    # After PyArrow 19, Decimal32/64Column.to_arrow() returns native
+    # decimal32/64 types instead of converting to decimal128
+    if col is Decimal32Column:
+        expected = pa.array(
+            data_, type=pa.decimal32(typ_.precision, typ_.scale)
+        )
+    elif col is Decimal64Column:
+        expected = pa.array(
+            data_, type=pa.decimal64(typ_.precision, typ_.scale)
+        )
+    else:
+        expected = pa_arr
+
+    assert result.equals(expected)
 
 
 def test_from_arrow_max_precision_decimal64():
