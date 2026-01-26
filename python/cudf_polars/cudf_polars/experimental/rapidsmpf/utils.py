@@ -199,9 +199,8 @@ class ChannelManager:
         """
         if self._reserved_input_slots >= len(self._channel_slots):
             raise ValueError("No more input channel slots available")
-        slot = self._channel_slots[self._reserved_input_slots]
         self._reserved_input_slots += 1
-        return slot
+        return self._channel_slots[self._reserved_input_slots - 1]
 
     def reserve_output_slot(self) -> Channel[TableChunk]:
         """
@@ -213,9 +212,8 @@ class ChannelManager:
         """
         if self._reserved_output_slots >= len(self._channel_slots):
             raise ValueError("No more output channel slots available")
-        slot = self._channel_slots[self._reserved_output_slots]
         self._reserved_output_slots += 1
-        return slot
+        return self._channel_slots[self._reserved_output_slots - 1]
 
 
 def process_children(
