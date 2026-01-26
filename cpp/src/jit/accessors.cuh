@@ -131,5 +131,77 @@ struct scalar_accessor {
   }
 };
 
+// Join-specific accessors for indexed table access
+template <typename T, int32_t Index>
+struct join_left_column_accessor {
+  using type                     = T;
+  static constexpr int32_t index = Index;
+
+  static __device__ T element(cudf::column_device_view_core const* tables,
+                             cudf::size_type row_idx, 
+                             cudf::size_type /* thread_idx */)
+  {
+    return tables[index].template element<T>(row_idx);
+  }
+  
+  static __device__ bool is_null(cudf::column_device_view_core const* tables,
+                                cudf::size_type row_idx,
+                                cudf::size_type /* thread_idx */)
+  {
+    return tables[index].is_null(row_idx);
+  }
+  
+  static __device__ bool is_valid(cudf::column_device_view_core const* tables,
+                                 cudf::size_type row_idx,
+                                 cudf::size_type /* thread_idx */)
+  {
+    return tables[index].is_valid(row_idx);
+  }
+
+  static __device__ cuda::std::optional<T> nullable_element(cudf::column_device_view_core const* tables,
+                                                            cudf::size_type row_idx,
+                                                            cudf::size_type thread_idx)
+  {
+    if (is_null(tables, row_idx, thread_idx)) { return cuda::std::nullopt; }
+    return element(tables, row_idx, thread_idx);
+  }
+};
+
+// Join-specific accessors for right table columns
+template <typename T, int32_t Index>
+struct join_right_column_accessor {
+  using type                     = T;
+  static constexpr int32_t index = Index;
+
+  static __device__ T element(cudf::column_device_view_core const* tables,
+                             cudf::size_type row_idx,
+                             cudf::size_type /* thread_idx */)
+  {
+    return tables[index].template element<T>(row_idx);
+  }
+  
+  static __device__ bool is_null(cudf::column_device_view_core const* tables,
+                                cudf::size_type row_idx,
+                                cudf::size_type /* thread_idx */)
+  {
+    return tables[index].is_null(row_idx);
+  }
+  
+  static __device__ bool is_valid(cudf::column_device_view_core const* tables,
+                                 cudf::size_type row_idx,
+                                 cudf::size_type /* thread_idx */)
+  {
+    return tables[index].is_valid(row_idx);
+  }
+
+  static __device__ cuda::std::optional<T> nullable_element(cudf::column_device_view_core const* tables,
+                                                            cudf::size_type row_idx,
+                                                            cudf::size_type thread_idx)
+  {
+    if (is_null(tables, row_idx, thread_idx)) { return cuda::std::nullopt; }
+    return element(tables, row_idx, thread_idx);
+  }
+};
+
 }  // namespace jit
 }  // namespace cudf

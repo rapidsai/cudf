@@ -316,6 +316,78 @@ filter_join_indices(cudf::table_view const& left,
                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief JIT-based filtering of join result indices using string predicate.
+ *
+ * This function provides a JIT-compiled alternative to filter_join_indices(),
+ * taking a string-based predicate that gets compiled to optimized GPU code.
+ *
+ * The behavior depends on the join type (same as filter_join_indices):
+ * - INNER_JOIN: Only pairs that satisfy the predicate and have valid indices are kept.
+ * - LEFT_JOIN: All left rows are preserved. Failed predicates nullify right indices.
+ * - FULL_JOIN: All rows from both sides are preserved. Failed predicates create separate pairs.
+ *
+ * ## Usage Pattern
+ *
+ * Similar to filter_join_indices but uses JIT compilation for better performance:
+ *
+ * @code{.cpp}
+ * // Step 1: Perform equality-based hash join (same as before)
+ * auto hash_joiner = cudf::hash_join(right_equality_table, null_equality::EQUAL);
+ * auto [left_indices, right_indices] = hash_joiner.inner_join(left_equality_table);
+ *
+ * // Step 2: Apply JIT-compiled conditional filter
+ * std::string predicate_code = R"(
+ *   __device__ bool predicate(double left_val, double right_val) {
+ *     return left_val > right_val;
+ *   }
+ * )";
+ * auto [filtered_left, filtered_right] = cudf::jit_filter_join_indices(
+ *   left_conditional_table,   // Table with columns referenced by predicate
+ *   right_conditional_table,  // Table with columns referenced by predicate
+ *   *left_indices,           // Indices from hash join
+ *   *right_indices,          // Indices from hash join
+ *   predicate_code,          // JIT-compiled predicate function
+ *   cudf::join_kind::INNER_JOIN);
+ * @endcode
+ *
+ * ## Predicate Function Requirements
+ *
+ * The predicate_code must define a device function with signature:
+ * ```cpp
+ * __device__ bool predicate(T1 left_col0, T2 left_col1, ..., T1 right_col0, T2 right_col1, ...)
+ * ```
+ * Where the parameters correspond to columns in left table followed by right table.
+ *
+ * @throw std::invalid_argument if join_kind is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @throw std::invalid_argument if left_indices and right_indices have different sizes.
+ * @throw cudf::jit_compilation_error if predicate_code fails to compile.
+ *
+ * @param left The left table for predicate evaluation (conditional columns only).
+ * @param right The right table for predicate evaluation (conditional columns only).
+ * @param left_indices Device span of row indices in the left table from hash join.
+ * @param right_indices Device span of row indices in the right table from hash join.
+ * @param predicate_code String containing CUDA device code for predicate function.
+ * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @param is_ptx Whether predicate_code contains PTX assembly instead of CUDA C++.
+ * @param stream CUDA stream used for kernel launches and memory operations.
+ * @param mr Device memory resource used to allocate output indices.
+ *
+ * @return A pair of device vectors [filtered_left_indices, filtered_right_indices]
+ *         corresponding to rows that satisfy the join semantics and predicate.
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+jit_filter_join_indices(cudf::table_view const& left,
+                        cudf::table_view const& right,
+                        cudf::device_span<size_type const> left_indices,
+                        cudf::device_span<size_type const> right_indices,
+                        std::string const& predicate_code,
+                        cudf::join_kind join_kind,
+                        bool is_ptx = false,
+                        rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                        rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /** @} */  // end of group
 
 }  // namespace CUDF_EXPORT cudf
