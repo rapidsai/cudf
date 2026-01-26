@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <functional>
@@ -27,12 +28,6 @@ namespace CUDF_EXPORT cudf {
  * @{
  * @file
  */
-
-// forward declaration
-namespace detail {
-class simple_aggregations_collector;
-class aggregation_finalizer;
-}  // namespace detail
 
 /**
  * @brief Tie-breaker method to use for ranking the column.
@@ -79,10 +74,10 @@ enum class bitwise_op : int32_t {
 class aggregation {
  public:
   /**
-   * @brief Possible aggregation operations
+   * @brief Possible aggregation operations.
    */
-  enum Kind {
-    SUM,                ///< sum reduction
+  enum Kind : int32_t {
+    SUM = 0,            ///< sum reduction
     SUM_WITH_OVERFLOW,  ///< sum reduction with overflow detection
     PRODUCT,            ///< product reduction
     MIN,                ///< min reduction
@@ -122,19 +117,37 @@ class aggregation {
     HISTOGRAM,          ///< compute frequency of each element
     MERGE_HISTOGRAM,    ///< merge partial values of HISTOGRAM aggregation
     BITWISE_AGG,        ///< bitwise aggregation on numeric columns
-    TOP_K               ///< top k elements in a group
+    TOP_K,              ///< top k elements in a group
+    INVALID             ///< invalid aggregation, used as a placeholder when default-constructed
   };
 
-  aggregation() = delete;
+  /**
+   * @brief Default constructor.
+   *
+   * This constructor should not be called at all. It only exists to satisfy the compiler
+   * requirements.
+   */
+  aggregation() : kind{Kind::INVALID}
+  {
+    CUDF_FAIL("No-parameter aggregation constructor should never be called");
+  }
 
   /**
-   * @brief Construct a new aggregation object
+   * @brief Construct a new aggregation object from a given aggregation kind.
    *
-   * @param a aggregation::Kind enum value
+   * @param kind_ aggregation::Kind enum value
    */
-  aggregation(aggregation::Kind a) : kind{a} {}
+  aggregation(Kind kind_) : kind{kind_} { CUDF_EXPECTS(is_valid(), "Invalid aggregation kind"); }
   Kind kind;  ///< The aggregation to perform
   virtual ~aggregation() = default;
+
+  /**
+   * @brief Checks if the aggregation is valid, i.e. it was constructed with a valid value for the
+   * aggregation kind.
+   *
+   * @return True if the aggregation is valid, false otherwise
+   */
+  [[nodiscard]] bool is_valid() const { return kind >= 0 && kind < Kind::INVALID; }
 
   /**
    * @brief Compares two aggregation objects for equality
@@ -157,98 +170,37 @@ class aggregation {
    * @return A copy of the aggregation object
    */
   [[nodiscard]] virtual std::unique_ptr<aggregation> clone() const = 0;
-
-  // override functions for compound aggregations
-  /**
-   * @pure @brief Get the simple aggregations that this aggregation requires to compute.
-   *
-   * @param col_type The type of the column to aggregate
-   * @param collector The collector visitor pattern to use to collect the simple aggregations
-   * @return Vector of pre-requisite simple aggregations
-   */
-  virtual std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const = 0;
-
-  /**
-   * @pure @brief Compute the aggregation after pre-requisite simple aggregations have been
-   * computed.
-   *
-   * @param finalizer The finalizer visitor pattern to use to compute the aggregation
-   */
-  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const = 0;
 };
 
 /**
  * @brief Derived class intended for rolling_window specific aggregation usage.
- *
- * As an example, rolling_window will only accept rolling_aggregation inputs,
- * and the appropriate derived classes (sum_aggregation, mean_aggregation, etc)
- * derive from this interface to represent these valid options.
  */
-class rolling_aggregation : public virtual aggregation {
- public:
-  ~rolling_aggregation() override = default;
-
- protected:
-  rolling_aggregation() {}
-  /// constructor inherited from cudf::aggregation
-  using aggregation::aggregation;
-};
+class rolling_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for groupby specific aggregation usage.
  */
-class groupby_aggregation : public virtual aggregation {
- public:
-  ~groupby_aggregation() override = default;
-
- protected:
-  groupby_aggregation() {}
-};
+class groupby_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for groupby specific scan usage.
  */
-class groupby_scan_aggregation : public virtual aggregation {
- public:
-  ~groupby_scan_aggregation() override = default;
-
- protected:
-  groupby_scan_aggregation() {}
-};
+class groupby_scan_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for reduction usage.
  */
-class reduce_aggregation : public virtual aggregation {
- public:
-  ~reduce_aggregation() override = default;
-
- protected:
-  reduce_aggregation() {}
-};
+class reduce_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for scan usage.
  */
-class scan_aggregation : public virtual aggregation {
- public:
-  ~scan_aggregation() override = default;
-
- protected:
-  scan_aggregation() {}
-};
+class scan_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for segmented reduction usage.
  */
-class segmented_reduce_aggregation : public virtual aggregation {
- public:
-  ~segmented_reduce_aggregation() override = default;
-
- protected:
-  segmented_reduce_aggregation() {}
-};
+class segmented_reduce_aggregation : public virtual aggregation {};
 
 /// Type of code in the user defined function string.
 enum class udf_type : bool { CUDA, PTX };
