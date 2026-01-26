@@ -3421,8 +3421,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/generic/test_to_xarray.py::TestDataFrameToXArray::test_to_xarray_index_types[uint32]",
     "tests/generic/test_to_xarray.py::TestDataFrameToXArray::test_to_xarray_index_types[uint64]",
     "tests/generic/test_to_xarray.py::TestDataFrameToXArray::test_to_xarray_index_types[uint8]",
-    "tests/generic/test_to_xarray.py::TestSeriesToXArray::test_to_xarray_index_types[string-pyarrow]",
-    "tests/generic/test_to_xarray.py::TestSeriesToXArray::test_to_xarray_index_types[string-python]",
     "tests/groupby/aggregate/test_aggregate.py::test_agg_multiple_with_as_index_false_subset_to_a_single_column",
     "tests/groupby/aggregate/test_aggregate.py::test_agg_str_with_kwarg_axis_1_raises[count]",
     "tests/groupby/aggregate/test_aggregate.py::test_agg_str_with_kwarg_axis_1_raises[first]",
