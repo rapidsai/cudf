@@ -273,6 +273,13 @@ void reader_impl::allocate_level_decode_space()
   // Loop over pages to compute sizes
   size_t total_memory_size = 0;
   for (size_t idx = 0; idx < num_pages; idx++) {
+    // Skip pages that are masked out - no need to allocate level decode space for them
+    if (!_subpass_page_mask.empty() && !_subpass_page_mask[idx]) {
+      def_level_sizes[idx] = 0;
+      rep_level_sizes[idx] = 0;
+      continue;
+    }
+
     auto const& p     = pages[idx];
     auto const& chunk = pass.chunks[p.chunk_idx];
 
