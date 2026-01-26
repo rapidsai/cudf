@@ -280,12 +280,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     thrust::exclusive_scan(
       rmm::exec_policy_nosync(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
 
-    auto const node_levels_end = cudf::detail::copy_if_safe(token_levels.begin(),
-                                                            token_levels.end(),
-                                                            tokens.begin(),
-                                                            node_levels.begin(),
-                                                            is_node,
-                                                            stream);
+    auto const node_levels_end = cudf::detail::copy_if(token_levels.begin(),
+                                                       token_levels.end(),
+                                                       tokens.begin(),
+                                                       node_levels.begin(),
+                                                       is_node,
+                                                       stream);
     CUDF_EXPECTS(cuda::std::distance(node_levels.begin(), node_levels_end) == num_nodes,
                  "node level count mismatch");
   }
@@ -296,12 +296,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);  // needed for SE, LE later
   // This block of code is generalized logical stack algorithm. TODO: make this a separate function.
   {
-    cudf::detail::copy_if_safe(thrust::make_counting_iterator<NodeIndexT>(0),
-                               thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
-                               tokens.begin(),
-                               node_token_ids.begin(),
-                               is_node,
-                               stream);
+    cudf::detail::copy_if(thrust::make_counting_iterator<NodeIndexT>(0),
+                          thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
+                          tokens.begin(),
+                          node_token_ids.begin(),
+                          is_node,
+                          stream);
 
     // previous push node_id
     // if previous node is a push, then i-1
@@ -413,7 +413,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     auto zipped_in_it =
       thrust::make_zip_iterator(push_pop_it, thrust::make_counting_iterator<NodeIndexT>(0));
     auto zipped_out_it = thrust::make_zip_iterator(token_levels.begin(), token_id.begin());
-    cudf::detail::copy_if_safe(
+    cudf::detail::copy_if(
       zipped_in_it, zipped_in_it + num_tokens, tokens.begin(), zipped_out_it, is_nested, stream);
 
     thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
