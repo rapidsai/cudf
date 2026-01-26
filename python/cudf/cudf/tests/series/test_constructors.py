@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import array
 import datetime
@@ -1335,7 +1335,7 @@ def test_string_ingest(one_dimensional_array_types):
     expect = ["a", "a", "b", "c", "a"]
     data = one_dimensional_array_types(expect)
     got = cudf.Series(data)
-    assert got.dtype == np.dtype("object")
+    assert got.dtype == pd.StringDtype(na_value=np.nan)
     assert len(got) == 5
     for idx, val in enumerate(expect):
         assert expect[idx] == got[idx]
