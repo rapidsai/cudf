@@ -58,8 +58,13 @@ class ListColumn(ColumnBase):
     def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-        dtype = cast("ListDtype", self.dtype)
-        return ColumnBase.create(sliced_plc_col, dtype.element_type)
+        # For nested structures (e.g., list<list<T>>), dtype.element_type might
+        # not accurately reflect the actual plc_column type. Always infer the dtype
+        # from the plc_column to ensure correct nested dtype handling.
+        from cudf.utils.dtypes import dtype_from_pylibcudf_column
+
+        element_dtype = dtype_from_pylibcudf_column(sliced_plc_col)
+        return ColumnBase.create(sliced_plc_col, element_dtype)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """

@@ -164,8 +164,13 @@ class StructColumn(ColumnBase):
             )
             return interval_col._with_type_metadata(dtype)
         elif isinstance(dtype, StructDtype):
+            from cudf.utils.dtypes import dtype_from_pylibcudf_column
+
+            # For nested structures, the stored field dtype might not accurately
+            # reflect the actual child column type. Always infer from child to
+            # ensure correct dtype handling.
             new_children = tuple(
-                ColumnBase.create(child, dtype.fields[f])
+                ColumnBase.create(child, dtype_from_pylibcudf_column(child))
                 for child, f in zip(
                     self.plc_column.children(),
                     dtype.fields.keys(),
