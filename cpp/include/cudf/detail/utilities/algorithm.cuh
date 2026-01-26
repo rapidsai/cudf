@@ -349,6 +349,59 @@ cuda::std::pair<KeysOutputIterator, ValuesOutputIterator> reduce_by_key(
 }
 
 /**
+ * @copydoc cudf::detail::reduce_by_key
+ *
+ * This function performs the reduce-by-key operation asynchronously.
+ * It is useful when the calling application does not need the returned result
+ * and therefore prevents a stream synchronization.
+ *
+ */
+template <typename Op,
+          typename KeysInputIterator,
+          typename KeysOutputIterator,
+          typename ValuesInputIterator,
+          typename ValuesOutputIterator>
+void reduce_by_key_async(KeysInputIterator keys_begin,
+                         KeysInputIterator keys_end,
+                         ValuesInputIterator values_begin,
+                         KeysOutputIterator keys_output,
+                         ValuesOutputIterator values_output,
+                         Op op,
+                         rmm::cuda_stream_view stream)
+{
+  auto const num_items = cuda::std::distance(keys_begin, keys_end);
+
+  auto d_num_runs =
+    cudf::detail::device_scalar<cuda::std::size_t>(stream, cudf::get_current_device_resource_ref());
+
+  size_t temp_storage_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(nullptr,
+                                               temp_storage_bytes,
+                                               keys_begin,
+                                               keys_output,
+                                               values_begin,
+                                               values_output,
+                                               d_num_runs.data(),
+                                               op,
+                                               num_items,
+                                               stream.value()));
+
+  rmm::device_buffer d_temp_storage(
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+
+  CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(d_temp_storage.data(),
+                                               temp_storage_bytes,
+                                               keys_begin,
+                                               keys_output,
+                                               values_begin,
+                                               values_output,
+                                               d_num_runs.data(),
+                                               op,
+                                               num_items,
+                                               stream.value()));
+}
+
+/**
  * @brief Helper to transform device-accessible iterator using a unary operation and then reduce the
  * transformed values using a binary operation
  *
