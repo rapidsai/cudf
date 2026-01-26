@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -142,7 +142,11 @@ class parquet_field_list : public parquet_field {
   {
     assert_field_type(field_type, FieldType::LIST);
     auto const [t, n] = cpr->get_listh();
-    assert_field_type(t, EXPECTED_ELEM_TYPE);
+    if constexpr (cuda::std::is_same_v<T, bool>) {
+      assert_bool_field_type(t);
+    } else {
+      assert_field_type(t, EXPECTED_ELEM_TYPE);
+    }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
       _read_value(i, cpr);
@@ -414,7 +418,8 @@ class parquet_field_struct_list : public parquet_field {
 
     constexpr uint32_t parallel_threshold = 512;
     if (n >= parallel_threshold) {
-      auto const num_tasks = std::min(n, cudf::detail::host_worker_pool().get_thread_count() * 2);
+      auto const num_tasks =
+        std::min<uint32_t>(n, cudf::detail::host_worker_pool().get_thread_count() * 2);
       auto const items_per_task = n / num_tasks;
       auto const remainder      = n % num_tasks;
 
@@ -439,7 +444,7 @@ class parquet_field_struct_list : public parquet_field {
           all_ranges.emplace_back(start, static_cast<size_t>(cpr->m_cur - start));
         }
 
-        // Launch task immediately to parse the structs  in parallel while the main thread collects
+        // Launch task immediately to parse the structs in parallel while the main thread collects
         // the remaining ranges
         tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
           [&val = this->val, &all_ranges, start_idx, end_idx]() {
