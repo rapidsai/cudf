@@ -658,23 +658,29 @@ def generate_ir_sub_network_wrapper(
 @define_py_node()
 async def metadata_feeder_node(
     context: Context,
-    channel: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
     metadata: Metadata,
 ) -> None:
     """
-    Feed metadata to a channel.
+    Forward data with new metadata.
 
     Parameters
     ----------
     context
         The rapidsmpf context.
-    channel
-        The channel wrapper.
+    ch_in
+        The input channel to pull data from.
+    ch_out
+        The output channel to forward data to and add metadata to.
     metadata
-        The metadata to feed.
+        The metadata to add to the output channel.
     """
-    async with shutdown_on_error(context, channel):
-        await send_metadata(channel, context, metadata)
+    async with shutdown_on_error(context, ch_in, ch_out):
+        await send_metadata(ch_out, context, metadata)
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
+        await ch_out.drain(context)
 
 
 @define_py_node()

@@ -654,6 +654,7 @@ def _(
     )
 
     # Use rapidsmpf native read_parquet node if possible
+    ch_in: Channel[TableChunk] | None = None
     ch_out = channels[ir].reserve_input_slot()
     nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
@@ -667,20 +668,23 @@ def _(
         and ir.skip_rows == 0
         and not distributed_split_files
     ):
+        # Create new channel to so ch_out can be used to add metadata
+        ch_in = rec.state["context"].create_channel()
         native_node = make_rapidsmpf_read_parquet_node(
             rec.state["context"],
             ir,
             num_producers,
-            ch_out,
+            ch_in,
             rec.state["stats"],
             partition_info,
         )
 
-    if native_node is not None:
+    if native_node is not None and ch_in is not None:
         # Need metadata node, because the native read_parquet
         # node does not send metadata.
         metadata_node = metadata_feeder_node(
             rec.state["context"],
+            ch_in,
             ch_out,
             Metadata(
                 # partition_info.count is the estimated "global" count.
@@ -691,7 +695,7 @@ def _(
                 global_count=partition_info.count,
             ),
         )
-        nodes[ir] = [metadata_node, native_node]
+        nodes[ir] = [native_node, metadata_node]
     else:
         # Fall back to scan_node (predicate not convertible, or other constraint)
         parquet_options = dataclasses.replace(parquet_options, chunked=False)
