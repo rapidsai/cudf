@@ -10553,6 +10553,8 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/window/test_pairwise.py::TestPairwise::test_no_flex[pairwise_frames5-<lambda>1]",
     "tests/window/test_pairwise.py::TestPairwise::test_no_flex[pairwise_frames8-<lambda>1]",
     "tests/window/test_win_type.py::test_cmov_window_frame[None-var-xp2]",
+    "tests/series/indexing/test_indexing.py::test_basic_indexing",
+    "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[string-python-Series]",
 }
 
 
