@@ -572,14 +572,16 @@ def test_round_trip_decimal_column(data_, typ_, col):
 
 
 def test_from_arrow_max_precision_decimal64():
+    # Decimal64 max precision is 18, so 19 should raise ValueError
     with pytest.raises(ValueError):
         Decimal64Column.from_arrow(
-            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=19))
+            pa.array([1, 2, 3], type=pa.decimal64(scale=0, precision=19))
         )
 
 
 def test_from_arrow_max_precision_decimal32():
+    # Decimal32 max precision is 9, so 10 should raise ValueError
     with pytest.raises(ValueError):
         Decimal32Column.from_arrow(
-            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=10))
+            pa.array([1, 2, 3], type=pa.decimal32(scale=0, precision=10))
         )
