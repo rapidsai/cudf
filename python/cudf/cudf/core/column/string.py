@@ -1011,9 +1011,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                ColumnBase.from_pylibcudf(plc_result)._with_type_metadata(
-                    self.dtype
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def is_hex(self) -> NumericalColumn:
@@ -1141,9 +1139,7 @@ class StringColumn(ColumnBase, Scannable):
                 enumerate(
                     cast(
                         Self,
-                        ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                            self.dtype
-                        ),
+                        ColumnBase.create(col, self.dtype),
                     )
                     for col in plc_table.columns()
                 )
@@ -1210,9 +1206,7 @@ class StringColumn(ColumnBase, Scannable):
                 enumerate(
                     cast(
                         Self,
-                        ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                            self.dtype
-                        ),
+                        ColumnBase.create(col, self.dtype),
                     )
                     for col in plc_table.columns()
                 )
@@ -1254,9 +1248,7 @@ class StringColumn(ColumnBase, Scannable):
                 enumerate(
                     cast(
                         Self,
-                        ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                            self.dtype
-                        ),
+                        ColumnBase.create(col, self.dtype),
                     )
                     for col in plc_table.columns()
                 )
