@@ -1,7 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
+
+import warnings
 
 import pylibcudf as plc
 
@@ -12,6 +14,9 @@ class BytePairEncoder:
     """
     Given a merge pairs strings series, performs byte pair encoding on
     a strings series using the provided separator.
+
+    .. deprecated:: 26.04
+        BytePairEncoder is deprecated and will be removed in a future version.
 
     Parameters
     ----------
@@ -24,6 +29,11 @@ class BytePairEncoder:
     """
 
     def __init__(self, merges_pair: Series) -> None:
+        warnings.warn(
+            "BytePairEncoder is deprecated and will be removed in a future version.",
+            FutureWarning,
+            stacklevel=2,
+        )
         self.merge_pairs = plc.nvtext.byte_pair_encode.BPEMergePairs(
             merges_pair._column.plc_column
         )
