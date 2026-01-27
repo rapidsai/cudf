@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 """Base class for Frame types that only have a single column."""
 
@@ -64,7 +64,23 @@ class SingleColumnFrame(Frame, NotIterable):
                 "with non-numeric dtypes."
             )
         try:
-            return getattr(self._column, op)(**kwargs)
+            # Special methods that are not reduction operations
+            # These are computed via methods on the column
+            # Note: sum is in this list because StringColumn and TimeDeltaColumn
+            # have custom sum() implementations
+            special_methods = {
+                "kurtosis",
+                "skew",
+                "std",
+                "median",
+                "mean",
+                "sum",
+            }
+            if op in special_methods and hasattr(self._column, op):
+                return getattr(self._column, op)(**kwargs)
+            else:
+                # Call reduce() directly instead of auto-generated method
+                return self._column.reduce(op, **kwargs)
         except AttributeError:
             raise TypeError(f"cannot perform {op} with type {self.dtype}")
 

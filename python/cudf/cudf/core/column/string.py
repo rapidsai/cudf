@@ -20,7 +20,6 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -76,7 +75,7 @@ def plc_flags_from_re_flags(
     return plc_flags
 
 
-class StringColumn(ColumnBase, Scannable):
+class StringColumn(ColumnBase):
     """Implements operations for Columns of String type"""
 
     _VALID_BINARY_OPERATIONS = {
@@ -99,10 +98,6 @@ class StringColumn(ColumnBase, Scannable):
         "__floordiv__",
     }
     _VALID_PLC_TYPES = {plc.TypeId.STRING}
-    _VALID_SCANS = {
-        "cummin",
-        "cummax",
-    }
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
@@ -190,17 +185,77 @@ class StringColumn(ColumnBase, Scannable):
         skipna: bool = True,
         min_count: int = 0,
     ) -> ScalarLike:
-        result_col = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
-        )
-        if isinstance(result_col, type(self)):
-            return result_col.join_strings("", None).element_indexing(0)
+        # Handle skipna and min_count
+        if not isinstance(skipna, bool):
+            raise ValueError(
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
+            )
+
+        # Handle skipna by converting nans to nulls and potentially dropping
+        col = self.nans_to_nulls() if skipna else self
+        if col.has_nulls():
+            if skipna:
+                col = col.dropna()
+            else:
+                # Return NA for strings if there are nulls and skipna=False
+                return pd.NA
+
+        # Handle min_count
+        if min_count > 0:
+            valid_count = len(col) - col.null_count
+            if valid_count < min_count:
+                return pd.NA
+
+        # Empty case - return empty string
+        if len(col) == 0:
+            return ""
+
+        # Concatenate all strings
+        return col.join_strings("", None).element_indexing(0)
+
+    def reduce(
+        self,
+        reduction_op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Validate and handle reduction operations for StringColumn."""
+        # StringColumn supports: sum (concatenation), min, max
+        # It does NOT support: product, mean, var, std, median, kurt, kurtosis, skew
+        # any/all have special implementations (they raise NotImplementedError or TypeError)
+        if reduction_op == "sum":
+            return self.sum(skipna=skipna, min_count=min_count)
+        elif reduction_op == "any":
+            return self.any(skipna=skipna)
+        elif reduction_op == "all":
+            return self.all(skipna=skipna)
+        elif reduction_op in {"min", "max"}:
+            # min/max are supported via the base implementation
+            return super().reduce(reduction_op, skipna, min_count, **kwargs)
+        elif reduction_op in {
+            "product",
+            "mean",
+            "var",
+            "std",
+            "median",
+            "kurt",
+            "kurtosis",
+            "skew",
+            "sum_of_squares",
+        }:
+            raise TypeError(
+                f"Series.{reduction_op} does not support StringColumn"
+            )
         else:
-            return result_col
+            # For other operations, raise a generic error
+            raise TypeError(
+                f"Series.{reduction_op} does not support StringColumn"
+            )
 
     def __contains__(self, item: ScalarLike) -> bool:
         other = [item] if is_scalar(item) else item
-        return self.contains(as_column(other, dtype=self.dtype)).any()
+        return self.contains(as_column(other, dtype=self.dtype)).reduce("any")
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         """
@@ -266,14 +321,14 @@ class StringColumn(ColumnBase, Scannable):
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
         if dtype.kind in {"i", "u"}:
-            if not self.is_integer().all():
+            if not self.is_integer().reduce("all"):
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
             cast_func = plc.strings.convert.convert_integers.to_integers
         elif dtype.kind == "f":
-            if not self.is_float().all():
+            if not self.is_float().reduce("all"):
                 raise ValueError(
                     "Could not convert strings to float "
                     "type due to presence of non-floating values."
@@ -299,7 +354,7 @@ class StringColumn(ColumnBase, Scannable):
             )
         elif self.null_count == len(self):
             return column_empty(len(self), dtype=dtype)  # type: ignore[return-value]
-        elif (self == "None").any():
+        elif (self == "None").reduce("any"):
             raise ValueError(
                 "Cannot convert `None` value to datetime or timedelta."
             )
@@ -323,11 +378,11 @@ class StringColumn(ColumnBase, Scannable):
                 )
             valid_ts = self.is_timestamp(format)
             valid = valid_ts | is_nat
-            if not valid.all():
+            if not valid.reduce("all"):
                 raise ValueError(f"Column contains invalid data for {format=}")
 
             casting_func = plc.strings.convert.convert_datetime.to_timestamps
-            add_back_nat = is_nat.any()
+            add_back_nat = is_nat.reduce("any")
         elif dtype.kind == "m":
             casting_func = plc.strings.convert.convert_durations.to_durations
             add_back_nat = False
@@ -431,9 +486,9 @@ class StringColumn(ColumnBase, Scannable):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in {"i", "u"} and self.is_integer().all():
+        elif to_dtype.kind in {"i", "u"} and self.is_integer().reduce("all"):
             return True
-        elif to_dtype.kind == "f" and self.is_float().all():
+        elif to_dtype.kind == "f" and self.is_float().reduce("all"):
             return True
         else:
             return False
@@ -972,7 +1027,7 @@ class StringColumn(ColumnBase, Scannable):
         # Replace σ with ς when followed by end-of-string or non-letter character.  # noqa: RUF003
         if cudf.get_option("mode.pandas_compatible"):
             has_sigma = result.str_contains("σ")
-            if has_sigma.any():
+            if has_sigma.reduce("any"):
                 result = result.replace_with_backrefs(
                     r"σ($|[^a-zA-Zα-ωΑ-Ωά-ώΆ-Ώ])", r"ς\1"
                 )

@@ -131,7 +131,7 @@ class NumericalColumn(NumericalBaseColumn):
                 dtype=self.dtype,
                 nan_as_null=not cudf.get_option("mode.pandas_compatible"),
             ),
-        ).any()
+        ).reduce("any")
 
     @property
     def values(self) -> cp.ndarray:
@@ -710,7 +710,7 @@ class NumericalColumn(NumericalBaseColumn):
     def nan_count(self) -> int:
         if self.dtype.kind != "f":
             return super().nan_count
-        return self.isnan().sum()
+        return self.isnan().reduce("sum")
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -741,7 +741,7 @@ class NumericalColumn(NumericalBaseColumn):
         if self.null_count == len(self):
             return self.dtype
 
-        min_value, max_value = self.min(), self.max()
+        min_value, max_value = self.reduce("min"), self.reduce("max")
         either_is_inf = np.isinf(min_value) or np.isinf(max_value)
         if not either_is_inf and expected_type.kind == "i":
             max_bound_dtype = min_signed_type(max_value)
@@ -907,7 +907,7 @@ class NumericalColumn(NumericalBaseColumn):
                 else:
                     col = self
 
-                min_ = col.min()
+                min_ = col.reduce("min")
                 # TODO: depending on implementation of cudf scalar and future
                 # refactor of min/max, change the test method
                 if np.isnan(min_):
@@ -936,15 +936,15 @@ class NumericalColumn(NumericalBaseColumn):
                     iinfo = np.iinfo(to_dtype_numpy)
                     lower_, upper_ = iinfo.min, iinfo.max
 
-                return (min_ >= lower_) and (col.max() < upper_)
+                return (min_ >= lower_) and (col.reduce("max") < upper_)
 
         # want to cast int to uint
         elif self_dtype_numpy.kind == "i" and to_dtype_numpy.kind == "u":
             i_max_ = np.iinfo(self_dtype_numpy).max
             u_max_ = np.iinfo(to_dtype_numpy).max
 
-            return (self.min() >= 0) and (
-                (i_max_ <= u_max_) or (self.max() < u_max_)
+            return (self.reduce("min") >= 0) and (
+                (i_max_ <= u_max_) or (self.reduce("max") < u_max_)
             )
 
         # want to cast uint to int
@@ -952,7 +952,7 @@ class NumericalColumn(NumericalBaseColumn):
             u_max_ = np.iinfo(self_dtype_numpy).max
             i_max_ = np.iinfo(to_dtype_numpy).max
 
-            return (u_max_ <= i_max_) or (self.max() < i_max_)
+            return (u_max_ <= i_max_) or (self.reduce("max") < i_max_)
 
         # want to cast int to float
         elif (
@@ -960,15 +960,15 @@ class NumericalColumn(NumericalBaseColumn):
         ):
             info = np.finfo(to_dtype_numpy)
             biggest_exact_int = 2 ** (info.nmant + 1)
-            if (self.min() >= -biggest_exact_int) and (
-                self.max() <= biggest_exact_int
+            if (self.reduce("min") >= -biggest_exact_int) and (
+                self.reduce("max") <= biggest_exact_int
             ):
                 return True
             else:
                 filled = self.fillna(0)
                 return (
                     filled.astype(to_dtype).astype(filled.dtype) == filled
-                ).all()
+                ).reduce("all")
 
         # want to cast float to int:
         elif self_dtype_numpy.kind == "f" and to_dtype_numpy.kind in {
@@ -983,9 +983,11 @@ class NumericalColumn(NumericalBaseColumn):
             # best we can do is hope to catch it here and avoid compare
             # Use Python floats, which have precise comparison for float64.
             # NOTE(seberg): it would make sense to limit to the mantissa range.
-            if (float(self.min()) >= min_) and (float(self.max()) <= max_):
+            if (float(self.reduce("min")) >= min_) and (
+                float(self.reduce("max")) <= max_
+            ):
                 filled = self.fillna(0)
-                return (filled % 1 == 0).all()
+                return (filled % 1 == 0).reduce("all")
             else:
                 return False
 

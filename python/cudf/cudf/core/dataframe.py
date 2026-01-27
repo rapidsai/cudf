@@ -6561,9 +6561,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 res._attrs = self._attrs
                 return res
+        # Special methods that are not reduction operations
+        special_methods = {"kurtosis", "skew"}
+
         if (
             axis == 2
-            and op in {"kurtosis", "skew"}
+            and op in special_methods
             and self._num_rows < 4
             and self._num_columns > 1
         ):
@@ -6576,8 +6579,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             axis_0_results = []
             for col_label, col in source._column_labels_and_values:
                 try:
-                    axis_0_results.append(getattr(col, op)(**kwargs))
-                except AttributeError as err:
+                    # For special statistical methods, call them directly
+                    # For standard reductions, use reduce()
+                    if op in special_methods:
+                        axis_0_results.append(getattr(col, op)(**kwargs))
+                    else:
+                        axis_0_results.append(col.reduce(op, **kwargs))
+                except (AttributeError, ValueError) as err:
                     if numeric_only:
                         raise NotImplementedError(
                             f"Column {col_label} with type {col.dtype} does not support {op}"
@@ -6591,9 +6599,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     else:
                         raise
             if axis == 2:
-                return getattr(
-                    as_column(axis_0_results, nan_as_null=False), op
-                )(**kwargs)
+                # For special statistical methods, call them directly
+                # For standard reductions, use reduce()
+                if op in special_methods:
+                    return getattr(
+                        as_column(axis_0_results, nan_as_null=False), op
+                    )(**kwargs)
+                else:
+                    return as_column(axis_0_results, nan_as_null=False).reduce(
+                        op, **kwargs
+                    )
             else:
                 source_dtypes = [dtype for _, dtype in source._dtypes]
                 # TODO: What happens if common_dtype is None?
@@ -8362,7 +8377,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if sort:
             result = result.sort_values(ascending=ascending)
         if normalize:
-            result = result / result._column.sum()
+            result = result / result._column.reduce("sum")
         # Pandas always returns MultiIndex even if only one column.
         if not isinstance(result.index, MultiIndex):
             result.index = MultiIndex._from_data(result.index._data)

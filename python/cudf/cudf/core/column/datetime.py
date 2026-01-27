@@ -9,7 +9,7 @@ import locale
 import re
 import warnings
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -146,12 +146,44 @@ class DatetimeColumn(TemporalBaseColumn):
                 # attr was not called yet, so ignore.
                 pass
 
-    def _scan(self, op: str) -> ColumnBase:
-        if op not in {"cummin", "cummax"}:
+    def _validate_scan_op(self, scan_op: str) -> None:
+        """DatetimeColumn only supports min/max scans."""
+        if scan_op not in {"min", "max"}:
             raise TypeError(
-                f"Accumulation {op} not supported for {self.dtype}"
+                f"Scan operation '{scan_op}' not supported for {self.dtype}. "
+                f"Only 'min' and 'max' are allowed."
             )
-        return super()._scan(op)
+
+    def reduce(
+        self,
+        reduction_op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Validate reduction operations for DatetimeColumn."""
+        # DatetimeColumn only supports: min, max, quantile via reduce()
+        # mean, median, std are implemented as methods (not via reduce)
+        # It does NOT support: sum, product, var, kurt, kurtosis, skew, any, all
+        unsupported_ops = {
+            "sum",
+            "product",
+            "var",
+            "kurt",
+            "kurtosis",
+            "skew",
+            "any",
+            "all",
+            "sum_of_squares",
+        }
+        if reduction_op in unsupported_ops:
+            raise TypeError(
+                f"'{self.dtype}' with dtype datetime64[{self.time_unit}] "
+                f"does not support reduction '{reduction_op}'"
+            )
+        # mean, median, std should not go through reduce() - they're methods
+        # But if they do, delegate to parent which will fail appropriately
+        return super().reduce(reduction_op, skipna, min_count, **kwargs)
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -530,16 +562,21 @@ class DatetimeColumn(TemporalBaseColumn):
             else:
                 sub_second_res_len = 0
 
-            has_nanos = self.time_unit == "ns" and self.nanosecond.any()
-            has_micros = (
-                self.time_unit in {"ns", "us"} and self.microsecond.any()
+            has_nanos = self.time_unit == "ns" and self.nanosecond.reduce(
+                "any"
             )
-            has_millis = (
-                self.time_unit in {"ns", "us", "ms"} and self.millisecond.any()
-            )
-            has_seconds = self.second.any()
-            has_minutes = self.minute.any()
-            has_hours = self.hour.any()
+            has_micros = self.time_unit in {
+                "ns",
+                "us",
+            } and self.microsecond.reduce("any")
+            has_millis = self.time_unit in {
+                "ns",
+                "us",
+                "ms",
+            } and self.millisecond.reduce("any")
+            has_seconds = self.second.reduce("any")
+            has_minutes = self.minute.reduce("any")
+            has_hours = self.hour.reduce("any")
             if sub_second_res_len:
                 if has_nanos:
                     # format should be intact and rest of the

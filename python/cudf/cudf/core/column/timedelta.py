@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import functools
 import math
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         DatetimeLikeScalar,
         DtypeObj,
+        ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -208,10 +209,44 @@ class TimeDeltaColumn(TemporalBaseColumn):
             result = result.fillna(op == "__ne__")
         return result
 
-    def _scan(self, op: str) -> ColumnBase:
-        if op == "cumprod":
-            raise TypeError("cumprod not supported for Timedelta.")
-        return super()._scan(op)
+    def _validate_scan_op(self, scan_op: str) -> None:
+        """TimeDeltaColumn doesn't support product scans."""
+        if scan_op == "product":
+            raise TypeError(
+                "Scan operation 'product' (cumprod) not supported for Timedelta. "
+                "Supported operations: sum, min, max."
+            )
+
+    def reduce(
+        self,
+        reduction_op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Validate reduction operations for TimeDeltaColumn."""
+        # TimeDeltaColumn only supports: sum, min, max, quantile via reduce()
+        # mean, median, std, sum are implemented as methods (not via reduce)
+        # It does NOT support: product, var, kurt, kurtosis, skew, any, all
+        unsupported_ops = {
+            "product",
+            "var",
+            "kurt",
+            "kurtosis",
+            "skew",
+            "any",
+            "all",
+        }
+        if reduction_op in unsupported_ops:
+            raise TypeError(
+                f"'{self.dtype}' with dtype timedelta64[{self.time_unit}] "
+                f"does not support reduction '{reduction_op}'"
+            )
+        # sum, mean, median, std should not go through reduce() - they're methods
+        # If sum is called via reduce(), delegate to the sum method
+        if reduction_op == "sum":
+            return self.sum(skipna=skipna, min_count=min_count)
+        return super().reduce(reduction_op, skipna, min_count, **kwargs)
 
     def total_seconds(self) -> ColumnBase:
         conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9
@@ -264,11 +299,8 @@ class TimeDeltaColumn(TemporalBaseColumn):
         min_count: int = 0,
     ) -> pd.Timedelta:
         return self._PD_SCALAR(
-            # Since sum isn't overridden in Numerical[Base]Column, mypy only
-            # sees the signature from Reducible (which doesn't have the extra
-            # parameters from ColumnBase._reduce) so we have to ignore this.
-            self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore[call-arg]
-                skipna=skipna, min_count=min_count
+            self.astype(self._UNDERLYING_DTYPE).reduce(
+                "sum", skipna=skipna, min_count=min_count
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)

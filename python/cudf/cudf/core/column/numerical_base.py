@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 
@@ -15,7 +15,6 @@ from cudf.core.column import column_empty
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.utils import access_columns
 from cudf.core.missing import NA
-from cudf.core.mixins import Scannable
 from cudf.utils.dtypes import _get_nan_for_dtype
 
 if TYPE_CHECKING:
@@ -30,7 +29,7 @@ _unaryop_map = {
 }
 
 
-class NumericalBaseColumn(ColumnBase, Scannable):
+class NumericalBaseColumn(ColumnBase):
     """
     A column composed of numerical (bool, integer, float, decimal) data.
 
@@ -40,24 +39,26 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     point, should be encoded here.
     """
 
-    _VALID_REDUCTIONS = {
-        "sum",
-        "product",
-        "sum_of_squares",
-        "mean",
-        "var",
-        "std",
-    }
-
-    _VALID_SCANS = {
-        "cumsum",
-        "cumprod",
-        "cummin",
-        "cummax",
-    }
-
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls()
+
+    def reduce(
+        self,
+        reduction_op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Override to dispatch median to specialized method."""
+        if reduction_op == "median":
+            if kwargs or min_count != 0:
+                raise ValueError(
+                    "median does not support additional kwargs or min_count"
+                )
+            return self.median(skipna=skipna)
+        return super().reduce(
+            reduction_op, skipna=skipna, min_count=min_count, **kwargs
+        )
 
     def kurtosis(self, skipna: bool = True) -> float:
         if not isinstance(skipna, bool):
@@ -75,7 +76,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
         n = len(self)
         miu = self.mean()
-        m4_numerator = ((self - miu) ** 4).sum()
+        m4_numerator = ((self - miu) ** 4).reduce("sum")
         V = self.var()
 
         if V == 0:
@@ -103,7 +104,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
         n = len(self)
         miu = self.mean()
-        m3 = (((self - miu) ** 3).sum()) / n
+        m3 = (((self - miu) ** 3).reduce("sum")) / n
         m2 = self.var(ddof=0)
 
         if m2 == 0:
@@ -177,7 +178,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         skipna: bool = True,
         min_count: int = 0,
     ) -> ScalarLike:
-        return self._reduce("mean", skipna=skipna, min_count=min_count)
+        return self.reduce("mean", skipna=skipna, min_count=min_count)
 
     def var(
         self,
@@ -185,7 +186,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         min_count: int = 0,
         ddof: int = 1,
     ) -> ScalarLike:
-        result = self._reduce(
+        result = self.reduce(
             "var", skipna=skipna, min_count=min_count, ddof=ddof
         )
         if result is NA:
@@ -198,7 +199,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         min_count: int = 0,
         ddof: int = 1,
     ) -> ScalarLike:
-        result = self._reduce(
+        result = self.reduce(
             "std", skipna=skipna, min_count=min_count, ddof=ddof
         )
         if result is NA:
@@ -234,7 +235,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         result = (self - self.mean()) * (other - other.mean())
-        cov_sample = result.sum() / (len(self) - 1)
+        cov_sample = result.reduce("sum") / (len(self) - 1)
         return cov_sample
 
     def corr(self, other: NumericalBaseColumn) -> float:

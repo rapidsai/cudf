@@ -59,7 +59,7 @@ from cudf.core.dtypes import (
     StructDtype,
     _dtype_to_metadata,
 )
-from cudf.core.mixins import BinaryOperand, Reducible
+from cudf.core.mixins import BinaryOperand
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -290,7 +290,7 @@ class _ColumnAccessContext:
         return False
 
 
-class ColumnBase(Serializable, BinaryOperand, Reducible):
+class ColumnBase(Serializable, BinaryOperand):
     """
     A ColumnBase stores columnar data in device memory.
 
@@ -303,12 +303,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     The *dtype* indicates the ColumnBase's element type.
     """
 
-    _VALID_REDUCTIONS = {
-        "any",
-        "all",
-        "max",
-        "min",
-    }
     _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
     plc_column: plc.Column
     _dtype: DtypeObj
@@ -956,7 +950,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ret = self._binaryop(other, "NULL_EQUALS")
         if ret is NotImplemented:
             return False
-        return ret.all()
+        return bool(ret.reduce("all"))
 
     def all(self, skipna: bool = True) -> bool:
         # The skipna argument is only used for numerical columns.
@@ -993,7 +987,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return True
         elif skipna and self.null_count == self.size:
             return False
-        return self.reduce("any")
+        return bool(self.reduce("any"))
 
     def dropna(self) -> Self:
         if self.has_nulls():
@@ -1415,7 +1409,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             else:
                 # Compute the number of element to scatter by summing all
                 # `True`s in the boolean mask.
-                num_keys = key.sum()
+                num_keys = key.reduce("sum")
         else:
             # `key` is integer scatter map
             num_keys = len(key)
@@ -1609,7 +1603,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         mask = self.isnull()
 
         # trivial cases, all nan or no nans
-        if not mask.any() or mask.all():
+        if not mask.reduce("any") or mask.reduce("all"):
             return self.copy()
 
         from cudf.core.index import RangeIndex
@@ -2266,58 +2260,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Convert NaN to NA."""
         return self
 
-    def _reduce(
-        self,
-        op: str,
-        skipna: bool = True,
-        min_count: int = 0,
-        *args: Any,
-        **kwargs: Any,
-    ) -> ScalarLike:
-        """Compute {op} of column values.
-
-        skipna : bool
-            Whether or not na values must be skipped.
-        min_count : int, default 0
-            The minimum number of entries for the reduction, otherwise the
-            reduction returns NaN.
-        """
-        preprocessed = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
-        )
-        if isinstance(preprocessed, ColumnBase):
-            return preprocessed.reduce(op, **kwargs)
-        return preprocessed
-
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls(include_nan=False)
-
-    def _process_for_reduction(
-        self, skipna: bool = True, min_count: int = 0
-    ) -> ColumnBase | ScalarLike:
-        if not isinstance(skipna, bool):
-            raise ValueError(
-                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
-            )
-
-        if self._can_return_nan(skipna=skipna):
-            return _get_nan_for_dtype(self.dtype)
-
-        col = self.nans_to_nulls() if skipna else self
-        if col.has_nulls():
-            if skipna:
-                col = col.dropna()
-            else:
-                return _get_nan_for_dtype(self.dtype)
-
-        # TODO: If and when pandas decides to validate that `min_count` >= 0 we
-        # should insert comparable behavior.
-        # https://github.com/pandas-dev/pandas/issues/50022
-        if min_count > 0:
-            valid_count = len(col) - col.null_count
-            if valid_count < min_count:
-                return _get_nan_for_dtype(self.dtype)
-        return col
 
     def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
         """
@@ -2465,10 +2409,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 type(self).from_pylibcudf(col) for col in plc_table.columns()
             )
 
-    # TODO: Currently this method is only used once, in ExponentialMovingWindow. That
-    # suggests a potential refactoring opportunity to make EWM play better with the rest
-    # of our aggregation/reduction framework.
     def scan(self, scan_op: str, inclusive: bool, **kwargs: Any) -> Self:
+        """Single entry point for all scan operations.
+
+        Args:
+            scan_op: Operation name (sum, product, min, max)
+            inclusive: Whether scan includes current element (True for cumulative)
+            **kwargs: Additional operation-specific parameters (e.g., com/adjust for EWM)
+        """
+        # Validation hook for subclasses
+        self._validate_scan_op(scan_op)
+
         with self.access(mode="read", scope="internal"):
             plc_result = plc.reduce.scan(
                 self.plc_column,
@@ -2479,34 +2430,95 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         return cast("Self", ColumnBase.create(plc_result, self.dtype))
 
-    def _scan(self, op: str) -> ColumnBase:
-        """Default cumulative scan implementation for DataFrame.cum* methods."""
-        return self.scan(op.replace("cum", ""), inclusive=True)
+    def _validate_scan_op(self, scan_op: str) -> None:
+        """Hook for subclasses to validate scan operations. Base allows all."""
+        pass
 
-    def reduce(self, reduction_op: str, **kwargs: Any) -> ScalarLike:
-        col_dtype = self._reduction_result_dtype(reduction_op)
+    def reduce(
+        self,
+        reduction_op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Single entry point for all reduction operations.
 
-        # check empty case
-        if len(self) <= self.null_count:
+        Args:
+            reduction_op: Operation name (sum, product, min, max, mean, etc.)
+            skipna: Whether to skip NA/null values
+            min_count: Minimum number of valid values required
+            **kwargs: Additional operation-specific parameters (e.g., ddof for std)
+        """
+        # Validation
+        if not isinstance(skipna, bool):
+            raise ValueError(
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
+            )
+
+        # Special case: for "any" and "all", NaN is always truthy in Python
+        # When skipna=False, treat NaN as truthy (don't return NA)
+        # When skipna=True, skip NaN like any other operation
+        if reduction_op in {"any", "all"} and not skipna:
+            # Remember if column had no nulls before nans_to_nulls
+            had_no_nulls_before = not self.has_nulls(include_nan=False)
+            col = self.nans_to_nulls()
+            if col.has_nulls():
+                col = col.dropna()
+            # If column is now empty but had no nulls originally, all values were NaN
+            # NaN is truthy, so return True
+            if len(col) == 0 and had_no_nulls_before and len(self) > 0:
+                return True
+        elif reduction_op in {"any", "all"} and skipna:
+            # When skipna=True for any/all, treat like normal (skip NaN)
+            col = self.nans_to_nulls()
+            if col.has_nulls():
+                col = col.dropna()
+        else:
+            # Early return if we can return NaN
+            if self._can_return_nan(skipna=skipna):
+                return _get_nan_for_dtype(self.dtype)
+
+            # Handle skipna by converting nans to nulls and potentially dropping
+            col = self.nans_to_nulls() if skipna else self
+            if col.has_nulls():
+                if skipna:
+                    col = col.dropna()
+                else:
+                    return _get_nan_for_dtype(self.dtype)
+
+        # Handle min_count
+        if min_count > 0:
+            valid_count = len(col) - col.null_count
+            if valid_count < min_count:
+                return _get_nan_for_dtype(self.dtype)
+
+        # Compute reduction result dtype
+        col_dtype = col._reduction_result_dtype(reduction_op)
+
+        # Handle empty case
+        if len(col) <= col.null_count:
             if reduction_op == "sum" or reduction_op == "sum_of_squares":
                 return col_dtype.type(0)
             if reduction_op == "product":
                 return col_dtype.type(1)
             if reduction_op == "any":
                 return False
-
+            if reduction_op == "all":
+                return True
             return _get_nan_for_dtype(col_dtype)
 
-        with self.access(mode="read", scope="internal"):
+        # Perform the actual reduction
+        with col.access(mode="read", scope="internal"):
             plc_scalar = plc.reduce.reduce(
-                self.plc_column,
+                col.plc_column,
                 aggregation.make_aggregation(reduction_op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
-            result_col = type(self).from_pylibcudf(
+            result_col = type(col).from_pylibcudf(
                 plc.Column.from_scalar(plc_scalar, 1)
             )
-            result_col = self._adjust_reduce_result(
+            # Hook for subclasses (e.g., DecimalBaseColumn adjusts precision)
+            result_col = col._adjust_reduce_result(
                 result_col, reduction_op, col_dtype, plc_scalar
             )
         return result_col.element_indexing(0)
