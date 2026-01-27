@@ -2515,9 +2515,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         Subclasses can override this to add type-specific validation or behavior.
         """
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
-        )
+        scan_op = op.replace("cum", "")
+        with self.access(mode="read", scope="internal"):
+            result = type(self).from_pylibcudf(
+                plc.reduce.scan(
+                    self.plc_column,
+                    aggregation.make_aggregation(scan_op, {}).plc_obj,
+                    plc.reduce.ScanType.INCLUSIVE,
+                )
+            )
+        return result._with_type_metadata(self.dtype)
 
     def reduce(self, reduction_op: str, **kwargs: Any) -> ScalarLike:
         col_dtype = self._reduction_result_dtype(reduction_op)
