@@ -20,7 +20,6 @@ namespace CUDF_EXPORT nvtext {
  * @file
  */
 
-// rapids-pre-commit-hooks: disable[verify-hardcoded-version]
 /**
  * @brief The table of merge pairs for the BPE encoder.
  *
@@ -128,7 +127,6 @@ struct bpe_merge_pairs {
   cudf::string_scalar const& separator = cudf::string_scalar(" "),
   rmm::cuda_stream_view stream         = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr    = cudf::get_current_device_resource_ref());
-// rapids-pre-commit-hooks: enable[verify-hardcoded-version]
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT nvtext
