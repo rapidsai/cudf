@@ -81,7 +81,6 @@ from cudf.utils.dtypes import (
     is_dtype_obj_struct,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
-    is_string_dtype,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
 )
@@ -664,7 +663,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cudf.core.column.TimeDeltaColumn
 
         # String types
-        if is_string_dtype(dtype):
+        if (
+            dtype == CUDF_STRING_DTYPE
+            or (hasattr(dtype, "kind") and dtype.kind == "U")
+            or isinstance(dtype, pd.StringDtype)
+            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
+        ):
             return cudf.core.column.StringColumn
 
         # cuDF custom types
