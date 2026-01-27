@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -14,7 +15,6 @@
 #include <cuda/std/iterator>
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
@@ -164,12 +164,14 @@ void labels_to_offsets(InputIterator labels_begin,
   auto list_sizes = rmm::device_uvector<OutputType>(num_segments, stream);
 
   // Count the numbers of labels in the each segment.
-  auto const end                    = thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                                         labels_begin,  // keys
-                                         labels_end,    // keys
-                                         thrust::make_constant_iterator<OutputType>(1),
-                                         list_indices.begin(),  // output unique label values
-                                         list_sizes.begin());  // count for each label
+  auto const end = cudf::detail::reduce_by_key(labels_begin,  // keys
+                                               labels_end,
+                                               thrust::make_constant_iterator<OutputType>(1),
+                                               list_indices.begin(),  // output unique label values
+                                               list_sizes.begin(),    // count for each label
+                                               cuda::std::plus<OutputType>(),
+                                               stream);
+
   auto const num_non_empty_segments = cuda::std::distance(list_indices.begin(), end.first);
 
   // Scatter segment sizes into the end position of their corresponding segment indices.
