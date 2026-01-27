@@ -654,7 +654,7 @@ class StructDtype(_BaseDtype):
         >>> import cudf
         >>> struct_type = cudf.StructDtype({"x": "int32", "y": "string"})
         >>> struct_type
-        StructDtype({'x': dtype('int32'), 'y': dtype('O')})
+        StructDtype({'x': dtype('int32'), 'y': <StringDtype(na_value=<NA>)>})
         >>> struct_type.to_arrow()
         StructType(struct<x: int32, y: string>)
         """
