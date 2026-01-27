@@ -624,38 +624,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
             dtype = dtype_from_pylibcudf_column(plc_col)
             col = ColumnBase.create(plc_col, dtype)
-
-        Parameters
-        ----------
-        col : pylibcudf.Column
-            The pylibcudf column to wrap.
-        dtype : DtypeObj
-            The cudf dtype to apply. Must be compatible with col's structure.
-
-        Returns
-        -------
-        ColumnBase
-            A properly typed Column object of the appropriate subclass.
-
-        Raises
-        ------
-        ValueError
-            If dtype is incompatible with the pylibcudf Column's type.
-
-        Examples
-        --------
-        # Preserving type from self
-        result = ColumnBase.create(plc_col, self.dtype)
-
-        # Inferring dtype from pylibcudf
-        dtype = dtype_from_pylibcudf_column(plc_col)
-        result = ColumnBase.create(plc_col, dtype)
-
-        # Categorical with categories
-        result = ColumnBase.create(
-            codes_col,
-            CategoricalDtype(categories=cats, ordered=True)
-        )
         """
         # Wrap buffers recursively
         wrapped = ColumnBase._wrap_buffers(col)
@@ -682,21 +650,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         This function determines which ColumnBase subclass should be used
         to construct a column with the given dtype.
-
-        Parameters
-        ----------
-        dtype : DtypeObj
-            The cudf dtype to dispatch on.
-
-        Returns
-        -------
-        type[ColumnBase]
-            The appropriate ColumnBase subclass for this dtype.
-
-        Raises
-        ------
-        TypeError
-            If the dtype is not recognized or supported.
         """
         # Special pandas extension types
         if isinstance(dtype, pd.DatetimeTZDtype):
