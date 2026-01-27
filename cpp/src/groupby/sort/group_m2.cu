@@ -8,6 +8,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -19,7 +20,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -58,18 +58,19 @@ void compute_m2_fn(column_device_view const& values,
     values, values_iter, d_means, group_labels.data()};
   auto const itr = thrust::counting_iterator<size_type>(0);
   // Using a temporary buffer for intermediate transform results instead of
-  // using the transform-iterator directly in thrust::reduce_by_key
+  // using the transform-iterator directly in reduce_by_key
   // improves compile-time significantly.
   auto m2_vals = rmm::device_uvector<ResultType>(values.size(), stream);
   thrust::transform(
     rmm::exec_policy_nosync(stream), itr, itr + values.size(), m2_vals.begin(), m2_fn);
 
-  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                        group_labels.begin(),
-                        group_labels.end(),
-                        m2_vals.begin(),
-                        thrust::make_discard_iterator(),
-                        d_result);
+  cudf::detail::reduce_by_key_async(group_labels.begin(),
+                                    group_labels.end(),
+                                    m2_vals.begin(),
+                                    thrust::make_discard_iterator(),
+                                    d_result,
+                                    cuda::std::plus<ResultType>(),
+                                    stream);
 }
 
 struct m2_functor {
