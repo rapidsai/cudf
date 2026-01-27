@@ -10,6 +10,7 @@ import pylibcudf as plc
 from cudf.core.series import Series
 
 
+# rapids-pre-commit-hooks: disable[verify-hardcoded-version]
 class BytePairEncoder:
     """
     Given a merge pairs strings series, performs byte pair encoding on
@@ -67,3 +68,6 @@ class BytePairEncoder:
         return Series._from_column(
             text._column.byte_pair_encoding(self.merge_pairs, separator)
         )
+
+
+# rapids-pre-commit-hooks: enable[verify-hardcoded-version]
