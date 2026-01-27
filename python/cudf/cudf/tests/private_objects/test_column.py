@@ -577,6 +577,3 @@ def test_from_arrow_max_precision_decimal32():
         Decimal32Column.from_arrow(
             pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=10))
         )
-
-
-# Tests for ColumnBase.create() factory method
