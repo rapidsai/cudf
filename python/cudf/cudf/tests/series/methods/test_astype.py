@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import zoneinfo
@@ -824,17 +824,16 @@ def test_astype_naive_to_aware_raises():
 
 
 @pytest.mark.parametrize(
-    "np_dtype,pd_dtype",
-    [
-        tuple(item)
-        for item in cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.items()
-    ],
+    "np_dtype,pd_dtype", cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.items()
 )
 def test_series_astype_pandas_nullable(
     all_supported_types_as_str, np_dtype, pd_dtype
 ):
+    if np_dtype == object:
+        pytest.skip(
+            "cuDF now uses pd.StringDtype which is not equivalent to object"
+        )
     source = cudf.Series([0, 1, None], dtype=all_supported_types_as_str)
-
     expect = source.astype(np_dtype)
     got = source.astype(pd_dtype)
 

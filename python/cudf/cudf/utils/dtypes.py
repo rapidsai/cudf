@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from cudf._typing import DtypeObj
     from cudf.core.dtypes import DecimalDtype
 
+DEFAULT_STRING_DTYPE = pd.StringDtype(na_value=np.nan)
 np_dtypes_to_pandas_dtypes: dict[
     np.dtype[Any], pd.core.dtypes.base.ExtensionDtype
 ] = {
@@ -33,8 +34,8 @@ np_dtypes_to_pandas_dtypes: dict[
     np.dtype("int32"): pd.Int32Dtype(),
     np.dtype("int64"): pd.Int64Dtype(),
     np.dtype("bool_"): pd.BooleanDtype(),
-    np.dtype("object"): pd.StringDtype(),
-    np.dtype("str"): pd.StringDtype(),
+    np.dtype("object"): DEFAULT_STRING_DTYPE,
+    np.dtype("str"): DEFAULT_STRING_DTYPE,
     np.dtype("float32"): pd.Float32Dtype(),
     np.dtype("float64"): pd.Float64Dtype(),
 }
@@ -829,4 +830,3 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING] = np.dtype(
 )
 
 SIZE_TYPE_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.SIZE_TYPE_ID]
-DEFAULT_STRING_DTYPE = pd.StringDtype(na_value=np.nan)
