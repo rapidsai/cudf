@@ -1328,6 +1328,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Computes the sum of all values in the column, returning a scalar
    * of the same type as this column.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.sum();
+   * // result = 15,              DType = INT32
+   * }</pre>
    */
   public Scalar sum() {
     return sum(type);
@@ -1336,6 +1343,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Computes the sum of all values in the column, returning a scalar
    * of the specified type.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.sum(DType.INT64);
+   * // result = 15,              DType = INT64
+   * }</pre>
+   *
+   * @param outType the output DType
    */
   public Scalar sum(DType outType) {
     return reduce(ReductionAggregation.sum(), outType);
@@ -1347,6 +1363,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * If the input column is empty or all nulls, an empty scalar is returned.
    *
    * If the input is floating point type and contains NaNs, the result is undefined.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.argMin();
+   * // result = 3,               DType = INT32
+   * }</pre>
    */
   public Scalar argMin() {
     return reduce(ReductionAggregation.argMin(), DType.INT32);
@@ -1358,6 +1381,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * If the input column is empty or all nulls, an empty scalar is returned.
    *
    * If the input is floating point type and contains NaNs, the result is undefined.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.argMax();
+   * // result = 4,               DType = INT32
+   * }</pre>
    */
   public Scalar argMax() {
     return reduce(ReductionAggregation.argMax(), DType.INT32);
@@ -1366,6 +1396,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the minimum of all values in the column, returning a scalar
    * of the same type as this column.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.min();
+   * // result = 1,               DType = INT32
+   * }</pre>
    */
   public Scalar min() {
     return reduce(ReductionAggregation.min(), type);
@@ -1374,6 +1411,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the minimum of all values in the column, returning a scalar
    * of the specified type.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.min(DType.INT64);
+   * // result = 1,               DType = INT64
+   * }</pre>
+   *
+   * @param outType the output DType
    * @deprecated the min reduction no longer internally allows for setting the output type, as a
    * work around this API will cast the input type to the output type for you, but this may not
    * work in all cases.
@@ -1391,6 +1437,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the maximum of all values in the column, returning a scalar
    * of the same type as this column.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.max();
+   * // result = 9,               DType = INT32
+   * }</pre>
    */
   public Scalar max() {
     return reduce(ReductionAggregation.max(), type);
@@ -1399,6 +1452,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the maximum of all values in the column, returning a scalar
    * of the specified type.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.max(DType.INT64);
+   * // result = 9,               DType = INT64
+   * }</pre>
+   *
+   * @param outType the output DType
    * @deprecated the max reduction no longer internally allows for setting the output type, as a
    * work around this API will cast the input type to the output type for you, but this may not
    * work in all cases.
@@ -1416,6 +1478,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the product of all values in the column, returning a scalar
    * of the same type as this column.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [2, 3, 4],  DType = INT32
+   * Scalar result = col.product();
+   * // result = 24,         DType = INT32
+   * }</pre>
    */
   public Scalar product() {
     return product(type);
@@ -1424,6 +1493,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the product of all values in the column, returning a scalar
    * of the specified type.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [2, 3, 4],  DType = INT32
+   * Scalar result = col.product(DType.INT64);
+   * // result = 24,         DType = INT64
+   * }</pre>
+   *
+   * @param outType the output DType
    */
   public Scalar product(DType outType) {
     return reduce(ReductionAggregation.product(), outType);
@@ -1432,6 +1510,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the sum of squares of all values in the column, returning a
    * scalar of the same type as this column.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3],  DType = INT32
+   * Scalar result = col.sumOfSquares();
+   * // result = 14,         DType = INT32
+   * }</pre>
    */
   public Scalar sumOfSquares() {
     return sumOfSquares(type);
@@ -1440,6 +1525,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the sum of squares of all values in the column, returning a
    * scalar of the specified type.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3],  DType = INT32
+   * Scalar result = col.sumOfSquares(DType.INT64);
+   * // result = 14,         DType = INT64
+   * }</pre>
+   *
+   * @param outType the output DType
    */
   public Scalar sumOfSquares(DType outType) {
     return reduce(ReductionAggregation.sumOfSquares(), outType);
@@ -1449,6 +1543,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the arithmetic mean of all values in the column, returning a
    * FLOAT64 scalar unless the column type is FLOAT32 then a FLOAT32 scalar is returned.
    * Null values are skipped.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.mean();
+   * // result = 3.0,             DType = FLOAT64
+   * }</pre>
    */
   public Scalar mean() {
     DType outType = DType.FLOAT64;
@@ -1462,6 +1563,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the arithmetic mean of all values in the column, returning a
    * scalar of the specified type.
    * Null values are skipped.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.mean(DType.FLOAT32);
+   * // result = 3.0,             DType = FLOAT32
+   * }</pre>
+   *
    * @param outType the output type to return.  Note that only floating point
    *                types are currently supported.
    */
@@ -1473,6 +1582,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the variance of all values in the column, returning a
    * FLOAT64 scalar unless the column type is FLOAT32 then a FLOAT32 scalar is returned.
    * Null values are skipped.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.variance();
+   * // result = 2.5,             DType = FLOAT64
+   * }</pre>
    */
   public Scalar variance() {
     DType outType = DType.FLOAT64;
@@ -1486,6 +1602,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the variance of all values in the column, returning a
    * scalar of the specified type.
    * Null values are skipped.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.variance(DType.FLOAT32);
+   * // result = 2.5,             DType = FLOAT32
+   * }</pre>
+   *
    * @param outType the output type to return.  Note that only floating point
    *                types are currently supported.
    */
@@ -1498,6 +1622,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * returning a FLOAT64 scalar unless the column type is FLOAT32 then
    * a FLOAT32 scalar is returned. Nulls are not counted as an element
    * of the column when calculating the standard deviation.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5],    DType = INT32
+   * Scalar result = col.standardDeviation();
+   * // result = 1.5811388300841898, DType = FLOAT64
+   * }</pre>
    */
   public Scalar standardDeviation() {
     DType outType = DType.FLOAT64;
@@ -1511,6 +1642,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the sample standard deviation of all values in the column,
    * returning a scalar of the specified type. Null's are not counted as
    * an element of the column when calculating the standard deviation.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5],    DType = INT32
+   * Scalar result = col.standardDeviation(DType.FLOAT32);
+   * // result = 1.5811388,          DType = FLOAT32
+   * }</pre>
+   *
    * @param outType the output type to return.  Note that only floating point
    *                types are currently supported.
    */
@@ -1522,6 +1661,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean scalar that is true if any of the elements in
    * the column are true or non-zero otherwise false.
    * Null values are skipped.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [0, 0, 1, 0], DType = INT32
+   * Scalar result = col.any();
+   * // result = true,         DType = BOOL8
+   * }</pre>
    */
   public Scalar any() {
     return any(DType.BOOL8);
@@ -1532,6 +1678,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * if any of the elements in the column are true or non-zero
    * otherwise false or 0.
    * Null values are skipped.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [0, 0, 1, 0], DType = INT32
+   * Scalar result = col.any(DType.INT32);
+   * // result = 1,            DType = INT32
+   * }</pre>
+   *
+   * @param outType the output DType
    */
   public Scalar any(DType outType) {
     return reduce(ReductionAggregation.any(), outType);
@@ -1541,6 +1696,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean scalar that is true if all of the elements in
    * the column are true or non-zero otherwise false.
    * Null values are skipped.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4], DType = INT32
+   * Scalar result = col.all();
+   * // result = true,         DType = BOOL8
+   * }</pre>
    */
   public Scalar all() {
     return all(DType.BOOL8);
@@ -1551,6 +1713,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * if all of the elements in the column are true or non-zero
    * otherwise false or 0.
    * Null values are skipped.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4], DType = INT32
+   * Scalar result = col.all(DType.BOOL8);
+   * // result = true,         DType = BOOL8
+   * }</pre>
+   *
+   * @param outType the output DType
    * @deprecated the only output type supported is BOOL8.
    */
   @Deprecated
@@ -1563,6 +1734,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Overflows in reductions are not detected. Specifying a higher precision
    * output type may prevent overflow. Only the MIN and MAX ops are
    * The null values are skipped for the operation.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.reduce(ReductionAggregation.sum());
+   * // result = 15,              DType = INT32
+   * }</pre>
+   *
    * @param aggregation The reduction aggregation to perform
    * @return The scalar result of the reduction operation. If the column is
    * empty or the reduction operation fails then the
@@ -1578,6 +1757,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * output type may prevent overflow. Only the MIN and MAX ops are
    * supported for reduction of non-arithmetic types (TIMESTAMP...)
    * The null values are skipped for the operation.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.reduce(ReductionAggregation.sum(), DType.INT64);
+   * // result = 15,              DType = INT64
+   * }</pre>
+   *
    * @param aggregation The reduction aggregation to perform
    * @param outType The type of scalar value to return. Not all output types are supported
    *                by all aggregation operations.
