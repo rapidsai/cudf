@@ -579,13 +579,13 @@ class StructDtype(_BaseDtype):
     >>> import cudf
     >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "string"})
     >>> struct_dtype
-    StructDtype({'a': dtype('int64'), 'b': dtype('O')})
+    StructDtype({'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>})
 
     A nested ``StructDtype`` can also be constructed in the following way:
 
     >>> nested_struct_dtype = cudf.StructDtype({"dict_data": struct_dtype, "c": "uint8"})
     >>> nested_struct_dtype
-    StructDtype({'dict_data': StructDtype({'a': dtype('int64'), 'b': dtype('O')}), 'c': dtype('uint8')})
+    StructDtype({'dict_data': StructDtype({'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>}), 'c': dtype('uint8')})
     """
 
     name = "struct"
@@ -606,9 +606,9 @@ class StructDtype(_BaseDtype):
         >>> import cudf
         >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "string"})
         >>> struct_dtype
-        StructDtype({'a': dtype('int64'), 'b': dtype('O')})
+        StructDtype({'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>})
         >>> struct_dtype.fields
-        {'a': dtype('int64'), 'b': dtype('O')}
+        {'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>}
         """
         return self._fields
 
@@ -631,7 +631,7 @@ class StructDtype(_BaseDtype):
         >>> pa_struct_type
         StructType(struct<x: int32, y: string>)
         >>> cudf.StructDtype.from_arrow(pa_struct_type)
-        StructDtype({'x': dtype('int32'), 'y': dtype('O')})
+        StructDtype({'x': dtype('int32'), 'y': <StringDtype(na_value=nan)>})
         """
         return cls(
             {
@@ -654,7 +654,7 @@ class StructDtype(_BaseDtype):
         >>> import cudf
         >>> struct_type = cudf.StructDtype({"x": "int32", "y": "string"})
         >>> struct_type
-        StructDtype({'x': dtype('int32'), 'y': dtype('O')})
+        StructDtype({'x': dtype('int32'), 'y': <StringDtype(na_value=<NA>)>})
         >>> struct_type.to_arrow()
         StructType(struct<x: int32, y: string>)
         """
