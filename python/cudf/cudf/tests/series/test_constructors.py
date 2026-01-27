@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import array
 import datetime
@@ -798,7 +798,9 @@ def test_series_all_valid_nan(num_elements):
 def test_series_empty_dtype():
     expected = pd.Series([])
     actual = cudf.Series([])
-    assert_eq(expected, actual, check_dtype=True)
+    assert expected.dtype == object
+    assert actual.dtype == pd.StringDtype(na_value=np.nan)
+    assert_eq(expected, actual, check_dtype=False)
 
 
 @pytest.mark.parametrize("data", [None, {}, []])
@@ -1335,7 +1337,7 @@ def test_string_ingest(one_dimensional_array_types):
     expect = ["a", "a", "b", "c", "a"]
     data = one_dimensional_array_types(expect)
     got = cudf.Series(data)
-    assert got.dtype == np.dtype("object")
+    assert got.dtype == pd.StringDtype(na_value=np.nan)
     assert len(got) == 5
     for idx, val in enumerate(expect):
         assert expect[idx] == got[idx]
@@ -1506,16 +1508,16 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
-    assert_eq(col.dtype, np.dtype("object"))
+    assert_eq(col.dtype, pd.StringDtype(na_value=np.nan))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
     col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
-    assert_eq(col.dtype, np.dtype("object"))
+    assert_eq(col.dtype, pd.StringDtype(na_value=np.nan))
     gds = cudf.Series._from_column(col)
-    pds = pd.Series(pd.Series([], dtype="object"))
+    pds = pd.Series(pd.Series([], dtype=pd.StringDtype(na_value=np.nan)))
 
     assert_eq(pds, gds)
 

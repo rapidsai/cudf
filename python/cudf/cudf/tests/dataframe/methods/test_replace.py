@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -6,20 +6,12 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
 )
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning introduced in pandas-2.2.0",
-)
 @pytest.mark.parametrize(
     "data, dtype",
     [
@@ -119,7 +111,15 @@ def test_dataframe_replace(request, data, dtype, to_replace, value):
     else:
         expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
     actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
-
+    if isinstance(value, list) and value == ["_", None]:
+        # "foo" already contained strings with NaNs, replacing with None
+        # results in object dtype which cuDF doesn't support
+        if "c" in data:
+            expected["c"] = expected["c"].astype(actual["c"].dtype)
+        elif "col two" in data:
+            expected["col two"] = expected["col two"].astype(
+                actual["col two"].dtype
+            )
     expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
     actual_sorted = actual.sort_values(by=list(actual.columns), axis=0)
 
