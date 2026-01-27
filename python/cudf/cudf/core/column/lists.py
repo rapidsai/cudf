@@ -68,7 +68,9 @@ class ListColumn(ColumnBase):
     def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-        # Infer dtype from plc_column since some legacy code paths may have stale metadata.
+        # Must infer dtype from plc_column: stored element_type may be inaccurate
+        # when columns are constructed from Python data with ambiguous types
+        # (e.g., [[]] creates ListDtype(object) but plc is list<int8>).
         element_dtype = dtype_from_pylibcudf_column(sliced_plc_col)
         return ColumnBase.create(sliced_plc_col, element_dtype)
 
