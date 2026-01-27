@@ -70,9 +70,13 @@ class ListColumn(ColumnBase):
     def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-        # For nested structures (e.g., list<list<T>>), dtype.element_type might
-        # not accurately reflect the actual plc_column type. Always infer the dtype
-        # from the plc_column to ensure correct nested dtype handling.
+        # For nested structures (e.g., list<list<T>>), dtype.element_type may not
+        # accurately reflect the actual plc_column type. This happens when operations
+        # like groupby collect() aggregate list columns, creating nested lists without
+        # updating the stored dtype. For example, groupby("a").agg({"b": "collect"})
+        # on a list<int> column produces list<list<int>>, but dtype.element_type
+        # remains int64 instead of being updated to ListDtype(int64).
+        # Always infer the dtype from the plc_column to handle these cases correctly.
         from cudf.utils.dtypes import dtype_from_pylibcudf_column
 
         element_dtype = dtype_from_pylibcudf_column(sliced_plc_col)

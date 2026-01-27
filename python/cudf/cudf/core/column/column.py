@@ -1228,6 +1228,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         plc_col = self.plc_column
         if deep:
             plc_col = plc_col.copy()
+        # For nested types (e.g., list<list<int>>), self.dtype may not accurately
+        # reflect the actual plc_column structure. Some operations (like groupby
+        # collect on a list column) create nested structures but don't update the
+        # stored dtype to reflect the new nesting level. Using _with_type_metadata()
+        # is more permissive and handles these cases.
         return cast(
             "Self",
             (
