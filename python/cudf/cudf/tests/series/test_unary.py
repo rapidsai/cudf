@@ -45,7 +45,7 @@ def test_series_decimal_neg():
     assert_eq((-sr).to_pandas(), -psr, check_dtype=True)
 
 
-def test_series_invert_arrow_dtype(request):
+def test_series_invert_arrow_dtype():
     ps = pd.Series(
         pd.arrays.ArrowExtensionArray(
             pa.array([1, 0, 1, 0, None, 2, 1, 2], type=pa.uint32())
