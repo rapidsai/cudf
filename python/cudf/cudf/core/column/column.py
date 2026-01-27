@@ -716,12 +716,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ValueError
             If the dtype is incompatible with the Column.
         """
-        from cudf.utils.dtypes import _is_empty_to_int8_conversion
-
         # Skip validation for empty columns (INT8 with all nulls). These are created
         # by _wrap_buffers() from EMPTY columns and may have inaccurate dtype metadata.
         # For example, an empty list [] has element_type=object but child is INT8.
-        if _is_empty_to_int8_conversion(col):
+        if (
+            col.type().id() == plc.TypeId.INT8
+            and col.null_count() == col.size()
+        ):
             return
 
         # Dispatch to the appropriate subclass and use its _validate_args
