@@ -1,10 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import decimal
 import operator
 import re
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
 
 import cupy as cp
 import numpy as np
@@ -3174,3 +3175,20 @@ def test_timedelta_arrow_backed_comparisions_pandas_compat():
         gs = cudf.from_pandas(s)
         assert_eq(s == s, gs == gs)
         assert_eq(s != s, gs != gs)
+
+
+def test_decimal_arrow_backed_comparisons_pandas_compat(comparison_op):
+    s = pd.Series(
+        pd.arrays.ArrowExtensionArray(
+            pa.array(
+                [Decimal("1.234"), Decimal("0.000"), None],
+                type=pa.decimal128(7, 3),
+            )
+        )
+    )
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        gs = cudf.from_pandas(s)
+        expect = comparison_op(s, s)
+        got = comparison_op(gs, gs)
+        assert_eq(expect, got)

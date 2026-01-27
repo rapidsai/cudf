@@ -334,7 +334,9 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 op,
                 get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
             )
-            if cudf.get_option("mode.pandas_compatible"):
+            if cudf.get_option("mode.pandas_compatible") and not isinstance(
+                self.dtype, pd.ArrowDtype
+            ):
                 result = result.fillna(op == "__ne__")
             return result
         else:
