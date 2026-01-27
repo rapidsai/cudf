@@ -68,6 +68,8 @@ class SingleColumnFrame(Frame, NotIterable):
             # These are computed via methods on the column
             # Note: sum is in this list because StringColumn and TimeDeltaColumn
             # have custom sum() implementations
+            # Note: mean/std/median are in this list because TemporalBaseColumn
+            # has wrapper methods that convert int64 results to pd.Timestamp/pd.Timedelta
             special_methods = {
                 "kurtosis",
                 "skew",

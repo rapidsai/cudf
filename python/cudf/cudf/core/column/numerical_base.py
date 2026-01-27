@@ -49,16 +49,23 @@ class NumericalBaseColumn(ColumnBase):
         min_count: int = 0,
         **kwargs: Any,
     ) -> ScalarLike:
-        """Override to dispatch median to specialized method."""
+        """Override to dispatch median and handle var/std NA conversion."""
         if reduction_op == "median":
             if kwargs or min_count != 0:
                 raise ValueError(
                     "median does not support additional kwargs or min_count"
                 )
             return self.median(skipna=skipna)
-        return super().reduce(
+
+        result = super().reduce(
             reduction_op, skipna=skipna, min_count=min_count, **kwargs
         )
+
+        # Convert NA to NaN for var/std operations
+        if reduction_op in {"var", "std"} and result is NA:
+            return _get_nan_for_dtype(self.dtype)
+
+        return result
 
     def kurtosis(self, skipna: bool = True) -> float:
         if not isinstance(skipna, bool):
@@ -75,9 +82,9 @@ class NumericalBaseColumn(ColumnBase):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         n = len(self)
-        miu = self.mean()
+        miu = self.reduce("mean")
         m4_numerator = ((self - miu) ** 4).reduce("sum")
-        V = self.var()
+        V = self.reduce("var")
 
         if V == 0:
             return np.float64(0)
@@ -103,9 +110,9 @@ class NumericalBaseColumn(ColumnBase):
             return _get_nan_for_dtype(self.dtype)
 
         n = len(self)
-        miu = self.mean()
+        miu = self.reduce("mean")
         m3 = (((self - miu) ** 3).reduce("sum")) / n
-        m2 = self.var(ddof=0)
+        m2 = self.reduce("var", ddof=0)
 
         if m2 == 0:
             return np.float64(0)
@@ -173,39 +180,6 @@ class NumericalBaseColumn(ColumnBase):
             )
         return result
 
-    def mean(
-        self,
-        skipna: bool = True,
-        min_count: int = 0,
-    ) -> ScalarLike:
-        return self.reduce("mean", skipna=skipna, min_count=min_count)
-
-    def var(
-        self,
-        skipna: bool = True,
-        min_count: int = 0,
-        ddof: int = 1,
-    ) -> ScalarLike:
-        result = self.reduce(
-            "var", skipna=skipna, min_count=min_count, ddof=ddof
-        )
-        if result is NA:
-            return _get_nan_for_dtype(self.dtype)
-        return result
-
-    def std(
-        self,
-        skipna: bool = True,
-        min_count: int = 0,
-        ddof: int = 1,
-    ) -> ScalarLike:
-        result = self.reduce(
-            "std", skipna=skipna, min_count=min_count, ddof=ddof
-        )
-        if result is NA:
-            return _get_nan_for_dtype(self.dtype)
-        return result
-
     def median(self, skipna: bool = True) -> NumericalBaseColumn:
         if not isinstance(skipna, bool):
             raise ValueError(
@@ -234,7 +208,7 @@ class NumericalBaseColumn(ColumnBase):
         ):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
-        result = (self - self.mean()) * (other - other.mean())
+        result = (self - self.reduce("mean")) * (other - other.reduce("mean"))
         cov_sample = result.reduce("sum") / (len(self) - 1)
         return cov_sample
 
@@ -243,7 +217,7 @@ class NumericalBaseColumn(ColumnBase):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         cov = self.cov(other)
-        lhs_std, rhs_std = self.std(), other.std()
+        lhs_std, rhs_std = self.reduce("std"), other.reduce("std")
 
         if not cov or lhs_std == 0 or rhs_std == 0:
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]

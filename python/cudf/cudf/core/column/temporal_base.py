@@ -341,8 +341,8 @@ class TemporalBaseColumn(ColumnBase):
         self, skipna: bool = True, min_count: int = 0
     ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE).mean(  # type: ignore[attr-defined]
-                skipna=skipna, min_count=min_count
+            self.astype(self._UNDERLYING_DTYPE).reduce(
+                "mean", skipna=skipna, min_count=min_count
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
@@ -351,15 +351,17 @@ class TemporalBaseColumn(ColumnBase):
         self, skipna: bool = True, min_count: int = 0, ddof: int = 1
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.astype(self._UNDERLYING_DTYPE).std(  # type: ignore[attr-defined]
-                skipna=skipna, min_count=min_count, ddof=ddof
+            self.astype(self._UNDERLYING_DTYPE).reduce(
+                "std", skipna=skipna, min_count=min_count, ddof=ddof
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
     def median(self, skipna: bool = True) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE).median(skipna=skipna),  # type: ignore[attr-defined]
+            self.astype(self._UNDERLYING_DTYPE).reduce(
+                "median", skipna=skipna
+            ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
