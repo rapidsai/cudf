@@ -348,8 +348,8 @@ class device_row_comparator {
     }
 
     template <typename Element>
-    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
-      size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
+    __attribute__((noinline)) __device__ cuda::std::pair<cudf::detail::weak_ordering, int>
+    operator()(size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
       requires(cudf::is_dictionary<Element>())
     {
       if (_check_nulls) {
@@ -394,8 +394,8 @@ class device_row_comparator {
      * with the depth at which a null value was encountered.
      */
     template <typename Element>
-    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
-      size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
+    __attribute__((noinline)) __device__ cuda::std::pair<cudf::detail::weak_ordering, int>
+    operator()(size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
       requires(has_nested_columns and cuda::std::is_same_v<Element, cudf::struct_view>)
     {
       column_device_view lcol = _lhs;
@@ -437,8 +437,8 @@ class device_row_comparator {
      * with the depth at which a null value was encountered.
      */
     template <typename Element>
-    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
-      size_type lhs_element_index, size_type rhs_element_index)
+    __attribute__((noinline)) __device__ cuda::std::pair<cudf::detail::weak_ordering, int>
+    operator()(size_type lhs_element_index, size_type rhs_element_index)
       requires(has_nested_columns and cuda::std::is_same_v<Element, cudf::list_view>)
     {
       auto const is_l_row_null = _lhs.is_null(lhs_element_index);
