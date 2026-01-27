@@ -708,8 +708,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        # Wrap buffers first to handle type conversions (TIMESTAMP_DAYS -> TIMESTAMP_SECONDS, EMPTY -> INT8)
-        # This ensures dtype_from_pylibcudf_column sees the canonical form
+        # Wrap buffers first so that dtypes are compatible with dtype_from_pylibcudf_column
         wrapped = ColumnBase._wrap_buffers(col)
         dtype = dtype_from_pylibcudf_column(wrapped)
         return ColumnBase.create(wrapped, dtype)
@@ -2447,37 +2446,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 type(self).from_pylibcudf(col) for col in plc_table.columns()
             )
 
+    # TODO: Currently this method is only used once, in ExponentialMovingWindow. That
+    # suggests a potential refactoring opportunity to make EWM play better with the rest
+    # of our aggregation/reduction framework.
     def scan(self, scan_op: str, inclusive: bool, **kwargs: Any) -> Self:
         with self.access(mode="read", scope="internal"):
-            return cast(
-                "Self",
-                type(self).from_pylibcudf(
-                    plc.reduce.scan(
-                        self.plc_column,
-                        aggregation.make_aggregation(scan_op, kwargs).plc_obj,
-                        plc.reduce.ScanType.INCLUSIVE
-                        if inclusive
-                        else plc.reduce.ScanType.EXCLUSIVE,
-                    )
-                ),
+            plc_result = plc.reduce.scan(
+                self.plc_column,
+                aggregation.make_aggregation(scan_op, kwargs).plc_obj,
+                plc.reduce.ScanType.INCLUSIVE
+                if inclusive
+                else plc.reduce.ScanType.EXCLUSIVE,
             )
+        return cast("Self", ColumnBase.create(plc_result, self.dtype))
 
     def _scan(self, op: str) -> ColumnBase:
-        """
-        Default cumulative scan implementation for DataFrame.cum* methods.
-
-        Subclasses can override this to add type-specific validation or behavior.
-        """
-        scan_op = op.replace("cum", "")
-        with self.access(mode="read", scope="internal"):
-            result = type(self).from_pylibcudf(
-                plc.reduce.scan(
-                    self.plc_column,
-                    aggregation.make_aggregation(scan_op, {}).plc_obj,
-                    plc.reduce.ScanType.INCLUSIVE,
-                )
-            )
-        return result._with_type_metadata(self.dtype)
+        """Default cumulative scan implementation for DataFrame.cum* methods."""
+        return self.scan(op.replace("cum", ""), inclusive=True)
 
     def reduce(self, reduction_op: str, **kwargs: Any) -> ScalarLike:
         col_dtype = self._reduction_result_dtype(reduction_op)
