@@ -613,8 +613,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             validate=False,
         )
 
-    @classmethod
-    def create(cls, col: plc.Column, dtype: DtypeObj) -> ColumnBase:
+    @staticmethod
+    def create(col: plc.Column, dtype: DtypeObj) -> ColumnBase:
         """
         Create a Column from a pylibcudf.Column with an explicit cudf dtype.
 
