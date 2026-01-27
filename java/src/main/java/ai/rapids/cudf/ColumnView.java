@@ -1784,6 +1784,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Do a segmented reduce where the offsets column indicates which groups in this to combine. The
    * output type is the same as the input type.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col     = [1, 2, 3, 4, 5], DType = INT32
+   * // offsets = [0, 2, 5],       DType = INT32
+   * ColumnVector result = col.segmentedReduce(offsets, SegmentedReductionAggregation.sum());
+   * // result  = [3, 12],         DType = INT32
+   * }</pre>
+   *
    * @param offsets an INT32 column with no nulls.
    * @param aggregation the aggregation to do
    * @return the result.
@@ -1794,6 +1803,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Do a segmented reduce where the offsets column indicates which groups in this to combine.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col     = [1, 2, 3, 4, 5], DType = INT32
+   * // offsets = [0, 2, 5],       DType = INT32
+   * ColumnVector result = col.segmentedReduce(offsets, SegmentedReductionAggregation.sum(), DType.INT64);
+   * // result  = [3, 12],         DType = INT64
+   * }</pre>
+   *
    * @param offsets an INT32 column with no nulls.
    * @param aggregation the aggregation to do
    * @param outType the output data type.
@@ -1806,6 +1824,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Do a segmented reduce where the offsets column indicates which groups in this to combine.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col     = [1, null, 3, 4, 5], DType = INT32
+   * // offsets = [0, 2, 5],          DType = INT32
+   * ColumnVector result = col.segmentedReduce(offsets, SegmentedReductionAggregation.sum(),
+   *     NullPolicy.INCLUDE, DType.INT64);
+   * // result  = [null, 12],         DType = INT64
+   * }</pre>
+   *
    * @param offsets an INT32 column with no nulls.
    * @param aggregation the aggregation to do
    * @param nullPolicy the null policy.
@@ -1827,6 +1855,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Segmented gather of the elements within a list element in each row of a list column.
    * For each list, assuming the size is N, valid indices of gather map ranges in [-N, N).
    * Out of bound indices refer to null.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col       = [[1, 2, 3], [4, 5], [6, 7, 8, 9]], DType = LIST of INT32
+   * // gatherMap = [[0, 2],    [1],    [3, 0]],       DType = LIST of INT32
+   * ColumnVector result = col.segmentedGather(gatherMap);
+   * // result    = [[1, 3],    [5],    [9, 6]],       DType = LIST of INT32
+   * }</pre>
+   *
    * @param gatherMap ListColumnView carrying lists of integral indices which maps the
    * element in list of each row in the source columns to rows of lists in the result columns.
    * @return the result.
@@ -1837,6 +1874,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Segmented gather of the elements within a list element in each row of a list column.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col       = [[1, 2, 3], [4, 5], [6, 7, 8, 9]], DType = LIST of INT32
+   * // gatherMap = [[0, 10],   [1],    [3, 0]],       DType = LIST of INT32
+   * ColumnVector result = col.segmentedGather(gatherMap, OutOfBoundsPolicy.NULLIFY);
+   * // result    = [[1, null], [5],    [9, 6]],       DType = LIST of INT32
+   * }</pre>
+   *
    * @param gatherMap ListColumnView carrying lists of integral indices which maps the
    * element in list of each row in the source columns to rows of lists in the result columns.
    * @param policy OutOfBoundsPolicy, `DONT_CHECK` leads to undefined behaviour; `NULLIFY`
@@ -1851,6 +1897,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Do a reduction on the values in a list. The output type will be the type of the data column
    * of this list.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 3], [4, 5], [6]], DType = LIST of INT32
+   * ColumnVector result = col.listReduce(SegmentedReductionAggregation.sum());
+   * // result = [6, 9, 6],                DType = INT32
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    */
   public ColumnVector listReduce(SegmentedReductionAggregation aggregation) {
@@ -1865,6 +1919,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Do a reduction on the values in a list.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 3], [4, 5], [6]], DType = LIST of INT32
+   * ColumnVector result = col.listReduce(SegmentedReductionAggregation.sum(), DType.INT64);
+   * // result = [6, 9, 6],                DType = INT64
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    * @param outType the type of the output. Typically, this should match with the child type
    *                of the list.
@@ -1875,6 +1937,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Do a reduction on the values in a list.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, null, 3], [4, 5], [6]], DType = LIST of INT32
+   * ColumnVector result = col.listReduce(SegmentedReductionAggregation.sum(),
+   *     NullPolicy.INCLUDE, DType.INT64);
+   * // result = [null, 9, 6],                DType = INT64
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    * @param nullPolicy should nulls be included or excluded from the aggregation.
    * @param outType the type of the output. Typically, this should match with the child type
@@ -1895,6 +1966,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
    * a t-digest aggregation.
    *
+   * <p>Example:
+   * <pre>{@code
+   * // tdigestCol = column of t-digest centroids (produced by createTDigest aggregation)
+   * // percentiles = [0.25, 0.5, 0.75]
+   * ColumnVector result = tdigestCol.approxPercentile(new double[]{0.25, 0.5, 0.75});
+   * // result = list of approximate percentile values for each row
+   * }</pre>
+   *
    * @param percentiles Required percentiles [0,1]
    * @return Column containing the approximate percentile values as a list of doubles, in
    *         the same order as the input percentiles
@@ -1909,6 +1988,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
    * a t-digest aggregation.
    *
+   * <p>Example:
+   * <pre>{@code
+   * // tdigestCol = column of t-digest centroids (produced by createTDigest aggregation)
+   * // percentiles = [0.25, 0.5, 0.75], DType = FLOAT64
+   * ColumnVector result = tdigestCol.approxPercentile(percentiles);
+   * // result = list of approximate percentile values for each row
+   * }</pre>
+   *
    * @param percentiles Column containing percentiles [0,1]
    * @return Column containing the approximate percentile values as a list of doubles, in
    *         the same order as the input percentiles
@@ -1920,6 +2007,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
    * in the desired order.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [-1, 0, 1, 1, 2, 3, 4, 6, 7, 9], DType = INT32
+   * ColumnVector result = col.quantile(QuantileMethod.LINEAR, new double[]{0.0, 0.25, 0.5, 1.0});
+   * // result = [-1.0, 0.75, 2.5, 9.0],          DType = FLOAT64
+   * }</pre>
+   *
    * @param method   the method used to calculate the quantiles
    * @param quantiles the quantile values [0,1]
    * @return Column containing the approximate percentile values as a list of doubles, in
@@ -1933,6 +2028,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This function aggregates values in a window around each element i of the input
    * column. Please refer to WindowsOptions for various options that can be passed.
    * Note: Only rows-based windows are supported.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [5, 4, 7, 6, 8],     DType = INT32
+   * WindowOptions options = WindowOptions.builder().minPeriods(2).window(1, 1).build();
+   * ColumnVector result = col.rollingWindow(RollingAggregation.sum(), options);
+   * // result = [9, 16, 17, 21, 14], DType = INT64
+   * }</pre>
+   *
    * @param op the operation to perform.
    * @param options various window function arguments.
    * @return Column containing aggregate function result.
@@ -1966,6 +2070,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Compute the prefix sum (aka cumulative sum) of the values in this column.
    * This is just a convenience method for an inclusive scan with a SUM aggregation.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 5, 8, 10],   DType = INT64
+   * ColumnVector result = col.prefixSum();
+   * // result = [1, 3, 6, 11, 19, 29], DType = INT64
+   * }</pre>
    */
   public final ColumnVector prefixSum() {
     return scan(ScanAggregation.sum());
@@ -1973,6 +2084,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Computes a scan for a column. This is very similar to a running window on the column.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, null, 3, 5, 8, 10],   DType = INT32
+   * ColumnVector result = col.scan(ScanAggregation.sum(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+   * // result = [1, 3, null, 6, 11, 19, 29], DType = INT32
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    * @param scanType should the scan be inclusive, include the current row, or exclusive.
    * @param nullPolicy how should nulls be treated. Note that some aggregations also include a
@@ -1991,6 +2110,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Computes a scan for a column that excludes nulls.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, null, 3, 5, 8, 10], DType = INT32
+   * ColumnVector result = col.scan(ScanAggregation.sum(), ScanType.EXCLUSIVE);
+   * // result = [0, 1, null, 3, 6, 11, 19], DType = INT32
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    * @param scanType should the scan be inclusive, include the current row, or exclusive.
    */
@@ -2000,6 +2127,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Computes an inclusive scan for a column that excludes nulls.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [1, 2, null, 3, 5, 8, 10], DType = INT32
+   * ColumnVector result = col.scan(ScanAggregation.sum());
+   * // result = [1, 3, null, 6, 11, 19, 29], DType = INT32
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    */
   public final ColumnVector scan(ScanAggregation aggregation) {
