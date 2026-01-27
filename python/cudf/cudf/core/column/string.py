@@ -130,21 +130,6 @@ class StringColumn(ColumnBase):
             dtype = CUDF_STRING_DTYPE
         return plc_column, dtype
 
-    def all(self, skipna: bool = True) -> bool:
-        if skipna and self.null_count == self.size:
-            return True
-        elif not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
-        raise NotImplementedError("`all` not implemented for `StringColumn`")
-
-    def any(self, skipna: bool = True) -> bool:
-        if not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
-        elif skipna and self.null_count == self.size:
-            return False
-
-        raise NotImplementedError("`any` not implemented for `StringColumn`")
-
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
@@ -208,13 +193,26 @@ class StringColumn(ColumnBase):
         **kwargs: Any,
     ) -> ScalarLike:
         """Validate and handle reduction operations for StringColumn."""
-        special_ops = {
-            "sum": lambda: self.sum(skipna=skipna, min_count=min_count),
-            "any": lambda: self.any(skipna=skipna),
-            "all": lambda: self.all(skipna=skipna),
-        }
-        if reduction_op in special_ops:
-            return special_ops[reduction_op]()
+        if reduction_op == "sum":
+            return self.sum(skipna=skipna, min_count=min_count)
+
+        if reduction_op == "any":
+            if not skipna and self.has_nulls():
+                raise TypeError("boolean value of NA is ambiguous")
+            elif skipna and self.null_count == self.size:
+                return False
+            raise NotImplementedError(
+                "`any` not implemented for `StringColumn`"
+            )
+
+        if reduction_op == "all":
+            if skipna and self.null_count == self.size:
+                return True
+            elif not skipna and self.has_nulls():
+                raise TypeError("boolean value of NA is ambiguous")
+            raise NotImplementedError(
+                "`all` not implemented for `StringColumn`"
+            )
 
         if reduction_op in {"min", "max"}:
             return super().reduce(reduction_op, skipna, min_count, **kwargs)
