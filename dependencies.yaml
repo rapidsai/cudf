@@ -982,18 +982,18 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - numba-cuda>=0.24.0,<0.25.0
+        - numba-cuda>=0.24.0
     specific:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - numba-cuda[cu12]>=0.24.0,<0.25.0
+              - numba-cuda[cu12]>=0.24.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - numba-cuda[cu13]>=0.24.0,<0.25.0
+              - numba-cuda[cu13]>=0.24.0
   depends_on_pylibcudf:
     common:
       - output_types: conda
