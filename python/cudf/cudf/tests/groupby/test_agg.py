@@ -398,11 +398,7 @@ def test_groupby_multi_agg_hash_groupby(agg):
     assert_groupby_results_equal(pdg, gdg, check_dtype=check_dtype)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="previous verion of pandas throws a warning",
-)
-def test_groupby_nulls_basic(groupby_reduction_methods, request):
+def test_groupby_nulls_basic(groupby_reduction_methods):
     pdf = pd.DataFrame({"a": [0, 0, 1, 1, 2, 2], "b": [1, 2, 1, 2, 1, None]})
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
@@ -423,6 +419,8 @@ def test_groupby_nulls_basic(groupby_reduction_methods, request):
         getattr(gdf.groupby("a"), groupby_reduction_methods)(),
     )
 
+
+def test_groupby_nulls_all_na_group(groupby_reduction_methods, request):
     pdf = pd.DataFrame(
         {
             "a": [0, 0, 1, 1, 2, 2],
@@ -432,16 +430,22 @@ def test_groupby_nulls_basic(groupby_reduction_methods, request):
     )
     gdf = cudf.from_pandas(pdf)
 
-    request.applymarker(
-        pytest.mark.xfail(
-            groupby_reduction_methods in ["prod", "sum"],
-            reason="cuDF returns NaN instead of an actual value",
+    if groupby_reduction_methods in ["idxmin", "idxmax"]:
+        with pytest.raises(ValueError):
+            getattr(gdf.groupby("a"), groupby_reduction_methods)()
+        with pytest.raises(ValueError):
+            getattr(pdf.groupby("a"), groupby_reduction_methods)()
+    else:
+        request.applymarker(
+            pytest.mark.xfail(
+                groupby_reduction_methods in ["prod", "sum"],
+                reason="cuDF returns NaN instead of an actual value",
+            )
         )
-    )
-    assert_groupby_results_equal(
-        getattr(pdf.groupby("a"), groupby_reduction_methods)(),
-        getattr(gdf.groupby("a"), groupby_reduction_methods)(),
-    )
+        assert_groupby_results_equal(
+            getattr(pdf.groupby("a"), groupby_reduction_methods)(),
+            getattr(gdf.groupby("a"), groupby_reduction_methods)(),
+        )
 
 
 @pytest.mark.parametrize("agg", [lambda x: x.count(), "count"])
