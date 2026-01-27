@@ -2500,6 +2500,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ),
             )
 
+    def _scan(self, op: str) -> ColumnBase:
+        """
+        Default cumulative scan implementation for DataFrame.cum* methods.
+
+        Subclasses can override this to add type-specific validation or behavior.
+        """
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )
+
     def reduce(self, reduction_op: str, **kwargs: Any) -> ScalarLike:
         col_dtype = self._reduction_result_dtype(reduction_op)
 
