@@ -23,7 +23,7 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
     get_tz_data,
 )
-from cudf.core.column import as_column
+from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -604,32 +604,19 @@ class DatetimeColumn(TemporalBaseColumn):
             )
             if other_is_null_scalar:
                 # return a column with all nulls in the size of `self`
-                result_col = cudf.core.column.column_empty(
-                    len(self), out_dtype
-                )
-                return result_col
+                return column_empty(len(self), out_dtype)
         elif op == "__sub__":
             # Subtracting a datetime from a datetime results in a timedelta.
             if other_is_datetime64:
+                out_dtype = get_dtype_of_same_kind(
+                    self.dtype,
+                    np.dtype(
+                        f"timedelta64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                    ),
+                )
                 if other_is_null_scalar:
                     # return a column with all nulls in the size of `self`
-                    out_dtype = get_dtype_of_same_kind(
-                        self.dtype,
-                        np.dtype(
-                            f"timedelta64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
-                        ),
-                    )
-                    result_col = cudf.core.column.column_empty(
-                        len(self), out_dtype
-                    )
-                    return result_col
-                if not other_is_null_scalar:
-                    out_dtype = get_dtype_of_same_kind(
-                        self.dtype,
-                        np.dtype(
-                            f"timedelta64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
-                        ),
-                    )
+                    return column_empty(len(self), out_dtype)
             # We can subtract a timedelta from a datetime, but not vice versa.
             # Not only is subtraction antisymmetric (as is normal), it is only
             # well-defined if this operation was not invoked via reflection.
@@ -642,10 +629,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 )
                 if other_is_null_scalar:
                     # return a column with all nulls in the size of `self`
-                    result_col = cudf.core.column.column_empty(
-                        len(self), out_dtype
-                    )
-                    return result_col
+                    return column_empty(len(self), out_dtype)
         elif op in {
             "__eq__",
             "__ne__",

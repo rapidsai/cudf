@@ -1418,7 +1418,7 @@ class Index(SingleColumnFrame):
 
     def _binaryop(
         self,
-        other: Frame,
+        other: Any,
         op: str,
         fill_value: Any = None,
         *args,
