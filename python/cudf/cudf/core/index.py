@@ -44,6 +44,7 @@ from cudf.core.column.column import as_column, column_empty, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
+from cudf.core.frame import Frame
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
@@ -69,7 +70,6 @@ if TYPE_CHECKING:
 
     from cudf._typing import ColumnLike, Dtype
     from cudf.core.dataframe import DataFrame
-    from cudf.core.frame import Frame
     from cudf.core.multiindex import MultiIndex
     from cudf.core.series import Series
     from cudf.core.tools.datetimes import DateOffset, MonthEnd, YearEnd
@@ -1737,7 +1737,7 @@ class Index(SingleColumnFrame):
 
     def _binaryop(
         self,
-        other: Frame,
+        other: Any,
         op: str,
         fill_value: Any = None,
         *args,
@@ -1765,7 +1765,8 @@ class Index(SingleColumnFrame):
             if ret._column.has_nulls():
                 ret = ret.fillna(op == "__ne__")
 
-            return ret.values
+            if not isinstance(other, Frame):
+                return ret.values
         return ret
 
     @classmethod

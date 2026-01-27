@@ -25,7 +25,7 @@ from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
 )
-from cudf.utils.utils import _is_null_host_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -151,7 +151,7 @@ class ListColumn(ColumnBase):
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
-            if _is_null_host_scalar(data):
+            if is_na_like(data):
                 mask_bools.append(False)
                 offset_vals.append(offset)
             else:

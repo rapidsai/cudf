@@ -40,7 +40,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.utils import _is_null_host_scalar, is_na_like
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -1078,7 +1078,7 @@ def _normalize_find_and_replace_input(
         )
         # Scalar case
         if len(col_to_normalize) == 1:
-            if _is_null_host_scalar(col_to_normalize[0]):
+            if is_na_like(col_to_normalize[0]):
                 return normalized_column.astype(input_column_dtype)
             if np.isinf(col_to_normalize[0]):
                 return normalized_column
