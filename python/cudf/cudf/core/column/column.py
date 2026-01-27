@@ -694,6 +694,41 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         raise TypeError(f"Unrecognized dtype: {dtype}")
 
     @staticmethod
+    def _validate_dtype_recursively(col: plc.Column, dtype: DtypeObj) -> None:
+        """
+        Validate dtype compatibility by dispatching to the appropriate ColumnBase
+        subclass's _validate_args method.
+
+        This method is used for recursive validation in nested types (List, Struct,
+        Interval). It dispatches to the correct ColumnBase subclass based on dtype
+        and calls its _validate_args method, which may recursively call this method
+        for nested children.
+
+        Parameters
+        ----------
+        col : plc.Column
+            The pylibcudf Column to validate.
+        dtype : DtypeObj
+            The cudf dtype to validate against.
+
+        Raises
+        ------
+        ValueError
+            If the dtype is incompatible with the Column.
+        """
+        from cudf.utils.dtypes import _is_empty_to_int8_conversion
+
+        # Skip validation for empty columns (INT8 with all nulls). These are created
+        # by _wrap_buffers() from EMPTY columns and may have inaccurate dtype metadata.
+        # For example, an empty list [] has element_type=object but child is INT8.
+        if _is_empty_to_int8_conversion(col):
+            return
+
+        # Dispatch to the appropriate subclass and use its _validate_args
+        target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
+        target_cls._validate_args(col, dtype)
+
+    @staticmethod
     def from_pylibcudf(col: plc.Column) -> ColumnBase:
         """Create a Column from a pylibcudf.Column.
 

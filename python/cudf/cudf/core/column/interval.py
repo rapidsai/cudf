@@ -15,10 +15,7 @@ import pylibcudf as plc
 import cudf
 from cudf.core.column.column import ColumnBase, _handle_nulls, as_column
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
-from cudf.utils.dtypes import (
-    _validate_dtype_recursively,
-    is_dtype_obj_interval,
-)
+from cudf.utils.dtypes import is_dtype_obj_interval
 from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
 if TYPE_CHECKING:
@@ -56,7 +53,7 @@ class IntervalColumn(ColumnBase):
 
         for i, child in enumerate(plc_column.children()):
             try:
-                _validate_dtype_recursively(child, dtype.subtype)
+                ColumnBase._validate_dtype_recursively(child, dtype.subtype)
             except ValueError as e:
                 raise ValueError(
                     f"{'Right' if i else 'Left'} interval bound validation failed: {e}"

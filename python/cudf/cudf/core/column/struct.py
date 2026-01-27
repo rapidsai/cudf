@@ -13,7 +13,6 @@ import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import (
-    _validate_dtype_recursively,
     dtype_from_pylibcudf_column,
     is_dtype_obj_struct,
 )
@@ -76,7 +75,7 @@ class StructColumn(ColumnBase):
         for i, (field_name, field_dtype) in enumerate(dtype.fields.items()):
             child = plc_column.child(i)
             try:
-                _validate_dtype_recursively(child, field_dtype)
+                ColumnBase._validate_dtype_recursively(child, field_dtype)
             except ValueError as e:
                 raise ValueError(
                     f"Field '{field_name}' (index {i}) validation failed: {e}"

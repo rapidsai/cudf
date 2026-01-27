@@ -19,7 +19,6 @@ from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
-    _validate_dtype_recursively,
     dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
     is_dtype_obj_list,
@@ -58,7 +57,7 @@ class ListColumn(ColumnBase):
 
         child = plc_column.list_view().child()
         try:
-            _validate_dtype_recursively(child, dtype.element_type)
+            ColumnBase._validate_dtype_recursively(child, dtype.element_type)
         except ValueError as e:
             raise ValueError(
                 f"List element type validation failed: {e}"
