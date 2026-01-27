@@ -185,11 +185,6 @@ class StringColumn(ColumnBase):
         skipna: bool = True,
         min_count: int = 0,
     ) -> ScalarLike:
-        if not isinstance(skipna, bool):
-            raise ValueError(
-                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
-            )
-
         col = self.nans_to_nulls() if skipna else self
         if not skipna and col.has_nulls():
             return pd.NA

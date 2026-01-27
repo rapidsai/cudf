@@ -2410,13 +2410,6 @@ class ColumnBase(Serializable, BinaryOperand):
             )
 
     def scan(self, scan_op: str, inclusive: bool, **kwargs: Any) -> Self:
-        """Single entry point for all scan operations.
-
-        Args:
-            scan_op: Operation name (sum, product, min, max)
-            inclusive: Whether scan includes current element (True for cumulative)
-            **kwargs: Additional operation-specific parameters (e.g., com/adjust for EWM)
-        """
         # Validation hook for subclasses
         self._validate_scan_op(scan_op)
 
@@ -2441,20 +2434,6 @@ class ColumnBase(Serializable, BinaryOperand):
         min_count: int = 0,
         **kwargs: Any,
     ) -> ScalarLike:
-        """Single entry point for all reduction operations.
-
-        Args:
-            reduction_op: Operation name (sum, product, min, max, mean, etc.)
-            skipna: Whether to skip NA/null values
-            min_count: Minimum number of valid values required
-            **kwargs: Additional operation-specific parameters (e.g., ddof for std)
-        """
-        # Validation
-        if not isinstance(skipna, bool):
-            raise ValueError(
-                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
-            )
-
         # Special case: for "any" and "all", NaN is always truthy in Python
         # When skipna=False, treat NaN as truthy (don't return NA)
         # When skipna=True, skip NaN like any other operation
