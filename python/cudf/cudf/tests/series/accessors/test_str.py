@@ -2254,6 +2254,31 @@ def test_string_lower(ps_gs):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        "ΦΘΣ",  # Sigma at end -> should become final sigma ς
+        "ΦΘΣ.",  # Sigma before punctuation -> should become final sigma ς
+        "ΦΘΣ ",  # Sigma before space -> should become final sigma ς
+        "ΦΘΣq",  # Sigma before letter -> should stay regular sigma σ  # noqa: RUF003
+        "ΣΗΜΑ",  # Sigma at beginning -> should become regular sigma σ  # noqa: RUF003
+        "ΘΕΣΣ",  # Two sigmas at end -> last should become final sigma ς
+        "ΘΕΣΣαλονίκη",  # Sigma before Greek letter -> should stay regular sigma σ  # noqa: RUF003
+        "ΦΘΣ!",  # Sigma before exclamation -> should become final sigma ς
+        "ΦΘΣ123",  # Sigma before number -> should become final sigma ς
+    ],
+)
+def test_string_lower_greek_final_sigma(data):
+    with cudf.option_context("mode.pandas_compatible", True):
+        ps = pd.Series([data])
+        gs = cudf.Series([data])
+
+        expect = ps.str.lower()
+        got = gs.str.lower()
+
+        assert_eq(expect, got)
+
+
 def test_string_upper(ps_gs):
     ps, gs = ps_gs
 
