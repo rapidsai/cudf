@@ -631,7 +631,7 @@ class StructDtype(_BaseDtype):
         >>> pa_struct_type
         StructType(struct<x: int32, y: string>)
         >>> cudf.StructDtype.from_arrow(pa_struct_type)
-        StructDtype({'x': dtype('int32'), 'y': dtype('O')})
+        StructDtype({'x': dtype('int32'), 'y': <StringDtype(na_value=nan)>})
         """
         return cls(
             {
