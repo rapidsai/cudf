@@ -1441,7 +1441,13 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                ColumnBase.create(plc_column, self.dtype),
+                (
+                    type(self)
+                    .from_pylibcudf(plc_column)
+                    ._with_type_metadata(
+                        get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
+                    )
+                ),
             )
 
     def repeat_strings(self, repeats: int | ColumnBase) -> Self:
