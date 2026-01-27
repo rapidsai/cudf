@@ -2533,6 +2533,15 @@ class ColumnBase(Serializable, BinaryOperand):
         """Hook for subclasses to adjust reduction result."""
         return result_col
 
+    def _raise_if_unsupported_reduction(
+        self, reduction_op: str, unsupported_ops: set[str]
+    ) -> None:
+        """Raise TypeError if reduction operation is not supported by this column type."""
+        if reduction_op in unsupported_ops:
+            raise TypeError(
+                f"'{self.dtype}' does not support reduction '{reduction_op}'"
+            )
+
     def minmax(self) -> tuple[ScalarLike, ScalarLike]:
         with self.access(mode="read", scope="internal"):
             min_val, max_val = plc.reduce.minmax(self.plc_column)

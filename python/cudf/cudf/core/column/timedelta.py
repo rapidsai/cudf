@@ -212,10 +212,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
     def _validate_scan_op(self, scan_op: str) -> None:
         """TimeDeltaColumn doesn't support product scans."""
         if scan_op == "product":
-            raise TypeError(
-                "Scan operation 'product' (cumprod) not supported for Timedelta. "
-                "Supported operations: sum, min, max."
-            )
+            raise TypeError(f"Scan '{scan_op}' not supported for {self.dtype}")
 
     def reduce(
         self,
@@ -225,27 +222,12 @@ class TimeDeltaColumn(TemporalBaseColumn):
         **kwargs: Any,
     ) -> ScalarLike:
         """Validate reduction operations for TimeDeltaColumn."""
-        # TimeDeltaColumn only supports: sum, min, max, quantile via reduce()
-        # mean, median, std, sum are implemented as methods (not via reduce)
-        # It does NOT support: product, var, kurt, kurtosis, skew, any, all
-        unsupported_ops = {
-            "product",
-            "var",
-            "kurt",
-            "kurtosis",
-            "skew",
-            "any",
-            "all",
-        }
-        if reduction_op in unsupported_ops:
-            raise TypeError(
-                f"'{self.dtype}' with dtype timedelta64[{self.time_unit}] "
-                f"does not support reduction '{reduction_op}'"
-            )
-        # sum, mean, median, std should not go through reduce() - they're methods
-        # If sum is called via reduce(), delegate to the sum method
         if reduction_op == "sum":
             return self.sum(skipna=skipna, min_count=min_count)
+        self._raise_if_unsupported_reduction(
+            reduction_op,
+            {"product", "var", "kurt", "kurtosis", "skew", "any", "all"},
+        )
         return super().reduce(reduction_op, skipna, min_count, **kwargs)
 
     def total_seconds(self) -> ColumnBase:

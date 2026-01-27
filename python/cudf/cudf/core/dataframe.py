@@ -6561,8 +6561,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 res._attrs = self._attrs
                 return res
-        # Special methods that are not reduction operations
         special_methods = {"kurtosis", "skew"}
+
+        def _apply_reduction(col, op, kwargs):
+            return (
+                getattr(col, op)(**kwargs)
+                if op in special_methods
+                else col.reduce(op, **kwargs)
+            )
 
         if (
             axis == 2
@@ -6570,8 +6576,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             and self._num_rows < 4
             and self._num_columns > 1
         ):
-            # Total number of elements may satisfy the min number of values
-            # to compute skew/kurtosis
             return getattr(concat_columns(source._columns), op)(**kwargs)
         elif axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
@@ -6579,12 +6583,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             axis_0_results = []
             for col_label, col in source._column_labels_and_values:
                 try:
-                    # For special statistical methods, call them directly
-                    # For standard reductions, use reduce()
-                    if op in special_methods:
-                        axis_0_results.append(getattr(col, op)(**kwargs))
-                    else:
-                        axis_0_results.append(col.reduce(op, **kwargs))
+                    axis_0_results.append(_apply_reduction(col, op, kwargs))
                 except (AttributeError, ValueError) as err:
                     if numeric_only:
                         raise NotImplementedError(
@@ -6599,16 +6598,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     else:
                         raise
             if axis == 2:
-                # For special statistical methods, call them directly
-                # For standard reductions, use reduce()
-                if op in special_methods:
-                    return getattr(
-                        as_column(axis_0_results, nan_as_null=False), op
-                    )(**kwargs)
-                else:
-                    return as_column(axis_0_results, nan_as_null=False).reduce(
-                        op, **kwargs
-                    )
+                return _apply_reduction(
+                    as_column(axis_0_results, nan_as_null=False), op, kwargs
+                )
             else:
                 source_dtypes = [dtype for _, dtype in source._dtypes]
                 # TODO: What happens if common_dtype is None?

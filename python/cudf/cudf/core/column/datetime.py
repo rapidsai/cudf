@@ -149,10 +149,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def _validate_scan_op(self, scan_op: str) -> None:
         """DatetimeColumn only supports min/max scans."""
         if scan_op not in {"min", "max"}:
-            raise TypeError(
-                f"Scan operation '{scan_op}' not supported for {self.dtype}. "
-                f"Only 'min' and 'max' are allowed."
-            )
+            raise TypeError(f"Scan '{scan_op}' not supported for {self.dtype}")
 
     def reduce(
         self,
@@ -162,27 +159,20 @@ class DatetimeColumn(TemporalBaseColumn):
         **kwargs: Any,
     ) -> ScalarLike:
         """Validate reduction operations for DatetimeColumn."""
-        # DatetimeColumn only supports: min, max, quantile via reduce()
-        # mean, median, std are implemented as methods (not via reduce)
-        # It does NOT support: sum, product, var, kurt, kurtosis, skew, any, all
-        unsupported_ops = {
-            "sum",
-            "product",
-            "var",
-            "kurt",
-            "kurtosis",
-            "skew",
-            "any",
-            "all",
-            "sum_of_squares",
-        }
-        if reduction_op in unsupported_ops:
-            raise TypeError(
-                f"'{self.dtype}' with dtype datetime64[{self.time_unit}] "
-                f"does not support reduction '{reduction_op}'"
-            )
-        # mean, median, std should not go through reduce() - they're methods
-        # But if they do, delegate to parent which will fail appropriately
+        self._raise_if_unsupported_reduction(
+            reduction_op,
+            {
+                "sum",
+                "product",
+                "var",
+                "kurt",
+                "kurtosis",
+                "skew",
+                "any",
+                "all",
+                "sum_of_squares",
+            },
+        )
         return super().reduce(reduction_op, skipna, min_count, **kwargs)
 
     def __contains__(self, item: ScalarLike) -> bool:
