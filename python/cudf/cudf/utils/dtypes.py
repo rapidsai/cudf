@@ -890,6 +890,12 @@ def _validate_dtype_recursively(col: plc.Column, dtype: DtypeObj) -> None:
     ValueError
         If the dtype is incompatible with the Column.
     """
+    # Skip validation for empty columns (INT8 with all nulls). These are created
+    # by _wrap_buffers() from EMPTY columns and may have inaccurate dtype metadata.
+    # For example, an empty list [] has element_type=object but child is INT8.
+    if _is_empty_to_int8_conversion(col):
+        return
+
     # Import here to avoid circular imports
     from cudf.core.column import ColumnBase
 
