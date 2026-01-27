@@ -606,9 +606,9 @@ class StructDtype(_BaseDtype):
         >>> import cudf
         >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "string"})
         >>> struct_dtype
-        StructDtype({'a': dtype('int64'), 'b': dtype('O')})
+        StructDtype({'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>})
         >>> struct_dtype.fields
-        {'a': dtype('int64'), 'b': dtype('O')}
+        {'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>}
         """
         return self._fields
 
