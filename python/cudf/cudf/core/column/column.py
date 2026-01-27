@@ -1561,8 +1561,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.unary.is_valid(self.plc_column)
+            return ColumnBase.create(
+                plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
             )
 
     def isnan(self) -> ColumnBase:
@@ -1579,8 +1579,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return as_column(False, length=len(self))
 
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.unary.is_null(self.plc_column)
+            return ColumnBase.create(
+                plc.unary.is_null(self.plc_column), np.dtype(np.bool_)
             )
 
     def notnull(self) -> ColumnBase:
@@ -1589,8 +1589,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result = as_column(True, length=len(self))
         else:
             with self.access(mode="read", scope="internal"):
-                result = type(self).from_pylibcudf(
-                    plc.unary.is_valid(self.plc_column)
+                result = ColumnBase.create(
+                    plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
                 )
 
         if cudf.get_option("mode.pandas_compatible"):
@@ -1837,11 +1837,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self,
             other,
         ):
-            return ColumnBase.from_pylibcudf(
+            return ColumnBase.create(
                 plc.search.contains(
                     self.plc_column,
                     other.plc_column,
-                )
+                ),
+                np.dtype(np.bool_),
             )
 
     def sort_values(
