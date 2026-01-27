@@ -61,6 +61,26 @@ class StructColumn(ColumnBase):
             and not is_dtype_obj_struct(dtype)
         ):
             raise ValueError(f"{type(dtype).__name__} must be a StructDtype.")
+
+        # Check field count
+        if len(dtype.fields) != plc_column.num_children():
+            raise ValueError(
+                f"StructDtype has {len(dtype.fields)} fields, "
+                f"but column has {plc_column.num_children()} children"
+            )
+
+        # Recursively validate each field
+        from cudf.utils.dtypes import _validate_dtype_recursively
+
+        for i, (field_name, field_dtype) in enumerate(dtype.fields.items()):
+            child = plc_column.child(i)
+            try:
+                _validate_dtype_recursively(child, field_dtype)
+            except ValueError as e:
+                raise ValueError(
+                    f"Field '{field_name}' (index {i}) validation failed: {e}"
+                ) from e
+
         return plc_column, dtype
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
@@ -161,6 +181,7 @@ class StructColumn(ColumnBase):
             interval_col = IntervalColumn._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=current_dtype,
+                validate=False,
             )
             return interval_col._with_type_metadata(dtype)
         elif isinstance(dtype, StructDtype):
@@ -189,6 +210,7 @@ class StructColumn(ColumnBase):
             return StructColumn._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
+                validate=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(

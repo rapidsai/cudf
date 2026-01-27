@@ -868,16 +868,52 @@ def _is_empty_to_int8_conversion(col: plc.Column) -> bool:
     )
 
 
-def _validate_dtype_compatibility(col: plc.Column, dtype: DtypeObj) -> None:
+def _validate_dtype_recursively(col: plc.Column, dtype: DtypeObj) -> None:
     """
-    Validate that a cudf dtype is structurally compatible with a pylibcudf Column.
+    Validate dtype compatibility by dispatching to the appropriate ColumnBase
+    subclass's _validate_args method.
 
-    This function performs structural validation to ensure that the provided dtype
-    matches the structure of the pylibcudf Column. It checks:
+    This function is used for recursive validation in nested types (List, Struct,
+    Interval). It dispatches to the correct ColumnBase subclass based on dtype
+    and calls its _validate_args method, which may recursively call this function
+    for nested children.
+
+    Parameters
+    ----------
+    col : plc.Column
+        The pylibcudf Column to validate.
+    dtype : DtypeObj
+        The cudf dtype to validate against.
+
+    Raises
+    ------
+    ValueError
+        If the dtype is incompatible with the Column.
+    """
+    # Import here to avoid circular imports
+    from cudf.core.column import ColumnBase
+
+    # Dispatch to the appropriate subclass and use its _validate_args
+    target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
+    target_cls._validate_args(col, dtype)
+
+
+def _validate_simple_dtype_compatibility(
+    col: plc.Column, dtype: DtypeObj
+) -> None:
+    """
+    Validate that a cudf dtype is compatible with a pylibcudf Column.
+
+    This function performs validation for non-nested types. Nested types
+    (List, Struct, Interval) should be validated through their respective
+    ColumnBase subclass _validate_args methods, which handle recursive validation.
+
+    This function checks:
     - Basic type compatibility (TypeId matching)
-    - Nested structure validation (List, Struct, Interval)
     - Decimal scale matching
     - Categorical codes validation
+    - DatetimeTZ unit matching
+    - String type compatibility
 
     Parameters
     ----------
@@ -894,22 +930,16 @@ def _validate_dtype_compatibility(col: plc.Column, dtype: DtypeObj) -> None:
     Examples
     --------
     >>> # Valid: dtype matches column structure
-    >>> _validate_dtype_compatibility(int_col, np.dtype('int64'))
+    >>> _validate_simple_dtype_compatibility(int_col, np.dtype('int64'))
 
     >>> # Invalid: dtype mismatch
-    >>> _validate_dtype_compatibility(int_col, np.dtype('float64'))  # Raises ValueError
-
-    >>> # Valid: nested type with matching structure
-    >>> _validate_dtype_compatibility(list_col, ListDtype(np.dtype('int64')))
+    >>> _validate_simple_dtype_compatibility(int_col, np.dtype('float64'))  # Raises ValueError
     """
     from cudf.core.dtypes import (
         CategoricalDtype,
         Decimal32Dtype,
         Decimal64Dtype,
         Decimal128Dtype,
-        IntervalDtype,
-        ListDtype,
-        StructDtype,
     )
 
     col_type = col.type()
@@ -922,62 +952,6 @@ def _validate_dtype_compatibility(col: plc.Column, dtype: DtypeObj) -> None:
                 f"Categorical dtype requires integer column for codes, "
                 f"but got pylibcudf TypeId: {col_tid}"
             )
-        return
-
-    # List: Verify LIST TypeId and recursively validate element type
-    if isinstance(dtype, ListDtype):
-        if col_tid != plc.TypeId.LIST:
-            raise ValueError(
-                f"ListDtype requires LIST column, but got pylibcudf TypeId: {col_tid}"
-            )
-        # Recursively validate the child column
-        child = col.list_view().child()
-        _validate_dtype_compatibility(child, dtype.element_type)
-        return
-
-    # Struct: Verify STRUCT TypeId, field count, and recursively validate fields
-    if isinstance(dtype, StructDtype):
-        if col_tid != plc.TypeId.STRUCT:
-            raise ValueError(
-                f"StructDtype requires STRUCT column, but got pylibcudf TypeId: {col_tid}"
-            )
-        # Check field count
-        if len(dtype.fields) != col.num_children():
-            raise ValueError(
-                f"StructDtype has {len(dtype.fields)} fields, "
-                f"but column has {col.num_children()} children"
-            )
-        # Recursively validate each field
-        for i, (field_name, field_dtype) in enumerate(dtype.fields.items()):
-            child = col.child(i)
-            try:
-                _validate_dtype_compatibility(child, field_dtype)
-            except ValueError as e:
-                raise ValueError(
-                    f"Field '{field_name}' (index {i}) validation failed: {e}"
-                ) from e
-        return
-
-    # Interval: Verify STRUCT TypeId with exactly 2 children of matching subtype
-    if isinstance(dtype, IntervalDtype):
-        if col_tid != plc.TypeId.STRUCT:
-            raise ValueError(
-                f"IntervalDtype requires STRUCT column, but got pylibcudf TypeId: {col_tid}"
-            )
-        if col.num_children() != 2:
-            raise ValueError(
-                f"IntervalDtype requires exactly 2 children (left and right bounds), "
-                f"but got {col.num_children()}"
-            )
-        # Both children should match the subtype
-        for i in range(2):
-            child = col.child(i)
-            try:
-                _validate_dtype_compatibility(child, dtype.subtype)
-            except ValueError as e:
-                raise ValueError(
-                    f"Interval bound {i} validation failed: {e}"
-                ) from e
         return
 
     # Decimal: Verify correct DECIMAL TypeId and scale

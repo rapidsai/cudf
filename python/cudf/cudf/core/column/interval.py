@@ -50,6 +50,19 @@ class IntervalColumn(ColumnBase):
             and not is_dtype_obj_interval(dtype)
         ):
             raise ValueError("dtype must be a IntervalDtype.")
+
+        # Recursively validate both children match the subtype
+        from cudf.utils.dtypes import _validate_dtype_recursively
+
+        for i in range(2):
+            child = plc_column.child(i)
+            try:
+                _validate_dtype_recursively(child, dtype.subtype)
+            except ValueError as e:
+                raise ValueError(
+                    f"Interval bound {i} validation failed: {e}"
+                ) from e
+
         return plc_column, dtype
 
     def _with_type_metadata(self, dtype: DtypeObj) -> ColumnBase:
@@ -76,6 +89,7 @@ class IntervalColumn(ColumnBase):
             return type(self)._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
+                validate=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(

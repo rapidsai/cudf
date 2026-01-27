@@ -67,7 +67,6 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     _get_nan_for_dtype,
     _maybe_convert_to_default_type,
-    _validate_dtype_compatibility,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
@@ -661,16 +660,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # Wrap buffers recursively
         wrapped = ColumnBase._wrap_buffers(col)
 
-        # Validate dtype compatibility with the column structure
-        _validate_dtype_compatibility(wrapped, dtype)
-
         # Dispatch to the appropriate subclass based on dtype
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
 
+        # Validate dtype compatibility with the column structure using the
+        # target subclass's _validate_args method (includes recursive validation)
+        target_cls._validate_args(wrapped, dtype)
+
         # Construct the instance using the subclass's _from_preprocessed method
+        # Skip validation since we already validated above
         return target_cls._from_preprocessed(
             plc_column=wrapped,
             dtype=dtype,
+            validate=False,
         )
 
     @staticmethod
@@ -764,6 +766,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         cls,
         plc_column: plc.Column,
         dtype: DtypeObj,
+        validate: bool = True,
     ) -> Self:
         # TODO: This function bypassess some of the buffer copying/wrapping that would
         # be done in from_pylibcudf, so it is only ever safe to call this in situations
@@ -772,7 +775,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # in from_pylibcudf, but for now it is necessary for the various
         # _with_type_metadata calls.
         self = cls.__new__(cls)
-        plc_column, dtype = self._validate_args(plc_column, dtype)
+        if validate:
+            plc_column, dtype = self._validate_args(plc_column, dtype)
         self.plc_column = plc_column
         self._dtype = dtype
         self._distinct_count = {}
