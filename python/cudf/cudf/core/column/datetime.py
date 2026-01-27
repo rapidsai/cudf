@@ -23,7 +23,7 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
     get_tz_data,
 )
-from cudf.core.column import as_column
+from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -34,6 +34,7 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     import datetime
@@ -550,12 +551,14 @@ class DatetimeColumn(TemporalBaseColumn):
         if other is NotImplemented:
             return NotImplemented
 
+        other_is_null_scalar = False
         if reflect:
             lhs = other
             rhs = self
             if isinstance(lhs, pa.Scalar):
                 lhs_unit = lhs.type.unit
                 other_dtype = cudf_dtype_from_pa_type(lhs.type)
+                other_is_null_scalar = is_na_like(lhs)
             else:
                 lhs_unit = getattr(lhs, "time_unit", None)
                 other_dtype = lhs.dtype
@@ -566,6 +569,7 @@ class DatetimeColumn(TemporalBaseColumn):
             if isinstance(rhs, pa.Scalar):
                 rhs_unit = rhs.type.unit
                 other_dtype = cudf_dtype_from_pa_type(rhs.type)
+                other_is_null_scalar = is_na_like(rhs)
             else:
                 rhs_unit = getattr(rhs, "time_unit", None)
                 other_dtype = rhs.dtype
@@ -588,7 +592,7 @@ class DatetimeColumn(TemporalBaseColumn):
             and other_is_datetime64
         ):
             out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-        elif op == "__add__" and other_is_timedelta:
+        elif op == "__add__" and (other_is_timedelta or other_is_null_scalar):
             # The only thing we can add to a datetime is a timedelta. This
             # operation is symmetric, i.e. we allow `datetime + timedelta` or
             # `timedelta + datetime`. Both result in DatetimeColumns.
@@ -598,6 +602,9 @@ class DatetimeColumn(TemporalBaseColumn):
                     f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
                 ),
             )
+            if other_is_null_scalar:
+                # return a column with all nulls in the size of `self`
+                return column_empty(len(self), out_dtype)
         elif op == "__sub__":
             # Subtracting a datetime from a datetime results in a timedelta.
             if other_is_datetime64:
@@ -607,6 +614,9 @@ class DatetimeColumn(TemporalBaseColumn):
                         f"timedelta64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
                     ),
                 )
+                if other_is_null_scalar:
+                    # return a column with all nulls in the size of `self`
+                    return column_empty(len(self), out_dtype)
             # We can subtract a timedelta from a datetime, but not vice versa.
             # Not only is subtraction antisymmetric (as is normal), it is only
             # well-defined if this operation was not invoked via reflection.
@@ -617,6 +627,9 @@ class DatetimeColumn(TemporalBaseColumn):
                         f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
                     ),
                 )
+                if other_is_null_scalar:
+                    # return a column with all nulls in the size of `self`
+                    return column_empty(len(self), out_dtype)
         elif op in {
             "__eq__",
             "__ne__",
