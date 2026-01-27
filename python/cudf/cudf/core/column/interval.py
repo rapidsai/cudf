@@ -89,7 +89,6 @@ class IntervalColumn(ColumnBase):
             return type(self)._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                validate=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(

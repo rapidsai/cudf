@@ -665,7 +665,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         # Validate dtype compatibility with the column structure using the
         # target subclass's _validate_args method (includes recursive validation)
-        target_cls._validate_args(wrapped, dtype)
+        wrapped, dtype = target_cls._validate_args(wrapped, dtype)
 
         # Construct the instance using the subclass's _from_preprocessed method
         # Skip validation since we already validated above

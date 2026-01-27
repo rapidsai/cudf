@@ -1003,7 +1003,7 @@ class NumericalColumn(NumericalBaseColumn):
                 self.astype(codes_dtype),
             )
             return CategoricalColumn._from_preprocessed(
-                codes.plc_column, dtype, validate=False
+                codes.plc_column, dtype
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)

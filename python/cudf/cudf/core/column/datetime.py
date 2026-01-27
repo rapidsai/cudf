@@ -683,7 +683,6 @@ class DatetimeColumn(TemporalBaseColumn):
             return DatetimeTZColumn._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=dtype,
-                validate=False,
             )
         if cudf.get_option("mode.pandas_compatible"):
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
@@ -853,7 +852,7 @@ class DatetimeTZColumn(DatetimeColumn):
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
         return DatetimeColumn._from_preprocessed(
-            self.plc_column, _get_base_dtype(self.dtype), validate=False
+            self.plc_column, _get_base_dtype(self.dtype)
         )
 
     @functools.cached_property

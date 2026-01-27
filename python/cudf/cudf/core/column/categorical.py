@@ -101,7 +101,7 @@ class CategoricalColumn(column.ColumnBase):
     def codes(self) -> NumericalColumn:
         codes_dtype = min_unsigned_type(len(self.dtype.categories))
         return cudf.core.column.NumericalColumn._from_preprocessed(
-            self.plc_column, codes_dtype, validate=False
+            self.plc_column, codes_dtype
         )
 
     @property
@@ -652,7 +652,6 @@ class CategoricalColumn(column.ColumnBase):
             return type(self)._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=dtype,
-                validate=False,
             )
 
         return self

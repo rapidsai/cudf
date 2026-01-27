@@ -181,7 +181,6 @@ class StructColumn(ColumnBase):
             interval_col = IntervalColumn._from_preprocessed(
                 plc_column=self.plc_column,
                 dtype=current_dtype,
-                validate=False,
             )
             return interval_col._with_type_metadata(dtype)
         elif isinstance(dtype, StructDtype):
@@ -210,7 +209,6 @@ class StructColumn(ColumnBase):
             return StructColumn._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                validate=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
