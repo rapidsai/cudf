@@ -14,6 +14,8 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint
 
+from .span import is_span as py_is_span
+
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
@@ -99,6 +101,11 @@ cpdef DeviceBuffer copy_bitmask_from_bitmask(
         A ``DeviceBuffer`` containing ``col``'s bitmask, or an empty
         ``DeviceBuffer`` if ``col`` is not nullable
     """
+    if not py_is_span(bitmask):
+        raise TypeError(
+            f"bitmask must satisfy Span protocol (have .ptr and .size), "
+            f"got {type(bitmask).__name__}"
+        )
     cdef device_buffer db
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -263,6 +270,11 @@ cpdef size_type null_count(
     int
         The number of null elements in the specified range.
     """
+    if not py_is_span(bitmask):
+        raise TypeError(
+            f"bitmask must satisfy Span protocol (have .ptr and .size), "
+            f"got {type(bitmask).__name__}"
+        )
     cdef uintptr_t ptr = bitmask.ptr
     stream = _get_stream(stream)
     with nogil:
