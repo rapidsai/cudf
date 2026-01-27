@@ -57,7 +57,7 @@ std::unique_ptr<cudf::column> edit_distance(
 /**
  * @brief Compute the edit distance between all the strings in the input column.
  *
- * @deprecated Deprecated since 26.04
+ * @deprecated Deprecated since release 26,04
  *
  * This uses the Levenshtein algorithm to calculate the edit distance between
  * two strings as documented here: https://www.cuelogic.com/blog/the-levenshtein-algorithm

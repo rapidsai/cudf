@@ -65,7 +65,7 @@ cpdef Column edit_distance_matrix(
     """
     Returns the edit distance between all strings in the input strings column
 
-    .. deprecated:: 26.04
+    .. deprecated:: release 26,04
         edit_distance_matrix is deprecated.
 
     For details, see :cpp:func:`edit_distance_matrix`
