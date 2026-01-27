@@ -57,7 +57,6 @@ class ListColumn(ColumnBase):
             raise ValueError("dtype must be a cudf.ListDtype")
 
         child = plc_column.list_view().child()
-
         try:
             _validate_dtype_recursively(child, dtype.element_type)
         except ValueError as e:
