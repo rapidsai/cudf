@@ -1506,16 +1506,16 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
-    assert_eq(col.dtype, np.dtype("object"))
+    assert_eq(col.dtype, pd.StringDtype(na_value=np.nan))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
     col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
-    assert_eq(col.dtype, np.dtype("object"))
+    assert_eq(col.dtype, pd.StringDtype(na_value=np.nan))
     gds = cudf.Series._from_column(col)
-    pds = pd.Series(pd.Series([], dtype="object"))
+    pds = pd.Series(pd.Series([], dtype=pd.StringDtype(na_value=np.nan)))
 
     assert_eq(pds, gds)
 
