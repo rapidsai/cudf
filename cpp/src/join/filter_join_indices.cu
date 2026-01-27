@@ -10,6 +10,7 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/join/join.hpp>
@@ -29,7 +30,6 @@
 #include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <memory>
@@ -160,10 +160,10 @@ filter_join_indices(cudf::table_view const& left,
     auto valid_predicate = [=] __device__(size_type i) -> bool { return predicate_results_ptr[i]; };
 
     auto const num_valid =
-      thrust::count_if(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator{0},
-                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
-                       valid_predicate);
+      cudf::detail::count_if(thrust::counting_iterator<size_type>(0),
+                             thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+                             valid_predicate,
+                             stream);
 
     if (num_valid == 0) { return make_empty_result(); }
 
@@ -326,10 +326,10 @@ filter_join_indices(cudf::table_view const& left,
 
     // Count failed matches for output sizing
     auto const failed_matched_count =
-      thrust::count_if(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator{0},
-                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
-                       is_failed_matched_pair);
+      cudf::detail::count_if(thrust::counting_iterator{0},
+                             thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+                             is_failed_matched_pair,
+                             stream);
     auto const output_size = left_indices.size() + failed_matched_count;
 
     if (output_size == 0) { return make_empty_result(); }
