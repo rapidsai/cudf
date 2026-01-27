@@ -6395,6 +6395,8 @@ class IndexedFrame(Frame):
                     if cp.allclose(col, as_int):
                         cols.append(as_int)
                         continue
+                elif isinstance(col.dtype, pd.StringDtype):
+                    col = col.astype(pd.StringDtype(na_value=pd.NA))
                 cols.append(col)
             return self._from_data_like_self(
                 self._data._from_columns_like_self(cols, verify=False)
