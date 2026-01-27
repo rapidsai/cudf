@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import itertools
 import re
+import warnings
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, cast
 
@@ -727,6 +728,11 @@ class StringColumn(ColumnBase, Scannable):
         merge_pairs: plc.nvtext.byte_pair_encode.BPEMergePairs,
         separator: str,
     ) -> Self:
+        warnings.warn(
+            "byte_pair_encoding is deprecated and will be removed in a future version.",
+            FutureWarning,
+            stacklevel=2,
+        )
         with self.access(mode="read", scope="internal"):
             return cast(
                 Self,
@@ -953,9 +959,22 @@ class StringColumn(ColumnBase, Scannable):
             return cast(Self, ColumnBase.from_pylibcudf(plc_column))
 
     def to_lower(self) -> Self:
-        return self._modify_characters(
+        result = self._modify_characters(
             plc.strings.case.to_lower
         )._with_type_metadata(self.dtype)
+
+        # Handle Greek final sigma (ς) special case in pandas compatibility mode
+        # Greek capital sigma (Σ) lowercases to regular sigma (σ) at libcudf level,  # noqa: RUF003
+        # but should become final sigma (ς) when at the end of a word.
+        # Replace σ with ς when followed by end-of-string or non-letter character.  # noqa: RUF003
+        if cudf.get_option("mode.pandas_compatible"):
+            has_sigma = result.str_contains("σ")
+            if has_sigma.any():
+                result = result.replace_with_backrefs(
+                    r"σ($|[^a-zA-Zα-ωΑ-Ωά-ώΆ-Ώ])", r"ς\1"
+                )
+
+        return result
 
     def to_upper(self) -> Self:
         return self._modify_characters(
