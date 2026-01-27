@@ -696,17 +696,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         TypeError
             If the dtype is not recognized or supported.
         """
-        from cudf.core.dtypes import (
-            CategoricalDtype,
-            IntervalDtype,
-            ListDtype,
-            StructDtype,
-        )
-
         # Special pandas extension types
         if isinstance(dtype, pd.DatetimeTZDtype):
             return cudf.core.column.datetime.DatetimeTZColumn
-        if isinstance(dtype, (pd.CategoricalDtype, CategoricalDtype)):
+        if isinstance(dtype, CategoricalDtype):
             return cudf.core.column.CategoricalColumn
 
         # Temporal types (by kind)
