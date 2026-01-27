@@ -19,7 +19,6 @@ from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
-    dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
     is_dtype_obj_list,
 )
@@ -68,11 +67,8 @@ class ListColumn(ColumnBase):
     def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-        # Must infer dtype from plc_column: stored element_type may be inaccurate
-        # when columns are constructed from Python data with ambiguous types
-        # (e.g., [[]] creates ListDtype(object) but plc is list<int8>).
-        element_dtype = dtype_from_pylibcudf_column(sliced_plc_col)
-        return ColumnBase.create(sliced_plc_col, element_dtype)
+        assert isinstance(self.dtype, ListDtype)
+        return ColumnBase.create(sliced_plc_col, self.dtype.element_type)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
