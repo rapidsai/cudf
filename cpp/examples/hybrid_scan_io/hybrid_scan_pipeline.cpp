@@ -96,10 +96,11 @@ struct hybrid_scan_fn {
       reader->all_column_chunks_byte_ranges(row_groups_indices, options);
     auto all_column_chunk_buffers =
       fetch_byte_ranges(file_buffer_span, all_column_chunk_byte_ranges, stream, mr);
+    auto all_column_chunk_data = make_device_spans<uint8_t>(all_column_chunk_buffers);
     table.get() =
       std::move(reader
                   ->materialize_all_columns(
-                    row_groups_indices, std::move(all_column_chunk_buffers), options, stream)
+                    row_groups_indices, all_column_chunk_data, options, stream)
                   .tbl);
     stream.synchronize_no_throw();
   }
@@ -163,10 +164,14 @@ auto hybrid_scan_pipelined(io_source const& io_source,
 
   timer.print_elapsed_millis();
 
-  std::cout << "Creating row group partitions... \n";
-  timer.reset();
+  if (num_partitions > 1) {
+    std::cout << "Creating row group partitions... \n";
+    timer.reset();
+  }
 
   if (num_partitions == 1) {
+    std::cout << "Reading as single partition... \n";
+    timer.reset();
     hybrid_scan_fn{.table              = std::ref(tables.front()),
                    .reader             = std::move(readers.front()),
                    .file_buffer_span   = file_buffer_span,
@@ -175,6 +180,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
                    .options            = options,
                    .stream             = stream_pool.get_stream(),
                    .mr                 = mr}();
+    timer.print_elapsed_millis();
     return std::move(tables.front());
   }
 
