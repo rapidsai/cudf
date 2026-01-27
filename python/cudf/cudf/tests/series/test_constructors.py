@@ -798,7 +798,9 @@ def test_series_all_valid_nan(num_elements):
 def test_series_empty_dtype():
     expected = pd.Series([])
     actual = cudf.Series([])
-    assert_eq(expected, actual, check_dtype=True)
+    assert expected.dtype == object
+    assert actual.dtype == pd.StringDtype(na_value=np.nan)
+    assert_eq(expected, actual, check_dtype=False)
 
 
 @pytest.mark.parametrize("data", [None, {}, []])
