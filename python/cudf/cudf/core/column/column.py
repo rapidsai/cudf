@@ -1434,11 +1434,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
                 return cast(
                     "Self",
-                    (
-                        type(self)
-                        .from_pylibcudf(plc_table.columns()[0])
-                        ._with_type_metadata(self.dtype)
-                    ),
+                    ColumnBase.create(plc_table.columns()[0], self.dtype),
                 )
         else:
             return cast(

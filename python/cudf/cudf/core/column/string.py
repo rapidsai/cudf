@@ -1393,12 +1393,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return dict(
                 enumerate(
-                    cast(
-                        Self,
-                        type(self)
-                        .from_pylibcudf(col)
-                        ._with_type_metadata(self.dtype),
-                    )
+                    cast(Self, ColumnBase.create(col, self.dtype))
                     for col in plc_table.columns()
                 )
             )
