@@ -19,6 +19,8 @@ from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
+    _validate_dtype_recursively,
+    dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
     is_dtype_obj_list,
 )
@@ -54,9 +56,7 @@ class ListColumn(ColumnBase):
         ):
             raise ValueError("dtype must be a cudf.ListDtype")
 
-        # Recursively validate the child column structure
         child = plc_column.list_view().child()
-        from cudf.utils.dtypes import _validate_dtype_recursively
 
         try:
             _validate_dtype_recursively(child, dtype.element_type)
@@ -70,15 +70,10 @@ class ListColumn(ColumnBase):
     def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-        # For nested structures (e.g., list<list<T>>), dtype.element_type may not
-        # accurately reflect the actual plc_column type. This happens when operations
-        # like groupby collect() aggregate list columns, creating nested lists without
-        # updating the stored dtype. For example, groupby("a").agg({"b": "collect"})
-        # on a list<int> column produces list<list<int>>, but dtype.element_type
-        # remains int64 instead of being updated to ListDtype(int64).
-        # Always infer the dtype from the plc_column to handle these cases correctly.
-        from cudf.utils.dtypes import dtype_from_pylibcudf_column
-
+        # TODO: For nested structures, stored dtype may not reflect actual plc_column type
+        # due to operations like groupby().collect() not updating dtype metadata when
+        # creating nested lists (e.g., list<int> becomes list<list<int>> but
+        # dtype.element_type remains int64 instead of ListDtype(int64)).
         element_dtype = dtype_from_pylibcudf_column(sliced_plc_col)
         return ColumnBase.create(sliced_plc_col, element_dtype)
 

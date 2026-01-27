@@ -12,7 +12,11 @@ import pylibcudf as plc
 import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import is_dtype_obj_struct
+from cudf.utils.dtypes import (
+    _validate_dtype_recursively,
+    dtype_from_pylibcudf_column,
+    is_dtype_obj_struct,
+)
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
@@ -68,9 +72,6 @@ class StructColumn(ColumnBase):
                 f"StructDtype has {len(dtype.fields)} fields, "
                 f"but column has {plc_column.num_children()} children"
             )
-
-        # Recursively validate each field
-        from cudf.utils.dtypes import _validate_dtype_recursively
 
         for i, (field_name, field_dtype) in enumerate(dtype.fields.items()):
             child = plc_column.child(i)
@@ -162,11 +163,12 @@ class StructColumn(ColumnBase):
         )
 
     def _with_type_metadata(self: StructColumn, dtype: DtypeObj) -> ColumnBase:
+        # Import here to avoid circular dependency (interval imports from column)
         from cudf.core.dtypes import IntervalDtype
 
         # Check IntervalDtype first because it's a subclass of StructDtype
         if isinstance(dtype, IntervalDtype):
-            # Dispatch to IntervalColumn when given IntervalDtype
+            # Import here to avoid circular dependency (interval imports from column)
             from cudf.core.column.interval import IntervalColumn
 
             # Determine the current subtype from the first child
@@ -184,11 +186,9 @@ class StructColumn(ColumnBase):
             )
             return interval_col._with_type_metadata(dtype)
         elif isinstance(dtype, StructDtype):
-            from cudf.utils.dtypes import dtype_from_pylibcudf_column
-
-            # For nested structures, the stored field dtype might not accurately
-            # reflect the actual child column type. Always infer from child to
-            # ensure correct dtype handling.
+            # TODO: For nested structures, stored field dtype might not reflect actual
+            # child column type due to dtype metadata updates being skipped during
+            # certain operations.
             new_children = tuple(
                 ColumnBase.create(child, dtype_from_pylibcudf_column(child))
                 for child, f in zip(

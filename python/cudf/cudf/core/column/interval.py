@@ -15,7 +15,10 @@ import pylibcudf as plc
 import cudf
 from cudf.core.column.column import ColumnBase, _handle_nulls, as_column
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
-from cudf.utils.dtypes import is_dtype_obj_interval
+from cudf.utils.dtypes import (
+    _validate_dtype_recursively,
+    is_dtype_obj_interval,
+)
 from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
 if TYPE_CHECKING:
@@ -52,7 +55,6 @@ class IntervalColumn(ColumnBase):
             raise ValueError("dtype must be a IntervalDtype.")
 
         # Recursively validate both children match the subtype
-        from cudf.utils.dtypes import _validate_dtype_recursively
 
         for i in range(2):
             child = plc_column.child(i)
