@@ -830,17 +830,3 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING] = np.dtype(
 
 SIZE_TYPE_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.SIZE_TYPE_ID]
 CUDF_STRING_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING]
-
-# Integer type IDs for validation
-_INTEGER_TYPE_IDS = frozenset(
-    {
-        plc.TypeId.INT8,
-        plc.TypeId.INT16,
-        plc.TypeId.INT32,
-        plc.TypeId.INT64,
-        plc.TypeId.UINT8,
-        plc.TypeId.UINT16,
-        plc.TypeId.UINT32,
-        plc.TypeId.UINT64,
-    }
-)
