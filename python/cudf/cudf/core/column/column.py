@@ -973,35 +973,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
             )
         if self.size == 0:
-            return np.bool_(True)
+            return True
         if self.null_count == self.size:
             if not skipna:
                 return _get_nan_for_dtype(self.dtype)
             else:
-                return np.bool_(True)
+                return True
 
         # For all(), we want NaN values to be treated as truthy.
-        # Call libcudf reduce directly on the appropriate column.
-        if skipna:
-            col = self.nans_to_nulls().dropna()
+        # Call _reduce() with skipna=True to get the boolean result.
+        result = self._reduce(
+            "all", skipna=True, min_count=min_count, **kwargs
+        )
+        if np.isnan(result):
+            result = True
         else:
-            col = self
-
-        if len(col) == 0:
-            return np.bool_(True)
-
-        # Call libcudf reduce directly
-        col_dtype = col._reduction_result_dtype("all")
-        with col.access(mode="read", scope="internal"):
-            plc_scalar = plc.reduce.reduce(
-                col.plc_column,
-                aggregation.make_aggregation("all", kwargs).plc_obj,
-                dtype_to_pylibcudf_type(col_dtype),
-            )
-            result_col = type(col).from_pylibcudf(
-                plc.Column.from_scalar(plc_scalar, 1)
-            )
-        result = np.bool_(result_col.element_indexing(0))
+            result = bool(result)
 
         # For pandas nullable extension dtypes with skipna=False and nulls, return NaN
         if (
@@ -1021,34 +1008,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
             )
         if self.size == 0:
-            return np.bool_(False)
+            return False
         if not skipna and self.has_nulls():
-            return np.bool_(True)
+            return True
         elif skipna and self.null_count == self.size:
-            return np.bool_(False)
+            return False
 
         # For any(), we want NaN values to be treated as truthy.
-        # Call libcudf reduce directly on the appropriate column.
-        if skipna:
-            col = self.nans_to_nulls().dropna()
-        else:
-            col = self
-
-        if len(col) == 0:
-            return np.bool_(False)
-
-        # Call libcudf reduce directly
-        col_dtype = col._reduction_result_dtype("any")
-        with col.access(mode="read", scope="internal"):
-            plc_scalar = plc.reduce.reduce(
-                col.plc_column,
-                aggregation.make_aggregation("any", kwargs).plc_obj,
-                dtype_to_pylibcudf_type(col_dtype),
-            )
-            result_col = type(col).from_pylibcudf(
-                plc.Column.from_scalar(plc_scalar, 1)
-            )
-        return np.bool_(result_col.element_indexing(0))
+        # Call _reduce() with skipna=True to get the boolean result.
+        result = self._reduce(
+            "any", skipna=True, min_count=min_count, **kwargs
+        )
+        if np.isnan(result):
+            # If all values are NaN, treat them as truthy when skipna=False
+            result = not skipna
+        return bool(result)
 
     def dropna(self) -> Self:
         if self.has_nulls():
