@@ -402,7 +402,7 @@ class Index(SingleColumnFrame):
         >>> import cudf
         >>> import pyarrow as pa
         >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        Index(['a', 'b', <NA>], dtype='object')
+        Index(['a', 'b', nan], dtype='str')
         """
         try:
             return cls._from_column(ColumnBase.from_arrow(obj))
@@ -1386,7 +1386,7 @@ class Index(SingleColumnFrame):
         --------
         >>> idx = cudf.Index(['a', 'b', 'c', 'd', 'e'])
         >>> idx.take([2, 0, 4, 3])
-        Index(['c', 'a', 'e', 'd'], dtype='object')
+        Index(['c', 'a', 'e', 'd'], dtype='str')
         """
 
         if axis not in {0, "index"}:
@@ -2094,7 +2094,7 @@ class Index(SingleColumnFrame):
         >>> import cudf
         >>> idx = cudf.Index(["a", "b", "c"])
         >>> idx.get_level_values(0)
-        Index(['a', 'b', 'c'], dtype='object')
+        Index(['a', 'b', 'c'], dtype='str')
         """
         if level == self.name:
             return self
@@ -3899,7 +3899,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.day_name()
         Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
                'Friday', 'Saturday', 'Sunday'],
-              dtype='object')
+              dtype='str')
         """
         day_names = self._column.get_day_names(locale)
         return Index._from_column(day_names, name=self.name)
@@ -3918,7 +3918,7 @@ class DatetimeIndex(Index):
                     '2018-01-27', '2018-02-03'],
                       dtype='datetime64[ns]', freq='168h')
         >>> datetime_index.month_name()
-        Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='object')
+        Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='str')
         """
         month_names = self._column.get_month_names(locale)
         return Index._from_column(month_names, name=self.name)

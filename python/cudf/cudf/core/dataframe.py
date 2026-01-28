@@ -912,8 +912,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     ... ])
     >>> df
        0     1     2     3             4
-    0  5  cats  jump  <NA>          <NA>
-    1  2  dogs   dig   7.5          <NA>
+    0  5  cats  jump  <NA>           NaN
+    1  2  dogs   dig   7.5           NaN
     2  3  cows   moo  -2.1  occasionally
 
     Convert from a Pandas DataFrame:
@@ -1252,8 +1252,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> df.dtypes
         float              float64
         int                  int64
-        datetime    datetime64[ns]
-        string              object
+        datetime    datetime64[us]
+        string                 str
         dtype: object
         """
         result_dict = dict(self._dtypes)
@@ -3661,8 +3661,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> cdf1["val"] = [1,2,3,4]
         >>> cdf1["temp"] = [-1,2,2,3]
         >>> cdf1.axes
-        [RangeIndex(start=0, stop=4, step=1),
-            Index(['key', 'k2', 'val', 'temp'], dtype='object')]
+        [RangeIndex(start=0, stop=4, step=1), Index(['key', 'k2', 'val', 'temp'], dtype='str')]
 
         """
         return [self.index, self._data.to_pandas_index]
@@ -5277,10 +5276,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
          #   Column     Non-Null Count  Dtype
         ---  ------     --------------  -----
          0   int_col    5 non-null      int64
-         1   text_col   5 non-null      object
+         1   text_col   5 non-null      str
          2   float_col  5 non-null      float64
-        dtypes: float64(1), int64(1), object(1)
-        memory usage: 130.0+ bytes
+        dtypes: float64(1), int64(1), str(1)
+        memory usage: 130.0 bytes
 
         Prints a summary of columns count and its dtypes but not per column
         information:
@@ -5289,8 +5288,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         <class 'cudf.core.dataframe.DataFrame'>
         RangeIndex: 5 entries, 0 to 4
         Columns: 3 entries, int_col to float_col
-        dtypes: float64(1), int64(1), object(1)
-        memory usage: 130.0+ bytes
+        dtypes: float64(1), int64(1), str(1)
+        memory usage: 130.0 bytes
 
         Pipe output of DataFrame.info to a buffer instead of sys.stdout and
         print buffer contents:
@@ -5305,10 +5304,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
          #   Column     Non-Null Count  Dtype
         ---  ------     --------------  -----
          0   int_col    5 non-null      int64
-         1   text_col   5 non-null      object
+         1   text_col   5 non-null      str
          2   float_col  5 non-null      float64
-        dtypes: float64(1), int64(1), object(1)
-        memory usage: 130.0+ bytes
+        dtypes: float64(1), int64(1), str(1)
+        memory usage: 130.0 bytes
 
         The `memory_usage` parameter allows deep introspection mode, specially
         useful for big DataFrames and fine-tune memory optimization:
@@ -5327,10 +5326,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Data columns (total 3 columns):
          #   Column    Non-Null Count    Dtype
         ---  ------    --------------    -----
-         0   column_1  1000000 non-null  object
-         1   column_2  1000000 non-null  object
-         2   column_3  1000000 non-null  object
-        dtypes: object(3)
+         0   column_1  1000000 non-null  str
+         1   column_2  1000000 non-null  str
+         2   column_3  1000000 non-null  str
+        dtypes: str(3)
         memory usage: 14.3 MB
         """
         if buf is None:
@@ -5594,7 +5593,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         1  1  2
         2  2  0
         >>> type(pdf)
-        <class 'pandas.core.frame.DataFrame'>
+        <class 'pandas.DataFrame'>
 
         ``nullable=True`` converts the result to pandas nullable types:
 
@@ -6727,7 +6726,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> df.mode()
           species  legs  wings
         0    bird     2    0.0
-        1    <NA>  <NA>    2.0
+        1     NaN  <NA>    2.0
 
         Setting ``dropna=False``, ``NA`` values are considered and they can be
         the mode (like for wings).
@@ -7299,10 +7298,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         cat       0      1
         dog       2      3
         >>> df_single_level_cols.stack()
-        cat  height    1
-             weight    0
-        dog  height    3
-             weight    2
+        cat  weight    0
+             height    1
+        dog  weight    2
+             height    3
         dtype: int64
 
         **Multi level columns: simple case**
@@ -7359,16 +7358,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         >>> df_multi_level_cols2.stack(0)
                     kg     m
-        cat height  <NA>   2.0
-            weight   1.0  <NA>
-        dog height  <NA>   4.0
-            weight   3.0  <NA>
+        cat weight   1.0  <NA>
+            height  <NA>   2.0
+        dog weight   3.0  <NA>
+            height  <NA>   4.0
 
         >>> df_multi_level_cols2.stack([0, 1])
-        cat  height  m     2.0
-             weight  kg    1.0
-        dog  height  m     4.0
-             weight  kg    3.0
+        cat  weight  kg    1.0
+             height  m     2.0
+        dog  weight  kg    3.0
+             height  m     4.0
         dtype: float64
         """
 
@@ -7766,7 +7765,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         1    2    b
         2    3    c
         >>> df.keys()
-        Index(['one', 'five'], dtype='object')
+        Index(['one', 'five'], dtype='str')
         >>> df = cudf.DataFrame(columns=[0, 1, 2, 3])
         >>> df
         Empty DataFrame
@@ -7992,7 +7991,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         3    B2
         4    A3
         5    B3
-        dtype: object
+        dtype: str
 
         Returns
         -------

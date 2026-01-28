@@ -472,10 +472,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> import cudf
         >>> import pyarrow as pa
         >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
-        0       a
-        1       b
-        2    <NA>
-        dtype: object
+        0        a
+        1        b
+        2      NaN
+        dtype: str
         """
         return cls._from_column(ColumnBase.from_arrow(array))
 
@@ -889,7 +889,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         11    b
         12    c
         13    d
-        dtype: object
+        dtype: str
         >>> series.reset_index()
            index  0
         0     10  a
@@ -901,7 +901,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         1    b
         2    c
         3    d
-        dtype: object
+        dtype: str
 
         You can also use ``reset_index`` with MultiIndex.
 
@@ -981,15 +981,15 @@ class Series(SingleColumnFrame, IndexedFrame):
         10       a
         11       b
         12       c
-        13    <NA>
+        13     NaN
         15       d
-        Name: sample, dtype: object
+        Name: sample, dtype: str
         >>> series.to_frame()
            sample
         10      a
         11      b
         12      c
-        13   <NA>
+        13    NaN
         15      d
         """
         res = self._to_frame(name=name, index=self.index)
@@ -1120,9 +1120,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s
         0      cat
         1      dog
-        2     <NA>
+        2      NaN
         3   rabbit
-        dtype: object
+        dtype: str
 
         ``map`` accepts a ``dict`` or a ``Series``. Values that are not found
         in the ``dict`` are converted to ``NaN``, default values in dicts are
@@ -1131,9 +1131,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s.map({'cat': 'kitten', 'dog': 'puppy'})
         0   kitten
         1    puppy
-        2     <NA>
-        3     <NA>
-        dtype: object
+        2      NaN
+        3      NaN
+        dtype: str
 
         It also accepts numeric functions:
 
@@ -1603,13 +1603,13 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser = cudf.Series(['', None, 'abc'])
         >>> ser
         0
-        1    <NA>
+        1     NaN
         2     abc
-        dtype: object
+        dtype: str
         >>> ser.dropna()
         0
         2    abc
-        dtype: object
+        dtype: str
         """
         if axis not in (0, "index"):
             raise ValueError(
@@ -1661,7 +1661,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         3    beetle
         4      lama
         5     hippo
-        Name: animal, dtype: object
+        Name: animal, dtype: str
 
         With the `keep` parameter, the selection behavior of duplicated
         values can be changed. The value 'first' keeps the first
@@ -1675,7 +1675,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         1       cow
         3    beetle
         5     hippo
-        Name: animal, dtype: object
+        Name: animal, dtype: str
 
         The value 'last' for parameter `keep` keeps the last occurrence
         for each set of duplicated entries.
@@ -1685,7 +1685,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         3    beetle
         4      lama
         5     hippo
-        Name: animal, dtype: object
+        Name: animal, dtype: str
 
         The value `False` for parameter `keep` discards all sets
         of duplicated entries. Setting the value of 'inplace' to
@@ -1696,7 +1696,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         1       cow
         3    beetle
         5     hippo
-        Name: animal, dtype: object
+        Name: animal, dtype: str
         """
         result = super().drop_duplicates(keep=keep, ignore_index=ignore_index)
 
@@ -1733,15 +1733,15 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser
         0       a
         1       b
-        2    <NA>
+        2     NaN
         3       c
-        dtype: object
+        dtype: str
         >>> ser.fillna('z')
         0    a
         1    b
         2    z
         3    c
-        dtype: object
+        dtype: str
 
         ``fillna`` can also supports inplace operation:
 
@@ -1751,7 +1751,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         1    b
         2    z
         3    c
-        dtype: object
+        dtype: str
         """
         if isinstance(value, (pd.Series, Mapping)):
             value = Series(value)
@@ -1949,7 +1949,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         2    0
         dtype: int64
         >>> type(pds)
-        <class 'pandas.core.series.Series'>
+        <class 'pandas.Series'>
 
         ``nullable=True`` converts the result to pandas nullable types:
 
@@ -2361,13 +2361,13 @@ class Series(SingleColumnFrame, IndexedFrame):
         0    a
         1    b
         2    c
-        dtype: object
+        dtype: str
         >>> s.update(cudf.Series(['d', 'e'], index=[0, 2]))
         >>> s
         0    d
         1    b
         2    e
-        dtype: object
+        dtype: str
         >>> s = cudf.Series([1, 2, 3])
         >>> s
         0    1
@@ -3013,17 +3013,17 @@ class Series(SingleColumnFrame, IndexedFrame):
         0       a
         1       a
         2       b
-        3    <NA>
+        3     NaN
         4       b
-        5    <NA>
+        5     NaN
         6       c
-        dtype: object
+        dtype: str
         >>> series.unique()
         0       a
         1       b
-        2    <NA>
+        2     NaN
         3       c
-        dtype: object
+        dtype: str
         """
         res = self._column.unique()
         if cudf.get_option("mode.pandas_compatible"):
@@ -3614,7 +3614,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         0    a
         1    b
         2    c
-        dtype: object
+        dtype: str
         >>> sr.keys()
         RangeIndex(start=0, stop=3, step=1)
         >>> sr = cudf.Series([1, 2, 3], index=['a', 'b', 'c'])
@@ -3624,7 +3624,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         c    3
         dtype: int64
         >>> sr.keys()
-        Index(['a', 'b', 'c'], dtype='object')
+        Index(['a', 'b', 'c'], dtype='str')
         """
         return self.index
 

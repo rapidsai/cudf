@@ -966,8 +966,8 @@ def pivot(
               c
         b     1     2      3
         a
-        1   one   two   <NA>
-        2  <NA>  <NA>  three
+        1   one   two    NaN
+        2   NaN   NaN  three
 
     """
     values_is_list = True

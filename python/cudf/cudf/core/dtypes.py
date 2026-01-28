@@ -192,7 +192,7 @@ class CategoricalDtype(_BaseDtype):
     2       a
     3    <NA>
     dtype: category
-    Categories (2, object): ['b' < 'a']
+    Categories (2, str): ['b' < 'a']
     """
 
     def __init__(self, categories=None, ordered: bool | None = False) -> None:
@@ -211,7 +211,7 @@ class CategoricalDtype(_BaseDtype):
         >>> import cudf
         >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> dtype.categories
-        Index(['b', 'a'], dtype='object')
+        Index(['b', 'a'], dtype='str')
         """
         if self._categories is None:
             col = cudf.core.column.column_empty(0, dtype=DEFAULT_STRING_DTYPE)
@@ -247,9 +247,9 @@ class CategoricalDtype(_BaseDtype):
         >>> import cudf
         >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=str)
         >>> dtype.to_pandas()
-        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=str)
         """
         if self._categories is None:
             categories = None
