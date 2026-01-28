@@ -26,25 +26,10 @@ def _leading_nulls_count(plc_col: plc.Column, size: int) -> int:
 
     offset = plc_col.offset()
 
-    total = plc.null_mask.null_count(bitmask, offset, offset + size)
-    if total == 0:
-        return 0
-
-    # binary search for the first first occurrence
-    # where null count == index
-    low = 0
-    high = size
-    while low + 1 < high:
-        midpoint = low + ((high - low) // 2)
-        null_count = plc.null_mask.null_count(
-            bitmask, offset, offset + midpoint
-        )
-        if null_count == midpoint:
-            low = midpoint
-        else:
-            high = midpoint
-
-    return low
+    return (
+        plc.null_mask.index_of_first_set_bit(bitmask, offset, offset + size)
+        - offset
+    )
 
 
 class ExponentialMovingWindow(_RollingBase):
