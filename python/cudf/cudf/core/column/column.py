@@ -968,13 +968,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def all(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> bool:
+        if skipna is not True and skipna is not False:
+            raise ValueError(
+                f'For argument "skipna" expected type bool, received type {type(skipna).__name__}.'
+            )
         if self.size == 0:
-            return True
+            return np.bool_(True)
         if self.null_count == self.size:
             if not skipna:
                 return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
             else:
-                return True
+                return np.bool_(True)
 
         # When skipna=False and there are NaN values (not null mask), libcudf
         # will return NaN due to propagation. But pandas treats NaN as truthy
@@ -984,9 +988,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "all", skipna=True, min_count=min_count, **kwargs
         )
         if np.isnan(result):
-            result = True
+            result = np.bool_(True)
         else:
-            result = bool(result)
+            result = np.bool_(result)
 
         # For pandas nullable extension dtypes with skipna=False and nulls, return NaN
         if (
@@ -1001,13 +1005,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def any(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> bool:
+        if skipna is not True and skipna is not False:
+            raise ValueError(
+                f'For argument "skipna" expected type bool, received type {type(skipna).__name__}.'
+            )
         # Empty series always returns False
         if self.size == 0:
-            return False
+            return np.bool_(False)
         if not skipna and self.has_nulls():
-            return True
+            return np.bool_(True)
         elif skipna and self.null_count == self.size:
-            return False
+            return np.bool_(False)
 
         # When skipna=False and there are NaN values (not null mask), libcudf
         # will return NaN due to propagation. But pandas treats NaN as truthy.
@@ -1017,8 +1025,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         if np.isnan(result):
             # If skipna=False and all values are NaN, pandas treats them as truthy
-            return not skipna
-        return bool(result)
+            return np.bool_(not skipna)
+        return np.bool_(result)
 
     def dropna(self) -> Self:
         if self.has_nulls():
@@ -2461,6 +2469,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         **kwargs: Any,
     ) -> ScalarLike:
         """Private method for reduction operations. Called by mixin-generated methods."""
+        if skipna is not True and skipna is not False:
+            raise ValueError(
+                f'For argument "skipna" expected type bool, received type {type(skipna).__name__}.'
+            )
         # Early return if we can return NaN
         if self._can_return_nan(skipna=skipna):
             return _get_nan_for_dtype(self.dtype)
