@@ -23,7 +23,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
-from packaging import version
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
@@ -1000,36 +999,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         type=array.type.value_type,
                     )
                 )
-            if version.parse(pa.__version__) < version.parse(
-                "16"
-            ) and isinstance(codes, pa.ChunkedArray):
-                result = cls.from_pylibcudf(
-                    plc.Table.from_arrow(pa.table({None: codes})).columns()[0]
-                )
-                categories = cls.from_pylibcudf(
-                    plc.Table.from_arrow(
-                        pa.table({None: dictionary})
-                    ).columns()[0]
-                )
-            else:
-                result = cls.from_pylibcudf(plc.Column.from_arrow(codes))
-                categories = cls.from_pylibcudf(
-                    plc.Column.from_arrow(dictionary)
-                )
+            result = cls.from_pylibcudf(plc.Column.from_arrow(codes))
+            categories = cls.from_pylibcudf(plc.Column.from_arrow(dictionary))
             return result._with_type_metadata(
                 CategoricalDtype(
                     categories=categories, ordered=array.type.ordered
                 )
             )
         else:
-            if version.parse(pa.__version__) < version.parse(
-                "16"
-            ) and isinstance(array, pa.ChunkedArray):
-                result = cls.from_pylibcudf(
-                    plc.Table.from_arrow(pa.table({None: array})).columns()[0]
-                )
-            else:
-                result = cls.from_pylibcudf(plc.Column.from_arrow(array))
+            result = cls.from_pylibcudf(plc.Column.from_arrow(array))
             return result._with_type_metadata(
                 cudf_dtype_from_pa_type(array.type)
             )
@@ -3170,18 +3148,25 @@ def as_column(
         # https://github.com/apache/arrow/pull/9948
         # Hence we should let the exception propagate to
         # the user.
-        data = pa.array(
-            arbitrary,
-            type=pa.decimal128(precision=dtype.precision, scale=dtype.scale),
-        )
         if isinstance(dtype, cudf.Decimal128Dtype):
-            return cudf.core.column.Decimal128Column.from_arrow(data)
+            pa_type = pa.decimal128(
+                precision=dtype.precision, scale=dtype.scale
+            )
+            column_class = cudf.core.column.Decimal128Column
         elif isinstance(dtype, cudf.Decimal64Dtype):
-            return cudf.core.column.Decimal64Column.from_arrow(data)
+            pa_type = pa.decimal64(
+                precision=dtype.precision, scale=dtype.scale
+            )
+            column_class = cudf.core.column.Decimal64Column
         elif isinstance(dtype, cudf.Decimal32Dtype):
-            return cudf.core.column.Decimal32Column.from_arrow(data)
+            pa_type = pa.decimal32(
+                precision=dtype.precision, scale=dtype.scale
+            )
+            column_class = cudf.core.column.Decimal32Column
         else:
             raise NotImplementedError(f"{dtype} not implemented")
+        data = pa.array(arbitrary, type=pa_type)
+        return column_class.from_arrow(data)
     elif isinstance(
         dtype,
         (
