@@ -33,7 +33,6 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         DatetimeLikeScalar,
         DtypeObj,
-        ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -52,6 +51,15 @@ def get_np_td_unit_conversion(
 class TimeDeltaColumn(TemporalBaseColumn):
     _NP_SCALAR = np.timedelta64
     _PD_SCALAR = pd.Timedelta
+    _VALID_REDUCTIONS = {
+        "sum",
+        "min",
+        "max",
+        "mean",
+        "std",
+        "median",
+        "sum_of_squares",
+    }
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
         "__ne__",
@@ -208,25 +216,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
         ):
             result = result.fillna(op == "__ne__")
         return result
-
-    def _validate_scan_op(self, op: str) -> None:
-        """TimeDeltaColumn doesn't support product scans."""
-        if op == "product":
-            raise TypeError(f"Scan '{op}' not supported for {self.dtype}")
-
-    def _reduce(
-        self,
-        op: str,
-        skipna: bool = True,
-        min_count: int = 0,
-        **kwargs: Any,
-    ) -> ScalarLike:
-        """Validate reduction operations for TimeDeltaColumn."""
-        self._raise_if_unsupported_reduction(
-            op,
-            {"product", "var", "kurt", "kurtosis", "skew", "any", "all"},
-        )
-        return super()._reduce(op, skipna, min_count, **kwargs)
 
     def total_seconds(self) -> ColumnBase:
         conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9

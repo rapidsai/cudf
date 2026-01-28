@@ -9,7 +9,7 @@ import locale
 import re
 import warnings
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -145,35 +145,6 @@ class DatetimeColumn(TemporalBaseColumn):
             except AttributeError:
                 # attr was not called yet, so ignore.
                 pass
-
-    def _validate_scan_op(self, op: str) -> None:
-        """DatetimeColumn only supports min/max scans."""
-        if op not in {"min", "max"}:
-            raise TypeError(f"Scan '{op}' not supported for {self.dtype}")
-
-    def _reduce(
-        self,
-        op: str,
-        skipna: bool = True,
-        min_count: int = 0,
-        **kwargs: Any,
-    ) -> ScalarLike:
-        """Validate reduction operations for DatetimeColumn."""
-        self._raise_if_unsupported_reduction(
-            op,
-            {
-                "sum",
-                "product",
-                "var",
-                "kurt",
-                "kurtosis",
-                "skew",
-                "any",
-                "all",
-                "sum_of_squares",
-            },
-        )
-        return super()._reduce(op, skipna, min_count, **kwargs)
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:

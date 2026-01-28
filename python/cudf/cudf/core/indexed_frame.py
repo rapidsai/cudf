@@ -504,19 +504,6 @@ class IndexedFrame(Frame):
         cast_to_int = op in ("cumsum", "cumprod")
         skipna = True if skipna is None else skipna
 
-        # Map cumulative operation name to scan parameters
-        op_to_scan = {
-            "cumsum": ("sum", True),
-            "cumprod": ("product", True),
-            "cummin": ("min", True),
-            "cummax": ("max", True),
-        }
-
-        if op not in op_to_scan:
-            raise ValueError(f"Unknown scan operation: {op}")
-
-        scan_op, inclusive = op_to_scan[op]
-
         results = []
         for col in self._columns:
             if skipna:
@@ -540,8 +527,8 @@ class IndexedFrame(Frame):
                     dtype = np.dtype(np.int64)
                 result_col = result_col.astype(dtype)
 
-            # Call public scan method
-            results.append(getattr(result_col, scan_op)(inclusive=inclusive))
+            # Call public scan method (cumsum, cumprod, cummin, cummax)
+            results.append(getattr(result_col, op)(inclusive=True))
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
         )

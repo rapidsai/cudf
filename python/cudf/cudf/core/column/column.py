@@ -2432,22 +2432,27 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _scan(self, op: str, inclusive: bool = True, **kwargs: Any) -> Self:
         """Private method for scan operations. Called by mixin-generated methods."""
-        # Validation hook for subclasses
-        self._validate_scan_op(op)
+        # Validate operation is supported by this column type
+        # Check own class's _VALID_SCANS, not inherited ones
+        for cls in type(self).__mro__:
+            if "_VALID_SCANS" in cls.__dict__:
+                valid_scans: set[str] = getattr(cls, "_VALID_SCANS", set())
+                if op not in valid_scans:
+                    raise TypeError(
+                        f"'{self.dtype}' does not support scan '{op}'"
+                    )
+                break
 
+        # `inclusive` controls scan type, not passed to aggregation
         with self.access(mode="read", scope="internal"):
             plc_result = plc.reduce.scan(
                 self.plc_column,
-                aggregation.make_aggregation(op, kwargs).plc_obj,
+                aggregation.make_aggregation(op, {}).plc_obj,
                 plc.reduce.ScanType.INCLUSIVE
                 if inclusive
                 else plc.reduce.ScanType.EXCLUSIVE,
             )
         return cast("Self", ColumnBase.create(plc_result, self.dtype))
-
-    def _validate_scan_op(self, op: str) -> None:
-        """Hook for subclasses to validate scan operations. Base allows all."""
-        pass
 
     def _reduce(
         self,
@@ -2457,6 +2462,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         **kwargs: Any,
     ) -> ScalarLike:
         """Private method for reduction operations. Called by mixin-generated methods."""
+        # Validate operation is supported by this column type
+        # Check own class's _VALID_REDUCTIONS, not inherited ones
+        for cls in type(self).__mro__:
+            if "_VALID_REDUCTIONS" in cls.__dict__:
+                valid_reductions: set[str] = getattr(
+                    cls, "_VALID_REDUCTIONS", set()
+                )
+                if op not in valid_reductions:
+                    raise TypeError(
+                        f"'{self.dtype}' does not support reduction '{op}'"
+                    )
+                break
+
         # Special case: for "any" and "all", NaN is always truthy in Python
         # When skipna=False, treat NaN as truthy (don't return NA)
         # When skipna=True, skip NaN like any other operation
@@ -2534,15 +2552,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> ColumnBase:
         """Hook for subclasses to adjust reduction result."""
         return result_col
-
-    def _raise_if_unsupported_reduction(
-        self, op: str, unsupported_ops: set[str]
-    ) -> None:
-        """Raise TypeError if reduction operation is not supported by this column type."""
-        if op in unsupported_ops:
-            raise TypeError(
-                f"'{self.dtype}' does not support reduction '{op}'"
-            )
 
     def minmax(self) -> tuple[ScalarLike, ScalarLike]:
         with self.access(mode="read", scope="internal"):

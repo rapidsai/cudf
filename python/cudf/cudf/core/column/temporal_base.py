@@ -45,6 +45,13 @@ class TemporalBaseColumn(ColumnBase, Scannable):
     Base class for TimeDeltaColumn and DatetimeColumn.
     """
 
+    _VALID_REDUCTIONS = {
+        "min",
+        "max",
+        "mean",
+        "std",
+        "median",
+    }
     _VALID_SCANS = {
         "cummin",
         "cummax",
