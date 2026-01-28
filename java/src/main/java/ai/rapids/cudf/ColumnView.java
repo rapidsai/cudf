@@ -1733,6 +1733,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Computes the reduction of the values in all rows of a column.
    * Overflows in reductions are not detected. Specifying a higher precision
    * output type may prevent overflow. Only the MIN and MAX ops are
+   * supported for reduction of non-arithmetic types (TIMESTAMP...)
    * The null values are skipped for the operation.
    *
    * <p>Example:
@@ -2011,8 +2012,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * <p>Example:
    * <pre>{@code
    * // col    = [-1, 0, 1, 1, 2, 3, 4, 6, 7, 9], DType = INT32
-   * ColumnVector result = col.quantile(QuantileMethod.LINEAR, new double[]{0.0, 0.25, 0.5, 1.0});
-   * // result = [-1.0, 0.75, 2.5, 9.0],          DType = FLOAT64
+   * ColumnVector result = col.quantile(QuantileMethod.LINEAR, new double[]{0.0, 0.25, 0.33, 0.5, 1.0});
+   * // result = [-1.0, 1.0, 1.0, 2.5, 9.0],      DType = FLOAT64
    * }</pre>
    *
    * @param method   the method used to calculate the quantiles
@@ -2032,7 +2033,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * <p>Example:
    * <pre>{@code
    * // col    = [5, 4, 7, 6, 8],     DType = INT32
-   * WindowOptions options = WindowOptions.builder().minPeriods(2).window(1, 1).build();
+   * Scalar one = Scalar.fromInt(1);
+   * Scalar two = Scalar.fromInt(2);
+   * WindowOptions options = WindowOptions.builder().minPeriods(2).window(two, one).build();
    * ColumnVector result = col.rollingWindow(RollingAggregation.sum(), options);
    * // result = [9, 16, 17, 21, 14], DType = INT64
    * }</pre>
@@ -2113,7 +2116,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * <p>Example:
    * <pre>{@code
-   * // col    = [1, 2, null, 3, 5, 8, 10], DType = INT32
+   * // col    = [1, 2, null, 3, 5, 8, 10],  DType = INT32
    * ColumnVector result = col.scan(ScanAggregation.sum(), ScanType.EXCLUSIVE);
    * // result = [0, 1, null, 3, 6, 11, 19], DType = INT32
    * }</pre>
@@ -2130,7 +2133,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * <p>Example:
    * <pre>{@code
-   * // col    = [1, 2, null, 3, 5, 8, 10], DType = INT32
+   * // col    = [1, 2, null, 3, 5, 8, 10],   DType = INT32
    * ColumnVector result = col.scan(ScanAggregation.sum());
    * // result = [1, 3, null, 6, 11, 19, 29], DType = INT32
    * }</pre>
