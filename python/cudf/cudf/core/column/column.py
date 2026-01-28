@@ -1465,7 +1465,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return cast(
                 "Self",
-                ColumnBase.create(
+                type(self)
+                .from_pylibcudf(
                     copying.scatter(
                         cast("list[plc.Scalar]", [value])
                         if isinstance(value, plc.Scalar)
@@ -1473,9 +1474,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         key,
                         [self],
                         bounds_check=bounds_check,
-                    )[0],
-                    self.dtype,
-                ),
+                    )[0]
+                )
+                ._with_type_metadata(self.dtype),
             )
 
     def _check_scatter_key_length(
