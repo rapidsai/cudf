@@ -743,14 +743,19 @@ CUDF_KERNEL void find_first_set_bit_kernel(bitmask_type const* __restrict__ bitm
   auto const block = cg::tiled_partition<block_size>(cg::this_thread_block());
   auto const tid   = cudf::detail::grid_1d::global_thread_id<block_size>();
 
+  cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(index)};
+  if (ref.load(cuda::std::memory_order_relaxed) != max) {
+    return;  // early exit if bit has already been found
+  }
+
   auto const end_word_index = word_index(stop);
 
   auto const thread_word_index = tid + word_index(start);
   auto bit_index               = max;
   if (thread_word_index <= end_word_index) {
-    auto mask = detail::get_mask_offset_word(bitmask, tid, start, stop);
-
-    auto mask_bit_index = __ffs(mask);  // index is 1-based
+    auto const mask = detail::get_mask_offset_word(bitmask, tid, start, stop);
+    // returned index is 1-based; 0 means no bits were set
+    auto mask_bit_index = __ffs(mask);
     if (mask_bit_index != 0) {
       bit_index = static_cast<size_type>(tid * word_size) + mask_bit_index - 1;
     }
@@ -759,7 +764,6 @@ CUDF_KERNEL void find_first_set_bit_kernel(bitmask_type const* __restrict__ bitm
   block.sync();
 
   if (block.thread_rank() == 0 && out_index != max) {
-    cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(index)};
     ref.fetch_min(out_index, cuda::std::memory_order_relaxed);
   }
 }
@@ -770,7 +774,8 @@ size_type index_of_first_set_bit(bitmask_type const* bitmask,
                                  size_type stop,
                                  rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
+  CUDF_EXPECTS(
+    start >= 0 and start <= stop and start != stop, "Invalid bit range.", std::invalid_argument);
   if (bitmask == nullptr) { return 0; }
 
   auto const bit_count  = stop - start;
@@ -778,7 +783,7 @@ size_type index_of_first_set_bit(bitmask_type const* bitmask,
 
   auto d_index =
     cudf::detail::device_scalar<size_type>(stream, cudf::get_current_device_resource_ref());
-  d_index.set_value_async(bit_count, stream);
+  d_index.set_value_async(bit_count, stream);  // init to no set bits found
 
   constexpr size_type block_size = 256;
   auto const grid                = grid_1d{mask_words + 1, block_size};
