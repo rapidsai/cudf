@@ -100,6 +100,28 @@ public class DeltaLake {
   public static Table readDeltaParquet(ParquetOptions opts,
                                   HostMemoryBuffer[] dataBuffers,
                                   DeletionVectorInfo[] deletionVectorInfos) {
+    return readDeltaParquet(opts, dataBuffers, null, deletionVectorInfos);
+  }
+
+  /**
+   * Reads a Parquet file with deletion vector support.
+   *
+   * Reads a Parquet file, prepends an index column to the table, and applies the deletion vector
+   * filter. If row group metadata is not provided, the index column will be a simple sequence
+   * from 0 to the number of rows. If the deletion vector is null or empty, the table with the
+   * prepended index column is returned as-is without filtering.
+   *
+   * @param opts ParquetOptions
+   * @param dataBuffers Array of HostMemoryBuffers containing the Parquet file data.
+   * @param rowGroups Row group indices to read
+   * @param deletionVectorInfos Array of DeletionVectorInfo objects representing deletion vectors
+   *                            for each Parquet file to read.
+   * @return A Table containing the filtered data with a prepended UINT64 index column.
+   */
+  public static Table readDeltaParquet(ParquetOptions opts,
+                                  HostMemoryBuffer[] dataBuffers,
+                                  int[] rowGroups,
+                                  DeletionVectorInfo[] deletionVectorInfos) {
     long[] dataBufferAddrsSizes = getAddrsAndSizes(dataBuffers);
     List<HostMemoryBuffer> serializedBitmapList = new ArrayList<>(deletionVectorInfos.length);
     List<Integer> deletionVectorRowCountsList = new ArrayList<>(deletionVectorInfos.length);
@@ -128,6 +150,7 @@ public class DeltaLake {
                                             opts.getReadBinaryAsString(),
                                             null,
                                             dataBufferAddrsSizes,
+                                            rowGroups,
                                             opts.timeUnit().typeId.getNativeId(),
                                             bitmapAddrsSizes,
                                             deletionVectorRowCounts,
@@ -167,12 +190,34 @@ public class DeltaLake {
      *                      0 if there is no limit
      * @param opts The options for Parquet reading.
      * @param dataBuffers Array of HostMemoryBuffers containing the Parquet file data.
+     * @param rowGroups Row group indices to read
      * @param deletionVectorInfos Array of DeletionVectorInfo objects representing deletion vectors
      *                            for each Parquet file to read.
      */
     public ParquetChunkedReader(long chunkSizeByteLimit, long passReadLimit,
                                 ParquetOptions opts,
                                 HostMemoryBuffer[] dataBuffers,
+                                DeletionVectorInfo[] deletionVectorInfos) {
+      this(chunkSizeByteLimit, passReadLimit, opts, dataBuffers, null, deletionVectorInfos);
+    }
+
+    /**
+     * Construct the reader instance from a read limit and data in host memory buffers.
+     *
+     * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+     *                           or 0 if there is no limit.
+     * @param passReadLimit Limit on the amount of memory used for reading and decompressing data or
+     *                      0 if there is no limit
+     * @param opts The options for Parquet reading.
+     * @param dataBuffers Array of HostMemoryBuffers containing the Parquet file data.
+     * @param rowGroups Row group indices to read
+     * @param deletionVectorInfos Array of DeletionVectorInfo objects representing deletion vectors
+     *                            for each Parquet file to read.
+     */
+    public ParquetChunkedReader(long chunkSizeByteLimit, long passReadLimit,
+                                ParquetOptions opts,
+                                HostMemoryBuffer[] dataBuffers,
+                                int[] rowGroups,
                                 DeletionVectorInfo[] deletionVectorInfos) {
       long[] addrsSizes = getAddrsAndSizes(dataBuffers);
       List<HostMemoryBuffer> serializedBitmapList = new ArrayList<>(deletionVectorInfos.length);
@@ -200,7 +245,7 @@ public class DeltaLake {
       int[] rowGroupNumRows = rowGroupNumRowsList.stream().mapToInt(Integer::intValue).toArray();
       long[] handles = createDeltaParquetChunkedReader(chunkSizeByteLimit, passReadLimit,
         opts.getIncludeColumnNames(), opts.getReadBinaryAsString(), null,
-          addrsSizes, opts.timeUnit().typeId.getNativeId(),
+          addrsSizes, rowGroups, opts.timeUnit().typeId.getNativeId(),
           bitmapAddrsSizes, deletionVectorRowCounts, rowGroupOffsets, rowGroupNumRows);
       readerHandle = handles[0];
       if (readerHandle == 0) {
@@ -283,6 +328,7 @@ public class DeltaLake {
                                                 boolean[] binaryToString,
                                                 String filePath,
                                                 long[] addrsAndSizes,
+                                                int[] rowGroups,
                                                 int timeUnit,
                                                 long[] serializedRoaring64,
                                                 int[] deletionVectorRowCounts,
@@ -296,6 +342,7 @@ public class DeltaLake {
                                                                boolean[] binaryToString,
                                                                String filePath,
                                                                long[] addrsAndSizes,
+                                                               int[] rowGroups,
                                                                int timeUnit,
                                                                long[] serializedRoaringBitmaps,
                                                                int[] deletionVectorRowCounts,

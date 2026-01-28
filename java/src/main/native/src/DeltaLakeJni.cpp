@@ -59,10 +59,12 @@ cudf::io::source_info make_source_info(
 cudf::io::parquet_reader_options make_parquet_reader_options(JNIEnv* env,
                                                              jobjectArray const& filter_col_names,
                                                              jbooleanArray const& col_binary_read,
+                                                             jintArray const& row_groups,
                                                              cudf::io::source_info&& source,
                                                              jint unit)
 {
   cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
+  cudf::jni::native_jintArray n_row_groups(env, row_groups);
 
   // TODO: This variable is unused now, but we still don't know what to do with it yet.
   // As such, it needs to stay here for a little more time before we decide to use it again,
@@ -73,6 +75,11 @@ cudf::io::parquet_reader_options make_parquet_reader_options(JNIEnv* env,
   auto builder = cudf::io::parquet_reader_options::builder(source);
   if (n_filter_col_names.size() > 0) {
     builder = builder.columns(n_filter_col_names.as_cpp_vector());
+  }
+  if (n_row_groups.size() > 0) {
+    auto row_groups_vec = std::vector<std::vector<cudf::size_type>>{};
+    row_groups_vec.emplace_back(n_row_groups.to_vector());
+    builder = builder.row_groups(row_groups_vec);
   }
 
   return builder.convert_strings_to_categories(false)
@@ -119,6 +126,7 @@ std::unique_ptr<cudf::io::parquet::experimental::deletion_vector_info> make_dele
  * @param col_binary_read Boolean array indicating binary read for string columns
  * @param inputfilepath Input file path (if reading from file)
  * @param addrs_and_sizes Address and size pairs for buffer reading (if reading from buffer)
+ * @param row_groups Row group indices to read
  * @param unit Timestamp unit
  * @param serialized_roaring64 Serialized 64-bit roaring bitmaps from deletion vectors
  * @param deletion_vector_row_counts Number of rows read from data files associated to each deletion
@@ -139,6 +147,7 @@ Java_ai_rapids_cudf_DeltaLake_readDeltaParquet(JNIEnv* env,
                                                jbooleanArray col_binary_read,
                                                jstring inputfilepath,
                                                jlongArray addrs_and_sizes,
+                                               jintArray row_groups,
                                                jint unit,
                                                jlongArray serialized_roaring64,
                                                jintArray deletion_vector_row_counts,
@@ -175,7 +184,7 @@ Java_ai_rapids_cudf_DeltaLake_readDeltaParquet(JNIEnv* env,
       make_source_info(env, read_buffer, filename, multi_buffer_source);
 
     cudf::io::parquet_reader_options opts =
-      make_parquet_reader_options(env, filter_col_names, col_binary_read, std::move(source), unit);
+      make_parquet_reader_options(env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
 
     auto dv_info = make_deletion_vector_info(
       env, serialized_roaring64, deletion_vector_row_counts, row_group_offsets, row_group_num_rows);
@@ -201,6 +210,7 @@ Java_ai_rapids_cudf_DeltaLake_readDeltaParquet(JNIEnv* env,
  * @param col_binary_read Boolean array indicating binary read for string columns
  * @param inp_file_path Input file path (if reading from file)
  * @param addrs_sizes Address and size pairs for buffer reading (if reading from buffer)
+ * @param row_groups Row group indices to read
  * @param unit Timestamp unit
  * @param serialized_roaring_bitmaps Array of serialized 64-bit roaring bitmaps from deletion
  * vectors
@@ -227,6 +237,7 @@ Java_ai_rapids_cudf_DeltaLake_createDeltaParquetChunkedReader(JNIEnv* env,
                                                               jbooleanArray col_binary_read,
                                                               jstring inp_file_path,
                                                               jlongArray addrs_sizes,
+                                                              jintArray row_groups,
                                                               jint unit,
                                                               jlongArray serialized_roaring64,
                                                               jintArray deletion_vector_row_counts,
@@ -263,7 +274,7 @@ Java_ai_rapids_cudf_DeltaLake_createDeltaParquetChunkedReader(JNIEnv* env,
       make_source_info(env, read_buffer, filename, multi_buffer_source);
 
     cudf::io::parquet_reader_options opts =
-      make_parquet_reader_options(env, filter_col_names, col_binary_read, std::move(source), unit);
+      make_parquet_reader_options(env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
 
     auto dv_info = make_deletion_vector_info(
       env, serialized_roaring64, deletion_vector_row_counts, row_group_offsets, row_group_num_rows);
