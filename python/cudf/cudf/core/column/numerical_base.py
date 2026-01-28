@@ -45,6 +45,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         "cumprod",
         "cummin",
         "cummax",
+        "ewma",
     }
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:

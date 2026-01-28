@@ -525,21 +525,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
             has_nanos = self.time_unit == "ns" and self.nanosecond.any()
             has_micros = (
-                self.time_unit
-                in {
-                    "ns",
-                    "us",
-                }
-                and self.microsecond.any()
+                self.time_unit in {"ns", "us"} and self.microsecond.any()
             )
             has_millis = (
-                self.time_unit
-                in {
-                    "ns",
-                    "us",
-                    "ms",
-                }
-                and self.millisecond.any()
+                self.time_unit in {"ns", "us", "ms"} and self.millisecond.any()
             )
             has_seconds = self.second.any()
             has_minutes = self.minute.any()

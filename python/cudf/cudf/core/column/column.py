@@ -303,7 +303,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     The *dtype* indicates the ColumnBase's element type.
     """
 
-    _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
     _VALID_REDUCTIONS = {
         "sum",
         "product",
@@ -317,6 +316,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         "all",
         "sum_of_squares",
     }
+    _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
     plc_column: plc.Column
     _dtype: DtypeObj
     _distinct_count: dict[bool, int]
@@ -982,9 +982,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
             else:
                 return True
-        result = bool(
-            self._reduce("all", skipna=skipna, min_count=min_count, **kwargs)
+        result = self._reduce(
+            "all", skipna=skipna, min_count=min_count, **kwargs
         )
+        # _reduce() returns NaN for empty columns; all() should return True (vacuous truth)
+        if isinstance(result, (int, float, bool)) and np.isnan(result):
+            result = True
+        else:
+            result = bool(result)
         if (
             result
             and not skipna
@@ -1006,9 +1011,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return True
         elif skipna and self.null_count == self.size:
             return False
-        return bool(
-            self._reduce("any", skipna=skipna, min_count=min_count, **kwargs)
+        result = self._reduce(
+            "any", skipna=skipna, min_count=min_count, **kwargs
         )
+        # _reduce() returns NaN for empty columns; any() should return False
+        if isinstance(result, (int, float, bool)) and np.isnan(result):
+            return False
+        return bool(result)
 
     def dropna(self) -> Self:
         if self.has_nulls():
@@ -2436,7 +2445,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         with self.access(mode="read", scope="internal"):
             plc_result = plc.reduce.scan(
                 self.plc_column,
-                aggregation.make_aggregation(op, {}).plc_obj,
+                aggregation.make_aggregation(op, kwargs).plc_obj,
                 plc.reduce.ScanType.INCLUSIVE
                 if inclusive
                 else plc.reduce.ScanType.EXCLUSIVE,

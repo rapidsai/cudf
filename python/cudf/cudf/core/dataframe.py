@@ -6561,14 +6561,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 res._attrs = self._attrs
                 return res
-        special_methods = {"kurtosis", "skew"}
 
         def _apply_reduction(col, op, kwargs):
             return getattr(col, op)(**kwargs)
 
         if (
             axis == 2
-            and op in special_methods
+            and op in {"kurtosis", "skew"}
             and self._num_rows < 4
             and self._num_columns > 1
         ):

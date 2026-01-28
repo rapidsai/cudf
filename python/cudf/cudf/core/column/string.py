@@ -79,10 +79,6 @@ def plc_flags_from_re_flags(
 class StringColumn(ColumnBase, Scannable):
     """Implements operations for Columns of String type"""
 
-    _VALID_SCANS = {
-        "cummin",
-        "cummax",
-    }
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
         "__ne__",
@@ -103,6 +99,10 @@ class StringColumn(ColumnBase, Scannable):
         "__floordiv__",
     }
     _VALID_PLC_TYPES = {plc.TypeId.STRING}
+    _VALID_SCANS = {
+        "cummin",
+        "cummax",
+    }
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:

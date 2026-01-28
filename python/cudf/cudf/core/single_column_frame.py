@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 """Base class for Frame types that only have a single column."""
 
@@ -64,8 +64,6 @@ class SingleColumnFrame(Frame, NotIterable):
                 "with non-numeric dtypes."
             )
         try:
-            # Special methods that are not reduction operations
-            # Call the specific reduction method dynamically
             return getattr(self._column, op)(**kwargs)
         except AttributeError:
             raise TypeError(f"cannot perform {op} with type {self.dtype}")

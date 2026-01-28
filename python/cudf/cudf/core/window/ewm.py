@@ -196,8 +196,8 @@ class ExponentialMovingWindow(_RollingBase):
         to_libcudf_column = source_column.astype(
             np.dtype(np.float64)
         ).nans_to_nulls()
-        return to_libcudf_column._scan(
-            agg_name, True, com=self.com, adjust=self.adjust
+        return getattr(to_libcudf_column, agg_name)(
+            inclusive=True, com=self.com, adjust=self.adjust
         )
 
 

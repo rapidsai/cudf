@@ -526,8 +526,6 @@ class IndexedFrame(Frame):
                 else:
                     dtype = np.dtype(np.int64)
                 result_col = result_col.astype(dtype)
-
-            # Call public scan method (cumsum, cumprod, cummin, cummax)
             results.append(getattr(result_col, op)(inclusive=True))
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
