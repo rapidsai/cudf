@@ -271,10 +271,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
         with self.access(mode="read", scope="internal"):
-            return (
-                type(self)
-                .from_pylibcudf(
-                    plc.unary.unary_operation(self.plc_column, unaryop_enum)
-                )
-                ._with_type_metadata(self.dtype)
+            return ColumnBase.create(
+                plc.unary.unary_operation(self.plc_column, unaryop_enum),
+                self.dtype,
             )
