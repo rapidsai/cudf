@@ -1586,21 +1586,19 @@ class StringColumn(ColumnBase, Scannable):
                 self.plc_column, char_type, case_type
             )
             res = type(self).from_pylibcudf(plc_result)
+            if (
+                isinstance(self.dtype, pd.StringDtype)
+                and self.dtype.na_value is np.nan
+            ):
+                res = res.fillna(False)
 
             if cudf.get_option("mode.pandas_compatible"):
-                if (
-                    isinstance(self.dtype, pd.StringDtype)
-                    and self.dtype.na_value is np.nan
-                ):
-                    res = res.fillna(False)
-                    new_type = np.dtype("bool")
-                else:
-                    new_type = get_dtype_of_same_kind(
-                        pd.StringDtype()
-                        if isinstance(self.dtype, pd.StringDtype)
-                        else self.dtype,
-                        np.dtype("bool"),
-                    )
+                new_type = get_dtype_of_same_kind(
+                    pd.StringDtype()
+                    if isinstance(self.dtype, pd.StringDtype)
+                    else self.dtype,
+                    np.dtype("bool"),
+                )
             else:
                 new_type = np.dtype("bool")
             return cast(
