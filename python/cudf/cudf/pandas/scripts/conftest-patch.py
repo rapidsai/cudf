@@ -7969,9 +7969,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/window/test_rolling.py::test_rolling_var_same_value_count_logic[values0-3-1-expected0]",
     "tests/window/test_rolling.py::test_variable_window_nonunique[DataFrame-right-expected2]",
     "tests/window/test_rolling.py::test_variable_window_nonunique[Series-right-expected2]",
-    "tests/window/test_rolling_functions.py::test_nans[max-max-kwargs4]",
-    "tests/window/test_rolling_functions.py::test_nans[mean-mean-kwargs0]",
-    "tests/window/test_rolling_functions.py::test_nans[min-min-kwargs3]",
     "tests/window/test_rolling_functions.py::test_rolling_max_gh6297[10]",
     "tests/window/test_rolling_functions.py::test_rolling_max_gh6297[1]",
     "tests/window/test_rolling_functions.py::test_rolling_max_gh6297[2]",
@@ -8006,7 +8003,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/window/test_timeseries_window.py::TestRollingTS::test_rolling_on_decreasing_index[us]",
     "tests/window/test_timeseries_window.py::TestRollingTS::test_rolling_on_empty",
     "tests/window/test_win_type.py::test_cmov_window_corner[None]",
-    "tests/window/test_win_type.py::test_invalid_scipy_arg",
     "tests/window/test_win_type.py::test_win_type_not_implemented",
     'tests/io/json/test_pandas.py::TestPandasContainer::test_json_indent_all_orients[table-{\\n    "schema":{\\n        "fields":[\\n            {\\n                "name":"index",\\n                "type":"integer"\\n            },\\n            {\\n                "name":"a",\\n                "type":"string"\\n            },\\n            {\\n                "name":"b",\\n                "type":"string"\\n            }\\n        ],\\n        "primaryKey":[\\n            "index"\\n        ],\\n        "pandas_version":"1.4.0"\\n    },\\n    "data":[\\n        {\\n            "index":0,\\n            "a":"foo",\\n            "b":"bar"\\n        },\\n        {\\n            "index":1,\\n            "a":"baz",\\n            "b":"qux"\\n        }\\n    ]\\n}]',
     r"tests/io/parser/common/test_index.py::test_multi_index_blank_df[c_high-True-a,b\nc,d-expected1-header1]",
@@ -10395,6 +10391,8 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_setitem_mix_of_nan_and_interval[NaTType-1.0]",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_setitem_mix_of_nan_and_interval[NaTType-a]",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_setitem_mix_of_nan_and_interval[float1-1.0]",
+    "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_setitem_mix_of_nan_and_interval[NoneType-not_na0]",
+    "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_setitem_mix_of_nan_and_interval[float1-not_na0]",
     "tests/indexing/test_loc.py::TestLocWithMultiIndex::test_loc_set_nan_in_categorical_series[Int16]",
     "tests/io/excel/test_openpyxl.py::test_engine_kwargs_append_data_only[True-0]",
     "tests/io/excel/test_writers.py::TestExcelWriterEngineTests::test_ExcelWriter_dispatch[OpenpyxlWriter-.xlsx]",
@@ -10572,6 +10570,8 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/window/test_pairwise.py::TestPairwise::test_no_flex[pairwise_frames5-<lambda>1]",
     "tests/window/test_pairwise.py::TestPairwise::test_no_flex[pairwise_frames8-<lambda>1]",
     "tests/window/test_win_type.py::test_cmov_window_frame[None-var-xp2]",
+    "tests/series/indexing/test_indexing.py::test_basic_indexing",
+    "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[string-python-Series]",
 }
 
 
