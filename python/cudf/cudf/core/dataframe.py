@@ -4398,9 +4398,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 plc.table.Table([col.plc_column for col in source_columns])
             )
             result_columns = (
-                ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                    source_dtype
-                )
+                ColumnBase.create(col, source_dtype)
                 for col in result_table.columns()
             )
 
@@ -7735,9 +7733,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     0,
                     list(children),
                 )
-            col = ColumnBase.from_pylibcudf(plc_column)._with_type_metadata(
-                dtype
-            )
+            col = ColumnBase.create(plc_column, dtype)
         return Series._from_column(
             col,
             index=self.index,

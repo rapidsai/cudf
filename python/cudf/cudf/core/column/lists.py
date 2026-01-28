@@ -19,6 +19,7 @@ from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
+    dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
     is_dtype_obj_list,
 )
@@ -53,15 +54,26 @@ class ListColumn(ColumnBase):
             and not is_dtype_obj_list(dtype)
         ):
             raise ValueError("dtype must be a cudf.ListDtype")
+
+        child = plc_column.list_view().child()
+        try:
+            ColumnBase._validate_dtype_recursively(child, dtype.element_type)
+        except ValueError as e:
+            raise ValueError(
+                f"List element type validation failed: {e}"
+            ) from e
+
         return plc_column, dtype
 
     def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-        dtype = cast("ListDtype", self.dtype)
-        return ColumnBase.from_pylibcudf(sliced_plc_col)._with_type_metadata(
-            dtype.element_type
-        )
+        # TODO: For nested structures, stored dtype may not reflect actual plc_column type
+        # due to operations like groupby().collect() not updating dtype metadata when
+        # creating nested lists (e.g., list<int> becomes list<list<int>> but
+        # dtype.element_type remains int64 instead of ListDtype(int64)).
+        element_dtype = dtype_from_pylibcudf_column(sliced_plc_col)
+        return ColumnBase.create(sliced_plc_col, element_dtype)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
