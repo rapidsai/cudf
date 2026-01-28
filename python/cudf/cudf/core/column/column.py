@@ -982,14 +982,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
             else:
                 return True
+
+        # When skipna=False and there are NaN values (not null mask), libcudf
+        # will return NaN due to propagation. But pandas treats NaN as truthy
+        # and only returns False if there's a falsy value. So we always compute
+        # with skipna=True to get the boolean result.
         result = self._reduce(
-            "all", skipna=skipna, min_count=min_count, **kwargs
+            "all", skipna=True, min_count=min_count, **kwargs
         )
-        # _reduce() returns NaN for empty columns; all() should return True (vacuous truth)
+        # _reduce() returns NaN when all values are NaN; all() should return True
         if isinstance(result, (int, float, bool)) and np.isnan(result):
             result = True
         else:
             result = bool(result)
+
+        # For pandas nullable extension dtypes with skipna=False and nulls, return NaN
         if (
             result
             and not skipna
@@ -1007,16 +1014,24 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
             )
+        # Empty series always returns False
+        if self.size == 0:
+            return False
         if not skipna and self.has_nulls():
             return True
         elif skipna and self.null_count == self.size:
             return False
+
+        # When skipna=False and there are NaN values (not null mask), libcudf
+        # will return NaN due to propagation. But pandas treats NaN as truthy.
+        # So we always compute with skipna=True to get the boolean result.
         result = self._reduce(
-            "any", skipna=skipna, min_count=min_count, **kwargs
+            "any", skipna=True, min_count=min_count, **kwargs
         )
-        # _reduce() returns NaN for empty columns; any() should return False
+        # _reduce() returns NaN when all values are NaN; any() should return False
         if isinstance(result, (int, float, bool)) and np.isnan(result):
-            return False
+            # If skipna=False and all values are NaN, pandas treats them as truthy
+            return not skipna
         return bool(result)
 
     def dropna(self) -> Self:

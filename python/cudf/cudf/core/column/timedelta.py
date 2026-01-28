@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         DatetimeLikeScalar,
         DtypeObj,
+        ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -113,6 +114,28 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 delattr(self, attr)
             except AttributeError:
                 pass
+
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        # Pandas raises TypeError for certain unsupported timedelta reductions
+        if op == "product":
+            raise TypeError(
+                f"'{type(self).__name__}' with dtype {self.dtype} "
+                f"does not support reduction '{op}'"
+            )
+        if op == "var":
+            raise TypeError(
+                f"'{type(self).__name__}' with dtype {self.dtype} "
+                f"does not support reduction '{op}'"
+            )
+        return super()._reduce(
+            op, skipna=skipna, min_count=min_count, **kwargs
+        )
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
         try:
