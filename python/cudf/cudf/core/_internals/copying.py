@@ -56,8 +56,7 @@ def scatter(
     if bounds_check:
         n_rows = len(target_columns[0])
         if not (
-            (scatter_map >= -n_rows).reduce("all")
-            and (scatter_map < n_rows).reduce("all")
+            (scatter_map >= -n_rows).all() and (scatter_map < n_rows).all()
         ):
             raise IndexError(
                 f"index out of bounds for column of size {n_rows}"

@@ -59,7 +59,7 @@ from cudf.core.dtypes import (
     StructDtype,
     _dtype_to_metadata,
 )
-from cudf.core.mixins import BinaryOperand
+from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -290,7 +290,7 @@ class _ColumnAccessContext:
         return False
 
 
-class ColumnBase(Serializable, BinaryOperand):
+class ColumnBase(Serializable, BinaryOperand, Reducible):
     """
     A ColumnBase stores columnar data in device memory.
 
@@ -304,6 +304,19 @@ class ColumnBase(Serializable, BinaryOperand):
     """
 
     _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
+    _VALID_REDUCTIONS = {
+        "sum",
+        "product",
+        "min",
+        "max",
+        "mean",
+        "std",
+        "var",
+        "median",
+        "any",
+        "all",
+        "sum_of_squares",
+    }
     plc_column: plc.Column
     _dtype: DtypeObj
     _distinct_count: dict[bool, int]
@@ -950,7 +963,7 @@ class ColumnBase(Serializable, BinaryOperand):
         ret = self._binaryop(other, "NULL_EQUALS")
         if ret is NotImplemented:
             return False
-        return bool(ret.reduce("all"))
+        return bool(ret.all())
 
     def all(self, skipna: bool = True) -> bool:
         # The skipna argument is only used for numerical columns.
@@ -967,7 +980,7 @@ class ColumnBase(Serializable, BinaryOperand):
                 return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
             else:
                 return True
-        result = bool(self.reduce("all"))
+        result = bool(self._reduce("all"))
         if (
             result
             and not skipna
@@ -987,7 +1000,7 @@ class ColumnBase(Serializable, BinaryOperand):
             return True
         elif skipna and self.null_count == self.size:
             return False
-        return bool(self.reduce("any"))
+        return bool(self._reduce("any"))
 
     def dropna(self) -> Self:
         if self.has_nulls():
@@ -1409,7 +1422,7 @@ class ColumnBase(Serializable, BinaryOperand):
             else:
                 # Compute the number of element to scatter by summing all
                 # `True`s in the boolean mask.
-                num_keys = key.reduce("sum")
+                num_keys = key.sum()
         else:
             # `key` is integer scatter map
             num_keys = len(key)
@@ -1603,7 +1616,7 @@ class ColumnBase(Serializable, BinaryOperand):
         mask = self.isnull()
 
         # trivial cases, all nan or no nans
-        if not mask.reduce("any") or mask.reduce("all"):
+        if not mask.any() or mask.all():
             return self.copy()
 
         from cudf.core.index import RangeIndex
@@ -2263,12 +2276,12 @@ class ColumnBase(Serializable, BinaryOperand):
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls(include_nan=False)
 
-    def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
+    def _reduction_result_dtype(self, op: str) -> DtypeObj:
         """
         Determine the correct dtype to pass to libcudf based on
         the input dtype, data dtype, and specific reduction op
         """
-        if reduction_op in {"any", "all"}:
+        if op in {"any", "all"}:
             return np.dtype(np.bool_)
         return self.dtype
 
@@ -2409,35 +2422,37 @@ class ColumnBase(Serializable, BinaryOperand):
                 type(self).from_pylibcudf(col) for col in plc_table.columns()
             )
 
-    def scan(self, scan_op: str, inclusive: bool, **kwargs: Any) -> Self:
+    def _scan(self, op: str, inclusive: bool = True, **kwargs: Any) -> Self:
+        """Private method for scan operations. Called by mixin-generated methods."""
         # Validation hook for subclasses
-        self._validate_scan_op(scan_op)
+        self._validate_scan_op(op)
 
         with self.access(mode="read", scope="internal"):
             plc_result = plc.reduce.scan(
                 self.plc_column,
-                aggregation.make_aggregation(scan_op, kwargs).plc_obj,
+                aggregation.make_aggregation(op, kwargs).plc_obj,
                 plc.reduce.ScanType.INCLUSIVE
                 if inclusive
                 else plc.reduce.ScanType.EXCLUSIVE,
             )
         return cast("Self", ColumnBase.create(plc_result, self.dtype))
 
-    def _validate_scan_op(self, scan_op: str) -> None:
+    def _validate_scan_op(self, op: str) -> None:
         """Hook for subclasses to validate scan operations. Base allows all."""
         pass
 
-    def reduce(
+    def _reduce(
         self,
-        reduction_op: str,
+        op: str,
         skipna: bool = True,
         min_count: int = 0,
         **kwargs: Any,
     ) -> ScalarLike:
+        """Private method for reduction operations. Called by mixin-generated methods."""
         # Special case: for "any" and "all", NaN is always truthy in Python
         # When skipna=False, treat NaN as truthy (don't return NA)
         # When skipna=True, skip NaN like any other operation
-        if reduction_op in {"any", "all"} and not skipna:
+        if op in {"any", "all"} and not skipna:
             # Remember if column had no nulls before nans_to_nulls
             had_no_nulls_before = not self.has_nulls(include_nan=False)
             col = self.nans_to_nulls()
@@ -2447,7 +2462,7 @@ class ColumnBase(Serializable, BinaryOperand):
             # NaN is truthy, so return True
             if len(col) == 0 and had_no_nulls_before and len(self) > 0:
                 return True
-        elif reduction_op in {"any", "all"} and skipna:
+        elif op in {"any", "all"} and skipna:
             # When skipna=True for any/all, treat like normal (skip NaN)
             col = self.nans_to_nulls()
             if col.has_nulls():
@@ -2472,17 +2487,17 @@ class ColumnBase(Serializable, BinaryOperand):
                 return _get_nan_for_dtype(self.dtype)
 
         # Compute reduction result dtype
-        col_dtype = col._reduction_result_dtype(reduction_op)
+        col_dtype = col._reduction_result_dtype(op)
 
         # Handle empty case
         if len(col) <= col.null_count:
-            if reduction_op == "sum" or reduction_op == "sum_of_squares":
+            if op == "sum" or op == "sum_of_squares":
                 return col_dtype.type(0)
-            if reduction_op == "product":
+            if op == "product":
                 return col_dtype.type(1)
-            if reduction_op == "any":
+            if op == "any":
                 return False
-            if reduction_op == "all":
+            if op == "all":
                 return True
             return _get_nan_for_dtype(col_dtype)
 
@@ -2490,7 +2505,7 @@ class ColumnBase(Serializable, BinaryOperand):
         with col.access(mode="read", scope="internal"):
             plc_scalar = plc.reduce.reduce(
                 col.plc_column,
-                aggregation.make_aggregation(reduction_op, kwargs).plc_obj,
+                aggregation.make_aggregation(op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
             result_col = type(col).from_pylibcudf(
@@ -2498,14 +2513,14 @@ class ColumnBase(Serializable, BinaryOperand):
             )
             # Hook for subclasses (e.g., DecimalBaseColumn adjusts precision)
             result_col = col._adjust_reduce_result(
-                result_col, reduction_op, col_dtype, plc_scalar
+                result_col, op, col_dtype, plc_scalar
             )
         return result_col.element_indexing(0)
 
     def _adjust_reduce_result(
         self,
         result_col: ColumnBase,
-        reduction_op: str,
+        op: str,
         col_dtype: DtypeObj,
         plc_scalar: plc.Scalar,
     ) -> ColumnBase:
@@ -2513,12 +2528,12 @@ class ColumnBase(Serializable, BinaryOperand):
         return result_col
 
     def _raise_if_unsupported_reduction(
-        self, reduction_op: str, unsupported_ops: set[str]
+        self, op: str, unsupported_ops: set[str]
     ) -> None:
         """Raise TypeError if reduction operation is not supported by this column type."""
-        if reduction_op in unsupported_ops:
+        if op in unsupported_ops:
             raise TypeError(
-                f"'{self.dtype}' does not support reduction '{reduction_op}'"
+                f"'{self.dtype}' does not support reduction '{op}'"
             )
 
     def minmax(self) -> tuple[ScalarLike, ScalarLike]:

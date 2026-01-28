@@ -212,8 +212,8 @@ class _ResampleGrouping(_Grouping):
 
         # get the start and end values that will be used to generate
         # the bin labels
-        min_date = key_column.reduce("min")
-        max_date = key_column.reduce("max")
+        min_date = key_column.min()
+        max_date = key_column.max()
         start, end = _get_timestamp_range_edges(
             pd.Timestamp(min_date),
             pd.Timestamp(max_date),
@@ -270,7 +270,7 @@ class _ResampleGrouping(_Grouping):
             cast_bin_labels = cast_bin_labels[:-1]
 
         # if we have more labels than bins, remove the extras labels:
-        nbins = bin_numbers.reduce("max") + 1
+        nbins = bin_numbers.max() + 1
         if len(cast_bin_labels) > nbins:
             cast_bin_labels = cast_bin_labels[:nbins]
 

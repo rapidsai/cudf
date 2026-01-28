@@ -2241,7 +2241,7 @@ class Index(SingleColumnFrame):
         return item in self._column
 
     def any(self) -> bool:
-        return self._column.reduce("any")
+        return self._column.any()
 
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False

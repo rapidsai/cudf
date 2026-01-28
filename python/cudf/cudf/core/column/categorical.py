@@ -166,9 +166,9 @@ class CategoricalColumn(column.ColumnBase):
             self.dtype
         )
 
-    def reduce(
+    def _reduce(
         self,
-        reduction_op: str,
+        op: str,
         skipna: bool = True,
         min_count: int = 0,
         **kwargs: Any,
@@ -177,14 +177,14 @@ class CategoricalColumn(column.ColumnBase):
         # Only valid reductions are min and max
         if not self.ordered:
             raise TypeError(
-                f"Categorical is not ordered for operation {reduction_op}. "
+                f"Categorical is not ordered for operation {op}. "
                 "You can use .as_ordered() to change the Categorical "
                 "to an ordered one."
             )
 
         # Delegate to underlying codes column
-        result = self.codes.reduce(
-            reduction_op, skipna=skipna, min_count=min_count, **kwargs
+        result = self.codes._reduce(
+            op, skipna=skipna, min_count=min_count, **kwargs
         )
 
         # Decode the result back to a category
@@ -291,7 +291,7 @@ class CategoricalColumn(column.ColumnBase):
         """Convert to PyArrow Array."""
         # pyarrow.Table doesn't support unsigned codes
         signed_type = (
-            min_signed_type(self.codes.reduce("max"))
+            min_signed_type(self.codes.max())
             if self.codes.size > 0
             else np.dtype(np.int8)
         )
@@ -483,7 +483,7 @@ class CategoricalColumn(column.ColumnBase):
             # Need to consider `np.nan` values in case
             # of an underlying float column
             categories = self.categories.isnan()
-            if categories.reduce("any"):
+            if categories.any():
                 code = self._encode(np.nan)
                 result = result | (self.codes == code)
 
@@ -499,7 +499,7 @@ class CategoricalColumn(column.ColumnBase):
             # Need to consider `np.nan` values in case
             # of an underlying float column
             categories = self.categories.isnan()
-            if categories.reduce("any"):
+            if categories.any():
                 code = self._encode(np.nan)
                 result = result & (self.codes != code)
 
@@ -817,7 +817,7 @@ class CategoricalColumn(column.ColumnBase):
         new_categories = new_categories.astype(common_dtype)
         old_categories = old_categories.astype(common_dtype)
 
-        if old_categories.isin(new_categories).reduce("any"):
+        if old_categories.isin(new_categories).any():
             raise ValueError("new categories must not include old categories")
 
         new_categories = old_categories.append(new_categories)
@@ -834,7 +834,7 @@ class CategoricalColumn(column.ColumnBase):
 
         # ensure all the removals are in the current categories
         # list. If not, raise an error to match Pandas behavior
-        if not removals_mask.reduce("all"):
+        if not removals_mask.all():
             raise ValueError("removals must all be in old categories")
 
         new_categories = self.categories.apply_boolean_mask(

@@ -3194,7 +3194,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             res = res.sort_values(ascending=ascending)
 
         if normalize:
-            res = res / float(res._column.reduce("sum"))
+            res = res / float(res._column.sum())
 
         # Pandas returns an IntervalIndex as the index of res
         # this condition makes sure we do too if bins is given

@@ -6564,11 +6564,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         special_methods = {"kurtosis", "skew"}
 
         def _apply_reduction(col, op, kwargs):
-            return (
-                getattr(col, op)(**kwargs)
-                if op in special_methods
-                else col.reduce(op, **kwargs)
-            )
+            return getattr(col, op)(**kwargs)
 
         if (
             axis == 2
@@ -8369,7 +8365,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if sort:
             result = result.sort_values(ascending=ascending)
         if normalize:
-            result = result / result._column.reduce("sum")
+            result = result / result._column.sum()
         # Pandas always returns MultiIndex even if only one column.
         if not isinstance(result.index, MultiIndex):
             result.index = MultiIndex._from_data(result.index._data)

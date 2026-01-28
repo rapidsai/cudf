@@ -65,24 +65,8 @@ class SingleColumnFrame(Frame, NotIterable):
             )
         try:
             # Special methods that are not reduction operations
-            # These are computed via methods on the column
-            # Note: sum is in this list because StringColumn and TimeDeltaColumn
-            # have custom sum() implementations
-            # Note: mean/std/median are in this list because TemporalBaseColumn
-            # has wrapper methods that convert int64 results to pd.Timestamp/pd.Timedelta
-            special_methods = {
-                "kurtosis",
-                "skew",
-                "std",
-                "median",
-                "mean",
-                "sum",
-            }
-            if op in special_methods and hasattr(self._column, op):
-                return getattr(self._column, op)(**kwargs)
-            else:
-                # Call reduce() directly instead of auto-generated method
-                return self._column.reduce(op, **kwargs)
+            # Call the specific reduction method dynamically
+            return getattr(self._column, op)(**kwargs)
         except AttributeError:
             raise TypeError(f"cannot perform {op} with type {self.dtype}")
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -196,7 +196,7 @@ class ExponentialMovingWindow(_RollingBase):
         to_libcudf_column = source_column.astype(
             np.dtype(np.float64)
         ).nans_to_nulls()
-        return to_libcudf_column.scan(
+        return to_libcudf_column._scan(
             agg_name, True, com=self.com, adjust=self.adjust
         )
 

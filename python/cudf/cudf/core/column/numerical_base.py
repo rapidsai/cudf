@@ -15,6 +15,7 @@ from cudf.core.column import column_empty
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.utils import access_columns
 from cudf.core.missing import NA
+from cudf.core.mixins import Scannable
 from cudf.utils.dtypes import _get_nan_for_dtype
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ _unaryop_map = {
 }
 
 
-class NumericalBaseColumn(ColumnBase):
+class NumericalBaseColumn(ColumnBase, Scannable):
     """
     A column composed of numerical (bool, integer, float, decimal) data.
 
@@ -39,30 +40,37 @@ class NumericalBaseColumn(ColumnBase):
     point, should be encoded here.
     """
 
+    _VALID_SCANS = {
+        "cumsum",
+        "cumprod",
+        "cummin",
+        "cummax",
+    }
+
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls()
 
-    def reduce(
+    def _reduce(
         self,
-        reduction_op: str,
+        op: str,
         skipna: bool = True,
         min_count: int = 0,
         **kwargs: Any,
     ) -> ScalarLike:
         """Override to dispatch median and handle var/std NA conversion."""
-        if reduction_op == "median":
+        if op == "median":
             if kwargs or min_count != 0:
                 raise ValueError(
                     "median does not support additional kwargs or min_count"
                 )
             return self.median(skipna=skipna)
 
-        result = super().reduce(
-            reduction_op, skipna=skipna, min_count=min_count, **kwargs
+        result = super()._reduce(
+            op, skipna=skipna, min_count=min_count, **kwargs
         )
 
         # Convert NA to NaN for var/std operations
-        if reduction_op in {"var", "std"} and result is NA:
+        if op in {"var", "std"} and result is NA:
             return _get_nan_for_dtype(self.dtype)
 
         return result
@@ -82,9 +90,9 @@ class NumericalBaseColumn(ColumnBase):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         n = len(self)
-        miu = self.reduce("mean")
-        m4_numerator = ((self - miu) ** 4).reduce("sum")
-        V = self.reduce("var")
+        miu = self.mean()
+        m4_numerator = ((self - miu) ** 4).sum()
+        V = self.var()
 
         if V == 0:
             return np.float64(0)
@@ -110,9 +118,9 @@ class NumericalBaseColumn(ColumnBase):
             return _get_nan_for_dtype(self.dtype)
 
         n = len(self)
-        miu = self.reduce("mean")
-        m3 = (((self - miu) ** 3).reduce("sum")) / n
-        m2 = self.reduce("var", ddof=0)
+        miu = self.mean()
+        m3 = (((self - miu) ** 3).sum()) / n
+        m2 = self._reduce("var", ddof=0)
 
         if m2 == 0:
             return np.float64(0)
@@ -208,8 +216,8 @@ class NumericalBaseColumn(ColumnBase):
         ):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
-        result = (self - self.reduce("mean")) * (other - other.reduce("mean"))
-        cov_sample = result.reduce("sum") / (len(self) - 1)
+        result = (self - self.mean()) * (other - other.mean())
+        cov_sample = result.sum() / (len(self) - 1)
         return cov_sample
 
     def corr(self, other: NumericalBaseColumn) -> float:
@@ -217,7 +225,7 @@ class NumericalBaseColumn(ColumnBase):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         cov = self.cov(other)
-        lhs_std, rhs_std = self.reduce("std"), other.reduce("std")
+        lhs_std, rhs_std = self.std(), other.std()
 
         if not cov or lhs_std == 0 or rhs_std == 0:
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]

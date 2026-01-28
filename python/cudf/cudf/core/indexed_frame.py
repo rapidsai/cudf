@@ -540,8 +540,8 @@ class IndexedFrame(Frame):
                     dtype = np.dtype(np.int64)
                 result_col = result_col.astype(dtype)
 
-            # Call scan() directly instead of auto-generated method
-            results.append(result_col.scan(scan_op, inclusive))
+            # Call _scan() directly for internal delegation
+            results.append(result_col._scan(scan_op, inclusive))
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
         )

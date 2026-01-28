@@ -20,6 +20,7 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -75,9 +76,13 @@ def plc_flags_from_re_flags(
     return plc_flags
 
 
-class StringColumn(ColumnBase):
+class StringColumn(ColumnBase, Scannable):
     """Implements operations for Columns of String type"""
 
+    _VALID_SCANS = {
+        "cummin",
+        "cummax",
+    }
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
         "__ne__",
@@ -185,18 +190,18 @@ class StringColumn(ColumnBase):
             else col.join_strings("", None).element_indexing(0)
         )
 
-    def reduce(
+    def _reduce(
         self,
-        reduction_op: str,
+        op: str,
         skipna: bool = True,
         min_count: int = 0,
         **kwargs: Any,
     ) -> ScalarLike:
         """Validate and handle reduction operations for StringColumn."""
-        if reduction_op == "sum":
+        if op == "sum":
             return self.sum(skipna=skipna, min_count=min_count)
 
-        if reduction_op == "any":
+        if op == "any":
             if not skipna and self.has_nulls():
                 raise TypeError("boolean value of NA is ambiguous")
             elif skipna and self.null_count == self.size:
@@ -205,7 +210,7 @@ class StringColumn(ColumnBase):
                 "`any` not implemented for `StringColumn`"
             )
 
-        if reduction_op == "all":
+        if op == "all":
             if skipna and self.null_count == self.size:
                 return True
             elif not skipna and self.has_nulls():
@@ -214,14 +219,14 @@ class StringColumn(ColumnBase):
                 "`all` not implemented for `StringColumn`"
             )
 
-        if reduction_op in {"min", "max"}:
-            return super().reduce(reduction_op, skipna, min_count, **kwargs)
+        if op in {"min", "max"}:
+            return super()._reduce(op, skipna, min_count, **kwargs)
 
-        raise TypeError(f"Series.{reduction_op} does not support StringColumn")
+        raise TypeError(f"Series.{op} does not support StringColumn")
 
     def __contains__(self, item: ScalarLike) -> bool:
         other = [item] if is_scalar(item) else item
-        return self.contains(as_column(other, dtype=self.dtype)).reduce("any")
+        return self.contains(as_column(other, dtype=self.dtype)).any()
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         """
@@ -287,14 +292,14 @@ class StringColumn(ColumnBase):
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
         if dtype.kind in {"i", "u"}:
-            if not self.is_integer().reduce("all"):
+            if not self.is_integer().all():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
             cast_func = plc.strings.convert.convert_integers.to_integers
         elif dtype.kind == "f":
-            if not self.is_float().reduce("all"):
+            if not self.is_float().all():
                 raise ValueError(
                     "Could not convert strings to float "
                     "type due to presence of non-floating values."
@@ -320,7 +325,7 @@ class StringColumn(ColumnBase):
             )
         elif self.null_count == len(self):
             return column_empty(len(self), dtype=dtype)  # type: ignore[return-value]
-        elif (self == "None").reduce("any"):
+        elif (self == "None").any():
             raise ValueError(
                 "Cannot convert `None` value to datetime or timedelta."
             )
@@ -344,11 +349,11 @@ class StringColumn(ColumnBase):
                 )
             valid_ts = self.is_timestamp(format)
             valid = valid_ts | is_nat
-            if not valid.reduce("all"):
+            if not valid.all():
                 raise ValueError(f"Column contains invalid data for {format=}")
 
             casting_func = plc.strings.convert.convert_datetime.to_timestamps
-            add_back_nat = is_nat.reduce("any")
+            add_back_nat = is_nat.any()
         elif dtype.kind == "m":
             casting_func = plc.strings.convert.convert_durations.to_durations
             add_back_nat = False
@@ -452,9 +457,9 @@ class StringColumn(ColumnBase):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in {"i", "u"} and self.is_integer().reduce("all"):
+        elif to_dtype.kind in {"i", "u"} and self.is_integer().all():
             return True
-        elif to_dtype.kind == "f" and self.is_float().reduce("all"):
+        elif to_dtype.kind == "f" and self.is_float().all():
             return True
         else:
             return False
@@ -993,7 +998,7 @@ class StringColumn(ColumnBase):
         # Replace σ with ς when followed by end-of-string or non-letter character.  # noqa: RUF003
         if cudf.get_option("mode.pandas_compatible"):
             has_sigma = result.str_contains("σ")
-            if has_sigma.reduce("any"):
+            if has_sigma.any():
                 result = result.replace_with_backrefs(
                     r"σ($|[^a-zA-Zα-ωΑ-Ωά-ώΆ-Ώ])", r"ς\1"
                 )

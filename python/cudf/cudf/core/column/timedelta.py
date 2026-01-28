@@ -209,26 +209,26 @@ class TimeDeltaColumn(TemporalBaseColumn):
             result = result.fillna(op == "__ne__")
         return result
 
-    def _validate_scan_op(self, scan_op: str) -> None:
+    def _validate_scan_op(self, op: str) -> None:
         """TimeDeltaColumn doesn't support product scans."""
-        if scan_op == "product":
-            raise TypeError(f"Scan '{scan_op}' not supported for {self.dtype}")
+        if op == "product":
+            raise TypeError(f"Scan '{op}' not supported for {self.dtype}")
 
-    def reduce(
+    def _reduce(
         self,
-        reduction_op: str,
+        op: str,
         skipna: bool = True,
         min_count: int = 0,
         **kwargs: Any,
     ) -> ScalarLike:
         """Validate reduction operations for TimeDeltaColumn."""
-        if reduction_op == "sum":
+        if op == "sum":
             return self.sum(skipna=skipna, min_count=min_count)
         self._raise_if_unsupported_reduction(
-            reduction_op,
+            op,
             {"product", "var", "kurt", "kurtosis", "skew", "any", "all"},
         )
-        return super().reduce(reduction_op, skipna, min_count, **kwargs)
+        return super()._reduce(op, skipna, min_count, **kwargs)
 
     def total_seconds(self) -> ColumnBase:
         conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9
@@ -281,7 +281,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         min_count: int = 0,
     ) -> pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE).reduce(
+            self.astype(self._UNDERLYING_DTYPE)._reduce(
                 "sum", skipna=skipna, min_count=min_count
             ),
             unit=self.time_unit,

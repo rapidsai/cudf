@@ -18,6 +18,7 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -39,11 +40,15 @@ if TYPE_CHECKING:
     from cudf.core.column.string import StringColumn
 
 
-class TemporalBaseColumn(ColumnBase):
+class TemporalBaseColumn(ColumnBase, Scannable):
     """
     Base class for TimeDeltaColumn and DatetimeColumn.
     """
 
+    _VALID_SCANS = {
+        "cummin",
+        "cummax",
+    }
     _PANDAS_NA_VALUE = pd.NaT
     _UNDERLYING_DTYPE: np.dtype[np.int64] = np.dtype(np.int64)
     _NP_SCALAR: ClassVar[type[np.datetime64] | type[np.timedelta64]]
@@ -304,11 +309,11 @@ class TemporalBaseColumn(ColumnBase):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == self.dtype.kind:
             to_res, _ = np.datetime_data(to_dtype)
-            max_val = self.reduce("max")
+            max_val = self.max()
             if isinstance(max_val, (pd.Timedelta, pd.Timestamp)):
                 max_val = max_val.to_numpy()
             max_val = max_val.astype(self._UNDERLYING_DTYPE, copy=False)
-            min_val = self.reduce("min")
+            min_val = self.min()
             if isinstance(min_val, (pd.Timedelta, pd.Timestamp)):
                 min_val = min_val.to_numpy()
             min_val = min_val.astype(self._UNDERLYING_DTYPE, copy=False)
@@ -341,7 +346,7 @@ class TemporalBaseColumn(ColumnBase):
         self, skipna: bool = True, min_count: int = 0
     ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE).reduce(
+            self.astype(self._UNDERLYING_DTYPE)._reduce(
                 "mean", skipna=skipna, min_count=min_count
             ),
             unit=self.time_unit,
@@ -351,7 +356,7 @@ class TemporalBaseColumn(ColumnBase):
         self, skipna: bool = True, min_count: int = 0, ddof: int = 1
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.astype(self._UNDERLYING_DTYPE).reduce(
+            self.astype(self._UNDERLYING_DTYPE)._reduce(
                 "std", skipna=skipna, min_count=min_count, ddof=ddof
             ),
             unit=self.time_unit,
@@ -359,7 +364,7 @@ class TemporalBaseColumn(ColumnBase):
 
     def median(self, skipna: bool = True) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE).reduce(
+            self.astype(self._UNDERLYING_DTYPE)._reduce(
                 "median", skipna=skipna
             ),
             unit=self.time_unit,

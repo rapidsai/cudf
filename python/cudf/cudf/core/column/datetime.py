@@ -146,21 +146,21 @@ class DatetimeColumn(TemporalBaseColumn):
                 # attr was not called yet, so ignore.
                 pass
 
-    def _validate_scan_op(self, scan_op: str) -> None:
+    def _validate_scan_op(self, op: str) -> None:
         """DatetimeColumn only supports min/max scans."""
-        if scan_op not in {"min", "max"}:
-            raise TypeError(f"Scan '{scan_op}' not supported for {self.dtype}")
+        if op not in {"min", "max"}:
+            raise TypeError(f"Scan '{op}' not supported for {self.dtype}")
 
-    def reduce(
+    def _reduce(
         self,
-        reduction_op: str,
+        op: str,
         skipna: bool = True,
         min_count: int = 0,
         **kwargs: Any,
     ) -> ScalarLike:
         """Validate reduction operations for DatetimeColumn."""
         self._raise_if_unsupported_reduction(
-            reduction_op,
+            op,
             {
                 "sum",
                 "product",
@@ -173,7 +173,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 "sum_of_squares",
             },
         )
-        return super().reduce(reduction_op, skipna, min_count, **kwargs)
+        return super()._reduce(op, skipna, min_count, **kwargs)
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -552,21 +552,27 @@ class DatetimeColumn(TemporalBaseColumn):
             else:
                 sub_second_res_len = 0
 
-            has_nanos = self.time_unit == "ns" and self.nanosecond.reduce(
-                "any"
+            has_nanos = self.time_unit == "ns" and self.nanosecond.any()
+            has_micros = (
+                self.time_unit
+                in {
+                    "ns",
+                    "us",
+                }
+                and self.microsecond.any()
             )
-            has_micros = self.time_unit in {
-                "ns",
-                "us",
-            } and self.microsecond.reduce("any")
-            has_millis = self.time_unit in {
-                "ns",
-                "us",
-                "ms",
-            } and self.millisecond.reduce("any")
-            has_seconds = self.second.reduce("any")
-            has_minutes = self.minute.reduce("any")
-            has_hours = self.hour.reduce("any")
+            has_millis = (
+                self.time_unit
+                in {
+                    "ns",
+                    "us",
+                    "ms",
+                }
+                and self.millisecond.any()
+            )
+            has_seconds = self.second.any()
+            has_minutes = self.minute.any()
+            has_hours = self.hour.any()
             if sub_second_res_len:
                 if has_nanos:
                     # format should be intact and rest of the
