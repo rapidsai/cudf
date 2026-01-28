@@ -36,7 +36,7 @@ elif [[ "${package_dir}" != "python/cudf_polars" ]] && \
 fi
 
 pydistcheck \
-    --inspect \
+    "${PYDISTCHECK_ARGS[@]}" \
     "$(echo "${wheel_dir_relative_path}"/*.whl)"
 
 rapids-logger "validate packages with 'twine'"
