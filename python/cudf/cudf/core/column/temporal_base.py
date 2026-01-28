@@ -343,29 +343,33 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return False
 
     def mean(
-        self, skipna: bool = True, min_count: int = 0
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE)._reduce(
-                "mean", skipna=skipna, min_count=min_count
+            self.astype(self._UNDERLYING_DTYPE).mean(
+                skipna=skipna, min_count=min_count, **kwargs
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
     def std(
-        self, skipna: bool = True, min_count: int = 0, ddof: int = 1
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> pd.Timedelta:
+        # Extract ddof from kwargs, defaulting to 1
+        ddof = kwargs.pop("ddof", 1)
         return pd.Timedelta(
-            self.astype(self._UNDERLYING_DTYPE)._reduce(
-                "std", skipna=skipna, min_count=min_count, ddof=ddof
+            self.astype(self._UNDERLYING_DTYPE).std(
+                skipna=skipna, min_count=min_count, ddof=ddof, **kwargs
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
-    def median(self, skipna: bool = True) -> pd.Timestamp | pd.Timedelta:
+    def median(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE)._reduce(
-                "median", skipna=skipna
+            self.astype(self._UNDERLYING_DTYPE).median(
+                skipna=skipna, min_count=min_count, **kwargs
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)

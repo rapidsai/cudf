@@ -182,9 +182,9 @@ class CategoricalColumn(column.ColumnBase):
                 "to an ordered one."
             )
 
-        # Delegate to underlying codes column
-        result = self.codes._reduce(
-            op, skipna=skipna, min_count=min_count, **kwargs
+        # Delegate to underlying codes column via public method
+        result = getattr(self.codes, op)(
+            skipna=skipna, min_count=min_count, **kwargs
         )
 
         # Decode the result back to a category

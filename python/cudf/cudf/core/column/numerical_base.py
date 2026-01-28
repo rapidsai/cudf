@@ -181,7 +181,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
         return result
 
-    def median(self, skipna: bool = True) -> NumericalBaseColumn:
+    def median(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> NumericalBaseColumn:
         if not isinstance(skipna, bool):
             raise ValueError(
                 f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."

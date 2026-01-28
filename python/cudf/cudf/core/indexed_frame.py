@@ -540,8 +540,8 @@ class IndexedFrame(Frame):
                     dtype = np.dtype(np.int64)
                 result_col = result_col.astype(dtype)
 
-            # Call _scan() directly for internal delegation
-            results.append(result_col._scan(scan_op, inclusive))
+            # Call public scan method
+            results.append(getattr(result_col, scan_op)(inclusive=inclusive))
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
         )

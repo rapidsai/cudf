@@ -277,10 +277,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
         self,
         skipna: bool = True,
         min_count: int = 0,
+        **kwargs: Any,
     ) -> pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE)._reduce(
-                "sum", skipna=skipna, min_count=min_count
+            self.astype(self._UNDERLYING_DTYPE).sum(
+                skipna=skipna, min_count=min_count, **kwargs
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)

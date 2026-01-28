@@ -174,6 +174,7 @@ class StringColumn(ColumnBase, Scannable):
         self,
         skipna: bool = True,
         min_count: int = 0,
+        **kwargs: Any,
     ) -> ScalarLike:
         col = self.nans_to_nulls() if skipna else self
         if not skipna and col.has_nulls():
@@ -190,7 +191,9 @@ class StringColumn(ColumnBase, Scannable):
             else col.join_strings("", None).element_indexing(0)
         )
 
-    def any(self, skipna: bool = True) -> bool:
+    def any(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> bool:
         """Check if any string value is truthy (non-empty)."""
         if not skipna and self.has_nulls():
             raise TypeError("boolean value of NA is ambiguous")
@@ -198,7 +201,9 @@ class StringColumn(ColumnBase, Scannable):
             return False
         raise NotImplementedError("`any` not implemented for `StringColumn`")
 
-    def all(self, skipna: bool = True) -> bool:
+    def all(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> bool:
         """Check if all string values are truthy (non-empty)."""
         if skipna and self.null_count == self.size:
             return True

@@ -965,7 +965,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return False
         return bool(ret.all())
 
-    def all(self, skipna: bool = True) -> bool:
+    def all(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> bool:
         # The skipna argument is only used for numerical columns.
         # If all entries are null the result is True, including when the column
         # is empty.
@@ -980,7 +982,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
             else:
                 return True
-        result = bool(self._reduce("all", skipna=skipna))
+        result = bool(
+            self._reduce("all", skipna=skipna, min_count=min_count, **kwargs)
+        )
         if (
             result
             and not skipna
@@ -990,7 +994,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
         return result
 
-    def any(self, skipna: bool = True) -> bool:
+    def any(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> bool:
         # Early exit for fast cases.
         if not isinstance(skipna, bool):
             raise ValueError(
@@ -1000,7 +1006,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return True
         elif skipna and self.null_count == self.size:
             return False
-        return bool(self._reduce("any", skipna=skipna))
+        return bool(
+            self._reduce("any", skipna=skipna, min_count=min_count, **kwargs)
+        )
 
     def dropna(self) -> Self:
         if self.has_nulls():
