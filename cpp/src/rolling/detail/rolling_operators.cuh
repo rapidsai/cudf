@@ -159,19 +159,8 @@ struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_vi
     for (size_type j = start_index; j < end_index; j++) {
       if (!has_nulls || input.is_valid(j)) {
         InputType element = input.element<InputType>(j);
-        // the agg_op is not being used here because of 13.1 compiler error
-        // documented here: https://nvbugspro.nvidia.com/bug/5790774
-        if constexpr (op == aggregation::ARGMIN) {
-          if (element < val) {
-            val_index = j;
-            val       = element;
-          }
-        } else {
-          if (element > val) {
-            val_index = j;
-            val       = element;
-          }
-        }
+        val               = agg_op(element, val);
+        if (val.data() == element.data()) { val_index = j; }
         count++;
       }
     }
