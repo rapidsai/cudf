@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -436,7 +436,9 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
 
     // Copy the row mask to the host and count the number of surviving rows
     auto const host_row_mask = cudf::detail::make_host_vector<bool>(
-      {row_mask->view().data<bool>(), static_cast<size_t>(row_mask->view().size())}, stream);
+      cudf::device_span<bool const>(row_mask->view().data<bool>(),
+                                    static_cast<size_t>(row_mask->view().size())),
+      stream);
     EXPECT_EQ(std::count(host_row_mask.begin(), host_row_mask.end(), true),
               expected_surviving_rows);
   };

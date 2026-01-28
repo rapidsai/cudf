@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -169,7 +169,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   for (size_type i = 0; i < dict.map_slots.size(); i += block_size) {
     if (t + i < dict.map_slots.size()) {
-      auto* slot     = dict.map_slots.begin() + t + i;
+      auto* slot     = dict.map_slots.data() + t + i;
       auto const key = slot->first;
       if (key != KEY_SENTINEL) {
         auto loc       = counter.fetch_add(1, memory_order_relaxed);

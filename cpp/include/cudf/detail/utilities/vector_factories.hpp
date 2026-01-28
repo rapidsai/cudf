@@ -85,6 +85,32 @@ rmm::device_uvector<T> make_zeroed_device_uvector(std::size_t size,
  * @return A device_uvector containing the copied data
  */
 template <typename T>
+rmm::device_uvector<T> make_device_uvector_async(host_span<T> source_data,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
+{
+  rmm::device_uvector<T> ret(source_data.size(), stream, mr);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(ret.data(),
+                                source_data.data(),
+                                source_data.size() * sizeof(T),
+                                cudaMemcpyDefault,
+                                stream.value()));
+  return ret;
+}
+
+/**
+ * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a
+ * const `host_span`
+ *
+ * @note This function does not synchronize `stream`.
+ *
+ * @tparam T The type of the data to copy
+ * @param source_data The host_span of data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
+template <typename T>
 rmm::device_uvector<T> make_device_uvector_async(host_span<T const> source_data,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
@@ -113,6 +139,48 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
   requires(std::is_convertible_v<Container, host_span<typename Container::value_type const>>)
 {
   return make_device_uvector_async(host_span<typename Container::value_type const>{c}, stream, mr);
+}
+
+/**
+ * @brief Asynchronously construct a `device_uvector` from a `std::vector`
+ *
+ * @note This function does not synchronize `stream`.
+ *
+ * @tparam T The type of the data to copy
+ * @tparam Allocator The allocator type of the std::vector
+ * @param source_data The std::vector of data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
+template <typename T, typename Allocator>
+rmm::device_uvector<T> make_device_uvector_async(std::vector<T, Allocator> const& source_data,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
+{
+  return make_device_uvector_async(host_span<T const>{source_data}, stream, mr);
+}
+
+/**
+ * @brief Asynchronously construct a `device_uvector` from a `std::string`
+ *
+ * @note This function does not synchronize `stream`.
+ *
+ * @tparam CharT The character type of the string
+ * @tparam Traits The character traits type
+ * @tparam Allocator The allocator type of the std::string
+ * @param source_data The std::string of data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
+template <typename CharT, typename Traits, typename Allocator>
+rmm::device_uvector<CharT> make_device_uvector_async(
+  std::basic_string<CharT, Traits, Allocator> const& source_data,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  return make_device_uvector_async(host_span<CharT const>{source_data}, stream, mr);
 }
 
 /**
@@ -204,6 +272,49 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector(
   requires(std::is_convertible_v<Container, host_span<typename Container::value_type const>>)
 {
   return make_device_uvector(host_span<typename Container::value_type const>{c}, stream, mr);
+}
+
+/**
+ * @brief Synchronously construct a `device_uvector` from a `std::vector`
+ *
+ * @note This function synchronizes `stream`.
+ *
+ * @tparam T The type of the data to copy
+ * @tparam Allocator The allocator type of the std::vector
+ * @param source_data The std::vector of data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
+template <typename T, typename Allocator>
+rmm::device_uvector<T> make_device_uvector(std::vector<T, Allocator> const& source_data,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+{
+  return make_device_uvector(host_span<T const>{source_data}, stream, mr);
+}
+
+/**
+ * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
+ * `std::basic_string`
+ *
+ * @note This function synchronizes `stream`.
+ *
+ * @tparam CharT The character type of the string
+ * @tparam Traits The character traits of the string
+ * @tparam Allocator The allocator type of the string
+ * @param source_data The string of data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
+template <typename CharT, typename Traits, typename Allocator>
+rmm::device_uvector<CharT> make_device_uvector(
+  std::basic_string<CharT, Traits, Allocator> const& source_data,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  return make_device_uvector(host_span<CharT const>{source_data}, stream, mr);
 }
 
 /**

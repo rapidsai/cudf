@@ -1248,7 +1248,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
     std::make_unique<packed_partition_buf_size_and_dst_buf_info>(
       num_partitions, num_bufs, stream, temp_mr);
 
-  auto const d_dst_buf_info = partition_buf_size_and_dst_buf_info->d_dst_buf_info.begin();
+  auto const d_dst_buf_info = partition_buf_size_and_dst_buf_info->d_dst_buf_info.data();
   auto const d_buf_sizes    = partition_buf_size_and_dst_buf_info->d_buf_sizes;
 
   auto const split_indices_and_src_buf_info = packed_split_indices_and_src_buf_info(
@@ -1507,8 +1507,8 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
     iter,
     iter + num_batches,
     [d_orig_dst_buf_info,
-     d_batched_dst_buf_info = d_batched_dst_buf_info.begin(),
-     batches                = batches.begin(),
+     d_batched_dst_buf_info = d_batched_dst_buf_info.data(),
+     batches                = batches.data(),
      d_batch_offsets        = d_batch_offsets.begin(),
      out_to_in_index] __device__(size_type i) {
       size_type const in_buf_index = out_to_in_index(i);
@@ -1624,8 +1624,8 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
         iter,
         iter + num_batches - num_batches_in_first_iteration,
         [num_iterations,
-         d_batched_dst_buf_info     = d_batched_dst_buf_info.begin(),
-         d_accum_size_per_iteration = d_accum_size_per_iteration.begin()] __device__(size_type i) {
+         d_batched_dst_buf_info     = d_batched_dst_buf_info.data(),
+         d_accum_size_per_iteration = d_accum_size_per_iteration.data()] __device__(size_type i) {
           auto prior_iteration_size =
             thrust::upper_bound(thrust::seq,
                                 d_accum_size_per_iteration,
@@ -1861,7 +1861,7 @@ struct contiguous_split_state {
                           keys + num_batches_total,
                           values,
                           thrust::make_discard_iterator(),
-                          dst_valid_count_output_iterator{d_orig_dst_buf_info.begin()});
+                          dst_valid_count_output_iterator{d_orig_dst_buf_info.data()});
 
     detail::cuda_memcpy<dst_buf_info>(h_orig_dst_buf_info, d_orig_dst_buf_info, stream);
 

@@ -237,17 +237,17 @@ TEST(SpanTest, CanConstructFromDeviceContainers)
   auto d_vector        = rmm::device_vector<int>(1);
   auto d_uvector       = rmm::device_uvector<int>(1, cudf::get_default_stream());
 
-  (void)device_span<int>(d_thrust_vector);
-  (void)device_span<int>(d_vector);
-  (void)device_span<int>(d_uvector);
+  (void)device_span<int>(d_thrust_vector.data().get(), d_thrust_vector.size());
+  (void)device_span<int>(d_vector.data().get(), d_vector.size());
+  (void)device_span<int>(d_uvector.data(), d_uvector.size());
 
   auto const& d_thrust_vector_c = d_thrust_vector;
   auto const& d_vector_c        = d_vector;
   auto const& d_uvector_c       = d_uvector;
 
-  (void)device_span<int const>(d_thrust_vector_c);
-  (void)device_span<int const>(d_vector_c);
-  (void)device_span<int const>(d_uvector_c);
+  (void)device_span<int const>(d_thrust_vector_c.data().get(), d_thrust_vector_c.size());
+  (void)device_span<int const>(d_vector_c.data().get(), d_vector_c.size());
+  (void)device_span<int const>(d_uvector_c.data(), d_uvector_c.size());
 }
 
 CUDF_KERNEL void simple_device_kernel(device_span<bool> result) { result[0] = true; }

@@ -749,9 +749,10 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
          codec] __device__(size_t i) {
           auto const& page = pages[i];
           if (parquet_compression_support(chunks[page.chunk_idx].codec).first == codec) {
-            temp_spans[i] = {page.page_data, static_cast<size_t>(page.compressed_page_size)};
+            temp_spans[i] = device_span<uint8_t const>(
+              page.page_data, static_cast<size_t>(page.compressed_page_size));
           } else {
-            temp_spans[i] = {nullptr, 0};  // Mark pages with other codecs as empty
+            temp_spans[i] = device_span<uint8_t const>();  // Mark pages with other codecs as empty
           }
         });
       // Copy only non-null spans

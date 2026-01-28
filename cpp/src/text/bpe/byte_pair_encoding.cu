@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -78,7 +78,7 @@ struct bpe_unpairable_offsets_fn {
     if (!cudf::strings::detail::is_begin_utf8_char(d_chars[idx])) { return 0; }
 
     auto const itr  = d_chars.data() + idx;
-    auto const end  = d_chars.end();
+    auto const end  = d_chars.data() + d_chars.size();
     auto const lhs  = cudf::string_view(itr, cudf::strings::detail::bytes_in_utf8_byte(*itr));
     auto const next = itr + lhs.size_bytes();
     auto output     = 0L;

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -113,7 +113,7 @@ CUDF_KERNEL void infer_column_type_kernel(OptionsView options,
        idx += gridDim.x * blockDim.x) {
     auto const field_offset = cuda::std::get<0>(*(offset_length_begin + idx));
     auto const field_len    = cuda::std::get<1>(*(offset_length_begin + idx));
-    auto const field_begin  = data.begin() + field_offset;
+    auto const field_begin  = data.data() + field_offset;
 
     if (cudf::detail::serialized_trie_contains(
           options.trie_na, {field_begin, static_cast<std::size_t>(field_len)})) {
