@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ class CategoricalAccessor(BaseAccessor):
     1    <NA>
     2    <NA>
     dtype: category
-    Categories (5, object): ['a', 'b', 'c', 'd', 'e']
+    Categories (5, str): ['a', 'b', 'c', 'd', 'e']
     >>> s.cat.as_ordered()
     0    1
     1    2

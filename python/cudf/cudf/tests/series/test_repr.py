@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
@@ -517,12 +517,6 @@ def test_empty_series_name():
 @pytest.mark.parametrize("item", [0, slice(0, 1)])
 @pytest.mark.parametrize("data", [["a"], ["a", None], [None]])
 def test_string_repr(data, item, request):
-    if data == [None]:
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="Missing value repr should be <NA> instead of None",
-            )
-        )
     ps = pd.Series(data, dtype="str", name="nice name")
     gs = cudf.Series(data, dtype="str", name="nice name")
 

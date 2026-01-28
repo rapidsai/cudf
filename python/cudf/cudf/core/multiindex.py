@@ -1280,7 +1280,7 @@ class MultiIndex(Index):
                    names=['number', 'color'])
         >>> idx.dtypes
         number     int64
-        color     object
+        color       str
         dtype: object
         """
         # Not using DataFrame.dtypes to avoid expensive invocation of `._data.to_pandas_index`
@@ -1767,11 +1767,11 @@ class MultiIndex(Index):
         ...         names=["x", "y"],
         ...       )
         >>> index
-        MultiIndex([( 'a',  '1'),
-                    ( 'a',  '5'),
-                    ( 'b', <NA>),
-                    ( 'c', <NA>),
-                    (<NA>,  '1')],
+        MultiIndex([('a', '1'),
+                    ('a', '5'),
+                    ('b', nan),
+                    ('c', nan),
+                    (nan, '1')],
                    names=['x', 'y'])
         >>> index.fillna('hello')
         MultiIndex([(    'a',     '1'),
