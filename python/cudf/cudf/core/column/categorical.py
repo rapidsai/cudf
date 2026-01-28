@@ -190,6 +190,24 @@ class CategoricalColumn(column.ColumnBase):
         # Decode the result back to a category
         return self._decode(result)
 
+    def all(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> bool:
+        """Categorical columns don't support all() reduction."""
+        raise TypeError(
+            f"'{type(self).__name__}' with dtype {self.dtype} "
+            f"does not support reduction 'all'"
+        )
+
+    def any(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> bool:
+        """Categorical columns don't support any() reduction."""
+        raise TypeError(
+            f"'{type(self).__name__}' with dtype {self.dtype} "
+            f"does not support reduction 'any'"
+        )
+
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         if isinstance(other, column.ColumnBase):
             if isinstance(other, CategoricalColumn):
