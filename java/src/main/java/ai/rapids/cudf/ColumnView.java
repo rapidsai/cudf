@@ -1329,7 +1329,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Computes the sum of all values in the column, returning a scalar
    * of the same type as this column.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4, 5], DType = INT32
    * Scalar result = col.sum();
@@ -1344,7 +1345,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Computes the sum of all values in the column, returning a scalar
    * of the specified type.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4, 5], DType = INT32
    * Scalar result = col.sum(DType.INT64);
@@ -1364,7 +1366,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * If the input is floating point type and contains NaNs, the result is undefined.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [5, 2, 8, 1, 9], DType = INT32
    * Scalar result = col.argMin();
@@ -1382,7 +1385,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * If the input is floating point type and contains NaNs, the result is undefined.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [5, 2, 8, 1, 9], DType = INT32
    * Scalar result = col.argMax();
@@ -1397,7 +1401,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the minimum of all values in the column, returning a scalar
    * of the same type as this column.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [5, 2, 8, 1, 9], DType = INT32
    * Scalar result = col.min();
@@ -1412,7 +1417,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the minimum of all values in the column, returning a scalar
    * of the specified type.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [5, 2, 8, 1, 9], DType = INT32
    * Scalar result = col.min(DType.INT64);
@@ -1438,7 +1444,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the maximum of all values in the column, returning a scalar
    * of the same type as this column.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [5, 2, 8, 1, 9], DType = INT32
    * Scalar result = col.max();
@@ -1453,7 +1460,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the maximum of all values in the column, returning a scalar
    * of the specified type.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [5, 2, 8, 1, 9], DType = INT32
    * Scalar result = col.max(DType.INT64);
@@ -1479,7 +1487,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the product of all values in the column, returning a scalar
    * of the same type as this column.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [2, 3, 4],  DType = INT32
    * Scalar result = col.product();
@@ -1494,7 +1503,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the product of all values in the column, returning a scalar
    * of the specified type.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [2, 3, 4],  DType = INT32
    * Scalar result = col.product(DType.INT64);
@@ -1511,7 +1521,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the sum of squares of all values in the column, returning a
    * scalar of the same type as this column.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3],  DType = INT32
    * Scalar result = col.sumOfSquares();
@@ -1526,7 +1537,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the sum of squares of all values in the column, returning a
    * scalar of the specified type.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3],  DType = INT32
    * Scalar result = col.sumOfSquares(DType.INT64);
@@ -1544,7 +1556,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * FLOAT64 scalar unless the column type is FLOAT32 then a FLOAT32 scalar is returned.
    * Null values are skipped.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4, 5], DType = INT32
    * Scalar result = col.mean();
@@ -1564,7 +1577,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * scalar of the specified type.
    * Null values are skipped.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4, 5], DType = INT32
    * Scalar result = col.mean(DType.FLOAT32);
@@ -1583,7 +1597,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * FLOAT64 scalar unless the column type is FLOAT32 then a FLOAT32 scalar is returned.
    * Null values are skipped.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4, 5], DType = INT32
    * Scalar result = col.variance();
@@ -1603,7 +1618,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * scalar of the specified type.
    * Null values are skipped.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4, 5], DType = INT32
    * Scalar result = col.variance(DType.FLOAT32);
@@ -1623,7 +1639,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * a FLOAT32 scalar is returned. Nulls are not counted as an element
    * of the column when calculating the standard deviation.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4, 5],    DType = INT32
    * Scalar result = col.standardDeviation();
@@ -1643,7 +1660,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * returning a scalar of the specified type. Null's are not counted as
    * an element of the column when calculating the standard deviation.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4, 5],    DType = INT32
    * Scalar result = col.standardDeviation(DType.FLOAT32);
@@ -1662,7 +1680,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * the column are true or non-zero otherwise false.
    * Null values are skipped.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [0, 0, 1, 0], DType = INT32
    * Scalar result = col.any();
@@ -1679,7 +1698,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * otherwise false or 0.
    * Null values are skipped.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [0, 0, 1, 0], DType = INT32
    * Scalar result = col.any(DType.INT32);
@@ -1697,7 +1717,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * the column are true or non-zero otherwise false.
    * Null values are skipped.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4], DType = INT32
    * Scalar result = col.all();
@@ -1714,7 +1735,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * otherwise false or 0.
    * Null values are skipped.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4], DType = INT32
    * Scalar result = col.all(DType.BOOL8);
@@ -1736,7 +1758,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * supported for reduction of non-arithmetic types (TIMESTAMP...)
    * The null values are skipped for the operation.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4, 5], DType = INT32
    * Scalar result = col.reduce(ReductionAggregation.sum());
@@ -1759,7 +1782,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * supported for reduction of non-arithmetic types (TIMESTAMP...)
    * The null values are skipped for the operation.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 4, 5], DType = INT32
    * Scalar result = col.reduce(ReductionAggregation.sum(), DType.INT64);
@@ -1786,7 +1810,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Do a segmented reduce where the offsets column indicates which groups in this to combine. The
    * output type is the same as the input type.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col     = [1, 2, 3, 4, 5], DType = INT32
    * // offsets = [0, 2, 5],       DType = INT32
@@ -1805,7 +1830,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Do a segmented reduce where the offsets column indicates which groups in this to combine.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col     = [1, 2, 3, 4, 5], DType = INT32
    * // offsets = [0, 2, 5],       DType = INT32
@@ -1826,7 +1852,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Do a segmented reduce where the offsets column indicates which groups in this to combine.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col     = [1, null, 3, 4, 5], DType = INT32
    * // offsets = [0, 2, 5],          DType = INT32
@@ -1857,7 +1884,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * For each list, assuming the size is N, valid indices of gather map ranges in [-N, N).
    * Out of bound indices refer to null.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col       = [[1, 2, 3], [4, 5], [6, 7, 8, 9]], DType = LIST of INT32
    * // gatherMap = [[0, 2],    [1],    [3, 0]],       DType = LIST of INT32
@@ -1876,7 +1904,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Segmented gather of the elements within a list element in each row of a list column.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col       = [[1, 2, 3], [4, 5], [6, 7, 8, 9]], DType = LIST of INT32
    * // gatherMap = [[0, 10],   [1],    [3, 0]],       DType = LIST of INT32
@@ -1899,7 +1928,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Do a reduction on the values in a list. The output type will be the type of the data column
    * of this list.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [[1, 2, 3], [4, 5], [6]], DType = LIST of INT32
    * ColumnVector result = col.listReduce(SegmentedReductionAggregation.sum());
@@ -1921,7 +1951,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Do a reduction on the values in a list.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [[1, 2, 3], [4, 5], [6]], DType = LIST of INT32
    * ColumnVector result = col.listReduce(SegmentedReductionAggregation.sum(), DType.INT64);
@@ -1939,7 +1970,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Do a reduction on the values in a list.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [[1, null, 3], [4, 5], [6]], DType = LIST of INT32
    * ColumnVector result = col.listReduce(SegmentedReductionAggregation.sum(),
@@ -1967,7 +1999,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
    * a t-digest aggregation.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // Create t-digest centroids via groupBy aggregation:
    * // Table tdigestTable = inputTable.groupBy(0)
@@ -1976,7 +2009,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * // Compute approximate percentiles:
    * ColumnVector result = tdigestCol.approxPercentile(new double[]{0.25, 0.5, 0.75});
-   * // result = LIST of FLOAT64, one list of percentile values per row
+   * // result = LIST of FLOAT64, one list of percentile values per element in the `percentiles` array
    * }</pre>
    *
    * @param percentiles Required percentiles [0,1]
@@ -1993,7 +2026,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
    * a t-digest aggregation.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // Create t-digest centroids via groupBy aggregation:
    * // Table tdigestTable = inputTable.groupBy(0)
@@ -2002,7 +2036,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * // percentiles = [0.25, 0.5, 0.75], DType = FLOAT64
    * ColumnVector result = tdigestCol.approxPercentile(percentiles);
-   * // result = LIST of FLOAT64, one list of percentile values per row
+   * // result = LIST of FLOAT64, one list of percentile values per element in the `percentiles` array
    * }</pre>
    *
    * @param percentiles Column containing percentiles [0,1]
@@ -2017,7 +2051,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
    * in the desired order.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [-1, 0, 1, 1, 2, 3, 4, 6, 7, 9], DType = INT32
    * ColumnVector result = col.quantile(QuantileMethod.LINEAR, new double[]{0.0, 0.25, 0.33, 0.5, 1.0});
@@ -2038,7 +2073,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * column. Please refer to WindowsOptions for various options that can be passed.
    * Note: Only rows-based windows are supported.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [5, 4, 7, 6, 8],     DType = INT32
    * Scalar one = Scalar.fromInt(1);
@@ -2082,7 +2118,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Compute the prefix sum (aka cumulative sum) of the values in this column.
    * This is just a convenience method for an inclusive scan with a SUM aggregation.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, 3, 5, 8, 10],   DType = INT64
    * ColumnVector result = col.prefixSum();
@@ -2096,7 +2133,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Computes a scan for a column. This is very similar to a running window on the column.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, null, 3, 5, 8, 10],   DType = INT32
    * ColumnVector result = col.scan(ScanAggregation.sum(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
@@ -2122,7 +2160,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Computes a scan for a column that excludes nulls.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, null, 3, 5, 8, 10],  DType = INT32
    * ColumnVector result = col.scan(ScanAggregation.sum(), ScanType.EXCLUSIVE);
@@ -2139,7 +2178,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Computes an inclusive scan for a column that excludes nulls.
    *
-   * <p>Example:
+   * <p>
+   * Example:
    * <pre>{@code
    * // col    = [1, 2, null, 3, 5, 8, 10],   DType = INT32
    * ColumnVector result = col.scan(ScanAggregation.sum());
