@@ -1969,10 +1969,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * <p>Example:
    * <pre>{@code
-   * // tdigestCol = column of t-digest centroids (produced by createTDigest aggregation)
-   * // percentiles = [0.25, 0.5, 0.75]
+   * // Create t-digest centroids via groupBy aggregation:
+   * // Table tdigestTable = inputTable.groupBy(0)
+   * //     .aggregate(GroupByAggregation.createTDigest(100).onColumn(1));
+   * // ColumnVector tdigestCol = tdigestTable.getColumn(1);
+   *
+   * // Compute approximate percentiles:
    * ColumnVector result = tdigestCol.approxPercentile(new double[]{0.25, 0.5, 0.75});
-   * // result = list of approximate percentile values for each row
+   * // result = LIST of FLOAT64, one list of percentile values per row
    * }</pre>
    *
    * @param percentiles Required percentiles [0,1]
@@ -1991,10 +1995,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * <p>Example:
    * <pre>{@code
-   * // tdigestCol = column of t-digest centroids (produced by createTDigest aggregation)
+   * // Create t-digest centroids via groupBy aggregation:
+   * // Table tdigestTable = inputTable.groupBy(0)
+   * //     .aggregate(GroupByAggregation.createTDigest(100).onColumn(1));
+   * // ColumnVector tdigestCol = tdigestTable.getColumn(1);
+   *
    * // percentiles = [0.25, 0.5, 0.75], DType = FLOAT64
    * ColumnVector result = tdigestCol.approxPercentile(percentiles);
-   * // result = list of approximate percentile values for each row
+   * // result = LIST of FLOAT64, one list of percentile values per row
    * }</pre>
    *
    * @param percentiles Column containing percentiles [0,1]
