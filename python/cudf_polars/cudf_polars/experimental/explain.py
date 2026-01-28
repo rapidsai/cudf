@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+    from cudf_polars.experimental.base import PartitionInfo, Profiler, StatsCollector
 
 
 def explain_query(
@@ -69,10 +69,10 @@ def explain_query(
                 lower_ir_graph as rapidsmpf_lower_ir_graph,
             )
 
-            lowered_ir, partition_info, _ = rapidsmpf_lower_ir_graph(ir, config)
+            lowered_ir, partition_info, stats = rapidsmpf_lower_ir_graph(ir, config)
         else:
-            lowered_ir, partition_info, _ = lower_ir_graph(ir, config)
-        return _repr_ir_tree(lowered_ir, partition_info)
+            lowered_ir, partition_info, stats = lower_ir_graph(ir, config)
+        return _repr_ir_tree(lowered_ir, partition_info, stats=stats)
     else:
         if config.executor.name == "streaming":
             # Include row-count statistics for the logical plan
@@ -101,6 +101,7 @@ def _repr_ir_tree(
     *,
     offset: str = "",
     stats: StatsCollector | None = None,
+    profiler: Profiler | None = None,
 ) -> str:
     header = _repr_ir(ir, offset=offset)
     count = partition_info[ir].count if partition_info else None
@@ -110,12 +111,23 @@ def _repr_ir_tree(
             stats.row_count.get(ir, ColumnStat[int](None)).value
         )
         row_count = f"~{row_count_estimate}" if row_count_estimate else "unknown"
-        header = header.rstrip("\n") + f" {row_count=}\n"
+        header = header.rstrip("\n") + f" {row_count=}"
+        if profiler is not None:
+            actual = profiler.row_count.get(ir)
+            actual_str = _fmt_row_count(actual) if actual is not None else "?"
+            header += f" [actual={actual_str}]"
+        header += "\n"
     if count is not None:
         header = header.rstrip("\n") + f" [{count}]\n"
 
     children_strs = [
-        _repr_ir_tree(child, partition_info, offset=offset + "  ", stats=stats)
+        _repr_ir_tree(
+            child,
+            partition_info,
+            offset=offset + "  ",
+            stats=stats,
+            profiler=profiler,
+        )
         for child in ir.children
     ]
 
@@ -168,3 +180,32 @@ def _(ir: Sort, *, offset: str = "") -> str:
 def _(ir: Scan, *, offset: str = "") -> str:
     label = f"SCAN {ir.typ.upper()}"
     return _repr_header(offset, label, ir.schema)
+
+
+def write_profile_output(
+    profile_output: str,
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    stats: StatsCollector,
+    profiler: Profiler,
+) -> None:
+    """
+    Write a post-execution profile showing estimated vs actual row counts.
+
+    Parameters
+    ----------
+    profile_output
+        Path to write the profile file.
+    ir
+        The lowered IR root node.
+    partition_info
+        Partition information for the IR nodes.
+    stats
+        The statistics collector with row count estimates.
+    profiler
+        The profiler with actual row counts from execution.
+    """
+    from pathlib import Path
+
+    profile_repr = _repr_ir_tree(ir, partition_info, stats=stats, profiler=profiler)
+    Path(profile_output).write_text(profile_repr)

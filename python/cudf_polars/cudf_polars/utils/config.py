@@ -649,6 +649,11 @@ class StreamingExecutor:
     max_io_threads
         Maximum number of IO threads for the rapidsmpf runtime. Default is 2.
         This controls the parallelism of IO operations when reading data.
+    profile_output
+        Path to write the post-execution profile (showing estimated vs actual
+        row counts per IR node). If None (default), no profile is written.
+        This is useful for diagnosing query performance and validating
+        row-count estimates.
     spill_to_pinned_memory
         Whether RapidsMPF should spill to pinned host memory when available,
         or use regular pageable host memory. Pinned host memory offers higher
@@ -754,6 +759,11 @@ class StreamingExecutor:
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=2
+        )
+    )
+    profile_output: str | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PROFILE_OUTPUT", str, default=None
         )
     )
     spill_to_pinned_memory: bool = dataclasses.field(
