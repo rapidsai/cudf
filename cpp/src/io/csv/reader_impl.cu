@@ -977,7 +977,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
         // Count how many rows were quoted to determine the fast path
         auto const num_quoted =
-          thrust::count(rmm::exec_policy(stream), is_quoted.begin(), is_quoted.end(), true);
+          thrust::count(rmm::exec_policy_nosync(stream), is_quoted.begin(), is_quoted.end(), true);
         if (num_quoted == 0) {
           // Fast path: no rows were quoted, skip replacement entirely
           out_columns[col_idx] = make_column(*buffer, nullptr, std::nullopt, stream);
