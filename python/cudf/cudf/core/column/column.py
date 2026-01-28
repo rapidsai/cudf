@@ -2432,17 +2432,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _scan(self, op: str, inclusive: bool = True, **kwargs: Any) -> Self:
         """Private method for scan operations. Called by mixin-generated methods."""
-        # Validate operation is supported by this column type
-        # Check own class's _VALID_SCANS, not inherited ones
-        for cls in type(self).__mro__:
-            if "_VALID_SCANS" in cls.__dict__:
-                valid_scans: set[str] = getattr(cls, "_VALID_SCANS", set())
-                if op not in valid_scans:
-                    raise TypeError(
-                        f"'{self.dtype}' does not support scan '{op}'"
-                    )
-                break
-
         # `inclusive` controls scan type, not passed to aggregation
         with self.access(mode="read", scope="internal"):
             plc_result = plc.reduce.scan(
@@ -2462,49 +2451,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         **kwargs: Any,
     ) -> ScalarLike:
         """Private method for reduction operations. Called by mixin-generated methods."""
-        # Validate operation is supported by this column type
-        # Check own class's _VALID_REDUCTIONS, not inherited ones
-        for cls in type(self).__mro__:
-            if "_VALID_REDUCTIONS" in cls.__dict__:
-                valid_reductions: set[str] = getattr(
-                    cls, "_VALID_REDUCTIONS", set()
-                )
-                if op not in valid_reductions:
-                    raise TypeError(
-                        f"'{self.dtype}' does not support reduction '{op}'"
-                    )
-                break
+        # Early return if we can return NaN
+        if self._can_return_nan(skipna=skipna):
+            return _get_nan_for_dtype(self.dtype)
 
-        # Special case: for "any" and "all", NaN is always truthy in Python
-        # When skipna=False, treat NaN as truthy (don't return NA)
-        # When skipna=True, skip NaN like any other operation
-        if op in {"any", "all"} and not skipna:
-            # Remember if column had no nulls before nans_to_nulls
-            had_no_nulls_before = not self.has_nulls(include_nan=False)
-            col = self.nans_to_nulls()
-            if col.has_nulls():
+        # Handle skipna by converting nans to nulls and potentially dropping
+        col = self.nans_to_nulls() if skipna else self
+        if col.has_nulls():
+            if skipna:
                 col = col.dropna()
-            # If column is now empty but had no nulls originally, all values were NaN
-            # NaN is truthy, so return True
-            if len(col) == 0 and had_no_nulls_before and len(self) > 0:
-                return True
-        elif op in {"any", "all"} and skipna:
-            # When skipna=True for any/all, treat like normal (skip NaN)
-            col = self.nans_to_nulls()
-            if col.has_nulls():
-                col = col.dropna()
-        else:
-            # Early return if we can return NaN
-            if self._can_return_nan(skipna=skipna):
+            else:
                 return _get_nan_for_dtype(self.dtype)
-
-            # Handle skipna by converting nans to nulls and potentially dropping
-            col = self.nans_to_nulls() if skipna else self
-            if col.has_nulls():
-                if skipna:
-                    col = col.dropna()
-                else:
-                    return _get_nan_for_dtype(self.dtype)
 
         # Handle min_count
         if min_count > 0:
@@ -2521,10 +2478,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return col_dtype.type(0)
             if op == "product":
                 return col_dtype.type(1)
-            if op == "any":
-                return False
-            if op == "all":
-                return True
             return _get_nan_for_dtype(col_dtype)
 
         # Perform the actual reduction
