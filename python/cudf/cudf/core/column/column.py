@@ -967,7 +967,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def all(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
-    ) -> bool:
+    ) -> ScalarLike:
         if skipna is not True and skipna is not False:
             raise ValueError(
                 f'For argument "skipna" expected type bool, received type {type(skipna).__name__}.'
@@ -976,7 +976,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return np.bool_(True)
         if self.null_count == self.size:
             if not skipna:
-                return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
+                return _get_nan_for_dtype(self.dtype)
             else:
                 return np.bool_(True)
 
@@ -999,12 +999,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             and self.null_count > 0
             and is_pandas_nullable_extension_dtype(self.dtype)
         ):
-            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
+            return _get_nan_for_dtype(self.dtype)
         return result
 
     def any(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
-    ) -> bool:
+    ) -> ScalarLike:
         if skipna is not True and skipna is not False:
             raise ValueError(
                 f'For argument "skipna" expected type bool, received type {type(skipna).__name__}.'
