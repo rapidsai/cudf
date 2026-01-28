@@ -244,24 +244,15 @@ struct DeviceRollingArgMinMaxDictionary : DeviceRollingArgMinMaxBase<cudf::dicti
       using AggOp = typename corresponding_operator<op>::type;
       AggOp agg_op;
 
-      auto keys       = dict.child(1);
-      size_type count = 0;
-      auto val        = AggOp::template identity<T>();
-      size_type index = -1;
+      auto keys  = dict.child(1);
+      auto count = size_type{0};
+      auto val   = AggOp::template identity<T>();
+      auto index = size_type{-1};
       for (size_type j = start_index; j < end_index; j++) {
         if (!has_nulls || dict.is_valid(j)) {
           auto element = keys.element<T>(dict.element<dictionary32>(j).value());
-          if constexpr (op == aggregation::ARGMIN) {
-            if (element < val) {
-              index = j;
-              val   = element;
-            }
-          } else {
-            if (element > val) {
-              index = j;
-              val   = element;
-            }
-          }
+          val          = agg_op(element, val);
+          if (val == element) { index = j; }
           count++;
         }
       }
