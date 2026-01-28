@@ -1008,7 +1008,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
                   auto const& p = original_pairs[idx];
                   return p.first != nullptr
                              ? cuda::std::optional<cudf::string_view>{cudf::string_view{p.first,
-                                                                                       p.second}}
+                                                                                      p.second}}
                              : cuda::std::nullopt;
                 }));
 
