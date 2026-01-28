@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_210
 from cudf.testing import assert_eq
 
 
@@ -296,7 +297,13 @@ def test_loc_datetime_index_slice_not_in(sli):
         slice(None, "2009"),
     ],
 )
-def test_loc_datetime_index_string_slice_non_monotonic(sli):
+def test_loc_datetime_index_string_slice_non_monotonic(request, sli):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_210,
+            reason="See https://github.com/pandas-dev/pandas/issues/53983",
+        )
+    )
     pd_data = pd.Series(
         [1, 2, 3],
         pd.Series(["2001", "2009", "2002"], dtype="datetime64[ns]"),

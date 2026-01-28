@@ -838,7 +838,7 @@ def test_loc_datetime_index(sli, is_dataframe):
         slice(None, "2009"),
     ],
 )
-def test_loc_datetime_index_string_slice_non_monotonic(sli, request):
+def test_loc_datetime_index_string_slice_non_monotonic(request, sli):
     request.applymarker(
         pytest.mark.xfail(
             condition=not PANDAS_GE_210,
