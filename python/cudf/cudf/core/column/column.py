@@ -968,9 +968,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def all(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> ScalarLike:
-        if skipna is not True and skipna is not False:
+        if not isinstance(skipna, bool):
             raise ValueError(
-                f'For argument "skipna" expected type bool, received type {type(skipna).__name__}.'
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
             )
         if self.size == 0:
             return np.bool_(True)
@@ -1005,9 +1005,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def any(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> ScalarLike:
-        if skipna is not True and skipna is not False:
+        if not isinstance(skipna, bool):
             raise ValueError(
-                f'For argument "skipna" expected type bool, received type {type(skipna).__name__}.'
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
             )
         # Empty series always returns False
         if self.size == 0:
@@ -2469,9 +2469,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         **kwargs: Any,
     ) -> ScalarLike:
         """Private method for reduction operations. Called by mixin-generated methods."""
-        if skipna is not True and skipna is not False:
+        if not isinstance(skipna, bool):
             raise ValueError(
-                f'For argument "skipna" expected type bool, received type {type(skipna).__name__}.'
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
             )
         # Early return if we can return NaN
         if self._can_return_nan(skipna=skipna):
