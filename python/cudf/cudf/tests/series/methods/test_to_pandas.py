@@ -107,7 +107,7 @@ def test_to_pandas_index_true_timezone():
                     None,
                     "rapids ai",
                 ],
-                dtype=pd.StringDtype(),
+                dtype=pd.StringDtype(na_value=np.nan),
             ),
         ),
         (
