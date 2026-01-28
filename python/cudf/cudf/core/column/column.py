@@ -1198,19 +1198,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         plc_col = self.plc_column
         if deep:
             plc_col = plc_col.copy()
-        # For nested types (e.g., list<list<int>>), self.dtype may not accurately
-        # reflect the actual plc_column structure. Some operations (like groupby
-        # collect on a list column) create nested structures but don't update the
-        # stored dtype to reflect the new nesting level. Using _with_type_metadata()
-        # is more permissive and handles these cases.
-        return cast(
-            "Self",
-            (
-                type(self)
-                .from_pylibcudf(plc_col)
-                ._with_type_metadata(self.dtype)
-            ),
-        )
+        return cast("Self", ColumnBase.create(plc_col, self.dtype))
 
     def element_indexing(self, index: int) -> ScalarLike:
         """Default implementation for indexing to an element
@@ -1434,11 +1422,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
                 return cast(
                     "Self",
-                    (
-                        type(self)
-                        .from_pylibcudf(plc_table.columns()[0])
-                        ._with_type_metadata(self.dtype)
-                    ),
+                    ColumnBase.create(plc_table.columns()[0], self.dtype),
                 )
         else:
             return cast(
@@ -1561,8 +1545,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.unary.is_valid(self.plc_column)
+            return ColumnBase.create(
+                plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
             )
 
     def isnan(self) -> ColumnBase:
@@ -1579,8 +1563,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return as_column(False, length=len(self))
 
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.unary.is_null(self.plc_column)
+            return ColumnBase.create(
+                plc.unary.is_null(self.plc_column), np.dtype(np.bool_)
             )
 
     def notnull(self) -> ColumnBase:
@@ -1589,8 +1573,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result = as_column(True, length=len(self))
         else:
             with self.access(mode="read", scope="internal"):
-                result = type(self).from_pylibcudf(
-                    plc.unary.is_valid(self.plc_column)
+                result = ColumnBase.create(
+                    plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
                 )
 
         if cudf.get_option("mode.pandas_compatible"):
@@ -1837,11 +1821,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self,
             other,
         ):
-            return ColumnBase.from_pylibcudf(
+            return ColumnBase.create(
                 plc.search.contains(
                     self.plc_column,
                     other.plc_column,
-                )
+                ),
+                np.dtype(np.bool_),
             )
 
     def sort_values(
