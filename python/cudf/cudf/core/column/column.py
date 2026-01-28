@@ -968,13 +968,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def all(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> bool:
-        # The skipna argument is only used for numerical columns.
-        # If all entries are null the result is True, including when the column
-        # is empty.
-        if not isinstance(skipna, bool):
-            raise ValueError(
-                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
-            )
         if self.size == 0:
             return True
         if self.null_count == self.size:
@@ -990,8 +983,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         result = self._reduce(
             "all", skipna=True, min_count=min_count, **kwargs
         )
-        # _reduce() returns NaN when all values are NaN; all() should return True
-        if isinstance(result, (int, float, bool)) and np.isnan(result):
+        if np.isnan(result):
             result = True
         else:
             result = bool(result)
@@ -1009,11 +1001,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def any(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> bool:
-        # Early exit for fast cases.
-        if not isinstance(skipna, bool):
-            raise ValueError(
-                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
-            )
         # Empty series always returns False
         if self.size == 0:
             return False
@@ -1028,8 +1015,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         result = self._reduce(
             "any", skipna=True, min_count=min_count, **kwargs
         )
-        # _reduce() returns NaN when all values are NaN; any() should return False
-        if isinstance(result, (int, float, bool)) and np.isnan(result):
+        if np.isnan(result):
             # If skipna=False and all values are NaN, pandas treats them as truthy
             return not skipna
         return bool(result)
