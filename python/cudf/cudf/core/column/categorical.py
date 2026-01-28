@@ -595,13 +595,14 @@ class CategoricalColumn(column.ColumnBase):
         out = self.categories.take(gather_map)
         mask = self.mask
         if self.offset > 0 and mask is not None:
-            mask = cudf.core.buffer.as_buffer(
-                plc.null_mask.copy_bitmask_from_bitmask(
-                    mask,
-                    self.offset,
-                    mask.size - self.offset,
+            with mask.access(mode="read", scope="internal"):
+                mask = cudf.core.buffer.as_buffer(
+                    plc.null_mask.copy_bitmask_from_bitmask(
+                        mask,
+                        self.offset,
+                        mask.size - self.offset,
+                    )
                 )
-            )
         out = out.set_mask(mask)
         return out
 

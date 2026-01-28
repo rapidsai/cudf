@@ -222,6 +222,10 @@ class StringColumn(ColumnBase, Scannable):
         if op in {"min", "max"}:
             return super()._reduce(op, skipna, min_count, **kwargs)
 
+        # For empty columns with statistical operations, return NaN (pandas behavior)
+        if len(self) == 0 and op in {"var", "std", "mean", "sum_of_squares"}:
+            return np.nan
+
         raise TypeError(f"Series.{op} does not support StringColumn")
 
     def __contains__(self, item: ScalarLike) -> bool:
