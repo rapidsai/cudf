@@ -362,11 +362,14 @@ class NumericalColumn(NumericalBaseColumn):
         reflect, op = self._check_reflected_op(op)
         if (other := self._normalize_binop_operand(other)) is NotImplemented:
             return NotImplemented
-        other_cudf_dtype = (
-            cudf_dtype_from_pa_type(other.type)
-            if isinstance(other, pa.Scalar)
-            else other.dtype
-        )
+        if isinstance(other, pa.Scalar):
+            other_cudf_dtype = (
+                pd.ArrowDtype(other.type)
+                if isinstance(self.dtype, pd.ArrowDtype)
+                else cudf_dtype_from_pa_type(other.type)
+            )
+        else:
+            other_cudf_dtype = other.dtype
 
         if out_dtype is None:
             out_dtype = find_common_type((self.dtype, other_cudf_dtype))
@@ -522,8 +525,12 @@ class NumericalColumn(NumericalBaseColumn):
             #   => np.int64
             if is_pandas_nullable_extension_dtype(self.dtype):
                 if isinstance(self.dtype, pd.ArrowDtype):
-                    common_dtype = cudf.utils.dtypes.find_common_type(
-                        [self.dtype, other]
+                    np_dtype = self.dtype.pyarrow_dtype.to_pandas_dtype()
+                    common_np_dtype = np.result_type(np_dtype, other)  # noqa: TID251
+                    common_dtype = (
+                        cudf.utils.dtypes.dtype_to_pandas_arrowdtype(
+                            common_np_dtype
+                        )
                     )
                 else:
                     common_dtype = get_dtype_of_same_kind(
@@ -532,7 +539,7 @@ class NumericalColumn(NumericalBaseColumn):
                     )
             else:
                 common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
-            if common_dtype.kind in {"b", "i", "u", "f"}:  # type: ignore[union-attr]
+            if common_dtype.kind in {"b", "i", "u", "f"}:
                 if self.dtype.kind == "b" and not isinstance(other, bool):
                     common_dtype = min_signed_type(other)
                 return pa.scalar(

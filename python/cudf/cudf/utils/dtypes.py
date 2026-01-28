@@ -323,6 +323,16 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
     if len(dtypes) == 1:
         return dtypes.pop()
 
+    if cudf.get_option("mode.pandas_compatible"):
+        arrow_dtypes = [dt for dt in dtypes if isinstance(dt, pd.ArrowDtype)]
+        if arrow_dtypes and len(arrow_dtypes) == len(dtypes):
+            pa_types = [dt.pyarrow_dtype for dt in arrow_dtypes]
+            if len(set(map(str, pa_types))) == 1:
+                return arrow_dtypes[0]
+            numpy_dtypes = [pa_type.to_pandas_dtype() for pa_type in pa_types]
+            common_np_dtype = np.result_type(*numpy_dtypes)  # noqa: TID251
+            return dtype_to_pandas_arrowdtype(common_np_dtype)
+
     if any(
         isinstance(dtype, cudf.core.dtypes.DecimalDtype) for dtype in dtypes
     ):
