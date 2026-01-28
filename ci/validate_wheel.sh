@@ -28,7 +28,8 @@ if [[ "${package_dir}" == "python/libcudf" ]]; then
             --max-allowed-size-compressed '325M'
         )
     fi
-elif [[ "${package_dir}" != "python/cudf_polars" ]] && \
+elif [[ "${package_dir}" != "python/cudf" ]] && \
+     [[ "${package_dir}" != "python/cudf_polars" ]] && \
      [[ "${package_dir}" != "python/dask_cudf" ]] && \
      [[ "${package_dir}" != "python/pylibcudf" ]]; then
     rapids-echo-stderr "unrecognized package_dir: '${package_dir}'"
