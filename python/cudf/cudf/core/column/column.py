@@ -621,6 +621,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
             dtype = dtype_from_pylibcudf_column(plc_col)
             col = ColumnBase.create(plc_col, dtype)
+
+        Note that the input col is never directly placed into the resulting ColumnBase.
+        Rather, a new plc.Column is created with the exact same properties but with
+        suitable shallow copies of the buffers wrapped in cudf Buffers to ensure
+        consistent behavior with respect to memory semantics like copy-on-write.
         """
         # Wrap buffers recursively
         wrapped = ColumnBase._wrap_buffers(col)

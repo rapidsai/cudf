@@ -5356,9 +5356,9 @@ class IntervalIndex(Index):
                 0,
                 [left, right],
             )
-            interval_col = ColumnBase.from_pylibcudf(
-                plc_column
-            )._with_type_metadata(IntervalDtype(child_type, closed))
+            interval_col = ColumnBase.create(
+                plc_column, IntervalDtype(child_type, closed)
+            )
         else:
             col = as_column(data)
             if not isinstance(col, IntervalColumn):
@@ -5466,9 +5466,7 @@ class IntervalIndex(Index):
             [left_col, right_col],
         )
         dtype = IntervalDtype(breaks.dtype, closed)
-        interval_col = ColumnBase.from_pylibcudf(
-            plc_column
-        )._with_type_metadata(dtype)
+        interval_col = ColumnBase.create(plc_column, dtype)
         return IntervalIndex._from_column(interval_col, name=name)
 
     @cached_property

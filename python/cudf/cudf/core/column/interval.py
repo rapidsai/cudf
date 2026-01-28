@@ -50,13 +50,22 @@ class IntervalColumn(ColumnBase):
         ):
             raise ValueError("dtype must be a IntervalDtype.")
 
-        for i, child in enumerate(plc_column.children()):
-            try:
-                ColumnBase._validate_dtype_recursively(child, dtype.subtype)
-            except ValueError as e:
-                raise ValueError(
-                    f"{'Right' if i else 'Left'} interval bound validation failed: {e}"
-                ) from e
+        # Cast children to target subtype - this ensures Arrow compatibility
+        # and handles any dtype normalization needed
+        new_children = tuple(
+            ColumnBase.from_pylibcudf(child).astype(dtype.subtype)
+            for child in plc_column.children()
+        )
+        # Reconstruct plc_column with type-casted children
+        plc_column = plc.Column(
+            plc.DataType(plc.TypeId.STRUCT),
+            plc_column.size(),
+            plc_column.data(),
+            plc_column.null_mask(),
+            plc_column.null_count(),
+            plc_column.offset(),
+            [child.plc_column for child in new_children],
+        )
 
         return plc_column, dtype
 
@@ -226,13 +235,14 @@ class IntervalColumn(ColumnBase):
     def set_closed(
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
-        return self._with_type_metadata(  # type: ignore[return-value]
-            IntervalDtype(self.dtype.subtype, closed)  # type: ignore[union-attr]
+        return ColumnBase.create(  # type: ignore[return-value]
+            self.plc_column,
+            IntervalDtype(self.dtype.subtype, closed),  # type: ignore[union-attr]
         )
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:
         if isinstance(dtype, IntervalDtype):
-            return self._with_type_metadata(dtype)  # type: ignore[return-value]
+            return ColumnBase.create(self.plc_column, dtype)  # type: ignore[return-value]
         else:
             raise ValueError("dtype must be IntervalDtype")
 
