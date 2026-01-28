@@ -73,6 +73,18 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@main
     with:
       files_yaml: |
+        build_docs:
+          - '**'
+          - '!.devcontainer/**'
+          - '!.pre-commit-config.yaml'
+          - '!ci/build_wheel*.sh'
+          - '!ci/check_style.sh'
+          - '!ci/discover_libcudf_tests.sh'
+          - '!ci/release/update-version.sh'
+          - '!ci/run_*.sh'
+          - '!ci/test_*.sh'
+          - '!ci/validate_wheel.sh'
+          - '!codecov.yml'
         test_cpp:
           - '**'
           - '!.devcontainer/**'
@@ -285,9 +297,10 @@ jobs:
       container_image: "rapidsai/ci-conda:26.04-latest"
       script: "ci/test_notebooks.sh"
   docs-build:
-    needs: [conda-python-build, conda-python-build-noarch]
+    needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).build_docs
     with:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
