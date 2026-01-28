@@ -222,8 +222,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
         **kwargs: Any,
     ) -> ScalarLike:
         """Validate reduction operations for TimeDeltaColumn."""
-        if op == "sum":
-            return self.sum(skipna=skipna, min_count=min_count)
         self._raise_if_unsupported_reduction(
             op,
             {"product", "var", "kurt", "kurtosis", "skew", "any", "all"},

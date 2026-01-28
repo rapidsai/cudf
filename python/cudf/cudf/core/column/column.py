@@ -980,7 +980,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
             else:
                 return True
-        result = bool(self._reduce("all"))
+        result = bool(self._reduce("all", skipna=skipna))
         if (
             result
             and not skipna
@@ -1000,7 +1000,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return True
         elif skipna and self.null_count == self.size:
             return False
-        return bool(self._reduce("any"))
+        return bool(self._reduce("any", skipna=skipna))
 
     def dropna(self) -> Self:
         if self.has_nulls():

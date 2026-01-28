@@ -57,14 +57,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         min_count: int = 0,
         **kwargs: Any,
     ) -> ScalarLike:
-        """Override to dispatch median and handle var/std NA conversion."""
-        if op == "median":
-            if kwargs or min_count != 0:
-                raise ValueError(
-                    "median does not support additional kwargs or min_count"
-                )
-            return self.median(skipna=skipna)
-
+        """Override to handle var/std NA conversion."""
         result = super()._reduce(
             op, skipna=skipna, min_count=min_count, **kwargs
         )
