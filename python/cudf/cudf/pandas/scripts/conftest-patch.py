@@ -2229,6 +2229,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_sparse.py::TestSparseArray::test_unary_ufunc_dunder_equivalence[nan-absolute]",
     "tests/extension/test_sparse.py::TestSparseArray::test_unary_ufunc_dunder_equivalence[nan-negative]",
     "tests/extension/test_sparse.py::TestSparseArray::test_unary_ufunc_dunder_equivalence[nan-positive]",
+    "tests/extension/test_sparse.py::TestSparseArray::test_reduce_series_boolean[nan-any-False]",  # Pandas bug: SparseArray._reduce() has inverted skipna logic
     "tests/extension/test_string.py::TestStringArray::test_EA_types[pyarrow-False-c]",
     "tests/extension/test_string.py::TestStringArray::test_EA_types[pyarrow-False-python]",
     "tests/extension/test_string.py::TestStringArray::test_EA_types[pyarrow-True-c]",
