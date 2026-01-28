@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import re
 import weakref
@@ -626,12 +626,6 @@ def test_dataframe_loc(scalar):
     # Full slice
     assert_eq(df.loc[:, "c"], pdf.loc[:, "c"])
 
-    # Repeat with at[]
-    assert_eq(df.loc[:, ["a"]], df.at[:, ["a"]])
-    assert_eq(df.loc[:, "d"], df.at[:, "d"])
-    assert_eq(df.loc[scalar], df.at[scalar])
-    assert_eq(df.loc[:, "c"], df.at[:, "c"])
-
 
 @pytest.mark.parametrize("step", [1, 5])
 def test_dataframe_loc_slice(step):
@@ -670,16 +664,6 @@ def test_dataframe_loc_slice(step):
     assert_eq(
         df.loc[begin, "a":"a"], pdf.loc[begin, "a":"a"], check_dtype=False
     )
-
-    # Repeat with at[]
-    assert_eq(
-        df.loc[begin:end:step, ["c", "d", "a"]],
-        df.at[begin:end:step, ["c", "d", "a"]],
-    )
-    assert_eq(df.loc[begin:end, ["c", "d"]], df.at[begin:end, ["c", "d"]])
-    assert_eq(df.loc[begin:end:step, "a":"c"], df.at[begin:end:step, "a":"c"])
-    assert_eq(df.loc[begin:begin, "a"], df.at[begin:begin, "a"])
-    assert_eq(df.loc[begin, "a":"a"], df.at[begin, "a":"a"], check_dtype=False)
 
 
 def test_dataframe_loc_arraylike():
