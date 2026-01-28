@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import re
 import weakref
@@ -824,6 +824,28 @@ def test_loc_datetime_index(sli, is_dataframe):
     expect = pd_data.loc[sli]
     got = gd_data.loc[sli]
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "sli",
+    [
+        slice("2001", "2009"),
+        slice("2001", "2006"),
+        slice(None, "2009"),
+    ],
+)
+def test_loc_datetime_index_string_slice_non_monotonic(sli):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3]},
+        index=pd.Series(["2001", "2009", "2002"], dtype="datetime64[ns]"),
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    with pytest.raises(KeyError, match="non-monotonic DatetimeIndexes"):
+        pdf.loc[sli]
+
+    with pytest.raises(KeyError, match="non-monotonic DatetimeIndexes"):
+        gdf.loc[sli]
 
 
 @pytest.mark.parametrize(
