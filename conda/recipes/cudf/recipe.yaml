@@ -8,8 +8,8 @@ context:
   cuda_version: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[:2] | join(".") }}
   cuda_major: '${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[0] }}'
   date_string: '${{ env.get("RAPIDS_DATE_STRING") }}'
-  py_version: ${{ env.get("RAPIDS_PY_VERSION") }}
-  py_buildstring: ${{ py_version | version_to_buildstring }}
+  py_abi_min: "3.11"
+  py_buildstring : ${{ py_abi_min | version_to_buildstring }}
   head_rev: '${{ git.head_rev(".")[:8] }}'
 
 package:
@@ -20,7 +20,9 @@ source:
   path: ../../..
 
 build:
-  string: cuda${{ cuda_major }}_py${{ py_buildstring }}_${{ date_string }}_${{ head_rev }}
+  python:
+    version_independent: true
+  string: cuda${{ cuda_major }}_cp${{ py_buildstring }}_abi3_${{ date_string }}_${{ head_rev }}
   script:
     content: |
       ./build.sh cudf
@@ -65,7 +67,8 @@ requirements:
     - cuda-version =${{ cuda_version }}
     - ${{ stdlib("c") }}
   host:
-    - python =${{ py_version }}
+    - python =${{ py_abi_min }}
+    - python-abi3 ${{ py_abi_min }}.*
     - pip
     - cython >=3.0.3,<3.2.0
     - rapids-build-backend >=0.4.0,<0.5.0

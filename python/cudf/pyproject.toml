@@ -149,6 +149,10 @@ provider = "scikit_build_core.metadata.regex"
 input = "cudf/VERSION"
 regex = "(?P<value>.*)"
 
+[[tool.scikit-build.overrides]]
+if.python-version = ">=3.11"
+wheel.py-api = "cp311"
+
 [tool.ruff]
 extend = "../../pyproject.toml"
 
