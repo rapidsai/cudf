@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -108,6 +108,34 @@ class DataFrameResampler(_Resampler, DataFrameGroupBy):
 
 
 class SeriesResampler(_Resampler, SeriesGroupBy):
+    pass
+
+
+class _DatetimeIndexResampler(_Resampler):
+    pass
+
+
+class DatetimeIndexSeriesResampler(_DatetimeIndexResampler, SeriesGroupBy):
+    pass
+
+
+class DatetimeIndexDataFrameResampler(
+    _DatetimeIndexResampler, DataFrameGroupBy
+):
+    pass
+
+
+class _TimedeltaIndexResampler(_DatetimeIndexResampler):
+    pass
+
+
+class TimedeltaIndexSeriesResampler(_TimedeltaIndexResampler, SeriesGroupBy):
+    pass
+
+
+class TimedeltaIndexDataFrameResampler(
+    _TimedeltaIndexResampler, DataFrameGroupBy
+):
     pass
 
 
