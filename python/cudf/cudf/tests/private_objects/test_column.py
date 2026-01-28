@@ -414,7 +414,7 @@ def test_as_column_arrow_array(data, pyarrow_kwargs, cudf_kwargs):
     "pd_dtype,expect_dtype",
     [
         # TODO: Nullable float is coming
-        (pd.StringDtype(), np.dtype("O")),
+        (pd.StringDtype(), pd.StringDtype()),
         (pd.UInt8Dtype(), np.dtype("uint8")),
         (pd.UInt16Dtype(), np.dtype("uint16")),
         (pd.UInt32Dtype(), np.dtype("uint32")),
@@ -450,7 +450,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
     "pd_dtype,expect_dtype",
     [
         # TODO: Nullable float is coming
-        (pd.StringDtype(), np.dtype("O")),
+        (pd.StringDtype(), pd.StringDtype()),
         (pd.UInt8Dtype(), np.dtype("uint8")),
         (pd.UInt16Dtype(), np.dtype("uint16")),
         (pd.UInt32Dtype(), np.dtype("uint32")),
