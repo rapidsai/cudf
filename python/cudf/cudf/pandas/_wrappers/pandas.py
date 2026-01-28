@@ -191,18 +191,6 @@ def Timestamp_Timedelta__new__(cls, *args, **kwargs):
     return self
 
 
-ExtensionArray = make_final_proxy_type(
-    "ExtensionArray",
-    _Unusable,
-    pd.api.extensions.ExtensionArray,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-    additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
-    },
-)
-
-
 Timedelta = make_final_proxy_type(
     "Timedelta",
     _Unusable,
@@ -563,10 +551,11 @@ ArrowDtype = make_final_proxy_type(
     "ArrowDtype",
     pd.ArrowDtype,
     pd.ArrowDtype,
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
     fast_to_slow=lambda fast: fast,
     slow_to_fast=lambda slow: slow,
     additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
         "pyarrow_dtype": _FastSlowAttribute("pyarrow_dtype"),
@@ -605,7 +594,10 @@ Categorical = make_final_proxy_type(
     pd.Categorical,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
+    additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+    },
 )
 
 CategoricalDtype = make_final_proxy_type(
@@ -645,8 +637,9 @@ DatetimeArray = make_final_proxy_type(
     pd.arrays.DatetimeArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
     },
@@ -719,8 +712,9 @@ TimedeltaArray = make_final_proxy_type(
     pd.arrays.TimedeltaArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
     },
@@ -750,7 +744,7 @@ PeriodArray = make_final_proxy_type(
     pd.arrays.PeriodArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
@@ -833,7 +827,7 @@ StringArray = make_final_proxy_type(
     pd.arrays.StringArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
@@ -873,7 +867,7 @@ ArrowStringArray = make_final_proxy_type(
     pd.core.arrays.string_arrow.ArrowStringArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
         "__array__": _FastSlowAttribute("__array__", private=True),
@@ -914,7 +908,7 @@ BooleanArray = make_final_proxy_type(
     pd.arrays.BooleanArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
@@ -939,7 +933,7 @@ IntegerArray = make_final_proxy_type(
     pd.arrays.IntegerArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
@@ -1060,8 +1054,9 @@ IntervalArray = make_final_proxy_type(
     pd.arrays.IntervalArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
     },
@@ -1095,7 +1090,7 @@ FloatingArray = make_final_proxy_type(
     pd.arrays.FloatingArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
@@ -1124,6 +1119,11 @@ Float64Dtype = make_final_proxy_type(
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
+
+# Note: We don't proxy JSONArray (a test extension array) because:
+# 1. It inherits from pd.api.extensions.ExtensionArray which is not proxied
+# 2. Test extension arrays should use pandas directly to avoid proxy initialization issues
+# 3. The tests work correctly without proxying JSONArray
 
 SeriesGroupBy = make_intermediate_proxy_type(
     "SeriesGroupBy",
