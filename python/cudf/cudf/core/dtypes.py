@@ -634,15 +634,7 @@ class StructDtype(_BaseDtype):
         StructDtype({'x': dtype('int32'), 'y': <StringDtype(na_value=nan)>})
         """
         return cls(
-            {
-                typ.field(i).name: cudf_dtype_from_pa_type(typ.field(i).type)
-                for i in range(typ.num_fields)
-            }
-            # Once pyarrow 18 is the min version, replace with this version
-            # {
-            #     field.name: cudf_dtype_from_pa_type(field.type)
-            #     for field in typ.fields
-            # }
+            {field.name: cudf_dtype_from_pa_type(field.type) for field in typ}
         )
 
     def to_arrow(self) -> pa.StructType:

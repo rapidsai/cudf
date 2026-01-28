@@ -250,11 +250,6 @@ class StringColumn(ColumnBase, Scannable):
             return result._with_type_metadata(new_type)
         return result
 
-    def _scan(self, op: str) -> ColumnBase:
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
-        )
-
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
             result = self.count_characters() > np.int8(0)
@@ -1009,9 +1004,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                ColumnBase.from_pylibcudf(plc_result)._with_type_metadata(
-                    self.dtype
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def is_hex(self) -> NumericalColumn:
@@ -1139,9 +1132,7 @@ class StringColumn(ColumnBase, Scannable):
                 enumerate(
                     cast(
                         Self,
-                        ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                            self.dtype
-                        ),
+                        ColumnBase.create(col, self.dtype),
                     )
                     for col in plc_table.columns()
                 )
@@ -1208,9 +1199,7 @@ class StringColumn(ColumnBase, Scannable):
                 enumerate(
                     cast(
                         Self,
-                        ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                            self.dtype
-                        ),
+                        ColumnBase.create(col, self.dtype),
                     )
                     for col in plc_table.columns()
                 )
@@ -1252,9 +1241,7 @@ class StringColumn(ColumnBase, Scannable):
                 enumerate(
                     cast(
                         Self,
-                        ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                            self.dtype
-                        ),
+                        ColumnBase.create(col, self.dtype),
                     )
                     for col in plc_table.columns()
                 )

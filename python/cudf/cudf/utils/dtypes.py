@@ -405,11 +405,6 @@ def is_dtype_obj_numeric(
         return is_non_decimal
 
 
-pa_decimal32type = getattr(pa, "Decimal32Type", None)
-
-pa_decimal64type = getattr(pa, "Decimal64Type", None)
-
-
 def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
     """Given a pandas ArrowDtype, converts it into the equivalent cudf pandas
     dtype.
@@ -418,13 +413,9 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
     pyarrow_dtype = dtype.pyarrow_dtype
     if isinstance(pyarrow_dtype, pa.Decimal128Type):
         return cudf.Decimal128Dtype.from_arrow(pyarrow_dtype)
-    elif pa_decimal64type is not None and isinstance(
-        pyarrow_dtype, pa_decimal64type
-    ):
+    elif isinstance(pyarrow_dtype, pa.Decimal64Type):
         return cudf.Decimal64Dtype.from_arrow(pyarrow_dtype)
-    elif pa_decimal32type is not None and isinstance(
-        pyarrow_dtype, pa_decimal32type
-    ):
+    elif isinstance(pyarrow_dtype, pa.Decimal32Type):
         return cudf.Decimal32Dtype.from_arrow(pyarrow_dtype)
     elif isinstance(pyarrow_dtype, pa.ListType):
         return cudf.ListDtype.from_arrow(pyarrow_dtype)

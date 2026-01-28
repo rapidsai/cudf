@@ -2930,9 +2930,7 @@ class IndexedFrame(Frame):
         )
         return self._from_columns_like_self(
             [
-                ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                    orig_col.dtype
-                )
+                ColumnBase.create(col, orig_col.dtype)
                 for col, orig_col in zip(
                     copying.gather(
                         columns_to_gather,
