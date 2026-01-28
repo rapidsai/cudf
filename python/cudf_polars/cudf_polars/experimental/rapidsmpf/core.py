@@ -477,8 +477,8 @@ def generate_network(
     nodes_dict, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
-    # Add node to drain metadata channel before pull_from_channel
-    # (since pull_from_channel doesn't accept a ChannelPair)
+    # Add node to drain metadata before pull_from_channel
+    # (since pull_from_channel doesn't handle metadata messages)
     ch_final_data: Channel[TableChunk] = context.create_channel()
     drain_node = metadata_drain_node(
         context,

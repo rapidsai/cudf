@@ -283,5 +283,21 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
                                         size_type stop,
                                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
+/**
+ * @brief Given a validity bitmask, returns the index of the first set bit
+ * in the range `[start, stop)`.
+ *
+ * @param bitmask Validity bitmask residing in device memory
+ * @param start Index of the first bit to check (inclusive)
+ * @param stop Index of the last bit to check (exclusive)
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return The index of the first set bit in the specified range,
+ *         or `stop-start` if no set bit is found (all nulls)
+ */
+size_type index_of_first_set_bit(bitmask_type const* bitmask,
+                                 size_type start,
+                                 size_type stop,
+                                 rmm::cuda_stream_view stream = cudf::get_default_stream());
+
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

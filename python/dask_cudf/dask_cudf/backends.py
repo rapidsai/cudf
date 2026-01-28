@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
@@ -9,7 +9,6 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from packaging.version import Version
 
 from dask import config
 from dask.array.dispatch import percentile_lookup
@@ -45,9 +44,6 @@ from dask.utils import Dispatch, is_arraylike
 import cudf
 from cudf.api.types import is_scalar, is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
-
-# Required for Arrow filesystem support in read_parquet
-PYARROW_GE_15 = Version(pa.__version__) >= Version("15.0.0")
 
 
 @meta_nonempty.register(cudf.Index)

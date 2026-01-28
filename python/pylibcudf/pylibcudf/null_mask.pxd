@@ -39,3 +39,10 @@ cpdef size_type null_count(
     size_type stop,
     Stream stream=*
 )
+
+cpdef size_type index_of_first_set_bit(
+    object bitmask,
+    size_type start,
+    size_type stop,
+    Stream stream=*
+)

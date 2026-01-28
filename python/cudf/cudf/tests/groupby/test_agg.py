@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import decimal
 import itertools
@@ -12,6 +12,7 @@ from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_VERSION,
 )
+from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.testing import assert_eq, assert_groupby_results_equal
 
 
@@ -687,3 +688,82 @@ def test_agg_duplicate_aggs_pandas_compat_raises():
         columns=pd.MultiIndex.from_tuples([("b", "mean")]),
     )
     assert_groupby_results_equal(result, expected)
+
+
+def test_groupby_collect_nested_lists():
+    """Test groupby collect on list columns creates properly nested dtypes."""
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [[1, 2], [3, 4], [5], [6, 7]],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    result = gdf.groupby("a").agg({"b": "collect"})
+
+    assert result["b"].dtype == ListDtype(ListDtype("int64"))
+    assert result["b"].dtype.element_type == ListDtype("int64")
+    assert result["b"].dtype.element_type.element_type.name == "int64"
+
+
+def test_groupby_collect_triple_nested():
+    """Test groupby collect with multi-level nesting."""
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [[[1, 2], [3]], [[4], [5, 6]], [[7]], [[8, 9], [10]]],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    result = gdf.groupby("a").agg({"b": "collect"})
+
+    assert result["b"].dtype == ListDtype(ListDtype(ListDtype("int64")))
+
+
+def test_groupby_collect_struct_lists():
+    """Test groupby collect with struct-containing lists."""
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [[{"x": 1}], [{"x": 2}], [{"x": 3}], [{"x": 4}]],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    result = gdf.groupby("a").agg({"b": "collect"})
+
+    assert isinstance(result["b"].dtype, ListDtype)
+    assert isinstance(result["b"].dtype.element_type, ListDtype)
+    assert isinstance(result["b"].dtype.element_type.element_type, StructDtype)
+
+
+def test_copy_with_nested_lists():
+    """Test that copy preserves dtype for nested list columns."""
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [[1, 2], [3, 4], [5], [6, 7]],
+        }
+    )
+    result = gdf.groupby("a").agg({"b": "collect"})
+
+    copied = result["b"]._column.copy()
+    assert copied.dtype == result["b"].dtype
+    assert copied.dtype == ListDtype(ListDtype("int64"))
+
+
+def test_sliced_child_dtype_accuracy():
+    """Test that sliced child dtype matches stored element_type."""
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [[1, 2], [3, 4], [5], [6, 7]],
+        }
+    )
+    result = gdf.groupby("a").agg({"b": "collect"})
+
+    col = result["b"]._column
+    child = col._get_sliced_child()
+    assert child.dtype == col.dtype.element_type
