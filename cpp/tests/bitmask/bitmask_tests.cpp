@@ -381,8 +381,7 @@ TEST_F(CountBitmaskTest, IndexOfFirstUnsetBit)
     cudf::test::fixed_width_column_wrapper<int, bool>(data.begin(), data.end(), data.begin())
       .release();
   // cudf::test::print(input->view());
-  auto result =
-    cudf::index_of_first_unset_bit(input->view().null_mask(), 256, input->view().size());
+  auto result = cudf::index_of_first_set_bit(input->view().null_mask(), 256, input->view().size());
   std::cout << "result: " << result << std::endl;
 }
 
