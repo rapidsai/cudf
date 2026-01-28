@@ -91,8 +91,8 @@ select = [
     "distro-too-large-compressed",
 ]
 
-# PyPI limit is 100 MiB, fail CI before we get too close to that
-max_allowed_size_compressed = '75M'
+# PyPI hard limit is 1GiB, but try to keep this as small as possible
+max_allowed_size_compressed = '15M'
 
 [tool.pytest.ini_options]
 addopts = "--tb=native --strict-config --strict-markers"
