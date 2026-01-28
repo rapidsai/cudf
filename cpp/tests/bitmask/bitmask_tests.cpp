@@ -360,6 +360,32 @@ TEST_F(CountBitmaskTest, BatchNullCount)
               ::testing::ElementsAreArray(std::vector<cudf::size_type>{3, 3, 2, 1, 6, 0}));
 }
 
+TEST_F(CountBitmaskTest, IndexOfFirstUnsetBit)
+{
+  //  auto parms = std::vector<std::tuple<cudf::size_type, cudf::size_type, cudf::size_type>>{
+  //    {28, 0, 0, 0},
+  //    {28, 10, 10, 0},
+  //    {32, 0, 0, 0},
+  //    {32, 10, 10, 0},
+  //    {32, 10, 11, 22},
+  //    {64, 33, 0, 33},
+  //    {260, 258, 0, 258},
+  //    {260, 258, 32, 226},
+  //    {320, 260, 60, 200},
+  //    {320, 260, 256, 4},
+  //  };
+  auto data = std::vector<bool>(320, false);
+  data[260] = true;
+  // std::cout << "r=" << std::reduce(data.begin(), data.end()) << std::endl;
+  auto input =
+    cudf::test::fixed_width_column_wrapper<int, bool>(data.begin(), data.end(), data.begin())
+      .release();
+  // cudf::test::print(input->view());
+  auto result =
+    cudf::index_of_first_unset_bit(input->view().null_mask(), 256, input->view().size());
+  std::cout << "result: " << result << std::endl;
+}
+
 using CountUnsetBitsTest = CountBitmaskTest;
 
 TEST_F(CountUnsetBitsTest, SingleBitAllSet)

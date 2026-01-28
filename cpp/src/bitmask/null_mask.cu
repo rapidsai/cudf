@@ -23,6 +23,7 @@
 #include <rmm/mr/device_memory_resource.hpp>
 
 #include <cooperative_groups.h>
+#include <cooperative_groups/reduce.h>
 #include <cub/cub.cuh>
 #include <cuda/atomic>
 #include <thrust/execution_policy.h>
@@ -31,8 +32,6 @@
 #include <algorithm>
 #include <limits>
 #include <numeric>
-
-namespace cg = cooperative_groups;
 
 namespace cudf {
 size_type state_null_count(mask_state state, size_type size)
@@ -156,6 +155,7 @@ CUDF_KERNEL void set_null_masks_kernel(cudf::device_span<bitmask_type*> destinat
                                        cudf::device_span<bool const> valids,
                                        cudf::device_span<size_type const> numbers_of_mask_words)
 {
+  namespace cg           = cooperative_groups;
   auto const bitmask_idx = cg::this_grid().block_rank();
   // Return early if nothing to do
   if (begin_bits[bitmask_idx] == end_bits[bitmask_idx]) { return; }
@@ -173,6 +173,7 @@ CUDF_KERNEL void set_null_mask_kernel(bitmask_type* destination,
                                       bool valid,
                                       size_type number_of_mask_words)
 {
+  namespace cg = cooperative_groups;
   set_null_mask_impl<cg::grid_group, mask_set_mode::UNSAFE>(
     destination, begin_bit, end_bit, valid, number_of_mask_words, cg::this_grid());
 }
@@ -727,6 +728,66 @@ void set_all_valid_null_masks(column_view const& input,
   }
 }
 
+namespace {
+
+template <size_type block_size>
+CUDF_KERNEL void find_first_unset_bit_kernel(bitmask_type const* __restrict__ bitmask,
+                                             size_type start,
+                                             size_type stop,
+                                             size_type max,
+                                             size_type* index)
+{
+  constexpr auto word_size = detail::size_in_bits<bitmask_type>();
+
+  namespace cg     = cooperative_groups;
+  auto const block = cg::tiled_partition<block_size>(cg::this_thread_block());
+  auto const tid   = cudf::detail::grid_1d::global_thread_id<block_size>();
+
+  auto const end_word_index = word_index(stop);
+
+  auto const thread_word_index = tid + word_index(start);
+  auto bit_index               = max;
+  if (thread_word_index <= end_word_index) {
+    auto mask = detail::get_mask_offset_word(bitmask, tid, start, stop);
+
+    auto mask_bit_index = __ffs(mask);  // index is 1-based
+    if (mask_bit_index != 0) {
+      bit_index = static_cast<size_type>(tid * word_size) + mask_bit_index - 1;
+    }
+  }
+  size_type out_index = cg::reduce(block, bit_index, cg::less<size_type>());
+  block.sync();
+
+  if (block.thread_rank() == 0 && out_index != max) {
+    cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(index)};
+    ref.fetch_min(out_index, cuda::std::memory_order_relaxed);
+  }
+}
+}  // namespace
+
+size_type index_of_first_unset_bit(bitmask_type const* bitmask,
+                                   size_type start,
+                                   size_type stop,
+                                   rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
+  if (bitmask == nullptr) { return 0; }
+
+  auto const bit_count  = stop - start;
+  auto const mask_words = num_bitmask_words(bit_count);
+
+  auto d_index =
+    cudf::detail::device_scalar<size_type>(stream, cudf::get_current_device_resource_ref());
+  d_index.set_value_async(bit_count, stream);
+
+  constexpr size_type block_size = 256;
+  auto const grid                = grid_1d{mask_words + 1, block_size};
+  find_first_unset_bit_kernel<block_size>
+    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      bitmask, start, stop, bit_count, d_index.data());
+  return d_index.value(stream);
+}
+
 }  // namespace detail
 
 // Create a bitmask from a specific range
@@ -798,6 +859,15 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
     if (bitmasks[i] != nullptr) { counts[i] = num_bits_to_count - counts[i]; }
   }
   return counts;
+}
+
+size_type index_of_first_unset_bit(bitmask_type const* bitmask,
+                                   size_type start,
+                                   size_type stop,
+                                   rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  return detail::index_of_first_unset_bit(bitmask, start, stop, stream);
 }
 
 }  // namespace cudf
