@@ -1,11 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Typing utilities for cudf_polars."""
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Hashable, MutableMapping
 from typing import (
     TYPE_CHECKING,
@@ -14,6 +13,7 @@ from typing import (
     NewType,
     Protocol,
     TypeVar,
+    TypedDict,
     Union,
 )
 
@@ -29,13 +29,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame, DataType
     from cudf_polars.dsl import nodebase
-
-
-if sys.version_info >= (3, 11):
-    # Inheriting from TypeDict + Generic added in python 3.11
-    from typing import TypedDict  # pragma: no cover
-else:
-    from typing_extensions import TypedDict  # pragma: no cover
 
 
 __all__: list[str] = [
