@@ -1120,10 +1120,6 @@ Float64Dtype = make_final_proxy_type(
     },
 )
 
-# Note: We don't proxy JSONArray (a test extension array) because:
-# 1. It inherits from pd.api.extensions.ExtensionArray which is not proxied
-# 2. Test extension arrays should use pandas directly to avoid proxy initialization issues
-# 3. The tests work correctly without proxying JSONArray
 
 SeriesGroupBy = make_intermediate_proxy_type(
     "SeriesGroupBy",
