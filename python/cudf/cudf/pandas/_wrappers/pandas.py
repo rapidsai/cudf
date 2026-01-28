@@ -551,7 +551,7 @@ ArrowDtype = make_final_proxy_type(
     "ArrowDtype",
     pd.ArrowDtype,
     pd.ArrowDtype,
-    bases=(pd.api.extensions.ExtensionArray,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     fast_to_slow=lambda fast: fast,
     slow_to_fast=lambda slow: slow,
     additional_attributes={
