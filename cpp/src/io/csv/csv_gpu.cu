@@ -686,18 +686,28 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
           ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE, 1, 0, 1);
         }
       } else if (c == quotechar) {
-        if (c_prev == delimiter || c_prev == quotechar) {
-          // Quote after delimiter or quote after quote: both toggle quote mode
-          // (start/end of quoted field, including escaped quote sequences (""))
-          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
+        // Quote handling uses ROW_CTX_COMMENT as a "pending exit" state to correctly handle
+        // escaped quotes (""). When in QUOTE state and we see a quote, we can't immediately
+        // exit because it might be the first quote of a "" escape sequence. We transition to
+        // COMMENT (pending exit) and wait for the next character:
+        //   - If next char is quote: it's a "" escape, return to QUOTE
+        //   - If next char is anything else: exit confirmed, go to NONE
+        // This doesn't conflict with actual comment handling because comments are only
+        // detected at row boundaries (after newline), where COMMENT state is set with row
+        // counting. Mid-row, COMMENT is purely used for this pending exit mechanism.
+        if (c_prev == delimiter) {
+          // Quote after delimiter: start field or pending exit
+          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_COMMENT);
+        } else if (c_prev == quotechar) {
+          // Quote after quote: "" escape or stay NONE (Spark compatibility)
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT, ROW_CTX_QUOTE);
         } else {
-          // Quote in middle of unquoted field (ignored for Spark compatibility)
-          // or closing quote of a quoted field
-          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_NONE);
+          // Quote after regular char: pending exit or stay NONE
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT);
         }
       } else {
-        // Neutral character
-        ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE);
+        // Non-quote char: stay in current state, or exit from pending
+        ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE);
       }
     } else {
       char const* data_end = start + data_size - start_offset;
