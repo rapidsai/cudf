@@ -160,11 +160,6 @@ class CategoricalColumn(column.ColumnBase):
         )
         return result
 
-    def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
-        return self.codes.slice(start, stop, stride)._with_type_metadata(  # type: ignore[return-value]
-            self.dtype
-        )
-
     def _reduce(
         self,
         op: str,
@@ -246,15 +241,6 @@ class CategoricalColumn(column.ColumnBase):
             return self._get_decategorized_column()._binaryop(other, op)
         return self.codes._binaryop(other.codes, op)
 
-    def sort_values(
-        self,
-        ascending: bool = True,
-        na_position: Literal["first", "last"] = "last",
-    ) -> Self:
-        return self.codes.sort_values(  # type: ignore[return-value]
-            ascending, na_position
-        )._with_type_metadata(self.dtype)
-
     def element_indexing(self, index: int) -> ScalarLike:
         val = self.codes.element_indexing(index)
         if val is self._PANDAS_NA_VALUE:
@@ -323,9 +309,6 @@ class CategoricalColumn(column.ColumnBase):
         return (
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)  # type: ignore[return-value]
         )
-
-    def unique(self) -> Self:
-        return self.codes.unique()._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
     def _cast_self_and_other_for_where(
         self, other: ScalarLike | ColumnBase, inplace: bool
