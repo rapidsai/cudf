@@ -296,10 +296,17 @@ def test_dtype_header_roundtrip(dtype: pl.DataType):
     assert result == dt
 
 
-def test_astype_to_string():
+@pytest.mark.parametrize(
+    "val, plc_tid, pl_type",
+    [
+        (1, plc.TypeId.INT64, pl.Int64()),
+        (True, plc.TypeId.BOOL8, pl.Boolean()),
+    ],
+)
+def test_astype_to_string(val, plc_tid, pl_type):
     col = Column(
-        plc.Column.from_iterable_of_py([True], plc.DataType(plc.TypeId.BOOL8)),
-        dtype=DataType(pl.Boolean()),
+        plc.Column.from_iterable_of_py([val], plc.DataType(plc_tid)),
+        dtype=DataType(pl_type),
     )
     stream = get_cuda_stream()
     target_dtype = DataType(pl.String())
