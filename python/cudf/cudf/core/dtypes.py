@@ -467,6 +467,10 @@ class ListDtype(_BaseDtype):
         >>> list_dtype
         ListDtype(int64)
         """
+        # PyArrow infers empty lists as list<null>, but libcudf uses int8 as
+        # the default for empty lists. Use int8 to match the plc structure.
+        if pa.types.is_null(typ.value_type):
+            return cls(np.dtype("int8"))
         return cls(cudf_dtype_from_pa_type(typ.value_type))
 
     def to_arrow(self) -> pa.ListType:
