@@ -1048,17 +1048,17 @@ class GroupBy(Serializable, Reducible, Scannable):
                     key = (col_name, agg_name)
                 else:
                     key = col_name
-                if (
-                    agg in {list, "collect"}
-                    and orig_dtype != col.dtype.element_type
-                ):
-                    # Structs lose their labels which we reconstruct here
-                    col = col._with_type_metadata(
-                        get_dtype_of_same_kind(
-                            orig_dtype, ListDtype(orig_dtype)
-                        )
+                if agg in {list, "collect"}:
+                    # Collect wraps the original dtype in ListDtype (e.g., int -> list<int>)
+                    new_dtype = get_dtype_of_same_kind(
+                        orig_dtype, ListDtype(orig_dtype)
                     )
+                    col = ColumnBase.create(col.plc_column, new_dtype)
 
+                # Default: use column as-is
+                data[key] = col
+
+                # Override for specific aggregation types that need dtype adjustments
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
                     data[key] = col.astype(
                         get_dtype_of_same_kind(orig_dtype, np.dtype(np.int64))
@@ -1076,7 +1076,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 ):
                     data[key] = col.astype(orig_dtype)
-                else:
+                elif agg not in {list, "collect"}:
+                    # For non-collect aggregations, apply original dtype metadata
                     if isinstance(orig_dtype, DecimalDtype):
                         # `col` has a different precision than `orig_dtype`
                         # hence we only preserve the kind of the dtype

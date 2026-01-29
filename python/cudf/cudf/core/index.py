@@ -3240,6 +3240,13 @@ class DatetimeIndex(Index):
             raise TypeError(
                 "Can only slice DatetimeIndex with a string or datetime objects"
             )
+        if isinstance(loc.stop, str) and not (
+            self.is_monotonic_increasing or self.is_monotonic_decreasing
+        ):
+            raise KeyError(
+                "Value based partial slicing on non-monotonic DatetimeIndexes "
+                "with non-existing keys is not allowed."
+            )
         new_slice = slice(
             pd.to_datetime(loc.start) if loc.start is not None else None,
             pd.to_datetime(loc.stop) if loc.stop is not None else None,
