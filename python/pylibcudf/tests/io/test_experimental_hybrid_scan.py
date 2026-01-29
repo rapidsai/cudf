@@ -332,9 +332,6 @@ def test_hybrid_scan_materialize_columns(
         )
         for r in filter_ranges
     ]
-    filter_data = [
-        DeviceSpan(buffer.ptr, buffer.size) for buffer in filter_buffers
-    ]
 
     synchronize_stream(stream)
 
@@ -369,9 +366,6 @@ def test_hybrid_scan_materialize_columns(
             )
         )
         for r in payload_ranges
-    ]
-    payload_data = [
-        DeviceSpan(buffer.ptr, buffer.size) for buffer in payload_buffers
     ]
 
     synchronize_stream(stream)
@@ -462,9 +456,6 @@ def test_hybrid_scan_has_next_table_chunk(
         )
         for r in filter_ranges
     ]
-    filter_data = [
-        DeviceSpan(buffer.ptr, buffer.size) for buffer in filter_buffers
-    ]
 
     synchronize_stream()
 
@@ -534,9 +525,6 @@ def test_hybrid_scan_chunked_reading(
             )
         )
         for r in filter_ranges
-    ]
-    filter_data = [
-        DeviceSpan(buffer.ptr, buffer.size) for buffer in filter_buffers
     ]
 
     synchronize_stream(stream)
