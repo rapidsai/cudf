@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -21,8 +21,8 @@ from cudf.testing import assert_eq
     ],
 )
 def test_series_update(index, other):
-    pd_data = pd.Series([1, 2, 3], index=index)
-    data = cudf.Series(pd_data)
+    ps = pd.Series([1, 2, 3], index=index)
+    data = cudf.Series(ps)
     gs = data.copy(deep=True)
     if isinstance(other, pd.Series):
         other = cudf.Series(other, nan_as_null=False)
@@ -31,8 +31,6 @@ def test_series_update(index, other):
     else:
         g_other = other
         p_other = other
-
-    ps = gs.to_pandas()
 
     ps.update(p_other)
     gs.update(g_other)
