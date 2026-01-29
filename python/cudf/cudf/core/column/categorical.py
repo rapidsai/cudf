@@ -200,10 +200,9 @@ class CategoricalColumn(column.ColumnBase):
                     )
             # We'll compare self's decategorized values later for non-CategoricalColumn
         else:
-            codes = column.as_column(
+            other = column.as_column(
                 self._encode(other), length=len(self), dtype=self.codes.dtype
-            )
-            other = codes._with_type_metadata(self.dtype)
+            )._with_type_metadata(self.dtype)
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
         if not self.ordered and op not in equality_ops:
             raise TypeError(
