@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -110,9 +110,7 @@ def factorize(
 
     labels = values._label_encoding(
         cats=cats,
-        dtype=np.dtype("int64")
-        if get_option("mode.pandas_compatible")
-        else None,
+        dtype=np.dtype("int64"),
     ).values
 
     # TODO: Avoid accessing Index from the top level namespace
