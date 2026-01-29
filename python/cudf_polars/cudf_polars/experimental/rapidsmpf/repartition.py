@@ -242,7 +242,7 @@ def _(
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Look up the reserved shuffle ID for this operation
-    collective_id = rec.state["collective_id_map"][ir]
+    collective_id = rec.state["collective_id_map"][ir][0]
 
     # Add python node
     nodes[ir] = [

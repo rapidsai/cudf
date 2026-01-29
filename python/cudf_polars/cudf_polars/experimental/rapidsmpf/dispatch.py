@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Dispatching for the RapidsMPF streaming runtime."""
 
@@ -76,7 +76,7 @@ class GenState(TypedDict):
     stats
         Statistics collector.
     collective_id_map
-        The mapping of IR nodes to collective IDs.
+        The mapping of IR nodes to lists of collective IDs.
     """
 
     context: Context
@@ -86,7 +86,7 @@ class GenState(TypedDict):
     ir_context: IRExecutionContext
     max_io_threads: int
     stats: StatsCollector
-    collective_id_map: dict[IR, int]
+    collective_id_map: dict[IR, list[int]]
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

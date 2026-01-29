@@ -35,7 +35,7 @@ class EvaluatePipelineCallback(Protocol):
         partition_info: MutableMapping[IR, PartitionInfo],
         config_options: ConfigOptions,
         stats: StatsCollector,
-        collective_id_map: dict[IR, int],
+        collective_id_map: dict[IR, list[int]],
         rmpf_context: Context | None = None,
         *,
         collect_metadata: bool = False,
@@ -58,7 +58,7 @@ def evaluate_pipeline_dask(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
-    shuffle_id_map: dict[IR, int],
+    collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
 ) -> tuple[pl.DataFrame, list[Metadata] | None]:
@@ -77,8 +77,8 @@ def evaluate_pipeline_dask(
         The configuration options.
     stats
         The statistics collector.
-    shuffle_id_map
-        Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
+    collective_id_map
+        Mapping from Shuffle/Repartition/Join IR nodes to reserved collective IDs.
     collect_metadata
         Whether to collect metadata.
 
@@ -94,7 +94,7 @@ def evaluate_pipeline_dask(
         partition_info,
         config_options,
         stats,
-        shuffle_id_map,
+        collective_id_map,
         collect_metadata=collect_metadata,
     )
     dfs: list[pl.DataFrame] = []
@@ -113,7 +113,7 @@ def _evaluate_pipeline_dask(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
-    shuffle_id_map: dict[IR, int],
+    collective_id_map: dict[IR, list[int]],
     dask_worker: Any = None,
     *,
     collect_metadata: bool = False,
@@ -133,8 +133,8 @@ def _evaluate_pipeline_dask(
         The configuration options.
     stats
         The statistics collector.
-    shuffle_id_map
-        Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
+    collective_id_map
+        Mapping from Shuffle/Repartition/Join IR nodes to reserved collective IDs.
     dask_worker
         Dask worker reference.
         This kwarg is automatically populated by Dask
@@ -167,7 +167,7 @@ def _evaluate_pipeline_dask(
             partition_info,
             config_options,
             stats,
-            shuffle_id_map,
+            collective_id_map,
             rmpf_context,
             collect_metadata=collect_metadata,
         )
