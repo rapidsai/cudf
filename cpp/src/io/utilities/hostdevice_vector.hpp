@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -88,8 +88,11 @@ class hostdevice_vector {
     return host_span<T const>{h_data}.subspan(0, size());
   }
 
-  operator cudf::device_span<T>() { return {device_ptr(), size()}; }
-  operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
+  operator cudf::device_span<T>() { return cudf::device_span<T>(device_ptr(), size()); }
+  operator cudf::device_span<T const>() const
+  {
+    return cudf::device_span<T const>(device_ptr(), size());
+  }
 
   void host_to_device_async(rmm::cuda_stream_view stream)
   {
@@ -147,8 +150,15 @@ class hostdevice_2dvector {
   {
   }
 
-  operator device_2dspan<T>() { return {device_span<T>{_data}, _size.second}; }
-  operator device_2dspan<T const>() const { return {device_span<T const>{_data}, _size.second}; }
+  operator device_2dspan<T>()
+  {
+    return device_2dspan<T>(device_span<T>(_data.device_ptr(), _data.size()), _size.second);
+  }
+  operator device_2dspan<T const>() const
+  {
+    return device_2dspan<T const>(device_span<T const>(_data.device_ptr(), _data.size()),
+                                  _size.second);
+  }
 
   device_2dspan<T> device_view() { return static_cast<device_2dspan<T>>(*this); }
   [[nodiscard]] device_2dspan<T const> device_view() const
@@ -156,8 +166,14 @@ class hostdevice_2dvector {
     return static_cast<device_2dspan<T const>>(*this);
   }
 
-  operator host_2dspan<T>() { return {host_span<T>{_data}, _size.second}; }
-  operator host_2dspan<T const>() const { return {host_span<T const>{_data}, _size.second}; }
+  operator host_2dspan<T>()
+  {
+    return host_2dspan<T>(host_span<T>(_data.host_ptr(), _data.size()), _size.second);
+  }
+  operator host_2dspan<T const>() const
+  {
+    return host_2dspan<T const>(host_span<T const>(_data.host_ptr(), _data.size()), _size.second);
+  }
 
   host_2dspan<T> host_view() { return static_cast<host_2dspan<T>>(*this); }
   [[nodiscard]] host_2dspan<T const> host_view() const
