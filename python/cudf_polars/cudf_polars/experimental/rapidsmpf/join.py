@@ -318,7 +318,7 @@ def _(
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
-                collective_id=rec.state["collective_id_map"][ir],
+                collective_id=rec.state["collective_id_map"][ir][0],
                 target_partition_size=target_partition_size,
             )
         ]
