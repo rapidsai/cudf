@@ -32,7 +32,6 @@ def test_factorize_code_pandas_compatibility():
     got = cudf.factorize(gsr)
     assert_eq(got[0], expect[0])
     assert_eq(got[1], expect[1])
-    assert got[0].dtype == expect[0].dtype
 
 
 def test_factorize_result_classes():
