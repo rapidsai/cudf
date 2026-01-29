@@ -455,8 +455,7 @@ class DynamicPlanningOptions:
     """
     Configuration for dynamic shuffle planning.
 
-    When dynamic planning is enabled (by setting this option to a
-    non-None value), shuffle decisions for GroupBy/Join/Unique operations
+    When enabled, shuffle decisions for GroupBy/Join/Unique operations
     are made at runtime by sampling real chunks.
 
     To enable dynamic planning, pass a ``DynamicPlanningOptions`` instance
