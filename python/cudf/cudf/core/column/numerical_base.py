@@ -114,7 +114,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         n = len(self)
         miu = self.mean()
         m3 = (((self - miu) ** 3).sum()) / n
-        m2 = self._reduce("var", ddof=0)
+        m2 = self.var(ddof=0)
 
         if m2 == 0:
             return np.float64(0)
