@@ -38,7 +38,6 @@ import pylibcudf.libcudf.io.hybrid_scan
 UseDataPageMask = pylibcudf.libcudf.io.hybrid_scan.use_data_page_mask
 
 __all__ = [
-    "DeviceSpan",
     "FileMetaData",
     "HybridScanReader",
     "UseDataPageMask",
@@ -85,29 +84,6 @@ cdef class FileMetaData:
     def created_by(self):
         """Get the application that created the file."""
         return self.c_obj.created_by.decode('utf-8')
-
-
-cdef class DeviceSpan:
-    """A non-owning view of device memory.
-
-    This class wraps a device_span<uint8_t> and provides a Python interface
-    for passing device memory to hybrid scan APIs.
-
-    Parameters
-    ----------
-    ptr : int
-        Device pointer as an integer (e.g., from __cuda_array_interface__)
-    size : int
-        Size of the memory region in bytes
-    """
-
-    def __init__(self, uintptr_t ptr, size_type size):
-        self.c_obj = device_span[const_uint8_t](<const_uint8_t*>ptr, size)
-
-    @property
-    def data(self):
-        """Get the device pointer as an integer."""
-        return <uintptr_t>self.c_obj.data()
 
 
 cdef class HybridScanReader:

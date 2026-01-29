@@ -16,11 +16,6 @@ class UseDataPageMask(IntEnum):
     YES: int
     NO: int
 
-class DeviceSpan:
-    def __init__(self, ptr: int, size: int) -> None: ...
-    @property
-    def data(self) -> int: ...
-
 class FileMetaData:
     @property
     def version(self) -> int: ...
