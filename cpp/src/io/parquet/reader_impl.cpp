@@ -544,7 +544,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   _reader_column_schema = options.get_column_schema();
 
   // Select only columns required by the options and filter
-  auto select_column_names = get_column_projection(options);
+  auto select_column_names =
+    get_column_projection(options, options.is_enabled_ignore_missing_columns());
 
   std::optional<std::vector<std::string>> filter_columns_names;
   if (options.get_filter().has_value() and
@@ -814,7 +815,7 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
 }
 
 std::optional<std::vector<std::string>> reader_impl::get_column_projection(
-  parquet_reader_options const& options) const
+  parquet_reader_options const& options, bool ignore_missing_columns) const
 {
   auto const has_column_names   = options.get_columns().has_value();
   auto const has_column_indices = options.get_column_indices().has_value();
@@ -828,7 +829,6 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   } else if (has_column_names) {
     return options.get_columns();
   } else {
-    auto const ignore_missing_columns = options.is_enabled_ignore_missing_columns();
     std::vector<std::string> col_names;
     auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
     for (auto const index : options.get_column_indices().value()) {

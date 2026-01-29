@@ -419,10 +419,11 @@ class reader_impl {
    * @brief Computes the names of columns to be read from the file, if specified.
    *
    * @param options The reader options
+   * @param ignore_missing_columns Whether to ignore non-existent projected columns
    * @return Names of columns to be read from the file if specified, `nullopt` otherwise
    */
   [[nodiscard]] std::optional<std::vector<std::string>> get_column_projection(
-    parquet_reader_options const& options) const;
+    parquet_reader_options const& options, bool ignore_missing_columns) const;
 
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
