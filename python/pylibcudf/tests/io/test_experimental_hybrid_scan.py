@@ -17,7 +17,11 @@ from pylibcudf.expressions import (
     Literal,
     Operation,
 )
-from pylibcudf.io.experimental import HybridScanReader, UseDataPageMask
+from pylibcudf.io.experimental import (
+    DeviceSpan,
+    HybridScanReader,
+    UseDataPageMask,
+)
 
 
 @pytest.fixture(scope="module")
@@ -327,13 +331,16 @@ def test_hybrid_scan_materialize_columns(
         )
         for r in filter_ranges
     ]
+    filter_data = [
+        DeviceSpan(buffer.ptr, buffer.size) for buffer in filter_buffers
+    ]
 
     synchronize_stream(stream)
 
     # Materialize filter columns (mr is optional, defaults to None)
     filter_result = simple_hybrid_scan_reader.materialize_filter_columns(
         filtered_row_groups,
-        filter_buffers,
+        filter_data,
         row_mask,
         use_data_page_mask,
         simple_parquet_options,
@@ -360,13 +367,16 @@ def test_hybrid_scan_materialize_columns(
         )
         for r in payload_ranges
     ]
+    payload_data = [
+        DeviceSpan(buffer.ptr, buffer.size) for buffer in payload_buffers
+    ]
 
     synchronize_stream(stream)
 
     # Materialize payload columns (mr is optional, defaults to None)
     payload_result = simple_hybrid_scan_reader.materialize_payload_columns(
         filtered_row_groups,
-        payload_buffers,
+        payload_data,
         row_mask,
         use_data_page_mask,
         simple_parquet_options,
@@ -447,6 +457,9 @@ def test_hybrid_scan_has_next_table_chunk(
         )
         for r in filter_ranges
     ]
+    filter_data = [
+        DeviceSpan(buffer.ptr, buffer.size) for buffer in filter_buffers
+    ]
 
     synchronize_stream()
 
@@ -457,7 +470,7 @@ def test_hybrid_scan_has_next_table_chunk(
         filtered_row_groups,
         row_mask,
         UseDataPageMask.NO,
-        filter_buffers,
+        filter_data,
         simple_parquet_options,
     )
 
@@ -515,6 +528,9 @@ def test_hybrid_scan_chunked_reading(
         )
         for r in filter_ranges
     ]
+    filter_data = [
+        DeviceSpan(buffer.ptr, buffer.size) for buffer in filter_buffers
+    ]
 
     synchronize_stream(stream)
 
@@ -528,7 +544,7 @@ def test_hybrid_scan_chunked_reading(
         filtered_row_groups,
         row_mask,
         UseDataPageMask.NO,
-        filter_buffers,
+        filter_data,
         simple_parquet_options,
         stream,
     )

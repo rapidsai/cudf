@@ -225,7 +225,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  auto expr_conv     = build_converted_expression(options.get_filter());
+  auto expr_conv     = build_converted_expression(options);
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _extended_metadata->filter_row_groups_with_stats(row_group_indices,
@@ -245,7 +245,7 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  auto expr_conv     = build_converted_expression(options.get_filter());
+  auto expr_conv     = build_converted_expression(options);
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   auto const bloom_filter_bytes =
@@ -264,7 +264,7 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
 
 std::vector<std::vector<size_type>>
 hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
-  cudf::host_span<rmm::device_buffer> dictionary_page_data,
+  cudf::host_span<cudf::device_span<uint8_t const> const> dictionary_page_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
@@ -275,7 +275,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  auto expr_conv     = build_converted_expression(options.get_filter());
+  auto expr_conv     = build_converted_expression(options);
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   // Collect literal and operator pairs for each input column with an (in)equality predicate
@@ -328,7 +328,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_bloom_filters(
-  cudf::host_span<rmm::device_buffer> bloom_filter_data,
+  cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
@@ -339,7 +339,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  auto expr_conv     = build_converted_expression(options.get_filter());
+  auto expr_conv     = build_converted_expression(options);
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _extended_metadata->filter_row_groups_with_bloom_filters(
@@ -375,7 +375,7 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_row_mask_with_page_
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  auto expr_conv     = build_converted_expression(options.get_filter());
+  auto expr_conv     = build_converted_expression(options);
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _extended_metadata->build_row_mask_with_page_index_stats(
@@ -472,7 +472,7 @@ hybrid_scan_reader_impl::all_column_chunks_byte_ranges(
 
 table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
   cudf::mutable_column_view& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
@@ -490,7 +490,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  _expr_conv = build_converted_expression(options.get_filter());
+  _expr_conv = build_converted_expression(options);
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
@@ -498,15 +498,14 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
       row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
   }
 
-  prepare_data(
-    read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+  prepare_data(read_mode::READ_ALL, row_group_indices, column_chunk_data, data_page_mask);
 
   return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::FILTER_COLUMNS, row_mask);
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
   cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
@@ -528,15 +527,14 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
       row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
   }
 
-  prepare_data(
-    read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+  prepare_data(read_mode::READ_ALL, row_group_indices, column_chunk_data, data_page_mask);
 
   return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::PAYLOAD_COLUMNS, row_mask);
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_all_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -549,9 +547,9 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns(
   select_columns(read_columns_mode::ALL_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  _expr_conv = build_converted_expression(options.get_filter());
+  _expr_conv = build_converted_expression(options);
 
-  prepare_data(read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), {});
+  prepare_data(read_mode::READ_ALL, row_group_indices, column_chunk_data, {});
 
   // Use the main reader's function
   return reader_impl::read_chunk_internal(read_mode::READ_ALL);
@@ -563,7 +561,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -581,7 +579,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  _expr_conv = build_converted_expression(options.get_filter());
+  _expr_conv = build_converted_expression(options);
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
@@ -589,8 +587,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
       row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
   }
 
-  prepare_data(
-    read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+  prepare_data(read_mode::CHUNKED_READ, row_group_indices, column_chunk_data, data_page_mask);
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns_chunk(
@@ -618,7 +615,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -640,8 +637,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
       row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
   }
 
-  prepare_data(
-    read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+  prepare_data(read_mode::CHUNKED_READ, row_group_indices, column_chunk_data, data_page_mask);
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns_chunk(
@@ -691,7 +687,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _output_chunk_read_limit = 0;
   _strings_to_categorical  = false;
   _reader_column_schema.reset();
-  _expr_conv = named_to_reference_converter(std::nullopt, {}, {});
+  _expr_conv = named_to_reference_converter(std::nullopt, {}, {}, {});
 }
 
 void hybrid_scan_reader_impl::initialize_options(
@@ -716,14 +712,16 @@ void hybrid_scan_reader_impl::initialize_options(
 }
 
 named_to_reference_converter hybrid_scan_reader_impl::build_converted_expression(
-  std::optional<std::reference_wrapper<const ast::expression>> filter)
+  parquet_reader_options const& options)
 {
-  if (not filter.has_value()) { return named_to_reference_converter(std::nullopt, {}, {}); }
+  if (not options.get_filter().has_value()) {
+    return named_to_reference_converter(std::nullopt, {}, {}, {});
+  }
 
   table_metadata metadata;
   populate_metadata(metadata);
-  auto expr_conv =
-    named_to_reference_converter(filter, metadata, _extended_metadata->get_schema_tree());
+  auto expr_conv = named_to_reference_converter(
+    options.get_filter(), metadata, _extended_metadata->get_schema_tree(), options.get_columns());
   CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
                "Columns names in filter expression must be convertible to index references");
   return expr_conv;
@@ -732,7 +730,7 @@ named_to_reference_converter hybrid_scan_reader_impl::build_converted_expression
 void hybrid_scan_reader_impl::prepare_data(
   read_mode mode,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
   cudf::host_span<bool const> data_page_mask)
 {
   // if we have not preprocessed at the whole-file level, do that now
@@ -747,7 +745,7 @@ void hybrid_scan_reader_impl::prepare_data(
   // handle any chunking work (ratcheting through the subpasses and chunks within
   // our current pass) if in bounds
   if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
-    handle_chunking(mode, std::move(column_chunk_buffers), data_page_mask);
+    handle_chunking(mode, column_chunk_data, data_page_mask);
   }
 }
 
