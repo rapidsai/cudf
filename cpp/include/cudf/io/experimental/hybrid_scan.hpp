@@ -12,7 +12,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
-#include <thrust/host_vector.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <utility>
@@ -148,8 +149,8 @@ enum class use_data_page_mask : bool {
  *
  * if (dict_page_byte_ranges.size()) {
  *   // Fetch dictionary page byte ranges into device buffers and create spans
- *   std::vector<rmm::device_buffer> dictionary_page_data =
- *     fetch_device_buffers(dict_page_byte_ranges);
+ *   std::vector<rmm::device_buffer> dictionary_page_buffers =
+ *     fetch_device_buffers(dict_page_byte_ranges, stream, mr);
  *   auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
  *
  *   // Prune row groups using dictionaries
@@ -165,7 +166,7 @@ enum class use_data_page_mask : bool {
  *
  * if (bloom_filter_byte_ranges.size()) {
  *   // Fetch bloom filter byte ranges into device buffers and create spans
- *   std::vector<rmm::device_buffer> bloom_filter_data =
+ *   std::vector<rmm::device_buffer> bloom_filter_buffers =
  *     fetch_device_buffers(bloom_filter_byte_ranges, stream, mr);
  *   auto bloom_filter_data = make_device_spans<uint8_t>(bloom_filter_buffers);
  *

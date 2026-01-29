@@ -95,7 +95,7 @@ def evaluate_logical_plan(
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
     # Reserve shuffle IDs for the entire pipeline execution
-    with ReserveOpIDs(ir) as shuffle_id_map:
+    with ReserveOpIDs(ir) as collective_id_map:
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
         # for cluster == "distributed".
@@ -113,7 +113,7 @@ def evaluate_logical_plan(
                 partition_info,
                 config_options,
                 stats,
-                shuffle_id_map,
+                collective_id_map,
                 collect_metadata=collect_metadata,
             )
         else:
@@ -123,7 +123,7 @@ def evaluate_logical_plan(
                 partition_info,
                 config_options,
                 stats,
-                shuffle_id_map,
+                collective_id_map,
                 collect_metadata=collect_metadata,
             )
 
@@ -135,7 +135,7 @@ def evaluate_pipeline(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
-    collective_id_map: dict[IR, int],
+    collective_id_map: dict[IR, list[int]],
     rmpf_context: Context | None = None,
     *,
     collect_metadata: bool = False,
@@ -154,7 +154,7 @@ def evaluate_pipeline(
     stats
         The statistics collector.
     collective_id_map
-        The mapping of IR nodes to collective IDs.
+        The mapping of IR nodes to lists of collective IDs.
     rmpf_context
         The RapidsMPF context.
     collect_metadata
@@ -412,7 +412,7 @@ def generate_network(
     stats: StatsCollector,
     *,
     ir_context: IRExecutionContext,
-    collective_id_map: dict[IR, int],
+    collective_id_map: dict[IR, list[int]],
     metadata_collector: list[Metadata] | None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
@@ -433,7 +433,7 @@ def generate_network(
     ir_context
         The execution context for the IR node.
     collective_id_map
-        The mapping of IR nodes to collective IDs.
+        The mapping of IR nodes to lists of collective IDs.
     metadata_collector
         The list to collect the final metadata.
         This list will be mutated when the network is executed.
@@ -477,8 +477,8 @@ def generate_network(
     nodes_dict, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
-    # Add node to drain metadata channel before pull_from_channel
-    # (since pull_from_channel doesn't accept a ChannelPair)
+    # Add node to drain metadata before pull_from_channel
+    # (since pull_from_channel doesn't handle metadata messages)
     ch_final_data: Channel[TableChunk] = context.create_channel()
     drain_node = metadata_drain_node(
         context,

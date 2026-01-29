@@ -20,6 +20,9 @@ from pylibcudf.libcudf.io.hybrid_scan cimport const_uint8_t
 from pylibcudf.libcudf.utilities.span cimport device_span
 
 
+cdef device_span[const_uint8_t] _get_device_span(object obj) except *
+
+
 cdef class FileMetaData:
     cdef cpp_FileMetaData c_obj
 
@@ -29,7 +32,3 @@ cdef class FileMetaData:
 
 cdef class HybridScanReader:
     cdef unique_ptr[cpp_hybrid_scan_reader] c_obj
-
-
-cdef class DeviceSpan:
-    cdef device_span[const_uint8_t] c_obj

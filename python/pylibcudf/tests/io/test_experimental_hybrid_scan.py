@@ -7,7 +7,7 @@ import pyarrow.parquet as pq
 import pytest
 from utils import synchronize_stream
 
-from rmm import DeviceBuffer
+import rmm
 from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
@@ -18,7 +18,6 @@ from pylibcudf.expressions import (
     Operation,
 )
 from pylibcudf.io.experimental import (
-    DeviceSpan,
     HybridScanReader,
     UseDataPageMask,
 )
@@ -324,10 +323,12 @@ def test_hybrid_scan_materialize_columns(
     filter_ranges = simple_hybrid_scan_reader.filter_column_chunks_byte_ranges(
         filtered_row_groups, simple_parquet_options
     )
-    filter_buffers = [
-        DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size],
-            plc.utils._get_stream(stream),
+    filter_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                simple_parquet_bytes[r.offset : r.offset + r.size],
+                plc.utils._get_stream(stream),
+            )
         )
         for r in filter_ranges
     ]
@@ -360,10 +361,12 @@ def test_hybrid_scan_materialize_columns(
             filtered_row_groups, simple_parquet_options
         )
     )
-    payload_buffers = [
-        DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size],
-            plc.utils._get_stream(stream),
+    payload_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                simple_parquet_bytes[r.offset : r.offset + r.size],
+                plc.utils._get_stream(stream),
+            )
         )
         for r in payload_ranges
     ]
@@ -450,10 +453,12 @@ def test_hybrid_scan_has_next_table_chunk(
     filter_ranges = simple_hybrid_scan_reader.filter_column_chunks_byte_ranges(
         filtered_row_groups, simple_parquet_options
     )
-    filter_buffers = [
-        DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size],
-            plc.utils._get_stream(),
+    filter_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                simple_parquet_bytes[r.offset : r.offset + r.size],
+                plc.utils._get_stream(),
+            )
         )
         for r in filter_ranges
     ]
@@ -521,10 +526,12 @@ def test_hybrid_scan_chunked_reading(
     filter_ranges = simple_hybrid_scan_reader.filter_column_chunks_byte_ranges(
         filtered_row_groups, simple_parquet_options
     )
-    filter_buffers = [
-        DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size],
-            plc.utils._get_stream(stream),
+    filter_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                simple_parquet_bytes[r.offset : r.offset + r.size],
+                plc.utils._get_stream(stream),
+            )
         )
         for r in filter_ranges
     ]

@@ -78,7 +78,7 @@ std::vector<cudf::device_span<T const>> make_device_spans(
 {
   std::vector<cudf::device_span<T const>> device_spans(buffers.size());
   std::transform(buffers.begin(), buffers.end(), device_spans.begin(), [](auto const& buffer) {
-    return cudf::device_span<T>{static_cast<T const*>((buffer.data())), buffer.size()};
+    return cudf::device_span<T const>{static_cast<T const*>((buffer.data())), buffer.size()};
   });
   return device_spans;
 }
@@ -105,7 +105,7 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
     byte_ranges.begin(), byte_ranges.end(), buffers.begin(), [&](auto const& byte_range) {
       auto const chunk_offset = host_buffer.data() + byte_range.offset();
       auto const chunk_size   = static_cast<size_t>(byte_range.size());
-      auto buffer = rmm::device_buffer(chunk_size, stream, cudf::get_current_device_resource_ref());
+      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
       cudf::detail::cuda_memcpy_async(
         cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
         cudf::host_span<uint8_t const>{chunk_offset, chunk_size},

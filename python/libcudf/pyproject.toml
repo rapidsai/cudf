@@ -17,7 +17,7 @@ authors = [
     { name = "NVIDIA Corporation" },
 ]
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Intended Audience :: Developers",
     "Topic :: Database",
@@ -40,12 +40,12 @@ libcudf = "libcudf"
 
 [tool.pydistcheck]
 select = [
+    # note: max_allowed_size_compressed is set as a command-line arg
     "distro-too-large-compressed",
 ]
+
 # Default precision is 2. Bump this a bit for better visibility.
 output_file_size_precision = 4
-# PyPI limit is 750 MiB, fail CI before we get too close to that
-max_allowed_size_compressed = '675M'
 
 [tool.scikit-build]
 build-dir = "build/{wheel_tag}"

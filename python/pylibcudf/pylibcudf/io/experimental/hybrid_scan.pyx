@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint8_t, uintptr_t
+from libc.stddef cimport size_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -30,6 +31,8 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport device_span, host_span
 from pylibcudf.utils cimport _get_memory_resource, _get_stream
 
+from pylibcudf.span import is_span
+
 import pylibcudf.libcudf.io.hybrid_scan
 
 UseDataPageMask = pylibcudf.libcudf.io.hybrid_scan.use_data_page_mask
@@ -40,6 +43,17 @@ __all__ = [
     "HybridScanReader",
     "UseDataPageMask",
 ]
+
+
+cdef device_span[const_uint8_t] _get_device_span(object obj) except *:
+    """Convert a Span-like object to a device_span<const uint8_t>."""
+    if not is_span(obj):
+        raise TypeError(
+            f"Object of type {type(obj)} does not implement the Span protocol"
+        )
+    return device_span[const_uint8_t](<const_uint8_t*>
+                                      <uintptr_t>obj.ptr,
+                                      <size_t>obj.size)
 
 
 cdef class FileMetaData:
@@ -303,8 +317,8 @@ cdef class HybridScanReader:
 
         Parameters
         ----------
-        dictionary_page_data : list[DeviceSpan]
-            Device spans of buffers containing dictionary page data
+        dictionary_page_data : list[Span]
+            Span-like objects containing dictionary page data
         row_group_indices : list[int]
             Input row group indices
         options : ParquetReaderOptions
@@ -318,11 +332,9 @@ cdef class HybridScanReader:
             Filtered row group indices
         """
         cdef vector[device_span[const_uint8_t]] spans_vec
-        cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         for span in dictionary_page_data:
-            dev_span = <DeviceSpan>span
-            spans_vec.push_back(dev_span.c_obj)
+            spans_vec.push_back(_get_device_span(span))
 
         cdef vector[size_type] indices_vec = row_group_indices
 
@@ -348,8 +360,8 @@ cdef class HybridScanReader:
 
         Parameters
         ----------
-        bloom_filter_data : list[DeviceSpan]
-            Device spans of buffers containing bloom filter data
+        bloom_filter_data : list[Span]
+            Span-like objects containing bloom filter data
         row_group_indices : list[int]
             Input row group indices
         options : ParquetReaderOptions
@@ -363,11 +375,9 @@ cdef class HybridScanReader:
             Filtered row group indices
         """
         cdef vector[device_span[const_uint8_t]] spans_vec
-        cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         for span in bloom_filter_data:
-            dev_span = <DeviceSpan>span
-            spans_vec.push_back(dev_span.c_obj)
+            spans_vec.push_back(_get_device_span(span))
 
         cdef vector[size_type] indices_vec = row_group_indices
 
@@ -462,8 +472,8 @@ cdef class HybridScanReader:
         ----------
         row_group_indices : list[int]
             Input row group indices
-        column_chunk_data : list[DeviceSpan]
-            Device spans of buffers containing column chunk data of filter columns
+        column_chunk_data : list[Span]
+            Span-like objects containing column chunk data of filter columns
         row_mask : Column
             Mutable boolean column indicating surviving rows
         mask_data_pages : UseDataPageMask
@@ -481,12 +491,10 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
 
         cdef vector[device_span[const_uint8_t]] spans_vec
-        cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         for span in column_chunk_data:
-            dev_span = <DeviceSpan>span
-            spans_vec.push_back(dev_span.c_obj)
+            spans_vec.push_back(_get_device_span(span))
 
         cdef mutable_column_view mask_view = row_mask.mutable_view()
         cdef table_with_metadata c_result = \
@@ -545,8 +553,8 @@ cdef class HybridScanReader:
         ----------
         row_group_indices : list[int]
             Input row group indices
-        column_chunk_data : list[DeviceSpan]
-            Device spans of buffers containing column chunk data of payload columns
+        column_chunk_data : list[Span]
+            Span-like objects containing column chunk data of payload columns
         row_mask : Column
             Boolean column indicating surviving rows
         mask_data_pages : UseDataPageMask
@@ -564,12 +572,10 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
 
         cdef vector[device_span[const_uint8_t]] spans_vec
-        cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         for span in column_chunk_data:
-            dev_span = <DeviceSpan>span
-            spans_vec.push_back(dev_span.c_obj)
+            spans_vec.push_back(_get_device_span(span))
 
         cdef column_view mask_view = row_mask.view()
         cdef table_with_metadata c_result = \
@@ -611,8 +617,8 @@ cdef class HybridScanReader:
             Boolean column indicating surviving rows
         mask_data_pages : UseDataPageMask
             Whether to use a data page mask
-        column_chunk_data : list[DeviceSpan]
-            Device spans of buffers containing column chunk data of filter columns
+        column_chunk_data : list[Span]
+            Span-like objects containing column chunk data of filter columns
         options : ParquetReaderOptions
             Parquet reader options
         stream : Stream, optional
@@ -623,12 +629,10 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
 
         cdef vector[device_span[const_uint8_t]] spans_vec
-        cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         for span in column_chunk_data:
-            dev_span = <DeviceSpan>span
-            spans_vec.push_back(dev_span.c_obj)
+            spans_vec.push_back(_get_device_span(span))
 
         cdef column_view mask_view = row_mask.view()
         self.c_obj.get()[0].setup_chunking_for_filter_columns(
@@ -700,8 +704,8 @@ cdef class HybridScanReader:
             Boolean column indicating surviving rows
         mask_data_pages : UseDataPageMask
             Whether to use a data page mask
-        column_chunk_data : list[DeviceSpan]
-            Device spans of buffers containing column chunk data of payload columns
+        column_chunk_data : list[Span]
+            Span-like objects containing column chunk data of payload columns
         options : ParquetReaderOptions
             Parquet reader options
         stream : Stream, optional
@@ -712,12 +716,10 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
 
         cdef vector[device_span[const_uint8_t]] spans_vec
-        cdef DeviceSpan dev_span
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         for span in column_chunk_data:
-            dev_span = <DeviceSpan>span
-            spans_vec.push_back(dev_span.c_obj)
+            spans_vec.push_back(_get_device_span(span))
 
         cdef column_view mask_view = row_mask.view()
         self.c_obj.get()[0].setup_chunking_for_payload_columns(

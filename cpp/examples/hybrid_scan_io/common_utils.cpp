@@ -143,8 +143,7 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
       byte_ranges.begin(), byte_ranges.end(), buffers.begin(), [&](auto const& byte_range) {
         auto const chunk_offset = host_buffer.data() + byte_range.offset();
         auto const chunk_size   = static_cast<size_t>(byte_range.size());
-        auto buffer =
-          rmm::device_buffer(chunk_size, stream, cudf::get_current_device_resource_ref());
+        auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
         cudf::detail::cuda_memcpy_async(
           cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
           cudf::host_span<uint8_t const>{chunk_offset, chunk_size},

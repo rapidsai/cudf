@@ -1097,17 +1097,17 @@ class GroupBy(Serializable, Reducible, Scannable):
                     key = (col_name, agg_name)
                 else:
                     key = col_name
-                if (
-                    agg in {list, "collect"}
-                    and orig_dtype != col.dtype.element_type
-                ):
-                    # Structs lose their labels which we reconstruct here
-                    col = col._with_type_metadata(
-                        get_dtype_of_same_kind(
-                            orig_dtype, ListDtype(orig_dtype)
-                        )
+                if agg in {list, "collect"}:
+                    # Collect wraps the original dtype in ListDtype (e.g., int -> list<int>)
+                    new_dtype = get_dtype_of_same_kind(
+                        orig_dtype, ListDtype(orig_dtype)
                     )
+                    col = ColumnBase.create(col.plc_column, new_dtype)
 
+                # Default: use column as-is
+                data[key] = col
+
+                # Override for specific aggregation types that need dtype adjustments
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
                     data[key] = col.astype(
                         get_dtype_of_same_kind(orig_dtype, np.dtype(np.int64))
@@ -1125,7 +1125,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 ):
                     data[key] = col.astype(orig_dtype)
-                else:
+                elif agg not in {list, "collect"}:
+                    # For non-collect aggregations, apply original dtype metadata
                     if isinstance(orig_dtype, DecimalDtype):
                         # `col` has a different precision than `orig_dtype`
                         # hence we only preserve the kind of the dtype
@@ -3049,7 +3050,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         raise NotImplementedError("expanding is currently not implemented")
 
-    def any(self, skipna: bool = True):
+    def any(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if any value in the group is truthful, else False.
 
@@ -3057,7 +3058,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         raise NotImplementedError("any is currently not implemented")
 
-    def all(self, skipna: bool = True):
+    def all(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if all values in the group are truthful, else False.
 
