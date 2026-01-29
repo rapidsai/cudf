@@ -698,11 +698,6 @@ class StreamingExecutor:
         or use regular pageable host memory. Pinned host memory offers higher
         bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
-    profile_output
-        Path to write a runtime profile file. When set, the executor will
-        track actual row counts and algorithm decisions for each IR node
-        and write them to this file after execution. This is useful for
-        debugging dynamic planning decisions. Default is None (no profiling).
 
     Notes
     -----
@@ -817,11 +812,6 @@ class StreamingExecutor:
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
-    profile_output: str | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__PROFILE_OUTPUT", str, default=None
-        )
-    )
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
@@ -933,17 +923,13 @@ class StreamingExecutor:
                 DynamicPlanningOptions(**opts),
             )
 
-        # Set broadcast_join_limit default after dynamic_planning is processed
         if self.broadcast_join_limit == 0:
-            if self.dynamic_planning is not None:
-                # With dynamic planning, use conservative threshold (1x target_partition_size)
-                limit = 1
-            elif self.cluster == "distributed":
-                limit = 2
-            else:
+            object.__setattr__(
+                self,
+                "broadcast_join_limit",
                 # Usually better to avoid shuffling for single gpu with UVM
-                limit = 32
-            object.__setattr__(self, "broadcast_join_limit", limit)
+                2 if self.cluster == "distributed" else 32,
+            )
 
         if self.cluster == "distributed":
             if self.sink_to_directory is False:
