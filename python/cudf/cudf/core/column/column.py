@@ -400,6 +400,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "memory_usage",
             "is_monotonic_increasing",
             "is_monotonic_decreasing",
+            "codes",  # CategoricalColumn only
         )
         for attr in attrs:
             try:

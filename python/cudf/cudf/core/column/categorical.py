@@ -96,8 +96,14 @@ class CategoricalColumn(column.ColumnBase):
     def categories(self) -> ColumnBase:
         return self.dtype.categories._column
 
-    @property
+    @cached_property
     def codes(self) -> NumericalColumn:
+        """
+        The integer codes representing each category.
+
+        Cached because codes wraps self.plc_column which is immutable.
+        Cache is cleared by _clear_cache() when plc_column changes.
+        """
         return cudf.core.column.NumericalColumn._from_preprocessed(
             self.plc_column, self.dtype.codes_dtype
         )
