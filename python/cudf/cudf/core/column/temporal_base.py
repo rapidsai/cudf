@@ -139,14 +139,14 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                     raise NotImplementedError(
                         "Binary operations with timezone aware operands is not supported."
                     )
-                other = other.to_numpy()
+                other = other.to_numpy().astype(f"M8[{self.time_unit}]")
             elif self.dtype.kind == "M" and isinstance(other, str):
                 try:
                     other = pd.Timestamp(other)
                 except ValueError:
                     return NotImplemented
             elif self.dtype.kind == "m" and isinstance(other, pd.Timedelta):
-                other = other.to_numpy()
+                other = other.to_numpy().astype(f"m8[{self.time_unit}]")
             elif isinstance(other, (np.datetime64, np.timedelta64)):
                 unit = np.datetime_data(other)[0]
                 if unit not in {"s", "ms", "us", "ns"}:
@@ -193,6 +193,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
     @functools.cached_property
     def time_unit(self) -> str:
+        if isinstance(self.dtype, pd.ArrowDtype):
+            return getattr(self.dtype.pyarrow_dtype, "unit", "ns")
         return np.datetime_data(self.dtype)[0]
 
     @property
@@ -218,7 +220,12 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return result
         result = result.as_py()
         if cudf.get_option("mode.pandas_compatible"):
-            return self._PD_SCALAR(result)
+            pd_scalar = self._PD_SCALAR(result)
+            if isinstance(self.dtype, pd.ArrowDtype) and hasattr(
+                pd_scalar, "as_unit"
+            ):
+                return pd_scalar.as_unit(self.time_unit)
+            return pd_scalar
         elif isinstance(result, self._PD_SCALAR):
             return result.to_numpy()
         return self.dtype.type(result).astype(self.dtype, copy=False)
