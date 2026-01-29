@@ -98,8 +98,8 @@ public class DeltaLake {
    * @return A Table containing the filtered data with a prepended UINT64 index column.
    */
   public static Table readDeltaParquet(ParquetOptions opts,
-                                  HostMemoryBuffer[] dataBuffers,
-                                  DeletionVectorInfo[] deletionVectorInfos) {
+                                       HostMemoryBuffer[] dataBuffers,
+                                       DeletionVectorInfo[] deletionVectorInfos) {
     return readDeltaParquet(opts, dataBuffers, null, deletionVectorInfos);
   }
 
@@ -119,10 +119,59 @@ public class DeltaLake {
    * @return A Table containing the filtered data with a prepended UINT64 index column.
    */
   public static Table readDeltaParquet(ParquetOptions opts,
-                                  HostMemoryBuffer[] dataBuffers,
-                                  int[] rowGroups,
-                                  DeletionVectorInfo[] deletionVectorInfos) {
+                                       HostMemoryBuffer[] dataBuffers,
+                                       int[][] rowGroups,
+                                       DeletionVectorInfo[] deletionVectorInfos) {
     long[] dataBufferAddrsSizes = getAddrsAndSizes(dataBuffers);
+    return readDeltaParquet(opts, null, dataBufferAddrsSizes, rowGroups, deletionVectorInfos);
+  }
+
+  /**
+   * Reads a Parquet file with deletion vector support.
+   *
+   * Reads a Parquet file, prepends an index column to the table, and applies the deletion vector
+   * filter. If row group metadata is not provided, the index column will be a simple sequence
+   * from 0 to the number of rows. If the deletion vector is null or empty, the table with the
+   * prepended index column is returned as-is without filtering.
+   *
+   * @param opts ParquetOptions
+   * @param inputFilePaths Array of input Parquet file paths.
+   * @param rowGroups Row group indices to read
+   * @param deletionVectorInfos Array of DeletionVectorInfo objects representing deletion vectors
+   *                            for each Parquet file to read.
+   * @return A Table containing the filtered data with a prepended UINT64 index column.
+   */
+  public static Table readDeltaParquet(ParquetOptions opts,
+                                       String[] inputFilePaths,
+                                       int[][] rowGroups,
+                                       DeletionVectorInfo[] deletionVectorInfos) {
+    return readDeltaParquet(opts, inputFilePaths, null, rowGroups, deletionVectorInfos);
+  }
+
+  /**
+   * Reads a Parquet file with deletion vector support.
+   *
+   * Reads a Parquet file, prepends an index column to the table, and applies the deletion vector
+   * filter. If row group metadata is not provided, the index column will be a simple sequence
+   * from 0 to the number of rows. If the deletion vector is null or empty, the table with the
+   * prepended index column is returned as-is without filtering.
+   *
+   * @param opts ParquetOptions
+   * @param inputFilePaths Array of input Parquet file paths.
+   * @param dataBufferAddrsSizes Array of addresses and sizes for data buffers containing the Parquet file data.
+   * @param rowGroups Row group indices to read
+   * @param deletionVectorInfos Array of DeletionVectorInfo objects representing deletion vectors
+   *                            for each Parquet file to read.
+   * @return A Table containing the filtered data with a prepended UINT64 index column.
+   */
+  private static Table readDeltaParquet(ParquetOptions opts,
+                                        String[] inputFilePaths,
+                                        long[] dataBufferAddrsSizes,
+                                        int[][] rowGroups,
+                                        DeletionVectorInfo[] deletionVectorInfos) {
+    if (inputFilePaths != null && dataBufferAddrsSizes != null) {
+      throw new IllegalArgumentException("Cannot pass in both inputFilePaths and dataBufferAddrsSizes.");
+    }
     List<HostMemoryBuffer> serializedBitmapList = new ArrayList<>(deletionVectorInfos.length);
     List<Integer> deletionVectorRowCountsList = new ArrayList<>(deletionVectorInfos.length);
     List<Long> rowGroupOffsetsList = new ArrayList<>(deletionVectorInfos.length);
@@ -148,7 +197,7 @@ public class DeltaLake {
     int[] rowGroupNumRows = rowGroupNumRowsList.stream().mapToInt(Integer::intValue).toArray();
     long[] columnHandles = readDeltaParquet(opts.getIncludeColumnNames(),
                                             opts.getReadBinaryAsString(),
-                                            null,
+                                            inputFilePaths,
                                             dataBufferAddrsSizes,
                                             rowGroups,
                                             opts.timeUnit().typeId.getNativeId(),
@@ -157,6 +206,76 @@ public class DeltaLake {
                                             rowGroupOffsets,
                                             rowGroupNumRows);
     return new Table(columnHandles);
+  }
+
+  /**
+   * Construct the reader instance from a read limit and data in host memory buffers.
+   *
+   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+   *                           or 0 if there is no limit.
+   * @param passReadLimit Limit on the amount of memory used for reading and decompressing data or
+   *                      0 if there is no limit
+   * @param opts The options for Parquet reading.
+   * @param dataBuffers Array of HostMemoryBuffers containing the Parquet file data.
+   * @param rowGroups Row group indices to read
+   * @param deletionVectorInfos Array of DeletionVectorInfo objects representing deletion vectors
+   *                            for each Parquet file to read.
+   */
+  public static ParquetChunkedReader newParquetChunkedReader(
+    long chunkSizeByteLimit,
+    long passReadLimit,
+    ParquetOptions opts,
+    HostMemoryBuffer[] dataBuffers,
+    DeletionVectorInfo[] deletionVectorInfos) {
+    long[] dataBufferAddrsSizes = getAddrsAndSizes(dataBuffers);
+    return new ParquetChunkedReader(chunkSizeByteLimit, passReadLimit, opts, null, dataBufferAddrsSizes, null, deletionVectorInfos);
+  }
+
+  /**
+   * Construct the reader instance from a read limit and data in host memory buffers.
+   *
+   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+   *                           or 0 if there is no limit.
+   * @param passReadLimit Limit on the amount of memory used for reading and decompressing data or
+   *                      0 if there is no limit
+   * @param opts The options for Parquet reading.
+   * @param dataBuffers Array of HostMemoryBuffers containing the Parquet file data.
+   * @param rowGroups Row group indices to read
+   * @param deletionVectorInfos Array of DeletionVectorInfo objects representing deletion vectors
+   *                            for each Parquet file to read.
+   */
+  public static ParquetChunkedReader newParquetChunkedReader(
+    long chunkSizeByteLimit,
+    long passReadLimit,
+    ParquetOptions opts,
+    HostMemoryBuffer[] dataBuffers,
+    int[][] rowGroups,
+    DeletionVectorInfo[] deletionVectorInfos) {
+    long[] dataBufferAddrsSizes = getAddrsAndSizes(dataBuffers);
+    return new ParquetChunkedReader(chunkSizeByteLimit, passReadLimit, opts, null, dataBufferAddrsSizes, rowGroups, deletionVectorInfos);
+  }
+
+  /**
+   * Construct the reader instance from a read limit and data in host memory buffers.
+   *
+   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+   *                           or 0 if there is no limit.
+   * @param passReadLimit Limit on the amount of memory used for reading and decompressing data or
+   *                      0 if there is no limit
+   * @param opts The options for Parquet reading.
+   * @param inputFilePaths Array of input file paths containing the Parquet file data.
+   * @param rowGroups Row group indices to read
+   * @param deletionVectorInfos Array of DeletionVectorInfo objects representing deletion vectors
+   *                            for each Parquet file to read.
+   */
+  public static ParquetChunkedReader newParquetChunkedReader(
+    long chunkSizeByteLimit,
+    long passReadLimit,
+    ParquetOptions opts,
+    String[] inputFilePaths,
+    int[][] rowGroups,
+    DeletionVectorInfo[] deletionVectorInfos) {
+    return new ParquetChunkedReader(chunkSizeByteLimit, passReadLimit, opts, inputFilePaths, null, rowGroups, deletionVectorInfos);
   }
 
   public static class ParquetChunkedReader implements AutoCloseable {
@@ -189,37 +308,21 @@ public class DeltaLake {
      * @param passReadLimit Limit on the amount of memory used for reading and decompressing data or
      *                      0 if there is no limit
      * @param opts The options for Parquet reading.
-     * @param dataBuffers Array of HostMemoryBuffers containing the Parquet file data.
+     * @param inputFilePaths Array of input file paths containing the Parquet file data.
+     * @param dataBufferAddrsSizes Array of addresses and sizes for data buffers containing the Parquet file data.
      * @param rowGroups Row group indices to read
      * @param deletionVectorInfos Array of DeletionVectorInfo objects representing deletion vectors
      *                            for each Parquet file to read.
      */
-    public ParquetChunkedReader(long chunkSizeByteLimit, long passReadLimit,
+    private ParquetChunkedReader(long chunkSizeByteLimit, long passReadLimit,
                                 ParquetOptions opts,
-                                HostMemoryBuffer[] dataBuffers,
+                                String[] inputFilePaths,
+                                long[] dataBufferAddrsSizes,
+                                int[][] rowGroups,
                                 DeletionVectorInfo[] deletionVectorInfos) {
-      this(chunkSizeByteLimit, passReadLimit, opts, dataBuffers, null, deletionVectorInfos);
-    }
-
-    /**
-     * Construct the reader instance from a read limit and data in host memory buffers.
-     *
-     * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
-     *                           or 0 if there is no limit.
-     * @param passReadLimit Limit on the amount of memory used for reading and decompressing data or
-     *                      0 if there is no limit
-     * @param opts The options for Parquet reading.
-     * @param dataBuffers Array of HostMemoryBuffers containing the Parquet file data.
-     * @param rowGroups Row group indices to read
-     * @param deletionVectorInfos Array of DeletionVectorInfo objects representing deletion vectors
-     *                            for each Parquet file to read.
-     */
-    public ParquetChunkedReader(long chunkSizeByteLimit, long passReadLimit,
-                                ParquetOptions opts,
-                                HostMemoryBuffer[] dataBuffers,
-                                int[] rowGroups,
-                                DeletionVectorInfo[] deletionVectorInfos) {
-      long[] addrsSizes = getAddrsAndSizes(dataBuffers);
+      if (inputFilePaths != null && dataBufferAddrsSizes != null) {
+        throw new IllegalArgumentException("Cannot pass in both inputFilePaths and dataBuffers.");
+      }
       List<HostMemoryBuffer> serializedBitmapList = new ArrayList<>(deletionVectorInfos.length);
       List<Integer> deletionVectorRowCountsList = new ArrayList<>(deletionVectorInfos.length);
       List<Long> rowGroupOffsetsList = new ArrayList<>(deletionVectorInfos.length);
@@ -244,17 +347,14 @@ public class DeltaLake {
       long[] rowGroupOffsets = rowGroupOffsetsList.stream().mapToLong(Long::longValue).toArray();
       int[] rowGroupNumRows = rowGroupNumRowsList.stream().mapToInt(Integer::intValue).toArray();
       long[] handles = createDeltaParquetChunkedReader(chunkSizeByteLimit, passReadLimit,
-        opts.getIncludeColumnNames(), opts.getReadBinaryAsString(), null,
-          addrsSizes, rowGroups, opts.timeUnit().typeId.getNativeId(),
+        opts.getIncludeColumnNames(), opts.getReadBinaryAsString(), inputFilePaths,
+          dataBufferAddrsSizes, rowGroups, opts.timeUnit().typeId.getNativeId(),
           bitmapAddrsSizes, deletionVectorRowCounts, rowGroupOffsets, rowGroupNumRows);
       readerHandle = handles[0];
       if (readerHandle == 0) {
         throw new IllegalStateException("Cannot create native chunked Parquet reader object.");
       }
       multiHostBufferSourceHandle = handles[1];
-      if (multiHostBufferSourceHandle == 0) {
-        throw new IllegalStateException("Cannot create native multi-host buffer source object.");
-      }
       deletionVectorParamHandle = handles[2];
       if (deletionVectorParamHandle == 0) {
         throw new IllegalStateException("Cannot create native deletion vector param object.");
@@ -326,9 +426,9 @@ public class DeltaLake {
 
   private static native long[] readDeltaParquet(String[] filterColumnNames,
                                                 boolean[] binaryToString,
-                                                String filePath,
+                                                String[] inputFilePaths,
                                                 long[] addrsAndSizes,
-                                                int[] rowGroups,
+                                                int[][] rowGroups,
                                                 int timeUnit,
                                                 long[] serializedRoaring64,
                                                 int[] deletionVectorRowCounts,
@@ -340,9 +440,9 @@ public class DeltaLake {
                                                                long passReadLimit,
                                                                String[] filterColumnNames,
                                                                boolean[] binaryToString,
-                                                               String filePath,
+                                                               String[] inputFilePaths,
                                                                long[] addrsAndSizes,
-                                                               int[] rowGroups,
+                                                               int[][] rowGroups,
                                                                int timeUnit,
                                                                long[] serializedRoaringBitmaps,
                                                                int[] deletionVectorRowCounts,

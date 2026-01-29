@@ -14,7 +14,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
 import static ai.rapids.cudf.AssertUtils.assertTableTypes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,11 +58,11 @@ class DeltaLakeTableTest extends CudfTestBase {
     ParquetOptions opts = ParquetOptions.DEFAULT;
     byte[][] data = TableTestUtils.sliceBytes(TableTestUtils.arrayFrom(TEST_FILE2), 1);
     byte[] bitmapData = TableTestUtils.arrayFrom(DELETED_ROWS_FILE2);
-    int[] rowGroups = new int[] {1, 3};
+    int[][] rowGroups = new int[][] { {1, 3} };
     try (HostMemoryBufferArray array = TableTestUtils.buffersFrom(data);
          HostMemoryBufferArray bitmapArray = TableTestUtils.buffersFrom(new byte[][] { bitmapData })) {
-      long[] rowGroupOffsets = Arrays.stream(rowGroups).mapToLong(i -> i * 10000L).toArray();
-      int[] rowGroupNumRows = Arrays.stream(rowGroups).map(i -> 10000).toArray();
+      long[] rowGroupOffsets = Arrays.stream(rowGroups[0]).mapToLong(i -> i * 10000L).toArray();
+      int[] rowGroupNumRows = Arrays.stream(rowGroups[0]).map(i -> 10000).toArray();
       DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], rowGroupOffsets, rowGroupNumRows);
       try (Table table = DeltaLake.readDeltaParquet(opts, array.buffers, rowGroups, new DeletionVectorInfo[] { dvInfo })) {
         long rows = table.getRowCount();
@@ -77,7 +81,7 @@ class DeltaLakeTableTest extends CudfTestBase {
          HostMemoryBufferArray bitmapArray = TableTestUtils.buffersFrom(new byte[][] { bitmapData })) {
       ParquetOptions opts = ParquetOptions.DEFAULT;
       DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], null, null);
-      try (ParquetChunkedReader reader = new ParquetChunkedReader(240000, 0, opts, array.buffers,
+      try (ParquetChunkedReader reader = DeltaLake.newParquetChunkedReader(240000, 0, opts, array.buffers,
               new DeletionVectorInfo[] { dvInfo })) {
         int numChunks = 0;
         long totalRows = 0;
@@ -98,14 +102,14 @@ class DeltaLakeTableTest extends CudfTestBase {
   void testChunkedReadParquetSomeRowGroups() throws Exception {
     byte[][] data = TableTestUtils.sliceBytes(TableTestUtils.arrayFrom(TEST_FILE2), 2);
     byte[] bitmapData = TableTestUtils.arrayFrom(DELETED_ROWS_FILE2);
-    int[] rowGroups = new int[] {1, 3};
+    int[][] rowGroups = new int[][] { {1, 3} };
     try (HostMemoryBufferArray array = TableTestUtils.buffersFrom(data);
          HostMemoryBufferArray bitmapArray = TableTestUtils.buffersFrom(new byte[][] { bitmapData })) {
       ParquetOptions opts = ParquetOptions.DEFAULT;
-      long[] rowGroupOffsets = Arrays.stream(rowGroups).mapToLong(i -> i * 10000L).toArray();
-      int[] rowGroupNumRows = Arrays.stream(rowGroups).map(i -> 10000).toArray();
+      long[] rowGroupOffsets = Arrays.stream(rowGroups[0]).mapToLong(i -> i * 10000L).toArray();
+      int[] rowGroupNumRows = Arrays.stream(rowGroups[0]).map(i -> 10000).toArray();
       DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], rowGroupOffsets, rowGroupNumRows);
-      try (ParquetChunkedReader reader = new ParquetChunkedReader(120000, 0, opts, array.buffers,
+      try (ParquetChunkedReader reader = DeltaLake.newParquetChunkedReader(120000, 0, opts, array.buffers,
         rowGroups, new DeletionVectorInfo[] { dvInfo })) {
         int numChunks = 0;
         long totalRows = 0;
@@ -124,16 +128,19 @@ class DeltaLakeTableTest extends CudfTestBase {
 
   @Test
   void testChunkedReadParquetMultiFiles() throws Exception {
-    byte[][] data = TableTestUtils.sliceBytes(TableTestUtils.arrayFrom(TEST_FILE2), 2);
-    byte[] bitmapData = TableTestUtils.arrayFrom(DELETED_ROWS_FILE2);
-    int[] rowGroups = new int[] {1, 3};
-    try (HostMemoryBufferArray array = TableTestUtils.buffersFrom(data);
-         HostMemoryBufferArray bitmapArray = TableTestUtils.buffersFrom(new byte[][] { bitmapData })) {
+    byte[][] bitmaps = new byte[2][];
+    bitmaps[0] = TableTestUtils.arrayFrom(DELETED_ROWS_FILE2);
+    bitmaps[1] = TableTestUtils.arrayFrom(DELETED_ROWS_FILE2);
+    int[][] rowGroups = new int[][] { {3}, {1} };
+    try (HostMemoryBufferArray bitmapArray = TableTestUtils.buffersFrom(bitmaps)) {
       ParquetOptions opts = ParquetOptions.DEFAULT;
-      long[] rowGroupOffsets = Arrays.stream(rowGroups).mapToLong(i -> i * 10000L).toArray();
-      int[] rowGroupNumRows = Arrays.stream(rowGroups).map(i -> 10000).toArray();
+      long[] rowGroupOffsets = new long[] { 30000L, 10000L };
+      int[] rowGroupNumRows = new int[] { 10000, 10000 };
       DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], rowGroupOffsets, rowGroupNumRows);
-      try (ParquetChunkedReader reader = new ParquetChunkedReader(120000, 0, opts, array.buffers,
+      try (ParquetChunkedReader reader = DeltaLake.newParquetChunkedReader(120000, 0, opts, new String[] {
+              TEST_FILE2.getAbsolutePath(),
+              TEST_FILE2.getAbsolutePath()
+          },
         rowGroups, new DeletionVectorInfo[] { dvInfo })) {
         int numChunks = 0;
         long totalRows = 0;

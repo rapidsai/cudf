@@ -44,14 +44,14 @@ std::vector<cudf::host_span<cuda::std::byte const>> to_vector_of_spans(
 cudf::io::source_info make_source_info(
   JNIEnv* env,
   bool read_buffer,
-  cudf::jni::native_jstring const& filename,
+  cudf::jni::native_jstringArray const& filenames,
   std::unique_ptr<cudf::jni::multi_host_buffer_source> const& multi_buffer_source)
 {
   cudf::io::source_info source;
   if (read_buffer) {
     source = cudf::io::source_info(multi_buffer_source.get());
   } else {
-    source = cudf::io::source_info(filename.get());
+    source = cudf::io::source_info(filenames.as_cpp_vector());
   }
   return source;
 }
@@ -59,12 +59,12 @@ cudf::io::source_info make_source_info(
 cudf::io::parquet_reader_options make_parquet_reader_options(JNIEnv* env,
                                                              jobjectArray const& filter_col_names,
                                                              jbooleanArray const& col_binary_read,
-                                                             jintArray const& row_groups,
+                                                             jobjectArray const& row_groups,
                                                              cudf::io::source_info&& source,
                                                              jint unit)
 {
   cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
-  cudf::jni::native_jintArray n_row_groups(env, row_groups);
+  cudf::jni::native_jobjectArray<jintArray> n_row_groups(env, row_groups);
 
   // TODO: This variable is unused now, but we still don't know what to do with it yet.
   // As such, it needs to stay here for a little more time before we decide to use it again,
@@ -78,7 +78,10 @@ cudf::io::parquet_reader_options make_parquet_reader_options(JNIEnv* env,
   }
   if (n_row_groups.size() > 0) {
     auto row_groups_vec = std::vector<std::vector<cudf::size_type>>{};
-    row_groups_vec.emplace_back(n_row_groups.to_vector());
+    for (int i = 0; i < n_row_groups.size(); i++) {
+      cudf::jni::native_jintArray n_row_group(env, n_row_groups.get(i));
+      row_groups_vec.emplace_back(n_row_group.to_vector());
+    }
     builder = builder.row_groups(row_groups_vec);
   }
 
@@ -124,7 +127,7 @@ std::unique_ptr<cudf::io::parquet::experimental::deletion_vector_info> make_dele
  * @param env JNI environment
  * @param filter_col_names Column names to filter
  * @param col_binary_read Boolean array indicating binary read for string columns
- * @param inputfilepath Input file path (if reading from file)
+ * @param input_file_paths Input file paths (if reading from files)
  * @param addrs_and_sizes Address and size pairs for buffer reading (if reading from buffer)
  * @param row_groups Row group indices to read
  * @param unit Timestamp unit
@@ -145,9 +148,9 @@ Java_ai_rapids_cudf_DeltaLake_readDeltaParquet(JNIEnv* env,
                                                jclass,
                                                jobjectArray filter_col_names,
                                                jbooleanArray col_binary_read,
-                                               jstring inputfilepath,
+                                               jobjectArray input_file_paths,
                                                jlongArray addrs_and_sizes,
-                                               jintArray row_groups,
+                                               jobjectArray row_groups,
                                                jint unit,
                                                jlongArray serialized_roaring64,
                                                jintArray deletion_vector_row_counts,
@@ -156,12 +159,12 @@ Java_ai_rapids_cudf_DeltaLake_readDeltaParquet(JNIEnv* env,
 {
   bool read_buffer = true;
   if (addrs_and_sizes == nullptr) {
-    JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", nullptr);
+    JNI_NULL_CHECK(env, input_file_paths, "input file or buffer must be supplied", nullptr);
     read_buffer = false;
-  } else if (inputfilepath != nullptr) {
+  } else if (input_file_paths != nullptr) {
     JNI_THROW_NEW(env,
                   cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
-                  "cannot pass in both a buffer and an inputfilepath",
+                  "cannot pass in both a buffer and an input_file_paths",
                   nullptr);
   }
 
@@ -169,10 +172,10 @@ Java_ai_rapids_cudf_DeltaLake_readDeltaParquet(JNIEnv* env,
   {
     cudf::jni::auto_set_device(env);
 
-    cudf::jni::native_jstring filename(env, inputfilepath);
-    if (!read_buffer && filename.is_empty()) {
+    cudf::jni::native_jstringArray filenames(env, input_file_paths);
+    if (!read_buffer && filenames.size() == 0) {
       JNI_THROW_NEW(
-        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "inputfilepath can't be empty", nullptr);
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "input_file_paths can't be empty", nullptr);
     }
 
     std::unique_ptr<cudf::jni::multi_host_buffer_source> multi_buffer_source;
@@ -181,7 +184,7 @@ Java_ai_rapids_cudf_DeltaLake_readDeltaParquet(JNIEnv* env,
       multi_buffer_source.reset(new cudf::jni::multi_host_buffer_source(n_addrs_sizes));
     }
     cudf::io::source_info source =
-      make_source_info(env, read_buffer, filename, multi_buffer_source);
+      make_source_info(env, read_buffer, filenames, multi_buffer_source);
 
     cudf::io::parquet_reader_options opts =
       make_parquet_reader_options(env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
@@ -208,7 +211,7 @@ Java_ai_rapids_cudf_DeltaLake_readDeltaParquet(JNIEnv* env,
  *                         for details.
  * @param filter_col_names Column names to filter
  * @param col_binary_read Boolean array indicating binary read for string columns
- * @param inp_file_path Input file path (if reading from file)
+ * @param input_file_paths Input file paths (if reading from files)
  * @param addrs_sizes Address and size pairs for buffer reading (if reading from buffer)
  * @param row_groups Row group indices to read
  * @param unit Timestamp unit
@@ -235,9 +238,9 @@ Java_ai_rapids_cudf_DeltaLake_createDeltaParquetChunkedReader(JNIEnv* env,
                                                               jlong pass_read_limit,
                                                               jobjectArray filter_col_names,
                                                               jbooleanArray col_binary_read,
-                                                              jstring inp_file_path,
+                                                              jobjectArray input_file_paths,
                                                               jlongArray addrs_sizes,
-                                                              jintArray row_groups,
+                                                              jobjectArray row_groups,
                                                               jint unit,
                                                               jlongArray serialized_roaring64,
                                                               jintArray deletion_vector_row_counts,
@@ -246,12 +249,12 @@ Java_ai_rapids_cudf_DeltaLake_createDeltaParquetChunkedReader(JNIEnv* env,
 {
   bool read_buffer = true;
   if (addrs_sizes == nullptr) {
-    JNI_NULL_CHECK(env, inp_file_path, "Input file or buffer must be supplied", nullptr);
+    JNI_NULL_CHECK(env, input_file_paths, "Input file or buffer must be supplied", nullptr);
     read_buffer = false;
-  } else if (inp_file_path != nullptr) {
+  } else if (input_file_paths != nullptr) {
     JNI_THROW_NEW(env,
                   cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
-                  "Cannot pass in both buffers and an inp_file_path",
+                  "Cannot pass in both buffers and an input_file_paths",
                   nullptr);
   }
 
@@ -259,10 +262,10 @@ Java_ai_rapids_cudf_DeltaLake_createDeltaParquetChunkedReader(JNIEnv* env,
   {
     cudf::jni::auto_set_device(env);
 
-    cudf::jni::native_jstring filename(env, inp_file_path);
-    if (!read_buffer && filename.is_empty()) {
+    cudf::jni::native_jstringArray filenames(env, input_file_paths);
+    if (!read_buffer && filenames.size() == 0) {
       JNI_THROW_NEW(
-        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "inp_file_path cannot be empty", nullptr);
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "input_file_paths cannot be empty", nullptr);
     }
 
     std::unique_ptr<cudf::jni::multi_host_buffer_source> multi_buffer_source;
@@ -271,7 +274,7 @@ Java_ai_rapids_cudf_DeltaLake_createDeltaParquetChunkedReader(JNIEnv* env,
       multi_buffer_source.reset(new cudf::jni::multi_host_buffer_source(n_addrs_sizes));
     }
     cudf::io::source_info source =
-      make_source_info(env, read_buffer, filename, multi_buffer_source);
+      make_source_info(env, read_buffer, filenames, multi_buffer_source);
 
     cudf::io::parquet_reader_options opts =
       make_parquet_reader_options(env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
