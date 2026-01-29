@@ -171,19 +171,24 @@ class CategoricalColumn(column.ColumnBase):
         op: str,
         skipna: bool = True,
         min_count: int = 0,
-        *args: Any,
         **kwargs: Any,
     ) -> ScalarLike:
+        """Custom reduction for categorical columns - delegates to codes."""
         # Only valid reductions are min and max
         if not self.ordered:
             raise TypeError(
-                f"Categorical is not ordered for operation {op} "
-                "you can use .as_ordered() to change the Categorical "
+                f"Categorical is not ordered for operation {op}. "
+                "You can use .as_ordered() to change the Categorical "
                 "to an ordered one."
             )
-        return self._decode(
-            self.codes._reduce(op, skipna, min_count, *args, **kwargs)
+
+        # Delegate to underlying codes column via public method
+        result = getattr(self.codes, op)(
+            skipna=skipna, min_count=min_count, **kwargs
         )
+
+        # Decode the result back to a category
+        return self._decode(result)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         if isinstance(other, column.ColumnBase):

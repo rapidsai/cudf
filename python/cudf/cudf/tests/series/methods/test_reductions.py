@@ -680,7 +680,7 @@ def test_timedelta_unsupported_reductions(op):
 def test_categorical_reductions(request, reduction_methods):
     request.applymarker(
         pytest.mark.xfail(
-            reduction_methods in ["quantile", "all", "any"],
+            reduction_methods in ["quantile"],
             reason=f"{reduction_methods} didn't fail",
         )
     )

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import functools
 import math
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -51,6 +51,15 @@ def get_np_td_unit_conversion(
 class TimeDeltaColumn(TemporalBaseColumn):
     _NP_SCALAR = np.timedelta64
     _PD_SCALAR = pd.Timedelta
+    _VALID_REDUCTIONS = {
+        "sum",
+        "min",
+        "max",
+        "mean",
+        "std",
+        "median",
+        "sum_of_squares",
+    }
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
         "__ne__",
@@ -208,11 +217,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
             result = result.fillna(op == "__ne__")
         return result
 
-    def _scan(self, op: str) -> ColumnBase:
-        if op == "cumprod":
-            raise TypeError("cumprod not supported for Timedelta.")
-        return super()._scan(op)
-
     def total_seconds(self) -> ColumnBase:
         conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9
         # Typecast to decimal128 to avoid floating point precision issues
@@ -262,13 +266,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
         self,
         skipna: bool = True,
         min_count: int = 0,
+        **kwargs: Any,
     ) -> pd.Timedelta:
         return self._PD_SCALAR(
-            # Since sum isn't overridden in Numerical[Base]Column, mypy only
-            # sees the signature from Reducible (which doesn't have the extra
-            # parameters from ColumnBase._reduce) so we have to ignore this.
-            self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore[call-arg]
-                skipna=skipna, min_count=min_count
+            self.astype(self._UNDERLYING_DTYPE).sum(
+                skipna=skipna, min_count=min_count, **kwargs
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)

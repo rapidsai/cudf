@@ -146,13 +146,6 @@ class DatetimeColumn(TemporalBaseColumn):
                 # attr was not called yet, so ignore.
                 pass
 
-    def _scan(self, op: str) -> ColumnBase:
-        if op not in {"cummin", "cummax"}:
-            raise TypeError(
-                f"Accumulation {op} not supported for {self.dtype}"
-            )
-        return super()._scan(op)
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
             ts = self._PD_SCALAR(item).as_unit(self.time_unit)

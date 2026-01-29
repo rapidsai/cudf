@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 
@@ -40,24 +40,34 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     point, should be encoded here.
     """
 
-    _VALID_REDUCTIONS = {
-        "sum",
-        "product",
-        "sum_of_squares",
-        "mean",
-        "var",
-        "std",
-    }
-
     _VALID_SCANS = {
         "cumsum",
         "cumprod",
         "cummin",
         "cummax",
+        "ewma",
     }
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls()
+
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Override to handle var/std NA conversion."""
+        result = super()._reduce(
+            op, skipna=skipna, min_count=min_count, **kwargs
+        )
+
+        # Convert NA to NaN for var/std operations
+        if op in {"var", "std"} and result is NA:
+            return _get_nan_for_dtype(self.dtype)
+
+        return result
 
     def kurtosis(self, skipna: bool = True) -> float:
         if not isinstance(skipna, bool):
@@ -104,7 +114,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         n = len(self)
         miu = self.mean()
         m3 = (((self - miu) ** 3).sum()) / n
-        m2 = self.var(ddof=0)
+        m2 = self._reduce("var", ddof=0)
 
         if m2 == 0:
             return np.float64(0)
@@ -172,40 +182,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
         return result
 
-    def mean(
-        self,
-        skipna: bool = True,
-        min_count: int = 0,
-    ) -> ScalarLike:
-        return self._reduce("mean", skipna=skipna, min_count=min_count)
-
-    def var(
-        self,
-        skipna: bool = True,
-        min_count: int = 0,
-        ddof: int = 1,
-    ) -> ScalarLike:
-        result = self._reduce(
-            "var", skipna=skipna, min_count=min_count, ddof=ddof
-        )
-        if result is NA:
-            return _get_nan_for_dtype(self.dtype)
-        return result
-
-    def std(
-        self,
-        skipna: bool = True,
-        min_count: int = 0,
-        ddof: int = 1,
-    ) -> ScalarLike:
-        result = self._reduce(
-            "std", skipna=skipna, min_count=min_count, ddof=ddof
-        )
-        if result is NA:
-            return _get_nan_for_dtype(self.dtype)
-        return result
-
-    def median(self, skipna: bool = True) -> NumericalBaseColumn:
+    def median(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> NumericalBaseColumn:
         if not isinstance(skipna, bool):
             raise ValueError(
                 f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
