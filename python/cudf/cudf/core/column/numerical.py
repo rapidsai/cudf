@@ -4,13 +4,12 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -698,17 +697,6 @@ class NumericalColumn(NumericalBaseColumn):
                 return res  # type: ignore[return-value]
 
         return self.cast(dtype=dtype)  # type: ignore[return-value]
-
-    def all(self, skipna: bool = True) -> bool:
-        # If all entries are null the result is True, including when the column
-        # is empty.
-        result_col = self.nans_to_nulls() if skipna else self
-        return super(type(self), result_col).all(skipna=skipna)
-
-    def any(self, skipna: bool = True) -> bool:
-        # Early exit for fast cases.
-        result_col = self.nans_to_nulls() if skipna else self
-        return super(type(self), result_col).any(skipna=skipna)
 
     @functools.cached_property
     def nan_count(self) -> int:

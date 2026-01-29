@@ -50,9 +50,9 @@ from cudf.utils.utils import (
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, MutableMapping
+    from typing import Self
 
     import pyarrow as pa
-    from typing_extensions import Self
 
     from cudf._typing import DataFrameOrSeries, Dtype
     from cudf.core.dataframe import DataFrame

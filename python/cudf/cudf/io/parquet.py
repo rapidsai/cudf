@@ -47,8 +47,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Sequence
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import DtypeObj
     from cudf.core.series import Series

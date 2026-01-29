@@ -7,12 +7,11 @@ import itertools
 import re
 import warnings
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -120,21 +119,6 @@ class StringColumn(ColumnBase, Scannable):
         """Return appropriate NA value based on dtype."""
         return cast("pd.StringDtype | pd.ArrowDtype", self.dtype).na_value
 
-    def all(self, skipna: bool = True) -> bool:
-        if skipna and self.null_count == self.size:
-            return True
-        elif not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
-        raise NotImplementedError("`all` not implemented for `StringColumn`")
-
-    def any(self, skipna: bool = True) -> bool:
-        if not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
-        elif skipna and self.null_count == self.size:
-            return False
-
-        raise NotImplementedError("`any` not implemented for `StringColumn`")
-
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
@@ -176,14 +160,59 @@ class StringColumn(ColumnBase, Scannable):
         self,
         skipna: bool = True,
         min_count: int = 0,
+        **kwargs: Any,
     ) -> ScalarLike:
-        result_col = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
+        col = self.nans_to_nulls() if skipna else self
+        if not skipna and col.has_nulls():
+            return pd.NA
+        if skipna:
+            col = col.dropna()
+
+        if min_count > 0 and len(col) - col.null_count < min_count:
+            return pd.NA
+
+        return (
+            0
+            if len(col) == 0
+            else col.join_strings("", None).element_indexing(0)
         )
-        if isinstance(result_col, type(self)):
-            return result_col.join_strings("", None).element_indexing(0)
-        else:
-            return result_col
+
+    def any(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> ScalarLike:
+        """Check if any string value is truthy (non-empty)."""
+        if not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        elif skipna and self.null_count == self.size:
+            return False
+        raise NotImplementedError("`any` not implemented for `StringColumn`")
+
+    def all(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> ScalarLike:
+        """Check if all string values are truthy (non-empty)."""
+        if skipna and self.null_count == self.size:
+            return True
+        elif not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        raise NotImplementedError("`all` not implemented for `StringColumn`")
+
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Validate reduction operations for StringColumn."""
+        if op in {"min", "max"}:
+            return super()._reduce(op, skipna, min_count, **kwargs)
+
+        # For empty columns with statistical operations, return NaN (pandas behavior)
+        if len(self) == 0 and op in {"var", "std", "mean", "sum_of_squares"}:
+            return np.nan
+
+        raise TypeError(f"Series.{op} does not support StringColumn")
 
     def __contains__(self, item: ScalarLike) -> bool:
         other = [item] if is_scalar(item) else item

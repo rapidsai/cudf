@@ -9,13 +9,12 @@ import textwrap
 from collections.abc import Mapping
 from copy import deepcopy
 from shutil import get_terminal_size
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, Self, assert_never, overload
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self, assert_never
 
 import pylibcudf as plc  # noqa: TC002
 

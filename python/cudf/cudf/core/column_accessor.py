@@ -25,7 +25,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import DEFAULT_STRING_DTYPE, is_mixed_with_object_dtype
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import DtypeObj
     from cudf.core.column import ColumnBase

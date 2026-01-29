@@ -2895,7 +2895,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         raise NotImplementedError("expanding is currently not implemented")
 
-    def any(self, skipna: bool = True):
+    def any(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if any value in the group is truthful, else False.
 
@@ -2903,7 +2903,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         raise NotImplementedError("any is currently not implemented")
 
-    def all(self, skipna: bool = True):
+    def all(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if all values in the group are truthful, else False.
 
