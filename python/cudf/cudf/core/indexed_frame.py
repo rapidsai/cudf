@@ -33,10 +33,12 @@ import cudf
 from cudf._lib import strings_udf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
+    is_datetime64_dtype,
     is_dict_like,
     is_list_like,
     is_scalar,
     is_string_dtype,
+    is_timedelta64_dtype,
 )
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, stream_compaction
@@ -57,7 +59,15 @@ from cudf.core.groupby.groupby import GroupBy
 from cudf.core.index import Index, RangeIndex, _index_from_data, ensure_index
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
-from cudf.core.resample import _Resampler
+from cudf.core.resample import (
+    DataFrameResampler,
+    DatetimeIndexDataFrameResampler,
+    DatetimeIndexSeriesResampler,
+    SeriesResampler,
+    TimedeltaIndexDataFrameResampler,
+    TimedeltaIndexSeriesResampler,
+    _Resampler,
+)
 from cudf.core.udf.utils import (
     _get_input_args_from_frame,
     _make_free_string_kernel,
@@ -4249,8 +4259,6 @@ class IndexedFrame(Frame):
             nanoseconds to milliseconds, the index will be of dtype
             'datetime64[ms]'.
         """
-        from cudf.core.resample import DataFrameResampler, SeriesResampler
-
         if kind is not None:
             warnings.warn(
                 "The 'kind' keyword in is "
@@ -4281,11 +4289,38 @@ class IndexedFrame(Frame):
         by = cudf.Grouper(
             key=on, freq=rule, closed=closed, label=label, level=level
         )
-        return (
-            SeriesResampler(self, by=by)
-            if isinstance(self, cudf.Series)
-            else DataFrameResampler(self, by=by)
-        )
+
+        # Determine target being resampled: index, or column specified by 'on'
+        target = None
+        if on is None and level is None:
+            target = self.index
+        elif on is not None and isinstance(self, cudf.DataFrame):
+            target = self[on]
+
+        # Select resampler class based on target type
+        is_series = isinstance(self, cudf.Series)
+        is_datetime = target is not None and is_datetime64_dtype(target)
+        is_timedelta = target is not None and is_timedelta64_dtype(target)
+
+        resampler_cls: type[_Resampler]
+        if is_datetime:
+            resampler_cls = (
+                DatetimeIndexSeriesResampler
+                if is_series
+                else DatetimeIndexDataFrameResampler
+            )
+        elif is_timedelta:
+            resampler_cls = (
+                TimedeltaIndexSeriesResampler
+                if is_series
+                else TimedeltaIndexDataFrameResampler
+            )
+        else:
+            resampler_cls = (
+                SeriesResampler if is_series else DataFrameResampler
+            )
+
+        return resampler_cls(self, by=by)
 
     def dropna(
         self,

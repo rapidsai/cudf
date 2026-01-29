@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -7,6 +7,10 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core.resample import (
+    DatetimeIndexDataFrameResampler,
+    DatetimeIndexSeriesResampler,
+)
 from cudf.testing import assert_eq
 
 
@@ -194,3 +198,25 @@ def test_resampling_downsampling_ms():
     result = gdf.resample("10ms", on="time").mean()
     result.index = result.index.astype("datetime64[ns]")
     assert_eq(result, expected, check_freq=False)
+
+
+def test_resampler_type_dispatch():
+    datetime_idx = cudf.date_range(start="2001-01-01", periods=10, freq="1min")
+
+    # DatetimeIndex on index
+    sr = cudf.Series(range(10), index=datetime_idx)
+    assert isinstance(sr.resample("3min"), DatetimeIndexSeriesResampler)
+
+    df = cudf.DataFrame({"a": range(10)}, index=datetime_idx)
+    assert isinstance(df.resample("3min"), DatetimeIndexDataFrameResampler)
+
+    # Datetime column with on=
+    df_col = cudf.DataFrame(
+        {
+            "time": cudf.date_range("2001-01-01", periods=10, freq="1min"),
+            "value": range(10),
+        }
+    )
+    assert isinstance(
+        df_col.resample("3min", on="time"), DatetimeIndexDataFrameResampler
+    )
