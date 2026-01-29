@@ -166,16 +166,6 @@ class IntervalColumn(ColumnBase):
             plc_col = plc_col.copy()
         return ColumnBase.create(plc_col, self.dtype)  # type: ignore[return-value]
 
-    def _adjust_reduce_result(
-        self,
-        result_col: ColumnBase,
-        reduction_op: str,
-        col_dtype: DtypeObj,
-        plc_scalar: plc.Scalar,
-    ) -> ColumnBase:
-        """Preserve IntervalDtype metadata on reduction result."""
-        return result_col._with_type_metadata(col_dtype)
-
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
         left_equals_right = (self.right == self.left).fillna(False)

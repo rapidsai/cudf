@@ -2482,8 +2482,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 aggregation.make_aggregation(op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
-            result_col = type(col).from_pylibcudf(
-                plc.Column.from_scalar(plc_scalar, 1)
+            result_col = ColumnBase.create(
+                plc.Column.from_scalar(plc_scalar, 1), col_dtype
             )
             # Hook for subclasses (e.g., DecimalBaseColumn adjusts precision)
             result_col = col._adjust_reduce_result(
