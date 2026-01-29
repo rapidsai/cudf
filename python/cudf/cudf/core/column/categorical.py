@@ -107,9 +107,6 @@ class CategoricalColumn(column.ColumnBase):
     def ordered(self) -> bool | None:
         return self.dtype.ordered
 
-    def to_pylibcudf(self) -> plc.Column:
-        return self.codes.to_pylibcudf()
-
     def __setitem__(self, key: Any, value: Any) -> None:
         if is_scalar(value) and _is_null_host_scalar(value):
             to_add_categories = 0
@@ -296,7 +293,7 @@ class CategoricalColumn(column.ColumnBase):
         # pyarrow.Table doesn't support unsigned codes
         signed_type = (
             min_signed_type(self.codes.max())
-            if self.codes.size > 0
+            if self.size > 0
             else np.dtype(np.int8)
         )
         return pa.DictionaryArray.from_arrays(
