@@ -17,6 +17,8 @@ import java.util.List;
  * Deletion vectors are used in Delta Lake and other table formats to track deleted rows
  * without physically rewriting data files. This class provides APIs to read Parquet files
  * while applying deletion vectors using 64-bit roaring bitmap serialization format.
+ * 
+ * The APIs in this file are experimental and subject to change.
  */
 public class DeltaLake {
   static {
@@ -455,7 +457,7 @@ public class DeltaLake {
   private static native long[] parquetChunkedReaderReadChunk(long readerHandle) throws CudfException;
 
   private static native void closeParquetChunkedReader(long readerHandle) throws CudfException;
-  
+
   private static native void destroyMultiHostBufferSource(long handle);
 
   private static native void destroyDeletionVectorParam(long handle);
