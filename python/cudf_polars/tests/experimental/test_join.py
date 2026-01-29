@@ -229,6 +229,25 @@ def test_join_and_slice(zlice):
         assert_gpu_result_equal(q, engine=engine)
 
 
+def test_join_selectivity_hint(left, right):
+    # Test that selectivity hints trigger repartition after selective joins
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "max_rows_per_partition": 3,
+            "broadcast_join_limit": 1,
+            "shuffle_method": DEFAULT_RUNTIME,
+            # Hint to reduce partitions after this join
+            "selectivity_hints": {"JOIN Inner ('y',) ('y',)": 0.1},
+        },
+    )
+    q = left.join(right, on="y", how="inner")
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
 )

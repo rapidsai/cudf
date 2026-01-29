@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -43,6 +43,10 @@ def engine():
             "stats_planning": {
                 "use_reduction_planning": True,
                 "default_selectivity": 0.5,
+            },
+            # Hints to reduce Distinct partitions when stats are unavailable (csv)
+            "selectivity_hints": {
+                "DISTINCT (": 0.5,
             },
         },
     )

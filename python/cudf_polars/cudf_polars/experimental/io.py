@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition IO Logic."""
 
@@ -39,6 +39,8 @@ from cudf_polars.experimental.base import (
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.utils import _get_selectivity_hint
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
@@ -341,7 +343,27 @@ def _(
             partition_info = {group: PartitionInfo(count=1) for group in groups} | {
                 new_node: PartitionInfo(count=len(groups))
             }
-        return new_node, partition_info
+
+        # Check for selectivity hint to consolidate partitions after selective scans
+        # (typically scans with predicate pushdown that filter out most rows)
+        scan_count = partition_info[new_node].count
+        result_node: IR = new_node
+        if (
+            ir.predicate is not None
+            and scan_count > 1
+            and (
+                hint := _get_selectivity_hint(
+                    ir,
+                    config_options.executor.selectivity_hints,  # type: ignore[union-attr]
+                )
+            )
+        ):
+            output_count = max(int(hint * scan_count), 1)
+            if output_count < scan_count:
+                result_node = Repartition(new_node.schema, new_node)
+                partition_info[result_node] = PartitionInfo(count=output_count)
+
+        return result_node, partition_info
 
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
 

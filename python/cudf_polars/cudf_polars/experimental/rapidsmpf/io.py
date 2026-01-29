@@ -43,6 +43,8 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     opaque_reservation,
     send_metadata,
 )
+from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.utils import _get_selectivity_hint
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -289,6 +291,8 @@ def _(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
+    partition_info: MutableMapping[IR, PartitionInfo]
+    result_node: IR = ir
     if (
         ir.typ in ("csv", "parquet", "ndjson")
         and ir.n_rows == -1
@@ -307,12 +311,31 @@ def _(
         else:
             count = math.ceil(len(paths) / plan.factor)
 
-        return ir, {ir: PartitionInfo(count=count, io_plan=plan)}
+        partition_info = {ir: PartitionInfo(count=count, io_plan=plan)}
     else:
         plan = IOPartitionPlan(
             flavor=IOPartitionFlavor.SINGLE_READ, factor=len(ir.paths)
         )
-        return ir, {ir: PartitionInfo(count=1, io_plan=plan)}
+        partition_info = {ir: PartitionInfo(count=1, io_plan=plan)}
+
+    # Check for selectivity hint to consolidate partitions after selective scans
+    scan_count = partition_info[ir].count
+    if (
+        ir.predicate is not None
+        and scan_count > 1
+        and (
+            hint := _get_selectivity_hint(
+                ir,
+                config_options.executor.selectivity_hints,  # type: ignore[union-attr]
+            )
+        )
+    ):
+        output_count = max(int(hint * scan_count), 1)
+        if output_count < scan_count:
+            result_node = Repartition(ir.schema, ir)
+            partition_info[result_node] = PartitionInfo(count=output_count)
+
+    return result_node, partition_info
 
 
 async def read_chunk(
