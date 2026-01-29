@@ -401,24 +401,14 @@ class StringColumn(ColumnBase, Scannable):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if isinstance(self.dtype, pd.StringDtype) and self.dtype.storage in [
-            "pyarrow",
-            "python",
-        ]:
-            if self.dtype.storage == "pyarrow":
-                pandas_array = self.dtype.__from_arrow__(
-                    self.to_arrow().cast(pa.large_string())
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        else:
+            return pd.Index(
+                cast("pd.StringDtype", self.dtype).__from_arrow__(
+                    self.to_arrow()
                 )
-            elif self.dtype.na_value is np.nan:
-                pandas_array = pd.array(
-                    self.to_arrow().to_pandas(), dtype=self.dtype
-                )
-            else:
-                return super().to_pandas(
-                    nullable=nullable, arrow_type=arrow_type
-                )
-            return pd.Index(pandas_array, copy=False)
-        return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+            )
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
