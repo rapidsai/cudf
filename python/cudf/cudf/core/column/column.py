@@ -986,9 +986,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "all", skipna=True, min_count=min_count, **kwargs
         )
         if np.isnan(result):
-            result = True
-        else:
-            result = bool(result)
+            # Empty after dropping NaN/nulls - return np.bool_
+            result = np.bool_(True)
 
         # For pandas nullable extension dtypes with skipna=False and nulls, return NaN
         if (
@@ -1009,7 +1008,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         if self.size == 0:
             return False
-        if not skipna and self.has_nulls():
+        if not skipna and (self.has_nulls() or self.nan_count > 0):
             return True
         elif skipna and self.null_count == self.size:
             return False
@@ -1020,9 +1019,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "any", skipna=True, min_count=min_count, **kwargs
         )
         if np.isnan(result):
-            # If all values are NaN, treat them as truthy when skipna=False
-            result = not skipna
-        return bool(result)
+            # Empty after dropping NaN/nulls
+            # If skipna=False, NaN values should be treated as truthy
+            result = np.bool_(not skipna)
+        return result
 
     def dropna(self) -> Self:
         if self.has_nulls():
