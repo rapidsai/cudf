@@ -97,10 +97,10 @@ public class DeltaLake {
    *                            for each Parquet file to read.
    * @return A Table containing the filtered data with a prepended UINT64 index column.
    */
-  public static Table readDeltaParquet(ParquetOptions opts,
+  public static Table readParquet(ParquetOptions opts,
                                        HostMemoryBuffer[] dataBuffers,
                                        DeletionVectorInfo[] deletionVectorInfos) {
-    return readDeltaParquet(opts, dataBuffers, null, deletionVectorInfos);
+    return readParquet(opts, dataBuffers, null, deletionVectorInfos);
   }
 
   /**
@@ -118,12 +118,12 @@ public class DeltaLake {
    *                            for each Parquet file to read.
    * @return A Table containing the filtered data with a prepended UINT64 index column.
    */
-  public static Table readDeltaParquet(ParquetOptions opts,
+  public static Table readParquet(ParquetOptions opts,
                                        HostMemoryBuffer[] dataBuffers,
                                        int[][] rowGroups,
                                        DeletionVectorInfo[] deletionVectorInfos) {
     long[] dataBufferAddrsSizes = getAddrsAndSizes(dataBuffers);
-    return readDeltaParquet(opts, null, dataBufferAddrsSizes, rowGroups, deletionVectorInfos);
+    return readParquet(opts, null, dataBufferAddrsSizes, rowGroups, deletionVectorInfos);
   }
 
   /**
@@ -141,11 +141,11 @@ public class DeltaLake {
    *                            for each Parquet file to read.
    * @return A Table containing the filtered data with a prepended UINT64 index column.
    */
-  public static Table readDeltaParquet(ParquetOptions opts,
+  public static Table readParquet(ParquetOptions opts,
                                        String[] inputFilePaths,
                                        int[][] rowGroups,
                                        DeletionVectorInfo[] deletionVectorInfos) {
-    return readDeltaParquet(opts, inputFilePaths, null, rowGroups, deletionVectorInfos);
+    return readParquet(opts, inputFilePaths, null, rowGroups, deletionVectorInfos);
   }
 
   /**
@@ -164,7 +164,7 @@ public class DeltaLake {
    *                            for each Parquet file to read.
    * @return A Table containing the filtered data with a prepended UINT64 index column.
    */
-  private static Table readDeltaParquet(ParquetOptions opts,
+  private static Table readParquet(ParquetOptions opts,
                                         String[] inputFilePaths,
                                         long[] dataBufferAddrsSizes,
                                         int[][] rowGroups,
@@ -195,7 +195,7 @@ public class DeltaLake {
     int[] deletionVectorRowCounts = deletionVectorRowCountsList.stream().mapToInt(Integer::intValue).toArray();
     long[] rowGroupOffsets = rowGroupOffsetsList.stream().mapToLong(Long::longValue).toArray();
     int[] rowGroupNumRows = rowGroupNumRowsList.stream().mapToInt(Integer::intValue).toArray();
-    long[] columnHandles = readDeltaParquet(opts.getIncludeColumnNames(),
+    long[] columnHandles = readParquet(opts.getIncludeColumnNames(),
                                             opts.getReadBinaryAsString(),
                                             inputFilePaths,
                                             dataBufferAddrsSizes,
@@ -346,7 +346,7 @@ public class DeltaLake {
       int[] deletionVectorRowCounts = deletionVectorRowCountsList.stream().mapToInt(Integer::intValue).toArray();
       long[] rowGroupOffsets = rowGroupOffsetsList.stream().mapToLong(Long::longValue).toArray();
       int[] rowGroupNumRows = rowGroupNumRowsList.stream().mapToInt(Integer::intValue).toArray();
-      long[] handles = createDeltaParquetChunkedReader(chunkSizeByteLimit, passReadLimit,
+      long[] handles = createParquetChunkedReader(chunkSizeByteLimit, passReadLimit,
         opts.getIncludeColumnNames(), opts.getReadBinaryAsString(), inputFilePaths,
           dataBufferAddrsSizes, rowGroups, opts.timeUnit().typeId.getNativeId(),
           bitmapAddrsSizes, deletionVectorRowCounts, rowGroupOffsets, rowGroupNumRows);
@@ -378,7 +378,7 @@ public class DeltaLake {
         firstCall = false;
         return true;
       }
-      return deltaParquetChunkedReaderHasNext(readerHandle);
+      return parquetChunkedReaderHasNext(readerHandle);
     }
 
     /**
@@ -393,7 +393,7 @@ public class DeltaLake {
         throw new IllegalStateException("Native chunked Parquet reader object may have been closed.");
       }
 
-      long[] columnPtrs = deltaParquetChunkedReaderReadChunk(readerHandle);
+      long[] columnPtrs = parquetChunkedReaderReadChunk(readerHandle);
       return columnPtrs != null ? new Table(columnPtrs) : null;
     }
 
@@ -402,7 +402,7 @@ public class DeltaLake {
       try (
         AutoCloseable closeable = () -> {
           if (readerHandle != 0) {
-            closeDeltaParquetChunkedReader(readerHandle);
+            closeParquetChunkedReader(readerHandle);
             readerHandle = 0;
           }
         };
@@ -424,7 +424,7 @@ public class DeltaLake {
 
   // Native methods
 
-  private static native long[] readDeltaParquet(String[] filterColumnNames,
+  private static native long[] readParquet(String[] filterColumnNames,
                                                 boolean[] binaryToString,
                                                 String[] inputFilePaths,
                                                 long[] addrsAndSizes,
@@ -436,7 +436,7 @@ public class DeltaLake {
                                                 int[] rowGroupNumRows)
     throws CudfException;
 
-  private static native long[] createDeltaParquetChunkedReader(long chunkReadLimit,
+  private static native long[] createParquetChunkedReader(long chunkReadLimit,
                                                                long passReadLimit,
                                                                String[] filterColumnNames,
                                                                boolean[] binaryToString,
@@ -450,12 +450,12 @@ public class DeltaLake {
                                                                int[] rowGroupNumRows)
     throws CudfException;
 
-  private static native boolean deltaParquetChunkedReaderHasNext(long readerHandle) throws CudfException;
+  private static native boolean parquetChunkedReaderHasNext(long readerHandle) throws CudfException;
 
-  private static native long[] deltaParquetChunkedReaderReadChunk(long readerHandle) throws CudfException;
+  private static native long[] parquetChunkedReaderReadChunk(long readerHandle) throws CudfException;
 
-  private static native void closeDeltaParquetChunkedReader(long readerHandle) throws CudfException;
-
+  private static native void closeParquetChunkedReader(long readerHandle) throws CudfException;
+  
   private static native void destroyMultiHostBufferSource(long handle);
 
   private static native void destroyDeletionVectorParam(long handle);
