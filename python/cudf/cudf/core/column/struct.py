@@ -24,8 +24,7 @@ from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import DtypeObj
     from cudf.core.column.string import StringColumn

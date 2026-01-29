@@ -32,8 +32,7 @@ from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import ColumnLike, DtypeObj, ScalarLike
     from cudf.core.column.numerical import NumericalColumn

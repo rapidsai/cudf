@@ -20,7 +20,7 @@ import time
 import traceback
 import warnings
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
@@ -131,7 +131,7 @@ class PackageVersions:
         for name in packages:
             try:
                 package = importlib.import_module(name)
-            except (AttributeError, ImportError):  # noqa: PERF203
+            except (AttributeError, ImportError):
                 versions[name] = None
             else:
                 if name in ("cudf_polars", "rapidsmpf"):
@@ -246,7 +246,7 @@ class RunConfig:
     threads: int
     iterations: int
     timestamp: str = dataclasses.field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
     rmm_async: bool

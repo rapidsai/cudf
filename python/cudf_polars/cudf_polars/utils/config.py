@@ -35,8 +35,7 @@ from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from typing_extensions import Self
+    from typing import Self
 
     import polars.lazyframe.engine_config
 

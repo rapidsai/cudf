@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Base class for IR nodes, and utilities."""
@@ -9,8 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, Sequence
-
-    from typing_extensions import Self
+    from typing import Self
 
 
 __all__: list[str] = ["Node"]

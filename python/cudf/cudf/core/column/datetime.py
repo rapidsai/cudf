@@ -39,8 +39,7 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import (
         ColumnBinaryOperand,

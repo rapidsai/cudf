@@ -16,7 +16,7 @@ from contextlib import ExitStack
 from decimal import Decimal
 from functools import cached_property
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast
 
 import cupy as cp
 import numpy as np
@@ -24,7 +24,6 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-from typing_extensions import Self
 
 import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document StringFunction to remove noqa
 # ruff: noqa: D101
@@ -24,7 +24,7 @@ from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -1137,7 +1137,7 @@ def _infer_datetime_format(val: str) -> str | None:
             for fmt in PATTERN_FORMATS[pattern_name]:
                 try:
                     datetime.strptime(val, fmt)
-                except ValueError:  # noqa: PERF203
+                except ValueError:
                     continue
                 else:
                     return fmt
