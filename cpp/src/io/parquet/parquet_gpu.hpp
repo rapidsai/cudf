@@ -985,6 +985,29 @@ void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
                                rmm::cuda_stream_view stream);
 
 /**
+ * @brief Launches pre-processing kernel to decode definition and repetition levels
+ *
+ * This kernel runs before most preprocessing to pre-decode all definition and
+ * repetition levels, storing them in the pre-allocated level decode buffers. This
+ * allows other kernels to skip RLE decoding and directly access decoded levels.
+ *
+ * @param[in,out] pages All pages to be processed
+ * @param[in] chunks All chunks to be processed
+ * @param[in] page_mask Boolean vector indicating which pages need to be processed
+ * @param[in] min_row Minimum row index to read
+ * @param[in] num_rows Number of rows to read starting from min_row
+ * @param[in] level_type_size Size in bytes of the type for level decoding (1 or 2)
+ * @param[in] stream CUDA stream to use
+ */
+void preprocess_levels(cudf::detail::hostdevice_span<PageInfo> pages,
+                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                       cudf::device_span<bool const> page_mask,
+                       size_t min_row,
+                       size_t num_rows,
+                       int level_type_size,
+                       rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernel for reading non-dictionary fixed width column data stored in the pages
  *
  * The page data will be written to the output pointed to in the page's
