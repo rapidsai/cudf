@@ -371,12 +371,7 @@ class CategoricalColumn(column.ColumnBase):
                 .apply_boolean_mask(df._data["old"].isnull())
                 .element_indexing(0)
             )
-            # TODO: This line of code does not work because we cannot use the
-            # `in` operator on self.categories (which is a column). mypy
-            # realizes that this is wrong because __iter__ is not implemented.
-            # However, it seems that this functionality has been broken for a
-            # long time so for now we're just having mypy ignore and we'll come
-            # back to this.
+            # TODO: Fix Column.__contains__ to support `in` operator
             if fill_value in self.categories:  # type: ignore[operator]
                 replaced = self.fillna(fill_value)
             else:
