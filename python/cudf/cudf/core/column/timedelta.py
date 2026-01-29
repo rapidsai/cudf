@@ -19,6 +19,7 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
@@ -251,7 +252,13 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 raise MixedTypeError(
                     f"cannot astype a timedelta like from {self.dtype} to {dtype}"
                 )
-        return self.strftime("%D days %H:%M:%S")
+        result = self.strftime("%D days %H:%M:%S")
+        if dtype != CUDF_STRING_DTYPE:
+            result = cast(
+                cudf.core.column.string.StringColumn,
+                result.astype(dtype),
+            )
+        return result
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
