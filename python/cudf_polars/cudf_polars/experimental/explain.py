@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
@@ -69,10 +69,10 @@ def explain_query(
                 lower_ir_graph as rapidsmpf_lower_ir_graph,
             )
 
-            lowered_ir, partition_info, _ = rapidsmpf_lower_ir_graph(ir, config)
+            lowered_ir, partition_info, stats = rapidsmpf_lower_ir_graph(ir, config)
         else:
-            lowered_ir, partition_info, _ = lower_ir_graph(ir, config)
-        return _repr_ir_tree(lowered_ir, partition_info)
+            lowered_ir, partition_info, stats = lower_ir_graph(ir, config)
+        return _repr_ir_tree(lowered_ir, partition_info, stats=stats)
     else:
         if config.executor.name == "streaming":
             # Include row-count statistics for the logical plan
