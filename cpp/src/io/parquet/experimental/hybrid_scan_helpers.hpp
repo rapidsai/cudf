@@ -360,33 +360,14 @@ class dictionary_literals_collector : public equality_literals_collector {
  */
 class named_to_reference_converter : public parquet::detail::named_to_reference_converter {
  public:
+  named_to_reference_converter() = default;
+
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata,
                                std::vector<SchemaElement> const& schema_tree,
-                               std::optional<std::vector<std::string>> selected_columns);
+                               cudf::io::parquet_reader_options const& options);
 
   using parquet::detail::named_to_reference_converter::visit;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
-
- private:
-  std::unordered_map<int32_t, std::string> _column_indices_to_names;
-};
-
-/**
- * @brief Collects column names from the expression ignoring the `skip_names`
- */
-class names_from_expression : public parquet::detail::names_from_expression {
- public:
-  names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                        std::vector<std::string> const& skip_names,
-                        std::optional<std::vector<std::string>> selected_columns,
-                        std::vector<SchemaElement> const& schema_tree);
-
-  using parquet::detail::names_from_expression::visit;
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )

@@ -395,24 +395,26 @@ TEST_F(HybridScanFiltersTest, FilterColumnSelection)
     EXPECT_EQ(stats_filtered_row_groups.size(), 1);
   };
 
+  auto literal_value1 = cudf::numeric_scalar<T>(50);
+  auto literal1       = cudf::ast::literal(literal_value1);
+  auto col_name0      = cudf::ast::column_name_reference("col0");
+  auto col_ref0       = cudf::ast::column_reference(0);
+
+  auto literal_value2 = cudf::string_scalar("000010000");
+  auto literal2       = cudf::ast::literal(literal_value2);
+  auto col_name2      = cudf::ast::column_name_reference("col2");
+  auto col_ref2       = cudf::ast::column_reference(2);
+
+  // Test columns selection by names and filter expression. Column selection is
+  // irrelevant here as we can collect column names from the filter expression itself
   {
-    auto literal_value1 = cudf::numeric_scalar<T>(50);
-    auto literal1       = cudf::ast::literal(literal_value1);
-    auto col_ref0       = cudf::ast::column_name_reference("col0");
     auto filter_expression1 =
-      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal1);
-
-    auto literal_value2 = cudf::string_scalar("000010000");
-    auto literal2       = cudf::ast::literal(literal_value2);
-    auto col_ref2       = cudf::ast::column_name_reference("col2");
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name0, literal1);
     auto filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
-
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name2, literal2);
     auto filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
 
-    // Options with columns selection and filter expression. Column selection is
-    // irrelevant here as we can collect column names from the filter expression itself
     auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     options.set_columns({"col0", "col1", "col2"});
     test_filter_column_selection(options);
@@ -430,40 +432,97 @@ TEST_F(HybridScanFiltersTest, FilterColumnSelection)
     test_filter_column_selection(options);
   }
 
+  // Test column selection by name and index and filter expression. Since `col2` is referred by
+  // index, it must be present in column selection (or no column selection should be specified)
   {
-    auto literal_value1 = cudf::numeric_scalar<T>(50);
-    auto literal1       = cudf::ast::literal(literal_value1);
-    auto col_ref0       = cudf::ast::column_name_reference("col0");
     auto filter_expression1 =
-      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal1);
-
-    auto literal_value2 = cudf::string_scalar("000010000");
-    auto literal2       = cudf::ast::literal(literal_value2);
-    auto col_ref2       = cudf::ast::column_reference(2);
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name0, literal1);
     auto filter_expression2 =
       cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
-
     auto filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
 
-    // Options with columns selection and filter expression. Since `col2` is referred by index, it
-    // must be present in column selection (or no column selection should be specified)
     auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     test_filter_column_selection(options);
     options.set_columns({"col0", "col1", "col2"});
     test_filter_column_selection(options);
     options.set_columns({"col1"});
-    EXPECT_THROW(test_filter_column_selection(options), std::runtime_error);
+    EXPECT_ANY_THROW(test_filter_column_selection(options));
     options.set_columns({});
-    EXPECT_THROW(test_filter_column_selection(options), std::runtime_error);
+    EXPECT_ANY_THROW(test_filter_column_selection(options));
 
     options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     options.set_column_indices({0, 1, 2});
     test_filter_column_selection(options);
     options.set_column_indices({2});
-    test_filter_column_selection(options);
+    EXPECT_ANY_THROW(test_filter_column_selection(options));
     options.set_column_indices({});
-    EXPECT_THROW(test_filter_column_selection(options), std::runtime_error);
+    EXPECT_ANY_THROW(test_filter_column_selection(options));
+
+    // `col2` is actually in our column selection at index 0, so we can select it using the index in
+    // selection
+    {
+      auto updated_col_ref2 = cudf::ast::column_reference(0);
+      filter_expression2 =
+        cudf::ast::operation(cudf::ast::ast_operator::LESS, updated_col_ref2, literal2);
+      options.set_column_indices({2});
+      test_filter_column_selection(options);
+    }
+  }
+
+  // Test columns selection by index and filter expression. Since both columns are referred by
+  // index, they must be present in the column selection at respective indices (or the filter
+  // expression must be modified)
+  {
+    auto filter_expression1 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal1);
+    auto filter_expression2 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
+
+    auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    test_filter_column_selection(options);
+    options.set_columns({"col0", "col1", "col2"});
+    test_filter_column_selection(options);
+    options.set_columns({"col0", "col1"});
+    EXPECT_ANY_THROW(test_filter_column_selection(options));
+    options.set_columns({"col1"});
+    EXPECT_ANY_THROW(test_filter_column_selection(options));
+    options.set_columns({});
+    EXPECT_ANY_THROW(test_filter_column_selection(options));
+
+    options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    options.set_column_indices({0, 1, 2});
+    test_filter_column_selection(options);
+    options.set_column_indices({2});
+    EXPECT_ANY_THROW(test_filter_column_selection(options));
+    options.set_column_indices({});
+    EXPECT_ANY_THROW(test_filter_column_selection(options));
+  }
+
+  // Both columns are in the selection, so we can select them using the correct indices in the
+  // selection
+  {
+    auto col_ref1 = cudf::ast::column_reference(2);
+    auto col_ref2 = cudf::ast::column_reference(1);
+    auto filter_expression1 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref1, literal1);
+    auto filter_expression2 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
+
+    auto options = cudf::io::parquet_reader_options::builder()
+                     .filter(filter_expression)
+                     .column_indices({1, 2, 0})
+                     .build();
+    test_filter_column_selection(options);
+    options = cudf::io::parquet_reader_options::builder()
+                .filter(filter_expression)
+                .columns({"col1", "col2", "col0"})
+                .build();
+    test_filter_column_selection(options);
   }
 }
 
@@ -486,8 +545,8 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
   srand(31337);
 
   // A table concatenated multiple times by itself with result in a parquet file with a row group
-  // per concatenation with multiple pages per row group. Since all row groups will be identical, we
-  // can only prune pages based on `PageIndex` stats
+  // per concatenation with multiple pages per row group. Since all row groups will be identical,
+  // we can only prune pages based on `PageIndex` stats
   auto constexpr num_concat = 2;
   auto const file_buffer    = std::get<1>(create_parquet_with_stats<T, num_concat, false>());
 
@@ -622,8 +681,8 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
   srand(0xcafe);
   using T = uint32_t;
 
-  // A table with several row groups each containing a single page per column. The data page and row
-  // group stats are identical so only row groups can be pruned using stats
+  // A table with several row groups each containing a single page per column. The data page and
+  // row group stats are identical so only row groups can be pruned using stats
   auto constexpr num_concat = 1;
   auto const buffer         = std::get<1>(create_parquet_with_stats<T, num_concat>());
   auto stream               = cudf::get_default_stream();

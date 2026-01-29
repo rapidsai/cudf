@@ -580,29 +580,12 @@ named_to_reference_converter::named_to_reference_converter(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
   table_metadata const& metadata,
   std::vector<SchemaElement> const& schema_tree,
-  std::optional<std::vector<std::string>> selected_columns)
+  cudf::io::parquet_reader_options const& options)
 {
   if (!expr.has_value()) { return; }
 
-  // Map indices from the column selection to their names
-  if (selected_columns.has_value()) {
-    std::transform(selected_columns->begin(),
-                   selected_columns->end(),
-                   thrust::counting_iterator<cudf::size_type>(0),
-                   std::inserter(_column_indices_to_names, _column_indices_to_names.end()),
-                   [](auto const& col_name, auto const col_index) {
-                     return std::make_pair(col_index, col_name);
-                   });
-  } else {
-    // Map top-level column indices from the schema tree to their names
-    auto const& root = schema_tree.front();
-    std::for_each(thrust::counting_iterator<int32_t>(0),
-                  thrust::counting_iterator<int32_t>(root.children_idx.size()),
-                  [&](int32_t col_idx) {
-                    auto const schema_idx = root.children_idx[col_idx];
-                    _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
-                  });
-  }
+  _column_indices_to_names =
+    cudf::io::parquet::detail::map_column_indices_to_names(options, schema_tree);
 
   // Map column names to their indices
   std::transform(metadata.schema_info.cbegin(),
@@ -629,49 +612,6 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   _col_ref.emplace_back(col_index);
   _converted_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
   return std::reference_wrapper<ast::expression const>(_col_ref.back());
-}
-
-names_from_expression::names_from_expression(
-  std::optional<std::reference_wrapper<ast::expression const>> expr,
-  std::vector<std::string> const& skip_names,
-  std::optional<std::vector<std::string>> selected_columns,
-  std::vector<SchemaElement> const& schema_tree)
-{
-  if (!expr.has_value()) { return; }
-
-  _skip_names = std::unordered_set<std::string>{skip_names.cbegin(), skip_names.cend()};
-
-  // Map indices from the column selection to their names
-  if (selected_columns.has_value()) {
-    std::transform(selected_columns->begin(),
-                   selected_columns->end(),
-                   thrust::counting_iterator<cudf::size_type>(0),
-                   std::inserter(_column_indices_to_names, _column_indices_to_names.end()),
-                   [](auto const& col_name, auto const col_index) {
-                     return std::make_pair(col_index, col_name);
-                   });
-  } else {
-    // Map top-level column indices from the schema tree to their names
-    auto const& root = schema_tree.front();
-    std::for_each(thrust::counting_iterator<int32_t>(0),
-                  thrust::counting_iterator<int32_t>(root.children_idx.size()),
-                  [&](int32_t col_idx) {
-                    auto const schema_idx = root.children_idx[col_idx];
-                    _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
-                  });
-  }
-
-  expr.value().get().accept(*this);
-}
-
-std::reference_wrapper<ast::expression const> names_from_expression::visit(
-  ast::column_reference const& expr)
-{
-  // Map the column index to its name
-  auto const col_name = _column_indices_to_names[expr.get_column_index()];
-  // If the column name is not in the skip_names, add it to the set
-  if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
-  return expr;
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

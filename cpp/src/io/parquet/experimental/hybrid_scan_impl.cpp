@@ -118,8 +118,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     // https://github.com/rapidsai/cudf/blob/a8b25cd205dc5d04b9918dcb0b3abd6b8c4e4a74/cpp/src/io/parquet/reader_impl.cpp#L556-L569
     std::optional<std::vector<std::string>> filter_only_columns_names;
     if (options.get_filter().has_value() and select_column_names.has_value()) {
-      filter_only_columns_names = cudf::io::parquet::detail::get_column_names_in_expression(
-        options.get_filter(), *select_column_names);
+      filter_only_columns_names = parquet::detail::get_column_names_in_expression(
+        options.get_filter(), *select_column_names, options, _extended_metadata->get_schema_tree());
       _num_filter_only_columns = filter_only_columns_names->size();
     }
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
@@ -138,12 +138,9 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
 
     // list, struct, dictionary are not supported by AST filter yet.
     auto constexpr ignore_missing_columns = false;
-    auto const select_column_names        = get_column_projection(options, ignore_missing_columns);
 
-    _filter_columns_names =
-      names_from_expression(
-        options.get_filter(), {}, select_column_names, _extended_metadata->get_schema_tree())
-        .to_vector();
+    _filter_columns_names = cudf::io::parquet::detail::get_column_names_in_expression(
+      options.get_filter(), {}, options, _extended_metadata->get_schema_tree());
     // Select only filter columns using the base `select_columns` method
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
       _extended_metadata->select_columns(_filter_columns_names,
@@ -693,7 +690,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _output_chunk_read_limit = 0;
   _strings_to_categorical  = false;
   _reader_column_schema.reset();
-  _expr_conv = named_to_reference_converter(std::nullopt, {}, {}, {});
+  _expr_conv = named_to_reference_converter{};
 }
 
 void hybrid_scan_reader_impl::initialize_options(
@@ -720,14 +717,12 @@ void hybrid_scan_reader_impl::initialize_options(
 named_to_reference_converter hybrid_scan_reader_impl::build_converted_expression(
   parquet_reader_options const& options)
 {
-  if (not options.get_filter().has_value()) {
-    return named_to_reference_converter(std::nullopt, {}, {}, {});
-  }
+  if (not options.get_filter().has_value()) { return named_to_reference_converter{}; }
 
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(
-    options.get_filter(), metadata, _extended_metadata->get_schema_tree(), options.get_columns());
+    options.get_filter(), metadata, _extended_metadata->get_schema_tree(), options);
   CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
                "Columns names in filter expression must be convertible to index references");
   return expr_conv;
