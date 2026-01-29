@@ -65,32 +65,51 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
 }
 
 /**
- * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
+ * @brief Converts a span of device buffers into a vector of corresponding device spans
+ *
+ * @tparam T Type of output device spans
+ * @param buffers Host span of device buffers
+ * @return Device spans corresponding to the input device buffers
+ */
+template <typename T>
+std::vector<cudf::device_span<T const>> make_device_spans(
+  cudf::host_span<rmm::device_buffer const> buffers)
+  requires(sizeof(T) == 1)
+{
+  std::vector<cudf::device_span<T const>> device_spans(buffers.size());
+  std::transform(buffers.begin(), buffers.end(), device_spans.begin(), [](auto const& buffer) {
+    return cudf::device_span<T const>{static_cast<T const*>((buffer.data())), buffer.size()};
+  });
+  return device_spans;
+}
+
+/**
+ * @brief Fetches a list of byte ranges from a host buffer into device buffers
  *
  * @param host_buffer Host buffer span
  * @param byte_ranges Byte ranges to fetch
  * @param stream CUDA stream
+ * @param mr Device memory resource
  *
- * @return Vector of device buffers
+ * @return Device buffers
  */
 std::vector<rmm::device_buffer> fetch_byte_ranges(
   cudf::host_span<uint8_t const> host_buffer,
   cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
-  std::vector<rmm::device_buffer> buffers{};
-  buffers.reserve(byte_ranges.size());
+  std::vector<rmm::device_buffer> buffers(byte_ranges.size());
 
   std::transform(
-    byte_ranges.begin(),
-    byte_ranges.end(),
-    std::back_inserter(buffers),
-    [&](auto const& byte_range) {
+    byte_ranges.begin(), byte_ranges.end(), buffers.begin(), [&](auto const& byte_range) {
       auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = byte_range.size();
-      auto buffer             = rmm::device_buffer(chunk_size, stream);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
+      auto const chunk_size   = static_cast<size_t>(byte_range.size());
+      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
+      cudf::detail::cuda_memcpy_async(
+        cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
+        cudf::host_span<uint8_t const>{chunk_offset, chunk_size},
+        stream);
       return buffer;
     });
 
@@ -157,9 +176,10 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
   // If we have dictionary page byte ranges, filter row groups with dictionary pages
   CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
 
-  // Fetch dictionary page buffers from the input file buffer
-  std::vector<rmm::device_buffer> dictionary_page_buffers =
-    fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream);
+  // Fetch dictionary page buffers and corresponding device spans from the input file buffer
+  auto dictionary_page_buffers = fetch_byte_ranges(
+    file_buffer_span, dict_page_byte_ranges, stream, cudf::get_current_device_resource_ref());
+  auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
@@ -168,7 +188,7 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
                try_drop_l3_cache();
                timer.start();
                std::ignore = reader->filter_row_groups_with_dictionary_pages(
-                 dictionary_page_buffers, input_row_group_indices, read_opts, stream);
+                 dictionary_page_data, input_row_group_indices, read_opts, stream);
                timer.stop();
              });
 

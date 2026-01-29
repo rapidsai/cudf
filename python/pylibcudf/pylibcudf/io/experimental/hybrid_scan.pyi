@@ -1,9 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
 
-from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
@@ -11,6 +10,7 @@ from pylibcudf.column import Column
 from pylibcudf.io.parquet import ParquetReaderOptions
 from pylibcudf.io.text import ByteRangeInfo
 from pylibcudf.io.types import TableWithMetadata
+from pylibcudf.span import Span
 
 class UseDataPageMask(IntEnum):
     YES: int
@@ -50,14 +50,14 @@ class HybridScanReader:
     ) -> tuple[list[ByteRangeInfo], list[ByteRangeInfo]]: ...
     def filter_row_groups_with_dictionary_pages(
         self,
-        dictionary_page_data: list[DeviceBuffer],
+        dictionary_page_data: list[Span],
         row_group_indices: list[int],
         options: ParquetReaderOptions,
         stream: Stream | None = None,
     ) -> list[int]: ...
     def filter_row_groups_with_bloom_filters(
         self,
-        bloom_filter_data: list[DeviceBuffer],
+        bloom_filter_data: list[Span],
         row_group_indices: list[int],
         options: ParquetReaderOptions,
         stream: Stream | None = None,
@@ -75,7 +75,7 @@ class HybridScanReader:
     def materialize_filter_columns(
         self,
         row_group_indices: list[int],
-        column_chunk_buffers: list[DeviceBuffer],
+        column_chunk_data: list[Span],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
@@ -87,7 +87,7 @@ class HybridScanReader:
     def materialize_payload_columns(
         self,
         row_group_indices: list[int],
-        column_chunk_buffers: list[DeviceBuffer],
+        column_chunk_data: list[Span],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
@@ -100,7 +100,7 @@ class HybridScanReader:
         row_group_indices: list[int],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
-        column_chunk_buffers: list[DeviceBuffer],
+        column_chunk_data: list[Span],
         options: ParquetReaderOptions,
         stream: Stream | None = None,
     ) -> None: ...
@@ -114,7 +114,7 @@ class HybridScanReader:
         row_group_indices: list[int],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
-        column_chunk_buffers: list[DeviceBuffer],
+        column_chunk_data: list[Span],
         options: ParquetReaderOptions,
         stream: Stream | None = None,
     ) -> None: ...

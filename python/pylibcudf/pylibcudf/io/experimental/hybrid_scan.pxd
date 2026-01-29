@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint8_t
@@ -16,7 +16,11 @@ from pylibcudf.libcudf.io.hybrid_scan cimport (
     use_data_page_mask,
 )
 from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
-from rmm.librmm.device_buffer cimport device_buffer
+from pylibcudf.libcudf.io.hybrid_scan cimport const_uint8_t
+from pylibcudf.libcudf.utilities.span cimport device_span
+
+
+cdef device_span[const_uint8_t] _get_device_span(object obj) except *
 
 
 cdef class FileMetaData:
@@ -28,7 +32,3 @@ cdef class FileMetaData:
 
 cdef class HybridScanReader:
     cdef unique_ptr[cpp_hybrid_scan_reader] c_obj
-
-
-cdef class DeviceBuffer:
-    cdef device_buffer c_obj

@@ -7,7 +7,7 @@ import pyarrow.parquet as pq
 import pytest
 from utils import synchronize_stream
 
-from rmm import DeviceBuffer
+import rmm
 from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
@@ -17,7 +17,10 @@ from pylibcudf.expressions import (
     Literal,
     Operation,
 )
-from pylibcudf.io.experimental import HybridScanReader, UseDataPageMask
+from pylibcudf.io.experimental import (
+    HybridScanReader,
+    UseDataPageMask,
+)
 
 
 @pytest.fixture(scope="module")
@@ -320,10 +323,12 @@ def test_hybrid_scan_materialize_columns(
     filter_ranges = simple_hybrid_scan_reader.filter_column_chunks_byte_ranges(
         filtered_row_groups, simple_parquet_options
     )
-    filter_buffers = [
-        DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size],
-            plc.utils._get_stream(stream),
+    filter_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                simple_parquet_bytes[r.offset : r.offset + r.size],
+                plc.utils._get_stream(stream),
+            )
         )
         for r in filter_ranges
     ]
@@ -333,7 +338,7 @@ def test_hybrid_scan_materialize_columns(
     # Materialize filter columns (mr is optional, defaults to None)
     filter_result = simple_hybrid_scan_reader.materialize_filter_columns(
         filtered_row_groups,
-        filter_buffers,
+        filter_data,
         row_mask,
         use_data_page_mask,
         simple_parquet_options,
@@ -353,10 +358,12 @@ def test_hybrid_scan_materialize_columns(
             filtered_row_groups, simple_parquet_options
         )
     )
-    payload_buffers = [
-        DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size],
-            plc.utils._get_stream(stream),
+    payload_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                simple_parquet_bytes[r.offset : r.offset + r.size],
+                plc.utils._get_stream(stream),
+            )
         )
         for r in payload_ranges
     ]
@@ -366,7 +373,7 @@ def test_hybrid_scan_materialize_columns(
     # Materialize payload columns (mr is optional, defaults to None)
     payload_result = simple_hybrid_scan_reader.materialize_payload_columns(
         filtered_row_groups,
-        payload_buffers,
+        payload_data,
         row_mask,
         use_data_page_mask,
         simple_parquet_options,
@@ -440,10 +447,12 @@ def test_hybrid_scan_has_next_table_chunk(
     filter_ranges = simple_hybrid_scan_reader.filter_column_chunks_byte_ranges(
         filtered_row_groups, simple_parquet_options
     )
-    filter_buffers = [
-        DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size],
-            plc.utils._get_stream(),
+    filter_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                simple_parquet_bytes[r.offset : r.offset + r.size],
+                plc.utils._get_stream(),
+            )
         )
         for r in filter_ranges
     ]
@@ -457,7 +466,7 @@ def test_hybrid_scan_has_next_table_chunk(
         filtered_row_groups,
         row_mask,
         UseDataPageMask.NO,
-        filter_buffers,
+        filter_data,
         simple_parquet_options,
     )
 
@@ -508,10 +517,12 @@ def test_hybrid_scan_chunked_reading(
     filter_ranges = simple_hybrid_scan_reader.filter_column_chunks_byte_ranges(
         filtered_row_groups, simple_parquet_options
     )
-    filter_buffers = [
-        DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size],
-            plc.utils._get_stream(stream),
+    filter_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                simple_parquet_bytes[r.offset : r.offset + r.size],
+                plc.utils._get_stream(stream),
+            )
         )
         for r in filter_ranges
     ]
@@ -528,7 +539,7 @@ def test_hybrid_scan_chunked_reading(
         filtered_row_groups,
         row_mask,
         UseDataPageMask.NO,
-        filter_buffers,
+        filter_data,
         simple_parquet_options,
         stream,
     )
