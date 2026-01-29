@@ -23,4 +23,4 @@ fi
 
 ctest -R BITMASK_TEST --output-on-failure --no-tests=error "$@"
 
-BITMASK_TEST --gtest_filter=CountBitmaskTest.IndexOfFirstUnsetBit
+./BITMASK_TEST --gtest_filter=CountBitmaskTest.IndexOfFirstUnsetBit
