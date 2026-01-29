@@ -5,12 +5,11 @@ from __future__ import annotations
 
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -171,18 +170,41 @@ class CategoricalColumn(column.ColumnBase):
         op: str,
         skipna: bool = True,
         min_count: int = 0,
-        *args: Any,
         **kwargs: Any,
     ) -> ScalarLike:
+        """Custom reduction for categorical columns - delegates to codes."""
         # Only valid reductions are min and max
         if not self.ordered:
             raise TypeError(
-                f"Categorical is not ordered for operation {op} "
-                "you can use .as_ordered() to change the Categorical "
+                f"Categorical is not ordered for operation {op}. "
+                "You can use .as_ordered() to change the Categorical "
                 "to an ordered one."
             )
-        return self._decode(
-            self.codes._reduce(op, skipna, min_count, *args, **kwargs)
+
+        # Delegate to underlying codes column via public method
+        result = getattr(self.codes, op)(
+            skipna=skipna, min_count=min_count, **kwargs
+        )
+
+        # Decode the result back to a category
+        return self._decode(result)
+
+    def all(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> bool:
+        """Categorical columns don't support all() reduction."""
+        raise TypeError(
+            f"'{type(self).__name__}' with dtype {self.dtype} "
+            f"does not support reduction 'all'"
+        )
+
+    def any(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> bool:
+        """Categorical columns don't support any() reduction."""
+        raise TypeError(
+            f"'{type(self).__name__}' with dtype {self.dtype} "
+            f"does not support reduction 'any'"
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -200,10 +222,9 @@ class CategoricalColumn(column.ColumnBase):
                     )
             # We'll compare self's decategorized values later for non-CategoricalColumn
         else:
-            codes = column.as_column(
+            other = column.as_column(
                 self._encode(other), length=len(self), dtype=self.codes.dtype
-            )
-            other = codes._with_type_metadata(self.dtype)
+            )._with_type_metadata(self.dtype)
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
         if not self.ordered and op not in equality_ops:
             raise TypeError(
@@ -591,13 +612,14 @@ class CategoricalColumn(column.ColumnBase):
         out = self.categories.take(gather_map)
         mask = self.mask
         if self.offset > 0 and mask is not None:
-            mask = cudf.core.buffer.as_buffer(
-                plc.null_mask.copy_bitmask_from_bitmask(
-                    mask,
-                    self.offset,
-                    mask.size - self.offset,
+            with mask.access(mode="read", scope="internal"):
+                mask = cudf.core.buffer.as_buffer(
+                    plc.null_mask.copy_bitmask_from_bitmask(
+                        mask,
+                        self.offset,
+                        mask.size - self.offset,
+                    )
                 )
-            )
         out = out.set_mask(mask)
         return out
 

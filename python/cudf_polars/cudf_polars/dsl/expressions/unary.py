@@ -5,9 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, cast
-
-from typing_extensions import assert_never
+from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
 import pylibcudf as plc
 

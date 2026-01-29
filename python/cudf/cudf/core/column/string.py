@@ -5,13 +5,13 @@ from __future__ import annotations
 
 import itertools
 import re
+import warnings
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -134,21 +134,6 @@ class StringColumn(ColumnBase, Scannable):
             dtype = CUDF_STRING_DTYPE
         return plc_column, dtype
 
-    def all(self, skipna: bool = True) -> bool:
-        if skipna and self.null_count == self.size:
-            return True
-        elif not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
-        raise NotImplementedError("`all` not implemented for `StringColumn`")
-
-    def any(self, skipna: bool = True) -> bool:
-        if not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
-        elif skipna and self.null_count == self.size:
-            return False
-
-        raise NotImplementedError("`any` not implemented for `StringColumn`")
-
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
@@ -188,14 +173,59 @@ class StringColumn(ColumnBase, Scannable):
         self,
         skipna: bool = True,
         min_count: int = 0,
+        **kwargs: Any,
     ) -> ScalarLike:
-        result_col = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
+        col = self.nans_to_nulls() if skipna else self
+        if not skipna and col.has_nulls():
+            return pd.NA
+        if skipna:
+            col = col.dropna()
+
+        if min_count > 0 and len(col) - col.null_count < min_count:
+            return pd.NA
+
+        return (
+            0
+            if len(col) == 0
+            else col.join_strings("", None).element_indexing(0)
         )
-        if isinstance(result_col, type(self)):
-            return result_col.join_strings("", None).element_indexing(0)
-        else:
-            return result_col
+
+    def any(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> ScalarLike:
+        """Check if any string value is truthy (non-empty)."""
+        if not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        elif skipna and self.null_count == self.size:
+            return False
+        raise NotImplementedError("`any` not implemented for `StringColumn`")
+
+    def all(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> ScalarLike:
+        """Check if all string values are truthy (non-empty)."""
+        if skipna and self.null_count == self.size:
+            return True
+        elif not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        raise NotImplementedError("`all` not implemented for `StringColumn`")
+
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Validate reduction operations for StringColumn."""
+        if op in {"min", "max"}:
+            return super()._reduce(op, skipna, min_count, **kwargs)
+
+        # For empty columns with statistical operations, return NaN (pandas behavior)
+        if len(self) == 0 and op in {"var", "std", "mean", "sum_of_squares"}:
+            return np.nan
+
+        raise TypeError(f"Series.{op} does not support StringColumn")
 
     def __contains__(self, item: ScalarLike) -> bool:
         other = [item] if is_scalar(item) else item
@@ -255,11 +285,6 @@ class StringColumn(ColumnBase, Scannable):
             new_type = self._get_pandas_compatible_dtype(np.dtype("int64"))
             return result._with_type_metadata(new_type)
         return result
-
-    def _scan(self, op: str) -> ColumnBase:
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
-        )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
@@ -735,6 +760,11 @@ class StringColumn(ColumnBase, Scannable):
         merge_pairs: plc.nvtext.byte_pair_encode.BPEMergePairs,
         separator: str,
     ) -> Self:
+        warnings.warn(
+            "byte_pair_encoding is deprecated and will be removed in a future version.",
+            FutureWarning,
+            stacklevel=2,
+        )
         with self.access(mode="read", scope="internal"):
             return cast(
                 Self,
@@ -961,29 +991,63 @@ class StringColumn(ColumnBase, Scannable):
             return cast(Self, ColumnBase.from_pylibcudf(plc_column))
 
     def to_lower(self) -> Self:
-        return self._modify_characters(
-            plc.strings.case.to_lower
-        )._with_type_metadata(self.dtype)
+        with self.access(mode="read", scope="internal"):
+            result = cast(
+                Self,
+                ColumnBase.create(
+                    plc.strings.case.to_lower(self.plc_column), self.dtype
+                ),
+            )
+
+        # Handle Greek final sigma (ς) special case in pandas compatibility mode
+        # Greek capital sigma (Σ) lowercases to regular sigma (σ) at libcudf level,  # noqa: RUF003
+        # but should become final sigma (ς) when at the end of a word.
+        # Replace σ with ς when followed by end-of-string or non-letter character.  # noqa: RUF003
+        if cudf.get_option("mode.pandas_compatible"):
+            has_sigma = result.str_contains("σ")
+            if has_sigma.any():
+                result = result.replace_with_backrefs(
+                    r"σ($|[^a-zA-Zα-ωΑ-Ωά-ώΆ-Ώ])", r"ς\1"
+                )
+
+        return result
 
     def to_upper(self) -> Self:
-        return self._modify_characters(
-            plc.strings.case.to_upper
-        )._with_type_metadata(self.dtype)
+        with self.access(mode="read", scope="internal"):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc.strings.case.to_upper(self.plc_column), self.dtype
+                ),
+            )
 
     def capitalize(self) -> Self:
-        return self._modify_characters(
-            plc.strings.capitalize.capitalize
-        )._with_type_metadata(self.dtype)
+        with self.access(mode="read", scope="internal"):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc.strings.capitalize.capitalize(self.plc_column),
+                    self.dtype,
+                ),
+            )
 
     def swapcase(self) -> Self:
-        return self._modify_characters(
-            plc.strings.case.swapcase
-        )._with_type_metadata(self.dtype)
+        with self.access(mode="read", scope="internal"):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc.strings.case.swapcase(self.plc_column), self.dtype
+                ),
+            )
 
     def title(self) -> Self:
-        return self._modify_characters(
-            plc.strings.capitalize.title
-        )._with_type_metadata(self.dtype)
+        with self.access(mode="read", scope="internal"):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc.strings.capitalize.title(self.plc_column), self.dtype
+                ),
+            )
 
     def is_title(self) -> Self:
         res = self._modify_characters(plc.strings.capitalize.is_title)
@@ -998,9 +1062,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                ColumnBase.from_pylibcudf(plc_result)._with_type_metadata(
-                    self.dtype
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def is_hex(self) -> NumericalColumn:
@@ -1128,9 +1190,7 @@ class StringColumn(ColumnBase, Scannable):
                 enumerate(
                     cast(
                         Self,
-                        ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                            self.dtype
-                        ),
+                        ColumnBase.create(col, self.dtype),
                     )
                     for col in plc_table.columns()
                 )
@@ -1197,9 +1257,7 @@ class StringColumn(ColumnBase, Scannable):
                 enumerate(
                     cast(
                         Self,
-                        ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                            self.dtype
-                        ),
+                        ColumnBase.create(col, self.dtype),
                     )
                     for col in plc_table.columns()
                 )
@@ -1210,6 +1268,18 @@ class StringColumn(ColumnBase, Scannable):
 
     def rsplit(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
+
+    def split_part(self, delimiter: plc.Scalar, index: int) -> Self:
+        with self.access(mode="read", scope="internal"):
+            plc_column = plc.strings.split.split.split_part(
+                self.plc_column,
+                delimiter,
+                index,
+            )
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
+            )
 
     def _partition(
         self,
@@ -1225,9 +1295,7 @@ class StringColumn(ColumnBase, Scannable):
                 enumerate(
                     cast(
                         Self,
-                        ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                            self.dtype
-                        ),
+                        ColumnBase.create(col, self.dtype),
                     )
                     for col in plc_table.columns()
                 )
@@ -1250,11 +1318,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_column)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def url_encode(self) -> Self:
@@ -1264,11 +1328,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_column)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def is_integer(self) -> NumericalColumn:
@@ -1332,11 +1392,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_column)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def concatenate(
@@ -1352,11 +1408,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_column)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def extract(self, pattern: str, flags: int) -> dict[int, Self]:
@@ -1370,12 +1422,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return dict(
                 enumerate(
-                    cast(
-                        Self,
-                        type(self)
-                        .from_pylibcudf(col)
-                        ._with_type_metadata(self.dtype),
-                    )
+                    cast(Self, ColumnBase.create(col, self.dtype))
                     for col in plc_table.columns()
                 )
             )
@@ -1426,7 +1473,9 @@ class StringColumn(ColumnBase, Scannable):
                 (
                     type(self)
                     .from_pylibcudf(plc_column)
-                    ._with_type_metadata(self.dtype)
+                    ._with_type_metadata(
+                        get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
+                    )
                 ),
             )
 
@@ -1443,11 +1492,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_column)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def replace_re(
@@ -1482,11 +1527,7 @@ class StringColumn(ColumnBase, Scannable):
                 raise ValueError("Invalid pattern and replacement types")
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_column)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def replace_str(
@@ -1501,11 +1542,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_result)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def replace_with_backrefs(self, pattern: str, replacement: str) -> Self:
@@ -1519,11 +1556,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_result)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def slice_strings(
@@ -1555,11 +1588,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_result)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def all_characters_of_type(
@@ -1611,11 +1640,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_column)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def replace_slice(self, start: int, stop: int, repl: str) -> Self:
@@ -1628,11 +1653,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_result)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def get_json_object(
@@ -1672,11 +1693,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_result)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def zfill(self, width: int) -> Self:
@@ -1687,11 +1704,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_result)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def strip(
@@ -1707,11 +1720,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_result)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def wrap(self, width: int) -> Self:
@@ -1722,11 +1731,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_result)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def count_re(self, pattern: str, flags: int) -> NumericalColumn:
@@ -1876,11 +1881,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_result)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def filter_characters(
@@ -1900,9 +1901,5 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                (
-                    type(self)
-                    .from_pylibcudf(plc_result)
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
