@@ -526,7 +526,7 @@ class IndexedFrame(Frame):
                 else:
                     dtype = np.dtype(np.int64)
                 result_col = result_col.astype(dtype)
-            results.append(getattr(result_col, op)())
+            results.append(getattr(result_col, op)(inclusive=True))
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
         )
@@ -1544,6 +1544,11 @@ class IndexedFrame(Frame):
         >>> ser.median()
         17.0
         """
+        if "overwrite_input" in kwargs:
+            raise ValueError(
+                "the 'overwrite_input' parameter is not supported in the "
+                "pandas implementation of median()"
+            )
         return self._reduce(
             "median",
             axis=axis,

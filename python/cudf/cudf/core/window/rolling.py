@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 import itertools
 import warnings
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -395,11 +395,21 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         """
         return self._apply_agg(op)
 
-    def var(self, ddof: int = 1) -> DataFrame | Series:
+    def var(
+        self,
+        skipna: bool = True,
+        min_count: int = 0,
+        ddof: int = 1,
+        **kwargs: Any,
+    ) -> DataFrame | Series:
         """Calculate the rolling variance.
 
         Parameters
         ----------
+        skipna : bool, default True
+            Exclude NA/null values.
+        min_count : int, default 0
+            Minimum number of observations required.
         ddof : int, default 1
             Delta Degrees of Freedom.  The divisor used in calculations
             is ``N - ddof``, where ``N`` represents the number of
@@ -410,13 +420,23 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         Series or DataFrame
             Return type is the same as the original object.
         """
-        return self._apply_agg("var", ddof=ddof)
+        return self._apply_agg("var", ddof=ddof, **kwargs)
 
-    def std(self, ddof: int = 1) -> DataFrame | Series:
+    def std(
+        self,
+        skipna: bool = True,
+        min_count: int = 0,
+        ddof: int = 1,
+        **kwargs: Any,
+    ) -> DataFrame | Series:
         """Calculate the rolling standard deviation.
 
         Parameters
         ----------
+        skipna : bool, default True
+            Exclude NA/null values.
+        min_count : int, default 0
+            Minimum number of observations required.
         ddof : int, default 1
             Delta Degrees of Freedom.  The divisor used in calculations
             is ``N - ddof``, where ``N`` represents the number of
@@ -427,10 +447,19 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         Series or DataFrame
             Return type is the same as the original object.
         """
-        return self._apply_agg("std", ddof=ddof)
+        return self._apply_agg("std", ddof=ddof, **kwargs)
 
-    def count(self) -> DataFrame | Series:
+    def count(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> DataFrame | Series:
         """Calculate the rolling count of non NaN observations.
+
+        Parameters
+        ----------
+        skipna : bool, default True
+            Exclude NA/null values.
+        min_count : int, default 0
+            Minimum number of observations required.
 
         Returns
         -------
