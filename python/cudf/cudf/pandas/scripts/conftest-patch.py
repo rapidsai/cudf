@@ -3189,7 +3189,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/test_query_eval.py::TestDataFrameQueryPythonPython::test_query_numexpr_with_min_and_max_columns",
     "tests/frame/test_query_eval.py::TestDataFrameQueryWithMultiIndex::test_query_multiindex_get_index_resolvers",
     "tests/frame/test_reductions.py::TestDataFrameAnalytics::test_any_all_bool_frame[any]",
-    "tests/frame/test_reductions.py::TestDataFrameAnalytics::test_any_all_extra",
     "tests/frame/test_reductions.py::TestDataFrameAnalytics::test_any_all_np_func[all-data1-True]",
     "tests/frame/test_reductions.py::TestDataFrameAnalytics::test_any_all_np_func[any-data0-False]",
     "tests/frame/test_reductions.py::TestDataFrameAnalytics::test_idxmax_idxmin_convert_dtypes[idxmax-expected_value0]",
