@@ -900,6 +900,38 @@ def test_validate_stats_planning(option: str) -> None:
         )
 
 
+@pytest.mark.parametrize("option", ["enabled", "sample_chunk_count"])
+def test_validate_dynamic_planning(option: str) -> None:
+    with pytest.raises(TypeError, match=f"{option} must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {option: object()}},
+            )
+        )
+
+
+def test_dynamic_planning_sample_chunk_count_min() -> None:
+    with pytest.raises(ValueError, match="sample_chunk_count must be at least 1"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"sample_chunk_count": 0}},
+            )
+        )
+
+
+def test_dynamic_planning_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__ENABLED", "1")
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__SAMPLE_CHUNK_COUNT", "3"
+    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    assert config.executor.dynamic_planning.enabled is True
+    assert config.executor.dynamic_planning.sample_chunk_count == 3
+
+
 def test_parse_memory_resource_config() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
