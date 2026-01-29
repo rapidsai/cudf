@@ -145,17 +145,17 @@ std::unique_ptr<cudf::io::parquet::experimental::deletion_vector_info> make_dele
  */
 JNIEXPORT jlongArray JNICALL
 Java_ai_rapids_cudf_DeltaLake_readParquet(JNIEnv* env,
-                                               jclass,
-                                               jobjectArray filter_col_names,
-                                               jbooleanArray col_binary_read,
-                                               jobjectArray input_file_paths,
-                                               jlongArray addrs_and_sizes,
-                                               jobjectArray row_groups,
-                                               jint unit,
-                                               jlongArray serialized_roaring64,
-                                               jintArray deletion_vector_row_counts,
-                                               jlongArray row_group_offsets,
-                                               jintArray row_group_num_rows)
+                                          jclass,
+                                          jobjectArray filter_col_names,
+                                          jbooleanArray col_binary_read,
+                                          jobjectArray input_file_paths,
+                                          jlongArray addrs_and_sizes,
+                                          jobjectArray row_groups,
+                                          jint unit,
+                                          jlongArray serialized_roaring64,
+                                          jintArray deletion_vector_row_counts,
+                                          jlongArray row_group_offsets,
+                                          jintArray row_group_num_rows)
 {
   bool read_buffer = true;
   if (addrs_and_sizes == nullptr) {
@@ -186,8 +186,8 @@ Java_ai_rapids_cudf_DeltaLake_readParquet(JNIEnv* env,
     cudf::io::source_info source =
       make_source_info(env, read_buffer, filenames, multi_buffer_source);
 
-    cudf::io::parquet_reader_options opts =
-      make_parquet_reader_options(env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
+    cudf::io::parquet_reader_options opts = make_parquet_reader_options(
+      env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
 
     auto dv_info = make_deletion_vector_info(
       env, serialized_roaring64, deletion_vector_row_counts, row_group_offsets, row_group_num_rows);
@@ -233,19 +233,19 @@ Java_ai_rapids_cudf_DeltaLake_readParquet(JNIEnv* env,
  */
 JNIEXPORT jlongArray JNICALL
 Java_ai_rapids_cudf_DeltaLake_createParquetChunkedReader(JNIEnv* env,
-                                                              jclass,
-                                                              jlong chunk_read_limit,
-                                                              jlong pass_read_limit,
-                                                              jobjectArray filter_col_names,
-                                                              jbooleanArray col_binary_read,
-                                                              jobjectArray input_file_paths,
-                                                              jlongArray addrs_sizes,
-                                                              jobjectArray row_groups,
-                                                              jint unit,
-                                                              jlongArray serialized_roaring64,
-                                                              jintArray deletion_vector_row_counts,
-                                                              jlongArray row_group_offsets,
-                                                              jintArray row_group_num_rows)
+                                                         jclass,
+                                                         jlong chunk_read_limit,
+                                                         jlong pass_read_limit,
+                                                         jobjectArray filter_col_names,
+                                                         jbooleanArray col_binary_read,
+                                                         jobjectArray input_file_paths,
+                                                         jlongArray addrs_sizes,
+                                                         jobjectArray row_groups,
+                                                         jint unit,
+                                                         jlongArray serialized_roaring64,
+                                                         jintArray deletion_vector_row_counts,
+                                                         jlongArray row_group_offsets,
+                                                         jintArray row_group_num_rows)
 {
   bool read_buffer = true;
   if (addrs_sizes == nullptr) {
@@ -276,8 +276,8 @@ Java_ai_rapids_cudf_DeltaLake_createParquetChunkedReader(JNIEnv* env,
     cudf::io::source_info source =
       make_source_info(env, read_buffer, filenames, multi_buffer_source);
 
-    cudf::io::parquet_reader_options opts =
-      make_parquet_reader_options(env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
+    cudf::io::parquet_reader_options opts = make_parquet_reader_options(
+      env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
 
     auto dv_info = make_deletion_vector_info(
       env, serialized_roaring64, deletion_vector_row_counts, row_group_offsets, row_group_num_rows);
@@ -352,8 +352,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_DeltaLake_parquetChunkedReaderR
  * @param env JNI environment
  * @param j_reader_handle Handle to the chunked_parquet_reader
  */
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_DeltaLake_closeParquetChunkedReader(
-  JNIEnv* env, jclass, jlong j_reader_handle)
+JNIEXPORT void JNICALL
+Java_ai_rapids_cudf_DeltaLake_closeParquetChunkedReader(JNIEnv* env, jclass, jlong j_reader_handle)
 {
   JNI_NULL_CHECK(env, j_reader_handle, "reader handle is null", );
 
