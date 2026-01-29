@@ -482,21 +482,6 @@ jobs:
       node_type: "gpu-l4-latest-1"
       container_image: "rapidsai/citestwheel:26.04-latest"
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
-<<<<<<< HEAD
-  # narwhals-tests:
-  #   needs: [conda-python-build, conda-python-build-noarch, changed-files]
-  #   secrets: inherit
-  #   uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-  #   if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
-  #   with:
-  #     build_type: pull-request
-  #     branch: ${{ inputs.branch }}
-  #     date: ${{ inputs.date }}
-  #     sha: ${{ inputs.sha }}
-  #     node_type: "gpu-l4-latest-1"
-  #     container_image: "rapidsai/ci-conda:26.04-latest"
-  #     script: ci/test_narwhals.sh
-=======
   # narwhals-tests:
   #   needs: [conda-python-build, conda-python-build-noarch, changed-files]
   #   secrets: inherit
@@ -510,7 +495,6 @@ jobs:
   #     node_type: "gpu-l4-latest-1"
   #     container_image: "rapidsai/ci-conda:26.04-latest"
   #     script: ci/test_narwhals.sh
->>>>>>> main
   spark-rapids-jni:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
