@@ -471,7 +471,7 @@ class DynamicPlanningOptions:
         Whether to enable dynamic planning mode. When enabled, shuffle
         operations are not inserted at lowering time. Instead, the runtime
         samples chunks to decide whether shuffling is needed.
-        Default is True.
+        Default is False.
     sample_chunk_count
         The maximum number of chunks to sample before deciding whether
         to shuffle. A higher value provides more accurate estimates but
@@ -483,7 +483,7 @@ class DynamicPlanningOptions:
 
     enabled: bool = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__ENABLED", _bool_converter, default=True
+            f"{_env_prefix}__ENABLED", _bool_converter, default=False
         )
     )
     sample_chunk_count: int = dataclasses.field(

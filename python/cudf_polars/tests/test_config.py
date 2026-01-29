@@ -921,6 +921,14 @@ def test_dynamic_planning_sample_chunk_count_min() -> None:
         )
 
 
+def test_dynamic_planning_defaults() -> None:
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    # Dynamic planning is disabled by default until fully implemented
+    assert config.executor.dynamic_planning.enabled is False
+    assert config.executor.dynamic_planning.sample_chunk_count == 2
+
+
 def test_dynamic_planning_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__ENABLED", "1")
     monkeypatch.setenv(
