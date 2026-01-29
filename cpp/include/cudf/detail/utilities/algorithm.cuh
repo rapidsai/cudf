@@ -16,6 +16,7 @@
 #include <cuda/std/functional>
 #include <cuda/stream_ref>
 #include <thrust/copy.h>
+#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf::detail {
 
@@ -39,12 +40,13 @@ template <typename InputIterator,
           typename StencilIterator,
           typename OutputIterator,
           typename Predicate>
-OutputIterator copy_if_safe(InputIterator first,
-                            InputIterator last,
-                            StencilIterator stencil,
-                            OutputIterator result,
-                            Predicate pred,
-                            rmm::cuda_stream_view stream)
+[[deprecated("Use cudf::detail::copy_if instead")]] OutputIterator copy_if_safe(
+  InputIterator first,
+  InputIterator last,
+  StencilIterator stencil,
+  OutputIterator result,
+  Predicate pred,
+  rmm::cuda_stream_view stream)
 {
   auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
                                   static_cast<std::size_t>(std::numeric_limits<int>::max()));
@@ -58,6 +60,69 @@ OutputIterator copy_if_safe(InputIterator first,
     itr = copy_end;
   }
   return result;
+}
+
+/**
+ * @brief Helper to copy elements satisfying a predicate/stencil using CUB with pinned memory
+ *
+ * This function copies elements from the input range that satisfy the given predicate/stencil
+ * to the output range, using CUB's DeviceSelect::FlaggedIf implementation with pinned memory
+ * for efficient device-to-host transfer of the number of selected elements.
+ *
+ * @tparam InputIterator **[inferred]** Type of device-accessible input iterator
+ * @tparam StencilIterator **[inferred]** Type of device-accessible stencil iterator
+ * @tparam OutputIterator **[inferred]** Type of device-accessible output iterator
+ * @tparam Predicate **[inferred]** Type of the unary predicate
+ *
+ * @param begin Device-accessible iterator to start of input values
+ * @param end Device-accessible iterator to end of input values
+ * @param stencil Device-accessible iterator to start of stencil values
+ * @param result Device-accessible iterator to start of output values
+ * @param predicate Unary predicate that returns true for elements to copy
+ * @param stream CUDA stream to use
+ * @return Iterator pointing to the end of the output range
+ */
+template <typename InputIterator,
+          typename StencilIterator,
+          typename OutputIterator,
+          typename Predicate>
+OutputIterator copy_if(InputIterator begin,
+                       InputIterator end,
+                       StencilIterator stencil,
+                       OutputIterator result,
+                       Predicate predicate,
+                       rmm::cuda_stream_view stream)
+{
+  auto const num_items = cuda::std::distance(begin, end);
+
+  auto num_selected =
+    cudf::detail::device_scalar<std::size_t>(stream, cudf::get_current_device_resource_ref());
+
+  auto temp_storage_bytes = std::size_t{0};
+  CUDF_CUDA_TRY(cub::DeviceSelect::FlaggedIf(nullptr,
+                                             temp_storage_bytes,
+                                             begin,
+                                             stencil,
+                                             result,
+                                             num_selected.data(),
+                                             num_items,
+                                             predicate,
+                                             stream.value()));
+
+  auto d_temp_storage =
+    rmm::device_buffer(temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+
+  CUDF_CUDA_TRY(cub::DeviceSelect::FlaggedIf(d_temp_storage.data(),
+                                             temp_storage_bytes,
+                                             begin,
+                                             stencil,
+                                             result,
+                                             num_selected.data(),
+                                             num_items,
+                                             predicate,
+                                             stream.value()));
+
+  return result + num_selected.value(stream);
 }
 
 /**
@@ -282,6 +347,56 @@ cuda::std::pair<KeysOutputIterator, ValuesOutputIterator> reduce_by_key(
   auto const num_runs = d_num_runs.value(stream);
 
   return {keys_output + num_runs, values_output + num_runs};
+}
+
+/**
+ * @copydoc cudf::detail::reduce_by_key
+ *
+ * This function performs the reduce-by-key operation asynchronously.
+ * It is useful when the calling function does not need the returned result
+ * and therefore prevents a stream synchronization.
+ *
+ */
+template <typename Op,
+          typename KeysInputIterator,
+          typename KeysOutputIterator,
+          typename ValuesInputIterator,
+          typename ValuesOutputIterator>
+void reduce_by_key_async(KeysInputIterator keys_begin,
+                         KeysInputIterator keys_end,
+                         ValuesInputIterator values_begin,
+                         KeysOutputIterator keys_output,
+                         ValuesOutputIterator values_output,
+                         Op op,
+                         rmm::cuda_stream_view stream)
+{
+  auto const num_items = cuda::std::distance(keys_begin, keys_end);
+
+  size_t temp_storage_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(nullptr,
+                                               temp_storage_bytes,
+                                               keys_begin,
+                                               keys_output,
+                                               values_begin,
+                                               values_output,
+                                               thrust::make_discard_iterator(),
+                                               op,
+                                               num_items,
+                                               stream.value()));
+
+  rmm::device_buffer d_temp_storage(
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+
+  CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(d_temp_storage.data(),
+                                               temp_storage_bytes,
+                                               keys_begin,
+                                               keys_output,
+                                               values_begin,
+                                               values_output,
+                                               thrust::make_discard_iterator(),
+                                               op,
+                                               num_items,
+                                               stream.value()));
 }
 
 /**

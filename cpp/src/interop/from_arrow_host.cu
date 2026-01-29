@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -252,18 +252,8 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::dictiona
   }();
 
   auto indices_column = get_column_copy(schema, input, dict_indices_type, skip_mask, stream, mr);
-  // child columns shouldn't have masks and we need the mask in the main column
-  auto column_contents = indices_column->release();
-  indices_column       = std::make_unique<column>(dict_indices_type,
-                                            static_cast<size_type>(input->length),
-                                            std::move(*(column_contents.data)),
-                                            rmm::device_buffer{},
-                                            0);
 
-  return make_dictionary_column(std::move(keys_column),
-                                std::move(indices_column),
-                                std::move(*(column_contents.null_mask)),
-                                input->null_count);
+  return make_dictionary_column(std::move(keys_column), std::move(indices_column), stream, mr);
 }
 
 template <>

@@ -14,6 +14,8 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint
 
+from .span import is_span as py_is_span
+
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
@@ -25,6 +27,7 @@ __all__ = [
     "copy_bitmask",
     "create_null_mask",
     "null_count",
+    "index_of_first_set_bit",
 ]
 
 cdef DeviceBuffer buffer_to_python(
@@ -99,6 +102,11 @@ cpdef DeviceBuffer copy_bitmask_from_bitmask(
         A ``DeviceBuffer`` containing ``col``'s bitmask, or an empty
         ``DeviceBuffer`` if ``col`` is not nullable
     """
+    if not py_is_span(bitmask):
+        raise TypeError(
+            f"bitmask must satisfy Span protocol (have .ptr and .size), "
+            f"got {type(bitmask).__name__}"
+        )
     cdef device_buffer db
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -263,10 +271,56 @@ cpdef size_type null_count(
     int
         The number of null elements in the specified range.
     """
+    if not py_is_span(bitmask):
+        raise TypeError(
+            f"bitmask must satisfy Span protocol (have .ptr and .size), "
+            f"got {type(bitmask).__name__}"
+        )
     cdef uintptr_t ptr = bitmask.ptr
     stream = _get_stream(stream)
     with nogil:
         return cpp_null_mask.null_count(
+            <bitmask_type*>ptr,
+            start,
+            stop,
+            stream.view()
+        )
+
+cpdef size_type index_of_first_set_bit(
+    object bitmask,
+    size_type start,
+    size_type stop,
+    Stream stream=None
+):
+    """Given a validity bitmask, returns the index of the first valid element.
+
+    For details, see :cpp:func:`index_of_first_set_bit`.
+
+    Parameters
+    ----------
+    bitmask : Span-like object
+        Object with ptr and size attributes (e.g., gpumemoryview, Buffer, DeviceBuffer).
+    start : int
+        Index of the first bit to check (inclusive).
+    stop : int
+        Index of the last bit to check (exclusive).
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
+    Returns
+    -------
+    int
+        The number of null elements in the specified range.
+    """
+    if not py_is_span(bitmask):
+        raise TypeError(
+            f"bitmask must satisfy Span protocol (have .ptr and .size), "
+            f"got {type(bitmask).__name__}"
+        )
+    cdef uintptr_t ptr = bitmask.ptr
+    stream = _get_stream(stream)
+    with nogil:
+        return cpp_null_mask.index_of_first_set_bit(
             <bitmask_type*>ptr,
             start,
             stop,
