@@ -439,7 +439,7 @@ The available configuration options are:
   This option currently applies to Parquet data only. This option can also be set via the
   `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_IO_PARTITIONING` environment variable.
 
-- **`use_reduction_planning`** (default: `False`): Whether to use estimated column
+- **`use_reduction_planning`** (default: `True`): Whether to use estimated column
   statistics to calculate the output-partition count for reduction operations
   like `Distinct`, `GroupBy`, and `Select(unique)`. This can also be set via the
   `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_REDUCTION_PLANNING` environment variable.
