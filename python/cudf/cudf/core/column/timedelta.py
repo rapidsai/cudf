@@ -53,13 +53,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
     _NP_SCALAR = np.timedelta64
     _PD_SCALAR = pd.Timedelta
     _VALID_REDUCTIONS = {
-        "sum",
-        "min",
-        "max",
-        "mean",
-        "std",
         "median",
-        "sum_of_squares",
     }
     _VALID_BINARY_OPERATIONS = {
         "__eq__",

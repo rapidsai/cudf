@@ -40,6 +40,15 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     point, should be encoded here.
     """
 
+    _VALID_REDUCTIONS = {
+        "mean",
+        "product",
+        "std",
+        "sum",
+        "sum_of_squares",
+        "var",
+    }
+
     _VALID_SCANS = {
         "cumsum",
         "cumprod",

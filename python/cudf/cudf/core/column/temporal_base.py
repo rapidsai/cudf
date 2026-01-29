@@ -46,11 +46,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
     """
 
     _VALID_REDUCTIONS = {
-        "min",
-        "max",
         "mean",
         "std",
-        "median",
     }
     _VALID_SCANS = {
         "cummin",

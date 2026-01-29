@@ -304,17 +304,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     """
 
     _VALID_REDUCTIONS = {
-        "sum",
-        "product",
-        "min",
-        "max",
-        "mean",
-        "std",
-        "var",
-        "median",
         "any",
         "all",
-        "sum_of_squares",
+        "min",
+        "max",
     }
     _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
     plc_column: plc.Column
