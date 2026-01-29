@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -172,8 +172,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
  * @param[in] input The input column
  * @param[in] preceding_window The static rolling window size in the backward direction
  * @param[in] following_window The static rolling window size in the forward direction
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result. If the number of valid observations is less than
+ *                        `min_periods`, the result for element `i` is null, except when
+ *                        `min_periods=0`. When `min_periods=0`, aggregations return identity values
+ *                        for windows with insufficient observations: SUM and COUNT return 0, MIN
+ *                        returns the maximum value for the type, MAX returns the minimum value for
+ *                        the type. Note: MEAN behavior is undefined for empty windows.
  * @param[in] agg The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -346,8 +351,9 @@ struct window_bounds {
  * positive values), or forward direction (for negative values)
  * @param[in] following_window The static rolling window size in the forward direction (for positive
  * values), or backward direction (for negative values)
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result, otherwise element `i` is null. Must be positive
+ *                        (>= 1).
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -539,8 +545,9 @@ std::unique_ptr<column> grouped_rolling_window(
  * @param[in] input The input column (to be aggregated)
  * @param[in] preceding The interval value in the backward direction
  * @param[in] following The interval value in the forward direction
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result, otherwise element `i` is null. Must be positive
+ *                        (>= 1).
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -618,8 +625,13 @@ std::unique_ptr<table> grouped_range_rolling_window(
  * @param[in] following_window A non-nullable column of INT32 window sizes in the backward
  *                             direction. `following_window[i]` specifies following window size
  *                             for element `i`.
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result. If the number of valid observations is less than
+ *                        `min_periods`, the result for element `i` is null, except when
+ *                        `min_periods=0`. When `min_periods=0`, aggregations return identity values
+ *                        for windows with insufficient observations: SUM and COUNT return 0, MIN
+ *                        returns the maximum value for the type, MAX returns the minimum value for
+ *                        the type. Note: MEAN behavior is undefined for empty windows.
  * @param[in] agg The rolling window aggregation type (sum, max, min, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
