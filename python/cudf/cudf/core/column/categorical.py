@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal, Self, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import numpy as np
 import pandas as pd
@@ -150,7 +150,6 @@ class CategoricalColumn(column.ColumnBase):
         fill_code = self._encode(fill_value.to_arrow())
         fill_code_scalar = pa_scalar_to_plc_scalar(pa.scalar(fill_code))
 
-        # Parent's _fill operates on self.plc_column (codes) and preserves self.dtype
         return super()._fill(fill_code_scalar, begin, end, inplace)
 
     def _reduce(
@@ -234,16 +233,12 @@ class CategoricalColumn(column.ColumnBase):
                 # TODO: Other non-comparison ops may raise or be supported
                 return NotImplemented
             return self._get_decategorized_column()._binaryop(other, op)
-        # Use self.codes to delegate to NumericalColumn._binaryop
-        # No base ColumnBase._binaryop exists, so we need integer comparison semantics
         return self.codes._binaryop(other.codes, op)
 
     def element_indexing(self, index: int) -> ScalarLike:
-        # Use super() to get the code value from self.plc_column
         val = super().element_indexing(index)
         if val is self._PANDAS_NA_VALUE:
             return val
-        # Decode the code (pyarrow scalar) to the category value
         return self._decode(int(val.as_py()))
 
     @property
@@ -543,12 +538,10 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        # Categorical must be ordered for monotonicity to be meaningful
         return bool(self.ordered) and super().is_monotonic_increasing
 
     @cached_property
     def is_monotonic_decreasing(self) -> bool:
-        # Categorical must be ordered for monotonicity to be meaningful
         return bool(self.ordered) and super().is_monotonic_decreasing
 
     def as_categorical_column(self, dtype: CategoricalDtype) -> Self:

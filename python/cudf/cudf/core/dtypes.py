@@ -245,12 +245,7 @@ class CategoricalDtype(_BaseDtype):
 
     @cached_property
     def codes_dtype(self) -> np.dtype:
-        """
-        The dtype of the codes (unsigned integer) used to represent categories.
-
-        This returns the minimal unsigned integer dtype that can represent
-        all category codes based on the number of categories.
-        """
+        """The dtype of the codes (unsigned integer) used to represent categories."""
         return min_unsigned_type(len(self.categories))
 
     def to_pandas(self) -> pd.CategoricalDtype:
