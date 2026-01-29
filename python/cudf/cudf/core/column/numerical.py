@@ -427,6 +427,11 @@ class NumericalColumn(NumericalBaseColumn):
                 and isinstance(rhs, NumericalColumn)
             ):
                 rhs = rhs.nans_to_nulls()
+        if op in cmp_ops and is_pandas_nullable_extension_dtype(out_dtype):
+            if lhs_dtype.kind == "f" and isinstance(lhs, NumericalColumn):
+                lhs = lhs.nans_to_nulls()
+            if rhs_dtype.kind == "f" and isinstance(rhs, NumericalColumn):
+                rhs = rhs.nans_to_nulls()
         lhs_binaryop: plc.Scalar | ColumnBase = (
             pa_scalar_to_plc_scalar(lhs) if isinstance(lhs, pa.Scalar) else lhs
         )
