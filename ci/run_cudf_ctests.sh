@@ -21,8 +21,8 @@ else
     exit 1
 fi
 
-# ctest -R BITMASK_TEST --output-on-failure --no-tests=error "$@"
+ctest --output-on-failure --no-tests=error "$@"
 
 ./BITMASK_TEST --gtest_filter=CountBitmaskTest.IndexOfFirstUnsetBit
 
-compute-sanitizer ./BITMASK_TEST --gtest_filter=CountBitmaskTest.IndexOfFirstUnsetBit
+compute-sanitizer ./BITMASK_TEST --gtest_filter=CountBitmaskTest.IndexOfFirstUnsetBit --rmm_mode=cuda

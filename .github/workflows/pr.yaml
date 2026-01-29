@@ -27,9 +27,6 @@ jobs:
       - conda-java-tests
       - conda-notebook-tests
       - docs-build
-      - wheel-build-libcudf
-      - wheel-build-pylibcudf
-      - wheel-build-cudf
       - devcontainer
       - telemetry-setup
     secrets: inherit
@@ -297,41 +294,6 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:26.04-latest"
       script: "ci/build_docs.sh"
-  wheel-build-libcudf:
-    needs: checks
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
-    with:
-      # build for every combination of arch and CUDA version, but only for the latest Python
-      matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
-      build_type: pull-request
-      node_type: cpu16
-      script: "ci/build_wheel_libcudf.sh"
-      package-name: libcudf
-      package-type: cpp
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
-  wheel-build-pylibcudf:
-    needs: [checks, wheel-build-libcudf]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
-    with:
-      build_type: pull-request
-      node_type: cpu8
-      script: "ci/build_wheel_pylibcudf.sh"
-      package-name: pylibcudf
-      package-type: python
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
-  wheel-build-cudf:
-    needs: wheel-build-pylibcudf
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
-    with:
-      build_type: pull-request
-      node_type: cpu8
-      script: "ci/build_wheel_cudf.sh"
-      package-name: cudf
-      package-type: python
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   devcontainer:
     secrets: inherit
     needs: telemetry-setup
