@@ -7618,12 +7618,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             with access_columns(  # type: ignore[assignment]
                 *homogenized, mode="read", scope="internal"
             ) as homogenized:
-                interleaved_col = ColumnBase.from_pylibcudf(
-                    plc.reshape.interleave_columns(
-                        plc.Table([col.plc_column for col in homogenized])
-                    )
+                interleaved_col = plc.reshape.interleave_columns(
+                    plc.Table([col.plc_column for col in homogenized])
                 )
-            stacked.append(interleaved_col._with_type_metadata(common_type))
+            stacked.append(ColumnBase.create(interleaved_col, common_type))
 
         # Construct the resulting dataframe / series
         if not has_unnamed_levels:

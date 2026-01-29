@@ -1551,7 +1551,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         col = concat_columns([o._column for o in objs])
 
         if len(objs):
-            col = col._with_type_metadata(objs[0].dtype)
+            col = ColumnBase.create(col.plc_column, objs[0].dtype)
 
         result = cls._from_column(col, name=name, index=result_index)
         if cudf.get_option("mode.pandas_compatible"):

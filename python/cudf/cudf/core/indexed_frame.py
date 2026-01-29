@@ -7069,7 +7069,9 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
             to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
-    res_col = concat_columns([old_col, val_col])._with_type_metadata(to_type)
+    res_col = ColumnBase.create(
+        concat_columns([old_col, val_col]).plc_column, to_type
+    )
     if (
         cudf.get_option("mode.pandas_compatible")
         and res_col.dtype != col.dtype
