@@ -2927,6 +2927,8 @@ def as_column(
                 # pandas arrays define __arrow_array__ for better
                 # pyarrow.array conversion
                 arbitrary = arbitrary.array
+            if dtype is None and isinstance(arbitrary.dtype, pd.StringDtype):
+                dtype = arbitrary.dtype
             result = as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,

@@ -117,21 +117,8 @@ class StringColumn(ColumnBase, Scannable):
         cls, plc_column: plc.Column, dtype: np.dtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and dtype != CUDF_STRING_DTYPE
-            and dtype.kind != "U"
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_string(dtype)
-        ):
-            raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(dtype, np.dtype)
-            and dtype.kind == "U"
-        ):
-            dtype = CUDF_STRING_DTYPE
+        if not is_dtype_obj_string(dtype):
+            raise ValueError("dtype must be a valid cuDF string dtype")
         return plc_column, dtype
 
     @property
@@ -437,25 +424,19 @@ class StringColumn(ColumnBase, Scannable):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.StringDtype)
-            and self.dtype.storage in ["pyarrow", "python"]
-        ):
-            if self.dtype.storage == "pyarrow":
-                pandas_array = self.dtype.__from_arrow__(
-                    self.to_arrow().cast(pa.large_string())
-                )
-            elif self.dtype.na_value is np.nan:
-                pandas_array = pd.array(
-                    self.to_arrow().to_pandas(), dtype=self.dtype
-                )
-            else:
-                return super().to_pandas(
-                    nullable=nullable, arrow_type=arrow_type
-                )
-            return pd.Index(pandas_array, copy=False)
-        return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        elif nullable or isinstance(self.dtype, pd.StringDtype):
+            dtype_ref = (
+                self.dtype
+                if isinstance(self.dtype, pd.StringDtype)
+                else pd.StringDtype()
+            )
+            return pd.Index(
+                dtype_ref.__from_arrow__(self.to_arrow()), copy=False
+            )
+        else:
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:

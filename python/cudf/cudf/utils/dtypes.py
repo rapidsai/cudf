@@ -634,23 +634,22 @@ def is_dtype_obj_categorical(obj):
         return pd_types.is_categorical_dtype(obj)
 
 
-def is_dtype_obj_string(obj):
-    """Check whether the provided array or dtype is of the string dtype.
+def is_dtype_obj_string(obj) -> bool:
+    """Check whether the provided object is a cuDF string dtype.
 
     Parameters
     ----------
-    obj : array-like or dtype
-        The array or dtype to check.
+    obj : Any
+        The object to check.
 
     Returns
     -------
     bool
-        Whether or not the array or dtype is of the string dtype.
+        Whether or not the object is a cuDF string dtype.
     """
     return (
-        obj is CUDF_STRING_DTYPE
-        or obj is np.dtype("str")
-        or (isinstance(obj, pd.StringDtype))
+        obj == CUDF_STRING_DTYPE
+        or isinstance(obj, pd.StringDtype)
         or (
             isinstance(obj, pd.ArrowDtype)
             and (
