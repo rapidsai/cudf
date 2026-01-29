@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -21,4 +21,6 @@ else
     exit 1
 fi
 
-ctest --output-on-failure --no-tests=error "$@"
+ctest -R BITMASK_TEST --output-on-failure --no-tests=error "$@"
+
+BITMASK_TEST --gtest_filter=CountBitmaskTest.IndexOfFirstUnsetBit

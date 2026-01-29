@@ -393,6 +393,8 @@ TEST_F(CountBitmaskTest, IndexOfFirstUnsetBit)
     // clang-format on
   });
   for (auto parm : parameters) {
+    std::cout << parm.size << "," << parm.set_index << "," << parm.start_index << "," << parm.result
+              << std::endl;
     auto data            = std::vector<bool>(parm.size, false);
     data[parm.set_index] = true;
     std::fill(data.begin() + parm.set_index + 1, data.end(), (parm.set_index >= parm.start_index));
