@@ -204,7 +204,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@main
     with:
       enable_check_generated_files: false
-      ignored_pr_jobs: "telemetry-summarize"
+      ignored_pr_jobs: "telemetry-summarize spark-rapids-jni conda-cpp-checks"
   conda-cpp-build:
     needs: checks
     secrets: inherit
