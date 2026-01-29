@@ -242,10 +242,12 @@ class CategoricalColumn(column.ColumnBase):
         return self.codes._binaryop(other.codes, op)
 
     def element_indexing(self, index: int) -> ScalarLike:
-        val = self.codes.element_indexing(index)
+        # Use super() to get the code value from self.plc_column
+        val = super().element_indexing(index)
         if val is self._PANDAS_NA_VALUE:
             return val
-        return self._decode(int(val))  # type: ignore[arg-type]
+        # Decode the code (pyarrow scalar) to the category value
+        return self._decode(int(val.as_py()))
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -543,11 +545,13 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        return bool(self.ordered) and self.codes.is_monotonic_increasing
+        # Categorical must be ordered for monotonicity to be meaningful
+        return bool(self.ordered) and super().is_monotonic_increasing
 
-    @property
+    @cached_property
     def is_monotonic_decreasing(self) -> bool:
-        return bool(self.ordered) and self.codes.is_monotonic_decreasing
+        # Categorical must be ordered for monotonicity to be meaningful
+        return bool(self.ordered) and super().is_monotonic_decreasing
 
     def as_categorical_column(self, dtype: CategoricalDtype) -> Self:
         if not isinstance(self.categories, type(dtype.categories._column)):
