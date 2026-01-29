@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import pandas as pd
 import pyarrow as pa
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-from typing_extensions import Self
 
 import pylibcudf as plc
 
