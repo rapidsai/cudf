@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -79,7 +79,7 @@ int main(int argc, char** argv)
   // it being set as the default
   // Also, call this before the first libcudf API call to ensure all data is allocated by the same
   // memory resource.
-  cudf::set_current_device_resource(&mr);
+  cudf::set_current_device_resource_ref(&mr);
 
   // Read data
   auto stock_table_with_metadata = read_csv("4stock_5day.csv");

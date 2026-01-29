@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -112,9 +112,9 @@ int main(int argc, char const** argv)
     resource.get()};
 
   if (enable_stats) {
-    cudf::set_current_device_resource(&stats_adaptor);
+    cudf::set_current_device_resource_ref(&stats_adaptor);
   } else {
-    cudf::set_current_device_resource(resource.get());
+    cudf::set_current_device_resource_ref(resource.get());
   }
 
   cudf::io::csv_reader_options in_opts =

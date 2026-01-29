@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -181,7 +181,7 @@ int main(int argc, char const** argv)
 
   auto pool     = mr_name == "pool";
   auto resource = create_memory_resource(pool);
-  cudf::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource_ref(resource.get());
 
   std::cout << "Reading " << input_filepath << "..." << std::endl;
   // read input file

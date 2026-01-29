@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -160,7 +160,7 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
 inline auto make_memory_resource_adaptor(cudf::test::config const& config)
 {
   auto resource = cudf::test::create_memory_resource(config.rmm_mode);
-  cudf::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource_ref(resource.get());
   return resource;
 }
 
@@ -183,7 +183,7 @@ inline auto make_stream_mode_adaptor(cudf::test::config const& config)
   auto adaptor                       = cudf::test::stream_checking_resource_adaptor(
     resource, error_on_invalid_stream, check_default_stream);
   if ((config.stream_mode == "new_cudf_default") || (config.stream_mode == "new_testing_default")) {
-    cudf::set_current_device_resource(&adaptor);
+    cudf::set_current_device_resource_ref(&adaptor);
   }
   return adaptor;
 }
@@ -228,7 +228,7 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
     if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {                                                 \
       auto mr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(           \
         cudf::get_current_device_resource_ref());                                                \
-      cudf::set_current_device_resource(&mr);                                                    \
+      cudf::set_current_device_resource_ref(&mr);                                                \
       auto rc = RUN_ALL_TESTS();                                                                 \
       std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl; \
       cudf::deinitialize();                                                                      \
