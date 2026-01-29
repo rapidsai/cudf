@@ -746,19 +746,19 @@ class StringMethods(BaseAccessor):
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
         """
-        if (
-            na is not no_default
-            and not pd.isna(na)
-            and not isinstance(na, bool)
-        ):
-            # GH#59561
-            warnings.warn(
-                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
-                "and will raise in a future version.",
-                FutureWarning,
-            )
-        if na not in {no_default, np.nan}:
-            raise NotImplementedError("`na` parameter is not yet supported")
+        # if (
+        #     na is not no_default
+        #     and not pd.isna(na)
+        #     and not isinstance(na, bool)
+        # ):
+        #     # GH#59561
+        #     warnings.warn(
+        #         "Allowing a non-bool 'na' in obj.str.contains is deprecated "
+        #         "and will raise in a future version.",
+        #         FutureWarning,
+        #     )
+        # if na not in {no_default, np.nan}:
+        #     raise NotImplementedError("`na` parameter is not yet supported")
         if regex and isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
             pat = pat.pattern
@@ -791,6 +791,8 @@ class StringMethods(BaseAccessor):
             else:
                 input_column = self._column
             result_col = input_column.str_contains(col_pat)  # type: ignore[arg-type]
+        if na is not no_default:
+            result_col = result_col.fillna(na)
         return self._return_or_inplace(result_col)
 
     def like(self, pat: str, esc: str | None = None) -> Series | Index:
@@ -4263,7 +4265,11 @@ class StringMethods(BaseAccessor):
             return result
 
     def match(
-        self, pat: str, case: bool = True, flags: int = 0
+        self,
+        pat: str,
+        case: bool = True,
+        flags: int = 0,
+        na=no_default,
     ) -> Series | Index:
         """
         Determine if each string matches a regular expression.
@@ -4320,7 +4326,10 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
-        return self._return_or_inplace(self._column.matches_re(pat, flags))
+        result = self._column.matches_re(pat, flags)
+        if na is not no_default:
+            result = result.fillna(na)
+        return self._return_or_inplace(result)
 
     def url_decode(self) -> Series | Index:
         """
