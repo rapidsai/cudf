@@ -455,23 +455,19 @@ class DynamicPlanningOptions:
     """
     Configuration for dynamic shuffle planning.
 
-    When enabled, shuffle decisions for GroupBy/Join/Unique operations
+    When dynamic planning is enabled (by setting this option to a
+    non-None value), shuffle decisions for GroupBy/Join/Unique operations
     are made at runtime by sampling real chunks.
+
+    To enable dynamic planning, pass a ``DynamicPlanningOptions`` instance
+    to ``StreamingExecutor(dynamic_planning=...)``. To disable it, pass
+    ``None`` (the default).
 
     These options can be configured via environment variables
     with the prefix ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__``.
 
-    .. note::
-        Dynamic planning is not yet implemented. These options are
-        reserved for future use and currently have no effect.
-
     Parameters
     ----------
-    enabled
-        Whether to enable dynamic planning mode. When enabled, shuffle
-        operations are not inserted at lowering time. Instead, the runtime
-        samples chunks to decide whether shuffling is needed.
-        Default is False.
     sample_chunk_count
         The maximum number of chunks to sample before deciding whether
         to shuffle. A higher value provides more accurate estimates but
@@ -481,11 +477,6 @@ class DynamicPlanningOptions:
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
 
-    enabled: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__ENABLED", _bool_converter, default=False
-        )
-    )
     sample_chunk_count: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SAMPLE_CHUNK_COUNT", int, default=2
@@ -493,8 +484,6 @@ class DynamicPlanningOptions:
     )
 
     def __post_init__(self) -> None:  # noqa: D105
-        if not isinstance(self.enabled, bool):
-            raise TypeError("enabled must be a bool")
         if not isinstance(self.sample_chunk_count, int):
             raise TypeError("sample_chunk_count must be an int")
         if self.sample_chunk_count < 1:
@@ -698,13 +687,10 @@ class StreamingExecutor:
         Options controlling statistics-based query planning. See
         :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
     dynamic_planning
-        Options controlling dynamic shuffle planning. When enabled,
-        shuffle decisions are made at runtime by sampling chunks. See
-        :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
-
-        .. note::
-            Dynamic planning is not yet implemented. These options are
-            reserved for future use and currently have no effect.
+        Options controlling dynamic shuffle planning. When set to a
+        :class:`~cudf_polars.utils.config.DynamicPlanningOptions` instance,
+        shuffle decisions are made at runtime by sampling chunks.
+        When ``None`` (the default), dynamic planning is disabled.
     max_io_threads
         Maximum number of IO threads for the rapidsmpf runtime. Default is 2.
         This controls the parallelism of IO operations when reading data.
@@ -713,6 +699,11 @@ class StreamingExecutor:
         or use regular pageable host memory. Pinned host memory offers higher
         bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
+    profile_output
+        Path to write a runtime profile file. When set, the executor will
+        track actual row counts and algorithm decisions for each IR node
+        and write them to this file after execution. This is useful for
+        debugging dynamic planning decisions. Default is None (no profiling).
 
     Notes
     -----
@@ -810,8 +801,12 @@ class StreamingExecutor:
     stats_planning: StatsPlanningOptions = dataclasses.field(
         default_factory=StatsPlanningOptions
     )
-    dynamic_planning: DynamicPlanningOptions = dataclasses.field(
-        default_factory=DynamicPlanningOptions
+    dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__ENABLED",
+            lambda v: DynamicPlanningOptions() if _bool_converter(v) else None,
+            default=None,
+        )
     )
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
@@ -821,6 +816,11 @@ class StreamingExecutor:
     spill_to_pinned_memory: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
+        )
+    )
+    profile_output: str | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PROFILE_OUTPUT", str, default=None
         )
     )
 
@@ -924,21 +924,27 @@ class StreamingExecutor:
                 StatsPlanningOptions(**self.stats_planning),
             )
 
-        # Make sure dynamic_planning is a dataclass
+        # Handle dynamic_planning: can be None, dict, or DynamicPlanningOptions
         if isinstance(self.dynamic_planning, dict):
+            # Filter out 'enabled' key if present (for backward compatibility)
+            opts = {k: v for k, v in self.dynamic_planning.items() if k != "enabled"}
             object.__setattr__(
                 self,
                 "dynamic_planning",
-                DynamicPlanningOptions(**self.dynamic_planning),
+                DynamicPlanningOptions(**opts),
             )
 
+        # Set broadcast_join_limit default after dynamic_planning is processed
         if self.broadcast_join_limit == 0:
-            object.__setattr__(
-                self,
-                "broadcast_join_limit",
+            if self.dynamic_planning is not None:
+                # With dynamic planning, use conservative threshold (1x target_partition_size)
+                limit = 1
+            elif self.cluster == "distributed":
+                limit = 2
+            else:
                 # Usually better to avoid shuffling for single gpu with UVM
-                2 if self.cluster == "distributed" else 32,
-            )
+                limit = 32
+            object.__setattr__(self, "broadcast_join_limit", limit)
 
         if self.cluster == "distributed":
             if self.sink_to_directory is False:

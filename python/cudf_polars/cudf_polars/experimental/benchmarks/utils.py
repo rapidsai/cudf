@@ -474,10 +474,9 @@ def get_executor_options(
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
         executor_options["spill_to_pinned_memory"] = run_config.spill_to_pinned_memory
-        if run_config.dynamic_planning is not None:
-            executor_options["dynamic_planning"] = {
-                "enabled": run_config.dynamic_planning,
-            }
+        if run_config.dynamic_planning:
+            # Pass empty dict to enable with defaults; None means disabled
+            executor_options["dynamic_planning"] = {}
 
     if (
         benchmark

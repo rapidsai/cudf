@@ -900,13 +900,12 @@ def test_validate_stats_planning(option: str) -> None:
         )
 
 
-@pytest.mark.parametrize("option", ["enabled", "sample_chunk_count"])
-def test_validate_dynamic_planning(option: str) -> None:
-    with pytest.raises(TypeError, match=f"{option} must be"):
+def test_validate_dynamic_planning() -> None:
+    with pytest.raises(TypeError, match="sample_chunk_count must be"):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
                 executor="streaming",
-                executor_options={"dynamic_planning": {option: object()}},
+                executor_options={"dynamic_planning": {"sample_chunk_count": object()}},
             )
         )
 
@@ -924,9 +923,8 @@ def test_dynamic_planning_sample_chunk_count_min() -> None:
 def test_dynamic_planning_defaults() -> None:
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
     assert config.executor.name == "streaming"
-    # Dynamic planning is disabled by default until fully implemented
-    assert config.executor.dynamic_planning.enabled is False
-    assert config.executor.dynamic_planning.sample_chunk_count == 2
+    # Dynamic planning is disabled (None) by default
+    assert config.executor.dynamic_planning is None
 
 
 def test_dynamic_planning_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -936,7 +934,8 @@ def test_dynamic_planning_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
     assert config.executor.name == "streaming"
-    assert config.executor.dynamic_planning.enabled is True
+    # When ENABLED env var is set, dynamic_planning should be a DynamicPlanningOptions
+    assert config.executor.dynamic_planning is not None
     assert config.executor.dynamic_planning.sample_chunk_count == 3
 
 
