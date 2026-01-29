@@ -146,19 +146,16 @@ class CategoricalColumn(column.ColumnBase):
         begin: int,
         end: int,
         inplace: bool = False,
-    ) -> Self:
+    ) -> Self | None:
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
+        # Encode fill_value to code (integer), then delegate to parent
         fill_code = self._encode(fill_value.to_arrow())
-        result = self if inplace else self.copy()
-        result.codes._fill(
-            pa_scalar_to_plc_scalar(pa.scalar(fill_code)),
-            begin,
-            end,
-            inplace=True,
-        )
-        return result
+        fill_code_scalar = pa_scalar_to_plc_scalar(pa.scalar(fill_code))
+
+        # Parent's _fill operates on self.plc_column (codes) and preserves self.dtype
+        return super()._fill(fill_code_scalar, begin, end, inplace)
 
     def _reduce(
         self,
@@ -239,6 +236,8 @@ class CategoricalColumn(column.ColumnBase):
                 # TODO: Other non-comparison ops may raise or be supported
                 return NotImplemented
             return self._get_decategorized_column()._binaryop(other, op)
+        # Use self.codes to delegate to NumericalColumn._binaryop
+        # No base ColumnBase._binaryop exists, so we need integer comparison semantics
         return self.codes._binaryop(other.codes, op)
 
     def element_indexing(self, index: int) -> ScalarLike:
