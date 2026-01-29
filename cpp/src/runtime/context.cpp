@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,18 +18,23 @@ namespace cudf {
 
 context::context(init_flags flags) : _program_cache{nullptr}
 {
-  auto dump_codegen_flag = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
-  _dump_codegen          = (dump_codegen_flag == "ON" || dump_codegen_flag == "1");
+  auto dump_codegen_env = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
+  bool dump_codegen =
+    (dump_codegen_env == "ON" || dump_codegen_env == "on" || dump_codegen_env == "1");
 
-  auto use_jit_flag = getenv_or("LIBCUDF_JIT_ENABLED", std::string{"OFF"});
-  _use_jit          = (use_jit_flag == "ON" || use_jit_flag == "1");
+  auto use_jit_env = getenv_or("LIBCUDF_JIT_ENABLED", std::string{"OFF"});
+  bool use_jit     = (use_jit_env == "ON" || use_jit_env == "on" || use_jit_env == "1");
+
+  _dump_codegen = dump_codegen;
+
+  flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
   initialize_components(flags);
 }
 
 jit::program_cache& context::program_cache()
 {
-  CUDF_EXPECTS(_program_cache != nullptr, "JIT cache not initialized", std::runtime_error);
+  CUDF_EXPECTS(_program_cache != nullptr, "JIT cache is not initialized", std::runtime_error);
   return *_program_cache;
 }
 
@@ -37,32 +42,19 @@ bool context::dump_codegen() const { return _dump_codegen; }
 
 void context::initialize_components(init_flags flags)
 {
-  // Only initialize components that haven't been initialized yet
-  auto const new_flags = flags & ~_initialized_flags;
-
-  if (has_flag(new_flags, init_flags::INIT_JIT_CACHE)) {
+  if (has_flag(flags, init_flags::INIT_JIT_CACHE)) {
     _program_cache = std::make_unique<jit::program_cache>();
   }
 
-  if (has_flag(new_flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
+  if (has_flag(flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
 
-  _initialized_flags = _initialized_flags | new_flags;
+  _initialized_flags = flags;
 }
 
 bool context::use_jit() const { return _use_jit; }
 
-std::unique_ptr<context>& get_context_ptr_ref()
-{
-  static std::unique_ptr<context> context;
-  return context;
-}
-
-context& get_context()
-{
-  auto& ctx = get_context_ptr_ref();
-  if (ctx == nullptr) { cudf::initialize(); }
-  return *ctx;
-}
+static std::unique_ptr<context> ctx;
+static std::once_flag ctx_init_flag{};
 
 }  // namespace cudf
 
@@ -70,15 +62,21 @@ namespace CUDF_EXPORT cudf {
 
 void initialize(init_flags flags)
 {
-  auto& ctx = get_context_ptr_ref();
-  if (ctx == nullptr) {
-    // First initialization - create the context
-    ctx = std::make_unique<context>(flags);
-  } else {
-    // Context already exists - initialize additional components
-    ctx->initialize_components(flags);
-  }
+  std::call_once(ctx_init_flag, [&]() {
+    auto c = std::make_unique<context>();
+    c->initialize_components(flags);
+    ctx = std::move(c);
+  });
+
+  CUDF_EXPECTS(has_flag(ctx->_initialized_flags, flags),
+               "CUDF's context has already been initialized with incompatible flags",
+               std::runtime_error);
 }
 
-void deinitialize() { get_context_ptr_ref().reset(); }
+context& get_context(init_flags expected)
+{
+  initialize(expected);
+  return *ctx;
+}
+
 }  // namespace CUDF_EXPORT cudf
