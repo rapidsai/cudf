@@ -56,7 +56,7 @@ def factorize(
     >>> data = cudf.Series(['a', 'c', 'c'])
     >>> codes, uniques = cudf.factorize(data)
     >>> codes
-    array([0, 1, 1], dtype=int8)
+    array([0, 1, 1])
     >>> uniques
     Index(['a' 'c'], dtype='object')
 
@@ -66,7 +66,7 @@ def factorize(
 
     >>> codes, uniques = cudf.factorize(['b', None, 'a', 'c', 'b'])
     >>> codes
-    array([ 1, -1,  0,  2,  1], dtype=int8)
+    array([ 1, -1,  0,  2,  1])
     >>> uniques
     Index(['a', 'b', 'c'], dtype='object')
 
@@ -76,12 +76,12 @@ def factorize(
     >>> values = np.array([1, 2, 1, np.nan])
     >>> codes, uniques = cudf.factorize(values)
     >>> codes
-    array([ 0,  1,  0, -1], dtype=int8)
+    array([ 0,  1,  0, -1])
     >>> uniques
     Index([1.0, 2.0], dtype='float64')
     >>> codes, uniques = cudf.factorize(values, use_na_sentinel=False)
     >>> codes
-    array([1, 2, 1, 0], dtype=int8)
+    array([1, 2, 1, 0])
     >>> uniques
     Index([<NA>, 1.0, 2.0], dtype='float64')
     """
