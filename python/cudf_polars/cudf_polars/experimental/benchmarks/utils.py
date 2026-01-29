@@ -973,7 +973,7 @@ def parse_args(
         "--dynamic-planning",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Enable dynamic shuffle planning.",
+        help="Enable dynamic shuffle planning (not yet implemented). ",
     )
     parser.add_argument(
         "--max-io-threads",
