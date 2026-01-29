@@ -437,7 +437,19 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
 
 class _DataFrameAtIndexer(_DataFrameLocIndexer):
-    pass
+    @_performance_tracking
+    def __getitem__(self, key):
+        indexing_utils.validate_scalar_key(
+            key, "Invalid call for scalar access (getting)!"
+        )
+        return super().__getitem__(key)
+
+    @_performance_tracking
+    def __setitem__(self, key, value):
+        indexing_utils.validate_scalar_key(
+            key, "Invalid call for scalar access (getting)!"
+        )
+        return super().__setitem__(key, value)
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
@@ -507,7 +519,19 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
 
 class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
-    pass
+    @_performance_tracking
+    def __getitem__(self, key):
+        indexing_utils.validate_scalar_key(
+            key, "iAt based indexing can only have integer indexers"
+        )
+        return super().__getitem__(key)
+
+    @_performance_tracking
+    def __setitem__(self, key, value):
+        indexing_utils.validate_scalar_key(
+            key, "iAt based indexing can only have integer indexers"
+        )
+        return super().__setitem__(key, value)
 
 
 @_performance_tracking
@@ -4355,9 +4379,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 plc.table.Table([col.plc_column for col in source_columns])
             )
             result_columns = (
-                ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                    source_dtype
-                )
+                ColumnBase.create(col, source_dtype)
                 for col in result_table.columns()
             )
 
@@ -7774,9 +7796,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     0,
                     list(children),
                 )
-            col = ColumnBase.from_pylibcudf(plc_column)._with_type_metadata(
-                dtype
-            )
+            col = ColumnBase.create(plc_column, dtype)
         return Series._from_column(
             col,
             index=self.index,
