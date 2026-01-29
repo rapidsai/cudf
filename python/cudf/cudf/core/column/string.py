@@ -433,7 +433,10 @@ class StringColumn(ColumnBase, Scannable):
                 else pd.StringDtype()
             )
             return pd.Index(
-                dtype_ref.__from_arrow__(self.to_arrow()), copy=False
+                dtype_ref.__from_arrow__(
+                    self.to_arrow().cast(pa.large_string())
+                ),
+                copy=False,
             )
         else:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
