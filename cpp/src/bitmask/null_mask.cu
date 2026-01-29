@@ -755,8 +755,13 @@ CUDF_KERNEL void find_first_set_bit_kernel(bitmask_type const* __restrict__ bitm
       bit_index = static_cast<size_type>(tid * word_size) + mask_bit_index - 1;
     }
   }
-  size_type out_index = cg::reduce(block, bit_index, cg::less<size_type>());
-  block.sync();
+
+  using BlockReduce = cub::BlockReduce<size_type, block_size>;
+  __shared__ typename BlockReduce::TempStorage ts;
+  auto const out_index = BlockReduce(ts).Reduce(bit_index, cuda::minimum());
+
+  // size_type out_index = cg::reduce(block, bit_index, cg::less<size_type>());
+  // block.sync();
 
   if (block.thread_rank() == 0 && out_index != max) {
     cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(index)};
