@@ -20,7 +20,7 @@ import time
 import traceback
 import warnings
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
@@ -131,7 +131,7 @@ class PackageVersions:
         for name in packages:
             try:
                 package = importlib.import_module(name)
-            except (AttributeError, ImportError):  # noqa: PERF203
+            except (AttributeError, ImportError):
                 versions[name] = None
             else:
                 if name in ("cudf_polars", "rapidsmpf"):
@@ -246,7 +246,7 @@ class RunConfig:
     threads: int
     iterations: int
     timestamp: str = dataclasses.field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
     rmm_async: bool
@@ -259,6 +259,7 @@ class RunConfig:
     max_io_threads: int
     native_parquet: bool
     spill_to_pinned_memory: bool
+    extra_info: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -376,6 +377,7 @@ class RunConfig:
             stats_planning=args.stats_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
+            extra_info=args.extra_info,
             spill_to_pinned_memory=args.spill_to_pinned_memory,
         )
 
@@ -984,6 +986,12 @@ def parse_args(
         help=textwrap.dedent("""\
             Whether RapidsMPF should spill to pinned host memory when available,
             or use regular pageable host memory."""),
+    )
+    parser.add_argument(
+        "--extra-info",
+        type=json.loads,
+        default={},
+        help="Extra information to add to the output file (e.g. version information). Must be JSON-serializable.",
     )
 
     parsed_args = parser.parse_args(args)

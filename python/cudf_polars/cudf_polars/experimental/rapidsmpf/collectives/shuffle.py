@@ -237,7 +237,7 @@ def _(
     num_partitions = rec.state["partition_info"][ir].count
 
     # Look up the reserved collective ID for this operation
-    collective_id = rec.state["collective_id_map"][ir]
+    collective_id = rec.state["collective_id_map"][ir][0]
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
