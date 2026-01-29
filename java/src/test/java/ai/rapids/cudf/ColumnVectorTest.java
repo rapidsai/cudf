@@ -3690,8 +3690,6 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  @Disabled("Negative timestamp values are not currently supported. " +
-      "See github issue https://github.com/rapidsai/cudf/issues/3116 for details")
   void testCastNegativeTimestampAsString() {
     final String[] NEG_TIME_S_STRING = {"1965-10-26 14:01:12",
         "1960-02-06 19:22:11"};

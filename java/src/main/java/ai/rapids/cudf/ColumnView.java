@@ -2356,8 +2356,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param timestampType timestamp DType that includes the time unit to parse the timestamp into.
    * @param format strptime format specifier string of the timestamp. Used to parse and convert
    *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
-   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
-   *               for full parsing format specification and documentation.
+   *               See https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
+   *               for parsing format specification and documentation.
    * @return A new ColumnVector containing the long representations of the timestamps in the
    *         original column vector.
    */
@@ -2373,8 +2373,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Cast to Strings.
-   * Negative timestamp values are not currently supported and will yield undesired results. See
-   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    * In case of timestamps it follows the following formats
    *    {@link DType#TIMESTAMP_DAYS} - "%Y-%m-%d"
    *    {@link DType#TIMESTAMP_SECONDS} - "%Y-%m-%d %H:%M:%S"
@@ -2405,27 +2403,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * positive or negative direction.
 
    * No checking is done for invalid formats or invalid timestamp units.
-   * Negative timestamp values are not currently supported and will yield undesired results. See
-   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    *
    * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
-   *               the timestamp with. Supports %m,%j,%d,%H,%M,%S,%y,%Y,%f format specifiers.
+   *               the timestamp with. Supports the following format specifiers:
    *               %d 	Day of the month: 01-31
    *               %m 	Month of the year: 01-12
-   *               %y 	Year without century: 00-99c
+   *               %y 	Year without century: 00-99
    *               %Y 	Year with century: 0001-9999
    *               %H 	24-hour of the day: 00-23
+   *               %I 	12-hour of the day: 01-12
    *               %M 	Minute of the hour: 00-59
    *               %S 	Second of the minute: 00-59
    *               %f 	6-digit microsecond: 000000-999999
-   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
-   *
-   * Reported bugs
-   * https://github.com/rapidsai/cudf/issues/4160 after the bug is fixed this method should
-   * also support
-   *               %I 	12-hour of the day: 01-12
-   *               %p 	Only 'AM', 'PM'
-   *               %j   day of the year
+   *               %p 	One of: 'AM', 'PM', 'am', 'pm'
+   *               %j 	Day of the year: 001-366
+   *               See https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
    *
    * @return A new vector allocated on the GPU
    */
@@ -4152,14 +4144,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Strings that fail to parse will default to 0. Supported time units are second, millisecond,
    * microsecond, and nanosecond. Larger time units for column vectors are not supported yet in cudf.
    * No checking is done for invalid formats or invalid timestamp units.
-   * Negative timestamp values are not currently supported and will yield undesired results. See
-   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    *
    * @param unit integer native ID of the time unit to parse the timestamp into.
    * @param format strptime format specifier string of the timestamp. Used to parse and convert
    *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
-   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
-   *               for full parsing format specification and documentation.
+   *               See https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
+   *               for parsing format specification and documentation.
    * @return native handle of the resulting cudf column, used to construct the Java column vector
    *         by the timestampToLong method.
    */
@@ -4270,27 +4260,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00:000 in either
    * positive or negative direction. This mirrors the functionality spark sql's from_unixtime.
    * No checking is done for invalid formats or invalid timestamp units.
-   * Negative timestamp values are not currently supported and will yield undesired results. See
-   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    *
    * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
-   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%M,%S,%f format specifiers.
+   *               the timestamp with. Supports the following format specifiers:
    *               %d 	Day of the month: 01-31
    *               %m 	Month of the year: 01-12
-   *               %y 	Year without century: 00-99c
+   *               %y 	Year without century: 00-99
    *               %Y 	Year with century: 0001-9999
    *               %H 	24-hour of the day: 00-23
+   *               %I 	12-hour of the day: 01-12
    *               %M 	Minute of the hour: 00-59
    *               %S 	Second of the minute: 00-59
    *               %f 	6-digit microsecond: 000000-999999
-   *               See http://man7.org/linux/man-pages/man3/strftime.3.html for details
-   *
-   * Reported bugs
-   * https://github.com/rapidsai/cudf/issues/4160 after the bug is fixed this method should
-   * also support
-   *               %I 	12-hour of the day: 01-12
-   *               %p 	Only 'AM', 'PM'
-   *               %j   day of the year
+   *               %p 	One of: 'AM', 'PM', 'am', 'pm'
+   *               %j 	Day of the year: 001-366
+   *               See https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
    *
    * @return - native handle of the resulting cudf column used to construct the Java column vector
    */
