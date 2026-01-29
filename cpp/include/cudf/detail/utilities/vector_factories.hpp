@@ -133,11 +133,11 @@ rmm::device_uvector<T> make_device_uvector_async(device_span<T const> source_dat
                                                  rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> ret(source_data.size(), stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(ret.data(),
-                                source_data.data(),
-                                source_data.size() * sizeof(T),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(ret.data(),
+                                           source_data.data(),
+                                           source_data.size() * sizeof(T),
+                                           cudaMemcpyDefault,
+                                           stream.value()));
   return ret;
 }
 
@@ -264,7 +264,7 @@ template <typename T>
 std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
 {
   std::vector<T> result(v.size());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(
     result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
   return result;
 }

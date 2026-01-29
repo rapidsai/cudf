@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,31 @@ enum class host_memory_kind : uint8_t { PINNED, PAGEABLE };
 
 void cuda_memcpy_async_impl(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
+
+/**
+ * @brief Wrapper around cudaMemcpyBatchAsync
+ *
+ * @param dsts Host pointer to a list of device pointers.
+ * @param srcs Host pointer to a list of device pointers.
+ * @param sizes Host pointer to a list of sizes.
+ * @param count Size of dsts, srcs, sizes arrays
+ * @param stream CUDA stream. The wrapper enforces stream order access.
+ */
+[[nodiscard]] cudaError_t memcpy_batch_async(
+  void** dsts, void** srcs, std::size_t* sizes, std::size_t count, rmm::cuda_stream_view stream);
+
+/**
+ * @brief Wrapper to call `memcpy_batch_async` for a single source to destination buffer.
+ *
+ * @param dst Destination memory address
+ * @param src Source memory address
+ * @param count Size in bytes to copy
+ * @param kind Type of memory copy
+ * @param stream CUDA stream
+ * @return cudaError_t CUDA error code
+ */
+[[nodiscard]] cudaError_t memcpy_async(
+  void* dst, void const* src, size_t count, cudaMemcpyKind kind, rmm::cuda_stream_view stream);
 
 /**
  * @brief Asynchronously copies data from host to device memory.

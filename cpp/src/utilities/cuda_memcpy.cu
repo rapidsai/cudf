@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
+
+#include <vector>
 
 namespace cudf::detail {
 
@@ -39,7 +41,7 @@ void copy_pinned(void* dst, void const* src, std::size_t size, rmm::cuda_stream_
     copy_kernel<<<grid_size, block_size, 0, stream.value()>>>(
       static_cast<char const*>(src), static_cast<char*>(dst), size);
   } else {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, size, cudaMemcpyDefault, stream));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, cudaMemcpyDefault, stream));
   }
 }
 
@@ -47,10 +49,76 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
 {
   if (size == 0) return;
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, size, cudaMemcpyDefault, stream));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, cudaMemcpyDefault, stream));
 }
 
 };  // namespace
+
+cudaError_t memcpy_batch_async(
+  void** dsts, void** srcs, std::size_t* sizes, std::size_t count, rmm::cuda_stream_view stream)
+{
+  // Filter out invalid copies (nullptr dst/src or size==0);
+  // cudaMemcpyBatchAsync does not support these inputs
+  std::size_t valid_count = 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (dsts[i] != nullptr && srcs[i] != nullptr && sizes[i] != 0) { ++valid_count; }
+  }
+  if (valid_count == 0) { return cudaSuccess; }
+
+  // Build filtered arrays if any copies were invalid
+  std::vector<void*> valid_dsts;
+  std::vector<void*> valid_srcs;
+  std::vector<std::size_t> valid_sizes;
+  if (valid_count < count) {
+    valid_dsts.reserve(valid_count);
+    valid_srcs.reserve(valid_count);
+    valid_sizes.reserve(valid_count);
+    for (std::size_t i = 0; i < count; ++i) {
+      if (dsts[i] != nullptr && srcs[i] != nullptr && sizes[i] != 0) {
+        valid_dsts.push_back(dsts[i]);
+        valid_srcs.push_back(srcs[i]);
+        valid_sizes.push_back(sizes[i]);
+      }
+    }
+    dsts  = valid_dsts.data();
+    srcs  = valid_srcs.data();
+    sizes = valid_sizes.data();
+    count = valid_count;
+  }
+
+  // Uses cudaMemcpyBatchAsync for CUDA 13.0+ to avoid driver-side locking overhead.
+  // cudaMemcpyBatchAsync does not support the default stream.
+#if CUDART_VERSION >= 13000
+  if (!stream.is_default()) {
+    cudaMemcpyAttributes attrs[1] = {};  // zero-initialize all fields
+    attrs[0].srcAccessOrder       = cudaMemcpySrcAccessOrderStream;
+    attrs[0].flags                = cudaMemcpyFlagPreferOverlapWithCompute;
+    std::size_t attrs_idxs[1]     = {0};
+    std::size_t num_attrs{1};
+    return cudaMemcpyBatchAsync(
+      dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, stream.value());
+  }
+#endif  // CUDART_VERSION >= 13000
+  for (std::size_t i = 0; i < count; ++i) {
+    cudaError_t status =
+      cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDefault, stream.value());
+    if (status != cudaSuccess) { return status; }
+  }
+  return cudaSuccess;
+}
+
+cudaError_t memcpy_async(
+  void* dst, void const* src, size_t count, cudaMemcpyKind kind, rmm::cuda_stream_view stream)
+{
+  if (count == 0) { return cudaSuccess; }
+
+  // Use batch API with size 1 to prefer cudaMemcpyBatchAsync over
+  // cudaMemcpyAsync. The batched API is more efficient.
+  void* dsts[1]   = {dst};
+  void* srcs[1]   = {const_cast<void*>(src)};
+  size_t sizes[1] = {count};
+  return memcpy_batch_async(dsts, srcs, sizes, 1, stream);
+}
 
 void cuda_memcpy_async_impl(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream)
