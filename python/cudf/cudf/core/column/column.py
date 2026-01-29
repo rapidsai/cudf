@@ -1275,7 +1275,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ]
             return cast(
                 "Self",
-                result[0]._with_type_metadata(self.dtype),
+                ColumnBase.create(result[0].plc_column, self.dtype),
             )
         else:
             # Need to create a gather map for given slice with stride
@@ -1453,8 +1453,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return cast(
                 "Self",
-                type(self)
-                .from_pylibcudf(
+                ColumnBase.create(
                     copying.scatter(
                         cast("list[plc.Scalar]", [value])
                         if isinstance(value, plc.Scalar)
@@ -1462,9 +1461,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         key,
                         [self],
                         bounds_check=bounds_check,
-                    )[0]
-                )
-                ._with_type_metadata(self.dtype),
+                    )[0],
+                    self.dtype,
+                ),
             )
 
     def _check_scatter_key_length(
@@ -1606,8 +1605,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if cudf.get_option("mode.pandas_compatible"):
             return result
 
-        return result._with_type_metadata(
-            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+        return ColumnBase.create(
+            result.plc_column,
+            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
         )
 
     @cached_property
@@ -1743,12 +1743,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if indices.dtype.kind not in {"u", "i"}:
             indices = indices.astype(SIZE_TYPE_DTYPE)
         GatherMap(indices, len(self), nullify=not check_bounds or nullify)
-        gathered = ColumnBase.from_pylibcudf(
-            copying.gather([self], indices, nullify=nullify)[0]  # type: ignore[arg-type]
-        )
+        gathered = copying.gather([self], indices, nullify=nullify)[0]  # type: ignore[arg-type]
         return cast(
             "Self",
-            gathered._with_type_metadata(self.dtype),
+            ColumnBase.create(gathered, self.dtype),
         )
 
     def isin(self, values: Sequence) -> ColumnBase:
@@ -2389,18 +2387,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ) as (self, other, boolean_mask):
             return cast(
                 "Self",
-                (
-                    type(self)
-                    .from_pylibcudf(
-                        plc.copying.copy_if_else(
-                            self.plc_column,
-                            other
-                            if isinstance(other, plc.Scalar)
-                            else other.plc_column,
-                            boolean_mask.plc_column,
-                        )
-                    )
-                    ._with_type_metadata(self.dtype)
+                ColumnBase.create(
+                    plc.copying.copy_if_else(
+                        self.plc_column,
+                        other
+                        if isinstance(other, plc.Scalar)
+                        else other.plc_column,
+                        boolean_mask.plc_column,
+                    ),
+                    self.dtype,
                 ),
             )
 
@@ -2668,9 +2663,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         casted_col, casted_other = self._cast_self_and_other_for_where(
             other, inplace
         )
-        return casted_col.copy_if_else(casted_other, cond)._with_type_metadata(  # type: ignore[arg-type]
-            self.dtype
-        )
+        result = casted_col.copy_if_else(casted_other, cond)  # type: ignore[arg-type]
+        return ColumnBase.create(result.plc_column, self.dtype)
 
 
 def column_empty(
