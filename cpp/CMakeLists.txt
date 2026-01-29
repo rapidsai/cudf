@@ -585,6 +585,7 @@ add_library(
   src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
   src/join/hash_join.cu
+  src/join/jit_filter_join_indices.cu
   src/join/join.cu
   src/join/join_utils.cu
   src/join/key_remapping.cu
