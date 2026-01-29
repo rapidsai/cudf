@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,13 +33,13 @@ using parquet::detail::pass_intermediate_data;
 
 void hybrid_scan_reader_impl::handle_chunking(
   read_mode mode,
-  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
   cudf::host_span<bool const> data_page_mask)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
     // setup the next pass
-    setup_next_pass(std::move(column_chunk_buffers));
+    setup_next_pass(column_chunk_data);
 
     // Must be called as soon as we create the pass
     set_pass_page_mask(data_page_mask);
@@ -79,7 +79,7 @@ void hybrid_scan_reader_impl::handle_chunking(
 }
 
 void hybrid_scan_reader_impl::setup_next_pass(
-  std::vector<rmm::device_buffer>&& column_chunk_buffers)
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data)
 {
   auto const num_passes = _file_itm_data.num_passes();
   CUDF_EXPECTS(num_passes == 1,
@@ -121,7 +121,7 @@ void hybrid_scan_reader_impl::setup_next_pass(
     pass.num_rows  = _file_itm_data.global_num_rows;
 
     // Setup page information for the chunk (which we can access without decompressing)
-    setup_compressed_data(std::move(column_chunk_buffers));
+    setup_compressed_data(column_chunk_data);
 
     // detect malformed columns.
     // - we have seen some cases in the wild where we have a row group containing N
