@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -296,14 +296,15 @@ def test_dtype_header_roundtrip(dtype: pl.DataType):
     assert result == dt
 
 
-def test_astype_to_string_unsupported():
+def test_astype_to_string():
     col = Column(
         plc.Column.from_iterable_of_py([True], plc.DataType(plc.TypeId.BOOL8)),
         dtype=DataType(pl.Boolean()),
     )
     stream = get_cuda_stream()
-    with pytest.raises(pl.exceptions.InvalidOperationError):
-        col.astype(DataType(pl.String()), stream=stream)
+    target_dtype = DataType(pl.String())
+    result = col.astype(target_dtype, stream=stream)
+    assert result.dtype == target_dtype
 
 
 def test_astype_from_string_unsupported():
