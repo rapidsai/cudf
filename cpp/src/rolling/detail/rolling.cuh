@@ -108,9 +108,7 @@ inline std::vector<std::unique_ptr<aggregation>> preprocess_minmax(data_type col
                                                                    MakeDirectAggFn make_direct_agg)
 {
   std::vector<std::unique_ptr<aggregation>> aggs;
-  aggs.push_back(col_type.id() == type_id::STRING || col_type.id() == type_id::STRUCT
-                   ? make_arg_agg()
-                   : make_direct_agg());
+  aggs.push_back(cudf::is_compound(col_type) ? make_arg_agg() : make_direct_agg());
   return aggs;
 }
 
@@ -167,7 +165,7 @@ inline std::vector<std::unique_ptr<aggregation>>
 rolling_preprocessor::operator()<aggregation::LEAD>(data_type col_type,
                                                     aggregation const& agg) const
 {
-  if (!cudf::is_fixed_width(col_type)) { return {}; }
+  if (!cudf::is_fixed_width(col_type) && !cudf::is_dictionary(col_type)) { return {}; }
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(agg.clone());
   return aggs;
@@ -177,7 +175,7 @@ template <>
 inline std::vector<std::unique_ptr<aggregation>> rolling_preprocessor::operator()<aggregation::LAG>(
   data_type col_type, aggregation const& agg) const
 {
-  if (!cudf::is_fixed_width(col_type)) { return {}; }
+  if (!cudf::is_fixed_width(col_type) && !cudf::is_dictionary(col_type)) { return {}; }
   std::vector<std::unique_ptr<aggregation>> aggs;
   aggs.push_back(agg.clone());
   return aggs;
@@ -224,7 +222,9 @@ struct rolling_postprocessor {
   std::unique_ptr<column> operator()(aggregation const&,
                                      std::unique_ptr<column>& intermediate) const
   {
-    if (result_type.id() == type_id::STRING || result_type.id() == type_id::STRUCT) {
+    if (cudf::is_compound(result_type)) {
+      // The rows that represent null elements will have negative values in gather map,
+      // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
       auto output_table = detail::gather(table_view{{input}},
                                          intermediate->view(),
                                          cudf::out_of_bounds_policy::NULLIFY,
@@ -288,7 +288,13 @@ struct rolling_postprocessor {
                                      std::unique_ptr<column>& intermediate) const
   {
     auto const& lead_lag_agg = dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg);
-    if (!cudf::is_fixed_width(result_type)) {
+    if (cudf::is_dictionary(result_type)) {
+      // 'intermediate' is the column of indices for the output dictionary
+      auto keys =  // copy the keys
+        std::make_unique<cudf::column>(cudf::dictionary_column_view(input).keys(), stream, mr);
+      return cudf::make_dictionary_column(std::move(keys), std::move(intermediate), stream, mr);
+    }
+    if (cudf::is_compound(result_type)) {
       return cudf::detail::compute_lead_lag_for_nested<PrecedingWindowIterator,
                                                        FollowingWindowIterator>(
         lead_lag_agg.kind,
@@ -299,9 +305,8 @@ struct rolling_postprocessor {
         lead_lag_agg.row_offset,
         stream,
         mr);
-    } else {
-      return std::move(intermediate);
     }
+    return std::move(intermediate);
   }
 
   template <aggregation::Kind k>
@@ -430,8 +435,16 @@ struct rolling_window_launcher {
     requires(corresponding_rolling_operator<InputType, op>::type::is_supported())
   {
     auto const do_rolling = [&](auto const& device_op) {
-      auto output = make_fixed_width_column(
-        target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
+      // indices are used with dictionary aggregations; the element method always returns size_type
+      auto out_type = cudf::is_dictionary(input.type()) ? data_type{type_to_id<size_type>()}
+                                                        : target_type(input.type(), op);
+      using OutType =
+        typename std::conditional_t<cudf::is_dictionary<InputType>(),
+                                    size_type,
+                                    device_storage_type_t<target_type_t<InputType, op>>>;
+
+      auto output =
+        make_fixed_width_column(out_type, input.size(), mask_state::UNINITIALIZED, stream, mr);
 
       auto const d_inp_ptr         = column_device_view::create(input, stream);
       auto const d_default_out_ptr = column_device_view::create(default_outputs, stream);
@@ -440,7 +453,6 @@ struct rolling_window_launcher {
 
       auto constexpr block_size = 256;
       auto const grid           = cudf::detail::grid_1d(input.size(), block_size);
-      using OutType             = device_storage_type_t<target_type_t<InputType, op>>;
 
       if (input.has_nulls()) {
         gpu_rolling<OutType, block_size, true>
@@ -596,44 +608,16 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   min_periods = std::max(min_periods, 0);
 
-  auto input_col = cudf::is_dictionary(input.type())
-                     ? dictionary_column_view(input).get_indices_annotated()
-                     : input;
-
-  auto output = cudf::type_dispatcher(input_col.type(),
-                                      dispatch_rolling{},
-                                      input_col,
-                                      default_outputs,
-                                      preceding_window_begin,
-                                      following_window_begin,
-                                      min_periods,
-                                      agg,
-                                      stream,
-                                      mr);
-
-  if (!cudf::is_dictionary(input.type())) return output;
-
-  // dictionary column post processing
-  if (agg.kind == aggregation::COUNT_ALL || agg.kind == aggregation::COUNT_VALID ||
-      agg.kind == aggregation::ROW_NUMBER) {
-    return output;
-  }
-
-  // output is new dictionary indices (including nulls)
-  auto keys = std::make_unique<column>(dictionary_column_view(input).keys(), stream, mr);
-  auto const indices_type = output->type();        // capture these
-  auto const output_size  = output->size();        // before calling
-  auto const null_count   = output->null_count();  // release()
-  auto contents           = output->release();
-  // create indices column from output column data
-  auto indices = std::make_unique<column>(indices_type,
-                                          output_size,
-                                          std::move(*(contents.data.release())),
-                                          rmm::device_buffer{0, stream, mr},
-                                          0);
-  // create dictionary from keys and indices
-  return make_dictionary_column(
-    std::move(keys), std::move(indices), std::move(*(contents.null_mask.release())), null_count);
+  return cudf::type_dispatcher(input.type(),
+                               dispatch_rolling{},
+                               input,
+                               default_outputs,
+                               preceding_window_begin,
+                               following_window_begin,
+                               min_periods,
+                               agg,
+                               stream,
+                               mr);
 }
 
 }  // namespace detail
