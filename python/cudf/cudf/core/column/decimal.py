@@ -5,13 +5,12 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 from packaging import version
-from typing_extensions import Self
 
 import pylibcudf as plc
 

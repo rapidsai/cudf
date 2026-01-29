@@ -28,8 +28,7 @@ from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
