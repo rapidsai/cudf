@@ -2871,7 +2871,7 @@ def test_column_null_scalar_comparison(
     data = [1, 2, 3, 4, 5]
     sr = cudf.Series(data, dtype=dtype)
     result = comparison_op(sr, null_scalar)
-
+    import pdb;pdb.set_trace()
     assert result.isnull().all()
 
 
