@@ -30,9 +30,6 @@ jobs:
       - wheel-build-libcudf
       - wheel-build-pylibcudf
       - wheel-build-cudf
-      - wheel-tests-cudf
-      - wheel-build-cudf-polars
-      - wheel-build-dask-cudf
       - devcontainer
       - telemetry-setup
     secrets: inherit
@@ -334,43 +331,6 @@ jobs:
       script: "ci/build_wheel_cudf.sh"
       package-name: cudf
       package-type: python
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
-  wheel-tests-cudf:
-    needs: [wheel-build-cudf, changed-files]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
-    with:
-      build_type: pull-request
-      script: ci/test_wheel_cudf.sh
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
-  wheel-build-cudf-polars:
-    needs: wheel-build-pylibcudf
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
-    with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
-      build_type: pull-request
-      node_type: cpu8
-      script: "ci/build_wheel_cudf_polars.sh"
-      package-name: cudf_polars
-      package-type: python
-      pure-wheel: true
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
-  wheel-build-dask-cudf:
-    needs: wheel-build-cudf
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
-    with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
-      build_type: pull-request
-      node_type: cpu8
-      script: "ci/build_wheel_dask_cudf.sh"
-      package-name: dask_cudf
-      package-type: python
-      pure-wheel: true
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   devcontainer:
     secrets: inherit

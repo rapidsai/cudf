@@ -739,9 +739,9 @@ CUDF_KERNEL void find_first_set_bit_kernel(bitmask_type const* __restrict__ bitm
 {
   constexpr auto word_size = detail::size_in_bits<bitmask_type>();
 
-  namespace cg     = cooperative_groups;
-  auto const block = cg::tiled_partition<block_size>(cg::this_thread_block());
-  auto const tid   = cudf::detail::grid_1d::global_thread_id<block_size>();
+  // namespace cg     = cooperative_groups;
+  // auto const block = cg::tiled_partition<block_size>(cg::this_thread_block());
+  auto const tid = cudf::detail::grid_1d::global_thread_id<block_size>();
 
   auto const thread_word_index = tid + word_index(start);
   auto const end_word_index    = word_index(stop);
@@ -763,7 +763,8 @@ CUDF_KERNEL void find_first_set_bit_kernel(bitmask_type const* __restrict__ bitm
   // size_type out_index = cg::reduce(block, bit_index, cg::less<size_type>());
   // block.sync();
 
-  if (block.thread_rank() == 0 && out_index != max) {
+  // if (block.thread_rank() == 0 && out_index != max) {
+  if (threadIdx.x == 0 && out_index != max) {
     cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(index)};
     ref.fetch_min(out_index, cuda::std::memory_order_relaxed);
   }
