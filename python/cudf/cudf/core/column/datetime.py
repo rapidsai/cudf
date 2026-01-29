@@ -9,7 +9,7 @@ import locale
 import re
 import warnings
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -145,12 +145,27 @@ class DatetimeColumn(TemporalBaseColumn):
                 # attr was not called yet, so ignore.
                 pass
 
-    def _scan(self, op: str) -> ColumnBase:
-        if op not in {"cummin", "cummax"}:
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        # Pandas raises TypeError for certain unsupported datetime reductions
+        if op in {"sum", "product"}:
             raise TypeError(
-                f"Accumulation {op} not supported for {self.dtype}"
+                f"'{type(self).__name__}' with dtype {self.dtype} "
+                f"does not support reduction '{op}'"
             )
-        return super()._scan(op)
+        if op == "var":
+            raise TypeError(
+                f"'{type(self).__name__}' with dtype {self.dtype} "
+                f"does not support reduction '{op}'"
+            )
+        return super()._reduce(
+            op, skipna=skipna, min_count=min_count, **kwargs
+        )
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
