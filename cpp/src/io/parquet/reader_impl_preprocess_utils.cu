@@ -397,13 +397,12 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
                              sort_indices.begin(),
                              cuda::std::less<int>());
   auto pass_pages = cudf::detail::hostdevice_vector<PageInfo>(unsorted_pages.size(), stream);
-  thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    sort_indices.begin(),
-    sort_indices.end(),
-    pass_pages.d_begin(),
-    cuda::proclaim_return_type<PageInfo>([unsorted_pages = unsorted_pages.begin()] __device__(
-                                           int32_t i) { return unsorted_pages[i]; }));
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    sort_indices.begin(),
+                    sort_indices.end(),
+                    pass_pages.d_begin(),
+                    cuda::proclaim_return_type<PageInfo>(
+                      [p = unsorted_pages.data()] __device__(int32_t i) { return p[i]; }));
   stream.synchronize();
   return pass_pages;
 }
@@ -494,15 +493,20 @@ void decode_page_headers(pass_intermediate_data& pass,
       host_page_locations, stream, cudf::get_current_device_resource_ref());
 
     // Accelerated decode page headers, one thread per page
-    decode_page_headers_with_pgidx(pass.chunks,
-                                   unsorted_pages,
-                                   page_locations.begin(),
-                                   chunk_page_offsets.begin(),
-                                   error_code.data(),
-                                   stream);
+    decode_page_headers_with_pgidx(
+      device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
+      unsorted_pages,
+      page_locations.begin(),
+      chunk_page_offsets.begin(),
+      error_code.data(),
+      stream);
   } else {
     // (Slow) decode page headers, one warp (lane) per pages of a chunk
-    decode_page_headers(pass.chunks, d_chunk_page_info.begin(), error_code.data(), stream);
+    decode_page_headers(
+      device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
+      d_chunk_page_info.begin(),
+      error_code.data(),
+      stream);
   }
 
   if (auto const error = error_code.value_sync(stream); error != 0) {
@@ -531,14 +535,18 @@ void decode_page_headers(pass_intermediate_data& pass,
   pass.level_type_size = std::max<int32_t>(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
-  pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);
+  pass.pages =
+    sort_pages(device_span<PageInfo const>(unsorted_pages.data(), unsorted_pages.size()),
+               device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
+               stream);
 
   // compute offsets to each group of input pages.
   // page_keys:   1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
   //
   // result:      0,          4,          8
   rmm::device_uvector<size_type> page_counts(pass.pages.size() + 1, stream);
-  auto page_keys             = make_page_key_iterator(pass.pages);
+  auto page_keys =
+    make_page_key_iterator(device_span<PageInfo const>(pass.pages.device_ptr(), pass.pages.size()));
   auto const page_counts_end = cudf::detail::reduce_by_key(page_keys,
                                                            page_keys + pass.pages.size(),
                                                            thrust::make_constant_iterator(1),

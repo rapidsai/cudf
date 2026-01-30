@@ -1363,8 +1363,8 @@ std::optional<writer_compression_statistics> compress_orc_data_streams(
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
 
-  device_span<device_span<uint8_t const>> comp_in_span(comp_in);
-  device_span<device_span<uint8_t>> comp_out_span(comp_out);
+  device_span<device_span<uint8_t const>> comp_in_span(comp_in.data(), comp_in.size());
+  device_span<device_span<uint8_t>> comp_out_span(comp_out.data(), comp_out.size());
 
   size_t const num_blocks = strm_desc.size().first * strm_desc.size().second;
   init_compression_blocks_kernel<<<num_blocks, 256, 0, stream.value()>>>(strm_desc,

@@ -1521,9 +1521,9 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                comp_res.end(),
                codec_exec_result{0, codec_status::FAILURE});
 
-  device_span<device_span<uint8_t const>> comp_in_span(comp_in);
-  device_span<device_span<uint8_t>> comp_out_span(comp_out);
-  device_span<codec_exec_result> comp_res_span(comp_res);
+  device_span<device_span<uint8_t const>> comp_in_span(comp_in.data(), comp_in.size());
+  device_span<device_span<uint8_t>> comp_out_span(comp_out.data(), comp_out.size());
+  device_span<codec_exec_result> comp_res_span(comp_res.data(), comp_res.size());
   EncodePages(pages, write_v2_headers, comp_in_span, comp_out_span, comp_res_span, stream);
   compress(compression, comp_in_span, comp_out_span, comp_res_span, stream);
 
@@ -1787,6 +1787,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   auto parent_column_table_device_view = table_device_view::create(single_streams_table, stream);
   rmm::device_uvector<column_device_view> leaf_column_views(0, stream);
 
+  device_span<parquet_column_device_view const> d_col_desc(col_desc.device_ptr(), col_desc.size());
+
   if (num_fragments != 0) {
     // Move column info to device
     col_desc.host_to_device_async(stream);
@@ -1794,7 +1796,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       col_desc, *parent_column_table_device_view, stream);
 
     init_row_group_fragments(row_group_fragments,
-                             col_desc,
+                             d_col_desc,
                              partitions,
                              d_part_frag_offset,
                              max_page_fragment_size,
@@ -1991,7 +1993,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
   // Build chunk dictionaries and count pages. Sends chunks to device.
   auto comp_page_sizes = init_page_sizes(chunks,
-                                         col_desc,
+                                         d_col_desc,
                                          num_columns,
                                          max_page_size_bytes,
                                          max_page_size_rows,
@@ -2098,7 +2100,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
   if (num_pages != 0) {
     init_encoder_pages(chunks,
-                       col_desc,
+                       d_col_desc,
                        {pages.data(), pages.size()},
                        comp_page_sizes,
                        (num_stats_bfr) ? page_stats.data() : nullptr,
