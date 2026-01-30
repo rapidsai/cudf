@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -146,13 +146,14 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         bgzip_nvcomp_transform_functor{reinterpret_cast<uint8_t const*>(d_compressed_blocks.data()),
                                        reinterpret_cast<uint8_t*>(d_decompressed_blocks.data())});
 
-      cudf::io::detail::decompress(cudf::io::compression_type::ZLIB,
-                                   d_compressed_spans,
-                                   d_decompressed_spans,
-                                   d_decompression_results,
-                                   max_decompressed_size,
-                                   decompressed_size(),
-                                   stream);
+      cudf::io::detail::decompress(
+        cudf::io::compression_type::ZLIB,
+        device_span<device_span<uint8_t const> const>{d_compressed_spans},
+        device_span<device_span<uint8_t> const>{d_decompressed_spans},
+        device_span<cudf::io::detail::codec_exec_result>{d_decompression_results},
+        max_decompressed_size,
+        decompressed_size(),
+        stream);
       is_decompressed = true;
     }
 

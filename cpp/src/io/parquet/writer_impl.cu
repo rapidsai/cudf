@@ -1521,8 +1521,11 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                comp_res.end(),
                codec_exec_result{0, codec_status::FAILURE});
 
-  EncodePages(pages, write_v2_headers, comp_in, comp_out, comp_res, stream);
-  compress(compression, comp_in, comp_out, comp_res, stream);
+  device_span<device_span<uint8_t const>> comp_in_span(comp_in);
+  device_span<device_span<uint8_t>> comp_out_span(comp_out);
+  device_span<codec_exec_result> comp_res_span(comp_res);
+  EncodePages(pages, write_v2_headers, comp_in_span, comp_out_span, comp_res_span, stream);
+  compress(compression, comp_in_span, comp_out_span, comp_res_span, stream);
 
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
   // chunk-level
@@ -1543,7 +1546,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   chunks.device_to_host_async(stream);
 
   if (comp_stats.has_value()) {
-    comp_stats.value() += collect_compression_statistics(comp_in, comp_res, stream);
+    comp_stats.value() += collect_compression_statistics(comp_in_span, comp_res_span, stream);
   }
   stream.synchronize();
 }
