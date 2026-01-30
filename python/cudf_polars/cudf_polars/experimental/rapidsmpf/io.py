@@ -364,7 +364,7 @@ async def read_chunk(
             context=ir_context,
         )
         if node_profiler is not None:
-            node_profiler.add_chunk(df=df)
+            node_profiler.add_chunk(table=df.table)
         await ch_out.send(
             context,
             Message(

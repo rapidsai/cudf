@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator, MutableMapping
 
-    from cudf_polars.containers import DataFrame
+    import pylibcudf as plc
+
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
@@ -430,15 +431,15 @@ class RuntimeNodeProfiler:
         self.chunk_count: int = 0
         self.decision: str | None = None
 
-    def add_chunk(self, *, df: DataFrame | None = None) -> None:
+    def add_chunk(self, *, table: plc.Table | None = None) -> None:
         """
         Record a chunk.
 
-        If df is provided, both row_count and chunk_count are updated.
-        If df is None, only chunk_count is incremented.
+        If table is provided, both row_count and chunk_count are updated.
+        If table is None, only chunk_count is incremented.
         """
-        if df is not None:
-            self.row_count = (self.row_count or 0) + df.table.num_rows()
+        if table is not None:
+            self.row_count = (self.row_count or 0) + table.num_rows()
         self.chunk_count += 1
 
     def merge(self, other: RuntimeNodeProfiler) -> None:

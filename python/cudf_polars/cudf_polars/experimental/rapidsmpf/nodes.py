@@ -122,7 +122,7 @@ async def default_node_single(
                     context=ir_context,
                 )
                 if node_profiler is not None:
-                    node_profiler.add_chunk(df=df)
+                    node_profiler.add_chunk(table=df.table)
                 await ch_out.send(
                     context,
                     Message(
@@ -251,7 +251,7 @@ async def default_node_multi(
                     context=ir_context,
                 )
                 if node_profiler is not None:
-                    node_profiler.add_chunk(df=df)
+                    node_profiler.add_chunk(table=df.table)
                 await ch_out.send(
                     context,
                     Message(

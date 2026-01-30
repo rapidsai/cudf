@@ -79,15 +79,17 @@ def test_runtime_profiler_and_output(tmp_path):
 
 
 @pytest.mark.skipif(DEFAULT_CLUSTER != "single", reason="Requires 'single' cluster.")
-def test_profiling_dataframe_scan(tmp_path, df):
+def test_profiling_basic_query(tmp_path, df):
     """Test profiling output with a DataFrameScan query."""
     output_path = tmp_path / "dataframe_scan_profile.txt"
     engine = get_engine(output_path)
-    q = df.lazy().filter(pl.col("x") > 50).select(["x", "y"])
+    q = df.lazy().filter(pl.col("x") > 50).group_by("y").agg(pl.col("x").sum())
     q.collect(engine=engine)
     content = output_path.read_text()
-    assert "FILTER ('x', 'y') rows=49 chunks=10 [10]" in content
-    assert "DATAFRAMESCAN ('x', 'y') rows=100 chunks=10 [10]" in content
+    assert "GROUPBY ('y',) ('y', 'x') rows=2 chunks=1" in content
+    assert "REPARTITION ('y', 'x') rows=10 chunks=1" in content
+    assert "FILTER ('x', 'y') rows=49 chunks=10" in content
+    assert "DATAFRAMESCAN ('x', 'y') rows=100 chunks=10" in content
 
 
 @pytest.mark.skipif(DEFAULT_CLUSTER != "single", reason="Requires 'single' cluster.")
@@ -101,7 +103,7 @@ def test_profiling_scan_parquet_python(tmp_path, df):
     q = pl.scan_parquet(pq_path).filter(pl.col("x") > 50).select(["x", "y"])
     q.collect(engine=engine)
     content = output_path.read_text()
-    assert "SCAN PARQUET ('x', 'y') rows=49 chunks=5 [5]" in content
+    assert "SCAN PARQUET ('x', 'y') rows=49 chunks=5" in content
 
 
 @pytest.mark.skipif(DEFAULT_CLUSTER != "single", reason="Requires 'single' cluster.")
@@ -115,4 +117,5 @@ def test_profiling_scan_parquet_native(tmp_path, df):
     q = pl.scan_parquet(pq_path).filter(pl.col("x") > 50).select(["x", "y"])
     q.collect(engine=engine)
     content = output_path.read_text()
-    assert "SCAN PARQUET ('x', 'y') rows=? chunks=5 [5]" in content
+    # We can count the chunks but not the rows for "native" parquet
+    assert "SCAN PARQUET ('x', 'y') rows=? chunks=5" in content

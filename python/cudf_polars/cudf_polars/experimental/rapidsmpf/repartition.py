@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.experimental.base import RuntimeNodeProfiler
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
@@ -45,6 +46,7 @@ async def concatenate_node(
     *,
     output_count: int,
     collective_id: int,
+    node_profiler: RuntimeNodeProfiler | None = None,
 ) -> None:
     """
     Concatenate node for rapidsmpf.
@@ -75,6 +77,8 @@ async def concatenate_node(
         The expected global number of output chunks.
     collective_id
         Pre-allocated collective ID for this operation.
+    node_profiler
+        Node profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(context, ch_in, ch_out):
         # Receive metadata.
@@ -145,6 +149,8 @@ async def concatenate_node(
 
             # Extract concatenated result
             result_table = await allgather.extract_concatenated(stream)
+            if node_profiler is not None:
+                node_profiler.add_chunk(table=result_table)
 
             # If no chunks were gathered, result_table has 0 columns.
             # We need to create an empty table with the correct schema.
@@ -203,6 +209,8 @@ async def concatenate_node(
                             ),
                             context=ir_context,
                         )
+                        if node_profiler is not None:
+                            node_profiler.add_chunk(table=df.table)
                         await ch_out.send(
                             context,
                             Message(
@@ -245,6 +253,7 @@ def _(
     collective_id = rec.state["collective_id_map"][ir][0]
 
     # Add python node
+    profiler = rec.state["profiler"]
     nodes[ir] = [
         concatenate_node(
             rec.state["context"],
@@ -254,6 +263,7 @@ def _(
             channels[ir.children[0]].reserve_output_slot(),
             output_count=partition_info[ir].count,
             collective_id=collective_id,
+            node_profiler=profiler.get_or_create(ir) if profiler else None,
         )
     ]
     return nodes, channels
