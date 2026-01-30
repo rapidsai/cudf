@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition IO Logic."""
 
@@ -204,8 +204,7 @@ class SplitScan(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ not in ("parquet",):  # pragma: no cover
-            raise NotImplementedError(
-                f"Unhandled Scan type for file splitting: {typ}")
+            raise NotImplementedError(f"Unhandled Scan type for file splitting: {typ}")
 
         if len(paths) > 1:  # pragma: no cover
             raise ValueError(f"Expected a single path, got: {paths}")
@@ -231,11 +230,10 @@ class SplitScan(IR):
             # the row-group indices to "skip_rows" and "n_rows".
             rg_stride = total_row_groups // total_splits
             skip_rgs = rg_stride * split_index
-            skip_rows = sum(rg["num_rows"]
-                            for rg in rowgroup_metadata[:skip_rgs])
+            skip_rows = sum(rg["num_rows"] for rg in rowgroup_metadata[:skip_rgs])
             n_rows = sum(
                 rg["num_rows"]
-                for rg in rowgroup_metadata[skip_rgs: skip_rgs + rg_stride]
+                for rg in rowgroup_metadata[skip_rgs : skip_rgs + rg_stride]
             )
         else:
             # There are not enough row-groups to align
@@ -328,7 +326,7 @@ def _(
                     ir.typ,
                     ir.reader_options,
                     ir.cloud_options,
-                    paths[i: i + plan.factor],
+                    paths[i : i + plan.factor],
                     ir.with_columns,
                     ir.skip_rows,
                     ir.n_rows,
@@ -631,10 +629,9 @@ class ParquetMetadata:
         self.mean_size_per_file = {}
         self.column_names = ()
         stride = (
-            max(1, int(len(paths) / max_footer_samples)
-                ) if max_footer_samples else 1
+            max(1, int(len(paths) / max_footer_samples)) if max_footer_samples else 1
         )
-        self.sample_paths = paths[: stride * max_footer_samples: stride]
+        self.sample_paths = paths[: stride * max_footer_samples : stride]
 
         if not self.sample_paths:
             # No paths to sample from
@@ -751,8 +748,7 @@ class ParquetSourceInfo(DataSourceInfo):
             self.row_count.value is None
             or len(num_row_groups_per_file) != sampled_file_count
         ):
-            raise ValueError(
-                "Parquet metadata sampling failed.")  # pragma: no cover
+            raise ValueError("Parquet metadata sampling failed.")  # pragma: no cover
 
         n_sampled = 0
         samples: defaultdict[str, list[int]] = defaultdict(list)
@@ -886,8 +882,7 @@ def _extract_scan_stats(
         cstats = {
             name: ColumnStats(
                 name=name,
-                source_info=ColumnSourceInfo(
-                    DataSourcePair(table_source_info, name)),
+                source_info=ColumnSourceInfo(DataSourcePair(table_source_info, name)),
             )
             for name in ir.schema
         }
@@ -940,8 +935,7 @@ class DataFrameSourceInfo(DataSourceInfo):
                 )
             except pl.exceptions.InvalidOperationError:  # pragma: no cover
                 unique_count = self._pdf._df.get_column(column).n_unique()
-            unique_fraction = min(
-                (unique_count / row_count), 1.0) if row_count else 1.0
+            unique_fraction = min((unique_count / row_count), 1.0) if row_count else 1.0
             self._unique_stats[column] = UniqueStats(
                 ColumnStat[int](value=unique_count),
                 ColumnStat[float](value=unique_fraction),
@@ -967,8 +961,7 @@ def _extract_dataframescan_stats(
     return {
         name: ColumnStats(
             name=name,
-            source_info=ColumnSourceInfo(
-                DataSourcePair(table_source_info, name)),
+            source_info=ColumnSourceInfo(DataSourcePair(table_source_info, name)),
         )
         for name in ir.schema
     }
