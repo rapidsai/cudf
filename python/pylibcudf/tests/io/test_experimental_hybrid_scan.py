@@ -326,7 +326,7 @@ def test_hybrid_scan_materialize_columns(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset: r.offset + r.size],
+                simple_parquet_bytes[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -361,7 +361,7 @@ def test_hybrid_scan_materialize_columns(
     payload_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset: r.offset + r.size],
+                simple_parquet_bytes[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -442,11 +442,6 @@ def test_hybrid_scan_single_step_materialize(
         )
     )
 
-    # Get total rows in filtered row groups
-    total_rows = simple_hybrid_scan_reader.total_rows_in_row_groups(
-        filtered_row_groups
-    )
-
     # Get filter column data
     all_columns_ranges = (
         simple_hybrid_scan_reader.all_column_chunks_byte_ranges(
@@ -457,7 +452,7 @@ def test_hybrid_scan_single_step_materialize(
     all_columns_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset: r.offset + r.size],
+                simple_parquet_bytes[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -539,7 +534,7 @@ def test_hybrid_scan_has_next_table_chunk(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset: r.offset + r.size],
+                simple_parquet_bytes[r.offset : r.offset + r.size],
                 plc.utils._get_stream(),
             )
         )
@@ -609,7 +604,7 @@ def test_hybrid_scan_chunked_reading(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset: r.offset + r.size],
+                simple_parquet_bytes[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -706,7 +701,7 @@ def test_hybrid_scan_metadata_with_page_index(
 
     # Fetch page index bytes from the parquet file
     page_index_bytes = simple_parquet_bytes[
-        page_index_byte_range.offset: page_index_byte_range.offset
+        page_index_byte_range.offset : page_index_byte_range.offset
         + page_index_byte_range.size
     ]
 
