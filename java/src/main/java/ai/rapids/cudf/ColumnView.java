@@ -908,6 +908,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Extract a particular date time component from a timestamp.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-07-04 12:00:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.extractDateTimeComponent(DateTimeComponent.MONTH);
+   * // result     = [7, 1],                                        DType = INT16
+   * }</pre>
+   *
    * @param component what should be extracted
    * @return a column with the extracted information in it.
    */
@@ -918,10 +926,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get year from a timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.year();
+   * // result     = [1965, 2018, 2023],                         DType = INT16
+   * }</pre>
+   *
+   * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector year() {
     return extractDateTimeComponent(DateTimeComponent.YEAR);
@@ -929,10 +942,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get month from a timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.month();
+   * // result     = [10, 7, 1],                                 DType = INT16
+   * }</pre>
+   *
+   * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector month() {
     return extractDateTimeComponent(DateTimeComponent.MONTH);
@@ -940,10 +958,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get day from a timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.day();
+   * // result     = [26, 4, 25],                                DType = INT16
+   * }</pre>
+   *
+   * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector day() {
     return extractDateTimeComponent(DateTimeComponent.DAY);
@@ -951,10 +974,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get hour from a timestamp with time resolution.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26 14:01:12', '2018-07-04 12:00:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.hour();
+   * // result     = [14, 12, 7],                                                           DType = INT16
+   * }</pre>
+   *
+   * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector hour() {
     return extractDateTimeComponent(DateTimeComponent.HOUR);
@@ -962,10 +990,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get minute from a timestamp with time resolution.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26 14:01:12', '2018-07-04 12:00:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.minute();
+   * // result     = [1, 0, 32],                                                            DType = INT16
+   * }</pre>
+   *
+   * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector minute() {
     return extractDateTimeComponent(DateTimeComponent.MINUTE);
@@ -973,9 +1006,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get second from a timestamp with time resolution.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26 14:01:12', '2018-07-04 12:00:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.second();
+   * // result     = [12, 0, 12],                                                           DType = INT16
+   * }</pre>
+   *
    * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector second() {
@@ -984,9 +1022,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get the day of the week from a timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-07-01', '2018-07-02', '2018-07-03', '2018-07-04'], DType = TIMESTAMP_DAYS
+   * //               (Sunday)      (Monday)      (Tuesday)     (Wednesday)
+   * ColumnVector result = timestamps.weekDay();
+   * // result     = [7, 1, 2, 3],                                             DType = INT16
+   * }</pre>
+   *
    * @return A new INT16 vector allocated on the GPU. Monday=1, ..., Sunday=7
    */
   public final ColumnVector weekDay() {
@@ -995,9 +1039,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get the date that is the last day of the month for this timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.lastDayOfMonth();
+   * // result     = ['1965-10-31', '2018-07-31', '2023-01-31'], DType = TIMESTAMP_DAYS
+   * }</pre>
+   *
    * @return A new TIMESTAMP_DAYS vector allocated on the GPU.
    */
   public final ColumnVector lastDayOfMonth() {
@@ -1007,9 +1056,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get the day of the year from a timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.dayOfYear();
+   * // result     = [299, 185, 25],                             DType = INT16
+   * }</pre>
+   *
    * @return A new INT16 vector allocated on the GPU. The value is between [1, {365-366}]
    */
   public final ColumnVector dayOfYear() {
@@ -1019,6 +1073,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get the quarter of the year from a timestamp.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.quarterOfYear();
+   * // result     = [4, 3, 1],                                  DType = INT16
+   * }</pre>
+   *
    * @return A new INT16 vector allocated on the GPU. It will be a value from {1, 2, 3, 4}
    * corresponding to the quarter of the year.
    */
@@ -1029,6 +1091,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Add the specified number of months to the timestamp.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-01-31', '2018-02-28', '2018-03-31'], DType = TIMESTAMP_DAYS
+   * // months     = [1, 1, -1],                                 DType = INT16
+   * ColumnVector result = timestamps.addCalendricalMonths(months);
+   * // result     = ['2018-02-28', '2018-03-28', '2018-02-28'], DType = TIMESTAMP_DAYS
+   * }</pre>
+   *
    * @param months must be a INT16 column indicating the number of months to add. A negative number
    *               of months works too.
    * @return the updated timestamp
@@ -1039,6 +1110,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Add the specified number of months to the timestamp.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-01-31', '2018-02-28', '2018-03-31'], DType = TIMESTAMP_DAYS
+   * // months     = 1,                                          DType = INT16
+   * ColumnVector result = timestamps.addCalendricalMonths(months);
+   * // result     = ['2018-02-28', '2018-03-28', '2018-04-30'], DType = TIMESTAMP_DAYS
+   * }</pre>
+   *
    * @param months must be a INT16 scalar indicating the number of months to add. A negative number
    *               of months works too.
    * @return the updated timestamp
@@ -1049,6 +1129,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Check to see if the year for this timestamp is a leap year or not.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2000-01-01', '2004-01-01', '1900-01-01', '2023-01-01'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.isLeapYear();
+   * // result     = [true, true, false, false],                               DType = BOOL8
+   * }</pre>
+   *
    * @return BOOL8 vector of results
    */
   public final ColumnVector isLeapYear() {
@@ -1056,7 +1144,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Extract the number of days in the month
+   * Extract the number of days in the month.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1970-01-01', '1970-02-01', '1970-04-01'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.daysInMonth();
+   * // result     = [31, 28, 30],                               DType = INT16
+   * }</pre>
+   *
    * @return INT16 column of the number of days in the corresponding month
    */
   public final ColumnVector daysInMonth() {
@@ -1066,6 +1162,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Round the timestamp up to the given frequency keeping the type the same.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-07-04 12:30:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.dateTimeCeil(DateTimeRoundingFrequency.DAY);
+   * // result     = ['2018-07-05 00:00:00', '2023-01-26 00:00:00'], DType = TIMESTAMP_SECONDS
+   * }</pre>
+   *
    * @param freq what part of the timestamp to round.
    * @return a timestamp with the same type, but rounded up.
    */
@@ -1076,6 +1180,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Round the timestamp down to the given frequency keeping the type the same.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-07-04 12:30:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.dateTimeFloor(DateTimeRoundingFrequency.DAY);
+   * // result     = ['2018-07-04 00:00:00', '2023-01-25 00:00:00'], DType = TIMESTAMP_SECONDS
+   * }</pre>
+   *
    * @param freq what part of the timestamp to round.
    * @return a timestamp with the same type, but rounded down.
    */
@@ -1086,6 +1198,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Round the timestamp (half up) to the given frequency keeping the type the same.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-07-04 11:59:59', '2018-07-04 12:00:01'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.dateTimeRound(DateTimeRoundingFrequency.DAY);
+   * // result     = ['2018-07-04 00:00:00', '2018-07-05 00:00:00'], DType = TIMESTAMP_SECONDS
+   * }</pre>
+   *
    * @param freq what part of the timestamp to round.
    * @return a timestamp with the same type, but rounded (half up).
    */
