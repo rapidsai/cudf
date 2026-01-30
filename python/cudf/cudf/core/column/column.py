@@ -313,6 +313,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     _dtype: DtypeObj
     _distinct_count: dict[bool, int]
     _exposed_buffers: set[Buffer]
+    _cached_property_names: ClassVar[frozenset[str]] = frozenset()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        # Pre-compute the set of all @cached_property names across MRO
+        cached_props = set()
+        for base_cls in cls.__mro__:
+            for attr_name, attr_value in base_cls.__dict__.items():
+                if isinstance(attr_value, cached_property):
+                    cached_props.add(attr_name)
+        cls._cached_property_names = frozenset(cached_props)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         raise ValueError(
@@ -397,15 +408,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _clear_cache(self) -> None:
         self._distinct_count.clear()
 
-        # Automatically clear all @cached_property attributes across class hierarchy
-        for cls in type(self).__mro__:
-            for attr_name, attr_value in cls.__dict__.items():
-                if isinstance(attr_value, cached_property):
-                    try:
-                        delattr(self, attr_name)
-                    except AttributeError:
-                        # Cached property not yet accessed, nothing to clear
-                        pass
+        # Clear all @cached_property attributes (pre-computed at class definition time)
+        for attr_name in type(self)._cached_property_names:
+            try:
+                delattr(self, attr_name)
+            except AttributeError:
+                # Cached property not yet accessed, nothing to clear
+                pass
 
     def set_mask(self, mask: Buffer | None) -> Self:
         """
