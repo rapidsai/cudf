@@ -317,7 +317,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        # Pre-compute the set of all @cached_property names across MRO
+        # Pre-compute the set of all cached properties for efficient cache clearing
         cached_props = set()
         for base_cls in cls.__mro__:
             for attr_name, attr_value in base_cls.__dict__.items():
@@ -407,13 +407,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _clear_cache(self) -> None:
         self._distinct_count.clear()
-
-        # Clear all @cached_property attributes (pre-computed at class definition time)
         for attr_name in type(self)._cached_property_names:
             try:
                 delattr(self, attr_name)
             except AttributeError:
-                # Cached property not yet accessed, nothing to clear
                 pass
 
     def set_mask(self, mask: Buffer | None) -> Self:
