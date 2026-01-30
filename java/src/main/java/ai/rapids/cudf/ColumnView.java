@@ -2674,8 +2674,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * <p>Example:
    * <pre>{@code
    * // col    = [[1, 2, 1, 3], [4, 4, 5]], DType = LIST of INT32
-   * ColumnVector result = col.dropListDuplicates(DuplicateKeepOption.KEEP_FIRST);
-   * // result = [[1, 2, 3],    [4, 5]],    DType = LIST of INT32
+   * ColumnVector result = col.dropListDuplicates(DuplicateKeepOption.KEEP_LAST);
+   * // result = [[2, 1, 3],    [4, 5]],    DType = LIST of INT32
    * }</pre>
    *
    * @param keepOption Flag to specify which element to keep (first, last, any)
