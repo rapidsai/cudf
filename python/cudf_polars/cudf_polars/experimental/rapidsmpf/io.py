@@ -10,6 +10,7 @@ import math
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
@@ -39,7 +40,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    Metadata,
     opaque_reservation,
     send_metadata,
 )
@@ -183,7 +183,7 @@ async def dataframescan_node(
         await send_metadata(
             ch_out,
             context,
-            Metadata(local_count=local_count, global_count=global_count),
+            ChannelMetadata(local_count=local_count),
         )
 
         # Build list of IR slices to read
@@ -468,7 +468,7 @@ async def scan_node(
         await send_metadata(
             ch_out,
             context,
-            Metadata(local_count=len(scans), global_count=count),
+            ChannelMetadata(local_count=len(scans)),
         )
 
         # If there is nothing to scan, drain the channel and return
@@ -686,13 +686,12 @@ def _(
             rec.state["context"],
             ch_in,
             ch_out,
-            Metadata(
+            ChannelMetadata(
                 # partition_info.count is the estimated "global" count.
                 # Just estimate the local count as well.
                 local_count=math.ceil(
                     partition_info.count / rec.state["context"].comm().nranks
                 ),
-                global_count=partition_info.count,
             ),
         )
         nodes[ir] = [native_node, metadata_node]
