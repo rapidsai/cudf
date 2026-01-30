@@ -865,7 +865,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         * null (other types)= str(pd.NA)
         """
         if self.has_nulls():
-            return self.astype(np.dtype("str")).fillna(
+            return self.astype(CUDF_STRING_DTYPE).fillna(
                 str(self._PANDAS_NA_VALUE)
             )
         return self
