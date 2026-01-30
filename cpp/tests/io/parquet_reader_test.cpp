@@ -422,6 +422,19 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
   }
 
   {
+    // read them out of order using names
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+        .columns({"d", "c", "b", "a"});
+    auto result = cudf::io::read_parquet(read_opts);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), d);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), c);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(2), b);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(3), a);
+  }
+
+  {
     // read them out of order using indices
     cudf::io::parquet_reader_options read_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})

@@ -568,7 +568,7 @@ void host_decompress(compression_type compression,
     auto task = [d_in = h_inputs[i], d_out = h_outputs[i], cur_stream, compression]() -> size_t {
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in, cur_stream);
 
-      auto h_out = cudf::detail::make_pinned_vector_async<uint8_t>(d_out.size(), cur_stream);
+      auto h_out             = cudf::detail::make_pinned_vector<uint8_t>(d_out.size(), cur_stream);
       auto const uncomp_size = decompress(compression, h_in, h_out);
       h_in.clear();  // Free pinned memory as soon as possible
 
@@ -579,7 +579,7 @@ void host_decompress(compression_type compression,
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
-  auto h_results = cudf::detail::make_pinned_vector_async<codec_exec_result>(num_chunks, stream);
+  auto h_results = cudf::detail::make_pinned_vector<codec_exec_result>(num_chunks, stream);
   for (auto i = 0ul; i < num_chunks; ++i) {
     h_results[i] = {tasks[i].get(), codec_status::SUCCESS};
   }
