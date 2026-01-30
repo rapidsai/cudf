@@ -87,11 +87,8 @@ class TimeDeltaColumn(TemporalBaseColumn):
         cls, plc_column: plc.Column, dtype: np.dtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if cudf.get_option("mode.pandas_compatible"):
-            if not dtype.kind == "m":
-                raise ValueError("dtype must be a timedelta numpy dtype.")
-        elif not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
-            raise ValueError("dtype must be a timedelta numpy dtype.")
+        if dtype.kind != "m":
+            raise ValueError("dtype must be a timedelta dtype.")
         return plc_column, dtype
 
     def _reduce(
@@ -199,8 +196,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                         other,
                         bool_fill_value=fill_value,
                     )
-                    if cudf.get_option("mode.pandas_compatible"):
-                        result = result.fillna(fill_value)
+                    result = result.fillna(fill_value)
                     return result
 
         if out_dtype is None:
