@@ -953,6 +953,55 @@ def test_dynamic_planning_from_instance() -> None:
     assert config.executor.dynamic_planning.sample_chunk_count == 2  # default
 
 
+def test_profiling_defaults() -> None:
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    # Profiling is disabled (None) by default
+    assert config.executor.profiling is None
+
+
+def test_profiling_from_dict() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"profiling": {"output_file": "/tmp/profile.json"}},
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.profiling is not None
+    assert config.executor.profiling.output_file == "/tmp/profile.json"
+
+
+def test_profiling_from_instance() -> None:
+    from cudf_polars.utils.config import ProfilingOptions
+
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={
+                "profiling": ProfilingOptions(output_file="/tmp/out.json")
+            },
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.profiling is not None
+    assert config.executor.profiling.output_file == "/tmp/out.json"
+
+
+def test_profiling_output_file_required() -> None:
+    from cudf_polars.utils.config import ProfilingOptions
+
+    with pytest.raises(TypeError):
+        ProfilingOptions()  # type: ignore[call-arg]
+
+
+def test_profiling_output_file_not_empty() -> None:
+    from cudf_polars.utils.config import ProfilingOptions
+
+    with pytest.raises(ValueError, match="output_file must not be empty"):
+        ProfilingOptions(output_file="")
+
+
 def test_parse_memory_resource_config() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(

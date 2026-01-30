@@ -48,6 +48,7 @@ __all__ = [
     "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
+    "ProfilingOptions",
     "Runtime",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
@@ -493,6 +494,36 @@ class DynamicPlanningOptions:
             raise ValueError("sample_chunk_count must be at least 1")
 
 
+@dataclasses.dataclass(frozen=True)
+class ProfilingOptions:
+    """
+    Configuration for query profiling.
+
+    When enabled, the streaming executor collects per-node metrics
+    (such as row counts) and writes them to a file after execution.
+    This feature is only available for the "rapidsmpf" runtime.
+
+    To enable profiling, pass a ``ProfilingOptions`` instance
+    to ``StreamingExecutor(profiling=...)``. To disable it, pass
+    ``None`` (the default).
+
+    Parameters
+    ----------
+    output_file
+        Path to write the profiling results. The file will contain
+        a JSON representation of per-node metrics collected during
+        query execution. Required when profiling is enabled.
+    """
+
+    output_file: str
+
+    def __post_init__(self) -> None:  # noqa: D105
+        if not isinstance(self.output_file, str):
+            raise TypeError("output_file must be a str")
+        if not self.output_file:
+            raise ValueError("output_file must not be empty")
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class MemoryResourceConfig:
     """
@@ -704,6 +735,15 @@ class StreamingExecutor:
         or use regular pageable host memory. Pinned host memory offers higher
         bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
+    profiling
+        Options controlling query profiling. When set to a
+        :class:`~cudf_polars.utils.config.ProfilingOptions` instance,
+        per-node metrics (such as row counts) are collected during execution
+        and written to the specified output file. When ``None`` (the default),
+        profiling is disabled.
+
+        .. note::
+            This feature is only available for the "rapidsmpf" runtime.
 
     Notes
     -----
@@ -812,6 +852,7 @@ class StreamingExecutor:
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
+    profiling: ProfilingOptions | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
@@ -927,6 +968,15 @@ class StreamingExecutor:
                 self,
                 "dynamic_planning",
                 DynamicPlanningOptions(**self.dynamic_planning),
+            )
+
+        # Handle profiling.
+        # Can be None, dict, or ProfilingOptions
+        if isinstance(self.profiling, dict):
+            object.__setattr__(
+                self,
+                "profiling",
+                ProfilingOptions(**self.profiling),
             )
 
         if self.cluster == "distributed":
