@@ -542,7 +542,7 @@ class CategoricalColumn(column.ColumnBase):
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
         return self.codes.indices_of(self._encode(value))
 
-    @property
+    @cached_property
     def is_monotonic_increasing(self) -> bool:
         return bool(self.ordered) and super().is_monotonic_increasing
 
