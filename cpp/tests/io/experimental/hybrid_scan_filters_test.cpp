@@ -391,35 +391,39 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
   auto const file_buffer_span = cudf::host_span<uint8_t const>(
     reinterpret_cast<uint8_t const*>(file_buffer.data()), file_buffer.size());
 
+  // Fetch footer and page index bytes from the buffer.
+  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+
+  // Create hybrid scan reader with footer bytes
+  auto options = cudf::io::parquet_reader_options::builder().build();
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+
+  // Get all row groups from the reader
+  auto input_row_group_indices = reader->all_row_groups(options);
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
   // Helper function to test data page filteration using page index stats
-  auto const test_filter_data_pages_with_stats = [&](cudf::ast::operation const& filter_expression,
-                                                     cudf::size_type const expected_surviving_rows,
-                                                     rmm::cuda_stream_view stream =
-                                                       cudf::get_default_stream(),
-                                                     rmm::device_async_resource_ref mr =
-                                                       cudf::get_current_device_resource_ref()) {
-    // Create reader options with empty source info
-    cudf::io::parquet_reader_options options =
-      cudf::io::parquet_reader_options::builder().filter(filter_expression);
-
-    // Fetch footer and page index bytes from the buffer.
-    auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
-
-    // Create hybrid scan reader with footer bytes
-    auto const reader =
-      std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
-
-    // Get all row groups from the reader
-    auto input_row_group_indices = reader->all_row_groups(options);
+  auto const test_filter_data_pages_with_stats = [&](
+                                                   cudf::ast::operation const& filter_expression,
+                                                   cudf::size_type const expected_surviving_rows) {
+    // Set the filter expression and reset column selection
+    options.set_filter(filter_expression);
+    reader->reset_column_selection();
 
     // Span to track current row group indices
     auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
 
     // Calling `filter_data_pages_with_stats` before setting up the page index should raise an
     // error
-    EXPECT_THROW(std::ignore = reader->build_row_mask_with_page_index_stats(
-                   current_row_group_indices, options, stream, mr),
-                 std::runtime_error);
+    static std::once_flag once_flag;
+    std::call_once(once_flag, [&]() {
+      EXPECT_THROW(std::ignore = reader->build_row_mask_with_page_index_stats(
+                     current_row_group_indices, options, stream, mr),
+                   std::runtime_error);
+    });
 
     // Set up the page index
     auto const page_index_byte_range = reader->page_index_byte_range();

@@ -346,6 +346,14 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices) const;
 
   /**
+   * @brief Resets the column selection state
+   *
+   * Resets the internal column selection state forcing re-selection of columns in
+   * subsequent operations
+   */
+  void reset_column_selection() const;
+
+  /**
    * @brief Filter the row groups using the specified byte range specified by [`bytes_to_skip`,
    * `bytes_to_skip + bytes_to_read`)
    *
@@ -484,7 +492,8 @@ class hybrid_scan_reader {
     cudf::mutable_column_view& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Get byte ranges of column chunks of payload columns
@@ -514,7 +523,8 @@ class hybrid_scan_reader {
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Get byte ranges of column chunks of all (or selected) columns
@@ -540,7 +550,8 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices,
     cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
   /**
    * @brief Setup chunking information for filter columns and preprocess the input data pages
    *
@@ -563,7 +574,8 @@ class hybrid_scan_reader {
     use_data_page_mask mask_data_pages,
     cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Materializes a chunk of filter columns and updates the corresponding range of input row
@@ -575,7 +587,7 @@ class hybrid_scan_reader {
    * @return Table chunk of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
-    cudf::mutable_column_view& row_mask, rmm::cuda_stream_view stream) const;
+    cudf::mutable_column_view& row_mask) const;
 
   /**
    * @brief Setup chunking information for payload columns and preprocess the input data pages
@@ -599,7 +611,8 @@ class hybrid_scan_reader {
     use_data_page_mask mask_data_pages,
     cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Materializes a chunk of payload columns and applies the corresponding range of input row
@@ -611,7 +624,7 @@ class hybrid_scan_reader {
    * @return Table chunk of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
-    cudf::column_view const& row_mask, rmm::cuda_stream_view stream) const;
+    cudf::column_view const& row_mask) const;
 
   /**
    * @brief Check if there is any parquet data left to read for the current setup
