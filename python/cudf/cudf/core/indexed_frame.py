@@ -3141,14 +3141,6 @@ class IndexedFrame(Frame):
         ignore_index: bool, default False
             If True, the resulting axis will be labeled 0, 1, ..., n - 1.
         """
-        _keep_options = {
-            "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-            "last": plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-            False: plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-        }
-        if (keep_option := _keep_options.get(keep)) is None:
-            raise ValueError('keep must be either "first", "last" or False')
-
         if not isinstance(ignore_index, (np.bool_, bool)):
             raise ValueError(
                 f"{ignore_index=} must be bool, "
@@ -3167,24 +3159,17 @@ class IndexedFrame(Frame):
         keys = self._positions_from_column_names(
             subset, offset_by_index_columns=not ignore_index
         )
-        with access_columns(*columns, mode="read", scope="internal") as cols:
-            plc_table = plc.stream_compaction.stable_distinct(
-                plc.Table([col.plc_column for col in cols]),
-                keys,
-                keep_option,
-                plc.types.NullEquality.EQUAL
-                if nulls_are_equal
-                else plc.types.NullEquality.UNEQUAL,
-                plc.types.NanEquality.ALL_EQUAL,
-            )
-            return self._from_columns_like_self(
-                [
-                    ColumnBase.from_pylibcudf(col)
-                    for col in plc_table.columns()
-                ],
-                self._column_names,
-                self.index.names if not ignore_index else None,
-            )
+        result_columns = self._drop_duplicates_columns(
+            columns,
+            keys=keys,
+            keep=keep,
+            nulls_are_equal=nulls_are_equal,
+        )
+        return self._from_columns_like_self(
+            [ColumnBase.from_pylibcudf(col) for col in result_columns],
+            self._column_names,
+            self.index.names if not ignore_index else None,
+        )
 
     @_performance_tracking
     def duplicated(
@@ -4470,9 +4455,6 @@ class IndexedFrame(Frame):
             If specified, then drops every row containing
             less than `thresh` non-null values.
         """
-        if how not in {"any", "all"}:
-            raise ValueError("how must be 'any' or 'all'")
-
         subset = self._preprocess_subset(subset)
 
         if len(subset) == 0:
@@ -4482,27 +4464,17 @@ class IndexedFrame(Frame):
         columns = [*self.index._columns, *data_columns]
         keys = self._positions_from_column_names(subset)
 
-        if thresh is not None:
-            keep_threshold = thresh
-        elif how == "all":
-            keep_threshold = 1
-        else:
-            keep_threshold = len(keys)
-
-        with access_columns(*columns, mode="read", scope="internal") as cols:
-            plc_table = plc.stream_compaction.drop_nulls(
-                plc.Table([col.plc_column for col in cols]),
-                keys,
-                keep_threshold,
-            )
-            return self._from_columns_like_self(
-                [
-                    ColumnBase.from_pylibcudf(col)
-                    for col in plc_table.columns()
-                ],
-                self._column_names,
-                self.index.names,
-            )
+        result_columns = self._drop_nulls_columns(
+            columns,
+            keys=keys,
+            how=how,
+            thresh=thresh,
+        )
+        return self._from_columns_like_self(
+            [ColumnBase.from_pylibcudf(col) for col in result_columns],
+            self._column_names,
+            self.index.names,
+        )
 
     def _apply_boolean_mask(self, boolean_mask: BooleanMask, keep_index=True):
         """Apply boolean mask to each row of `self`.

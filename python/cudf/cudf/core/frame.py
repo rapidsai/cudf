@@ -235,6 +235,98 @@ class Frame(BinaryOperand, Scannable, Serializable):
         frame = self.__class__._from_data(data)
         return frame._copy_type_metadata(self)
 
+    def _drop_duplicates_columns(
+        self,
+        columns: list[ColumnBase],
+        keys: list[int],
+        keep: Literal["first", "last", False],
+        nulls_are_equal: bool,
+    ) -> list[plc.Column]:
+        """
+        Core stable_distinct implementation shared by Index and IndexedFrame.
+
+        Parameters
+        ----------
+        columns : list of ColumnBase
+            The columns to filter for duplicates.
+        keys : list of int
+            Column indices to consider when identifying duplicates.
+        keep : {"first", "last", False}
+            Which duplicate to keep.
+        nulls_are_equal : bool
+            Whether nulls should compare as equal.
+
+        Returns
+        -------
+        list of plc.Column
+            The deduplicated columns.
+        """
+        _keep_options = {
+            "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            "last": plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+            False: plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+        }
+        if (keep_option := _keep_options.get(keep)) is None:
+            raise ValueError('keep must be either "first", "last" or False')
+
+        with access_columns(*columns, mode="read", scope="internal") as cols:
+            plc_table = plc.stream_compaction.stable_distinct(
+                plc.Table([col.plc_column for col in cols]),
+                keys,
+                keep_option,
+                plc.types.NullEquality.EQUAL
+                if nulls_are_equal
+                else plc.types.NullEquality.UNEQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+            )
+            return list(plc_table.columns())
+
+    def _drop_nulls_columns(
+        self,
+        columns: list[ColumnBase],
+        keys: list[int],
+        how: Literal["any", "all"],
+        thresh: int | None = None,
+    ) -> list[plc.Column]:
+        """
+        Core drop_nulls implementation shared by Index and IndexedFrame.
+
+        Parameters
+        ----------
+        columns : list of ColumnBase
+            The columns to filter for nulls.
+        keys : list of int
+            Column indices to consider when identifying null rows.
+        how : {"any", "all"}
+            "any" drops rows with any null in keys, "all" drops rows
+            with all nulls in keys.
+        thresh : int, optional
+            Minimum number of non-nulls required to keep a row.
+            Overrides `how` if specified.
+
+        Returns
+        -------
+        list of plc.Column
+            The columns with null rows dropped.
+        """
+        if how not in {"any", "all"}:
+            raise ValueError("how must be 'any' or 'all'")
+
+        if thresh is not None:
+            keep_threshold = thresh
+        elif how == "all":
+            keep_threshold = 1
+        else:
+            keep_threshold = len(keys)
+
+        with access_columns(*columns, mode="read", scope="internal") as cols:
+            plc_table = plc.stream_compaction.drop_nulls(
+                plc.Table([col.plc_column for col in cols]),
+                keys,
+                keep_threshold,
+            )
+            return list(plc_table.columns())
+
     @_performance_tracking
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
