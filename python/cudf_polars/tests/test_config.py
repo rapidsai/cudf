@@ -939,6 +939,20 @@ def test_dynamic_planning_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.executor.dynamic_planning.sample_chunk_count == 3
 
 
+def test_dynamic_planning_from_instance() -> None:
+    from cudf_polars.utils.config import DynamicPlanningOptions
+
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"dynamic_planning": DynamicPlanningOptions()},
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.sample_chunk_count == 2  # default
+
+
 def test_parse_memory_resource_config() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
