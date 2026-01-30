@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import functools
 import math
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -19,6 +19,7 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         DatetimeLikeScalar,
         DtypeObj,
+        ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -51,6 +53,9 @@ def get_np_td_unit_conversion(
 class TimeDeltaColumn(TemporalBaseColumn):
     _NP_SCALAR = np.timedelta64
     _PD_SCALAR = pd.Timedelta
+    _VALID_REDUCTIONS = {
+        "median",
+    }
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
         "__ne__",
@@ -83,11 +88,8 @@ class TimeDeltaColumn(TemporalBaseColumn):
         cls, plc_column: plc.Column, dtype: np.dtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if cudf.get_option("mode.pandas_compatible"):
-            if not dtype.kind == "m":
-                raise ValueError("dtype must be a timedelta numpy dtype.")
-        elif not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
-            raise ValueError("dtype must be a timedelta numpy dtype.")
+        if dtype.kind != "m":
+            raise ValueError("dtype must be a timedelta dtype.")
         return plc_column, dtype
 
     def _clear_cache(self) -> None:
@@ -104,6 +106,28 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 delattr(self, attr)
             except AttributeError:
                 pass
+
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        # Pandas raises TypeError for certain unsupported timedelta reductions
+        if op == "product":
+            raise TypeError(
+                f"'{type(self).__name__}' with dtype {self.dtype} "
+                f"does not support reduction '{op}'"
+            )
+        if op == "var":
+            raise TypeError(
+                f"'{type(self).__name__}' with dtype {self.dtype} "
+                f"does not support reduction '{op}'"
+            )
+        return super()._reduce(
+            op, skipna=skipna, min_count=min_count, **kwargs
+        )
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
         try:
@@ -188,8 +212,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                         other,
                         bool_fill_value=fill_value,
                     )
-                    if cudf.get_option("mode.pandas_compatible"):
-                        result = result.fillna(fill_value)
+                    result = result.fillna(fill_value)
                     return result
 
         if out_dtype is None:
@@ -207,13 +230,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
         ):
             result = result.fillna(op == "__ne__")
         return result
-
-    def _scan(self, op: str) -> ColumnBase:
-        if op == "cumprod":
-            raise TypeError("cumprod not supported for Timedelta.")
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
-        )
 
     def total_seconds(self) -> ColumnBase:
         conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9
@@ -233,19 +249,21 @@ class TimeDeltaColumn(TemporalBaseColumn):
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
 
-    def strftime(self, format: str) -> StringColumn:
+    def strftime(
+        self, format: str, dtype: DtypeObj = CUDF_STRING_DTYPE
+    ) -> StringColumn:
         if len(self) == 0:
             return super().strftime(format)
-        else:
-            with self.access(mode="read", scope="internal"):
-                return cast(
-                    cudf.core.column.string.StringColumn,
-                    type(self).from_pylibcudf(
-                        plc.strings.convert.convert_durations.from_durations(
-                            self.plc_column, format
-                        )
+        with self.access(mode="read", scope="internal"):
+            return cast(
+                cudf.core.column.string.StringColumn,
+                ColumnBase.create(
+                    plc.strings.convert.convert_durations.from_durations(
+                        self.plc_column, format
                     ),
-                )
+                    dtype,
+                ),
+            )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):
@@ -253,7 +271,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 raise MixedTypeError(
                     f"cannot astype a timedelta like from {self.dtype} to {dtype}"
                 )
-        return self.strftime("%D days %H:%M:%S")
+        return self.strftime("%D days %H:%M:%S", dtype=dtype)
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
@@ -264,13 +282,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
         self,
         skipna: bool = True,
         min_count: int = 0,
+        **kwargs: Any,
     ) -> pd.Timedelta:
         return self._PD_SCALAR(
-            # Since sum isn't overridden in Numerical[Base]Column, mypy only
-            # sees the signature from Reducible (which doesn't have the extra
-            # parameters from ColumnBase._reduce) so we have to ignore this.
-            self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore[call-arg]
-                skipna=skipna, min_count=min_count
+            self.astype(self._UNDERLYING_DTYPE).sum(
+                skipna=skipna, min_count=min_count, **kwargs
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)

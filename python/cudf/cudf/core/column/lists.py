@@ -5,12 +5,11 @@ from __future__ import annotations
 
 import itertools
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -53,15 +52,22 @@ class ListColumn(ColumnBase):
             and not is_dtype_obj_list(dtype)
         ):
             raise ValueError("dtype must be a cudf.ListDtype")
+
+        child = plc_column.list_view().child()
+        try:
+            ColumnBase._validate_dtype_recursively(child, dtype.element_type)
+        except ValueError as e:
+            raise ValueError(
+                f"List element type validation failed: {e}"
+            ) from e
+
         return plc_column, dtype
 
     def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-        dtype = cast("ListDtype", self.dtype)
-        return ColumnBase.from_pylibcudf(sliced_plc_col)._with_type_metadata(
-            dtype.element_type
-        )
+        assert isinstance(self.dtype, ListDtype)
+        return ColumnBase.create(sliced_plc_col, self.dtype.element_type)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """

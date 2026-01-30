@@ -21,9 +21,7 @@ import time
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, overload
-
-from typing_extensions import assert_never
+from typing import TYPE_CHECKING, Any, ClassVar, assert_never, overload
 
 import polars as pl
 
@@ -55,9 +53,7 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
-    from typing import Literal
-
-    from typing_extensions import Self
+    from typing import Literal, Self
 
     from polars import polars  # type: ignore[attr-defined]
 
