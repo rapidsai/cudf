@@ -55,13 +55,7 @@ class StructColumn(ColumnBase):
         cls, plc_column: plc.Column, dtype: StructDtype
     ) -> tuple[plc.Column, StructDtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, StructDtype)
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_struct(dtype)
-        ):
+        if not is_dtype_obj_struct(dtype):
             raise ValueError(f"{type(dtype).__name__} must be a StructDtype.")
 
         # Check field count
