@@ -50,6 +50,15 @@ class IntervalColumn(ColumnBase):
         ):
             raise ValueError("dtype must be a IntervalDtype.")
 
+        # Validate that children dtypes are compatible with target subtype
+        for i, child in enumerate(plc_column.children()):
+            try:
+                ColumnBase._validate_dtype_recursively(child, dtype.subtype)
+            except ValueError as e:
+                raise ValueError(
+                    f"{'Right' if i else 'Left'} interval bound validation failed: {e}"
+                ) from e
+
         return plc_column, dtype
 
     def _with_type_metadata(self, dtype: DtypeObj) -> ColumnBase:
