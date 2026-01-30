@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """A column, with some properties."""
@@ -24,8 +24,7 @@ from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from typing_extensions import Self
+    from typing import Self
 
     from polars import Series as pl_Series
 

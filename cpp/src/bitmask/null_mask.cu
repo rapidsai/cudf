@@ -743,31 +743,28 @@ CUDF_KERNEL void find_first_set_bit_kernel(bitmask_type const* __restrict__ bitm
 {
   constexpr auto word_size = detail::size_in_bits<bitmask_type>();
 
-  namespace cg     = cooperative_groups;
-  auto const block = cg::tiled_partition<block_size>(cg::this_thread_block());
-  auto const tid   = cudf::detail::grid_1d::global_thread_id<block_size>();
-
-  cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(index)};
-  if (ref.load(cuda::std::memory_order_relaxed) != max) {
-    return;  // early exit if bit has already been found
-  }
-
-  auto const end_word_index = word_index(stop);
-
+  auto const tid               = cudf::detail::grid_1d::global_thread_id<block_size>();
   auto const thread_word_index = tid + word_index(start);
-  auto bit_index               = max;
+  auto const end_word_index    = word_index(stop);
+
+  auto bit_index = max;
   if (thread_word_index <= end_word_index) {
     auto const mask = detail::get_mask_offset_word(bitmask, tid, start, stop);
     // returned index is 1-based; 0 means no bits were set
-    auto mask_bit_index = __ffs(mask);
+    auto const mask_bit_index = __ffs(mask);
     if (mask_bit_index != 0) {
       bit_index = static_cast<size_type>(tid * word_size) + mask_bit_index - 1;
     }
   }
-  size_type out_index = cg::reduce(block, bit_index, cg::less<size_type>());
-  block.sync();
 
-  if (block.thread_rank() == 0 && out_index != max) {
+  // using cooperative_group::reduce(block,bit_index,cg::less());
+  // fails at runtime on a V100 (sm70) with driver 535
+  using BlockReduce = cub::BlockReduce<size_type, block_size>;
+  __shared__ typename BlockReduce::TempStorage ts;
+  auto const out_index = BlockReduce(ts).Reduce(bit_index, cuda::minimum());
+
+  if (threadIdx.x == 0 && out_index != max) {
+    cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(index)};
     ref.fetch_min(out_index, cuda::std::memory_order_relaxed);
   }
 }
