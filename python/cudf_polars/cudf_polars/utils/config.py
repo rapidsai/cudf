@@ -509,19 +509,21 @@ class ProfilingOptions:
 
     Parameters
     ----------
-    output_file
-        Path to write the profiling results. The file will contain
-        a JSON representation of per-node metrics collected during
-        query execution. Required when profiling is enabled.
+    output_path
+        Path to write the profiling results. The output will be in a
+        human-readable text format similar to
+        :func:`~cudf_polars.experimental.explain.explain_query`.
+        If ``None`` (the default), profiling data is collected but not
+        written to a file.
     """
 
-    output_file: str
+    output_path: str | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
-        if not isinstance(self.output_file, str):
-            raise TypeError("output_file must be a str")
-        if not self.output_file:
-            raise ValueError("output_file must not be empty")
+        if self.output_path is not None and (
+            not isinstance(self.output_path, str) or not self.output_path
+        ):
+            raise TypeError("output_path must be a non-empty str or None")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
