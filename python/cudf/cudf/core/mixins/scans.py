@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from .mixin_factory import _create_delegating_mixin
@@ -13,5 +13,6 @@ Scannable = _create_delegating_mixin(
         "cumprod",
         "cummin",
         "cummax",
+        "ewma",
     },
 )

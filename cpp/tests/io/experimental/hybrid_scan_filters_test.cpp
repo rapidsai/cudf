@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -76,11 +76,12 @@ auto filter_row_groups_with_dictionaries(cudf::host_span<uint8_t const> file_buf
   CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
 
   // Fetch dictionary page buffers from the input file buffer
-  std::vector<rmm::device_buffer> dictionary_page_buffers =
+  auto dictionary_page_buffers =
     fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
+  auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
 
   dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
-    dictionary_page_buffers, current_row_group_indices, options, stream);
+    dictionary_page_data, current_row_group_indices, options, stream);
 
   return dictionary_page_filtered_row_group_indices;
 }

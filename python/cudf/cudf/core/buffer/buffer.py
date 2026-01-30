@@ -5,10 +5,9 @@ from __future__ import annotations
 
 import math
 import weakref
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import numpy
-from typing_extensions import Self
 
 import pylibcudf
 import rmm
