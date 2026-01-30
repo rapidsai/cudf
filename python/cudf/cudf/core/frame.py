@@ -33,10 +33,10 @@ from cudf.core.column import (
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils.dtypes import (
     find_common_type,
-    is_dtype_obj_numeric,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking

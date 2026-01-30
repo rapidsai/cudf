@@ -13,8 +13,8 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, _handle_nulls, as_column
+from cudf.core.dtype.validators import is_dtype_obj_interval
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
-from cudf.utils.dtypes import is_dtype_obj_interval
 from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
 if TYPE_CHECKING:

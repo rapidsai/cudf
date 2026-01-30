@@ -21,6 +21,7 @@ import pylibcudf as plc
 import cudf
 from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.utils.docutils import doc_apply
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -995,9 +996,13 @@ class IntervalDtype(_BaseDtype):
             self._fields = {}
         else:
             self._subtype = cudf.dtype(subtype)
-            if isinstance(
-                self._subtype, cudf.CategoricalDtype
-            ) or cudf.utils.dtypes.is_dtype_obj_string(self._subtype):
+            # TODO: Remove self._subtype.kind == "U" once cudf.dtype no longer accepts
+            # numpy string types
+            if (
+                isinstance(self._subtype, CategoricalDtype)
+                or is_dtype_obj_string(self._subtype)
+                or self._subtype.kind == "U"
+            ):
                 raise TypeError(
                     "category, object, and string subtypes are not supported "
                     "for IntervalDtype"
