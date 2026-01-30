@@ -167,7 +167,8 @@ cdef class ParquetReaderOptions:
         None
         """
         warnings.warn(
-            "set_columns is deprecated and will be removed in a future version of cudf. Use set_column_names instead."
+            "set_columns is deprecated and will be removed in a "
+            "future version of cudf. Use set_column_names instead."
             , FutureWarning,
         )
         self.set_column_names(col_names)
@@ -358,7 +359,8 @@ cdef class ParquetReaderOptionsBuilder:
         ParquetReaderOptionsBuilder
         """
         warnings.warn(
-            "columns is deprecated and will be removed in a future version of cudf. Use column_names instead."
+            "columns is deprecated and will be removed in a "
+            "future version of cudf. Use column_names instead."
             , FutureWarning,
         )
         return self.column_names(col_names)
