@@ -1266,17 +1266,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # compute mask slice
         if stride == 1:
             with self.access(mode="read", scope="internal"):
-                result = [
-                    type(self).from_pylibcudf(col)
-                    for col in plc.copying.slice(
-                        self.plc_column,
-                        [start, stop],
-                    )
-                ]
-            return cast(
-                "Self",
-                ColumnBase.create(result[0].plc_column, self.dtype),
-            )
+                (result,) = plc.copying.slice(
+                    self.plc_column,
+                    [start, stop],
+                )
+            return cast("Self", ColumnBase.create(result, self.dtype))
         else:
             # Need to create a gather map for given slice with stride
             gather_map = as_column(
