@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import pandas as pd
 import pyarrow as pa
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -50,6 +49,15 @@ class IntervalColumn(ColumnBase):
             and not is_dtype_obj_interval(dtype)
         ):
             raise ValueError("dtype must be a IntervalDtype.")
+
+        for i, child in enumerate(plc_column.children()):
+            try:
+                ColumnBase._validate_dtype_recursively(child, dtype.subtype)
+            except ValueError as e:
+                raise ValueError(
+                    f"{'Right' if i else 'Left'} interval bound validation failed: {e}"
+                ) from e
+
         return plc_column, dtype
 
     def _with_type_metadata(self, dtype: DtypeObj) -> ColumnBase:
@@ -90,8 +98,8 @@ class IntervalColumn(ColumnBase):
         if not isinstance(array, pa.ExtensionArray):
             raise ValueError("Expected ExtensionArray for interval data")
         new_col = super().from_arrow(array.storage)
-        return new_col._with_type_metadata(
-            IntervalDtype.from_arrow(array.type)
+        return ColumnBase.create(
+            new_col.plc_column, IntervalDtype.from_arrow(array.type)
         )  # type: ignore[return-value]
 
     def to_arrow(self) -> pa.Array:
@@ -144,7 +152,10 @@ class IntervalColumn(ColumnBase):
         )
 
     def copy(self, deep: bool = True) -> Self:
-        return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
+        plc_col = self.plc_column
+        if deep:
+            plc_col = plc_col.copy()
+        return ColumnBase.create(plc_col, self.dtype)  # type: ignore[return-value]
 
     def _adjust_reduce_result(
         self,
@@ -183,9 +194,10 @@ class IntervalColumn(ColumnBase):
 
     @property
     def left(self) -> ColumnBase:
-        return ColumnBase.from_pylibcudf(
-            self.plc_column.children()[0]
-        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
+        return ColumnBase.create(
+            self.plc_column.children()[0],
+            self.dtype.subtype,  # type: ignore[union-attr]
+        )
 
     @functools.cached_property
     def mid(self) -> ColumnBase:
@@ -197,9 +209,10 @@ class IntervalColumn(ColumnBase):
 
     @property
     def right(self) -> ColumnBase:
-        return ColumnBase.from_pylibcudf(
-            self.plc_column.children()[1]
-        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
+        return ColumnBase.create(
+            self.plc_column.children()[1],
+            self.dtype.subtype,  # type: ignore[union-attr]
+        )
 
     @property
     def __cuda_array_interface__(self) -> dict[str, Any]:

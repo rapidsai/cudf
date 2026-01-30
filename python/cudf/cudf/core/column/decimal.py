@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
+from packaging import version
 
 import pylibcudf as plc
 
@@ -133,32 +133,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
     @classmethod
     def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
         result = cast(Self, super().from_arrow(data))
-        # Support for this conversion can be removed when we drop support for
-        # pyarrow<19, but until then we must support constructing
-        # Decimal32Column and Decimal64Column from Decimal128 pyarrow arrays
-        if cls in (Decimal32Column, Decimal64Column) and isinstance(
-            data.type, pa.Decimal128Type
-        ):
-            dtype_cls = (
-                Decimal32Dtype if cls is Decimal32Column else Decimal64Dtype
-            )
-            type_id = (
-                plc.TypeId.DECIMAL32
-                if cls is Decimal32Column
-                else plc.TypeId.DECIMAL64
-            )
-            dtype = dtype_cls(
-                precision=data.type.precision, scale=data.type.scale
-            )
-            plc_column = plc.unary.cast(
-                result.plc_column,
-                plc.DataType(
-                    type_id,
-                    -data.type.scale,
-                ),
-            )
-            result = cast(Self, cls.from_pylibcudf(plc_column))
-            result._dtype = dtype
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
 
@@ -389,29 +363,42 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
+    # This overload can be removed once we require pyarrow 20, see
+    # https://github.com/apache/arrow/issues/45570
+    def to_pandas(
+        self,
+        *,
+        nullable: bool = False,
+        arrow_type: bool = False,
+    ) -> pd.Index:
+        col = self
+        if version.parse(pa.__version__) < version.parse("20") and isinstance(
+            col, (Decimal32Column, Decimal64Column)
+        ):
+            col = cast(
+                "Decimal128Column",
+                self.astype(
+                    cudf.Decimal128Dtype(
+                        self.dtype.precision,  # type: ignore[union-attr]
+                        self.dtype.scale,  # type: ignore[union-attr]
+                    )
+                ),
+            )
+        return super(DecimalBaseColumn, col).to_pandas(
+            nullable=nullable, arrow_type=arrow_type
+        )
+
 
 class Decimal32Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL32}
     _decimal_cls = Decimal32Dtype
     _decimal_check = is_decimal32_dtype
 
-    # When we drop support for pyarrow<19 we should match pyarrow decimal types, but
-    # until then we retain the legacy behavior of always returning Decimal128
-    def to_arrow(self) -> pa.Array:
-        return self.astype(
-            cudf.Decimal128Dtype(self.dtype.precision, self.dtype.scale)  # type: ignore[union-attr]
-        ).to_arrow()
-
 
 class Decimal64Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL64}
     _decimal_cls = Decimal64Dtype
     _decimal_check = is_decimal64_dtype
-
-    def to_arrow(self) -> pa.Array:
-        return self.astype(
-            cudf.Decimal128Dtype(self.dtype.precision, self.dtype.scale)  # type: ignore[union-attr]
-        ).to_arrow()
 
 
 class Decimal128Column(DecimalBaseColumn):
