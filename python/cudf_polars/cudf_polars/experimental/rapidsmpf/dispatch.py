@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import (
         PartitionInfo,
-        RuntimeProfiler,
+        RuntimeQueryProfiler,
         StatsCollector,
     )
     from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
@@ -90,7 +90,7 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     collective_id_map: dict[IR, list[int]]
-    profiler: RuntimeProfiler | None
+    profiler: RuntimeQueryProfiler | None
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

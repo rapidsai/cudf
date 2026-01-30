@@ -33,7 +33,7 @@ import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import RuntimeProfiler
+from cudf_polars.experimental.base import RuntimeQueryProfiler
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import (
@@ -151,7 +151,7 @@ def evaluate_pipeline(
     rmpf_context: Context | None = None,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None, RuntimeProfiler | None]:
+) -> tuple[pl.DataFrame, list[Metadata] | None, RuntimeQueryProfiler | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
 
@@ -242,8 +242,10 @@ def evaluate_pipeline(
         # Generate network nodes
         assert rmpf_context is not None, "RapidsMPF context must defined."
         metadata_collector: list[Metadata] | None = [] if collect_metadata else None
-        profiler: RuntimeProfiler | None = (
-            RuntimeProfiler() if config_options.executor.profiling is not None else None
+        profiler: RuntimeQueryProfiler | None = (
+            RuntimeQueryProfiler()
+            if config_options.executor.profiling is not None
+            else None
         )
         nodes, output = generate_network(
             rmpf_context,
@@ -430,7 +432,7 @@ def generate_network(
     ir_context: IRExecutionContext,
     collective_id_map: dict[IR, list[int]],
     metadata_collector: list[Metadata] | None,
-    profiler: RuntimeProfiler | None = None,
+    profiler: RuntimeQueryProfiler | None = None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.

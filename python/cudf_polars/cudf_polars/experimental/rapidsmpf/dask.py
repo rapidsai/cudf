@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import (
         PartitionInfo,
-        RuntimeProfiler,
+        RuntimeQueryProfiler,
         StatsCollector,
     )
     from cudf_polars.experimental.parallel import ConfigOptions
@@ -43,7 +43,7 @@ class EvaluatePipelineCallback(Protocol):
         rmpf_context: Context | None = None,
         *,
         collect_metadata: bool = False,
-    ) -> tuple[pl.DataFrame, list[Metadata] | None, RuntimeProfiler | None]:
+    ) -> tuple[pl.DataFrame, list[Metadata] | None, RuntimeQueryProfiler | None]:
         """Evaluate a pipeline and return the result DataFrame, metadata, and profiler."""
         ...
 
@@ -65,7 +65,7 @@ def evaluate_pipeline_dask(
     collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None, RuntimeProfiler | None]:
+) -> tuple[pl.DataFrame, list[Metadata] | None, RuntimeQueryProfiler | None]:
     """
     Evaluate a RapidsMPF streaming pipeline on a Dask cluster.
 
@@ -103,7 +103,7 @@ def evaluate_pipeline_dask(
     )
     dfs: list[pl.DataFrame] = []
     metadata_collector: list[Metadata] = []
-    merged_profiler: RuntimeProfiler | None = None
+    merged_profiler: RuntimeQueryProfiler | None = None
     for df, md, profiler in result.values():
         dfs.append(df)
         if md is not None:
@@ -127,7 +127,7 @@ def _evaluate_pipeline_dask(
     dask_worker: Any = None,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None, RuntimeProfiler | None]:
+) -> tuple[pl.DataFrame, list[Metadata] | None, RuntimeQueryProfiler | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
 

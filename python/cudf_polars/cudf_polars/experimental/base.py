@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator, MutableMapping
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
@@ -406,38 +407,80 @@ class StatsCollector:
         self.join_info = JoinInfo()
 
 
-class RuntimeProfiler:
+class RuntimeNodeProfiler:
     """
-    Profiler for collecting runtime statistics during execution.
+    Profiler for a single IR node.
 
     Attributes
     ----------
     row_count
-        Mapping from IR node to actual row count produced during execution.
+        Total row count produced by this node during execution.
+        None if row counting is not available for this node.
     chunk_count
-        Mapping from IR node to actual chunk count produced during execution.
-    decisions
-        Mapping from IR node to the algorithm decision made at runtime
+        Total chunk count produced by this node during execution.
+    decision
+        The algorithm decision made at runtime for this node
         (e.g., "broadcast_left", "shuffle", "tree", etc.).
     """
 
-    __slots__ = ("chunk_count", "decisions", "row_count")
-    row_count: defaultdict[IR, int]
-    chunk_count: defaultdict[IR, int]
-    decisions: dict[IR, str]
+    __slots__ = ("chunk_count", "decision", "row_count")
 
     def __init__(self) -> None:
-        self.row_count = defaultdict(int)
-        self.chunk_count = defaultdict(int)
-        self.decisions = {}
+        self.row_count: int | None = None
+        self.chunk_count: int = 0
+        self.decision: str | None = None
 
-    def merge(self, other: RuntimeProfiler) -> None:
-        """Merge another profiler's statistics into this one."""
-        for ir, n_rows in other.row_count.items():
-            self.row_count[ir] += n_rows
-        for ir, n_chunks in other.chunk_count.items():
-            self.chunk_count[ir] += n_chunks
-        self.decisions.update(other.decisions)
+    def add_chunk(self, *, df: DataFrame | None = None) -> None:
+        """
+        Record a chunk.
+
+        If df is provided, both row_count and chunk_count are updated.
+        If df is None, only chunk_count is incremented.
+        """
+        if df is not None:
+            self.row_count = (self.row_count or 0) + df.table.num_rows()
+        self.chunk_count += 1
+
+    def merge(self, other: RuntimeNodeProfiler) -> None:
+        """Merge another node profiler's stats into this one."""
+        if other.row_count is not None:
+            self.row_count = (self.row_count or 0) + other.row_count
+        self.chunk_count += other.chunk_count
+        if other.decision is not None:
+            self.decision = other.decision
+
+
+class RuntimeQueryProfiler:
+    """
+    Profiler for collecting runtime statistics for an entire query.
+
+    Attributes
+    ----------
+    node_profilers
+        Mapping from each IR node to its node profiler.
+    """
+
+    __slots__ = ("node_profilers",)
+    node_profilers: dict[IR, RuntimeNodeProfiler]
+
+    def __init__(self) -> None:
+        self.node_profilers = {}
+
+    def get_or_create(self, ir: IR) -> RuntimeNodeProfiler:
+        """
+        Get or create a node profiler for the given IR.
+
+        Use this when setting up profiling for a node. To check if a node
+        was profiled without creating an entry, use `node_profilers.get(ir)`.
+        """
+        if ir not in self.node_profilers:
+            self.node_profilers[ir] = RuntimeNodeProfiler()
+        return self.node_profilers[ir]
+
+    def merge(self, other: RuntimeQueryProfiler) -> None:
+        """Merge another query profiler's statistics into this one."""
+        for ir, node_profiler in other.node_profilers.items():
+            self.get_or_create(ir).merge(node_profiler)
 
 
 class IOPartitionFlavor(IntEnum):

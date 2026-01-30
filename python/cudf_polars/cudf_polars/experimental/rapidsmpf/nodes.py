@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IRExecutionContext
-    from cudf_polars.experimental.base import RuntimeProfiler
+    from cudf_polars.experimental.base import RuntimeNodeProfiler, RuntimeQueryProfiler
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
@@ -48,7 +48,7 @@ async def default_node_single(
     ch_in: Channel[TableChunk],
     *,
     preserve_partitioning: bool = False,
-    profiler: RuntimeProfiler | None = None,
+    node_profiler: RuntimeNodeProfiler | None = None,
 ) -> None:
     """
     Single-channel default node for rapidsmpf.
@@ -67,8 +67,8 @@ async def default_node_single(
         The input Channel[TableChunk].
     preserve_partitioning
         Whether to preserve the partitioning metadata of the input chunks.
-    profiler
-        Profiler for collecting runtime statistics.
+    node_profiler
+        Node profiler for collecting runtime statistics.
 
     Notes
     -----
@@ -86,8 +86,6 @@ async def default_node_single(
         await send_metadata(ch_out, context, metadata_out)
 
         # Recv/send data.
-        n_rows_out = 0
-        n_chunks_out = 0
         seq_num = 0
         receiving = True
         received_any = False
@@ -123,8 +121,8 @@ async def default_node_single(
                     ),
                     context=ir_context,
                 )
-                n_rows_out += df.table.num_rows()
-                n_chunks_out += 1
+                if node_profiler is not None:
+                    node_profiler.add_chunk(df=df)
                 await ch_out.send(
                     context,
                     Message(
@@ -137,9 +135,6 @@ async def default_node_single(
                 del df, chunk
 
         await ch_out.drain(context)
-        if profiler is not None:
-            profiler.row_count[ir] += n_rows_out
-            profiler.chunk_count[ir] += n_chunks_out
 
 
 @define_py_node()
@@ -151,7 +146,7 @@ async def default_node_multi(
     chs_in: tuple[Channel[TableChunk], ...],
     *,
     partitioning_index: int | None = None,
-    profiler: RuntimeProfiler | None = None,
+    node_profiler: RuntimeNodeProfiler | None = None,
 ) -> None:
     """
     Pointwise node for rapidsmpf.
@@ -171,8 +166,8 @@ async def default_node_multi(
     partitioning_index
         Index of the input channel to preserve partitioning information for.
         If None, no partitioning information is preserved.
-    profiler
-        Profiler for collecting runtime statistics.
+    node_profiler
+        Node profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(context, *chs_in, ch_out):
         # Merge and forward basic metadata.
@@ -192,8 +187,6 @@ async def default_node_multi(
                 metadata.partitioning = md_child.partitioning
         await send_metadata(ch_out, context, metadata)
 
-        n_rows_out = 0
-        n_chunks_out = 0
         seq_num = 0
         n_children = len(chs_in)
         finished_channels: set[int] = set()
@@ -257,8 +250,8 @@ async def default_node_multi(
                     *dfs,
                     context=ir_context,
                 )
-                n_rows_out += df.table.num_rows()
-                n_chunks_out += 1
+                if node_profiler is not None:
+                    node_profiler.add_chunk(df=df)
                 await ch_out.send(
                     context,
                     Message(
@@ -276,9 +269,6 @@ async def default_node_multi(
         # Drain the output channel
         del ready_chunks
         await ch_out.drain(context)
-        if profiler is not None:
-            profiler.row_count[ir] += n_rows_out
-            profiler.chunk_count[ir] += n_chunks_out
 
 
 @define_py_node()
@@ -539,6 +529,7 @@ def _(
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
+    profiler: RuntimeQueryProfiler | None = rec.state.get("profiler")
 
     if len(ir.children) == 1:
         # Single-channel default node
@@ -558,7 +549,7 @@ def _(
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
                 preserve_partitioning=preserve_partitioning,
-                profiler=rec.state.get("profiler"),
+                node_profiler=profiler.get_or_create(ir) if profiler else None,
             )
         ]
     else:
@@ -570,7 +561,7 @@ def _(
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
-                profiler=rec.state.get("profiler"),
+                node_profiler=profiler.get_or_create(ir) if profiler else None,
             )
         ]
 
@@ -684,6 +675,7 @@ async def metadata_feeder_node(
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     metadata: Metadata,
+    node_profiler: RuntimeNodeProfiler | None = None,
 ) -> None:
     """
     Forward data with new metadata.
@@ -698,11 +690,15 @@ async def metadata_feeder_node(
         The output channel to forward data to and add metadata to.
     metadata
         The metadata to add to the output channel.
+    node_profiler
+        Node profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(context, ch_in, ch_out):
         await send_metadata(ch_out, context, metadata)
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
+            if node_profiler is not None:
+                node_profiler.chunk_count += 1
         await ch_out.drain(context)
 
 

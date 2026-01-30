@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import (
         PartitionInfo,
-        RuntimeProfiler,
+        RuntimeQueryProfiler,
         StatsCollector,
     )
 
@@ -179,7 +179,7 @@ def write_profile_output(
     profile_output: str | Path,
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    profiler: RuntimeProfiler,
+    profiler: RuntimeQueryProfiler,
 ) -> None:
     """
     Write a post-execution profile showing actual row counts and decisions.
@@ -204,26 +204,33 @@ def write_profile_output(
 def _repr_profile_tree(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    profiler: RuntimeProfiler,
+    profiler: RuntimeQueryProfiler,
     *,
     offset: str = "",
 ) -> str:
     """Recursively build a tree representation with profiler data."""
     header = _repr_ir(ir, offset=offset)
+    static_count = partition_info[ir].count if partition_info else None
+
+    # Get node profiler if it exists
+    node_profiler = profiler.node_profilers.get(ir)
 
     # Add actual row count
-    actual_rows = profiler.row_count.get(ir)
+    actual_rows = node_profiler.row_count if node_profiler is not None else None
     actual_str = _fmt_row_count(actual_rows) if actual_rows is not None else "?"
     header = header.rstrip("\n") + f" rows={actual_str}"
 
     # Add decision if present
-    if ir in profiler.decisions:
-        header += f" decision={profiler.decisions[ir]}"
+    if node_profiler is not None and node_profiler.decision is not None:
+        header += f" decision={node_profiler.decision}"
 
-    # Add chunk count if available
-    actual_chunks = profiler.chunk_count.get(ir)
-    if actual_chunks is not None:
-        header += f" chunks={actual_chunks}"
+    # Add actual chunk count if available
+    if node_profiler is not None and node_profiler.chunk_count > 0:
+        header += f" chunks={node_profiler.chunk_count}"
+
+    # Add expected partition count from PartitionInfo
+    if static_count is not None:
+        header += f" [{static_count}]"
 
     header += "\n"
 
