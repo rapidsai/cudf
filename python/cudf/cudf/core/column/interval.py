@@ -50,23 +50,6 @@ class IntervalColumn(ColumnBase):
         ):
             raise ValueError("dtype must be a IntervalDtype.")
 
-        # Cast children to target subtype - this ensures Arrow compatibility
-        # and handles any dtype normalization needed
-        new_children = tuple(
-            ColumnBase.from_pylibcudf(child).astype(dtype.subtype)
-            for child in plc_column.children()
-        )
-        # Reconstruct plc_column with type-casted children
-        plc_column = plc.Column(
-            plc.DataType(plc.TypeId.STRUCT),
-            plc_column.size(),
-            plc_column.data(),
-            plc_column.null_mask(),
-            plc_column.null_count(),
-            plc_column.offset(),
-            [child.plc_column for child in new_children],
-        )
-
         return plc_column, dtype
 
     def _with_type_metadata(self, dtype: DtypeObj) -> ColumnBase:
@@ -231,10 +214,29 @@ class IntervalColumn(ColumnBase):
         )
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:
-        if isinstance(dtype, IntervalDtype):
-            return ColumnBase.create(self.plc_column, dtype)  # type: ignore[return-value]
-        else:
+        if not isinstance(dtype, IntervalDtype):
             raise ValueError("dtype must be IntervalDtype")
+
+        # If subtype is changing, cast children to match new subtype
+        if dtype.subtype != self.dtype.subtype:  # type: ignore[union-attr]
+            new_children = tuple(
+                ColumnBase.from_pylibcudf(child).astype(dtype.subtype)
+                for child in self.plc_column.children()
+            )
+            # Reconstruct plc_column with cast children
+            plc_column = plc.Column(
+                plc.DataType(plc.TypeId.STRUCT),
+                self.plc_column.size(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                self.plc_column.offset(),
+                [child.plc_column for child in new_children],
+            )
+        else:
+            plc_column = self.plc_column
+
+        return ColumnBase.create(plc_column, dtype)  # type: ignore[return-value]
 
     def to_pandas(
         self,
