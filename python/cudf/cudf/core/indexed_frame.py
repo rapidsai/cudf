@@ -5502,11 +5502,12 @@ class IndexedFrame(Frame):
 
         column_index += len(idx_cols)
         exploded = [
-            new_column._with_type_metadata(
+            ColumnBase.create(
+                new_column.plc_column,
                 element_type,
             )
             if i == column_index
-            else new_column._with_type_metadata(old_column.dtype)
+            else ColumnBase.create(new_column.plc_column, old_column.dtype)
             for i, (new_column, old_column) in enumerate(
                 zip(
                     exploded,

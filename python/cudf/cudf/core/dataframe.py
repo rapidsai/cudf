@@ -8484,8 +8484,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:
             cudf_cols = (
-                col._with_type_metadata(
-                    recursively_update_struct_names(col.dtype, cn)
+                ColumnBase.create(
+                    col.plc_column,
+                    recursively_update_struct_names(col.dtype, cn),
                 )
                 for col, cn in zip(
                     cudf_cols, child_names.values(), strict=True
