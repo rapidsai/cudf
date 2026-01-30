@@ -388,7 +388,7 @@ class StatsPlanningOptions:
         Whether to use estimated column statistics to calculate
         the output-partition count for reduction operations
         like `Distinct`, `GroupBy`, and `Select(unique)`.
-        Default is False.
+        Default is True.
     use_join_heuristics
         Whether to use join heuristics to estimate row-count
         and unique-count statistics. Default is True.
@@ -417,7 +417,7 @@ class StatsPlanningOptions:
     )
     use_reduction_planning: bool = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__USE_REDUCTION_PLANNING", _bool_converter, default=False
+            f"{_env_prefix}__USE_REDUCTION_PLANNING", _bool_converter, default=True
         )
     )
     use_join_heuristics: bool = dataclasses.field(
