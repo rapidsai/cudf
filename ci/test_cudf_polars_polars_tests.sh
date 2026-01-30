@@ -54,6 +54,10 @@ sed -i 's/^pandas$/pandas>=2.0,<2.4.0/' polars/py-polars/requirements-dev.txt
 # Remove upper bound on pandas-stubs once we support 3.0.0+
 sed -i 's/^pandas-stubs/pandas-stubs<3/' polars/py-polars/requirements-dev.txt
 
+# xlsx2csv 0.8.5 contains a regression that breaks Polars tests
+# See https://github.com/pola-rs/polars/pull/26352
+sed -i 's/^xlsx2csv.*/xlsx2csv>=0.8.0,<0.8.5/' polars/py-polars/requirements-dev.txt
+
 # Pyparsing release 3.3.0 deprecates the enablePackrat method, which is used by the
 # version of pyiceberg that polars is currently pinned to. We can remove this skip
 # when we move to a newer version of polars using a pyiceberg where this issue is fixed
