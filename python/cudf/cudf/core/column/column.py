@@ -313,7 +313,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     _dtype: DtypeObj
     _distinct_count: dict[bool, int]
     _exposed_buffers: set[Buffer]
-    _cached_property_names: ClassVar[frozenset[str]] = frozenset()
+    _CACHED_PROPERTY_NAMES: ClassVar[frozenset[str]] = frozenset()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -323,7 +323,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             for attr_name, attr_value in base_cls.__dict__.items():
                 if isinstance(attr_value, cached_property):
                     cached_props.add(attr_name)
-        cls._cached_property_names = frozenset(cached_props)
+        cls._CACHED_PROPERTY_NAMES = frozenset(cached_props)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         raise ValueError(
@@ -407,7 +407,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _clear_cache(self) -> None:
         self._distinct_count.clear()
-        for attr_name in type(self)._cached_property_names:
+        for attr_name in self._CACHED_PROPERTY_NAMES:
             try:
                 delattr(self, attr_name)
             except AttributeError:

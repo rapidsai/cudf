@@ -28,7 +28,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     is_pandas_nullable_extension_dtype,
-    min_unsigned_type,
 )
 
 if PANDAS_GE_210:
@@ -242,11 +241,6 @@ class CategoricalDtype(_BaseDtype):
         Whether the categories have an ordered relationship.
         """
         return self._ordered
-
-    @cached_property
-    def codes_dtype(self) -> np.dtype:
-        """The dtype of the codes (unsigned integer) used to represent categories."""
-        return min_unsigned_type(len(self.categories))
 
     def to_pandas(self) -> pd.CategoricalDtype:
         """

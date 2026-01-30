@@ -104,8 +104,13 @@ class CategoricalColumn(column.ColumnBase):
         many operations on categoricals need to delegate to the codes column.
         """
         return cudf.core.column.NumericalColumn._from_preprocessed(
-            self.plc_column, self.dtype.codes_dtype
+            self.plc_column, self.codes_dtype
         )
+
+    @cached_property
+    def codes_dtype(self) -> np.dtype:
+        """The dtype of the codes (unsigned integer) used to represent categories."""
+        return min_unsigned_type(len(self.dtype.categories))
 
     @property
     def ordered(self) -> bool | None:
@@ -216,7 +221,7 @@ class CategoricalColumn(column.ColumnBase):
             other = column.as_column(
                 self._encode(other),
                 length=len(self),
-                dtype=self.dtype.codes_dtype,
+                dtype=self.codes_dtype,
             )._with_type_metadata(self.dtype)
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
         if not self.ordered and op not in equality_ops:
@@ -243,7 +248,7 @@ class CategoricalColumn(column.ColumnBase):
         val = super().element_indexing(index)
         if val is self._PANDAS_NA_VALUE:
             return val
-        return self._decode(int(val.as_py()))
+        return self._decode(val.as_py())
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -321,7 +326,7 @@ class CategoricalColumn(column.ColumnBase):
             other = pa_scalar_to_plc_scalar(
                 pa.scalar(
                     other,
-                    type=cudf_dtype_to_pa_type(self.dtype.codes_dtype),
+                    type=cudf_dtype_to_pa_type(self.codes_dtype),
                 )
             )
         elif isinstance(other.dtype, CategoricalDtype):
@@ -518,7 +523,7 @@ class CategoricalColumn(column.ColumnBase):
             return pa_scalar_to_plc_scalar(
                 pa.scalar(
                     fill_value,
-                    type=cudf_dtype_to_pa_type(self.dtype.codes_dtype),
+                    type=cudf_dtype_to_pa_type(self.codes_dtype),
                 )
             )
         else:
@@ -535,7 +540,7 @@ class CategoricalColumn(column.ColumnBase):
             fill_value = cast("CategoricalColumn", fill_value)._set_categories(
                 self.categories,
             )
-            return fill_value.codes.astype(self.dtype.codes_dtype)
+            return fill_value.codes.astype(self.codes_dtype)
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
         return self.codes.indices_of(self._encode(value))
@@ -562,7 +567,7 @@ class CategoricalColumn(column.ColumnBase):
                     column.as_column(
                         _DEFAULT_CATEGORICAL_VALUE,
                         length=self.size,
-                        dtype=self.dtype.codes_dtype,
+                        dtype=self.codes_dtype,
                     ),
                 )
                 return codes._with_type_metadata(dtype)  # type: ignore[return-value]
@@ -698,7 +703,7 @@ class CategoricalColumn(column.ColumnBase):
                     column.as_column(
                         _DEFAULT_CATEGORICAL_VALUE,
                         length=self.size,
-                        dtype=self.dtype.codes_dtype,
+                        dtype=self.codes_dtype,
                     ),
                 )
                 out_col = new_codes._with_type_metadata(  # type: ignore[assignment]
