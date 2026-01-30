@@ -94,21 +94,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
             raise ValueError("dtype must be a timedelta numpy dtype.")
         return plc_column, dtype
 
-    def _clear_cache(self) -> None:
-        super()._clear_cache()
-        attrs = (
-            "days",
-            "seconds",
-            "microseconds",
-            "nanoseconds",
-            "time_unit",
-        )
-        for attr in attrs:
-            try:
-                delattr(self, attr)
-            except AttributeError:
-                pass
-
     def _reduce(
         self,
         op: str,
