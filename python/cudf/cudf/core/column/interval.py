@@ -41,13 +41,7 @@ class IntervalColumn(ColumnBase):
             raise ValueError(
                 "plc_column must have two children (left edges, right edges)."
             )
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, IntervalDtype)
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_interval(dtype)
-        ):
+        if not is_dtype_obj_interval(dtype):
             raise ValueError("dtype must be a IntervalDtype.")
 
         for i, child in enumerate(plc_column.children()):
@@ -247,10 +241,7 @@ class IntervalColumn(ColumnBase):
         # self.to_arrow) is currently the best known way to convert interval
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
-        if nullable or (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
-        ):
+        if nullable or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
