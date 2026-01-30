@@ -1848,9 +1848,7 @@ class Index(SingleColumnFrame):
         return self._column.memory_usage
 
     def __sizeof__(self):
-        if cudf.get_option("mode.pandas_compatible"):
-            return self.memory_usage(deep=True)
-        return object.__sizeof__(self)
+        return self.memory_usage(deep=True)
 
     @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
@@ -1921,9 +1919,7 @@ class Index(SingleColumnFrame):
 
     @staticmethod
     def _return_get_indexer_result(result: cupy.ndarray) -> cupy.ndarray:
-        if cudf.get_option("mode.pandas_compatible"):
-            return result.astype(np.int64)
-        return result
+        return result.astype(np.int64)
 
     @_performance_tracking
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
@@ -3629,9 +3625,7 @@ class DatetimeIndex(Index):
 
     def __getitem__(self, index):
         value = super().__getitem__(index)
-        if cudf.get_option("mode.pandas_compatible") and isinstance(
-            value, np.datetime64
-        ):
+        if isinstance(value, np.datetime64):
             return pd.Timestamp(value)
         return value
 
@@ -4689,9 +4683,7 @@ class TimedeltaIndex(Index):
 
     def __getitem__(self, index):
         value = super().__getitem__(index)
-        if cudf.get_option("mode.pandas_compatible") and isinstance(
-            value, np.timedelta64
-        ):
+        if isinstance(value, np.timedelta64):
             return pd.Timedelta(value)
         return value
 
