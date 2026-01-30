@@ -833,12 +833,11 @@ namespace {
  * for non-dictionary, non-FLBA string pages.
  */
 struct compute_page_string_offset_size {
-  device_span<PageInfo const> pages;
   device_span<ColumnChunkDesc const> chunks;
   size_t skip_rows;
   size_t num_rows;
 
-  __device__ size_t operator()(size_t page_idx) const
+  __device__ size_t operator()(PageInfo const& page) const
   {
     // Mask for non-dictionary, non-delta string columns (same as used in decode kernel)
     constexpr uint32_t STRINGS_MASK_NON_DELTA_NON_DICT =
@@ -849,7 +848,6 @@ struct compute_page_string_offset_size {
             decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
             decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
 
-    auto const& page  = pages[page_idx];
     auto const& chunk = chunks[page.chunk_idx];
 
     // Check if this page is a non-dictionary string page using kernel mask
@@ -876,18 +874,17 @@ struct compute_page_string_offset_size {
  * This computes the memory needed to store definition and repetition levels.
  */
 struct compute_page_level_decode_size {
-  cudf::device_span<PageInfo const> pages;
   cudf::device_span<ColumnChunkDesc const> chunks;
   int level_type_size;
   size_t skip_rows;
   size_t num_rows;
 
-  __device__ size_t operator()(size_t page_idx) const
+  __device__ size_t operator()(PageInfo const& page) const
   {
     size_t def_level_size = 0;
     size_t rep_level_size = 0;
-    compute_page_level_decode_sizes(pages[page_idx],
-                                    chunks[pages[page_idx].chunk_idx],
+    compute_page_level_decode_sizes(page,
+                                    chunks[page.chunk_idx],
                                     level_type_size,
                                     skip_rows,
                                     num_rows,
@@ -903,16 +900,16 @@ rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkD
                                                         device_span<PageInfo const> pages,
                                                         size_t skip_rows,
                                                         size_t num_rows,
-                                                        rmm::cuda_stream_view stream)
+                                                        rmm::cuda_stream_view stream,
+                                                        rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<size_t> string_offset_sizes(pages.size(), stream);
+  rmm::device_uvector<size_t> string_offset_sizes(pages.size(), stream, mr);
 
-  auto iter = thrust::make_counting_iterator(size_t{0});
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    iter,
-                    iter + pages.size(),
+                    pages.begin(),
+                    pages.end(),
                     string_offset_sizes.begin(),
-                    compute_page_string_offset_size{pages, chunks, skip_rows, num_rows});
+                    compute_page_string_offset_size{chunks, skip_rows, num_rows});
 
   return string_offset_sizes;
 }
@@ -922,17 +919,16 @@ rmm::device_uvector<size_t> compute_level_decode_sizes(device_span<ColumnChunkDe
                                                        int level_type_size,
                                                        size_t skip_rows,
                                                        size_t num_rows,
-                                                       rmm::cuda_stream_view stream)
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<size_t> level_decode_sizes(pages.size(), stream);
+  rmm::device_uvector<size_t> level_decode_sizes(pages.size(), stream, mr);
 
-  auto iter = thrust::make_counting_iterator(size_t{0});
-  thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    iter,
-    iter + pages.size(),
-    level_decode_sizes.begin(),
-    compute_page_level_decode_size{pages, chunks, level_type_size, skip_rows, num_rows});
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    pages.begin(),
+                    pages.end(),
+                    level_decode_sizes.begin(),
+                    compute_page_level_decode_size{chunks, level_type_size, skip_rows, num_rows});
 
   return level_decode_sizes;
 }

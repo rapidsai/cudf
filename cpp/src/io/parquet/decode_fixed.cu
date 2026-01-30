@@ -281,19 +281,12 @@ __device__ inline void decode_fixed_width_split_values(
  *
  * @return Maximum depth valid count after skipping
  */
-template <int decode_block_size, typename level_t, bool is_nested>
-__device__ int skip_validity_and_row_indices_nonlist(int32_t target_value_count,
-                                                     page_state_s* s,
-                                                     level_t const* const def,
-                                                     int t)
+template <int decode_block_size, typename level_t>
+__device__ int skip_validity_and_row_indices_nonlist(
+  int32_t target_value_count, page_state_s* s, level_t const* const def, bool is_nested, int t)
 {
-  int const max_def_level = [&]() {
-    if constexpr (is_nested) {
-      return s->nesting_info[s->col.max_nesting_depth - 1].max_def_level;
-    } else {
-      return 1;
-    }
-  }();
+  int const max_def_level =
+    is_nested ? s->nesting_info[s->col.max_nesting_depth - 1].max_def_level : 1;
 
   int max_depth_valid_count = 0;
   int value_count           = 0;
@@ -879,11 +872,10 @@ __device__ void skip_ahead_in_decoding(page_state_s* s,
 
   // Count the number of valids we're skipping.
   processed_count = first_row;
-  valid_count =
-    !should_process_nulls
-      ? first_row
-      : skip_validity_and_row_indices_nonlist<decode_block_size_t, level_t, has_nesting_t>(
-          first_row, s, def, t);
+  valid_count     = !should_process_nulls
+                      ? first_row
+                      : skip_validity_and_row_indices_nonlist<decode_block_size_t, level_t>(
+                      first_row, s, def, has_nesting_t, t);
 
   if constexpr (has_dict_t) {
     skip_decode<rolling_buf_size>(dict_stream, valid_count, t);

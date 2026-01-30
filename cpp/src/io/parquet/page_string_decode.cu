@@ -55,7 +55,8 @@ __device__ cuda::std::pair<int, int> page_bounds(
     typename block_scan::TempStorage scan_storage;
   } temp_storage;
 
-  auto const t = threadIdx.x;
+  auto const block = cg::this_thread_block();
+  auto const t     = block.thread_rank();
 
   int const max_depth = s->col.max_nesting_depth;
   int const max_def   = s->nesting_info[max_depth - 1].max_def_level;
