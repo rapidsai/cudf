@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition Distinct logic."""
 
@@ -15,6 +15,7 @@ from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.utils import (
     _fallback_inform,
+    _get_selectivity_hint,
     _get_unique_fractions,
     _lower_ir_fallback,
 )
@@ -106,13 +107,15 @@ def lower_distinct(
             )
             shuffled = True
 
-    output_count = 1
+    # Conservative default: preserve input partitions unless tree reduction required
+    output_count = 1 if require_tree_reduction else child_count
     n_ary = 32  # Arbitrary default (for now)
     if ir.zlice is not None:
         # Head/tail slice operation has been pushed into Distinct
         if ir.zlice[0] < 1 and ir.zlice[1] is not None:
             # Use rough 1m-row heuristic to set n_ary
             n_ary = max(int(1_000_000 / ir.zlice[1]), 2)
+            output_count = 1  # Sliced operations require reduction
         else:  # pragma: no cover
             # TODO: General slicing is not supported for multiple
             # partitions. For now, we raise an error to fall back
@@ -122,15 +125,14 @@ def lower_distinct(
         # Use unique_fraction to determine partitioning
         n_ary = min(max(int(1.0 / unique_fraction), 2), child_count)
         output_count = max(int(unique_fraction * child_count), 1)
-
-    if output_count > 1 and require_tree_reduction:
-        # Need to reduce down to a single partition even
-        # if the unique_fraction is large.
-        output_count = 1
-        _fallback_inform(
-            "Unsupported unique options for multiple partitions.",
-            config_options,
-        )
+        if output_count > 1 and require_tree_reduction:
+            # Need to reduce down to a single partition even
+            # if the unique_fraction is large.
+            output_count = 1
+            _fallback_inform(
+                "Unsupported unique options for multiple partitions.",
+                config_options,
+            )
 
     # Partition-wise unique
     count = child_count
@@ -176,16 +178,23 @@ def _(
         "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
-    subset: frozenset[str] = ir.subset or frozenset(ir.schema)
-    unique_fraction_dict = _get_unique_fractions(
-        tuple(subset),
-        config_options.executor.unique_fraction,
-        row_count=rec.state["stats"].row_count.get(original_child),
-        column_stats=rec.state["stats"].column_stats.get(original_child),
-    )
-    unique_fraction = (
-        max(unique_fraction_dict.values()) if unique_fraction_dict else None
-    )
+    # Determine selectivity for output partitioning
+    # Check for selectivity hint first (explicit user knowledge)
+    unique_fraction: float | None = None
+    if hint := _get_selectivity_hint(ir, config_options.executor.selectivity_hints):
+        unique_fraction = hint
+    else:
+        # Fall back to unique_fraction statistics
+        subset: frozenset[str] = ir.subset or frozenset(ir.schema)
+        unique_fraction_dict = _get_unique_fractions(
+            tuple(subset),
+            config_options.executor.unique_fraction,
+            row_count=rec.state["stats"].row_count.get(original_child),
+            column_stats=rec.state["stats"].column_stats.get(original_child),
+        )
+        unique_fraction = (
+            max(unique_fraction_dict.values()) if unique_fraction_dict else None
+        )
 
     try:
         return lower_distinct(

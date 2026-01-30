@@ -37,7 +37,12 @@ from cudf_polars.experimental.dispatch import (
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
-from cudf_polars.experimental.utils import _concat, _contains_over, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _concat,
+    _contains_over,
+    _get_selectivity_hint,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -428,8 +433,23 @@ def _(
             ir, rec, msg="This filter is not supported for multiple partitions."
         )
 
-    new_node = ir.reconstruct([child])
+    new_node: IR = ir.reconstruct([child])
+    child_count = partition_info[child].count
     partition_info[new_node] = partition_info[child]
+
+    # Check for selectivity hint to consolidate partitions after selective filters
+    config_options = rec.state["config_options"]
+    if child_count > 1 and (
+        hint := _get_selectivity_hint(
+            ir,
+            config_options.executor.selectivity_hints,  # type: ignore[union-attr]
+        )
+    ):
+        output_count = max(int(hint * child_count), 1)
+        if output_count < child_count:
+            new_node = Repartition(new_node.schema, new_node)
+            partition_info[new_node] = PartitionInfo(count=output_count)
+
     return new_node, partition_info
 
 

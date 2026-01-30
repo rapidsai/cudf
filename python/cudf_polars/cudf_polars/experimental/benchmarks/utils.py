@@ -462,10 +462,7 @@ def get_executor_options(
             executor_options["cluster"] = "distributed"
         executor_options["stats_planning"] = {
             "use_reduction_planning": run_config.stats_planning,
-            "use_sampling": (
-                # Always allow row-group sampling for rapidsmpf runtime
-                run_config.stats_planning or run_config.runtime == "rapidsmpf"
-            ),
+            "use_io_partitioning": True,  # Always use parquet metadata for IO partitioning
         }
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
@@ -476,14 +473,46 @@ def get_executor_options(
         benchmark
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
-        # Only use the unique_fraction config if stats_planning is disabled
-        and not run_config.stats_planning
     ):
-        executor_options["unique_fraction"] = {
-            "c_custkey": 0.05,
-            "l_orderkey": 1.0,
-            "l_partkey": 0.1,
-            "o_custkey": 0.25,
+        # Selectivity hints for highly-selective operations.
+        # These hints specify the output/input row ratio and are used to
+        # determine output partition count. Derived from profiling sf300
+        # on 8 GPUs. Hints take precedence over stats-based estimates,
+        # allowing corrections where sampling is inaccurate.
+        executor_options["selectivity_hints"] = {
+            # GROUPBY hints (actual output / actual input from child)
+            "GROUPBY ('c_count',)": 0.0001,
+            "GROUPBY ('c_custkey', 'c_name', 'c_acctbal', 'c_phone', 'n_name', 'c_address', 'c_comment')": 0.5,
+            "GROUPBY ('c_custkey',)": 0.3,
+            "GROUPBY ('c_name', 'o_custkey', 'o_orderkey', 'o_orderdate', 'o_totalprice')": 0.43,
+            "GROUPBY ('cntrycode',)": 0.0001,
+            "GROUPBY ('l_returnflag', 'l_linestatus')": 0.0001,
+            "GROUPBY ('n_name',)": 0.0004,
+            "GROUPBY ('nation', 'o_year')": 0.0005,
+            "GROUPBY ('o_orderkey', 'o_orderdate', 'o_shippriority')": 0.5,
+            "GROUPBY ('o_orderpriority',)": 0.0001,
+            "GROUPBY ('o_year',)": 0.0006,
+            "GROUPBY ('supp_nation', 'cust_nation', 'l_year')": 0.0004,
+            "GROUPBY ('s_name',)": 0.04,
+            "GROUPBY ('p_partkey',)": 0.01,
+            # FILTER hints (actual output / actual input from child)
+            "FILTER ('key', 'avg_quantity', 'l_extendedprice', 'l_quantity')": 0.09,  # q17: 161K/1.79M=9%
+            "FILTER ('l_orderkey', 'sum_quantity')": 0.0001,
+            # SCAN hints (actual / estimated - for predicate pushdown)
+            "SCAN PARQUET ('l_extendedprice', 'l_discount', 'l_quantity', 'l_shipdate')": 0.0714,
+            "SCAN PARQUET ('l_partkey', 'l_extendedprice', 'l_discount', 'l_shipdate')": 0.0468,
+            "SCAN PARQUET ('l_suppkey', 'l_extendedprice', 'l_discount', 'l_shipdate')": 0.1418,
+            "SCAN PARQUET ('o_orderkey', 'o_orderpriority', 'o_orderdate')": 0.1434,
+            "SCAN PARQUET ('p_partkey', 'p_name')": 0.07,  # q9: 6.8%, q20: 1.4%
+            # JOIN hints (actual output / larger input - for truly selective joins < 10%)
+            "JOIN Inner ('p_partkey',) ('ps_partkey',) ('p_partkey', 'p_name',": 0.054,  # q9 only
+            "JOIN Inner ('p_partkey', 'ps_suppkey') ('l_partkey', 'l_suppkey')": 0.054,  # q9
+            "JOIN Inner ('s_suppkey',) ('supplier_no',)": 0.002,  # q15
+            "JOIN Inner ('n_nationkey',) ('c_nationkey',) ('r_regionkey', 'n_nationkey', 'n_name', 'r_name', 'c_custkey')": 0.2,  # q5
+            "JOIN Inner ('o_orderkey',) ('l_orderkey',) ('c_custkey', 'o_orderkey', 'n_nationkey', '...', 'l_extendedprice', 'l_discount')": 0.03,  # q5
+            "JOIN Semi ('o_orderkey',) ('l_orderkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice')": 0.00004,  # q18
+            "JOIN Inner ('o_orderkey',) ('l_orderkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice', 'l_quantity')": 0.0001,  # q18
+            "JOIN Inner ('o_custkey',) ('c_custkey',) ('o_orderkey', 'o_custkey', 'o_orderdate', 'o_totalprice', 'l_quantity', 'c_name')": 0.003,  # q18
         }
 
     return executor_options

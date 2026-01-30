@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition utilities."""
 
@@ -169,6 +169,37 @@ def _get_unique_fractions(
         }
     )
     return unique_fractions
+
+
+def _get_selectivity_hint(
+    ir: IR,
+    selectivity_hints: dict[str, float],
+) -> float | None:
+    """
+    Return a selectivity hint for the given IR node if one matches.
+
+    Parameters
+    ----------
+    ir
+        The IR node to find a hint for.
+    selectivity_hints
+        A dictionary mapping IR prefixes to selectivity factors.
+
+    Returns
+    -------
+    selectivity
+        The selectivity factor if a matching hint is found, otherwise None.
+    """
+    from cudf_polars.experimental.explain import _repr_ir
+
+    if not selectivity_hints:
+        return None
+
+    ir_repr = _repr_ir(ir).strip()
+    for prefix, selectivity in selectivity_hints.items():
+        if ir_repr.startswith(prefix):
+            return max(min(selectivity, 1.0), 0.00001)
+    return None
 
 
 def _contains_over(exprs: Sequence[Expr]) -> bool:

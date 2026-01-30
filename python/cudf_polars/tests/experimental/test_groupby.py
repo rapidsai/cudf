@@ -183,9 +183,19 @@ def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
 
 
 @pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
-def test_groupby_then_slice(
-    df: pl.LazyFrame, engine: pl.GPUEngine, zlice: tuple[int, int]
-) -> None:
+def test_groupby_then_slice(df: pl.LazyFrame, zlice: tuple[int, int]) -> None:
+    # Use a custom engine with selectivity hint to reduce output partitions.
+    # maintain_order=True requires single output partition.
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 4,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "selectivity_hints": {"GROUPBY ('y',)": 0.0001},
+        },
+    )
     df = pl.LazyFrame(
         {
             "x": [0, 1, 2, 3] * 2,
@@ -194,6 +204,31 @@ def test_groupby_then_slice(
     )
     q = df.group_by("y", maintain_order=True).max().slice(*zlice)
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_groupby_tree_reduction_with_hint() -> None:
+    # Test N-ary tree reduction with selectivity hints.
+    # With 16 partitions and n_ary=4, we need multiple reduction levels:
+    # 16 -> 4 -> 1, which exercises the intermediate GroupBy creation.
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 2,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "groupby_n_ary": 4,
+            "selectivity_hints": {"GROUPBY ('y',)": 0.0001},
+        },
+    )
+    df = pl.LazyFrame(
+        {
+            "x": list(range(32)),
+            "y": [1, 2, 3, 4] * 8,
+        }
+    )
+    q = df.group_by("y").sum()
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 def test_groupby_on_equality(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:

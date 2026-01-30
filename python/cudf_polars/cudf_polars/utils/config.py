@@ -591,6 +591,21 @@ class StreamingExecutor:
         Each factor estimates the fractional number of unique values in the
         column. By default, ``1.0`` is used for any column not included in
         ``unique_fraction``.
+    selectivity_hints
+        **Experimental**: This feature may change at any time.
+
+        A dictionary mapping IR node prefixes to selectivity factors between
+        0 and 1 (exclusive on the left, inclusive on the right).
+
+        Each factor estimates the output/input row ratio for matching IR nodes.
+        IR nodes are matched by checking if their string representation starts
+        with the given prefix (e.g., ``"GROUPBY ('nation', 'o_year')"``).
+
+        When a matching hint is found for a GroupBy or Distinct operation,
+        it determines the output partition count as a fraction of the input
+        partition count. Without hints, these operations conservatively
+        preserve the input partition count unless statistics-based planning
+        is enabled.
     target_partition_size
         Target partition size, in bytes, for IO tasks. This configuration currently
         controls how large parquet files are split into multiple partitions.
@@ -701,6 +716,11 @@ class StreamingExecutor:
     unique_fraction: dict[str, float] = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__UNIQUE_FRACTION", json.loads, default={}
+        )
+    )
+    selectivity_hints: dict[str, float] = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SELECTIVITY_HINTS", json.loads, default={}
         )
     )
     target_partition_size: int = dataclasses.field(
@@ -913,6 +933,7 @@ class StreamingExecutor:
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
         d["stats_planning"] = json.dumps(d["stats_planning"])
+        d["selectivity_hints"] = json.dumps(d["selectivity_hints"])
         return hash(tuple(sorted(d.items())))
 
 
