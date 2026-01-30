@@ -256,6 +256,7 @@ class RunConfig:
     query_set: str
     collect_traces: bool = False
     stats_planning: bool
+    dynamic_planning: bool | None = None
     max_io_threads: int
     native_parquet: bool
     spill_to_pinned_memory: bool
@@ -375,6 +376,7 @@ class RunConfig:
             query_set=args.query_set,
             collect_traces=args.collect_traces,
             stats_planning=args.stats_planning,
+            dynamic_planning=args.dynamic_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
             extra_info=args.extra_info,
@@ -410,6 +412,7 @@ class RunConfig:
                 print(f"stats_planning: {self.stats_planning}")
                 if self.runtime == "rapidsmpf":
                     print(f"native_parquet: {self.native_parquet}")
+                    print(f"dynamic_planning: {self.dynamic_planning}")
                 if self.cluster == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
@@ -471,6 +474,9 @@ def get_executor_options(
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
         executor_options["spill_to_pinned_memory"] = run_config.spill_to_pinned_memory
+        if run_config.dynamic_planning:
+            # Pass empty dict to enable with defaults; None means disabled
+            executor_options["dynamic_planning"] = {}
 
     if (
         benchmark
@@ -478,6 +484,7 @@ def get_executor_options(
         and run_config.executor == "streaming"
         # Only use the unique_fraction config if stats_planning is disabled
         and not run_config.stats_planning
+        and not run_config.dynamic_planning
     ):
         executor_options["unique_fraction"] = {
             "c_custkey": 0.05,
@@ -960,6 +967,12 @@ def parse_args(
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Enable statistics planning.",
+    )
+    parser.add_argument(
+        "--dynamic-planning",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable dynamic shuffle planning (not yet implemented). ",
     )
     parser.add_argument(
         "--max-io-threads",
