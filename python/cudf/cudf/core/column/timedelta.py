@@ -87,7 +87,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         cls, plc_column: plc.Column, dtype: np.dtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not dtype.kind == "m":
+        if dtype.kind != "m":
             raise ValueError("dtype must be a timedelta dtype.")
         return plc_column, dtype
 
