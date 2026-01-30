@@ -213,6 +213,14 @@ cdef class HybridScanReader:
             host_span[const_size_type](indices_vec.data(), indices_vec.size())
         )
 
+    def reset_column_selection(self):
+        """Reset the column selection state.
+
+        Resets the internal column selection state forcing re-selection of columns in
+        subsequent filter and read operations
+        """
+        self.c_obj.get()[0].reset_column_selection()
+
     def filter_row_groups_with_stats(
         self,
         list row_group_indices,
@@ -458,6 +466,8 @@ cdef class HybridScanReader:
             Parquet reader options
         stream : Stream, optional
             CUDA stream
+        mr : DeviceMemoryResource, optional
+            Device memory resource
 
         Returns
         -------
@@ -482,7 +492,8 @@ cdef class HybridScanReader:
                 mask_view,
                 mask_data_pages,
                 options.c_obj,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         return TableWithMetadata.from_libcudf(c_result, stream, mr)
 
@@ -539,6 +550,8 @@ cdef class HybridScanReader:
             Parquet reader options
         stream : Stream, optional
             CUDA stream
+        mr : DeviceMemoryResource, optional
+            Device memory resource
 
         Returns
         -------
@@ -563,7 +576,82 @@ cdef class HybridScanReader:
                 mask_view,
                 mask_data_pages,
                 options.c_obj,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
+            )
+        return TableWithMetadata.from_libcudf(c_result, stream, mr)
+
+    def all_column_chunks_byte_ranges(
+        self,
+        list row_group_indices,
+        ParquetReaderOptions options
+    ):
+        """Get byte ranges of column chunks of all columns.
+
+        Parameters
+        ----------
+        row_group_indices : list[int]
+            Input row group indices
+        options : ParquetReaderOptions
+            Parquet reader options
+
+        Returns
+        -------
+        list[ByteRangeInfo]
+            Byte ranges to column chunks of all columns
+        """
+        cdef vector[size_type] indices_vec = row_group_indices
+        cdef vector[byte_range_info] ranges = \
+            self.c_obj.get()[0].all_column_chunks_byte_ranges(
+                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                options.c_obj
+            )
+        return [ByteRangeInfo(r.offset(), r.size()) for r in ranges]
+
+    def materialize_all_columns(
+        self,
+        list row_group_indices,
+        list column_chunk_data,
+        ParquetReaderOptions options,
+        Stream stream=None,
+        DeviceMemoryResource mr=None
+    ):
+        """Materialize all columns.
+
+        Parameters
+        ----------
+        row_group_indices : list[int]
+            Input row group indices
+        column_chunk_data : list[Span]
+            Span-like objects containing column chunk data of all columns
+        options : ParquetReaderOptions
+            Parquet reader options
+        stream : Stream, optional
+            CUDA stream
+        mr : DeviceMemoryResource, optional
+            Device memory resource
+
+        Returns
+        -------
+        TableWithMetadata
+            Table of materialized all columns and metadata
+        """
+        cdef vector[size_type] indices_vec = row_group_indices
+
+        cdef vector[device_span[const_uint8_t]] spans_vec
+        stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
+        for span in column_chunk_data:
+            spans_vec.push_back(_get_device_span(span))
+        cdef table_with_metadata c_result = \
+            self.c_obj.get()[0].materialize_all_columns(
+                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                host_span[const_device_span_const_uint8_t](
+                    <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
+                ),
+                options.c_obj,
+                stream.view(),
+                mr.get_mr()
             )
         return TableWithMetadata.from_libcudf(c_result, stream, mr)
 
@@ -621,14 +709,13 @@ cdef class HybridScanReader:
                 <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
             ),
             options.c_obj,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     def materialize_filter_columns_chunk(
         self,
-        Column row_mask,
-        Stream stream=None,
-        DeviceMemoryResource mr=None
+        Column row_mask
     ):
         """Materialize a chunk of filter columns.
 
@@ -636,8 +723,6 @@ cdef class HybridScanReader:
         ----------
         row_mask : Column
             Mutable boolean column indicating surviving rows
-        stream : Stream, optional
-            CUDA stream
 
         Returns
         -------
@@ -645,14 +730,13 @@ cdef class HybridScanReader:
             Table chunk of materialized filter columns and metadata
         """
         cdef mutable_column_view mask_view = row_mask.mutable_view()
-        stream = _get_stream(stream)
-        mr = _get_memory_resource(mr)
         cdef table_with_metadata c_result = \
             self.c_obj.get()[0].materialize_filter_columns_chunk(
-                mask_view,
-                stream.view()
+                mask_view
             )
-        return TableWithMetadata.from_libcudf(c_result, stream, mr)
+        return TableWithMetadata.from_libcudf(
+            c_result, _get_stream(None), _get_memory_resource(None)
+        )
 
     def setup_chunking_for_payload_columns(
         self,
@@ -708,14 +792,13 @@ cdef class HybridScanReader:
                 <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
             ),
             options.c_obj,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     def materialize_payload_columns_chunk(
         self,
-        Column row_mask,
-        Stream stream=None,
-        DeviceMemoryResource mr=None
+        Column row_mask
     ):
         """Materialize a chunk of payload columns.
 
@@ -723,8 +806,6 @@ cdef class HybridScanReader:
         ----------
         row_mask : Column
             Boolean column indicating surviving rows
-        stream : Stream, optional
-            CUDA stream
 
         Returns
         -------
@@ -732,14 +813,13 @@ cdef class HybridScanReader:
             Table chunk of materialized payload columns and metadata
         """
         cdef column_view mask_view = row_mask.view()
-        stream = _get_stream(stream)
-        mr = _get_memory_resource(mr)
         cdef table_with_metadata c_result = \
             self.c_obj.get()[0].materialize_payload_columns_chunk(
-                mask_view,
-                stream.view()
+                mask_view
             )
-        return TableWithMetadata.from_libcudf(c_result, stream, mr)
+        return TableWithMetadata.from_libcudf(
+            c_result, _get_stream(None), _get_memory_resource(None)
+        )
 
     def has_next_table_chunk(self):
         """Check if there is any parquet data left to read.
