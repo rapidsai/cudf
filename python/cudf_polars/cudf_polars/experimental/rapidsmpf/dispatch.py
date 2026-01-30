@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import (
         PartitionInfo,
+        RuntimeProfiler,
         StatsCollector,
     )
     from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
@@ -77,6 +78,8 @@ class GenState(TypedDict):
         Statistics collector.
     collective_id_map
         The mapping of IR nodes to lists of collective IDs.
+    profiler
+        Runtime profiler for collecting execution statistics.
     """
 
     context: Context
@@ -87,6 +90,7 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     collective_id_map: dict[IR, list[int]]
+    profiler: RuntimeProfiler | None
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

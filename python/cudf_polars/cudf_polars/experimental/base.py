@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition base classes."""
 
@@ -404,6 +404,40 @@ class StatsCollector:
         self.row_count: dict[IR, ColumnStat[int]] = {}
         self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
         self.join_info = JoinInfo()
+
+
+class RuntimeProfiler:
+    """
+    Profiler for collecting runtime statistics during execution.
+
+    Attributes
+    ----------
+    row_count
+        Mapping from IR node to actual row count produced during execution.
+    chunk_count
+        Mapping from IR node to actual chunk count produced during execution.
+    decisions
+        Mapping from IR node to the algorithm decision made at runtime
+        (e.g., "broadcast_left", "shuffle", "tree", etc.).
+    """
+
+    __slots__ = ("chunk_count", "decisions", "row_count")
+    row_count: defaultdict[IR, int]
+    chunk_count: defaultdict[IR, int]
+    decisions: dict[IR, str]
+
+    def __init__(self) -> None:
+        self.row_count = defaultdict(int)
+        self.chunk_count = defaultdict(int)
+        self.decisions = {}
+
+    def merge(self, other: RuntimeProfiler) -> None:
+        """Merge another profiler's statistics into this one."""
+        for ir, n_rows in other.row_count.items():
+            self.row_count[ir] += n_rows
+        for ir, n_chunks in other.chunk_count.items():
+            self.chunk_count[ir] += n_chunks
+        self.decisions.update(other.decisions)
 
 
 class IOPartitionFlavor(IntEnum):
