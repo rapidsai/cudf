@@ -82,40 +82,34 @@ def remap_partitioning(
 
     Returns
     -------
-    The remapped partitioning, or None if any partitioning column
-    is not present in the new schema.
+    The remapped partitioning, or None if the inter-rank partitioning
+    columns are not present in the new schema.
     """
     if partitioning is None:
         return None
 
     old_names = list(old_schema.keys())
-    new_names = list(new_schema.keys())
+    new_name_to_idx = {name: i for i, name in enumerate(new_schema.keys())}
 
     def remap_hash_scheme(hs: HashScheme | None | str) -> HashScheme | None | str:
         if hs is None or isinstance(hs, str):
-            # None or "inherit" - inherits parent partitioning unchanged
-            return hs
-        # Get column names from old indices
+            return hs  # None or "inherit" passes through unchanged
         try:
-            column_names = [old_names[i] for i in hs.column_indices]
-        except IndexError:
-            return None  # Invalid index in old schema
-        # Check all exist in new schema and map to new indices
-        new_indices = []
-        for name in column_names:
-            if name not in new_names:
-                return None  # Column not in new schema - partitioning invalidated
-            new_indices.append(new_names.index(name))
-        return HashScheme(tuple(new_indices), hs.modulus)
+            new_indices = tuple(
+                new_name_to_idx[old_names[i]] for i in hs.column_indices
+            )
+        except (IndexError, KeyError):
+            return None  # Column missing in old or new schema
+        return HashScheme(new_indices, hs.modulus)
 
     new_inter_rank = remap_hash_scheme(partitioning.inter_rank)
     new_local = remap_hash_scheme(partitioning.local)
 
-    # If inter_rank was a HashScheme and got invalidated, whole partitioning is invalid
+    # If inter_rank partitioning was invalidated, the whole partitioning is invalid
     if isinstance(partitioning.inter_rank, HashScheme) and new_inter_rank is None:
         return None
 
-    # If local was a HashScheme and got invalidated, set it to None
+    # If only local partitioning was invalidated, we can still use inter_rank
     if isinstance(partitioning.local, HashScheme) and new_local is None:
         new_local = None
 
@@ -142,14 +136,16 @@ async def send_metadata(
     This function copies the metadata before sending, so the caller
     retains ownership of the original metadata object.
     """
-    # Copy metadata before sending since Message consumes the handle.
-    # Metadata is small, so copying is cheap.
-    metadata_copy = ChannelMetadata(
-        local_count=metadata.local_count,
-        partitioning=metadata.partitioning,
-        duplicated=metadata.duplicated,
+    msg = Message(
+        0,
+        # Copy metadata before sending since Message consumes the handle.
+        # Metadata is small, so copying is cheap.
+        ChannelMetadata(
+            local_count=metadata.local_count,
+            partitioning=metadata.partitioning,
+            duplicated=metadata.duplicated,
+        ),
     )
-    msg = Message(0, metadata_copy)
     await ch.send_metadata(ctx, msg)
     await ch.drain_metadata(ctx)
 

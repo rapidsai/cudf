@@ -74,9 +74,9 @@ async def default_node_single(
     async with shutdown_on_error(context, ch_in, ch_out):
         # Recv/send metadata.
         metadata_in = await recv_metadata(ch_in, context)
-        # Remap partitioning if preserving and schema might have changed
         partitioning = None
         if preserve_partitioning:
+            # Remap partitioning if schema has changed
             partitioning = remap_partitioning(
                 metadata_in.partitioning, ir.children[0].schema, ir.schema
             )
