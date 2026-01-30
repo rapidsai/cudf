@@ -201,6 +201,7 @@ Timedelta = make_final_proxy_type(
         "__hash__": _FastSlowAttribute("__hash__"),
         "__new__": Timestamp_Timedelta__new__,
         "__init__": _DELETE,
+        "__array_priority__": 100,
     },
 )
 
@@ -216,6 +217,7 @@ Timestamp = make_final_proxy_type(
         "__hash__": _FastSlowAttribute("__hash__"),
         "__new__": Timestamp_Timedelta__new__,
         "__init__": _DELETE,
+        "__array_priority__": 100,
     },
 )
 
@@ -770,6 +772,7 @@ Period = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__array_priority__": 100,
     },
 )
 
@@ -1078,6 +1081,7 @@ Interval = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__array_priority__": 1000,
     },
 )
 
