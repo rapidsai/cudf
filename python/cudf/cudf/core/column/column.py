@@ -396,18 +396,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _clear_cache(self) -> None:
         self._distinct_count.clear()
-        attrs = (
-            "memory_usage",
-            "is_monotonic_increasing",
-            "is_monotonic_decreasing",
-            "codes",  # CategoricalColumn only
-        )
-        for attr in attrs:
-            try:
-                delattr(self, attr)
-            except AttributeError:
-                # attr was not called yet, so ignore.
-                pass
+
+        # Automatically clear all @cached_property attributes across class hierarchy
+        for cls in type(self).__mro__:
+            for attr_name, attr_value in cls.__dict__.items():
+                if isinstance(attr_value, cached_property):
+                    try:
+                        delattr(self, attr_name)
+                    except AttributeError:
+                        # Cached property not yet accessed, nothing to clear
+                        pass
 
     def set_mask(self, mask: Buffer | None) -> Self:
         """
