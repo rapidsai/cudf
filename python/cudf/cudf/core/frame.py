@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     from cudf._typing import Axis, Dtype, DtypeObj, ScalarLike
+    from cudf.core.buffer import Buffer
     from cudf.core.series import Series
 
 
@@ -1756,7 +1757,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
             col,
             (left_column, right_column, reflect, fill_value),
         ) in operands.items():
-            output_mask = None
+            output_mask: Buffer | None = None
+            output_null_count: int | None = None
             left_is_column = isinstance(left_column, ColumnBase)
             right_is_column = isinstance(right_column, ColumnBase)
             if fill_value is not None:
@@ -1765,7 +1767,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
                     if left_column.nullable and right_column.nullable:
-                        output_mask = (
+                        output_mask, output_null_count = (
                             left_column._get_mask_as_column()
                             | right_column._get_mask_as_column()
                         ).as_mask()
@@ -1805,7 +1807,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 )
 
             if output_mask is not None:
-                outcol = outcol.set_mask(output_mask)
+                outcol = outcol.set_mask(output_mask, output_null_count)
 
             output[col] = outcol
 
@@ -1856,9 +1858,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 cp_output = cupy_func(*cupy_inputs, **kwargs)
                 if ufunc.nout == 1:
                     cp_output = (cp_output,)
+                if mask is None:
+                    mask_buff = None
+                    null_count = None
+                else:
+                    mask_buff, null_count = mask.as_mask()
                 for i, out in enumerate(cp_output):
                     data[i][name] = as_column(out).set_mask(
-                        mask if mask is None else mask.as_mask()
+                        mask_buff, null_count
                     )
             return data
 

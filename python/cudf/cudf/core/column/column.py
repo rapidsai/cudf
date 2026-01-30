@@ -835,10 +835,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         if mask is not None:
             cai_mask = mask.__cuda_array_interface__
+            null_count: int | None = None
             if cai_mask["typestr"][1] == "t":
                 mask_buff = as_buffer(MaskCAIWrapper(mask))
             elif cai_mask["typestr"][1] == "b":
-                mask_buff = ColumnBase.from_cuda_array_interface(
+                mask_buff, null_count = ColumnBase.from_cuda_array_interface(
                     mask,
                 ).as_mask()
             else:
@@ -849,7 +850,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     f"The value for mask is smaller than expected, got {mask.size} bytes, "
                     f"expected {required_num_bytes} bytes."
                 )
-            column = column.set_mask(mask_buff)
+            column = column.set_mask(mask_buff, null_count)
         return column
 
     def __len__(self) -> int:
@@ -1362,7 +1363,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             length=len(self),
         )
         if result_mask is not None:
-            result_col = result_col.set_mask(result_mask.as_mask())
+            mask_buff, null_count = result_mask.as_mask()
+            result_col = result_col.set_mask(mask_buff, null_count)
         return result_col
 
     def _scatter_by_slice(
@@ -1835,19 +1837,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 
-    def as_mask(self) -> Buffer:
+    def as_mask(self) -> tuple[Buffer, int]:
         """Convert booleans to bitmask
 
         Returns
         -------
-        Buffer
+        tuple[Buffer, int]
+            The mask buffer and the null count (number of False values).
         """
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
         with self.access(mode="read", scope="internal"):
-            mask, _ = plc.transform.bools_to_mask(self.plc_column)
-            return as_buffer(mask)
+            mask, null_count = plc.transform.bools_to_mask(self.plc_column)
+            return as_buffer(mask), null_count
 
     @property
     def is_unique(self) -> bool:

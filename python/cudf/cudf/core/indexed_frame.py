@@ -3621,7 +3621,8 @@ class IndexedFrame(Frame):
         else:
             col = as_column(ans_col, retty)
 
-        col = col.set_mask(ans_mask.as_mask())
+        mask_buff, null_count = ans_mask.as_mask()
+        col = col.set_mask(mask_buff, null_count)
         result = cudf.Series._from_column(
             col, index=self.index, attrs=self.attrs
         )

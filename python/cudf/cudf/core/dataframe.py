@@ -7005,7 +7005,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             result = as_column(result, dtype=result_dtype)
             if mask is not None:
-                result = result.set_mask(mask._column.as_mask())
+                mask_buff, null_count = mask._column.as_mask()
+                result = result.set_mask(mask_buff, null_count)
             return Series._from_column(
                 result, index=self.index, attrs=self.attrs
             )

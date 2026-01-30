@@ -270,8 +270,8 @@ class CategoricalColumn(column.ColumnBase):
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
         if self.categories.dtype.kind == "f":
-            new_mask = self.notnull().fillna(False).as_mask()
-            col = self.set_mask(new_mask)
+            new_mask, null_count = self.notnull().fillna(False).as_mask()
+            col = self.set_mask(new_mask, null_count)
         else:
             col = self
 
