@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 schema_version: 1
 
@@ -35,7 +35,7 @@ cache:
         ./build.sh -n -v \
             libcudf libcudf_kafka benchmarks tests \
             --build_metrics --incl_cache_stats --allgpuarch \
-            --cmake-args=\"-DCUDF_ENABLE_ARROW_S3=ON -DCUDA_ENABLE_LINEINFO=ON\"
+            --cmake-args=\"-DCUDF_ENABLE_ARROW_S3=ON\"
       secrets:
         - AWS_ACCESS_KEY_ID
         - AWS_SECRET_ACCESS_KEY
