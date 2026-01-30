@@ -210,7 +210,6 @@ def _repr_profile_tree(
 ) -> str:
     """Recursively build a tree representation with profiler data."""
     header = _repr_ir(ir, offset=offset)
-    static_count = partition_info[ir].count if partition_info else None
 
     # Get node profiler if it exists
     node_profiler = profiler.node_profilers.get(ir)
@@ -227,10 +226,6 @@ def _repr_profile_tree(
     # Add actual chunk count if available
     if node_profiler is not None and node_profiler.chunk_count > 0:
         header += f" chunks={node_profiler.chunk_count}"
-
-    # Add expected partition count from PartitionInfo
-    if static_count is not None:
-        header += f" [{static_count}]"
 
     header += "\n"
 

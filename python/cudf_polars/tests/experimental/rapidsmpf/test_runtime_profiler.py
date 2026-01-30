@@ -68,7 +68,6 @@ def test_runtime_profiler_and_output(tmp_path):
     assert "rows=250" in output
     assert "chunks=8" in output
     assert "decision=shuffle" in output
-    assert "[4]" in output  # static partition count
 
     # Test write_profile_output
     output_path = tmp_path / "profile.txt"
