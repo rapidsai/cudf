@@ -169,16 +169,15 @@ class DecimalBaseColumn(NumericalBaseColumn):
                         self.plc_column,
                     )
                 )
-                result = cast(
+                return cast(
                     cudf.core.column.string.StringColumn,
                     ColumnBase.create(plc_column, dtype),
                 )
         else:
-            result = cast(
+            return cast(
                 cudf.core.column.StringColumn,
                 cudf.core.column.column_empty(0, dtype=dtype),
             )
-        return result
 
     def __pow__(self, other: ColumnBinaryOperand) -> ColumnBase:
         if isinstance(other, int):
