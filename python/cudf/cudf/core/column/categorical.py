@@ -607,7 +607,7 @@ class CategoricalColumn(column.ColumnBase):
                         mask.size - self.offset,
                     )
                 )
-        out = out.set_mask(mask)
+        out = out.set_mask(mask, self.null_count)
         return out
 
     def copy(self, deep: bool = True) -> Self:

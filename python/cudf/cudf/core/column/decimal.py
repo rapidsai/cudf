@@ -185,7 +185,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     1, dtype=self.dtype, length=len(self)
                 )
                 if self.nullable:
-                    res = res.set_mask(self.mask)
+                    res = res.set_mask(self.mask, self.null_count)
                 return res
             elif other < 0:
                 raise TypeError("Power of negative integers not supported.")

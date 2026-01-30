@@ -412,17 +412,25 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             except AttributeError:
                 pass
 
-    def set_mask(self, mask: Buffer | None) -> Self:
+    def set_mask(
+        self, mask: Buffer | None, null_count: int | None = None
+    ) -> Self:
         """
         Replaces the mask buffer of the column and returns a new column.
-        The input mask is assumed to be of appropriate size for self.
+
+        Parameters
+        ----------
+        mask : Buffer or None
+            The new null mask buffer, or None to clear the mask.
+        null_count : int, optional
+            The number of null values. If not provided, it will be computed
+            from the mask (requires a GPU operation).
         """
         if isinstance(mask, Buffer):
-            new_null_count = plc.null_mask.null_count(
-                mask,
-                0,
-                self.size,
-            )
+            if null_count is None:
+                new_null_count = plc.null_mask.null_count(mask, 0, self.size)
+            else:
+                new_null_count = null_count
             new_mask = mask
         elif mask is None:
             new_mask = None
@@ -1993,7 +2001,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 # TODO: Make dropna shallow copy if there are no nulls?
                 cats = cats.dropna()
             dtype = CategoricalDtype(categories=cats, ordered=dtype.ordered)
-        return codes.set_mask(self.mask)._with_type_metadata(dtype)  # type: ignore[return-value]
+        return codes.set_mask(self.mask, self.null_count)._with_type_metadata(
+            dtype
+        )  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         raise NotImplementedError()
