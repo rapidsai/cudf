@@ -27,7 +27,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, sorting, stream_compaction
+from cudf.core._internals import copying, sorting
 from cudf.core.accessors import StringMethods
 from cudf.core.column import (
     CategoricalColumn,
@@ -1234,17 +1234,32 @@ class Index(SingleColumnFrame):
         nulls_are_equal: bool, default True
             Null elements are considered equal to other null elements.
         """
-        return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.drop_duplicates(
-                    list(self._columns),
-                    keep=keep,
-                    nulls_are_equal=nulls_are_equal,
-                )
-            ],
-            self._column_names,
-        )
+        _keep_options = {
+            "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            "last": plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+            False: plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+        }
+        if (keep_option := _keep_options.get(keep)) is None:
+            raise ValueError('keep must be either "first", "last" or False')
+
+        columns = list(self._columns)
+        with access_columns(*columns, mode="read", scope="internal") as cols:
+            plc_table = plc.stream_compaction.stable_distinct(
+                plc.Table([col.plc_column for col in cols]),
+                list(range(len(cols))),
+                keep_option,
+                plc.types.NullEquality.EQUAL
+                if nulls_are_equal
+                else plc.types.NullEquality.UNEQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+            )
+            return self._from_columns_like_self(
+                [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in plc_table.columns()
+                ],
+                self._column_names,
+            )
 
     def duplicated(
         self, keep: Literal["first", "last", False] = "first"
@@ -1323,17 +1338,24 @@ class Index(SingleColumnFrame):
         # This is to be consistent with IndexedFrame.dropna to handle nans
         # as nulls by default
         data_columns = [col.nans_to_nulls() for col in self._columns]
+        keys = list(range(len(data_columns)))
+        keep_threshold = 1 if how == "all" else len(keys)
 
-        return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.drop_nulls(
-                    data_columns,
-                    how=how,
-                )
-            ],
-            self._column_names,
-        )
+        with access_columns(
+            *data_columns, mode="read", scope="internal"
+        ) as cols:
+            plc_table = plc.stream_compaction.drop_nulls(
+                plc.Table([col.plc_column for col in cols]),
+                keys,
+                keep_threshold,
+            )
+            return self._from_columns_like_self(
+                [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in plc_table.columns()
+                ],
+                self._column_names,
+            )
 
     def is_numeric(self):
         """

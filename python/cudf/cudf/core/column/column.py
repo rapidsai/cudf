@@ -40,7 +40,6 @@ from cudf.core._internals import (
     aggregation,
     copying,
     sorting,
-    stream_compaction,
 )
 from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
@@ -1023,12 +1022,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def dropna(self) -> Self:
         if self.has_nulls():
-            return cast(
-                "Self",
-                ColumnBase.create(
-                    stream_compaction.drop_nulls([self])[0], self.dtype
-                ),
-            )
+            with self.access(mode="read", scope="internal"):
+                plc_table = plc.stream_compaction.drop_nulls(
+                    plc.Table([self.plc_column]),
+                    [0],
+                    1,
+                )
+                return cast(
+                    "Self",
+                    ColumnBase.create(plc_table.columns()[0], self.dtype),
+                )
         else:
             return self.copy()
 
@@ -1645,7 +1648,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         Parameters
         ----------
         value
-            Scalar to look for (cast to dtype of column), or a length-1 column
+            Scalar to look for (cast to dtype of column)
 
         Returns
         -------
@@ -1653,12 +1656,33 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         if not is_scalar(value):
             raise ValueError("value must be a scalar")
-        else:
-            value = as_column(value, dtype=self.dtype, length=1)
-        mask = value.contains(self)
-        return as_column(
-            range(len(self)), dtype=SIZE_TYPE_DTYPE
-        ).apply_boolean_mask(mask)  # type: ignore[return-value]
+
+        # Convert value to a pylibcudf scalar for comparison
+        pa_scalar = pa.scalar(value, type=cudf_dtype_to_pa_type(self.dtype))
+        plc_scalar = pa_scalar_to_plc_scalar(pa_scalar)
+
+        # Create boolean mask via element-wise equality comparison
+        with self.access(mode="read", scope="internal"):
+            mask = plc.binaryop.binary_operation(
+                self.plc_column,
+                plc_scalar,
+                plc.binaryop.BinaryOperator.EQUAL,
+                plc.DataType(plc.TypeId.BOOL8),
+            )
+
+        # Generate indices directly on GPU and filter by mask
+        indices = plc.filling.sequence(
+            len(self),
+            plc.Scalar.from_arrow(pa.scalar(0, type=pa.int32())),
+            plc.Scalar.from_arrow(pa.scalar(1, type=pa.int32())),
+        )
+        plc_table = plc.stream_compaction.apply_boolean_mask(
+            plc.Table([indices]), mask
+        )
+        return cast(
+            "NumericalColumn",
+            ColumnBase.from_pylibcudf(plc_table.columns()[0]),
+        )
 
     def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
         indices = self.indices_of(value)
@@ -1993,9 +2017,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
-        return ColumnBase.create(
-            stream_compaction.apply_boolean_mask([self], mask)[0], self.dtype
-        )
+        with access_columns(self, mask, mode="read", scope="internal") as (
+            self,
+            mask,
+        ):
+            plc_table = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([self.plc_column]),
+                mask.plc_column,
+            )
+            return ColumnBase.create(plc_table.columns()[0], self.dtype)
 
     def argsort(
         self,
@@ -2118,13 +2148,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.is_unique:
             return self.copy()
         else:
-            return cast(
-                "Self",
-                ColumnBase.create(
-                    stream_compaction.drop_duplicates([self], keep="first")[0],
-                    self.dtype,
-                ),
-            )
+            with self.access(mode="read", scope="internal"):
+                plc_table = plc.stream_compaction.stable_distinct(
+                    plc.Table([self.plc_column]),
+                    [0],
+                    plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+                    plc.types.NullEquality.EQUAL,
+                    plc.types.NanEquality.ALL_EQUAL,
+                )
+                return cast(
+                    "Self",
+                    ColumnBase.create(plc_table.columns()[0], self.dtype),
+                )
 
     @staticmethod
     def _serialize_plc_column_recursive(
