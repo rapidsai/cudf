@@ -1840,16 +1840,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Find if the `needle` is present in this col
    *
-   * example:
+   * Example:
+   * <pre>{@code
+   * // col    = [10, 20, 20, 30, 50], DType = INT32
+   * // needle = 20,                   DType = INT32
+   * boolean result = col.contains(needle);
+   * // result = true
+   * }</pre>
    *
-   *  Single Column:
-   *      idx      0   1   2   3   4
-   *      col = { 10, 20, 20, 30, 50 }
-   *  Scalar:
-   *   value = { 20 }
-   *   result = true
-   *
-   * @param needle
+   * @param needle the scalar value to search for in this column.
    * @return true if needle is present else false
    */
   public boolean contains(Scalar needle) {
@@ -1862,14 +1861,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * given searchSpace column and false if it is not.
    * The caller will be responsible for the lifecycle of the new vector.
    *
-   * example:
+   * Example:
+   * <pre>{@code
+   * // col         = [10, 20, 30, 40, 50], DType = INT32
+   * // searchSpace = [20, 40, 60, 80],     DType = INT32
+   * ColumnVector result = col.contains(searchSpace);
+   * // result      = [false, true, false, true, false], DType = BOOL8
+   * }</pre>
    *
-   *   col         = { 10, 20, 30, 40, 50 }
-   *   searchSpace = { 20, 40, 60, 80 }
-   *
-   *   result = { false, true, false, true, false }
-   *
-   * @param searchSpace
+   * @param searchSpace the column of values to check membership against.
    * @return A new ColumnVector of type {@link DType#BOOL8}
    */
   public final ColumnVector contains(ColumnView searchSpace) {
