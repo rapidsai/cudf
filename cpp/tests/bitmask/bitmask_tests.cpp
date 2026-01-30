@@ -395,6 +395,7 @@ TEST_F(CountBitmaskTest, IndexOfFirstUnsetBit)
   for (auto parm : parameters) {
     auto data            = std::vector<bool>(parm.size, false);
     data[parm.set_index] = true;
+    std::fill(data.begin() + parm.set_index + 1, data.end(), (parm.set_index >= parm.start_index));
     auto input =
       cudf::test::fixed_width_column_wrapper<int, bool>(data.begin(), data.end(), data.begin())
         .release();

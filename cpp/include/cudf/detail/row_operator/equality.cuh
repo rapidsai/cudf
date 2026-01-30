@@ -261,8 +261,11 @@ class device_row_comparator {
     }
 
     template <typename Element>
-    __device__ bool operator()(size_type const lhs_element_index,
-                               size_type const rhs_element_index) const noexcept
+#ifndef NDEBUG
+    __attribute__((noinline))
+#endif
+    __device__ bool
+    operator()(size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
       requires(cudf::is_dictionary<Element>())
     {
       if (check_nulls) {
@@ -291,8 +294,11 @@ class device_row_comparator {
     }
 
     template <typename Element>
-    __device__ bool operator()(size_type const lhs_element_index,
-                               size_type const rhs_element_index) const noexcept
+#ifndef NDEBUG
+    __attribute__((noinline))
+#endif
+    __device__ bool
+    operator()(size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
       requires(has_nested_columns and cudf::is_nested<Element>())
     {
       column_device_view lcol = lhs.slice(lhs_element_index, 1);
