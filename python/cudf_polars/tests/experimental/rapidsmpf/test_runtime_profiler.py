@@ -118,4 +118,5 @@ def test_profiling_scan_parquet_native(tmp_path, df):
     q.collect(engine=engine)
     content = output_path.read_text()
     # We can count the chunks but not the rows for "native" parquet
-    assert "SCAN PARQUET ('x', 'y') rows=? chunks=5" in content
+    # (row count is omitted when unavailable)
+    assert "SCAN PARQUET ('x', 'y') chunks=5" in content

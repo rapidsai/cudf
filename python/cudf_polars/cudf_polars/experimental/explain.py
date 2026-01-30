@@ -214,11 +214,11 @@ def _repr_profile_tree(
 
     # Get node profiler if it exists
     node_profiler = profiler.node_profilers.get(ir)
+    header = header.rstrip("\n")
 
-    # Add actual row count
-    actual_rows = node_profiler.row_count if node_profiler is not None else None
-    actual_str = _fmt_row_count(actual_rows) if actual_rows is not None else "?"
-    header = header.rstrip("\n") + f" rows={actual_str}"
+    # Add actual row count if available
+    if node_profiler is not None and node_profiler.row_count is not None:
+        header += f" rows={_fmt_row_count(node_profiler.row_count)}"
 
     # Add decision if present
     if node_profiler is not None and node_profiler.decision is not None:
