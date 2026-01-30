@@ -2106,13 +2106,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             out.index.name = objs[0].index.name
             out.index.names = objs[0].index.names
 
-        # frequency inference in compat mode only
-        if cudf.get_option("mode.pandas_compatible"):
-            if isinstance(out.index, DatetimeIndex):
-                try:
-                    out.index._freq = out.index.inferred_freq
-                except NotImplementedError:
-                    out.index._freq = None
+        if isinstance(out.index, DatetimeIndex):
+            try:
+                out.index._freq = out.index.inferred_freq
+            except NotImplementedError:
+                out.index._freq = None
         return out
 
     def astype(
@@ -6654,57 +6652,52 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     nan_as_null=not cudf.get_option("mode.pandas_compatible"),
                 )
 
-                if cudf.get_option("mode.pandas_compatible"):
-                    res_dtype = res.dtype
-                    if res.isnull().all():
-                        if cudf.api.types.is_numeric_dtype(common_dtype):
-                            if op in {"sum", "product"}:
-                                if (
-                                    common_dtype is not None
-                                    and common_dtype.kind == "f"
-                                ):
-                                    res_dtype = (
-                                        np.dtype("float64")
-                                        if isinstance(
-                                            common_dtype, pd.ArrowDtype
-                                        )
-                                        else common_dtype
-                                    )
-                                elif (
-                                    common_dtype is not None
-                                    and common_dtype.kind == "u"
-                                ):
-                                    res_dtype = np.dtype("uint64")
-                                else:
-                                    res_dtype = np.dtype("int64")
-                            elif op == "sum_of_squares":
-                                res_dtype = find_common_type(
-                                    (common_dtype, np.dtype(np.uint64))
+                res_dtype = res.dtype
+                if res.isnull().all():
+                    if cudf.api.types.is_numeric_dtype(common_dtype):
+                        if op in {"sum", "product"}:
+                            if (
+                                common_dtype is not None
+                                and common_dtype.kind == "f"
+                            ):
+                                res_dtype = (
+                                    np.dtype("float64")
+                                    if isinstance(common_dtype, pd.ArrowDtype)
+                                    else common_dtype
                                 )
-                            elif op in {
-                                "var",
-                                "std",
-                                "mean",
-                                "skew",
-                                "median",
-                            }:
-                                if (
-                                    common_dtype is not None
-                                    and common_dtype.kind == "f"
-                                ):
-                                    res_dtype = (
-                                        np.dtype("float64")
-                                        if isinstance(
-                                            common_dtype, pd.ArrowDtype
-                                        )
-                                        else common_dtype
-                                    )
-                                else:
-                                    res_dtype = np.dtype("float64")
-                            elif op in {"max", "min"}:
-                                res_dtype = common_dtype
-                        if op in {"any", "all"}:
-                            res_dtype = np.dtype(np.bool_)
+                            elif (
+                                common_dtype is not None
+                                and common_dtype.kind == "u"
+                            ):
+                                res_dtype = np.dtype("uint64")
+                            else:
+                                res_dtype = np.dtype("int64")
+                        elif op == "sum_of_squares":
+                            res_dtype = find_common_type(
+                                (common_dtype, np.dtype(np.uint64))
+                            )
+                        elif op in {
+                            "var",
+                            "std",
+                            "mean",
+                            "skew",
+                            "median",
+                        }:
+                            if (
+                                common_dtype is not None
+                                and common_dtype.kind == "f"
+                            ):
+                                res_dtype = (
+                                    np.dtype("float64")
+                                    if isinstance(common_dtype, pd.ArrowDtype)
+                                    else common_dtype
+                                )
+                            else:
+                                res_dtype = np.dtype("float64")
+                        elif op in {"max", "min"}:
+                            res_dtype = common_dtype
+                    if op in {"any", "all"}:
+                        res_dtype = np.dtype(np.bool_)
                     res = res.nans_to_nulls()
                     new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
                     res = res.astype(new_dtype)
@@ -6965,10 +6958,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 else None
             )
 
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and result_dtype is None
-                and is_pandas_nullable_extension_dtype(common_dtype)
+            if result_dtype is None and is_pandas_nullable_extension_dtype(
+                common_dtype
             ):
                 if (
                     method
