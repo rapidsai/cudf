@@ -194,6 +194,7 @@ class FooSpan:
 @pytest.mark.parametrize("num_buffers", [1, 2])
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("column_names", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_indices", [None, [2, 0]])
 @pytest.mark.parametrize("use_foo_span", [False, True])
 def test_read_parquet_from_device_buffers(
     table_data,
