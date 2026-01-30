@@ -772,7 +772,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
       auto const total_temp_size    = get_decompression_scratch_size(total_decomp_info);
       auto const total_temp_size_ex = cudf::io::detail::get_decompression_scratch_size_ex(
         total_decomp_info.type,
-        page_spans,
+        device_span<device_span<uint8_t const> const>{page_spans},
         total_decomp_info.max_page_decompressed_size,
         total_decomp_info.total_decompressed_size,
         stream);

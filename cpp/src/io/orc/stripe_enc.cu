@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1363,24 +1363,32 @@ std::optional<writer_compression_statistics> compress_orc_data_streams(
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
 
+  device_span<device_span<uint8_t const>> comp_in_span(comp_in);
+  device_span<device_span<uint8_t>> comp_out_span(comp_out);
+
   size_t const num_blocks = strm_desc.size().first * strm_desc.size().second;
   init_compression_blocks_kernel<<<num_blocks, 256, 0, stream.value()>>>(strm_desc,
                                                                          enc_streams,
-                                                                         comp_in,
-                                                                         comp_out,
+                                                                         comp_in_span,
+                                                                         comp_out_span,
                                                                          comp_res,
                                                                          compressed_data,
                                                                          comp_blk_size,
                                                                          max_comp_blk_size,
                                                                          comp_block_align);
 
-  cudf::io::detail::compress(compression, comp_in, comp_out, comp_res, stream);
+  cudf::io::detail::compress(compression, comp_in_span, comp_out_span, comp_res, stream);
 
-  compact_compressed_blocks_kernel<<<num_blocks, 1024, 0, stream.value()>>>(
-    strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);
+  compact_compressed_blocks_kernel<<<num_blocks, 1024, 0, stream.value()>>>(strm_desc,
+                                                                            comp_in_span,
+                                                                            comp_out_span,
+                                                                            comp_res,
+                                                                            compressed_data,
+                                                                            comp_blk_size,
+                                                                            max_comp_blk_size);
 
   if (collect_statistics) {
-    return cudf::io::detail::collect_compression_statistics(comp_in, comp_res, stream);
+    return cudf::io::detail::collect_compression_statistics(comp_in_span, comp_res, stream);
   } else {
     return std::nullopt;
   }

@@ -310,9 +310,9 @@ rmm::device_buffer decompress_data(datasource& source,
                  codec_exec_result{0, codec_status::FAILURE});
 
     decompress(compression_type::SNAPPY,
-               compressed_blocks,
-               decompressed_blocks,
-               decomp_results,
+               device_span<device_span<uint8_t const> const>{compressed_blocks},
+               device_span<device_span<uint8_t> const>{decompressed_blocks},
+               device_span<codec_exec_result>{decomp_results},
                max_decomp_block_size,
                uncompressed_data_size,
                stream);
