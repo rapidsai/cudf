@@ -996,12 +996,12 @@ class IntervalDtype(_BaseDtype):
             self._fields = {}
         else:
             self._subtype = cudf.dtype(subtype)
-            # TODO: Remove self.dtype,kind == "U" once cudf.dtype no longer accepts
+            # TODO: Remove self._subtype.kind == "U" once cudf.dtype no longer accepts
             # numpy string types
             if (
                 isinstance(self._subtype, CategoricalDtype)
                 or is_dtype_obj_string(self._subtype)
-                or self.dtype.kind == "U"
+                or self._subtype.kind == "U"
             ):
                 raise TypeError(
                     "category, object, and string subtypes are not supported "
