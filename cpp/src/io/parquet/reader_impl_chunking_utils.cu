@@ -348,6 +348,157 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   return {std::move(aggregated_info), std::move(page_keys_by_split)};
 }
 
+struct page_max_size {
+  cumulative_page_info const* c_info;
+  size_type const* key_offsets;
+  size_t num_keys;
+
+  __device__ cumulative_page_info operator()(cumulative_page_info const& i) const
+  {
+    size_t max_size = 0;
+    for (auto idx = 0; std::cmp_less(idx, num_keys); idx++) {
+      auto const start = key_offsets[idx];
+      auto const end   = key_offsets[idx + 1];
+      auto iter        = cudf::detail::make_counting_transform_iterator(
+        0, cuda::proclaim_return_type<size_t>([&] __device__(size_type i) {
+          return c_info[i].end_row_index;
+        }));
+      auto const page_index =
+        thrust::lower_bound(thrust::seq, iter + start, iter + end, i.end_row_index) - iter;
+      max_size = cuda::std::max(max_size, c_info[page_index].size_bytes);
+    }
+    return {i.end_row_index, max_size, i.key};
+  }
+};
+
+std::pair<rmm::device_uvector<cumulative_page_info>, rmm::device_uvector<int32_t>>
+adjust_cumulative_sizes_max(device_span<cumulative_page_info const> c_info,
+                            device_span<PageInfo const> pages,
+                            rmm::cuda_stream_view stream)
+{
+  // sort by row count
+  rmm::device_uvector<cumulative_page_info> c_info_sorted(c_info.size(), stream);
+  {
+    rmm::device_uvector<size_t> end_row_indices(c_info.size(), stream);
+    rmm::device_uvector<size_t> sorted_end_row_indices(c_info.size(), stream);
+    rmm::device_uvector<size_t> indices(c_info.size(), stream);
+    rmm::device_uvector<size_t> sort_order(c_info.size(), stream);
+
+    thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), 0);
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      c_info.begin(),
+                      c_info.end(),
+                      end_row_indices.begin(),
+                      [] __device__(auto const& c) { return c.end_row_index; });
+
+    auto tmp_bytes = std::size_t{0};
+    cub::DeviceRadixSort::SortPairs(nullptr,
+                                    tmp_bytes,
+                                    end_row_indices.begin(),         // keys in
+                                    sorted_end_row_indices.begin(),  // sorted keys out
+                                    indices.begin(),                 // values in
+                                    sort_order.begin(),              // sorted values out
+                                    c_info.size(),
+                                    0,
+                                    sizeof(size_t) * 8,
+                                    stream.value());
+    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+    cub::DeviceRadixSort::SortPairs(tmp_stg.data(),
+                                    tmp_bytes,
+                                    end_row_indices.begin(),         // keys in
+                                    sorted_end_row_indices.begin(),  // sorted keys out
+                                    indices.begin(),                 // values in
+                                    sort_order.begin(),              // sorted values out
+                                    c_info.size(),
+                                    0,
+                                    sizeof(size_t) * 8,
+                                    stream.value());
+
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      sort_order.begin(),
+                      sort_order.end(),
+                      c_info_sorted.begin(),
+                      [c_info] __device__(std::size_t i) { return c_info[i]; });
+  }
+
+  // page keys grouped by split.
+  rmm::device_uvector<int32_t> page_keys_by_split{c_info.size(), stream};
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    c_info_sorted.begin(),
+                    c_info_sorted.end(),
+                    page_keys_by_split.begin(),
+                    cuda::proclaim_return_type<int>(
+                      [] __device__(cumulative_page_info const& c) { return c.key; }));
+
+  // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
+  // key
+  rmm::device_uvector<size_type> key_offsets(pages.size() + 1, stream);
+  auto page_keys             = make_page_key_iterator(pages);
+  auto const key_offsets_end = cudf::detail::reduce_by_key(page_keys,
+                                                           page_keys + pages.size(),
+                                                           thrust::make_constant_iterator(1),
+                                                           thrust::make_discard_iterator(),
+                                                           key_offsets.begin(),
+                                                           cuda::std::plus<>{},
+                                                           stream)
+                                 .second;
+
+  size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
+  thrust::exclusive_scan(
+    rmm::exec_policy_nosync(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
+
+  // adjust the cumulative info such that for each row count, the size reflects the max column size
+  rmm::device_uvector<cumulative_page_info> aggregated_info(c_info.size(), stream);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    c_info_sorted.begin(),
+                    c_info_sorted.end(),
+                    aggregated_info.begin(),
+                    page_max_size{c_info.data(), key_offsets.data(), num_unique_keys});
+  return {std::move(aggregated_info), std::move(page_keys_by_split)};
+}
+
+std::vector<row_range> compute_page_splits_by_row_max(
+  device_span<cumulative_page_info const> c_info,
+  device_span<PageInfo const> pages,
+  size_t skip_rows,
+  size_t num_rows,
+  size_t size_limit,
+  rmm::cuda_stream_view stream)
+{
+  auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes_max(c_info, pages, stream);
+
+  // bring back to the cpu
+  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
+
+#if defined(CHUNKING_DEBUG)
+  print_cumulative_page_info(h_aggregated_info, "adjusted");
+#endif  // CHUNKING_DEBUG
+
+  std::vector<row_range> splits;
+  // note: we are working with absolute row indices so skip_rows represents the absolute min row
+  // index we care about
+  size_t cur_pos             = find_start_index(h_aggregated_info, skip_rows);
+  size_t cur_row_index       = skip_rows;
+  size_t cur_cumulative_size = 0;
+  auto const max_row = std::min(skip_rows + num_rows, h_aggregated_info.back().end_row_index);
+  while (cur_row_index < max_row) {
+    auto const split_pos = find_next_split(
+      cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit, 1);
+
+    auto const start_row = cur_row_index;
+    cur_row_index        = std::min(max_row, h_aggregated_info[split_pos].end_row_index);
+    splits.push_back({start_row, cur_row_index - start_row});
+    cur_pos             = split_pos;
+    cur_cumulative_size = h_aggregated_info[split_pos].size_bytes;
+  }
+
+#if defined(CHUNKING_DEBUG)
+  print_cumulative_page_info(h_aggregated_info, "adjusted w/splits", splits);
+#endif  // CHUNKING_DEBUG
+
+  return splits;
+}
+
 std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   device_span<cumulative_page_info const> c_info,
   device_span<PageInfo const> pages,

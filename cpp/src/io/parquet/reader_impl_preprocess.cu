@@ -14,6 +14,7 @@
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -748,7 +749,11 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
 
   // compute string sizes if necessary. if we are doing chunking, we need to know
   // the sizes of all strings so we can properly compute chunk boundaries.
-  if ((chunk_read_limit > 0) && (subpass.kernel_mask & STRINGS_MASK)) {
+  auto const need_string_sizes =
+    (subpass.kernel_mask & STRINGS_MASK) &&
+    (chunk_read_limit > 0 || !cudf::strings::is_large_strings_enabled());
+
+  if (need_string_sizes) {
     auto const has_flba =
       std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
         return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and

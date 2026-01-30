@@ -10,6 +10,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -39,6 +40,30 @@ constexpr size_t minimum_subpass_expected_size = 200 * 1024 * 1024;
 // Percentage of the total available input read limit that should be reserved for compressed
 // data vs uncompressed data.
 constexpr float input_limit_compression_reserve = 0.3f;
+
+std::vector<row_range> intersect_splits(std::vector<row_range> const& a,
+                                        std::vector<row_range> const& b)
+{
+  std::vector<row_range> out;
+  size_t i = 0;
+  size_t j = 0;
+  while (i < a.size() && j < b.size()) {
+    auto const a_start = a[i].skip_rows;
+    auto const a_end   = a[i].skip_rows + a[i].num_rows;
+    auto const b_start = b[j].skip_rows;
+    auto const b_end   = b[j].skip_rows + b[j].num_rows;
+
+    auto const start = std::max(a_start, b_start);
+    auto const end   = std::min(a_end, b_end);
+    if (start < end) { out.push_back({start, end - start}); }
+    if (a_end <= b_end) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+  return out;
+}
 
 }  // namespace
 
@@ -634,39 +659,74 @@ void reader_impl::compute_output_chunks_for_subpass()
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
+  std::vector<row_range> base_splits;
+
   // simple case : no chunk size, no splits
   if (_output_chunk_read_limit <= 0) {
-    subpass.output_chunk_read_info.push_back({subpass.skip_rows, subpass.num_rows});
-    return;
+    base_splits.push_back({subpass.skip_rows, subpass.num_rows});
+  } else {
+    // generate row_indices and cumulative output sizes for all pages
+    rmm::device_uvector<cumulative_page_info> c_info(subpass.pages.size(), _stream);
+    auto page_input =
+      thrust::make_transform_iterator(subpass.pages.device_begin(), get_page_output_size{});
+    auto page_keys = make_page_key_iterator(subpass.pages);
+    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
+                                  page_keys,
+                                  page_keys + subpass.pages.size(),
+                                  page_input,
+                                  c_info.begin(),
+                                  cuda::std::equal_to{},
+                                  cumulative_page_sum{});
+    auto iter = thrust::make_counting_iterator(0);
+    // cap the max row in all pages by the max row we expect in the subpass. input chunking
+    // can cause "dangling" row counts where for example, only 1 column has a page whose
+    // maximum row is beyond our expected subpass max row, which will cause an out of
+    // bounds index in compute_page_splits_by_row.
+    auto const subpass_max_row = subpass.skip_rows + subpass.num_rows;
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     iter,
+                     iter + subpass.pages.size(),
+                     set_row_index{pass.chunks, subpass.pages, c_info, subpass_max_row});
+    // print_cumulative_page_info(subpass.pages, pass.chunks, c_info, _stream);
+
+    // compute the splits
+    base_splits = compute_page_splits_by_row(c_info,
+                                             subpass.pages,
+                                             subpass.skip_rows,
+                                             subpass.num_rows,
+                                             _output_chunk_read_limit,
+                                             _stream);
   }
 
-  // generate row_indices and cumulative output sizes for all pages
-  rmm::device_uvector<cumulative_page_info> c_info(subpass.pages.size(), _stream);
-  auto page_input =
-    thrust::make_transform_iterator(subpass.pages.device_begin(), get_page_output_size{});
-  auto page_keys = make_page_key_iterator(subpass.pages);
-  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
-                                page_keys,
-                                page_keys + subpass.pages.size(),
-                                page_input,
-                                c_info.begin(),
-                                cuda::std::equal_to{},
-                                cumulative_page_sum{});
-  auto iter = thrust::make_counting_iterator(0);
-  // cap the max row in all pages by the max row we expect in the subpass. input chunking
-  // can cause "dangling" row counts where for example, only 1 column has a page whose
-  // maximum row is beyond our expected subpass max row, which will cause an out of
-  // bounds index in compute_page_splits_by_row.
-  auto const subpass_max_row = subpass.skip_rows + subpass.num_rows;
-  thrust::for_each(rmm::exec_policy_nosync(_stream),
-                   iter,
-                   iter + subpass.pages.size(),
-                   set_row_index{pass.chunks, subpass.pages, c_info, subpass_max_row});
-  // print_cumulative_page_info(subpass.pages, pass.chunks, c_info, _stream);
+  if ((subpass.kernel_mask & STRINGS_MASK) && !cudf::strings::is_large_strings_enabled()) {
+    auto const str_limit = static_cast<size_t>(cudf::strings::get_offset64_threshold() > 0
+                                                 ? cudf::strings::get_offset64_threshold() - 1
+                                                 : 0);
 
-  // compute the splits
-  subpass.output_chunk_read_info = compute_page_splits_by_row(
-    c_info, subpass.pages, subpass.skip_rows, subpass.num_rows, _output_chunk_read_limit, _stream);
+    rmm::device_uvector<cumulative_page_info> c_info_str(subpass.pages.size(), _stream);
+    auto str_page_input =
+      thrust::make_transform_iterator(subpass.pages.device_begin(), get_page_string_only_size{});
+    auto page_keys = make_page_key_iterator(subpass.pages);
+    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
+                                  page_keys,
+                                  page_keys + subpass.pages.size(),
+                                  str_page_input,
+                                  c_info_str.begin(),
+                                  cuda::std::equal_to{},
+                                  cumulative_page_sum{});
+    auto iter                  = thrust::make_counting_iterator(0);
+    auto const subpass_max_row = subpass.skip_rows + subpass.num_rows;
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     iter,
+                     iter + subpass.pages.size(),
+                     set_row_index{pass.chunks, subpass.pages, c_info_str, subpass_max_row});
+
+    auto string_splits = compute_page_splits_by_row_max(
+      c_info_str, subpass.pages, subpass.skip_rows, subpass.num_rows, str_limit, _stream);
+    if (!string_splits.empty()) { base_splits = intersect_splits(base_splits, string_splits); }
+  }
+
+  subpass.output_chunk_read_info = std::move(base_splits);
 }
 
 void reader_impl::set_subpass_page_mask()

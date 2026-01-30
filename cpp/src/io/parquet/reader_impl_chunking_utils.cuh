@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -169,6 +169,17 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                                                   size_t num_rows,
                                                   size_t size_limit,
                                                   rmm::cuda_stream_view stream);
+
+/**
+ * @brief Computes page splits based on the max per-column size (not sum).
+ */
+std::vector<row_range> compute_page_splits_by_row_max(
+  device_span<cumulative_page_info const> c_info,
+  device_span<PageInfo const> pages,
+  size_t skip_rows,
+  size_t num_rows,
+  size_t size_limit,
+  rmm::cuda_stream_view stream);
 
 /**
  * @brief Decompresses a mix of dictionary and non-dictionary pages from a set of column chunks
@@ -477,10 +488,25 @@ struct get_page_output_size {
         return cudf::type_dispatcher(
           data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
       }));
-    return {
-      0,
-      thrust::reduce(thrust::seq, iter, iter + page.num_output_nesting_levels) + page.str_bytes_all,
-      page.src_col_schema};
+    return {0,
+            thrust::reduce(thrust::seq, iter, iter + page.num_output_nesting_levels) +
+              static_cast<size_t>(page.str_bytes_all),
+            page.src_col_schema};
+  }
+};
+
+/**
+ * @brief Functor which computes the total output cudf data size for string bytes only
+ *
+ * Returns zero for non-string pages. Uses PageInfo::str_bytes_all.
+ */
+struct get_page_string_only_size {
+  __device__ cumulative_page_info operator()(PageInfo const& page) const
+  {
+    if (page.flags & PAGEINFO_FLAGS_DICTIONARY) {
+      return cumulative_page_info{0, 0, page.src_col_schema};
+    }
+    return {0, static_cast<size_t>(page.str_bytes_all), page.src_col_schema};
   }
 };
 
