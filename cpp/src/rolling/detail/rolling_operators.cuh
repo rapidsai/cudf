@@ -747,11 +747,9 @@ struct create_rolling_operator<
 };
 
 template <typename InputType, aggregation::Kind k>
-struct create_rolling_operator<
-  InputType,
-  k,
-  typename std::enable_if_t<std::is_same_v<InputType, cudf::dictionary32> &&
-                            (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX)>> {
+  requires(std::is_same_v<InputType, cudf::dictionary32> &&
+           (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX))
+struct create_rolling_operator<InputType, k> {
   auto operator()(size_type min_periods, rolling_aggregation const&)
   {
     return DeviceRollingArgMinMaxDictionary<k>{min_periods};
