@@ -694,7 +694,6 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
   auto temp_mr                  = cudf::get_current_device_resource_ref();
   auto const table_mapping_size = _table_view.num_rows() - _num_nulls.value();
   rmm::device_uvector<size_type> table_mapping(table_mapping_size, stream, temp_mr);
-  // cudf::detail::device_scalar<int64_t> d_table_mapping_size(table_mapping_size, stream, temp_mr);
   cudf::detail::copy_if(
     cuda::counting_iterator<size_type>(0),
     cuda::counting_iterator<size_type>(_table_view.num_rows()),
