@@ -800,11 +800,8 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         result = self.agg(rank)
 
-        if get_option("mode.pandas_compatible"):
-            # pandas always returns floats:
-            return result.astype(np.dtype(np.float64))
-
-        return result
+        # pandas always returns floats:
+        return result.astype(np.dtype(np.float64))
 
     @property
     def _groupby(self):
@@ -3050,7 +3047,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         raise NotImplementedError("expanding is currently not implemented")
 
-    def any(self, skipna: bool = True):
+    def any(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if any value in the group is truthful, else False.
 
@@ -3058,7 +3055,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         raise NotImplementedError("any is currently not implemented")
 
-    def all(self, skipna: bool = True):
+    def all(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if all values in the group are truthful, else False.
 
