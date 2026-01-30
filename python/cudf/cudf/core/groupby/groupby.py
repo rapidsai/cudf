@@ -800,11 +800,8 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         result = self.agg(rank)
 
-        if get_option("mode.pandas_compatible"):
-            # pandas always returns floats:
-            return result.astype(np.dtype(np.float64))
-
-        return result
+        # pandas always returns floats:
+        return result.astype(np.dtype(np.float64))
 
     @property
     def _groupby(self):

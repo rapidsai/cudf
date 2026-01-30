@@ -30,7 +30,6 @@ from cudf.core.dtypes import (
 )
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
@@ -171,12 +170,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 )
                 return cast(
                     cudf.core.column.string.StringColumn,
-                    type(self).from_pylibcudf(plc_column),
+                    ColumnBase.create(plc_column, dtype),
                 )
         else:
             return cast(
                 cudf.core.column.StringColumn,
-                cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE),
+                cudf.core.column.column_empty(0, dtype=dtype),
             )
 
     def __pow__(self, other: ColumnBinaryOperand) -> ColumnBase:
