@@ -20,7 +20,7 @@ import time
 import traceback
 import warnings
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
@@ -131,7 +131,7 @@ class PackageVersions:
         for name in packages:
             try:
                 package = importlib.import_module(name)
-            except (AttributeError, ImportError):  # noqa: PERF203
+            except (AttributeError, ImportError):
                 versions[name] = None
             else:
                 if name in ("cudf_polars", "rapidsmpf"):
@@ -246,7 +246,7 @@ class RunConfig:
     threads: int
     iterations: int
     timestamp: str = dataclasses.field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
     rmm_async: bool
@@ -256,9 +256,11 @@ class RunConfig:
     query_set: str
     collect_traces: bool = False
     stats_planning: bool
+    dynamic_planning: bool | None = None
     max_io_threads: int
     native_parquet: bool
     spill_to_pinned_memory: bool
+    extra_info: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -374,8 +376,10 @@ class RunConfig:
             query_set=args.query_set,
             collect_traces=args.collect_traces,
             stats_planning=args.stats_planning,
+            dynamic_planning=args.dynamic_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
+            extra_info=args.extra_info,
             spill_to_pinned_memory=args.spill_to_pinned_memory,
         )
 
@@ -408,6 +412,7 @@ class RunConfig:
                 print(f"stats_planning: {self.stats_planning}")
                 if self.runtime == "rapidsmpf":
                     print(f"native_parquet: {self.native_parquet}")
+                    print(f"dynamic_planning: {self.dynamic_planning}")
                 if self.cluster == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
@@ -469,6 +474,9 @@ def get_executor_options(
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
         executor_options["spill_to_pinned_memory"] = run_config.spill_to_pinned_memory
+        if run_config.dynamic_planning:
+            # Pass empty dict to enable with defaults; None means disabled
+            executor_options["dynamic_planning"] = {}
 
     if (
         benchmark
@@ -476,6 +484,7 @@ def get_executor_options(
         and run_config.executor == "streaming"
         # Only use the unique_fraction config if stats_planning is disabled
         and not run_config.stats_planning
+        and not run_config.dynamic_planning
     ):
         executor_options["unique_fraction"] = {
             "c_custkey": 0.05,
@@ -960,6 +969,12 @@ def parse_args(
         help="Enable statistics planning.",
     )
     parser.add_argument(
+        "--dynamic-planning",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable dynamic shuffle planning (not yet implemented). ",
+    )
+    parser.add_argument(
         "--max-io-threads",
         default=2,
         type=int,
@@ -984,6 +999,12 @@ def parse_args(
         help=textwrap.dedent("""\
             Whether RapidsMPF should spill to pinned host memory when available,
             or use regular pageable host memory."""),
+    )
+    parser.add_argument(
+        "--extra-info",
+        type=json.loads,
+        default={},
+        help="Extra information to add to the output file (e.g. version information). Must be JSON-serializable.",
     )
 
     parsed_args = parser.parse_args(args)

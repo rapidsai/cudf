@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Common utilities for collective operations."""
 
@@ -58,6 +58,9 @@ class ReserveOpIDs:
     2. Reserves collective IDs from the vacancy pool
     3. Creates a mapping from IR nodes to their reserved IDs
     4. Releases all IDs back to the pool on __exit__
+
+    Each IR node may require multiple collective operation IDs
+    (e.g., for metadata gathering, shuffling multiple sides of a join).
     """
 
     def __init__(self, ir: IR):
@@ -67,20 +70,22 @@ class ReserveOpIDs:
             for node in traversal([ir])
             if isinstance(node, (Shuffle, Join, Repartition))
         ]
-        self.collective_id_map: dict[IR, int] = {}
+        self.collective_id_map: dict[IR, list[int]] = {}
 
-    def __enter__(self) -> dict[IR, int]:
+    def __enter__(self) -> dict[IR, list[int]]:
         """
         Reserve collective IDs and return the mapping.
 
         Returns
         -------
-        collective_id_map : dict[IR, int]
+        collective_id_map : dict[IR, list[int]]
             Mapping from IR nodes to their reserved collective IDs.
+            Each IR node gets a list of IDs to support multiple
+            collective operations per node.
         """
-        # Reserve IDs and map nodes directly to their IDs
+        # Reserve IDs and map nodes to a list of IDs
         for node in self.collective_nodes:
-            self.collective_id_map[node] = _get_new_collective_id()
+            self.collective_id_map[node] = [_get_new_collective_id()]
 
         return self.collective_id_map
 
@@ -91,6 +96,7 @@ class ReserveOpIDs:
         exc_tb: TracebackType | None,
     ) -> Literal[False]:
         """Release all reserved collective IDs back to the vacancy pool."""
-        for collective_id in self.collective_id_map.values():
-            _release_collective_id(collective_id)
+        for collective_ids in self.collective_id_map.values():
+            for collective_id in collective_ids:
+                _release_collective_id(collective_id)
         return False
