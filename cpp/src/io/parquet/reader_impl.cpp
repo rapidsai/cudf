@@ -523,16 +523,16 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // Open and parse the source dataset metadata
   CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(),
                "Encountered a mismatch in the number of provided data sources and metadatas");
-  _metadata =
-    file_metadatas.empty()
-      ? std::make_unique<aggregate_reader_metadata>(
-          _sources,
-          options.is_enabled_use_arrow_schema(),
-          options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas())
-      : std::make_unique<aggregate_reader_metadata>(
-          std::forward<std::vector<FileMetaData>>(file_metadatas),
-          options.is_enabled_use_arrow_schema(),
-          options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+  _metadata = file_metadatas.empty() ? std::make_unique<aggregate_reader_metadata>(
+                                         _sources,
+                                         options.is_enabled_use_arrow_schema(),
+                                         options.get_column_names().has_value() and
+                                           options.is_enabled_allow_mismatched_pq_schemas())
+                                     : std::make_unique<aggregate_reader_metadata>(
+                                         std::forward<std::vector<FileMetaData>>(file_metadatas),
+                                         options.is_enabled_use_arrow_schema(),
+                                         options.get_column_names().has_value() and
+                                           options.is_enabled_allow_mismatched_pq_schemas());
 
   // Number of input sources
   _num_sources = _sources.size();
@@ -549,9 +549,9 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
 
   std::optional<std::vector<std::string>> filter_only_columns_names;
   if (options.get_filter().has_value() and
-      (options.get_columns().has_value() or options.get_column_indices().has_value())) {
+      (options.get_column_names().has_value() or options.get_column_indices().has_value())) {
     // list, struct, dictionary are not supported by AST filter yet.
-    // extract columns not present in get_columns() & keep count to remove at end.
+    // extract columns not present in get_column_names() & keep count to remove at end.
     filter_only_columns_names = get_column_names_in_expression(
       options.get_filter(), *select_column_names, options, _metadata->get_schema_tree());
     _num_filter_only_columns = filter_only_columns_names->size();
@@ -817,7 +817,7 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
 std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   parquet_reader_options const& options, bool ignore_missing_columns) const
 {
-  auto const has_column_names   = options.get_columns().has_value();
+  auto const has_column_names   = options.get_column_names().has_value();
   auto const has_column_indices = options.get_column_indices().has_value();
 
   CUDF_EXPECTS(
@@ -828,7 +828,7 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   if (not has_column_names and not has_column_indices) {
     return std::nullopt;
   } else if (has_column_names) {
-    return options.get_columns();
+    return options.get_column_names();
   } else {
     std::vector<std::string> col_names;
     auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;

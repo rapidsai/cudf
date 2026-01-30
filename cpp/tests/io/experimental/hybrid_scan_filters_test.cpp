@@ -416,11 +416,11 @@ TEST_F(HybridScanFiltersTest, FilterColumnSelection)
       cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
 
     auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
-    options.set_columns({"col0", "col1", "col2"});
+    options.set_column_names({"col0", "col1", "col2"});
     test_filter_column_selection(options);
-    options.set_columns({"col1"});
+    options.set_column_names({"col1"});
     test_filter_column_selection(options);
-    options.set_columns({});
+    options.set_column_names({});
     test_filter_column_selection(options);
 
     options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
@@ -444,11 +444,11 @@ TEST_F(HybridScanFiltersTest, FilterColumnSelection)
 
     auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     test_filter_column_selection(options);
-    options.set_columns({"col0", "col1", "col2"});
+    options.set_column_names({"col0", "col1", "col2"});
     test_filter_column_selection(options);
-    options.set_columns({"col1"});
+    options.set_column_names({"col1"});
     EXPECT_ANY_THROW(test_filter_column_selection(options));
-    options.set_columns({});
+    options.set_column_names({});
     EXPECT_ANY_THROW(test_filter_column_selection(options));
 
     options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
@@ -483,13 +483,13 @@ TEST_F(HybridScanFiltersTest, FilterColumnSelection)
 
     auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     test_filter_column_selection(options);
-    options.set_columns({"col0", "col1", "col2"});
+    options.set_column_names({"col0", "col1", "col2"});
     test_filter_column_selection(options);
-    options.set_columns({"col0", "col1"});
+    options.set_column_names({"col0", "col1"});
     EXPECT_ANY_THROW(test_filter_column_selection(options));
-    options.set_columns({"col1"});
+    options.set_column_names({"col1"});
     EXPECT_ANY_THROW(test_filter_column_selection(options));
-    options.set_columns({});
+    options.set_column_names({});
     EXPECT_ANY_THROW(test_filter_column_selection(options));
 
     options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
@@ -520,7 +520,7 @@ TEST_F(HybridScanFiltersTest, FilterColumnSelection)
     test_filter_column_selection(options);
     options = cudf::io::parquet_reader_options::builder()
                 .filter(filter_expression)
-                .columns({"col1", "col2", "col0"})
+                .column_names({"col1", "col2", "col0"})
                 .build();
     test_filter_column_selection(options);
   }

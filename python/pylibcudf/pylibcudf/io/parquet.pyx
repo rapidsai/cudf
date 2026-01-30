@@ -152,7 +152,8 @@ cdef class ParquetReaderOptions:
 
     cpdef void set_columns(self, list col_names):
         """
-        Sets names of the columns to be read.
+        Sets names of the columns to be read. Deprecated and will be
+        removed in a future version. Use set_column_names instead.
 
         Parameters
         ----------
@@ -167,6 +168,24 @@ cdef class ParquetReaderOptions:
         for name in col_names:
             vec.push_back(<string>str(name).encode())
         self.c_obj.set_columns(vec)
+
+    cpdef void set_column_names(self, list col_names):
+        """
+        Sets names of the columns to be read.
+
+        Parameters
+        ----------
+        col_names : list
+            List of column names
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[string] vec
+        for name in col_names:
+            vec.push_back(<string>str(name).encode())
+        self.c_obj.set_column_names(vec)
 
     cpdef void set_column_indices(self, list col_indices):
         """
@@ -323,7 +342,8 @@ cdef class ParquetReaderOptionsBuilder:
 
     cpdef ParquetReaderOptionsBuilder columns(self, list col_names):
         """
-        Sets names of the columns to be read.
+        Sets names of the columns to be read. Deprecated and will be
+        removed in a future version. Use column_names instead.
 
         Parameters
         ----------
@@ -338,6 +358,25 @@ cdef class ParquetReaderOptionsBuilder:
         for name in col_names:
             vec.push_back(<string>str(name).encode())
         self.c_obj.columns(vec)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder column_names(self, list col_names):
+        """
+        Sets names of the columns to be read.
+
+        Parameters
+        ----------
+        col_names : list[str]
+            List of column names
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        cdef vector[string] vec
+        for name in col_names:
+            vec.push_back(<string>str(name).encode())
+        self.c_obj.column_names(vec)
         return self
 
     cpdef ParquetReaderOptionsBuilder column_indices(self, list col_indices):

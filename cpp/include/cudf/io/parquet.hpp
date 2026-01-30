@@ -66,9 +66,10 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Path in schema of column to read; `nullopt` is all
-  std::optional<std::vector<std::string>> _columns;
-  // Indices of top-level columns to read; `nullopt` is all (cannot be used alongside `_columns`)
+  // Path in schema of column names to read; `nullopt` is all
+  std::optional<std::vector<std::string>> _column_names;
+  // Indices of top-level columns to read; `nullopt` is all (cannot be used alongside
+  // `_column_names`)
   std::optional<std::vector<cudf::size_type>> _column_indices;
 
   // List of individual row groups to read (ignored if empty)
@@ -228,7 +229,17 @@ class parquet_reader_options {
    *
    * @return Names of column to be read; `nullopt` if the option is not set
    */
-  [[nodiscard]] auto const& get_columns() const { return _columns; }
+  [[nodiscard]] [[deprecated("Use `get_column_names` instead.")]] auto const& get_columns() const
+  {
+    return _column_names;
+  }
+
+  /**
+   * @brief Returns names of column to be read, if set.
+   *
+   * @return Names of column to be read; `nullopt` if the option is not set
+   */
+  [[nodiscard]] auto const& get_column_names() const { return _column_names; }
 
   /**
    * @brief Returns indices of top-level columns to be read, if set.
@@ -275,6 +286,8 @@ class parquet_reader_options {
   /**
    * @brief Sets the names of columns to be read from all input sources.
    *
+   * @deprecated Deprecated in 26.04 and will be removed in 26.06+. Use `set_column_names` instead.
+   *
    * Applies the same list of column names across all sources. Unlike `set_row_groups`,
    * which allows per-source configuration, `set_columns` applies globally.
    *
@@ -290,13 +303,39 @@ class parquet_reader_options {
    *
    * @note This function does not currently support per-source column selection.
    *
-   * @param col_names A vector of column names to attempt to read from each input source.
+   * @param column_names A vector of column names to attempt to read from each input source.
    */
-  void set_columns(std::vector<std::string> col_names)
+  [[deprecated("Use `set_column_names` instead.")]] void set_columns(
+    std::vector<std::string> column_names)
+  {
+    set_column_names(std::move(column_names));
+  }
+
+  /**
+   * @brief Sets the names of columns to be read from all input sources.
+   *
+   * Applies the same list of column names across all sources. Unlike `set_row_groups`,
+   * which allows per-source configuration, `set_columns` applies globally.
+   *
+   * Columns that do not exist in the input files will be ignored silently and the output table will
+   * only include the columns that are actually found. This behavior can be changed by setting
+   * `enable_ignore_missing_columns` to false.
+   *
+   * To select a nested column (e.g., a struct member), use dot notation.
+   *
+   * Example:
+   * To read only the `bar` and `baz` fields, call:
+   *   set_columns({"foo.bar", "foo.baz"});
+   *
+   * @note This function does not currently support per-source column selection.
+   *
+   * @param column_names A vector of column names to attempt to read from each input source.
+   */
+  void set_column_names(std::vector<std::string> column_names)
   {
     CUDF_EXPECTS(not _column_indices.has_value(),
                  "Cannot select columns by indices and names simultaneously");
-    _columns = std::move(col_names);
+    _column_names = std::move(column_names);
   }
 
   /**
@@ -312,7 +351,7 @@ class parquet_reader_options {
    */
   void set_column_indices(std::vector<cudf::size_type> col_indices)
   {
-    CUDF_EXPECTS(not _columns.has_value(),
+    CUDF_EXPECTS(not _column_names.has_value(),
                  "Cannot select columns by indices and names simultaneously");
     _column_indices = std::move(col_indices);
   }
@@ -481,14 +520,26 @@ class parquet_reader_options_builder {
   /**
    * @brief Sets names of the columns to be read.
    *
-   * @param col_names Vector of column names
+   * @deprecated Deprecated in 26.04 and will be removed in 26.06+. Use `column_names` instead.
+   *
+   * @param column_names Vector of column names
    * @return this for chaining
    */
-  parquet_reader_options_builder& columns(std::vector<std::string> col_names)
+  [[deprecated("Use `column_names` instead.")]] parquet_reader_options_builder& columns(
+    std::vector<std::string> column_names)
   {
-    CUDF_EXPECTS(not options._column_indices.has_value(),
-                 "Cannot select columns by indices and names simultaneously");
-    options._columns = std::move(col_names);
+    return this->column_names(std::move(column_names));
+  }
+
+  /**
+   * @brief Sets names of the columns to be read.
+   *
+   * @param column_names Vector of column names
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& column_names(std::vector<std::string> column_names)
+  {
+    options.set_column_names(std::move(column_names));
     return *this;
   }
 
@@ -500,9 +551,7 @@ class parquet_reader_options_builder {
    */
   parquet_reader_options_builder& column_indices(std::vector<cudf::size_type> col_indices)
   {
-    CUDF_EXPECTS(not options._columns.has_value(),
-                 "Cannot select columns by indices and names simultaneously");
-    options._column_indices = std::move(col_indices);
+    options.set_column_indices(std::move(col_indices));
     return *this;
   }
 

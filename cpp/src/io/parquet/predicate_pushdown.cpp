@@ -431,7 +431,7 @@ void names_from_expression::visit_operands(
 {
   std::unordered_map<cudf::size_type, std::string> column_indices_to_names;
 
-  auto const& selected_columns        = options.get_columns();
+  auto const& selected_columns        = options.get_column_names();
   auto const& selected_column_indices = options.get_column_indices();
 
   CUDF_EXPECTS(
