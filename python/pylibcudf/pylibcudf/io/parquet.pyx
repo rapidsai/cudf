@@ -46,8 +46,6 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
-import warnings
-
 __all__ = [
     "ChunkedParquetReader",
     "ChunkedParquetWriterOptions",
@@ -166,11 +164,6 @@ cdef class ParquetReaderOptions:
         -------
         None
         """
-        warnings.warn(
-            "set_columns is deprecated and will be removed in a "
-            "future version of cudf. Use set_column_names instead."
-            , FutureWarning,
-        )
         self.set_column_names(col_names)
 
     cpdef void set_column_names(self, list col_names):
@@ -358,11 +351,6 @@ cdef class ParquetReaderOptionsBuilder:
         -------
         ParquetReaderOptionsBuilder
         """
-        warnings.warn(
-            "columns is deprecated and will be removed in a "
-            "future version of cudf. Use column_names instead."
-            , FutureWarning,
-        )
         return self.column_names(col_names)
 
     cpdef ParquetReaderOptionsBuilder column_names(self, list col_names):
