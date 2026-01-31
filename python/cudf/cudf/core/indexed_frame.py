@@ -4496,12 +4496,12 @@ class IndexedFrame(Frame):
         )
         mask = boolean_mask.column
         with access_columns(*columns, mask, mode="read", scope="internal") as (
-            *columns,
-            mask,
+            *cols,
+            mask_col,
         ):
             plc_table = plc.stream_compaction.apply_boolean_mask(
-                plc.Table([col.plc_column for col in columns]),
-                mask.plc_column,
+                plc.Table([col.plc_column for col in cols]),
+                mask_col.plc_column,
             )
             return self._from_columns_like_self(
                 [

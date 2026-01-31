@@ -1656,7 +1656,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         Parameters
         ----------
         value
-            Scalar to look for (cast to dtype of column)
+            Scalar to look for (cast to dtype of column), or a length-1 column
 
         Returns
         -------
@@ -1664,33 +1664,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         if not is_scalar(value):
             raise ValueError("value must be a scalar")
-
-        # Convert value to a pylibcudf scalar for comparison
-        pa_scalar = pa.scalar(value, type=cudf_dtype_to_pa_type(self.dtype))
-        plc_scalar = pa_scalar_to_plc_scalar(pa_scalar)
-
-        # Create boolean mask via element-wise equality comparison
-        with self.access(mode="read", scope="internal"):
-            mask = plc.binaryop.binary_operation(
-                self.plc_column,
-                plc_scalar,
-                plc.binaryop.BinaryOperator.EQUAL,
-                plc.DataType(plc.TypeId.BOOL8),
-            )
-
-        # Generate indices directly on GPU and filter by mask
-        indices = plc.filling.sequence(
-            len(self),
-            plc.Scalar.from_arrow(pa.scalar(0, type=pa.int32())),
-            plc.Scalar.from_arrow(pa.scalar(1, type=pa.int32())),
-        )
-        plc_table = plc.stream_compaction.apply_boolean_mask(
-            plc.Table([indices]), mask
-        )
-        return cast(
-            "NumericalColumn",
-            ColumnBase.from_pylibcudf(plc_table.columns()[0]),
-        )
+        else:
+            value = as_column(value, dtype=self.dtype, length=1)
+        mask = value.contains(self)
+        return as_column(
+            range(len(self)), dtype=SIZE_TYPE_DTYPE
+        ).apply_boolean_mask(mask)  # type: ignore[return-value]
 
     def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
         indices = self.indices_of(value)
@@ -2029,12 +2008,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError("boolean_mask is not boolean type.")
 
         with access_columns(self, mask, mode="read", scope="internal") as (
-            self,
-            mask,
+            col,
+            mask_col,
         ):
             plc_table = plc.stream_compaction.apply_boolean_mask(
-                plc.Table([self.plc_column]),
-                mask.plc_column,
+                plc.Table([col.plc_column]),
+                mask_col.plc_column,
             )
             return ColumnBase.create(plc_table.columns()[0], self.dtype)
 

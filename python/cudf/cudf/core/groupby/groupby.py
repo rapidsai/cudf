@@ -660,9 +660,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-        group_keys = [
-            ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-        ]
+            group_keys = [
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+            ]
         if len(group_keys) > 1:
             index = MultiIndex.from_arrays(group_keys)
         else:

@@ -285,7 +285,7 @@ def query_execute(df, expr, callenv):
                 )
         if out_mask is None:
             mask_buff = None
-            null_count = None
+            null_count = 0
         else:
             mask_buff, null_count = out_mask.as_mask()
         return as_column(out).set_mask(mask_buff, null_count).fillna(False)
