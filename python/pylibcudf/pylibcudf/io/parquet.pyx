@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from cython.operator cimport dereference
+import warnings
 
 from libc.stdint cimport int64_t, uint8_t
 
@@ -62,6 +63,11 @@ __all__ = [
     "write_parquet",
 ]
 
+
+
+def _warn_deprecated(api_name, new_api):
+    warnings.warn(f"{api_name} is deprecated and will be removed in a "
+            "future version of cudf. Use {new_api} instead.", FutureWarning)
 
 cdef class ParquetReaderOptions:
     """The settings to use for ``read_parquet``
@@ -164,6 +170,7 @@ cdef class ParquetReaderOptions:
         -------
         None
         """
+        _warn_deprecated("set_columns", "set_column_names")
         self.set_column_names(col_names)
 
     cpdef void set_column_names(self, list col_names):
@@ -351,6 +358,7 @@ cdef class ParquetReaderOptionsBuilder:
         -------
         ParquetReaderOptionsBuilder
         """
+        _warn_deprecated("columns", "column_names")
         return self.column_names(col_names)
 
     cpdef ParquetReaderOptionsBuilder column_names(self, list col_names):
