@@ -64,10 +64,13 @@ __all__ = [
 ]
 
 
-
 def _warn_deprecated(api_name, new_api):
-    warnings.warn(f"{api_name} is deprecated and will be removed in a "
-            "future version of cudf. Use {new_api} instead.", FutureWarning)
+    warnings.warn(
+        f"{api_name} is deprecated and will be removed in a "
+        f"future version of cudf. Use {new_api} instead.",
+        FutureWarning
+    )
+
 
 cdef class ParquetReaderOptions:
     """The settings to use for ``read_parquet``
