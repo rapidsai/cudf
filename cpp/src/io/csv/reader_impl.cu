@@ -317,9 +317,10 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                                                    skip_rows,
                                                                    stream);
 
-    cudf::detail::cuda_memcpy(host_span<uint64_t>{row_ctx}.subspan(0, num_blocks),
-                              device_span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
-                              stream);
+    cudf::detail::cuda_memcpy(
+      host_span<uint64_t>(row_ctx.host_ptr(), row_ctx.size(), true).subspan(0, num_blocks),
+      device_span<uint64_t const>(row_ctx.device_ptr(), row_ctx.size()).subspan(0, num_blocks),
+      stream);
 
     // Sum up the rows in each character block, selecting the row count that
     // corresponds to the current input context. Also stores the now known input
@@ -334,9 +335,10 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
       // At least one row in range in this batch
       all_row_offsets.resize(total_rows - skip_rows, stream);
 
-      cudf::detail::cuda_memcpy_async(device_span<uint64_t>{row_ctx}.subspan(0, num_blocks),
-                                      host_span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
-                                      stream);
+      cudf::detail::cuda_memcpy_async(
+        device_span<uint64_t>(row_ctx.device_ptr(), row_ctx.size()).subspan(0, num_blocks),
+        host_span<uint64_t const>(row_ctx.host_ptr(), row_ctx.size(), true).subspan(0, num_blocks),
+        stream);
 
       // Pass 2: Output row offsets
       cudf::io::csv::gpu::gather_row_offsets(parse_opts.view(),
@@ -353,9 +355,10 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                              stream);
       // With byte range, we want to keep only one row out of the specified range
       if (range_end < data_size) {
-        cudf::detail::cuda_memcpy(host_span<uint64_t>{row_ctx}.subspan(0, num_blocks),
-                                  device_span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
-                                  stream);
+        cudf::detail::cuda_memcpy(
+          host_span<uint64_t>(row_ctx.host_ptr(), row_ctx.size(), true).subspan(0, num_blocks),
+          device_span<uint64_t const>(row_ctx.device_ptr(), row_ctx.size()).subspan(0, num_blocks),
+          stream);
 
         size_t rows_out_of_range = 0;
         for (uint32_t i = 0; i < num_blocks; i++) {

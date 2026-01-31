@@ -82,11 +82,8 @@ class hostdevice_vector {
   [[nodiscard]] T* d_end() { return device_ptr(size()); }
   [[nodiscard]] T const* d_end() const { return device_ptr(size()); }
 
-  operator cudf::host_span<T>() { return host_span<T>{h_data}.subspan(0, size()); }
-  operator cudf::host_span<T const>() const
-  {
-    return host_span<T const>{h_data}.subspan(0, size());
-  }
+  operator cudf::host_span<T>() { return host_span<T>(host_ptr(), size(), true); }
+  operator cudf::host_span<T const>() const { return host_span<T const>(host_ptr(), size(), true); }
 
   operator cudf::device_span<T>() { return cudf::device_span<T>(device_ptr(), size()); }
   operator cudf::device_span<T const>() const
@@ -168,11 +165,12 @@ class hostdevice_2dvector {
 
   operator host_2dspan<T>()
   {
-    return host_2dspan<T>(host_span<T>(_data.host_ptr(), _data.size()), _size.second);
+    return host_2dspan<T>(host_span<T>(_data.host_ptr(), _data.size(), true), _size.second);
   }
   operator host_2dspan<T const>() const
   {
-    return host_2dspan<T const>(host_span<T const>(_data.host_ptr(), _data.size()), _size.second);
+    return host_2dspan<T const>(host_span<T const>(_data.host_ptr(), _data.size(), true),
+                                _size.second);
   }
 
   host_2dspan<T> host_view() { return static_cast<host_2dspan<T>>(*this); }
@@ -183,12 +181,14 @@ class hostdevice_2dvector {
 
   host_span<T> operator[](size_t row)
   {
-    return host_span<T>{_data}.subspan(row * _size.second, _size.second);
+    return host_span<T>(_data.host_ptr(), _data.size(), true)
+      .subspan(row * _size.second, _size.second);
   }
 
   host_span<T const> operator[](size_t row) const
   {
-    return host_span<T const>{_data}.subspan(row * _size.second, _size.second);
+    return host_span<T const>(_data.host_ptr(), _data.size(), true)
+      .subspan(row * _size.second, _size.second);
   }
 
   [[nodiscard]] auto size() const noexcept { return _size; }
