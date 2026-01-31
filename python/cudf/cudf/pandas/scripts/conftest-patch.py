@@ -4880,8 +4880,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexing/test_partial.py::TestPartialSetting::test_partial_setting_mixed_dtype",
     "tests/indexing/test_scalar.py::TestMultiIndexScalar::test_multiindex_at_get_one_level",
     "tests/interchange/test_impl.py::test_multi_chunk_column",
-    "tests/interchange/test_impl.py::test_string_validity_buffer",
-    "tests/interchange/test_impl.py::test_string_validity_buffer_no_missing",
     "tests/internals/test_api.py::test_create_block_manager_from_blocks_deprecated",
     "tests/internals/test_api.py::test_deprecations[Block]",
     "tests/internals/test_api.py::test_deprecations[DatetimeTZBlock]",
