@@ -31,8 +31,10 @@ def test_runtime_profiler_and_output(tmp_path):
     profiler2 = RuntimeQueryProfiler()
     profiler2.get_or_create(ir1).row_count = 150
     profiler2.get_or_create(ir1).chunk_count = 3
+    profiler2.get_or_create(ir1).decision = "shuffle"
     profiler2.get_or_create(ir2).row_count = 200
-    profiler2.get_or_create(ir2).chunk_count = 4
+    profiler2.get_or_create(ir2).chunk_count = 3
+    profiler2.get_or_create(ir2).add_chunk()
 
     # Test merge
     profiler1.merge(profiler2)
