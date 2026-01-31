@@ -412,9 +412,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             except AttributeError:
                 pass
 
-    def set_mask(
-        self, mask: Buffer | None, null_count: int | None = None
-    ) -> Self:
+    def set_mask(self, mask: Buffer | None, null_count: int) -> Self:
         """
         Replaces the mask buffer of the column and returns a new column.
 
@@ -422,16 +420,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ----------
         mask : Buffer or None
             The new null mask buffer, or None to clear the mask.
-        null_count : int, optional
-            The number of null values. If not provided, it will be computed
-            from the mask (requires a GPU operation).
+        null_count : int
+            The number of null values.
         """
         if isinstance(mask, Buffer):
-            if null_count is None:
-                new_null_count = plc.null_mask.null_count(mask, 0, self.size)
-            else:
-                new_null_count = null_count
             new_mask = mask
+            new_null_count = null_count
         elif mask is None:
             new_mask = None
             new_null_count = 0
@@ -835,7 +829,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         if mask is not None:
             cai_mask = mask.__cuda_array_interface__
-            null_count: int | None = None
             if cai_mask["typestr"][1] == "t":
                 mask_buff = as_buffer(MaskCAIWrapper(mask))
             elif cai_mask["typestr"][1] == "b":
@@ -849,6 +842,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 raise ValueError(
                     f"The value for mask is smaller than expected, got {mask.size} bytes, "
                     f"expected {required_num_bytes} bytes."
+                )
+            # Compute null_count for external masks that don't provide it
+            if cai_mask["typestr"][1] != "b":
+                null_count = plc.null_mask.null_count(
+                    mask_buff, 0, column.size
                 )
             column = column.set_mask(mask_buff, null_count)
         return column

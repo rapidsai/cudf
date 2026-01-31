@@ -2500,7 +2500,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                         self.obj._data[y].plc_column,
                     ]
                 )
-            ).set_mask(None)
+            ).set_mask(None, 0)
             column_pair_structs[(x, y)] = struct_column
 
         from cudf.core.dataframe import DataFrame

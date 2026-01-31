@@ -1860,7 +1860,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     cp_output = (cp_output,)
                 if mask is None:
                     mask_buff = None
-                    null_count = None
+                    null_count = 0
                 else:
                     mask_buff, null_count = mask.as_mask()
                 for i, out in enumerate(cp_output):
