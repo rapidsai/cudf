@@ -243,25 +243,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         keep: Literal["first", "last", False],
         nulls_are_equal: bool,
     ) -> list[plc.Column]:
-        """
-        Core stable_distinct implementation shared by Index and IndexedFrame.
-
-        Parameters
-        ----------
-        columns : list of ColumnBase
-            The columns to filter for duplicates.
-        keys : list of int
-            Column indices to consider when identifying duplicates.
-        keep : {"first", "last", False}
-            Which duplicate to keep.
-        nulls_are_equal : bool
-            Whether nulls should compare as equal.
-
-        Returns
-        -------
-        list of plc.Column
-            The deduplicated columns.
-        """
+        """Core stable_distinct implementation shared by Index and IndexedFrame."""
         _keep_options = {
             "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
             "last": plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
@@ -289,27 +271,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         how: Literal["any", "all"],
         thresh: int | None = None,
     ) -> list[plc.Column]:
-        """
-        Core drop_nulls implementation shared by Index and IndexedFrame.
-
-        Parameters
-        ----------
-        columns : list of ColumnBase
-            The columns to filter for nulls.
-        keys : list of int
-            Column indices to consider when identifying null rows.
-        how : {"any", "all"}
-            "any" drops rows with any null in keys, "all" drops rows
-            with all nulls in keys.
-        thresh : int, optional
-            Minimum number of non-nulls required to keep a row.
-            Overrides `how` if specified.
-
-        Returns
-        -------
-        list of plc.Column
-            The columns with null rows dropped.
-        """
+        """Core drop_nulls implementation shared by Index and IndexedFrame."""
         if how not in {"any", "all"}:
             raise ValueError("how must be 'any' or 'all'")
 
