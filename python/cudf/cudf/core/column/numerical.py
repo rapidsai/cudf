@@ -249,11 +249,6 @@ class NumericalColumn(NumericalBaseColumn):
     def element_indexing(self, index: int) -> ScalarLike | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
-            if isinstance(self.dtype, pd.ArrowDtype):
-                # Use PyArrow's pandas conversion to preserve precision
-                # (e.g., float32 vs float64, int8 vs int64)
-                np_dtype = np.dtype(result.type.to_pandas_dtype())
-                return np_dtype.type(result.as_py())
             return self.dtype.type(result.as_py())
         return result
 

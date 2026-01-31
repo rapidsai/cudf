@@ -6649,9 +6649,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     axis_0_results = pd.Index(
                         axis_0_results, dtype=f"m8[{unit}]"
                     )
+                # For max/min operations, preserve the original dtype since
+                # Python scalars (int, float) would otherwise widen to int64/float64
+                result_dtype = common_dtype if op in {"max", "min"} else None
                 res = as_column(
                     axis_0_results,
                     nan_as_null=not cudf.get_option("mode.pandas_compatible"),
+                    dtype=result_dtype,
                 )
 
                 if cudf.get_option("mode.pandas_compatible"):
