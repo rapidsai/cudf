@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import zoneinfo
@@ -1142,7 +1142,7 @@ def test_typecast_from_float_to_decimal(
     got = data.astype(float_types_as_str)
 
     pa_arr = got.to_arrow().cast(
-        pa.decimal128(to_dtype.precision, to_dtype.scale)
+        pa.decimal64(to_dtype.precision, to_dtype.scale)
     )
     expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
@@ -1174,7 +1174,7 @@ def test_typecast_from_int_to_decimal(integer_types_as_str, precision, scale):
     pa_arr = (
         got.to_arrow()
         .cast("float64")
-        .cast(pa.decimal128(to_dtype.precision, to_dtype.scale))
+        .cast(pa.decimal64(to_dtype.precision, to_dtype.scale))
     )
     expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
@@ -1227,12 +1227,15 @@ def test_typecast_to_from_decimal(from_dtype, to_dtype):
         )
     s = data.astype(from_dtype)
 
-    pa_arr = s.to_arrow().cast(
-        pa.decimal128(to_dtype.precision, to_dtype.scale), safe=False
-    )
     if isinstance(to_dtype, cudf.Decimal32Dtype):
+        pa_arr = s.to_arrow().cast(
+            pa.decimal32(to_dtype.precision, to_dtype.scale), safe=False
+        )
         expected = cudf.Series._from_column(Decimal32Column.from_arrow(pa_arr))
     elif isinstance(to_dtype, cudf.Decimal64Dtype):
+        pa_arr = s.to_arrow().cast(
+            pa.decimal64(to_dtype.precision, to_dtype.scale), safe=False
+        )
         expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     with expect_warning_if(to_dtype.scale < s.dtype.scale, UserWarning):
