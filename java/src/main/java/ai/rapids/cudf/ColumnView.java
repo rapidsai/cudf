@@ -1579,7 +1579,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns the variance of all values in the column, returning a
+   * Returns the sample variance of all values in the column, returning a
    * FLOAT64 scalar unless the column type is FLOAT32 then a FLOAT32 scalar is returned.
    * Null values are skipped.
    *
@@ -1599,7 +1599,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns the variance of all values in the column, returning a
+   * Returns the sample variance of all values in the column, returning a
    * scalar of the specified type.
    * Null values are skipped.
    *
