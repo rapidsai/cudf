@@ -709,17 +709,17 @@ class Series(SingleColumnFrame, IndexedFrame):
         0    12
         1    13
         2    14
-        dtype: int16
+        dtype: int32
         >>> s.dt.second
         0    0
         1    0
         2    0
-        dtype: int16
+        dtype: int32
         >>> s.dt.day
         0    3
         1    3
         2    3
-        dtype: int16
+        dtype: int32
 
         Returns
         -------
@@ -4615,12 +4615,6 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int16
         """
         res = self.series._column.days_in_month
-        # Pandas returns int64 for dayofweek
-        res = res.astype(
-            get_dtype_of_same_kind(
-                self.series._column.dtype, np.dtype("int64")
-            )
-        )
         return self._return_result_like_self(res)
 
     daysinmonth = days_in_month

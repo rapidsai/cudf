@@ -764,7 +764,6 @@ def test_dt_component_dtype_pandas_compat(data, component):
     ps = pd.Series(data)
     gs = cudf.Series(data)
 
-    with cudf.option_context("mode.pandas_compatible", True):
-        expect = getattr(ps.dt, component)
-        got = getattr(gs.dt, component)
-        assert_eq(expect, got, check_dtype=True)
+    expect = getattr(ps.dt, component)
+    got = getattr(gs.dt, component)
+    assert_eq(expect, got, check_dtype=True)
