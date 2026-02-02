@@ -323,20 +323,24 @@ class ListColumn(ColumnBase):
 
     def extract_element_scalar(self, index: int) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return ColumnBase.from_pylibcudf(
-                plc.lists.extract_list_element(
-                    self.plc_column,
-                    index,
-                )
+            plc_column = plc.lists.extract_list_element(
+                self.plc_column,
+                index,
+            )
+            return ColumnBase.create(
+                plc_column,
+                self.dtype.element_type,  # type: ignore[union-attr]
             )
 
     def extract_element_column(self, index: ColumnBase) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return ColumnBase.from_pylibcudf(
-                plc.lists.extract_list_element(
-                    self.plc_column,
-                    index.plc_column,
-                )
+            plc_column = plc.lists.extract_list_element(
+                self.plc_column,
+                index.plc_column,
+            )
+            return ColumnBase.create(
+                plc_column,
+                self.dtype.element_type,  # type: ignore[union-attr]
             )
 
     def contains_scalar(self, search_key: pa.Scalar) -> ColumnBase:

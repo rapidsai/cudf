@@ -115,13 +115,6 @@ class ListMethods(BaseAccessor):
                     out_of_bounds_mask,
                     pa_scalar_to_plc_scalar(pa.scalar(default)),
                 )
-
-        if self._column.element_type != out.dtype:
-            # libcudf doesn't maintain struct labels so we must transfer over
-            # manually from the input column if we lost some information
-            # somewhere. Not doing this unilaterally since the cost is
-            # non-zero..
-            out = out._with_type_metadata(self._column.element_type)
         return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> Series | Index:
