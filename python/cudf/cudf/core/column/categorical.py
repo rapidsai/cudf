@@ -598,6 +598,7 @@ class CategoricalColumn(column.ColumnBase):
         gather_map = self.codes.astype(SIZE_TYPE_DTYPE).fillna(0)
         out = self.categories.take(gather_map)
         mask = self.mask
+        new_null_count = self.null_count
         if self.offset > 0 and mask is not None:
             with mask.access(mode="read", scope="internal"):
                 mask = cudf.core.buffer.as_buffer(
@@ -607,7 +608,12 @@ class CategoricalColumn(column.ColumnBase):
                         mask.size - self.offset,
                     )
                 )
-        out = out.set_mask(mask, self.null_count)
+                new_null_count = plc.null_mask.null_count(
+                    mask,
+                    0,
+                    mask.size,
+                )
+        out = out.set_mask(mask, new_null_count)
         return out
 
     def copy(self, deep: bool = True) -> Self:

@@ -262,7 +262,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 else plc.types.NullEquality.UNEQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-            return list(plc_table.columns())
+            return plc_table.columns()
 
     def _drop_nulls_columns(
         self,
@@ -288,7 +288,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 keys,
                 keep_threshold,
             )
-            return list(plc_table.columns())
+            return plc_table.columns()
 
     @_performance_tracking
     def _mimic_inplace(
