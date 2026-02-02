@@ -216,6 +216,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_ipc-failed to retrieve first file schema (ipc)-'ipc scan']": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_csv-failed to retrieve file schemas (csv)-'csv scan']": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_ndjson-failed to retrieve first file schema (ndjson)-'ndjson scan']": "Debug output on stderr doesn't match",
+    "tests/unit/operations/namespaces/test_binary.py::test_binary_compounded_literal_aggstate_24460": "List literal loses nesting in gather: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-0-False]": "List literal loses nesting in gather: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx1-False]": "List literal loses nesting in gather: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx2-False]": "List literal loses nesting in gather: cudf#19610",

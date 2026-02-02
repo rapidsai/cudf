@@ -654,8 +654,6 @@ def translate_named_expr(
 
 
 def _contains_nested_lists(val: Any) -> bool:
-    if not isinstance(val, list):
-        return False
     if not val:
         return False
     return any(isinstance(_, list) for _ in val)
