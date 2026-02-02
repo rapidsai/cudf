@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -24,7 +25,6 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
-#include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -918,11 +918,9 @@ void scatter_offsets(tree_meta_t const& tree,
         return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
                                                                   : col_ids[parent_node_ids[node_id]];
       }));
-  auto const list_children_end = thrust::copy_if(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id),
-    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id) +
-      num_nodes,
+  auto const list_children_end = cudf::detail::copy_if(
+    thrust::make_zip_iterator(thrust::counting_iterator<size_type>(0), parent_col_id),
+    thrust::make_zip_iterator(thrust::counting_iterator<size_type>(0), parent_col_id) + num_nodes,
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()),
     [d_ignore_vals     = d_ignore_vals.begin(),
@@ -933,7 +931,8 @@ void scatter_offsets(tree_meta_t const& tree,
       return parent_node_id != parent_node_sentinel and
              column_categories[col_ids[parent_node_id]] == NC_LIST and
              (!d_ignore_vals[col_ids[parent_node_id]]);
-    });
+    },
+    stream);
   // For children of list and in ignore_vals, find it's parent node id, and set corresponding
   // parent's null mask to null. Setting mixed type list rows to null.
   auto const num_list_children = cuda::std::distance(
