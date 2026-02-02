@@ -142,7 +142,10 @@ def test_invalid_duration_spec_raises_in_translation():
 
 def test_rolling_inside_groupby_raises(request):
     request.applymarker(
-        pytest.mark.xfail(condition=not POLARS_VERSION_LT_136, reason="not supported as of polars 1.36")
+        pytest.mark.xfail(
+            condition=not POLARS_VERSION_LT_136,
+            reason="not supported as of polars 1.36",
+        )
     )
     df = pl.LazyFrame(
         {"keys": [1, 1, 1, 2], "orderby": [1, 2, 4, 2], "values": [1, 2, 3, 4]}

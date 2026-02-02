@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import decimal
@@ -8,9 +8,7 @@ import nanoarrow
 import nanoarrow.device
 import numpy as np
 import pyarrow as pa
-import pyarrow.compute as pc
 import pytest
-from packaging.version import parse
 from utils import assert_column_eq, assert_table_eq
 
 import rmm
@@ -102,19 +100,15 @@ def test_decimal_other(data_type):
     "plc_type",
     [plc.TypeId.DECIMAL128, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL32],
 )
-def test_decimal_respect_metadata_precision(plc_type, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            parse(pa.__version__) < parse("19.0.0")
-            and plc_type in {plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL32},
-            reason=(
-                "pyarrow does not interpret Arrow schema decimal type string correctly"
-            ),
-        )
-    )
+def test_decimal_respect_metadata_precision(plc_type):
     precision, scale = 3, 2
+    pa_type = {
+        plc.TypeId.DECIMAL128: pa.decimal128,
+        plc.TypeId.DECIMAL64: pa.decimal64,
+        plc.TypeId.DECIMAL32: pa.decimal32,
+    }[plc_type]
     expected = pa.array(
-        [decimal.Decimal("1.23"), None], type=pa.decimal128(precision, scale)
+        [decimal.Decimal("1.23"), None], type=pa_type(precision, scale)
     )
     plc_column = plc.unary.cast(
         plc.Column.from_arrow(expected), plc.DataType(plc_type, scale=-scale)
@@ -122,11 +116,6 @@ def test_decimal_respect_metadata_precision(plc_type, request):
     result = plc_column.to_arrow(
         metadata=plc.interop.ColumnMetadata(precision=precision)
     )
-    if parse(pa.__version__) >= parse("19.0.0"):
-        if plc_type == plc.TypeId.DECIMAL64:
-            expected = pc.cast(expected, pa.decimal64(precision, scale))
-        elif plc_type == plc.TypeId.DECIMAL32:
-            expected = pc.cast(expected, pa.decimal32(precision, scale))
     assert result.equals(expected)
 
 
@@ -219,10 +208,6 @@ def test_device_interop_table():
     assert_table_eq(pa_tbl, new_tbl)
 
 
-@pytest.mark.skipif(
-    parse(pa.__version__) < parse("16.0.0"),
-    reason="https://github.com/apache/arrow/pull/39985",
-)
 @pytest.mark.parametrize(
     "data",
     [
@@ -258,15 +243,3 @@ def test_arrow_object_lifetime():
     except ValueError:
         # Ignore the exception. A failure in this test is a seg fault
         pass
-
-
-def test_deprecate_arrow_interop_apis():
-    with pytest.warns(
-        FutureWarning, match="pylibcudf.interop.from_arrow is deprecated"
-    ):
-        foo = plc.interop.from_arrow(pa.array([1]))
-
-    with pytest.warns(
-        FutureWarning, match="pylibcudf.interop.to_arrow is deprecated"
-    ):
-        plc.interop.to_arrow(foo)

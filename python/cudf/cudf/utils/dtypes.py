@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -340,7 +340,9 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
         else:
             return CUDF_STRING_DTYPE
     elif any(
-        isinstance(dtype, (cudf.ListDtype, cudf.StructDtype))
+        isinstance(
+            dtype, (cudf.ListDtype, cudf.StructDtype, cudf.IntervalDtype)
+        )
         for dtype in dtypes
     ):
         # TODO: As list dtypes allow casting
@@ -402,11 +404,6 @@ def is_dtype_obj_numeric(
         return is_non_decimal
 
 
-pa_decimal32type = getattr(pa, "Decimal32Type", None)
-
-pa_decimal64type = getattr(pa, "Decimal64Type", None)
-
-
 def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
     """Given a pandas ArrowDtype, converts it into the equivalent cudf pandas
     dtype.
@@ -415,13 +412,9 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
     pyarrow_dtype = dtype.pyarrow_dtype
     if isinstance(pyarrow_dtype, pa.Decimal128Type):
         return cudf.Decimal128Dtype.from_arrow(pyarrow_dtype)
-    elif pa_decimal64type is not None and isinstance(
-        pyarrow_dtype, pa_decimal64type
-    ):
+    elif isinstance(pyarrow_dtype, pa.Decimal64Type):
         return cudf.Decimal64Dtype.from_arrow(pyarrow_dtype)
-    elif pa_decimal32type is not None and isinstance(
-        pyarrow_dtype, pa_decimal32type
-    ):
+    elif isinstance(pyarrow_dtype, pa.Decimal32Type):
         return cudf.Decimal32Dtype.from_arrow(pyarrow_dtype)
     elif isinstance(pyarrow_dtype, pa.ListType):
         return cudf.ListDtype.from_arrow(pyarrow_dtype)
@@ -480,6 +473,8 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
         dtype = pyarrow_dtype_to_cudf_dtype(dtype)
     if isinstance(dtype, cudf.ListDtype):
         return plc.DataType(plc.TypeId.LIST)
+    elif isinstance(dtype, cudf.IntervalDtype):
+        return plc.DataType(plc.TypeId.STRUCT)
     elif isinstance(dtype, cudf.StructDtype):
         return plc.DataType(plc.TypeId.STRUCT)
     elif isinstance(dtype, cudf.Decimal128Dtype):
@@ -679,14 +674,8 @@ def is_dtype_obj_list(obj):
     bool
         Whether or not the array-like or dtype is of the list dtype.
     """
-    return (
-        type(obj) is cudf.ListDtype
-        or obj is cudf.ListDtype
-        or (isinstance(obj, str) and obj == cudf.ListDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_list(obj.pyarrow_dtype)
-        )
+    return type(obj) is cudf.ListDtype or (
+        isinstance(obj, pd.ArrowDtype) and pa.types.is_list(obj.pyarrow_dtype)
     )
 
 
@@ -708,32 +697,22 @@ def is_dtype_obj_struct(obj):
     # IntervalDtype(int)) will return True. For now this is not being changed
     # since the interval dtype is being modified as part of the array refactor,
     # but this behavior should be made consistent afterwards.
-    return (
-        isinstance(obj, cudf.StructDtype)
-        or obj is cudf.StructDtype
-        or (isinstance(obj, str) and obj == cudf.StructDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_struct(obj.pyarrow_dtype)
-        )
+    return isinstance(obj, cudf.StructDtype) or (
+        isinstance(obj, pd.ArrowDtype)
+        and pa.types.is_struct(obj.pyarrow_dtype)
     )
 
 
 def is_dtype_obj_interval(obj):
-    return (
-        isinstance(
-            obj,
-            (
-                cudf.IntervalDtype,
-                pd.IntervalDtype,
-            ),
-        )
-        or obj is cudf.IntervalDtype
-        or (isinstance(obj, str) and obj == cudf.IntervalDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_interval(obj.pyarrow_dtype)
-        )
+    return isinstance(
+        obj,
+        (
+            cudf.IntervalDtype,
+            pd.IntervalDtype,
+        ),
+    ) or (
+        isinstance(obj, pd.ArrowDtype)
+        and pa.types.is_interval(obj.pyarrow_dtype)
     )
 
 

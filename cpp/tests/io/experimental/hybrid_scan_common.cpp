@@ -57,19 +57,17 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  std::vector<rmm::device_buffer> buffers{};
-  buffers.reserve(byte_ranges.size());
+  std::vector<rmm::device_buffer> buffers(byte_ranges.size());
 
   std::transform(
-    byte_ranges.begin(),
-    byte_ranges.end(),
-    std::back_inserter(buffers),
-    [&](auto const& byte_range) {
+    byte_ranges.begin(), byte_ranges.end(), buffers.begin(), [&](auto const& byte_range) {
       auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = byte_range.size();
+      auto const chunk_size   = static_cast<size_t>(byte_range.size());
       auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
+      cudf::detail::cuda_memcpy_async(
+        cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
+        cudf::host_span<uint8_t const>{chunk_offset, chunk_size},
+        stream);
       return buffer;
     });
 
@@ -154,12 +152,13 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
   dictionary_page_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (dict_page_byte_ranges.size()) {
     // Fetch dictionary page buffers from the input file buffer
-    std::vector<rmm::device_buffer> dictionary_page_buffers =
+    auto dictionary_page_buffers =
       fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
+    auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
 
     // Filter row groups with dictionary pages
     dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
-      dictionary_page_buffers, current_row_group_indices, options, stream);
+      dictionary_page_data, current_row_group_indices, options, stream);
 
     // Update current row group indices
     current_row_group_indices = dictionary_page_filtered_row_group_indices;
@@ -173,8 +172,9 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
     auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::device_async_resource_ref>(
       cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
-    std::vector<rmm::device_buffer> bloom_filter_data =
+    auto bloom_filter_buffers =
       fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, aligned_mr);
+    auto bloom_filter_data = make_device_spans<uint8_t>(bloom_filter_buffers);
 
     // Filter row groups with bloom filters
     bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
@@ -184,9 +184,15 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
     current_row_group_indices = bloom_filtered_row_group_indices;
   }
 
-  // Build row mask using page index stats
-  auto row_mask =
-    reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
+  // Build row mask using page index stats or all true if no filter is provided
+  auto row_mask = [&]() {
+    if (options.get_filter().has_value()) {
+      return reader->build_row_mask_with_page_index_stats(
+        current_row_group_indices, options, stream, mr);
+    } else {
+      return reader->build_all_true_row_mask(current_row_group_indices, stream, mr);
+    }
+  }();
 
   std::vector<cudf::size_type> final_row_group_indices(current_row_group_indices.begin(),
                                                        current_row_group_indices.end());
@@ -223,15 +229,16 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
   auto const filter_column_chunk_byte_ranges =
     reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
 
-  // Fetch column chunk device buffers from the input buffer
+  // Fetch column chunk device buffers and spans from the input buffer
   auto filter_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
+  auto filter_column_chunk_data = make_device_spans<uint8_t>(filter_column_chunk_buffers);
 
   // Materialize the table with only the filter columns
   auto row_mask_mutable_view = row_mask->mutable_view();
   auto [filter_table, filter_metadata] =
     reader->materialize_filter_columns(current_row_group_indices,
-                                       std::move(filter_column_chunk_buffers),
+                                       filter_column_chunk_data,
                                        row_mask_mutable_view,
                                        cudf::io::parquet::experimental::use_data_page_mask::YES,
                                        options,
@@ -241,14 +248,15 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
   auto const payload_column_chunk_byte_ranges =
     reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
 
-  // Fetch column chunk device buffers from the input buffer
+  // Fetch column chunk device buffers and spans from the input buffer
   auto payload_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
+  auto payload_column_chunk_data = make_device_spans<uint8_t>(payload_column_chunk_buffers);
 
   // Materialize the table with only the payload columns
   auto [payload_table, payload_metadata] =
     reader->materialize_payload_columns(current_row_group_indices,
-                                        std::move(payload_column_chunk_buffers),
+                                        payload_column_chunk_data,
                                         row_mask->view(),
                                         cudf::io::parquet::experimental::use_data_page_mask::YES,
                                         options,
@@ -296,6 +304,7 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
         reader->filter_column_chunks_byte_ranges(row_group_indices, options);
       auto filter_column_chunk_buffers =
         fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
+      auto filter_column_chunk_data = make_device_spans<uint8_t>(filter_column_chunk_buffers);
 
       // Setup chunking for filter columns and materialize the columns
       reader->setup_chunking_for_filter_columns(
@@ -304,7 +313,7 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
         row_group_indices,
         row_mask->view(),
         cudf::io::parquet::experimental::use_data_page_mask::YES,
-        std::move(filter_column_chunk_buffers),
+        filter_column_chunk_data,
         options,
         stream);
 
@@ -339,6 +348,7 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
         reader->payload_column_chunks_byte_ranges(row_group_indices, options);
       auto payload_column_chunk_buffers =
         fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
+      auto payload_column_chunk_data = make_device_spans<uint8_t>(payload_column_chunk_buffers);
 
       // Setup chunking for payload columns and materialize the table
       reader->setup_chunking_for_payload_columns(
@@ -347,7 +357,7 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
         row_group_indices,
         row_mask->view(),
         cudf::io::parquet::experimental::use_data_page_mask::YES,
-        std::move(payload_column_chunk_buffers),
+        payload_column_chunk_data,
         options,
         stream);
 
@@ -401,11 +411,12 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
   auto const all_column_chunk_byte_ranges =
     reader->all_column_chunks_byte_ranges(current_row_group_indices, options);
 
-  // Fetch column chunk device buffers from the input buffer
+  // Fetch column chunk device buffers and spans from the input buffer
   auto all_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, all_column_chunk_byte_ranges, stream, mr);
+  auto all_column_chunk_data = make_device_spans<uint8_t>(all_column_chunk_buffers);
 
   // Materialize the table with all columns
   return reader->materialize_all_columns(
-    current_row_group_indices, std::move(all_column_chunk_buffers), options, stream);
+    current_row_group_indices, all_column_chunk_data, options, stream);
 }

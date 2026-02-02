@@ -5,9 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, cast
-
-from typing_extensions import assert_never
+from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
 import pylibcudf as plc
 
@@ -15,7 +13,6 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_135
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -242,7 +239,9 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
-        elif self.name == "set_sorted":
+        elif self.name == "set_sorted":  # pragma: no cover
+            # TODO: LazyFrame.set_sorted is proper IR concept (ie. FunctionIR::Hint)
+            # and is is currently not implemented. We should reimplement it as a MapFunction.
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             (asc,) = self.options
             order = (

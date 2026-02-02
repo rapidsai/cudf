@@ -7,9 +7,8 @@ from __future__ import annotations
 import asyncio
 import operator
 from contextlib import asynccontextmanager, contextmanager
-from dataclasses import dataclass
 from functools import reduce
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
 from rapidsmpf.streaming.core.message import Message
@@ -55,141 +54,166 @@ async def shutdown_on_error(
         raise
 
 
-class Metadata:
-    """Metadata payload for an individual ChannelPair."""
-
-    __slots__ = ("count", "duplicated", "partitioned_on")
-    count: int
-    """Chunk-count estimate."""
-    partitioned_on: tuple[str, ...]
-    """Partitioned-on columns."""
-    duplicated: bool
-    """Whether the data is duplicated on all workers."""
-
-    def __init__(
-        self,
-        count: int,
-        *,
-        partitioned_on: tuple[str, ...] = (),
-        duplicated: bool = False,
-    ):
-        self.count = count
-        self.partitioned_on = partitioned_on
-        self.duplicated = duplicated
-
-
-@dataclass
-class ChannelPair:
+class HashPartitioned:
     """
-    A pair of channels for metadata and table data.
-
-    This abstraction ensures that metadata and data are kept separate,
-    avoiding ordering issues and making the code more type-safe.
+    Hash-partitioned metadata.
 
     Attributes
     ----------
-    metadata :
-        Channel for metadata.
-    data :
-        Channel for table data chunks.
-
-    Notes
-    -----
-    This is a placeholder implementation. The metadata channel exists
-    but is not used yet. Metadata handling will be fully implemented
-    in follow-up work.
+    columns
+        Columns the data is hash-partitioned on.
+    scope
+        Whether data is partitioned locally (within a rank) or
+        globally (across all ranks).
+    count
+        The modulus used for hash partitioning (number of partitions).
     """
 
-    metadata: Channel[ArbitraryChunk]
-    data: Channel[TableChunk]
+    __slots__ = ("columns", "count", "scope")
 
-    @classmethod
-    def create(cls, context: Context) -> ChannelPair:
-        """Create a new ChannelPair with fresh channels."""
-        return cls(
-            metadata=context.create_channel(),
-            data=context.create_channel(),
-        )
+    columns: tuple[str, ...]
+    scope: Literal["local", "global"]
+    count: int
 
-    async def send_metadata(self, ctx: Context, metadata: Metadata) -> None:
-        """
-        Send metadata and drain the metadata channel.
+    def __init__(
+        self,
+        columns: tuple[str, ...],
+        scope: Literal["local", "global"],
+        count: int,
+    ):
+        self.columns = columns
+        self.scope = scope
+        self.count = count
 
-        Parameters
-        ----------
-        ctx :
-            The streaming context.
-        metadata :
-            The metadata to send.
-        """
-        msg = Message(0, ArbitraryChunk(metadata))
-        await self.metadata.send(ctx, msg)
-        await self.metadata.drain(ctx)
 
-    async def recv_metadata(self, ctx: Context) -> Metadata:
-        """
-        Receive metadata from the metadata channel.
+class Metadata:
+    """Metadata payload for a channel."""
 
-        Parameters
-        ----------
-        ctx :
-            The streaming context.
+    __slots__ = (
+        "duplicated",
+        "global_count",
+        "local_count",
+        "partitioning",
+    )
 
-        Returns
-        -------
-        ChunkMetadata
-            The metadata, or None if channel is drained.
-        """
-        msg = await self.metadata.recv(ctx)
-        assert msg is not None, f"Expected Metadata message, got {msg}."
-        return ArbitraryChunk.from_message(msg).release()
+    # Chunk counts
+    local_count: int
+    """Local chunk-count estimate for the current rank."""
+    global_count: int | None
+    """Global chunk-count estimate across all ranks."""
+
+    # Partitioning
+    partitioning: HashPartitioned | None
+    """How the data is hash-partitioned, or None if not partitioned."""
+
+    # Duplication
+    duplicated: bool
+    """Whether the data is duplicated (identical) on all workers."""
+
+    def __init__(
+        self,
+        local_count: int,
+        *,
+        global_count: int | None = None,
+        partitioning: HashPartitioned | None = None,
+        duplicated: bool = False,
+    ):
+        if local_count < 0:  # pragma: no cover
+            raise ValueError(f"Local count must be non-negative. Got: {local_count}")
+        self.local_count = local_count
+        if global_count is not None and global_count < 0:  # pragma: no cover
+            raise ValueError(f"Global count must be non-negative. Got: {global_count}")
+        self.global_count = global_count
+        self.partitioning = partitioning
+        self.duplicated = duplicated
+
+
+async def send_metadata(
+    ch: Channel[TableChunk], ctx: Context, metadata: Metadata
+) -> None:
+    """
+    Send metadata and drain the metadata queue.
+
+    Parameters
+    ----------
+    ch :
+        The channel to send metadata on.
+    ctx :
+        The streaming context.
+    metadata :
+        The metadata to send.
+    """
+    msg = Message(0, ArbitraryChunk(metadata))
+    await ch.send_metadata(ctx, msg)
+    await ch.drain_metadata(ctx)
+
+
+async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> Metadata:
+    """
+    Receive metadata from a channel's metadata queue.
+
+    Parameters
+    ----------
+    ch :
+        The channel to receive metadata from.
+    ctx :
+        The streaming context.
+
+    Returns
+    -------
+    Metadata
+        The received metadata.
+    """
+    msg = await ch.recv_metadata(ctx)
+    assert msg is not None, f"Expected Metadata message, got {msg}."
+    return ArbitraryChunk.from_message(msg).release()
 
 
 class ChannelManager:
-    """A utility class for managing ChannelPair objects."""
+    """A utility class for managing Channel objects."""
 
     def __init__(self, context: Context, *, count: int = 1):
         """
-        Initialize the ChannelManager with a given number of ChannelPair slots.
+        Initialize the ChannelManager with a given number of channel slots.
 
         Parameters
         ----------
         context
             The rapidsmpf context.
         count: int
-            The number of ChannelPair slots to allocate.
+            The number of channel slots to allocate.
         """
-        self._channel_slots = [ChannelPair.create(context) for _ in range(count)]
+        self._channel_slots: list[Channel[TableChunk]] = [
+            context.create_channel() for _ in range(count)
+        ]
         self._reserved_output_slots: int = 0
         self._reserved_input_slots: int = 0
 
-    def reserve_input_slot(self) -> ChannelPair:
+    def reserve_input_slot(self) -> Channel[TableChunk]:
         """
-        Reserve an input channel-pair slot.
+        Reserve an input channel slot.
 
         Returns
         -------
-        The reserved ChannelPair.
+        The reserved Channel.
         """
         if self._reserved_input_slots >= len(self._channel_slots):
-            raise ValueError("No more input channel-pair slots available")
-        pair = self._channel_slots[self._reserved_input_slots]
+            raise ValueError("No more input channel slots available")
         self._reserved_input_slots += 1
-        return pair
+        return self._channel_slots[self._reserved_input_slots - 1]
 
-    def reserve_output_slot(self) -> ChannelPair:
+    def reserve_output_slot(self) -> Channel[TableChunk]:
         """
-        Reserve an output channel-pair slot.
+        Reserve an output channel slot.
 
         Returns
         -------
-        The reserved ChannelPair.
+        The reserved Channel.
         """
         if self._reserved_output_slots >= len(self._channel_slots):
-            raise ValueError("No more output channel-pair slots available")
-        pair = self._channel_slots[self._reserved_output_slots]
+            raise ValueError("No more output channel slots available")
         self._reserved_output_slots += 1
-        return pair
+        return self._channel_slots[self._reserved_output_slots - 1]
 
 
 def process_children(

@@ -61,7 +61,11 @@ def test_sort_by_expression(descending, nulls_last, maintain_order):
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("nulls_last", [False, True])
 @pytest.mark.parametrize("with_nulls", ["no_nulls", "nulls"])
-def test_setsorted(descending, nulls_last, with_nulls):
+def test_setsorted(request, descending, nulls_last, with_nulls):
+    if not POLARS_VERSION_LT_135:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/24981")
+        )
     values = sorted([1, 2, 3, 4, 5, 6, -2], reverse=descending)
     if with_nulls == "nulls":
         values[-1 if nulls_last else 0] = None
@@ -70,7 +74,7 @@ def test_setsorted(descending, nulls_last, with_nulls):
     q = df.set_sorted("a", descending=descending)
 
     assert_gpu_result_equal(q)
-    
+
     if POLARS_VERSION_LT_135:
         translator = Translator(q._ldf.visit(), pl.GPUEngine())
 

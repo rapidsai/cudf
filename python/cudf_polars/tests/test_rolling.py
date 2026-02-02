@@ -15,6 +15,7 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
+
 @pytest.fixture(params=[False, True], ids=["nosort", "sort"])
 def presort(request):
     return request.param

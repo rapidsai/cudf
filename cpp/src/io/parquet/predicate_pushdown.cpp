@@ -242,18 +242,29 @@ aggregate_reader_metadata::filter_row_groups(
 
   // Read a vector of bloom filter bitset device buffers for all columns with equality
   // predicate(s) across all row groups
-  auto bloom_filter_data = read_bloom_filters(sources,
-                                              bloom_filter_input_row_groups,
-                                              equality_col_schemas,
-                                              num_stats_filtered_row_groups,
-                                              stream,
-                                              aligned_mr);
+  auto bloom_filter_buffers = read_bloom_filters(sources,
+                                                 bloom_filter_input_row_groups,
+                                                 equality_col_schemas,
+                                                 num_stats_filtered_row_groups,
+                                                 stream,
+                                                 aligned_mr);
 
   // No bloom filter buffers, return early
-  if (bloom_filter_data.empty()) {
+  if (bloom_filter_buffers.empty()) {
     return {stats_filtered_row_groups,
             {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
   }
+
+  // Create spans from bloom filter buffers
+  std::vector<cudf::device_span<cuda::std::byte const>> bloom_filter_data;
+  bloom_filter_data.reserve(bloom_filter_buffers.size());
+  std::transform(bloom_filter_buffers.begin(),
+                 bloom_filter_buffers.end(),
+                 std::back_inserter(bloom_filter_data),
+                 [](auto& buffer) {
+                   return cudf::device_span<cuda::std::byte const>(
+                     static_cast<cuda::std::byte const*>(buffer.data()), buffer.size());
+                 });
 
   // Apply bloom filtering on the output row groups from stats filter
   auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_data,
@@ -429,14 +440,10 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   auto host_bitmask = [&] {
     std::size_t const num_bitmasks = num_bitmask_words(predicate.size());
     if (predicate.nullable()) {
-      auto bitmask = cudf::detail::make_pinned_vector_async<bitmask_type>(num_bitmasks, stream);
-      cudf::detail::cuda_memcpy(
-        cudf::host_span<bitmask_type>{bitmask},
-        cudf::device_span<bitmask_type const>{predicate.null_mask(), num_bitmasks},
-        stream);
-      return bitmask;
+      return cudf::detail::make_pinned_vector(
+        cudf::device_span<bitmask_type const>{predicate.null_mask(), num_bitmasks}, stream);
     } else {
-      auto bitmask = cudf::detail::make_pinned_vector_async<bitmask_type>(num_bitmasks, stream);
+      auto bitmask = cudf::detail::make_pinned_vector<bitmask_type>(num_bitmasks, stream);
       std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
       return bitmask;
     }
@@ -446,11 +453,9 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
     0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
 
   // Return only filtered row groups based on predicate
-  auto is_row_group_required =
-    cudf::detail::make_pinned_vector_async<uint8_t>(predicate.size(), stream);
-  cudf::detail::cuda_memcpy(
-    cudf::host_span<uint8_t>(is_row_group_required.data(), predicate.size()),
-    cudf::device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()),
+  auto is_row_group_required = cudf::detail::make_pinned_vector(
+    cudf::device_span<uint8_t const>{predicate.data<uint8_t>(),
+                                     static_cast<size_t>(predicate.size())},
     stream);
 
   // Return if all are required, or all are nulls.

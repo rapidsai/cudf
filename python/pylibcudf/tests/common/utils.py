@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -14,6 +14,20 @@ from pyarrow.parquet import write_table as pq_write_table
 
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
+
+
+def synchronize_stream(stream=None):
+    """Synchronize a stream, handling both explicit streams and None (default stream).
+
+    Parameters
+    ----------
+    stream : Stream or None
+        The stream to synchronize. If None, synchronizes the default stream.
+    """
+    if stream is None:
+        plc.utils.DEFAULT_STREAM.synchronize()
+    else:
+        stream.synchronize()
 
 
 def metadata_from_arrow_type(

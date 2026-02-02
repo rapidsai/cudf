@@ -26,7 +26,7 @@ build:
 
 requirements:
   host:
-    - python >=3.10
+    - python >=3.11
     - pip
     - rapids-build-backend >=0.4.0,<0.5.0
     - setuptools>=77.0.0
@@ -38,8 +38,6 @@ requirements:
     - pylibcudf =${{ version }}
     - polars>=1.30,<1.36
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
-    - if: python == "3.10"
-      then: typing_extensions
   ignore_run_exports:
     by_name:
       - cuda-version

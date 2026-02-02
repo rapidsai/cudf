@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -2785,6 +2785,41 @@ class StringMethods(BaseAccessor):
 
         return self._return_or_inplace(result_table, expand=expand)
 
+    def split_part(
+        self, delimiter: str | None = None, index: int = 0
+    ) -> Series | Index:
+        """
+        Splits the string by delimiter and returns the token at the given index.
+
+        Parameters
+        ----------
+        delimiter : str, default None
+            The string to split on. If not specified, split on whitespace.
+        index : int, default 0
+            The index of the token to retrieve.
+
+        Returns
+        -------
+        Series or Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["a_b_c", "d_e", "f"])
+        >>> s.str.split_part(delimiter="_", index=1)
+        0       b
+        1       e
+        2    None
+        dtype: object
+        """
+
+        if delimiter is None:
+            delimiter = ""
+        delim_scalar = plc.Scalar.from_py(delimiter)
+        return self._return_or_inplace(
+            self._column.split_part(delim_scalar, index)
+        )
+
     def partition(self, sep: str = " ", expand: bool = True) -> Series | Index:
         """
         Split the string at the first occurrence of sep.
@@ -4630,7 +4665,9 @@ class StringMethods(BaseAccessor):
         2    .
         dtype: object
         """
-        result_col = self._column.character_tokenize().children[1]
+        result_col = ColumnBase.from_pylibcudf(
+            self._column.character_tokenize().plc_column.children()[1]
+        )
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)

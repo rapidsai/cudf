@@ -21,9 +21,7 @@ import time
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, overload
-
-from typing_extensions import assert_never
+from typing import TYPE_CHECKING, Any, ClassVar, assert_never, overload
 
 import polars as pl
 
@@ -51,13 +49,16 @@ from cudf_polars.utils.cuda_stream import (
     get_new_cuda_stream,
     join_cuda_streams,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_134, POLARS_VERSION_LT_136, POLARS_VERSION_LT_137
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_131,
+    POLARS_VERSION_LT_134,
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_137,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
-    from typing import Literal
-
-    from typing_extensions import Self
+    from typing import Literal, Self
 
     from polars import polars  # type: ignore[attr-defined]
 
@@ -3154,20 +3155,22 @@ class MapFunction(IR):
             return DataFrame([index_col, *df.columns], stream=df.stream)
         elif name == "hint_sorted":
             (sorted_info,) = options
-            
+
             for column_name, descending, nulls_last in sorted_info:
                 column = df.column_map[column_name]
-                
+
                 order = (
-                    plc.types.Order.DESCENDING if descending
+                    plc.types.Order.DESCENDING
+                    if descending
                     else plc.types.Order.ASCENDING
                 )
-                
+
                 null_order = (
-                    plc.types.NullOrder.AFTER if nulls_last
+                    plc.types.NullOrder.AFTER
+                    if nulls_last
                     else plc.types.NullOrder.BEFORE
                 )
-                
+
                 df.column_map[column_name] = column.set_sorted(
                     is_sorted=plc.types.Sorted.YES,
                     order=order,
