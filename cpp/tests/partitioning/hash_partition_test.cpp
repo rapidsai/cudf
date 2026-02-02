@@ -10,7 +10,9 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
@@ -104,6 +106,38 @@ TEST_F(HashPartition, ZeroColumns)
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
   EXPECT_EQ(std::size_t{num_partitions + 1}, offsets.size());
+}
+
+TEST_F(HashPartition, LargeRowCountNoOverflow)
+{
+  // We are also restricted by thrust 32bit offsets, so this test is quite delicate.
+  cudf::size_type const num_rows       = 200'000'000;
+  cudf::size_type const num_partitions = 5128;
+  auto bools = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::BOOL8}, num_rows);
+  auto view  = bools->mutable_view();
+  auto value = cudf::numeric_scalar<bool>(true, /* is_valid = */ true);
+  cudf::fill_in_place(view, 0, num_rows, value);
+  auto input = cudf::table_view({bools->view()});
+
+  auto [output, offsets] = cudf::hash_partition(input, {0}, num_partitions);
+
+  EXPECT_EQ(1, output->num_columns());
+  EXPECT_EQ(num_rows, output->num_rows());
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets.size());
+  EXPECT_EQ(num_rows, offsets.back());
+}
+
+TEST_F(HashPartition, TooManyPartitionsForSharedMemory)
+{
+  cudf::size_type const num_rows       = 48 * 1024;
+  cudf::size_type const num_partitions = 48 * 1024;
+  auto bools = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::BOOL8}, num_rows);
+  auto view  = bools->mutable_view();
+  auto value = cudf::numeric_scalar<bool>(true, /* is_valid = */ true);
+  cudf::fill_in_place(view, 0, num_rows, value);
+  auto input = cudf::table_view({bools->view()});
+
+  EXPECT_THROW(cudf::hash_partition(input, {0}, num_partitions), std::invalid_argument);
 }
 
 TEST_F(HashPartition, MixedColumnTypes)
