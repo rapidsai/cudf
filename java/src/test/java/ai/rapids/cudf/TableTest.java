@@ -71,6 +71,7 @@ public class TableTest extends CudfTestBase {
 
   private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
   private static final File TEST_PARQUET_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.parquet");
+  private static final File TEST_PARQUET_FILE_STRING_OVERFLOW = TestUtils.getResourceAsFile("str_col_size_overflow.parquet");
   private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
   private static final File TEST_ORC_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.orc");
@@ -1706,6 +1707,27 @@ public class TableTest extends CudfTestBase {
       assertEquals(40000, totalRows);
     }
   }
+
+  @Test
+  void testChunkedReadParquetStringOverflow() {
+    // Input file (highly compressed): single row group, 2,000,000 rows, each string row
+    // is 2200 bytes long. So the single string column size is ~4G.
+    // Even large chunk limit (5G) will not trigger overflow path in readChunk due to the
+    // column size limit.
+    final long overStrColSizeLimitBytes = 5L * 1024 * 1024 * 1024;
+    try (ParquetChunkedReader reader = new ParquetChunkedReader(overStrColSizeLimitBytes,
+        TEST_PARQUET_FILE_STRING_OVERFLOW)) {
+      int numChunks = 0;
+      while (reader.hasNext()) {
+        try (Table chunk = reader.readChunk()) {
+          numChunks ++;
+        }
+      }
+      // Two chunks due to column size limit even out size is larger than input size.
+      assertEquals(2, numChunks);
+    }
+  }
+
 
   @Test
   void testChunkedReadParquetHostBuffers() throws Exception {
