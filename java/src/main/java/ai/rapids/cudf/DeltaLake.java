@@ -77,11 +77,7 @@ public class DeltaLake {
       if (rowGroupNumRows == null || rowGroupNumRows.length == 0) {
         return Integer.MAX_VALUE;
       }
-      final int sum = Arrays.stream(rowGroupNumRows).sum();
-      if (sum < 0) {
-        throw new IllegalStateException("Integer overflow when summing row group num rows.");
-      }
-      return sum;
+      return Arrays.stream(rowGroupNumRows).reduce(Math::addExact).orElse(0);
     }
   }
 
