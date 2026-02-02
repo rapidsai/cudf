@@ -1,5 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+
+import warnings
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -63,6 +65,9 @@ cpdef Column edit_distance_matrix(
     """
     Returns the edit distance between all strings in the input strings column
 
+    .. deprecated:: release 26.04
+        edit_distance_matrix is deprecated.
+
     For details, see :cpp:func:`edit_distance_matrix`
 
     Parameters
@@ -77,6 +82,10 @@ cpdef Column edit_distance_matrix(
     Column
         New column of edit distance values
     """
+    warnings.warn(
+        "edit_distance_matrix is deprecated.",
+        FutureWarning,
+    )
     cdef column_view c_strings = input.view()
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
