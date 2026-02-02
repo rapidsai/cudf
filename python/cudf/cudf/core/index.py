@@ -9,13 +9,12 @@ import operator
 import warnings
 from collections.abc import Hashable, MutableMapping
 from functools import cache, cached_property
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -1849,9 +1848,7 @@ class Index(SingleColumnFrame):
         return self._column.memory_usage
 
     def __sizeof__(self):
-        if cudf.get_option("mode.pandas_compatible"):
-            return self.memory_usage(deep=True)
-        return object.__sizeof__(self)
+        return self.memory_usage(deep=True)
 
     @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
@@ -1922,9 +1919,7 @@ class Index(SingleColumnFrame):
 
     @staticmethod
     def _return_get_indexer_result(result: cupy.ndarray) -> cupy.ndarray:
-        if cudf.get_option("mode.pandas_compatible"):
-            return result.astype(np.int64)
-        return result
+        return result.astype(np.int64)
 
     @_performance_tracking
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
@@ -3630,9 +3625,7 @@ class DatetimeIndex(Index):
 
     def __getitem__(self, index):
         value = super().__getitem__(index)
-        if cudf.get_option("mode.pandas_compatible") and isinstance(
-            value, np.datetime64
-        ):
+        if isinstance(value, np.datetime64):
             return pd.Timestamp(value)
         return value
 
@@ -3644,6 +3637,13 @@ class DatetimeIndex(Index):
         ):
             raise TypeError(
                 "Can only slice DatetimeIndex with a string or datetime objects"
+            )
+        if isinstance(loc.stop, str) and not (
+            self.is_monotonic_increasing or self.is_monotonic_decreasing
+        ):
+            raise KeyError(
+                "Value based partial slicing on non-monotonic DatetimeIndexes "
+                "with non-existing keys is not allowed."
             )
         new_slice = slice(
             pd.to_datetime(loc.start) if loc.start is not None else None,
@@ -4683,9 +4683,7 @@ class TimedeltaIndex(Index):
 
     def __getitem__(self, index):
         value = super().__getitem__(index)
-        if cudf.get_option("mode.pandas_compatible") and isinstance(
-            value, np.timedelta64
-        ):
+        if isinstance(value, np.timedelta64):
             return pd.Timedelta(value)
         return value
 

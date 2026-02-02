@@ -10,13 +10,12 @@ import warnings
 from collections.abc import Mapping
 from copy import deepcopy
 from shutil import get_terminal_size
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, Self, assert_never, overload
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self, assert_never
 
 import pylibcudf as plc  # noqa: TC002
 
@@ -269,7 +268,19 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
 
 class _SeriesiAtIndexer(_SeriesIlocIndexer):
-    pass
+    @_performance_tracking
+    def __getitem__(self, key):
+        indexing_utils.validate_scalar_key(
+            key, "iAt based indexing can only have integer indexers"
+        )
+        return super().__getitem__(key)
+
+    @_performance_tracking
+    def __setitem__(self, key, value):
+        indexing_utils.validate_scalar_key(
+            key, "iAt based indexing can only have integer indexers"
+        )
+        return super().__setitem__(key, value)
 
 
 class _SeriesLocIndexer(_FrameIndexer):
@@ -413,7 +424,19 @@ class _SeriesLocIndexer(_FrameIndexer):
 
 
 class _SeriesAtIndexer(_SeriesLocIndexer):
-    pass
+    @_performance_tracking
+    def __getitem__(self, key):
+        indexing_utils.validate_scalar_key(
+            key, "Invalid call for scalar access (getting)!"
+        )
+        return super().__getitem__(key)
+
+    @_performance_tracking
+    def __setitem__(self, key, value):
+        indexing_utils.validate_scalar_key(
+            key, "Invalid call for scalar access (getting)!"
+        )
+        return super().__setitem__(key, value)
 
 
 class Series(SingleColumnFrame, IndexedFrame):

@@ -21,16 +21,18 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     Metadata,
     empty_table_chunk,
     opaque_reservation,
+    recv_metadata,
+    send_metadata,
 )
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 @define_py_node()
@@ -38,8 +40,8 @@ async def concatenate_node(
     context: Context,
     ir: Repartition,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    ch_in: ChannelPair,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
     *,
     output_count: int,
     collective_id: int,
@@ -66,19 +68,17 @@ async def concatenate_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output Channel[TableChunk].
     ch_in
-        The input ChannelPair.
+        The input Channel[TableChunk].
     output_count
         The expected global number of output chunks.
     collective_id
         Pre-allocated collective ID for this operation.
     """
-    async with shutdown_on_error(
-        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
-    ):
+    async with shutdown_on_error(context, ch_in, ch_out):
         # Receive metadata.
-        input_metadata = await ch_in.recv_metadata(context)
+        input_metadata = await recv_metadata(ch_in, context)
         nranks = context.comm().nranks
 
         # Interpret output_count as the GLOBAL target chunk count.
@@ -132,12 +132,12 @@ async def concatenate_node(
                 global_count=output_count,
                 duplicated=output_duplicated,
             )
-            await ch_out.send_metadata(context, metadata)
+            await send_metadata(ch_out, context, metadata)
 
             allgather = AllGatherManager(context, collective_id)
             stream = context.get_stream_from_pool()
             seq_num = 0
-            while (msg := await ch_in.data.recv(context)) is not None:
+            while (msg := await ch_in.recv(context)) is not None:
                 allgather.insert(seq_num, TableChunk.from_message(msg))
                 seq_num += 1
                 del msg
@@ -155,7 +155,7 @@ async def concatenate_node(
                     result_table, stream, exclusive_view=True
                 )
 
-            await ch_out.data.send(context, Message(0, output_chunk))
+            await ch_out.send(context, Message(0, output_chunk))
         else:
             # Local repartitioning (tree reduction).
 
@@ -165,7 +165,7 @@ async def concatenate_node(
                 global_count=output_count,
                 duplicated=output_duplicated,
             )
-            await ch_out.send_metadata(context, metadata)
+            await send_metadata(ch_out, context, metadata)
 
             # Local repartitioning
             seq_num = 0
@@ -175,7 +175,7 @@ async def concatenate_node(
 
                 # Collect chunks up to max_chunks or until end of stream
                 while len(chunks) < (max_chunks or float("inf")):
-                    msg = await ch_in.data.recv(context)
+                    msg = await ch_in.recv(context)
                     if msg is None:
                         done_receiving = True
                         break
@@ -203,7 +203,7 @@ async def concatenate_node(
                             ),
                             context=ir_context,
                         )
-                        await ch_out.data.send(
+                        await ch_out.send(
                             context,
                             Message(
                                 seq_num,
@@ -219,7 +219,7 @@ async def concatenate_node(
                 if done_receiving:
                     break
 
-        await ch_out.data.drain(context)
+        await ch_out.drain(context)
 
 
 @generate_ir_sub_network.register(Repartition)
@@ -242,7 +242,7 @@ def _(
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Look up the reserved shuffle ID for this operation
-    collective_id = rec.state["collective_id_map"][ir]
+    collective_id = rec.state["collective_id_map"][ir][0]
 
     # Add python node
     nodes[ir] = [

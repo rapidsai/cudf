@@ -225,19 +225,17 @@ class ExponentialMovingWindow(_RollingBase):
         leading_nulls = _leading_nulls_count(plc_col, size)
 
         if leading_nulls == 0:
-            return to_libcudf_column.scan(
-                agg_name, True, com=self.com, adjust=self.adjust
+            return getattr(to_libcudf_column, agg_name)(
+                inclusive=True, com=self.com, adjust=self.adjust
             )
 
         head_plc_col, tail_plc_col = plc.copying.split(
             plc_col, [int(leading_nulls)]
         )
         head = type(to_libcudf_column).from_pylibcudf(head_plc_col)
-        tail = (
-            type(to_libcudf_column)
-            .from_pylibcudf(tail_plc_col)
-            .scan(agg_name, True, com=self.com, adjust=self.adjust)
-        )
+        tail = getattr(
+            type(to_libcudf_column).from_pylibcudf(tail_plc_col), agg_name
+        )(inclusive=True, com=self.com, adjust=self.adjust)
         return head.append(tail)
 
 
