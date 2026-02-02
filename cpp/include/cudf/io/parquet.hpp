@@ -325,7 +325,7 @@ class parquet_reader_options {
    *
    * Example:
    * To read only the `bar` and `baz` fields, call:
-   *   set_columns({"foo.bar", "foo.baz"});
+   *   set_column_names({"foo.bar", "foo.baz"});
    *
    * @note This function does not currently support per-source column selection.
    *

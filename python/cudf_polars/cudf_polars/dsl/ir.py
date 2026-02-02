@@ -814,7 +814,7 @@ class Scan(IR):
                 plc.io.SourceInfo(paths)
             ).build()
             if with_columns is not None:
-                parquet_reader_options.set_columns(with_columns)
+                parquet_reader_options.set_column_names(with_columns)
             if filters is not None:
                 parquet_reader_options.set_filter(filters)
             if n_rows != -1:
