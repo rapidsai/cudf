@@ -6330,6 +6330,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/series/indexing/test_setitem.py::TestSetitemWithExpansion::test_setitem_enlarge_with_na[na5-target_na5-int64-object-2-None]",
     "tests/series/indexing/test_setitem.py::TestSetitemWithExpansion::test_setitem_enlarge_with_na[nan-target_na8-Float64-Float64-1-None]"
     "tests/series/indexing/test_setitem.py::TestSetitemWithExpansion::test_setitem_enlarge_with_na[nan-target_na8-Float64-Float64-1-None]",
+    "tests/series/indexing/test_setitem.py::TestSetitemWithExpansion::test_setitem_enlarge_with_na[nan-target_na8-Float64-Float64-1-None]",
     "tests/series/indexing/test_setitem.py::TestSetitemWithExpansion::test_setitem_enlargement_object_none[NAType]",
     "tests/series/indexing/test_setitem.py::TestSetitemWithExpansion::test_setitem_enlargement_object_none[NAType]",
     "tests/series/indexing/test_setitem.py::TestSmallIntegerSetitemUpcast::test_int_key[iloc-8589934593.0]",
