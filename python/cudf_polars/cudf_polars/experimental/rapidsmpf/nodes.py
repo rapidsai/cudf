@@ -541,7 +541,9 @@ def _(
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
+
     profiler: RuntimeQueryProfiler | None = rec.state.get("profiler")
+    node_profiler = profiler.get_or_create(ir) if profiler is not None else None
 
     if len(ir.children) == 1:
         # Single-channel default node
@@ -561,7 +563,7 @@ def _(
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
                 preserve_partitioning=preserve_partitioning,
-                node_profiler=profiler.get_or_create(ir) if profiler else None,
+                node_profiler=node_profiler,
             )
         ]
     else:
@@ -573,7 +575,7 @@ def _(
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
-                node_profiler=profiler.get_or_create(ir) if profiler else None,
+                node_profiler=node_profiler,
             )
         ]
 
