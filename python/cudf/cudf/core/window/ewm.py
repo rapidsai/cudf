@@ -26,10 +26,8 @@ def _leading_nulls_count(plc_col: plc.Column, size: int) -> int:
 
     offset = plc_col.offset()
 
-    return (
-        plc.null_mask.index_of_first_set_bit(bitmask, offset, offset + size)
-        - offset
-    )
+    # index_of_first_set_bit returns a relative index from start
+    return plc.null_mask.index_of_first_set_bit(bitmask, offset, offset + size)
 
 
 class ExponentialMovingWindow(_RollingBase):
