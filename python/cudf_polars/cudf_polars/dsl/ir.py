@@ -3035,10 +3035,7 @@ class MapFunction(IR):
                 "Fast count unsupported for CSV scans"
             )  # pragma: no cover
         elif self.name == "hint_sorted":
-            # options is a list containing one tuple of sorted info
-            # sorted info is a tuple: (column_name, descending, nulls_last)
-            (sorted_info,) = options
-            self.options = (tuple(sorted_info),)
+            raise NotImplementedError("Hint sorted unsupported")
         self._non_child_args = (schema, name, self.options)
 
     def get_hashable(self) -> Hashable:
@@ -3153,30 +3150,6 @@ class MapFunction(IR):
                 dtype=dtype,
             )
             return DataFrame([index_col, *df.columns], stream=df.stream)
-        elif name == "hint_sorted":
-            (sorted_info,) = options
-
-            for column_name, descending, nulls_last in sorted_info:
-                column = df.column_map[column_name]
-
-                order = (
-                    plc.types.Order.DESCENDING
-                    if descending
-                    else plc.types.Order.ASCENDING
-                )
-
-                null_order = (
-                    plc.types.NullOrder.AFTER
-                    if nulls_last
-                    else plc.types.NullOrder.BEFORE
-                )
-
-                df.column_map[column_name] = column.set_sorted(
-                    is_sorted=plc.types.Sorted.YES,
-                    order=order,
-                    null_order=null_order,
-                )
-            return df
         else:
             raise AssertionError("Should never be reached")  # pragma: no cover
 

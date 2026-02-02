@@ -33,13 +33,13 @@ def df():
 
 
 @pytest.mark.parametrize("time_unit", ["ns", "us", "ms"])
-def test_rolling_datetime(time_unit):
-    # request.applymarker(
-    #     pytest.mark.xfail(
-    #         condition=not POLARS_VERSION_LT_136,
-    #         reason="Polars translates this to AExpr::Rolling which is NotImplemented",
-    #     )
-    # )
+def test_rolling_datetime(request, time_unit):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not POLARS_VERSION_LT_136,
+            reason="Polars translates this to AExpr::Rolling which is NotImplemented",
+        )
+    )
     dates = [
         "2020-01-01 13:45:48",
         "2020-01-01 16:42:13",

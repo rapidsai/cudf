@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_135
 
 
 def test_explode_multiple_raises():
@@ -113,12 +113,16 @@ def test_unique_hash():
     assert hash(ir_a) != hash(ir_b)
 
 
-def test_set_sorted_then_inner_join():
+def test_set_sorted_then_inner_join(request):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not POLARS_VERSION_LT_135,
+            reason="HintIR not supported",
+        )
+    )
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5]})
-    
+
     q = df.set_sorted("a").join(
-        pl.LazyFrame({"a": [2, 4], "b": [20, 40]}),
-        on="a",
-        how="inner"
+        pl.LazyFrame({"a": [2, 4], "b": [20, 40]}), on="a", how="inner"
     )
     assert_gpu_result_equal(q)
