@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,7 +19,6 @@
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
 #include <cuda/std/iterator>
-#include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace cudf::detail {
