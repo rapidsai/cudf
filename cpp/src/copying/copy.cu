@@ -9,6 +9,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/copy_if_else.cuh>
@@ -22,7 +23,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/iterator>
-#include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
@@ -157,11 +157,11 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      rmm::device_async_resource_ref mr)
 {
   auto gather_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const gather_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
-                                              thrust::make_counting_iterator(size_type{0}),
-                                              thrust::make_counting_iterator(size_type{size}),
-                                              gather_map.begin(),
-                                              is_left);
+  auto const gather_map_end = cudf::detail::copy_if(thrust::counting_iterator(size_type{0}),
+                                                    thrust::counting_iterator(size_type{size}),
+                                                    gather_map.begin(),
+                                                    is_left,
+                                                    stream);
 
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
 
@@ -191,11 +191,11 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                      rmm::device_async_resource_ref mr)
 {
   auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const scatter_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
-                                               thrust::make_counting_iterator(size_type{0}),
-                                               thrust::make_counting_iterator(size_type{size}),
-                                               scatter_map.begin(),
-                                               is_left);
+  auto const scatter_map_end = cudf::detail::copy_if(thrust::counting_iterator(size_type{0}),
+                                                     thrust::counting_iterator(size_type{size}),
+                                                     scatter_map.begin(),
+                                                     is_left,
+                                                     stream);
 
   auto const scatter_map_size  = std::distance(scatter_map.begin(), scatter_map_end);
   auto scatter_source          = std::vector<std::reference_wrapper<scalar const>>{std::ref(lhs)};
