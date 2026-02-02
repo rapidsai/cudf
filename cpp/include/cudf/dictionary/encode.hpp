@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -32,8 +32,8 @@ namespace dictionary {
  *
  * The null mask and null count are copied from the input column to the output column.
  *
- * @throw std::invalid_argument if indices type is not a signed integer type
- * @throw std::invalid_argument if the column to encode is already a DICTIONARY type
+ * @throw cudf::data_type_error if indices type is not a signed integer type
+ * @throw std::invalid_argument if the column to encode is a DICTIONARY or nested type
  *
  * @code{.pseudo}
  * c = [429, 111, 213, 111, 213, 429, 213]

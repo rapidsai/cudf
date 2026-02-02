@@ -244,24 +244,15 @@ struct DeviceRollingArgMinMaxDictionary : DeviceRollingArgMinMaxBase<cudf::dicti
       using AggOp = typename corresponding_operator<op>::type;
       AggOp agg_op;
 
-      auto keys       = dict.child(1);
-      size_type count = 0;
-      auto val        = AggOp::template identity<T>();
-      size_type index = -1;
+      auto keys  = dict.child(1);
+      auto count = size_type{0};
+      auto val   = AggOp::template identity<T>();
+      auto index = size_type{-1};
       for (size_type j = start_index; j < end_index; j++) {
         if (!has_nulls || dict.is_valid(j)) {
           auto element = keys.element<T>(dict.element<dictionary32>(j).value());
-          if constexpr (op == aggregation::ARGMIN) {
-            if (element < val) {
-              index = j;
-              val   = element;
-            }
-          } else {
-            if (element > val) {
-              index = j;
-              val   = element;
-            }
-          }
+          val          = agg_op(element, val);
+          if (val == element) { index = j; }
           count++;
         }
       }
@@ -756,11 +747,9 @@ struct create_rolling_operator<
 };
 
 template <typename InputType, aggregation::Kind k>
-struct create_rolling_operator<
-  InputType,
-  k,
-  typename std::enable_if_t<std::is_same_v<InputType, cudf::dictionary32> &&
-                            (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX)>> {
+  requires(std::is_same_v<InputType, cudf::dictionary32> &&
+           (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX))
+struct create_rolling_operator<InputType, k> {
   auto operator()(size_type min_periods, rolling_aggregation const&)
   {
     return DeviceRollingArgMinMaxDictionary<k>{min_periods};

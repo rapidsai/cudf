@@ -113,38 +113,6 @@ class DatetimeColumn(TemporalBaseColumn):
             raise ValueError(f"dtype must be a datetime, got {dtype}")
         return plc_column, dtype
 
-    def _clear_cache(self) -> None:
-        super()._clear_cache()
-        attrs = (
-            "days_in_month",
-            "is_year_start",
-            "is_leap_year",
-            "is_year_end",
-            "is_quarter_start",
-            "is_quarter_end",
-            "is_month_start",
-            "is_month_end",
-            "day_of_year",
-            "weekday",
-            "nanosecond",
-            "microsecond",
-            "millisecond",
-            "second",
-            "minute",
-            "hour",
-            "day",
-            "month",
-            "year",
-            "quarter",
-            "time_unit",
-        )
-        for attr in attrs:
-            try:
-                delattr(self, attr)
-            except AttributeError:
-                # attr was not called yet, so ignore.
-                pass
-
     def _reduce(
         self,
         op: str,
@@ -800,13 +768,6 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
-    def _clear_cache(self) -> None:
-        super()._clear_cache()
-        try:
-            del self._local_time
-        except AttributeError:
-            pass
-
     @classmethod
     def _validate_args(
         cls, plc_column: plc.Column, dtype: pd.DatetimeTZDtype
