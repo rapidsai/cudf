@@ -1,9 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from collections.abc import Mapping
-from typing import TypeAlias
-
-from typing_extensions import Self
+from typing import Self, TypeAlias
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream

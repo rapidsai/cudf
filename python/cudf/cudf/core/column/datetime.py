@@ -9,7 +9,7 @@ import locale
 import re
 import warnings
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -39,8 +39,7 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -146,13 +145,26 @@ class DatetimeColumn(TemporalBaseColumn):
                 # attr was not called yet, so ignore.
                 pass
 
-    def _scan(self, op: str) -> ColumnBase:
-        if op not in {"cummin", "cummax"}:
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        # Pandas raises TypeError for certain unsupported datetime reductions
+        if op in {"sum", "product"}:
             raise TypeError(
-                f"Accumulation {op} not supported for {self.dtype}"
+                f"'{type(self).__name__}' with dtype {self.dtype} "
+                f"does not support reduction '{op}'"
             )
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
+        if op == "var":
+            raise TypeError(
+                f"'{type(self).__name__}' with dtype {self.dtype} "
+                f"does not support reduction '{op}'"
+            )
+        return super()._reduce(
+            op, skipna=skipna, min_count=min_count, **kwargs
         )
 
     def __contains__(self, item: ScalarLike) -> bool:
@@ -922,7 +934,11 @@ class DatetimeTZColumn(DatetimeColumn):
             return self._utc_time
         elif tz == str(self.dtype.tz):  # type: ignore[union-attr]
             return self.copy()
+
         utc_time = self._utc_time
-        return utc_time._with_type_metadata(
-            pd.DatetimeTZDtype(self.time_unit, tz)
+        return cast(
+            DatetimeColumn,
+            ColumnBase.create(
+                utc_time.plc_column, pd.DatetimeTZDtype(utc_time.time_unit, tz)
+            ),
         )
