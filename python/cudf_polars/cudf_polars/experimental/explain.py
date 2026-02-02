@@ -210,30 +210,27 @@ def _repr_profile_tree(
 ) -> str:
     """Recursively build a tree representation with profiler data."""
     header = _repr_ir(ir, offset=offset)
-
-    # Get node profiler if it exists
-    node_profiler = profiler.node_profilers.get(ir)
     header = header.rstrip("\n")
 
-    # Add actual row count if available
-    if node_profiler is not None and node_profiler.row_count is not None:
-        header += f" rows={_fmt_row_count(node_profiler.row_count)}"
+    # Get node profiler if it exists
+    if (node_profiler := profiler.node_profilers.get(ir)) is not None:
+        # Add actual row count if available
+        if node_profiler.row_count is not None:
+            header += f" rows={_fmt_row_count(node_profiler.row_count)}"
 
-    # Add decision if present
-    if node_profiler is not None and node_profiler.decision is not None:
-        header += f" decision={node_profiler.decision}"
+        # Add decision if present
+        if node_profiler.decision is not None:
+            header += f" decision={node_profiler.decision}"
 
-    # Add actual chunk count if available
-    if node_profiler is not None and node_profiler.chunk_count > 0:
+        # Add actual chunk count
         header += f" chunks={node_profiler.chunk_count}"
-
-    header += "\n"
 
     children_strs = [
         _repr_profile_tree(child, partition_info, profiler, offset=offset + "  ")
         for child in ir.children
     ]
 
+    header += "\n"
     return header + "".join(
         f"{line}{offset}  (repeated {count} times)\n"
         if (count := sum(1 for _ in group)) > 1
