@@ -2206,6 +2206,7 @@ def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
 
     got = op(a, b)
     assert expect.dtype == got.dtype
+    import pdb;pdb.set_trace()
     assert_eq(expect, got)
 
 

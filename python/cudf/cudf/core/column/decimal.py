@@ -205,6 +205,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return self._binaryop(other, "__rdiv__")
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        import pdb;pdb.set_trace()
         reflect, op = self._check_reflected_op(op)
 
         # Inline _normalize_binop_operand functionality
