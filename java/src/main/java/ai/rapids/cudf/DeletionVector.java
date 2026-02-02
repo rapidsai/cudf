@@ -20,7 +20,7 @@ import java.util.List;
  *
  * The APIs in this file are experimental and subject to change.
  */
-public class DeltaLake {
+public class DeletionVector {
   static {
     NativeDepsLoader.loadNativeDeps();
   }

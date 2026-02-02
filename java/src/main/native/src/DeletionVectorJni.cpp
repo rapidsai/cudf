@@ -144,7 +144,7 @@ std::unique_ptr<cudf::io::parquet::experimental::deletion_vector_info> make_dele
  * @return Handle to the columns of the resulting table (as jlongArray)
  */
 JNIEXPORT jlongArray JNICALL
-Java_ai_rapids_cudf_DeltaLake_readParquet(JNIEnv* env,
+Java_ai_rapids_cudf_DeletionVector_readParquet(JNIEnv* env,
                                           jclass,
                                           jobjectArray filter_col_names,
                                           jbooleanArray col_binary_read,
@@ -232,7 +232,7 @@ Java_ai_rapids_cudf_DeltaLake_readParquet(JNIEnv* env,
  *         [2] Handle to the deletion_vector_info
  */
 JNIEXPORT jlongArray JNICALL
-Java_ai_rapids_cudf_DeltaLake_createParquetChunkedReader(JNIEnv* env,
+Java_ai_rapids_cudf_DeletionVector_createParquetChunkedReader(JNIEnv* env,
                                                          jclass,
                                                          jlong chunk_read_limit,
                                                          jlong pass_read_limit,
@@ -306,7 +306,7 @@ Java_ai_rapids_cudf_DeltaLake_createParquetChunkedReader(JNIEnv* env,
  * @param j_reader_handle Handle to the chunked_parquet_reader
  * @return true if there is more data to read, false otherwise
  */
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_DeltaLake_parquetChunkedReaderHasNext(
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_DeletionVector_parquetChunkedReaderHasNext(
   JNIEnv* env, jclass, jlong j_reader_handle)
 {
   JNI_NULL_CHECK(env, j_reader_handle, "reader handle is null", false);
@@ -329,7 +329,7 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_DeltaLake_parquetChunkedReaderHas
  * @param j_reader_handle Handle to the chunked_parquet_reader
  * @return Handle to the resulting table (as jlongArray)
  */
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_DeltaLake_parquetChunkedReaderReadChunk(
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_DeletionVector_parquetChunkedReaderReadChunk(
   JNIEnv* env, jclass, jlong j_reader_handle)
 {
   JNI_NULL_CHECK(env, j_reader_handle, "reader handle is null", nullptr);
@@ -353,7 +353,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_DeltaLake_parquetChunkedReaderR
  * @param j_reader_handle Handle to the chunked_parquet_reader
  */
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_DeltaLake_closeParquetChunkedReader(JNIEnv* env, jclass, jlong j_reader_handle)
+Java_ai_rapids_cudf_DeletionVector_closeParquetChunkedReader(JNIEnv* env, jclass, jlong j_reader_handle)
 {
   JNI_NULL_CHECK(env, j_reader_handle, "reader handle is null", );
 
@@ -372,7 +372,7 @@ Java_ai_rapids_cudf_DeltaLake_closeParquetChunkedReader(JNIEnv* env, jclass, jlo
  * @param env JNI environment
  * @param handle Handle to the multi_host_buffer_source
  */
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_DeltaLake_destroyMultiHostBufferSource(JNIEnv* env,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_DeletionVector_destroyMultiHostBufferSource(JNIEnv* env,
                                                                                   jclass,
                                                                                   jlong handle)
 {
@@ -388,7 +388,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_DeltaLake_destroyMultiHostBufferSourc
  * @param env JNI environment
  * @param handle Handle to the deletion_vector_info
  */
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_DeltaLake_destroyDeletionVectorParam(JNIEnv* env,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_DeletionVector_destroyDeletionVectorParam(JNIEnv* env,
                                                                                 jclass,
                                                                                 jlong handle)
 {
