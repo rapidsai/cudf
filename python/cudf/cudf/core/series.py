@@ -2028,14 +2028,6 @@ class Series(SingleColumnFrame, IndexedFrame):
     ) -> Self:
         if copy is None:
             copy = True
-        if inspect.isclass(dtype) and issubclass(
-            dtype, pd.api.extensions.ExtensionDtype
-        ):
-            msg = (
-                f"Expected an instance of {dtype.__name__}, "
-                "but got the class instead. Try instantiating 'dtype'."
-            )
-            raise TypeError(msg)
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:  # type: ignore[arg-type,operator]
                 raise KeyError(

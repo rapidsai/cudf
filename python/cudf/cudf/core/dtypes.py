@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import decimal
+import inspect
 import operator
 import textwrap
 import warnings
@@ -63,7 +64,14 @@ def dtype(arbitrary: Any) -> DtypeObj:
     #  first, check if `arbitrary` is one of our extension types:
     if isinstance(arbitrary, (_BaseDtype, pd.DatetimeTZDtype)):
         return arbitrary
-
+    if inspect.isclass(arbitrary) and issubclass(
+        arbitrary, pd.api.extensions.ExtensionDtype
+    ):
+        msg = (
+            f"Expected an instance of {arbitrary.__name__}, "
+            "but got the class instead. Try instantiating 'dtype'."
+        )
+        raise TypeError(msg)
     # next, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
