@@ -290,7 +290,7 @@ dependencies:
               # ibis 11 is the first version that supports duckdb 1.4.0
               - ibis-framework[duckdb]>=11.0.0
               - duckdb>=1.4.0
-              - # Exclude broken version: https://github.com/tobymao/sqlglot/issues/6908
+              # Exclude broken version: https://github.com/tobymao/sqlglot/issues/6908
               - sqlglot!=28.7.*
   test_hvplot:
     common:
