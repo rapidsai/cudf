@@ -900,6 +900,59 @@ def test_validate_stats_planning(option: str) -> None:
         )
 
 
+def test_validate_dynamic_planning() -> None:
+    with pytest.raises(TypeError, match="sample_chunk_count must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"sample_chunk_count": object()}},
+            )
+        )
+
+
+def test_dynamic_planning_sample_chunk_count_min() -> None:
+    with pytest.raises(ValueError, match="sample_chunk_count must be at least 1"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"sample_chunk_count": 0}},
+            )
+        )
+
+
+def test_dynamic_planning_defaults() -> None:
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    # Dynamic planning is disabled (None) by default
+    assert config.executor.dynamic_planning is None
+
+
+def test_dynamic_planning_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "1")
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__SAMPLE_CHUNK_COUNT", "3"
+    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    # When env var is set, dynamic_planning should be a DynamicPlanningOptions
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.sample_chunk_count == 3
+
+
+def test_dynamic_planning_from_instance() -> None:
+    from cudf_polars.utils.config import DynamicPlanningOptions
+
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"dynamic_planning": DynamicPlanningOptions()},
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.sample_chunk_count == 2  # default
+
+
 def test_parse_memory_resource_config() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(

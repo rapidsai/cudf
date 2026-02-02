@@ -24,7 +24,7 @@ from collections.abc import (
     Sequence,
 )
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self, assert_never
 
 import cupy
 import numba
@@ -34,7 +34,6 @@ import pyarrow as pa
 from nvtx import annotate
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
-from typing_extensions import Self, assert_never
 
 import pylibcudf as plc
 
@@ -437,7 +436,19 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
 
 class _DataFrameAtIndexer(_DataFrameLocIndexer):
-    pass
+    @_performance_tracking
+    def __getitem__(self, key):
+        indexing_utils.validate_scalar_key(
+            key, "Invalid call for scalar access (getting)!"
+        )
+        return super().__getitem__(key)
+
+    @_performance_tracking
+    def __setitem__(self, key, value):
+        indexing_utils.validate_scalar_key(
+            key, "Invalid call for scalar access (getting)!"
+        )
+        return super().__setitem__(key, value)
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
@@ -507,7 +518,19 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
 
 class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
-    pass
+    @_performance_tracking
+    def __getitem__(self, key):
+        indexing_utils.validate_scalar_key(
+            key, "iAt based indexing can only have integer indexers"
+        )
+        return super().__getitem__(key)
+
+    @_performance_tracking
+    def __setitem__(self, key, value):
+        indexing_utils.validate_scalar_key(
+            key, "iAt based indexing can only have integer indexers"
+        )
+        return super().__setitem__(key, value)
 
 
 @_performance_tracking
@@ -4355,9 +4378,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 plc.table.Table([col.plc_column for col in source_columns])
             )
             result_columns = (
-                ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                    source_dtype
-                )
+                ColumnBase.create(col, source_dtype)
                 for col in result_table.columns()
             )
 
@@ -6563,14 +6584,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 res._attrs = self._attrs
                 return res
+
+        def _apply_reduction(col, op, kwargs):
+            return getattr(col, op)(**kwargs)
+
         if (
             axis == 2
             and op in {"kurtosis", "skew"}
             and self._num_rows < 4
             and self._num_columns > 1
         ):
-            # Total number of elements may satisfy the min number of values
-            # to compute skew/kurtosis
             return getattr(concat_columns(source._columns), op)(**kwargs)
         elif axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
@@ -6578,8 +6601,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             axis_0_results = []
             for col_label, col in source._column_labels_and_values:
                 try:
-                    axis_0_results.append(getattr(col, op)(**kwargs))
-                except AttributeError as err:
+                    axis_0_results.append(_apply_reduction(col, op, kwargs))
+                except (AttributeError, ValueError) as err:
                     if numeric_only:
                         raise NotImplementedError(
                             f"Column {col_label} with type {col.dtype} does not support {op}"
@@ -6593,9 +6616,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     else:
                         raise
             if axis == 2:
-                return getattr(
-                    as_column(axis_0_results, nan_as_null=False), op
-                )(**kwargs)
+                return _apply_reduction(
+                    as_column(axis_0_results, nan_as_null=False), op, kwargs
+                )
             else:
                 source_dtypes = [dtype for _, dtype in source._dtypes]
                 # TODO: What happens if common_dtype is None?
@@ -7774,9 +7797,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     0,
                     list(children),
                 )
-            col = ColumnBase.from_pylibcudf(plc_column)._with_type_metadata(
-                dtype
-            )
+            col = ColumnBase.create(plc_column, dtype)
         return Series._from_column(
             col,
             index=self.index,

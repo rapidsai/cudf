@@ -15,7 +15,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
     from polars import polars  # type: ignore[attr-defined]
 

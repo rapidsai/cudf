@@ -9,6 +9,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -348,11 +349,11 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   // output is a list column with each row containing percentiles.size() percentile values
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const all_empty_rows =
-    thrust::count_if(rmm::exec_policy_nosync(stream),
-                     detail::size_begin(input),
-                     detail::size_begin(input) + input.size(),
-                     [] __device__(auto const x) { return x == 0; }) == input.size();
+  auto const all_empty_rows = cudf::detail::count_if(
+                                detail::size_begin(input),
+                                detail::size_begin(input) + input.size(),
+                                [] __device__(auto const x) { return x == 0; },
+                                stream) == static_cast<std::size_t>(input.size());
   auto row_size_iter = thrust::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          row_size_iter,

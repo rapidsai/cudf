@@ -19,7 +19,7 @@ authors = [
 ]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "confluent-kafka>=2.8.0,<2.9.0",
     "cudf==26.4.*,>=0.0.0a0",
@@ -32,7 +32,6 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Topic :: Apache Kafka",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -71,7 +70,7 @@ select = [
     "distro-too-large-compressed",
 ]
 
-# PyPI limit is 100 MiB, fail CI before we get too close to that
+# PyPI hard limit is 1GiB, but try to keep these as small as possible
 max_allowed_size_compressed = '75M'
 
 [tool.ruff]

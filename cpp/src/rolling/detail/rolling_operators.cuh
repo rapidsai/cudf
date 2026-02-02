@@ -19,6 +19,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -118,9 +119,9 @@ struct DeviceRollingArgMinMaxBase {
 
   static constexpr bool is_supported()
   {
-    // Right now only support ARGMIN/ARGMAX of strings and structs.
+    // Right now only support ARGMIN/ARGMAX for compound-types but not lists
     auto const type_supported =
-      std::is_same_v<InputType, cudf::string_view> || std::is_same_v<InputType, cudf::struct_view>;
+      cudf::is_compound<InputType>() && !std::is_same_v<InputType, cudf::list_view>;
     auto const op_supported = op == aggregation::Kind::ARGMIN || op == aggregation::Kind::ARGMAX;
 
     return type_supported && op_supported;
@@ -159,19 +160,8 @@ struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_vi
     for (size_type j = start_index; j < end_index; j++) {
       if (!has_nulls || input.is_valid(j)) {
         InputType element = input.element<InputType>(j);
-        // the agg_op is not being used here because of 13.1 compiler error
-        // documented here: https://nvbugspro.nvidia.com/bug/5790774
-        if constexpr (op == aggregation::ARGMIN) {
-          if (element < val) {
-            val_index = j;
-            val       = element;
-          }
-        } else {
-          if (element > val) {
-            val_index = j;
-            val       = element;
-          }
-        }
+        val               = agg_op(element, val);
+        if (val.data() == element.data()) { val_index = j; }
         count++;
       }
     }
@@ -225,6 +215,76 @@ struct DeviceRollingArgMinMaxStruct : DeviceRollingArgMinMaxBase<cudf::struct_vi
                                                     comp)
                                    : default_output;
 
+    // The gather mask shouldn't contain null values, so always return true.
+    return true;
+  }
+};
+
+/**
+ * @brief Operator for applying an ARGMAX/ARGMIN rolling aggregation on a single window for
+ * dictionary
+ */
+template <aggregation::Kind op>
+struct DeviceRollingArgMinMaxDictionary : DeviceRollingArgMinMaxBase<cudf::dictionary32, op> {
+  DeviceRollingArgMinMaxDictionary(size_type _min_periods)
+    : DeviceRollingArgMinMaxBase<cudf::dictionary32, op>(_min_periods)
+  {
+  }
+  using DeviceRollingArgMinMaxBase<cudf::dictionary32, op>::min_periods;
+
+  template <bool has_nulls>
+  struct keys_dispatch_fn {
+    template <typename T>
+      requires(cudf::is_relationally_comparable<T, T>() and not cudf::is_dictionary<T>())
+    size_type __device__ operator()(column_device_view const& dict,
+                                    size_type start_index,
+                                    size_type end_index,
+                                    size_type current_index)
+    {
+      using AggOp = typename corresponding_operator<op>::type;
+      AggOp agg_op;
+
+      auto keys  = dict.child(1);
+      auto count = size_type{0};
+      auto val   = AggOp::template identity<T>();
+      auto index = size_type{-1};
+      for (size_type j = start_index; j < end_index; j++) {
+        if (!has_nulls || dict.is_valid(j)) {
+          auto element = keys.element<T>(dict.element<dictionary32>(j).value());
+          val          = agg_op(element, val);
+          if (val == element) { index = j; }
+          count++;
+        }
+      }
+      return count >= min_periods ? index : -1;
+    }
+    template <typename T>
+      requires(!cudf::is_relationally_comparable<T, T>() or cudf::is_dictionary<T>())
+    size_type __device__ operator()(column_device_view const&, size_type, size_type, size_type)
+    {
+      CUDF_UNREACHABLE("invalid dictionary key");
+    }
+
+    size_type min_periods;
+  };
+
+  template <typename OutputType, bool has_nulls>
+  bool __device__ operator()(column_device_view const& input,
+                             column_device_view const&,
+                             mutable_column_device_view& output,
+                             size_type start_index,
+                             size_type end_index,
+                             size_type current_index)
+  {
+    auto keys_type = input.child(1).type();
+    auto index     = type_dispatcher<dispatch_storage_type>(keys_type,
+                                                        keys_dispatch_fn<has_nulls>{min_periods},
+                                                        input,
+                                                        start_index,
+                                                        end_index,
+                                                        current_index);
+
+    output.element<OutputType>(current_index) = index;
     // The gather mask shouldn't contain null values, so always return true.
     return true;
   }
@@ -452,7 +512,7 @@ struct DeviceRollingLead {
   template <typename T = InputType, aggregation::Kind O = aggregation::LEAD>
   static constexpr bool is_supported()
   {
-    return cudf::is_fixed_width<T>();
+    return cudf::is_fixed_width<T>() || cudf::is_dictionary<T>();
   }
 
   template <typename T = InputType>
@@ -494,8 +554,12 @@ struct DeviceRollingLead {
     auto index   = current_index + row_offset;
     auto is_null = input.is_null(index);
     if (!is_null) {
-      output.element<OutputType>(current_index) =
-        input.element<device_storage_type_t<InputType>>(index);
+      if constexpr (cudf::is_dictionary<InputType>()) {
+        output.element<OutputType>(current_index) = input.element<dictionary32>(index).value();
+      } else {
+        output.element<OutputType>(current_index) =
+          input.element<device_storage_type_t<InputType>>(index);
+      }
     }
     return !is_null;
   }
@@ -512,7 +576,7 @@ struct DeviceRollingLag {
   template <typename T = InputType, aggregation::Kind O = aggregation::LAG>
   static constexpr bool is_supported()
   {
-    return cudf::is_fixed_width<T>();
+    return cudf::is_fixed_width<T>() || cudf::is_dictionary<T>();
   }
 
   template <typename T = InputType>
@@ -554,8 +618,12 @@ struct DeviceRollingLag {
     auto index   = current_index - row_offset;
     auto is_null = input.is_null(index);
     if (!is_null) {
-      output.element<OutputType>(current_index) =
-        input.element<device_storage_type_t<InputType>>(index);
+      if constexpr (cudf::is_dictionary<InputType>()) {
+        output.element<OutputType>(current_index) = input.element<dictionary32>(index).value();
+      } else {
+        output.element<OutputType>(current_index) =
+          input.element<device_storage_type_t<InputType>>(index);
+      }
     }
     return !is_null;
   }
@@ -675,6 +743,16 @@ struct create_rolling_operator<
   auto operator()(size_type min_periods, rolling_aggregation const&)
   {
     return DeviceRollingArgMinMaxString<k>{min_periods};
+  }
+};
+
+template <typename InputType, aggregation::Kind k>
+  requires(std::is_same_v<InputType, cudf::dictionary32> &&
+           (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX))
+struct create_rolling_operator<InputType, k> {
+  auto operator()(size_type min_periods, rolling_aggregation const&)
+  {
+    return DeviceRollingArgMinMaxDictionary<k>{min_periods};
   }
 };
 
