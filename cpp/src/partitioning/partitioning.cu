@@ -474,8 +474,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     use_optimization ? OPTIMIZED_ROWS_PER_THREAD : FALLBACK_ROWS_PER_THREAD;
   auto const rows_per_block = block_size * rows_per_thread;
 
-  // NOTE grid_size is non-const to workaround lambda capture bug in gcc 5.4
-  auto grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
+  std::size_t const grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
 
   // Allocate array to hold which partition each row belongs to
   auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
