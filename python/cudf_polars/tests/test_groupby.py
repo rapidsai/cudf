@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -15,7 +15,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132, POLARS_VERSION_LT_1321, POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_1321,
+)
 
 
 @pytest.fixture
@@ -361,7 +365,9 @@ def test_groupby_sum_all_null_group_returns_null():
     ],
     ids=["sum", "mean", "median", "quantile-0.5"],
 )
-def test_groupby_aggs_keep_unsupported_as_null(request, df: pl.LazyFrame, agg_expr) -> None:
+def test_groupby_aggs_keep_unsupported_as_null(
+    request, df: pl.LazyFrame, agg_expr
+) -> None:
     request.applymarker(
         pytest.mark.xfail(
             condition="sum" in str(agg_expr) and not POLARS_VERSION_LT_136,
