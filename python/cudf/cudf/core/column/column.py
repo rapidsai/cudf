@@ -1128,8 +1128,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @staticmethod
     def _plc_memory_usage(col: plc.Column) -> int:
         n = 0
-        if (data := col.data()) is not None:
-            n += cast("Buffer", data).size
+        if col.data() is not None:
+            # Only count the actual data in use, not the entire base buffer
+            # For sliced columns, col.size() * itemsize gives actual usage
+            typestr: str = col.type().typestr  # type: ignore[assignment]
+            itemsize = np.dtype(typestr).itemsize
+            n += col.size() * itemsize
         if col.null_mask() is not None:
             n += plc.null_mask.bitmask_allocation_size_bytes(col.size())
         for child in col.children():
