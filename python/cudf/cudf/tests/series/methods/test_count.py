@@ -22,9 +22,17 @@ def test_series_dataframe_count_float():
     assert_eq(ps.count(), gs.count())
     assert_eq(ps.to_frame().count(), gs.to_frame().count())
 
-    # TODO: Enable once pandas nullable dtypes are supported in cudf-classic mode
-    # assert_eq(gs.count(), gs.to_pandas(nullable=True).count())
-    # assert_eq(
-    #     gs.to_frame().count(),
-    #     gs.to_frame().to_pandas(nullable=True).count(),
-    # )
+
+@pytest.mark.xfail(
+    reason="Fails until pandas nullable dtypes are supported in cudf-classic mode"
+)
+def test_series_dataframe_count_nullable_int():
+    gs = cudf.Series(
+        [1, 2, 3, None, np.nan, 10], dtype="Float64", nan_as_null=False
+    )
+
+    assert_eq(gs.count(), gs.to_pandas(nullable=True).count())
+    assert_eq(
+        gs.to_frame().count(),
+        gs.to_frame().to_pandas(nullable=True).count(),
+    )
