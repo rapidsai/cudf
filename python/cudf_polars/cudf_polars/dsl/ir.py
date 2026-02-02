@@ -343,7 +343,7 @@ def _parquet_physical_types(
         plc.io.SourceInfo(paths)
     ).build()
     if columns is not None:
-        options.set_columns(columns)
+        options.set_column_names(columns)
     options.set_num_rows(0)
     df = plc.io.parquet.read_parquet(options, stream=stream)
     return dict(zip(schema.keys(), [c.type() for c in df.tbl.columns()], strict=True))
