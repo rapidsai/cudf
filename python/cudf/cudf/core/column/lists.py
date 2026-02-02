@@ -44,13 +44,7 @@ class ListColumn(ColumnBase):
         cls, plc_column: plc.Column, dtype: ListDtype
     ) -> tuple[plc.Column, ListDtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, ListDtype)
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_list(dtype)
-        ):
+        if not is_dtype_obj_list(dtype):
             raise ValueError("dtype must be a cudf.ListDtype")
 
         child = plc_column.list_view().child()
@@ -277,10 +271,7 @@ class ListColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
-        ):
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")

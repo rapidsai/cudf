@@ -2934,13 +2934,21 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         )
 
     def idxmin(
-        self, skipna: bool = True, numeric_only: bool = False
+        self,
+        skipna: bool = True,
+        min_count: int = 0,
+        numeric_only: bool = False,
+        **kwargs: Any,
     ) -> DataFrame:
         result = self._reduce("idxmin", numeric_only=numeric_only)
         return self._wrap_idxmin_idxmax(result, skipna=skipna)
 
     def idxmax(
-        self, skipna: bool = True, numeric_only: bool = False
+        self,
+        skipna: bool = True,
+        min_count: int = 0,
+        numeric_only: bool = False,
+        **kwargs: Any,
     ) -> DataFrame:
         result = self._reduce("idxmax", numeric_only=numeric_only)
         return self._wrap_idxmin_idxmax(result, skipna=skipna)
@@ -3246,11 +3254,15 @@ class SeriesGroupBy(GroupBy):
 
         return result
 
-    def idxmin(self, skipna: bool = True) -> Series:
+    def idxmin(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> Series:
         result = self._reduce("idxmin")
         return self._wrap_idxmin_idxmax(result, skipna=skipna)
 
-    def idxmax(self, skipna: bool = True) -> Series:
+    def idxmax(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> Series:
         result = self._reduce("idxmax")
         return self._wrap_idxmin_idxmax(result, skipna=skipna)
 

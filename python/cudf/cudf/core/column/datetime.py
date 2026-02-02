@@ -27,6 +27,7 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
+    DEFAULT_STRING_DTYPE,
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
@@ -112,38 +113,6 @@ class DatetimeColumn(TemporalBaseColumn):
         ):
             raise ValueError(f"dtype must be a datetime, got {dtype}")
         return plc_column, dtype
-
-    def _clear_cache(self) -> None:
-        super()._clear_cache()
-        attrs = (
-            "days_in_month",
-            "is_year_start",
-            "is_leap_year",
-            "is_year_end",
-            "is_quarter_start",
-            "is_quarter_end",
-            "is_month_start",
-            "is_month_end",
-            "day_of_year",
-            "weekday",
-            "nanosecond",
-            "microsecond",
-            "millisecond",
-            "second",
-            "minute",
-            "hour",
-            "day",
-            "month",
-            "year",
-            "quarter",
-            "time_unit",
-        )
-        for attr in attrs:
-            try:
-                delattr(self, attr)
-            except AttributeError:
-                # attr was not called yet, so ignore.
-                pass
 
     def _reduce(
         self,
@@ -421,7 +390,9 @@ class DatetimeColumn(TemporalBaseColumn):
 
     def isocalendar(self) -> dict[str, ColumnBase]:
         return {
-            field: self.strftime(format=directive).astype(np.dtype(np.uint32))
+            field: self.strftime(
+                format=directive, dtype=DEFAULT_STRING_DTYPE
+            ).astype(np.dtype(np.uint32))
             for field, directive in zip(
                 ["year", "week", "day"], ["%G", "%V", "%u"], strict=True
             )
@@ -493,9 +464,9 @@ class DatetimeColumn(TemporalBaseColumn):
             ]
         )
 
-    def strftime(self, format: str) -> StringColumn:
+    def strftime(self, format: str, dtype: DtypeObj) -> StringColumn:
         if len(self) == 0:
-            return super().strftime(format)
+            return super().strftime(format, dtype)
         if re.search("%[aAbB]", format):
             names = self._strftime_names
         else:
@@ -505,12 +476,13 @@ class DatetimeColumn(TemporalBaseColumn):
         with self.access(mode="read", scope="internal"):
             return cast(
                 cudf.core.column.string.StringColumn,
-                type(self).from_pylibcudf(
+                ColumnBase.create(
                     plc.strings.convert.convert_datetime.from_timestamps(
                         self.plc_column,
                         format,
                         names,
-                    )
+                    ),
+                    dtype,
                 ),
             )
 
@@ -553,7 +525,7 @@ class DatetimeColumn(TemporalBaseColumn):
                     format = format.split(" ")[0]
             elif not (has_seconds or has_minutes or has_hours):
                 format = format.split(" ")[0]
-        return self.strftime(format)
+        return self.strftime(format, dtype)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
@@ -796,13 +768,6 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
-    def _clear_cache(self) -> None:
-        super()._clear_cache()
-        try:
-            del self._local_time
-        except AttributeError:
-            pass
-
     @classmethod
     def _validate_args(
         cls, plc_column: plc.Column, dtype: pd.DatetimeTZDtype

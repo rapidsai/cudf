@@ -675,14 +675,8 @@ def is_dtype_obj_list(obj):
     bool
         Whether or not the array-like or dtype is of the list dtype.
     """
-    return (
-        type(obj) is cudf.ListDtype
-        or obj is cudf.ListDtype
-        or (isinstance(obj, str) and obj == cudf.ListDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_list(obj.pyarrow_dtype)
-        )
+    return type(obj) is cudf.ListDtype or (
+        isinstance(obj, pd.ArrowDtype) and pa.types.is_list(obj.pyarrow_dtype)
     )
 
 
@@ -704,32 +698,22 @@ def is_dtype_obj_struct(obj):
     # IntervalDtype(int)) will return True. For now this is not being changed
     # since the interval dtype is being modified as part of the array refactor,
     # but this behavior should be made consistent afterwards.
-    return (
-        isinstance(obj, cudf.StructDtype)
-        or obj is cudf.StructDtype
-        or (isinstance(obj, str) and obj == cudf.StructDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_struct(obj.pyarrow_dtype)
-        )
+    return isinstance(obj, cudf.StructDtype) or (
+        isinstance(obj, pd.ArrowDtype)
+        and pa.types.is_struct(obj.pyarrow_dtype)
     )
 
 
 def is_dtype_obj_interval(obj):
-    return (
-        isinstance(
-            obj,
-            (
-                cudf.IntervalDtype,
-                pd.IntervalDtype,
-            ),
-        )
-        or obj is cudf.IntervalDtype
-        or (isinstance(obj, str) and obj == cudf.IntervalDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_interval(obj.pyarrow_dtype)
-        )
+    return isinstance(
+        obj,
+        (
+            cudf.IntervalDtype,
+            pd.IntervalDtype,
+        ),
+    ) or (
+        isinstance(obj, pd.ArrowDtype)
+        and pa.types.is_interval(obj.pyarrow_dtype)
     )
 
 

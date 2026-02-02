@@ -20,7 +20,6 @@ from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    DEFAULT_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
@@ -271,9 +270,9 @@ class TemporalBaseColumn(ColumnBase, Scannable):
     def round(self, freq: str) -> ColumnBase:
         raise NotImplementedError("round is currently not implemented")
 
-    def strftime(self, format: str) -> StringColumn:
+    def strftime(self, format: str, dtype: DtypeObj) -> StringColumn:
         if len(self) == 0:
-            return column_empty(0, dtype=DEFAULT_STRING_DTYPE)  # type:ignore[return-value]
+            return column_empty(0, dtype=dtype)  # type:ignore[return-value]
         else:
             raise NotImplementedError("strftime is currently not implemented")
 

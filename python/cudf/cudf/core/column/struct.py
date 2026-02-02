@@ -55,13 +55,7 @@ class StructColumn(ColumnBase):
         cls, plc_column: plc.Column, dtype: StructDtype
     ) -> tuple[plc.Column, StructDtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, StructDtype)
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_struct(dtype)
-        ):
+        if not is_dtype_obj_struct(dtype):
             raise ValueError(f"{type(dtype).__name__} must be a StructDtype.")
 
         # Check field count
@@ -112,14 +106,7 @@ class StructColumn(ColumnBase):
     ) -> pd.Index:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
-        if (
-            arrow_type
-            or nullable
-            or (
-                cudf.get_option("mode.pandas_compatible")
-                and isinstance(self.dtype, pd.ArrowDtype)
-            )
-        ):
+        if arrow_type or nullable or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
