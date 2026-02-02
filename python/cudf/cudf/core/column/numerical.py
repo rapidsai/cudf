@@ -550,7 +550,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
             return cast(
                 cudf.core.column.string.StringColumn,
-                type(self).from_pylibcudf(plc_column),
+                ColumnBase.create(plc_column, CUDF_STRING_DTYPE),
             )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
@@ -592,9 +592,7 @@ class NumericalColumn(NumericalBaseColumn):
         with col.access(mode="read", scope="internal"):
             return cast(
                 cudf.core.column.string.StringColumn,
-                type(self)
-                .from_pylibcudf(conv_func(col.plc_column))
-                ._with_type_metadata(dtype),
+                ColumnBase.create(conv_func(col.plc_column), dtype),
             )
 
     def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
@@ -1052,7 +1050,7 @@ class NumericalColumn(NumericalBaseColumn):
         ):
             return cast(
                 Self,
-                type(self).from_pylibcudf(
+                ColumnBase.create(
                     getattr(
                         plc.search, "lower_bound" if right else "upper_bound"
                     )(
@@ -1060,7 +1058,8 @@ class NumericalColumn(NumericalBaseColumn):
                         plc.Table([self.plc_column]),
                         [plc.types.Order.ASCENDING],
                         [plc.types.NullOrder.BEFORE],
-                    )
+                    ),
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
                 ),
             )
 
