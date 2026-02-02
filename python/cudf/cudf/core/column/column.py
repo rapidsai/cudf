@@ -2273,8 +2273,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # Serialize dtype
         try:
             header["dtype"], dtype_frames = (
-                col_to_serialize.dtype.device_serialize()
-            )  # type: ignore[union-attr]
+                col_to_serialize.dtype.device_serialize()  # type: ignore[union-attr]
+            )
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
