@@ -6698,11 +6698,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                             res_dtype = common_dtype
                     if op in {"any", "all"}:
                         res_dtype = np.dtype(np.bool_)
-                    res = res.nans_to_nulls()
-                    new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
-                    res = res.astype(new_dtype)
+                res = res.nans_to_nulls()
+                new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
+                res = res.astype(new_dtype)
 
-                return Series._from_column(res, index=idx, attrs=self.attrs)
+            return Series._from_column(res, index=idx, attrs=self.attrs)
 
     @_performance_tracking
     def _scan(
