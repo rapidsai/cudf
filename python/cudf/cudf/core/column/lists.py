@@ -406,6 +406,7 @@ class ListColumn(ColumnBase):
         separator: str | StringColumn,
         sep_na_rep: str,
         string_na_rep: str,
+        result_dtype: DtypeObj,
     ) -> StringColumn:
         with self.access(mode="read", scope="internal"):
             if isinstance(separator, str):
@@ -424,7 +425,7 @@ class ListColumn(ColumnBase):
             )
             return cast(
                 "cudf.core.column.string.StringColumn",
-                type(self).from_pylibcudf(plc_column),
+                ColumnBase.create(plc_column, result_dtype),
             )
 
     def minhash_ngrams(

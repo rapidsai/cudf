@@ -517,17 +517,21 @@ class StringMethods(BaseAccessor):
 
         if isinstance(self._column.dtype, ListDtype):
             list_column = self._column
+            result_dtype = cast("ListDtype", list_column.dtype).element_type
         else:
             # If self._column is not a ListColumn, we will have to
             # split each row by character and create a ListColumn out of it.
             list_column = self._column.fillna("").character_tokenize()
+            result_dtype = cast("ListDtype", list_column.dtype).element_type
             if len(list_column) == 0:
                 list_column = column_empty(  # type: ignore[assignment]
                     len(self._column), dtype=list_column.dtype
                 )
 
         if is_scalar(sep):
-            data = list_column.join_list_elements(sep, string_na_rep, "")  # type: ignore[attr-defined]
+            data = list_column.join_list_elements(  # type: ignore[attr-defined]
+                sep, string_na_rep, "", result_dtype
+            )
         elif can_convert_to_column(sep):
             sep_column = as_column(sep)
             if len(sep_column) != len(list_column):
@@ -544,6 +548,7 @@ class StringMethods(BaseAccessor):
                 sep_column,
                 sep_na_rep,
                 string_na_rep,
+                result_dtype,
             )
         else:
             raise TypeError(
@@ -551,9 +556,7 @@ class StringMethods(BaseAccessor):
                 f"found {type(sep)}"
             )
 
-        return self._return_or_inplace(
-            data._with_type_metadata(self._column.dtype)
-        )
+        return self._return_or_inplace(data)
 
     def extract(
         self, pat: str, flags: int = 0, expand: bool = True
