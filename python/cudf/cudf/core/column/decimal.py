@@ -76,11 +76,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         cls, plc_column: plc.Column, dtype: DecimalDtype
     ) -> tuple[plc.Column, DecimalDtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if (
-            not isinstance(dtype, cls._decimal_cls)  # type: ignore[attr-defined]
-        ) or (
-            not cls._decimal_check(dtype)  # type: ignore[attr-defined]
-        ):
+        if not cls._decimal_check(dtype):  # type: ignore[attr-defined]
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
         return plc_column, dtype
 
@@ -205,7 +201,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return self._binaryop(other, "__rdiv__")
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        import pdb;pdb.set_trace()
         reflect, op = self._check_reflected_op(op)
 
         # Inline _normalize_binop_operand functionality
@@ -299,15 +294,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 if isinstance(rhs, (int, Decimal))
                 else rhs
             )
-            result = binaryop.binaryop(
+            return binaryop.binaryop(
                 lhs_comp,
                 rhs_comp,
                 op,
                 get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
             )
-            if not isinstance(self.dtype, pd.ArrowDtype):
-                result = result.fillna(op == "__ne__")
-            return result
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "
