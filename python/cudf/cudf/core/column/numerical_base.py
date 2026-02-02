@@ -170,7 +170,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 )
                 result = cast(
                     cudf.core.column.numerical_base.NumericalBaseColumn,
-                    type(self).from_pylibcudf(plc_column),
+                    ColumnBase.create(plc_column, self.dtype),
                 )
         if return_scalar:
             scalar_result = result.element_indexing(0)
@@ -249,8 +249,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         with self.access(mode="read", scope="internal"):
             return cast(
                 cudf.core.column.numerical_base.NumericalBaseColumn,
-                type(self).from_pylibcudf(
-                    plc.round.round(self.plc_column, decimals, plc_how)
+                ColumnBase.create(
+                    plc.round.round(self.plc_column, decimals, plc_how),
+                    self.dtype,
                 ),
             )
 
