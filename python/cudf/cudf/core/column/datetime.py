@@ -28,12 +28,12 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
-    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _EQUALITY_OPS, is_na_like
@@ -148,8 +148,9 @@ class DatetimeColumn(TemporalBaseColumn):
     @functools.cached_property
     def quarter(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.datetime.extract_quarter(self.plc_column)
+            return ColumnBase.create(
+                plc.datetime.extract_quarter(self.plc_column),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
             )
 
     @functools.cached_property
@@ -198,8 +199,9 @@ class DatetimeColumn(TemporalBaseColumn):
     @functools.cached_property
     def day_of_year(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.datetime.day_of_year(self.plc_column)
+            return ColumnBase.create(
+                plc.datetime.day_of_year(self.plc_column),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
             )
 
     @functools.cached_property
@@ -209,8 +211,9 @@ class DatetimeColumn(TemporalBaseColumn):
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            last_day_col = type(self).from_pylibcudf(
-                plc.datetime.last_day_of_month(self.plc_column)
+            last_day_col = ColumnBase.create(
+                plc.datetime.last_day_of_month(self.plc_column),
+                self.dtype,
             )
         return (self.day == cast("Self", last_day_col).day).fillna(False)
 
@@ -236,8 +239,9 @@ class DatetimeColumn(TemporalBaseColumn):
     @functools.cached_property
     def is_leap_year(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.datetime.is_leap_year(self.plc_column)
+            return ColumnBase.create(
+                plc.datetime.is_leap_year(self.plc_column),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
             )
 
     @functools.cached_property
@@ -246,17 +250,11 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def days_in_month(self) -> ColumnBase:
-        res = ColumnBase.create(
-            plc.datetime.days_in_month(self.plc_column), np.dtype("int16")
-        )
-        if is_pandas_nullable_extension_dtype(self.dtype):
-            res = res.astype(
-                get_dtype_of_same_kind(
-                    self.dtype,
-                    np.dtype("int64"),
-                ),
+        with self.access(mode="read", scope="internal"):
+            return ColumnBase.create(
+                plc.datetime.days_in_month(self.plc_column),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
             )
-        return res
 
     @functools.cached_property
     def day_of_week(self) -> ColumnBase:
@@ -314,13 +312,16 @@ class DatetimeColumn(TemporalBaseColumn):
         self, field: plc.datetime.DatetimeComponent
     ) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            result = type(self).from_pylibcudf(
+            result = ColumnBase.create(
                 plc.datetime.extract_datetime_component(
                     self.plc_column,
                     field,
-                )
+                ),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
             )
-            if result.dtype == np.dtype("int16"):
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and result.dtype == np.dtype("int16"):
                 result = result.astype(np.dtype("int32"))
             return result
 
@@ -389,11 +390,12 @@ class DatetimeColumn(TemporalBaseColumn):
             raise ValueError(f"Invalid resolution: '{freq}'")
 
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.create(
                 round_func(
                     self.plc_column,
                     plc_freq,
-                )
+                ),
+                self.dtype,
             )
 
     def ceil(self, freq: str) -> ColumnBase:
@@ -491,12 +493,13 @@ class DatetimeColumn(TemporalBaseColumn):
         with self.access(mode="read", scope="internal"):
             return cast(
                 cudf.core.column.string.StringColumn,
-                type(self).from_pylibcudf(
+                ColumnBase.create(
                     plc.strings.convert.convert_datetime.from_timestamps(
                         self.plc_column,
                         format,
                         names,
-                    )
+                    ),
+                    CUDF_STRING_DTYPE,
                 ),
             )
 
@@ -864,12 +867,18 @@ class DatetimeTZColumn(DatetimeColumn):
         with self._local_time.access(
             mode="read", scope="internal"
         ) as local_time:
-            return type(self).from_pylibcudf(
+            result = ColumnBase.create(
                 plc.datetime.extract_datetime_component(
                     local_time.plc_column,
                     field,
-                )
+                ),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
             )
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and result.dtype == np.dtype("int16"):
+                result = result.astype(np.dtype("int32"))
+            return result
 
     def __repr__(self) -> str:
         # Arrow prints the UTC timestamps, but we want to print the
