@@ -27,9 +27,9 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace dictionary {
@@ -42,33 +42,26 @@ struct create_indices_map_fn {
   Iterator d_begin;
   Iterator d_end;
   cudf::size_type const* d_indices;
-  cudf::size_type* d_map;
 
-  __device__ void operator()(size_type idx)
+  __device__ size_type operator()(size_type idx)
   {
     auto const key = d_old_keys.element<T>(idx);
     auto const itr = thrust::lower_bound(thrust::seq, d_begin, d_end, key);
-    auto const nidx =
-      (itr != d_end && key == *itr) ? d_indices[cuda::std::distance(d_begin, itr)] : -1;
-    d_map[idx] = nidx;
+    return (itr != d_end && key == *itr) ? d_indices[cuda::std::distance(d_begin, itr)] : -1;
   }
 };
 
 struct apply_indices_map_fn {
   cudf::column_device_view d_input;
   cudf::size_type const* d_map;
-  cudf::detail::output_indexalator d_output;
 
-  __device__ void operator()(cudf::size_type idx)
+  __device__ size_type operator()(cudf::size_type idx)
   {
-    if (d_input.is_null(idx)) {
-      d_output[idx] = -1;
-      return;
-    }
+    if (d_input.is_null(idx)) { return -1; }
     auto const indices = d_input.child(cudf::dictionary_column_view::indices_column_index);
     auto const indices_itr =
       cudf::detail::input_indexalator(indices.head(), indices.type(), d_input.offset());
-    d_output[idx] = d_map[indices_itr[idx]];
+    return d_map[indices_itr[idx]];
   }
 };
 
@@ -95,22 +88,22 @@ struct set_keys_dispatch_fn {
     // create a map from the old key indices to the new ones
     auto indices_map = rmm::device_uvector<size_type>(old_keys.size(), stream);
     create_indices_map_fn<T, decltype(keys_itr)> map_fn{
-      *d_old_keys, keys_itr, keys_itr + new_keys.size(), d_sorted_indices, indices_map.data()};
-    thrust::for_each(rmm::exec_policy_nosync(stream), zero, zero + old_keys.size(), map_fn);
+      *d_old_keys, keys_itr, keys_itr + new_keys.size(), d_sorted_indices};
+    thrust::transform(
+      rmm::exec_policy_nosync(stream), zero, zero + old_keys.size(), indices_map.begin(), map_fn);
 
-    // build the indices column using the same type as the input
+    // map the old indices to the new set
     auto indices_column = cudf::make_numeric_column(
       input.indices().type(), input.size(), cudf::mask_state::UNALLOCATED, stream, mr);
     auto d_new_indices =
       cudf::detail::indexalator_factory::make_output_iterator(indices_column->mutable_view());
-
-    // map the old indices to the new set
     auto d_input = cudf::column_device_view::create(input.parent(), stream);
-    apply_indices_map_fn apply_fn{*d_input, indices_map.data(), d_new_indices};
-    thrust::for_each(rmm::exec_policy_nosync(stream), zero, zero + input.size(), apply_fn);
-    auto d_indices = cudf::detail::indexalator_factory::make_input_iterator(indices_column->view());
+    apply_indices_map_fn apply_fn{*d_input, indices_map.data()};
+    thrust::transform(
+      rmm::exec_policy_nosync(stream), zero, zero + input.size(), d_new_indices, apply_fn);
 
     // compute the nulls (any indices < 0)
+    auto d_indices = cudf::detail::indexalator_factory::make_input_iterator(indices_column->view());
     auto [null_mask, null_count] = cudf::detail::valid_if(
       zero,
       zero + input.size(),
