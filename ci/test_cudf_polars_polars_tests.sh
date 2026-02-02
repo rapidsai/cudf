@@ -4,6 +4,8 @@
 
 set -euo pipefail
 
+RAPIDS_INIT_PIP_REMOVE_NVIDIA_INDEX="true"
+export RAPIDS_INIT_PIP_REMOVE_NVIDIA_INDEX
 source rapids-init-pip
 
 rapids-logger "Download wheels"
@@ -47,6 +49,12 @@ sed -i '/PydanticDeprecatedSince212/a \    warnings.simplefilter("ignore", Depre
 # https://github.com/pola-rs/polars/issues/25772
 # Remove upper bound on aiosqlite once we support polars >1.36.1
 sed -i 's/^aiosqlite/aiosqlite>=0.21.0,<0.22.0/' polars/py-polars/requirements-dev.txt
+
+# Remove upper bound on pandas once we support 3.0.0+
+sed -i 's/^pandas$/pandas>=2.0,<2.4.0/' polars/py-polars/requirements-dev.txt
+
+# Remove upper bound on pandas-stubs once we support 3.0.0+
+sed -i 's/^pandas-stubs/pandas-stubs<3/' polars/py-polars/requirements-dev.txt
 
 # Pyparsing release 3.3.0 deprecates the enablePackrat method, which is used by the
 # version of pyiceberg that polars is currently pinned to. We can remove this skip

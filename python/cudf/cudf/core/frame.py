@@ -7,13 +7,12 @@ import itertools
 import operator
 import warnings
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -605,8 +604,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             array = get_array(col)
 
             if (
-                cudf.get_option("mode.pandas_compatible")
-                and is_pandas_nullable_extension_dtype(col.dtype)
+                is_pandas_nullable_extension_dtype(col.dtype)
                 and col.dtype.kind in "iuf"
                 and to_dtype is None
             ):
@@ -1465,8 +1463,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 na_position=itertools.repeat(na_position, times=len(sources)),
             )
         )
-        if cudf.get_option("mode.pandas_compatible"):
-            outcol = outcol.astype(np.dtype("int64"))
+        outcol = outcol.astype(np.dtype("int64"))
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.

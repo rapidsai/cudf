@@ -9,7 +9,7 @@ import locale
 import re
 import warnings
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -39,8 +39,7 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -114,45 +113,26 @@ class DatetimeColumn(TemporalBaseColumn):
             raise ValueError(f"dtype must be a datetime, got {dtype}")
         return plc_column, dtype
 
-    def _clear_cache(self) -> None:
-        super()._clear_cache()
-        attrs = (
-            "days_in_month",
-            "is_year_start",
-            "is_leap_year",
-            "is_year_end",
-            "is_quarter_start",
-            "is_quarter_end",
-            "is_month_start",
-            "is_month_end",
-            "day_of_year",
-            "weekday",
-            "nanosecond",
-            "microsecond",
-            "millisecond",
-            "second",
-            "minute",
-            "hour",
-            "day",
-            "month",
-            "year",
-            "quarter",
-            "time_unit",
-        )
-        for attr in attrs:
-            try:
-                delattr(self, attr)
-            except AttributeError:
-                # attr was not called yet, so ignore.
-                pass
-
-    def _scan(self, op: str) -> ColumnBase:
-        if op not in {"cummin", "cummax"}:
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        # Pandas raises TypeError for certain unsupported datetime reductions
+        if op in {"sum", "product"}:
             raise TypeError(
-                f"Accumulation {op} not supported for {self.dtype}"
+                f"'{type(self).__name__}' with dtype {self.dtype} "
+                f"does not support reduction '{op}'"
             )
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
+        if op == "var":
+            raise TypeError(
+                f"'{type(self).__name__}' with dtype {self.dtype} "
+                f"does not support reduction '{op}'"
+            )
+        return super()._reduce(
+            op, skipna=skipna, min_count=min_count, **kwargs
         )
 
     def __contains__(self, item: ScalarLike) -> bool:
@@ -330,12 +310,17 @@ class DatetimeColumn(TemporalBaseColumn):
         self, field: plc.datetime.DatetimeComponent
     ) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            result = type(self).from_pylibcudf(
                 plc.datetime.extract_datetime_component(
                     self.plc_column,
                     field,
                 )
             )
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and result.dtype == np.dtype("int16"):
+                result = result.astype(np.dtype("int32"))
+            return result
 
     def _get_field_names(
         self,
@@ -372,7 +357,7 @@ class DatetimeColumn(TemporalBaseColumn):
         ],
         freq: str,
     ) -> ColumnBase:
-        # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
+        # https://pandas.pydata.org/pandas-docs/version/2.3.3/reference/api/pandas.Timedelta.resolution_string.html
         old_to_new_freq_map = {
             "H": "h",
             "N": "ns",
@@ -783,13 +768,6 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
-    def _clear_cache(self) -> None:
-        super()._clear_cache()
-        try:
-            del self._local_time
-        except AttributeError:
-            pass
-
     @classmethod
     def _validate_args(
         cls, plc_column: plc.Column, dtype: pd.DatetimeTZDtype
@@ -917,7 +895,11 @@ class DatetimeTZColumn(DatetimeColumn):
             return self._utc_time
         elif tz == str(self.dtype.tz):  # type: ignore[union-attr]
             return self.copy()
+
         utc_time = self._utc_time
-        return utc_time._with_type_metadata(
-            pd.DatetimeTZDtype(self.time_unit, tz)
+        return cast(
+            DatetimeColumn,
+            ColumnBase.create(
+                utc_time.plc_column, pd.DatetimeTZDtype(utc_time.time_unit, tz)
+            ),
         )

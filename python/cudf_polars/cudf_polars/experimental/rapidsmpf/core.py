@@ -13,6 +13,7 @@ from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
+from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
@@ -94,7 +95,7 @@ def evaluate_logical_plan(
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
     # Reserve shuffle IDs for the entire pipeline execution
-    with ReserveOpIDs(ir) as shuffle_id_map:
+    with ReserveOpIDs(ir) as collective_id_map:
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
         # for cluster == "distributed".
@@ -112,7 +113,7 @@ def evaluate_logical_plan(
                 partition_info,
                 config_options,
                 stats,
-                shuffle_id_map,
+                collective_id_map,
                 collect_metadata=collect_metadata,
             )
         else:
@@ -122,7 +123,7 @@ def evaluate_logical_plan(
                 partition_info,
                 config_options,
                 stats,
-                shuffle_id_map,
+                collective_id_map,
                 collect_metadata=collect_metadata,
             )
 
@@ -134,7 +135,7 @@ def evaluate_pipeline(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
-    collective_id_map: dict[IR, int],
+    collective_id_map: dict[IR, list[int]],
     rmpf_context: Context | None = None,
     *,
     collect_metadata: bool = False,
@@ -153,7 +154,7 @@ def evaluate_pipeline(
     stats
         The statistics collector.
     collective_id_map
-        The mapping of IR nodes to collective IDs.
+        The mapping of IR nodes to lists of collective IDs.
     rmpf_context
         The RapidsMPF context.
     collect_metadata
@@ -201,11 +202,19 @@ def evaluate_pipeline(
             }
             | get_environment_variables()
         )
+        pinned_mr = (
+            PinnedMemoryResource.make_if_available()
+            if config_options.executor.spill_to_pinned_memory
+            else None
+        )
         if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
             stream_pool = config_options.cuda_stream_policy.build()
         local_comm = new_communicator(options)
         br = BufferResource(
-            mr, memory_available=memory_available, stream_pool=stream_pool
+            mr,
+            pinned_mr=pinned_mr,
+            memory_available=memory_available,
+            stream_pool=stream_pool,
         )
         rmpf_context_manager = Context(local_comm, br, options)
 
@@ -403,7 +412,7 @@ def generate_network(
     stats: StatsCollector,
     *,
     ir_context: IRExecutionContext,
-    collective_id_map: dict[IR, int],
+    collective_id_map: dict[IR, list[int]],
     metadata_collector: list[Metadata] | None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
@@ -424,7 +433,7 @@ def generate_network(
     ir_context
         The execution context for the IR node.
     collective_id_map
-        The mapping of IR nodes to collective IDs.
+        The mapping of IR nodes to lists of collective IDs.
     metadata_collector
         The list to collect the final metadata.
         This list will be mutated when the network is executed.
@@ -468,8 +477,8 @@ def generate_network(
     nodes_dict, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
-    # Add node to drain metadata channel before pull_from_channel
-    # (since pull_from_channel doesn't accept a ChannelPair)
+    # Add node to drain metadata before pull_from_channel
+    # (since pull_from_channel doesn't handle metadata messages)
     ch_final_data: Channel[TableChunk] = context.create_channel()
     drain_node = metadata_drain_node(
         context,

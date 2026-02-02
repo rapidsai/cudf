@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -133,19 +133,39 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
 {
   CUDF_FUNC_RANGE();
 
+  static std::mutex mutex;
+
   std::vector<rmm::device_buffer> buffers(byte_ranges.size());
+  {
+    std::lock_guard<std::mutex> lock(mutex);
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(byte_ranges.size()),
-                [&](auto const idx) {
-                  auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
-                  auto const chunk_size   = byte_ranges[idx].size();
-                  auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-                  CUDF_CUDA_TRY(cudaMemcpyAsync(
-                    buffer.data(), chunk_offset, chunk_size, cudaMemcpyDefault, stream.value()));
-                  buffers[idx] = std::move(buffer);
-                });
+    std::transform(
+      byte_ranges.begin(), byte_ranges.end(), buffers.begin(), [&](auto const& byte_range) {
+        auto const chunk_offset = host_buffer.data() + byte_range.offset();
+        auto const chunk_size   = static_cast<size_t>(byte_range.size());
+        auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
+        cudf::detail::cuda_memcpy_async(
+          cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
+          cudf::host_span<uint8_t const>{chunk_offset, chunk_size},
+          stream);
+        return buffer;
+      });
+  }
 
-  stream.synchronize_no_throw();
   return buffers;
+}
+
+std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
+                                                rmm::cuda_stream_view stream)
+{
+  if (tables.size() == 1) { return std::move(tables[0]); }
+
+  std::vector<cudf::table_view> table_views;
+  table_views.reserve(tables.size());
+  std::transform(
+    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
+      return tbl->view();
+    });
+  // Construct the final table
+  return cudf::concatenate(table_views, stream);
 }

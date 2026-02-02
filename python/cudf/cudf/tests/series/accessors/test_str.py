@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import json
@@ -1733,6 +1733,34 @@ def test_string_rsplit_re(n, expand):
 
 
 @pytest.mark.parametrize(
+    "data, delimiter, index, expected",
+    [
+        (["a_b_c", "d_e", "f"], "_", 1, ["b", "e", None]),
+        (["a_b_c", "d_e", "f"], "_", 0, ["a", "d", "f"]),
+    ],
+)
+def test_split_part(data, delimiter, index, expected):
+    s = cudf.Series(data)
+    got = s.str.split_part(delimiter=delimiter, index=index)
+    expect = cudf.Series(expected)
+    assert_eq(got, expect)
+
+
+@pytest.mark.parametrize(
+    "data, index, expected",
+    [
+        (["a b c", "d  e", "f\tg", " h "], 0, ["a", "d", "f", "h"]),
+        (["a b c", "d  e", "f\tg", " h "], 1, ["b", "e", "g", None]),
+    ],
+)
+def test_split_part_whitespace(data, index, expected):
+    s = cudf.Series(data)
+    got = s.str.split_part(delimiter="", index=index)
+    expect = cudf.Series(expected)
+    assert_eq(got, expect)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         ["koala", "fox", "chameleon"],
@@ -2223,6 +2251,31 @@ def test_string_lower(ps_gs):
     got = gs.str.lower()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        "ΦΘΣ",  # Sigma at end -> should become final sigma ς
+        "ΦΘΣ.",  # Sigma before punctuation -> should become final sigma ς
+        "ΦΘΣ ",  # Sigma before space -> should become final sigma ς
+        "ΦΘΣq",  # Sigma before letter -> should stay regular sigma σ  # noqa: RUF003
+        "ΣΗΜΑ",  # Sigma at beginning -> should become regular sigma σ  # noqa: RUF003
+        "ΘΕΣΣ",  # Two sigmas at end -> last should become final sigma ς
+        "ΘΕΣΣαλονίκη",  # Sigma before Greek letter -> should stay regular sigma σ  # noqa: RUF003
+        "ΦΘΣ!",  # Sigma before exclamation -> should become final sigma ς
+        "ΦΘΣ123",  # Sigma before number -> should become final sigma ς
+    ],
+)
+def test_string_lower_greek_final_sigma(data):
+    with cudf.option_context("mode.pandas_compatible", True):
+        ps = pd.Series([data])
+        gs = cudf.Series([data])
+
+        expect = ps.str.lower()
+        got = gs.str.lower()
+
+        assert_eq(expect, got)
 
 
 def test_string_upper(ps_gs):
