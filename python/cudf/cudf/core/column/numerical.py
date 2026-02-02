@@ -104,13 +104,6 @@ class NumericalColumn(NumericalBaseColumn):
             )
         return plc_column, dtype
 
-    def _clear_cache(self) -> None:
-        super()._clear_cache()
-        try:
-            del self.nan_count
-        except AttributeError:
-            pass
-
     def __contains__(self, item: ScalarLike) -> bool:
         """
         Returns True if column contains item, else False.
