@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -30,6 +30,7 @@ from .utils cimport _get_stream, _get_memory_resource
 __all__ = [
     "bools_to_mask",
     "compute_column",
+    "compute_column_jit",
     "encode",
     "mask_to_bools",
     "nans_to_nulls",

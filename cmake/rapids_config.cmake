@@ -24,8 +24,8 @@ else()
 endif()
 
 # Use STRINGS to trim whitespace/newlines
-file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../RAPIDS_BRANCH" _rapids_branch)
-if(NOT _rapids_branch)
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../RAPIDS_BRANCH" RAPIDS_BRANCH)
+if(NOT RAPIDS_BRANCH)
   message(
     FATAL_ERROR
       "Could not determine branch name to use for checking out rapids-cmake. The file \"${CMAKE_CURRENT_LIST_DIR}/../RAPIDS_BRANCH\" is missing."
@@ -36,7 +36,7 @@ if(NOT rapids-cmake-version)
   set(rapids-cmake-version "${RAPIDS_VERSION_MAJOR_MINOR}")
 endif()
 if(NOT rapids-cmake-branch)
-  set(rapids-cmake-branch "${_rapids_branch}")
+  set(rapids-cmake-branch "${RAPIDS_BRANCH}")
 endif()
 include("${CMAKE_CURRENT_LIST_DIR}/RAPIDS.cmake")
 
