@@ -172,19 +172,19 @@ def _(ir: Scan, *, offset: str = "") -> str:
     return _repr_header(offset, label, ir.schema)
 
 
-def write_profile_output(
-    profile_output: str | Path,
+def write_query_trace(
+    trace_output: str | Path,
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     tracer: StreamingQueryTracer,
 ) -> None:
     """
-    Write a post-execution profile showing actual row counts and decisions.
+    Write a post-execution trace showing actual row counts and decisions.
 
     Parameters
     ----------
-    profile_output
-        Path to write the profile file.
+    trace_output
+        Path to write the trace file.
     ir
         The lowered IR root node.
     partition_info
@@ -194,11 +194,11 @@ def write_profile_output(
     """
     from pathlib import Path
 
-    profile_repr = _repr_profile_tree(ir, partition_info, tracer)
-    Path(profile_output).write_text(profile_repr)
+    trace_repr = _repr_trace_tree(ir, partition_info, tracer)
+    Path(trace_output).write_text(trace_repr)
 
 
-def _repr_profile_tree(
+def _repr_trace_tree(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     tracer: StreamingQueryTracer,
@@ -223,7 +223,7 @@ def _repr_profile_tree(
         header += f" chunks={node_tracer.chunk_count}"
 
     children_strs = [
-        _repr_profile_tree(child, partition_info, tracer, offset=offset + "  ")
+        _repr_trace_tree(child, partition_info, tracer, offset=offset + "  ")
         for child in ir.children
     ]
 

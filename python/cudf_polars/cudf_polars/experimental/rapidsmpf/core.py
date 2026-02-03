@@ -132,9 +132,9 @@ def evaluate_logical_plan(
     # Write tracer output if configured
     tracing = config_options.executor.tracing
     if tracing is not None and tracing.output_path is not None and tracer is not None:
-        from cudf_polars.experimental.explain import write_profile_output
+        from cudf_polars.experimental.explain import write_query_trace
 
-        write_profile_output(tracing.output_path, ir, partition_info, tracer)
+        write_query_trace(tracing.output_path, ir, partition_info, tracer)
 
     return result, metadata_collector
 
