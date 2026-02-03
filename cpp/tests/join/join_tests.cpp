@@ -169,7 +169,7 @@ std::vector<cudf::size_type> inner_join_size_per_row(
   auto per_row_counts = obj.inner_join_match_context(
     left_selected, cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
 
-  return cudf::detail::make_std_vector<cudf::size_type>(*per_row_counts._match_counts, stream);
+  return cudf::detail::make_std_vector<cudf::size_type>(*per_row_counts->_match_counts, stream);
 }
 
 std::unique_ptr<cudf::table> left_join(

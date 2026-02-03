@@ -32,16 +32,14 @@ namespace CUDF_EXPORT cudf {
  * @brief Class that implements sort-merge algorithm for table joins
  *
  * This class enables the sort-merge join scheme that builds a preprocessed right table once,
- * and probes as many times as needed. The `inner_join()` and `left_join()` methods are thread-safe
- * and can be called concurrently from multiple threads on the same instance.
- *
- * @note The `inner_join_match_context()` and `partitioned_inner_join()` methods are NOT thread-safe.
- * These methods share internal state and must be called sequentially on the same instance.
- * If you need to use partitioned joins from multiple threads, create separate `sort_merge_join`
- * instances for each thread.
+ * and probes as many times as needed. All join methods (`inner_join()`, `left_join()`,
+ * `inner_join_match_context()`, and `partitioned_inner_join()`) are thread-safe and can be
+ * called concurrently from multiple threads on the same instance.
  */
 class sort_merge_join {
  public:
+  struct sort_merge_join_match_context;  ///< Forward declaration
+
   sort_merge_join()                                  = delete;
   sort_merge_join(sort_merge_join const&)            = delete;
   sort_merge_join(sort_merge_join&&)                 = delete;
@@ -120,26 +118,29 @@ class sort_merge_join {
    * the right table according to inner join semantics, and returns the number of matches through a
    * match_context object.
    *
+   * This method is thread-safe and can be called concurrently from multiple threads.
+   *
    * This is particularly useful for:
    * - Determining the total size of a potential join result without materializing it
    * - Planning partitioned join operations for large datasets
    *
-   * The returned join_match_context can be used directly with partitioned_inner_join() to
-   * process large joins in manageable chunks.
+   * The returned sort_merge_join_match_context can be used directly with partitioned_inner_join()
+   * to process large joins in manageable chunks.
    *
    * @param left The left table to join with the pre-processed right table
    * @param is_left_sorted Enum to indicate if left table is pre-sorted
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the result device memory
    *
-   * @return A join_match_context object containing the left table view and a device vector
-   *         of match counts for each row in the left table
+   * @return A unique_ptr to join_match_context 
+   *         containing the left table view, match counts, and preprocessed left table state for
+   *         partitioned joins
    */
-  cudf::join_match_context inner_join_match_context(
+  std::unique_ptr<join_match_context> inner_join_match_context(
     table_view const& left,
     sorted is_left_sorted,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Performs an inner join between a partition of the left table and the right table.
@@ -148,6 +149,8 @@ class sort_merge_join {
    * (defined by the join_partition_context) and the right table that was provided when constructing
    * the sort_merge_join object. The join_partition_context must have been previously created by
    * calling inner_join_match_context().
+   *
+   * This method is thread-safe and can be called concurrently from multiple threads.
    *
    * This partitioning approach enables processing large joins in smaller, memory-efficient chunks,
    * while maintaining consistent results as if the entire join was performed at once. This is
@@ -171,14 +174,18 @@ class sort_merge_join {
    * sort_merge_join join_obj(right_table, sorted::NO);
    *
    * // Get match context for the entire left table
-   * auto context = join_obj.inner_join_match_context(left_table, sorted::NO);
+   * auto match_ctx = join_obj.inner_join_match_context(left_table, sorted::NO);
+   * 
+   * // Create partition context 
+   * cudf::join_partition_context part_ctx{std::move(match_ctx), 0, 0};
    *
    * // Define partition boundaries (e.g., process 1000 rows at a time)
    * for (size_type start = 0; start < left_table.num_rows(); start += 1000) {
    *   size_type end = std::min(start + 1000, left_table.num_rows());
    *
-   *   // Create partition context
-   *   cudf::join_partition_context part_ctx{context, start, end};
+   *   // Set partition boundaries
+   *   part_ctx.left_start_idx = start;
+   *   part_ctx.left_end_idx = end;
    *
    *   // Get join indices for this partition
    *   auto [left_indices, right_indices] = join_obj.partitioned_inner_join(part_ctx);
@@ -192,7 +199,7 @@ class sort_merge_join {
   partitioned_inner_join(
     cudf::join_partition_context const& context,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
   /**
@@ -268,11 +275,38 @@ class sort_merge_join {
      */
     rmm::device_uvector<size_type> map_table_to_unprocessed(rmm::cuda_stream_view stream) const;
   };
-  preprocessed_table preprocessed_left;  ///< Used only by partitioned join workflow (not
-                                         ///< thread-safe)
-  preprocessed_table const preprocessed_right;  ///< Preprocessed right table (immutable after
-                                                ///< construction)
-  null_equality const compare_nulls;            ///< Null comparison mode (immutable)
+
+ public:
+  /**
+   * @brief Extended match context for sort-merge join with preprocessed table state.
+   *
+   * This struct derives from join_match_context and adds the preprocessed left table
+   * state needed for thread-safe partitioned join operations. It is returned by
+   * inner_join_match_context() and used with partitioned_inner_join().
+   */
+  struct sort_merge_join_match_context : public join_match_context {
+    preprocessed_table preprocessed_left;  ///< Preprocessed left table state for partitioned joins
+
+    /**
+     * @brief Construct a sort_merge_join_match_context
+     *
+     * @param left_table The left table view
+     * @param match_counts Device vector of match counts per row
+     * @param preprocessed Preprocessed left table state
+     */
+    sort_merge_join_match_context(
+      table_view left_table,
+      std::unique_ptr<rmm::device_uvector<size_type>> match_counts,
+      preprocessed_table preprocessed)
+      : join_match_context{left_table, std::move(match_counts)},
+        preprocessed_left{std::move(preprocessed)}
+    {
+    }
+  };
+
+ private:
+  preprocessed_table preprocessed_right;  ///< Preprocessed right table
+  null_equality compare_nulls;            ///< Null comparison mode
 
   /**
    * @brief Post-process left and right tables after the merge operation

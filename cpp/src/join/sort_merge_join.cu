@@ -961,11 +961,11 @@ sort_merge_join::left_join(table_view const& left,
     stream);
 }
 
-cudf::join_match_context sort_merge_join::inner_join_match_context(
-  table_view const& left,
-  sorted is_left_sorted,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::unique_ptr<cudf::join_match_context>
+sort_merge_join::inner_join_match_context(table_view const& left,
+                                          sorted is_left_sorted,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"sort_merge_join::inner_join_match_context"};
   // Sanity checks
@@ -976,27 +976,14 @@ cudf::join_match_context sort_merge_join::inner_join_match_context(
                "Number of columns must match for a join",
                std::invalid_argument);
 
-  // Preprocessing the left table (stored in member for use by partitioned_inner_join)
-  // NOTE: This method is NOT thread-safe
-  preprocessed_left._table_view = left;
-  if (compare_nulls == null_equality::EQUAL) {
-    preprocessed_left._null_processed_table_view = left;
-  } else {
-    // if a table has no nullable column, then there's no preprocessing to be done
-    auto is_left_nullable = has_nested_nulls(left);
-    if (is_left_nullable) {
-      preprocessed_left.preprocess_unprocessed_table(stream);
-    } else {
-      preprocessed_left._null_processed_table_view = left;
-    }
-  }
-  if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.compute_sorted_order(stream); }
+  // Create preprocessed left table locally for thread safety
+  auto preprocessed_left = preprocessed_table::create(left, compare_nulls, is_left_sorted, stream);
 
   return invoke_merge(
     preprocessed_left,
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
-    [this, left, stream, mr](auto& obj) {
+    [this, left, &preprocessed_left, stream, mr](auto& obj) mutable {
       auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
       matches_per_row->resize(matches_per_row->size() - 1, stream);
       if (compare_nulls == null_equality::UNEQUAL &&
@@ -1012,24 +999,31 @@ cudf::join_match_context sort_merge_join::inner_join_match_context(
                         matches_per_row->end(),
                         mapping.begin(),
                         unprocessed_matches_per_row.begin());
-        return join_match_context{
+        return std::make_unique<sort_merge_join_match_context>(
           left,
-          std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row))};
+          std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row)),
+          std::move(preprocessed_left));
       }
-      return join_match_context{left, std::move(matches_per_row)};
+      return std::make_unique<sort_merge_join_match_context>(
+        left, std::move(matches_per_row), std::move(preprocessed_left));
     },
     stream);
 }
 
 // left_partition_end exclusive
-// NOTE: This method is NOT thread-safe. It uses state set by inner_join_match_context().
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& context,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"sort_merge_join::partitioned_inner_join"};
+
+  // Extract preprocessed_left from the context
+  auto const& preprocessed_left =
+    static_cast<sort_merge_join_match_context const*>(context.left_table_context.get())
+      ->preprocessed_left;
+
   auto const left_partition_start_idx = context.left_start_idx;
   auto const left_partition_end_idx   = context.left_end_idx;
   auto null_processed_table_start_idx = left_partition_start_idx;
