@@ -62,6 +62,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -107,7 +108,6 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
-    is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
