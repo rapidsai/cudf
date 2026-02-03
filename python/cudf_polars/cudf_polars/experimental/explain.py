@@ -298,7 +298,7 @@ class SerializableIRNode:
     cudf_polars.dsl.ir.IR node.
     """
 
-    id: int
+    id: str
     children: list[int]
     schema: dict[str, Serializable]
     properties: dict[str, Serializable]
@@ -308,7 +308,7 @@ class SerializableIRNode:
     def from_ir(cls, ir: IR) -> Self:
         """Build a Node from an IR Node."""
         return cls(
-            id=ir.get_stable_id(),
+            id=str(ir.get_stable_id()),
             children=[child.get_stable_id() for child in ir.children],
             schema={k: v.id().name for k, v in ir.schema.items()},
             properties=_serialize_properties(ir),
@@ -345,9 +345,9 @@ class SerializablePartitionInfo:
 class DAG:
     """A DAG of nodes."""
 
-    roots: list[int]
-    nodes: dict[int, SerializableIRNode]
-    partition_info: dict[int, SerializablePartitionInfo] | None = None
+    roots: list[str]
+    nodes: dict[str, SerializableIRNode]
+    partition_info: dict[str, SerializablePartitionInfo] | None = None
 
     @classmethod
     def from_query(
@@ -377,7 +377,7 @@ class DAG:
         config = ConfigOptions.from_polars_engine(engine)
         ir = Translator(q._ldf.visit(), engine).translate_ir()
 
-        partition_info_dict: dict[int, SerializablePartitionInfo] | None = None
+        partition_info_dict: dict[str, SerializablePartitionInfo] | None = None
         if lowered:
             if (
                 config.executor.name == "streaming"
@@ -392,9 +392,9 @@ class DAG:
                 ir, partition_info_d, _ = lower_ir_graph(ir, config)
             partition_info_dict = {}
 
-        nodes: dict[int, SerializableIRNode] = {}
+        nodes: dict[str, SerializableIRNode] = {}
         for ir_node in traversal([ir]):
-            stable_id = ir_node.get_stable_id()
+            stable_id = str(ir_node.get_stable_id())
             nodes[stable_id] = SerializableIRNode.from_ir(ir_node)
             if lowered and partition_info_dict is not None:
                 partition_info_dict[stable_id] = SerializablePartitionInfo(
@@ -405,22 +405,7 @@ class DAG:
                 )
 
         return cls(
-            roots=[ir.get_stable_id()], nodes=nodes, partition_info=partition_info_dict
+            roots=[str(ir.get_stable_id())],
+            nodes=nodes,
+            partition_info=partition_info_dict,
         )
-
-    def to_dict(self) -> dict[str, Serializable]:
-        """Convert to a JSON-serializable dictionary."""
-        return {
-            "roots": self.roots,
-            "nodes": {
-                str(node_id): node.to_dict() for node_id, node in self.nodes.items()
-            },
-            "partition_info": (
-                {
-                    str(node_id): info.to_dict()
-                    for node_id, info in self.partition_info.items()
-                }
-                if self.partition_info is not None
-                else None
-            ),
-        }
