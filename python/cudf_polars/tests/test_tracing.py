@@ -82,7 +82,7 @@ def test_import_without_structlog(monkeypatch: pytest.MonkeyPatch) -> None:
     reason="Requires 'rapidsmpf' runtime.",
 )
 def test_log_query_plan() -> None:
-    """Test that log_query_plan emits an IR Structure event."""
+    """Test that log_query_plan emits a Query Plan event."""
     import os
 
     code = textwrap.dedent("""\
@@ -111,7 +111,7 @@ def test_log_query_plan() -> None:
         [sys.executable, "-c", code], env=env, stderr=subprocess.STDOUT
     )
 
-    # Check for IR Structure event
+    # Check for Query Plan event
     assert b"Query Plan" in result
     assert b"scope=query" in result or b"'scope': 'query'" in result
     assert b"ir_id" in result
