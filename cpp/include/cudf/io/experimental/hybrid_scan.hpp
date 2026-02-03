@@ -346,10 +346,11 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices) const;
 
   /**
-   * @brief Resets the column selection state
+   * @brief Resets the current column selection
    *
-   * Resets the internal column selection state forcing re-selection of columns in
-   * subsequent operations
+   * Resets the current column selection state forcing column re-selection in subsequent filter,
+   * byte range, setup chunking and materialization APIs. This is useful if the filter expression
+   * has been cascaded (and-ed) to include new columns
    */
   void reset_column_selection() const;
 

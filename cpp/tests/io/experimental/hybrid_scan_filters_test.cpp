@@ -581,12 +581,13 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
 
     // Calling `filter_data_pages_with_stats` before setting up the page index should raise an
     // error
-    static std::once_flag once_flag;
-    std::call_once(once_flag, [&]() {
+    static bool is_page_index_set_up = false;
+    if (!is_page_index_set_up) {
       EXPECT_THROW(std::ignore = reader->build_row_mask_with_page_index_stats(
                      current_row_group_indices, options, stream, mr),
                    std::runtime_error);
-    });
+      is_page_index_set_up = true;
+    }
 
     // Set up the page index
     auto const page_index_byte_range = reader->page_index_byte_range();

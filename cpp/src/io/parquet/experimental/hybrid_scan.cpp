@@ -29,15 +29,11 @@ hybrid_scan_reader::~hybrid_scan_reader() = default;
 
 [[nodiscard]] text::byte_range_info hybrid_scan_reader::page_index_byte_range() const
 {
-  CUDF_FUNC_RANGE();
-
   return _impl->page_index_byte_range();
 }
 
 [[nodiscard]] FileMetaData hybrid_scan_reader::parquet_metadata() const
 {
-  CUDF_FUNC_RANGE();
-
   return _impl->parquet_metadata();
 }
 
@@ -51,8 +47,6 @@ void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_in
 std::vector<cudf::size_type> hybrid_scan_reader::all_row_groups(
   parquet_reader_options const& options) const
 {
-  CUDF_FUNC_RANGE();
-
   CUDF_EXPECTS(options.get_row_groups().size() <= 1,
                "Encountered invalid size of row group indices in parquet reader options");
 
@@ -65,8 +59,6 @@ std::vector<cudf::size_type> hybrid_scan_reader::all_row_groups(
 size_type hybrid_scan_reader::total_rows_in_row_groups(
   cudf::host_span<size_type const> row_group_indices) const
 {
-  CUDF_FUNC_RANGE();
-
   if (row_group_indices.empty()) { return 0; }
 
   auto const input_row_group_indices =
@@ -74,11 +66,7 @@ size_type hybrid_scan_reader::total_rows_in_row_groups(
   return _impl->total_rows_in_row_groups(input_row_group_indices);
 }
 
-void hybrid_scan_reader::reset_column_selection() const
-{
-  CUDF_FUNC_RANGE();
-  _impl->reset_column_selection();
-}
+void hybrid_scan_reader::reset_column_selection() const { _impl->reset_column_selection(); }
 
 std::vector<size_type> hybrid_scan_reader::filter_row_groups_with_byte_range(
   cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
