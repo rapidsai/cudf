@@ -11,16 +11,16 @@ if [[ "${RAPIDS_PY_VERSION}" != "3.10" ]]; then
 
 # download wheels, store the directories holding them in variables
 LIBRMM_WHEELHOUSE=$(
-  RAPIDS_PY_WHEEL_NAME="librmm_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact rmm 2184 cpp wheel
+  RAPIDS_PY_WHEEL_NAME="librmm_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact rmm 2241 cpp wheel
 )
 RMM_WHEELHOUSE=$(
-  rapids-get-pr-artifact rmm 2184 python wheel --stable
+  rapids-get-pr-artifact rmm 2241 python wheel --stable
 )
 LIBKVIKIO_WHEELHOUSE=$(
-  RAPIDS_PY_WHEEL_NAME="libkvikio_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact kvikio 892 cpp wheel
+  RAPIDS_PY_WHEEL_NAME="libkvikio_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact kvikio 920 cpp wheel
 )
 KVIKIO_WHEELHOUSE=$(
-  rapids-get-pr-artifact kvikio 892 python wheel --stable
+  rapids-get-pr-artifact kvikio 920 python wheel --stable
 )
 
 cat > "${PIP_CONSTRAINT}" <<EOF
