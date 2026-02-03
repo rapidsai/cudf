@@ -25,6 +25,7 @@ from cudf.core._internals.timezones import (
     get_tz_data,
 )
 from cudf.core.column import as_column, column_empty
+from cudf.core.column._pylibcudf_helpers import fillna_bool_false
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -204,7 +205,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def is_month_start(self) -> ColumnBase:
-        return (self.day == 1).fillna(False)
+        return fillna_bool_false(self.day == 1)
 
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
@@ -212,17 +213,17 @@ class DatetimeColumn(TemporalBaseColumn):
             last_day_col = type(self).from_pylibcudf(
                 plc.datetime.last_day_of_month(self.plc_column)
             )
-        return (self.day == cast("Self", last_day_col).day).fillna(False)
+        return fillna_bool_false(self.day == cast("Self", last_day_col).day)
 
     @functools.cached_property
     def is_quarter_end(self) -> ColumnBase:
         last_month = self.month.isin([3, 6, 9, 12])
-        return (self.is_month_end & last_month).fillna(False)
+        return fillna_bool_false(self.is_month_end & last_month)
 
     @functools.cached_property
     def is_quarter_start(self) -> ColumnBase:
         first_month = self.month.isin([1, 4, 7, 10])
-        return (self.is_month_start & first_month).fillna(False)
+        return fillna_bool_false(self.is_month_start & first_month)
 
     @functools.cached_property
     def is_year_end(self) -> ColumnBase:
@@ -231,7 +232,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
         leap = day_of_year == 366
         non_leap = day_of_year == 365
-        return leap.copy_if_else(non_leap, leap_dates).fillna(False)
+        return fillna_bool_false(leap.copy_if_else(non_leap, leap_dates))
 
     @functools.cached_property
     def is_leap_year(self) -> ColumnBase:
@@ -242,7 +243,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def is_year_start(self) -> ColumnBase:
-        return (self.day_of_year == 1).fillna(False)
+        return fillna_bool_false(self.day_of_year == 1)
 
     @functools.cached_property
     def days_in_month(self) -> ColumnBase:

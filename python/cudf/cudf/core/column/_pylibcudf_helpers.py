@@ -23,6 +23,7 @@ __all__ = [
     "all_strings_match_type",
     "create_non_null_mask",
     "reduce_boolean_column",
+    "fillna_bool_false",
 ]
 
 
@@ -180,3 +181,48 @@ def reduce_boolean_column(
         result = result_scalar.to_py()
         assert isinstance(result, bool)
         return result
+
+
+def fillna_bool_false(column: ColumnBase) -> ColumnBase:
+    """Fill null values in a boolean column with False.
+
+    This is more efficient than calling column.fillna(False) because it
+    avoids creating intermediate column objects by using pylibcudf's
+    replace_nulls directly.
+
+    Parameters
+    ----------
+    column : ColumnBase
+        Boolean column with potential null values
+
+    Returns
+    -------
+    ColumnBase
+        Boolean column with nulls replaced by False
+
+    Examples
+    --------
+    Instead of:
+
+        result = (self.day == 1).fillna(False)
+
+    Use:
+
+        from cudf.core.column._pylibcudf_helpers import fillna_bool_false
+        result = fillna_bool_false(self.day == 1)
+
+    Notes
+    -----
+    This is particularly useful for datetime property methods that return
+    boolean columns with nulls that should be treated as False (e.g.,
+    is_month_start, is_year_end, etc.)
+    """
+    from cudf.core.column.column import ColumnBase
+
+    with column.access(mode="read", scope="internal"):
+        # Use pylibcudf replace_nulls with scalar False
+        false_scalar = plc.Scalar.from_py(False)
+        result_plc = plc.replace.replace_nulls(
+            column.plc_column, false_scalar
+        )
+        return ColumnBase.from_pylibcudf(result_plc)
