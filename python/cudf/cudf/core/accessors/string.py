@@ -4668,8 +4668,9 @@ class StringMethods(BaseAccessor):
         2    .
         dtype: object
         """
-        result_col = ColumnBase.from_pylibcudf(
-            self._column.character_tokenize().plc_column.children()[1]
+        result_col = ColumnBase.create(
+            self._column.character_tokenize().plc_column.children()[1],
+            self._column.dtype,
         )
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)

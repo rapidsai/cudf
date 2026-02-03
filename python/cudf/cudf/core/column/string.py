@@ -925,8 +925,9 @@ class StringColumn(ColumnBase, Scannable):
         with self.access(mode="read", scope="internal"):
             return cast(
                 Self,
-                type(self).from_pylibcudf(
-                    plc.nvtext.tokenize.character_tokenize(self.plc_column)
+                type(self).create(
+                    plc.nvtext.tokenize.character_tokenize(self.plc_column),
+                    self.dtype,
                 ),
             )
 

@@ -6071,7 +6071,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/series/accessors/test_dt_accessor.py::TestSeriesDatetimeValues::test_strftime",
     "tests/series/accessors/test_dt_accessor.py::TestSeriesDatetimeValues::test_strftime_dt64_days",
     "tests/series/accessors/test_dt_accessor.py::TestSeriesDatetimeValues::test_valid_dt_with_missing_values",
-    "tests/series/accessors/test_list_accessor.py::test_list_getitem_invalid_index[list_dtype0]",
     "tests/series/accessors/test_list_accessor.py::test_list_len",
     "tests/series/accessors/test_struct_accessor.py::test_struct_accessor_dtypes",
     "tests/series/accessors/test_struct_accessor.py::test_struct_accessor_field_expanded[0-int_col]",
