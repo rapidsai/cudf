@@ -75,7 +75,9 @@ async def default_node_single(
     -----
     Chunks are processed in the order they are received.
     """
-    async with shutdown_on_error(context, ch_in, ch_out):
+    async with shutdown_on_error(
+        context, ch_in, ch_out, ir=ir, node_profiler=node_profiler
+    ) as profiler:
         # Recv/send metadata.
         metadata_in = await recv_metadata(ch_in, context)
         partitioning = None
@@ -127,8 +129,8 @@ async def default_node_single(
                     ),
                     context=ir_context,
                 )
-                if node_profiler is not None:
-                    node_profiler.add_chunk(table=df.table)
+                if profiler is not None:
+                    profiler.add_chunk(table=df.table)
                 await ch_out.send(
                     context,
                     Message(
@@ -175,7 +177,9 @@ async def default_node_multi(
     node_profiler
         Node profiler for collecting runtime statistics.
     """
-    async with shutdown_on_error(context, *chs_in, ch_out):
+    async with shutdown_on_error(
+        context, *chs_in, ch_out, ir=ir, node_profiler=node_profiler
+    ) as profiler:
         # Merge and forward basic metadata.
         local_count = 1
         duplicated = True
@@ -262,8 +266,8 @@ async def default_node_multi(
                     *dfs,
                     context=ir_context,
                 )
-                if node_profiler is not None:
-                    node_profiler.add_chunk(table=df.table)
+                if profiler is not None:
+                    profiler.add_chunk(table=df.table)
                 await ch_out.send(
                     context,
                     Message(
@@ -686,6 +690,7 @@ def generate_ir_sub_network_wrapper(
 @define_py_node()
 async def metadata_feeder_node(
     context: Context,
+    ir: IR,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     metadata: ChannelMetadata,
@@ -698,6 +703,8 @@ async def metadata_feeder_node(
     ----------
     context
         The rapidsmpf context.
+    ir
+        The IR node.
     ch_in
         The input channel to pull data from.
     ch_out
@@ -707,12 +714,14 @@ async def metadata_feeder_node(
     node_profiler
         Node profiler for collecting runtime statistics.
     """
-    async with shutdown_on_error(context, ch_in, ch_out):
+    async with shutdown_on_error(
+        context, ch_in, ch_out, ir=ir, node_profiler=node_profiler
+    ) as profiler:
         await send_metadata(ch_out, context, metadata)
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
-            if node_profiler is not None:
-                node_profiler.chunk_count += 1
+            if profiler is not None:
+                profiler.chunk_count += 1
         await ch_out.drain(context)
 
 

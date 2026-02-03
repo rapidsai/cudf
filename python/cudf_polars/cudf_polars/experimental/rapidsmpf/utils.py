@@ -5,10 +5,19 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import operator
 from contextlib import asynccontextmanager, contextmanager
 from functools import reduce
 from typing import TYPE_CHECKING, Any
+
+from cudf_polars.dsl.tracing import LOG_TRACES
+
+try:
+    import structlog
+    import structlog.contextvars
+except ImportError:
+    pass
 
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
@@ -33,30 +42,95 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import RuntimeNodeProfiler
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.typing import DataType
 
 
+def _stable_ir_id(ir_node: IR) -> int:
+    """
+    Compute a stable identifier for an IR node.
+
+    This identifier is based on the node's content (type + schema + children's IDs)
+    and is stable across process boundaries. Uses hashlib instead of Python's
+    built-in hash() because hash() uses a random per-process seed (PYTHONHASHSEED).
+
+    Parameters
+    ----------
+    ir_node
+        The IR node.
+
+    Returns
+    -------
+    int
+        A stable 64-bit identifier for this node.
+    """
+    type_name = type(ir_node).__name__
+    schema_keys = tuple(ir_node.schema.keys())
+    children_ids = tuple(_stable_ir_id(child) for child in ir_node.children)
+    content = repr((type_name, schema_keys, children_ids)).encode("utf-8")
+    # Use first 16 hex chars (64 bits) for a more concise ID
+    return int(hashlib.md5(content).hexdigest()[:16], 16)
+
+
 @asynccontextmanager
 async def shutdown_on_error(
-    context: Context, *channels: Channel[Any]
-) -> AsyncIterator[None]:
+    context: Context,
+    *channels: Channel[Any],
+    ir: IR | None = None,
+    node_profiler: RuntimeNodeProfiler | None = None,
+) -> AsyncIterator[RuntimeNodeProfiler | None]:
     """
     Shutdown on error for rapidsmpf.
+
+    This context manager handles channel cleanup on errors and optionally
+    manages node profiling with structlog tracing integration.
 
     Parameters
     ----------
     context
         The rapidsmpf context.
     channels
-        The channels to shutdown.
+        The channels to shutdown on error.
+    ir
+        The IR node being executed (for tracing).
+    node_profiler
+        Node profiler for collecting runtime statistics.
+
+    Yields
+    ------
+    RuntimeNodeProfiler | None
+        The node profiler (if provided) for use within the context.
     """
-    # TODO: This probably belongs in rapidsmpf.
+    # Setup tracing if enabled and ir is provided
+    ir_id: int | None = None
+    ir_type: str | None = None
+    if ir is not None and LOG_TRACES:
+        ir_id = _stable_ir_id(ir)
+        ir_type = type(ir).__name__
+        structlog.contextvars.bind_contextvars(ir_id=ir_id)
+
     try:
-        yield
+        yield node_profiler
     except BaseException:
         await asyncio.gather(*(ch.shutdown(context) for ch in channels))
         raise
+    finally:
+        # Emit structlog event on exit if tracing is enabled
+        if ir_id is not None and LOG_TRACES:
+            log = structlog.get_logger()
+            record: dict[str, Any] = {
+                "ir_id": ir_id,
+                "ir_type": ir_type,
+            }
+            if node_profiler is not None:
+                record["chunks"] = node_profiler.chunk_count
+                if node_profiler.row_count is not None:
+                    record["rows"] = node_profiler.row_count
+                if node_profiler.decision is not None:
+                    record["decision"] = node_profiler.decision
+            log.info("Streaming Node", **record)
+            structlog.contextvars.unbind_contextvars("ir_id")
 
 
 def remap_partitioning(

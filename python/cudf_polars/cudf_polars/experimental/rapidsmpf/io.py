@@ -174,7 +174,9 @@ async def dataframescan_node(
     node_profiler
         The node profiler for collecting runtime statistics.
     """
-    async with shutdown_on_error(context, ch_out):
+    async with shutdown_on_error(
+        context, ch_out, ir=ir, node_profiler=node_profiler
+    ) as profiler:
         # Find local partition count.
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
@@ -224,7 +226,7 @@ async def dataframescan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_profiler=node_profiler,
+                    node_profiler=profiler,
                 )
             await ch_out.drain(context)
             return
@@ -250,7 +252,7 @@ async def dataframescan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_profiler=node_profiler,
+                    node_profiler=profiler,
                 )
             await ch_out.drain(context)
 
@@ -416,7 +418,9 @@ async def scan_node(
     node_profiler
         The node profiler for collecting runtime statistics.
     """
-    async with shutdown_on_error(context, ch_out):
+    async with shutdown_on_error(
+        context, ch_out, ir=ir, node_profiler=node_profiler
+    ) as profiler:
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
@@ -507,7 +511,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_profiler=node_profiler,
+                    node_profiler=profiler,
                 )
             await ch_out.drain(context)
             return
@@ -533,7 +537,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_profiler=node_profiler,
+                    node_profiler=profiler,
                 )
             await ch_out.drain(context)
 
@@ -707,6 +711,7 @@ def _(
         # node does not send metadata.
         metadata_node = metadata_feeder_node(
             rec.state["context"],
+            ir,
             ch_in,
             ch_out,
             ChannelMetadata(

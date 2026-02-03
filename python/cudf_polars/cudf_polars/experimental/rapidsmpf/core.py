@@ -32,6 +32,7 @@ import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
+from cudf_polars.dsl.tracing import LOG_TRACES
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import RuntimeQueryProfiler
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
@@ -246,7 +247,7 @@ def evaluate_pipeline(
         )
         profiler: RuntimeQueryProfiler | None = (
             RuntimeQueryProfiler()
-            if config_options.executor.profiling is not None
+            if config_options.executor.profiling is not None or LOG_TRACES
             else None
         )
         nodes, output = generate_network(
