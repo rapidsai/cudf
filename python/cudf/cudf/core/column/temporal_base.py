@@ -141,9 +141,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                         arrow_type = cudf_dtype_to_pa_type(other.dtype)
                     except pa.ArrowNotImplementedError:
                         arrow_type = cudf_dtype_to_pa_type(
-                            np.dtype(
-                                f"{other.dtype.type.__name__}[ns]"
-                            )
+                            np.dtype(f"{other.dtype.type.__name__}[ns]")
                         )
                 else:
                     arrow_type = cudf_dtype_to_pa_type(self.dtype)
