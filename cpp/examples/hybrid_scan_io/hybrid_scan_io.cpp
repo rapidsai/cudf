@@ -85,20 +85,21 @@ auto hybrid_scan(io_source const& io_source,
   auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
 
   // Input file buffer span
-  auto const file_buffer_span = io_source.get_host_buffer_span();
+  auto datasource     = std::move(cudf::io::make_datasources(io_source.get_source_info()).front());
+  auto datasource_ref = std::ref(*datasource);
 
   std::cout << "\nREADER: Setup, metadata and page index...\n";
   timer timer;
 
   // Fetch footer bytes and setup reader
-  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
-  auto const reader =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+  auto const footer_buffer = fetch_footer_bytes(datasource_ref);
+  auto const reader        = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+    make_host_span(*footer_buffer), options);
 
   // Get page index byte range from the reader
   auto const page_index_byte_range = reader->page_index_byte_range();
-  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
-  reader->setup_page_index(page_index_buffer);
+  auto const page_index_buffer     = fetch_page_index_bytes(datasource_ref, page_index_byte_range);
+  reader->setup_page_index(make_host_span(*page_index_buffer));
 
   // Get all row groups from the reader
   auto input_row_group_indices   = reader->all_row_groups(options);
@@ -142,9 +143,9 @@ auto hybrid_scan(io_source const& io_source,
     std::cout << "READER: Filter row groups with dictionary pages...\n";
     timer.reset();
     // Fetch dictionary page buffers and corresponding device spans from the input file buffer
-    auto dictionary_page_buffers =
-      fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
-    auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
+    auto [dictionary_page_buffers, dictionary_page_data, dict_read_tasks] =
+      fetch_byte_ranges(datasource_ref, dict_page_byte_ranges, stream, mr);
+    dict_read_tasks.get();
     dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
       dictionary_page_data, current_row_group_indices, options, stream);
 
@@ -167,9 +168,9 @@ auto hybrid_scan(io_source const& io_source,
       mr, bloom_filter_alignment);
     std::cout << "READER: Filter row groups with bloom filters...\n";
     timer.reset();
-    auto bloom_filter_buffers =
-      fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, aligned_mr);
-    auto bloom_filter_data = make_device_spans<uint8_t>(bloom_filter_buffers);
+    auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
+      fetch_byte_ranges(datasource_ref, bloom_filter_byte_ranges, stream, aligned_mr);
+    bloom_read_tasks.get();
     // Filter row groups with bloom filters
     bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
       bloom_filter_data, current_row_group_indices, options, stream);
@@ -207,9 +208,9 @@ auto hybrid_scan(io_source const& io_source,
   // Get column chunk byte ranges from the reader
   auto const filter_column_chunk_byte_ranges =
     reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
-  auto filter_column_chunk_buffers =
-    fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
-  auto filter_column_chunk_data = make_device_spans<uint8_t>(filter_column_chunk_buffers);
+  auto [filter_column_chunk_buffers, filter_column_chunk_data, filter_col_read_tasks] =
+    fetch_byte_ranges(datasource_ref, filter_column_chunk_byte_ranges, stream, mr);
+  filter_col_read_tasks.get();
 
   // Materialize the table with only the filter columns
   auto row_mask_mutable_view = row_mask->mutable_view();
@@ -240,9 +241,9 @@ auto hybrid_scan(io_source const& io_source,
   // Get column chunk byte ranges from the reader
   auto const payload_column_chunk_byte_ranges =
     reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
-  auto payload_column_chunk_buffers =
-    fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
-  auto payload_column_chunk_data = make_device_spans<uint8_t>(payload_column_chunk_buffers);
+  auto [payload_column_chunk_buffers, payload_column_chunk_data, payload_col_read_tasks] =
+    fetch_byte_ranges(datasource_ref, payload_column_chunk_byte_ranges, stream, mr);
+  payload_col_read_tasks.get();
 
   // Materialize the table with only the payload columns
   auto payload_table =
@@ -269,7 +270,8 @@ void inline print_usage()
   std::cout
     << std::endl
     << "Usage: hybrid_scan <input parquet file> <column name> <literal> <io source type>\n\n"
-    << "Available IO source types: HOST_BUFFER, PINNED_BUFFER (Default) \n\n"
+    << "Available IO source types: FILEPATH, HOST_BUFFER, PINNED_BUFFER (Default), DEVICE_BUFFER "
+       "\n\n"
     << "Note: Both the column name and literal must be of `string` type. The constructed filter "
        "expression\n      will be of the form <column name> == <literal>\n\n"
     << "Example usage: hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER \n\n";
