@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-RAPIDS_INIT_PIP_REMOVE_NVIDIA_INDEX="true"
-export RAPIDS_INIT_PIP_REMOVE_NVIDIA_INDEX
 source rapids-init-pip
 
 EXITCODE=0
@@ -62,7 +60,7 @@ fi
 MAIN_RUN_ID=$(
     gh run list                       \
         -w "Pandas Test Job"          \
-        -b main                       \
+        -b "$(<./RAPIDS_BRANCH)"      \
         --repo 'rapidsai/cudf'        \
         --status success              \
         --limit 7                     \

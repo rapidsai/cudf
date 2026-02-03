@@ -936,6 +936,8 @@ dependencies:
               - sqlframe
               - ibis-framework[duckdb]
               - duckdb<1.4.0
+              # Exclude broken version: https://github.com/tobymao/sqlglot/issues/6908
+              - sqlglot!=28.7.*
   depends_on_libcudf:
     common:
       - output_types: conda
