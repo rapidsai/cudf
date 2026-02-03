@@ -20,8 +20,12 @@ PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel
 echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBCUDF_WHEELHOUSE}/libcudf_*.whl)" >> "${PIP_CONSTRAINT}"
 echo "pylibcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${PYLIBCUDF_WHEELHOUSE}/pylibcudf_*.whl)" >> "${PIP_CONSTRAINT}"
 
+# TODO: move this variable into `ci-wheel`
+# Format Python limited API version string
+RAPIDS_PY_API="cp${RAPIDS_PY_VERSION//./}"
+export RAPIDS_PY_API
 
-./ci/build_wheel.sh cudf ${package_dir}
+./ci/build_wheel.sh cudf ${package_dir} --stable
 
 # repair wheels and write to the location that artifact-uploading code expects to find them
 python -m auditwheel repair \
