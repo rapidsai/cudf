@@ -52,6 +52,9 @@ class Agg(Expr):
         elif name == "max":
             req = plc.aggregation.max()
         elif name == "median":
+            (child,) = self.children
+            if plc.traits.is_timestamp(child.dtype.plc_type):
+                raise NotImplementedError("Median with temporal data types")
             req = plc.aggregation.median()
         elif name == "n_unique":
             # TODO: datatype of result
@@ -82,6 +85,8 @@ class Agg(Expr):
                 raise NotImplementedError("Quantile with equiprobable interpolation")
             if plc.traits.is_duration(child.dtype.plc_type):
                 raise NotImplementedError("Quantile with duration data type")
+            if plc.traits.is_timestamp(child.dtype.plc_type):
+                raise NotImplementedError("Quantile with temporal data types")
             req = plc.aggregation.quantile(
                 quantiles=[quantile.value], interp=Agg.interp_mapping[options]
             )

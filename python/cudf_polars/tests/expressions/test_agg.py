@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -218,3 +219,10 @@ def test_sum_all_null_decimal_dtype():
     df = pl.LazyFrame({"foo": pl.Series([None], dtype=pl.Decimal(9, 2))})
     q = df.select(pl.col("foo").sum())
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("expr", [pl.col("a").median(), pl.col("a").quantile(0.5)])
+def test_temporal_quantile_median_not_supported(expr):
+    df = pl.LazyFrame({"a": [date(2025, 1, 1), date(2025, 1, 2), date(2025, 1, 3)]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
