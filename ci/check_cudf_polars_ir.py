@@ -136,7 +136,10 @@ def is_ir_subclass(class_node: ast.ClassDef) -> bool:
         return False
 
     for base in class_node.bases:
-        if isinstance(base, ast.Name) and base.id == "IR":
+        # Handle both direct imports and aliased imports
+        if (isinstance(base, ast.Name) and base.id == "IR") or (
+            isinstance(base, ast.Attribute) and base.attr == "IR"
+        ):
             return True
     return False
 
