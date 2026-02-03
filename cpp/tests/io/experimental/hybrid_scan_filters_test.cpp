@@ -579,21 +579,6 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
     // Span to track current row group indices
     auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
 
-    // Calling `filter_data_pages_with_stats` before setting up the page index should raise an
-    // error
-    static bool is_page_index_set_up = false;
-    if (!is_page_index_set_up) {
-      EXPECT_THROW(std::ignore = reader->build_row_mask_with_page_index_stats(
-                     current_row_group_indices, options, stream, mr),
-                   std::runtime_error);
-      is_page_index_set_up = true;
-    }
-
-    // Set up the page index
-    auto const page_index_byte_range = reader->page_index_byte_range();
-    auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
-    reader->setup_page_index(page_index_buffer);
-
     // Filter the data pages with page index stats
     auto const row_mask =
       reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
@@ -609,6 +594,21 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
     EXPECT_EQ(std::count(host_row_mask.begin(), host_row_mask.end(), true),
               expected_surviving_rows);
   };
+
+  // Calling `test_filter_data_pages_with_stats` before setting up the page index should raise an
+  // error
+  {
+    auto literal_value     = cudf::numeric_scalar<T>(T{100});
+    auto const literal     = cudf::ast::literal(literal_value);
+    auto const col_ref     = cudf::ast::column_name_reference("col0");
+    auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
+    EXPECT_THROW(test_filter_data_pages_with_stats(filter_expression, 0), std::runtime_error);
+  }
+
+  // Set up the page index
+  auto const page_index_byte_range = reader->page_index_byte_range();
+  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
+  reader->setup_page_index(page_index_buffer);
 
   // Filtering AST - table[0] < 100
   {
