@@ -136,16 +136,16 @@ def remap_partitioning(
     new_name_to_idx = {name: i for i, name in enumerate(new_schema.keys())}
 
     def remap_hash_scheme(hs: HashScheme | None | str) -> HashScheme | None | str:
-        if hs is None or hs == "inherit":
+        if isinstance(hs, HashScheme):
+            try:
+                new_indices = tuple(
+                    new_name_to_idx[old_names[i]] for i in hs.column_indices
+                )
+            except (IndexError, KeyError):
+                return None  # Column missing in old or new schema
+            return HashScheme(new_indices, hs.modulus)
+        else:
             return hs  # None or "inherit" passes through unchanged
-        assert isinstance(hs, HashScheme), "Expected HashScheme"
-        try:
-            new_indices = tuple(
-                new_name_to_idx[old_names[i]] for i in hs.column_indices
-            )
-        except (IndexError, KeyError):
-            return None  # Column missing in old or new schema
-        return HashScheme(new_indices, hs.modulus)
 
     new_inter_rank = remap_hash_scheme(partitioning.inter_rank)
     new_local = remap_hash_scheme(partitioning.local)
