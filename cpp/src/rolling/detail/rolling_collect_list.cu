@@ -7,13 +7,12 @@
 
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
-#include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/functional.h>
@@ -91,10 +90,10 @@ size_type count_child_nulls(column_view const& input,
     return d_input.is_null_nocheck(i);
   };
 
-  return thrust::count_if(rmm::exec_policy_nosync(stream),
-                          gather_map->view().begin<size_type>(),
-                          gather_map->view().end<size_type>(),
-                          input_row_is_null);
+  return cudf::detail::count_if(gather_map->view().begin<size_type>(),
+                                gather_map->view().end<size_type>(),
+                                input_row_is_null,
+                                stream);
 }
 
 /**
@@ -119,11 +118,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
                                                 gather_map.size() - num_child_nulls,
                                                 mask_state::UNALLOCATED,
                                                 stream);
-  thrust::copy_if(rmm::exec_policy_nosync(stream),
-                  gather_map.template begin<size_type>(),
-                  gather_map.template end<size_type>(),
-                  new_gather_map->mutable_view().template begin<size_type>(),
-                  input_row_not_null);
+  cudf::detail::copy_if(gather_map.template begin<size_type>(),
+                        gather_map.template end<size_type>(),
+                        new_gather_map->mutable_view().template begin<size_type>(),
+                        input_row_not_null,
+                        stream);
 
   // Recalculate offsets after null entries are purged.
   auto new_sizes = make_fixed_width_column(

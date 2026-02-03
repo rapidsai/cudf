@@ -73,13 +73,59 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@main
     with:
       files_yaml: |
+        build_docs:
+          - '**'
+          - '!.clang-format'
+          - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
+          - '!.pre-commit-config.yaml'
+          - '!ci/build_wheel*.sh'
+          - '!ci/check_style.sh'
+          - '!ci/discover_libcudf_tests.sh'
+          - '!ci/release/update-version.sh'
+          - '!ci/run_*.sh'
+          - '!ci/test_*.sh'
+          - '!ci/validate_wheel.sh'
+          - '!codecov.yml'
         test_cpp:
           - '**'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
+          - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
+          - '!ci/build_docs.sh'
+          - '!ci/build_python*.sh'
+          - '!ci/build_wheel*.sh'
+          - '!ci/check_style.sh'
+          - '!ci/cudf_pandas_scripts/**'
           - '!ci/release/update-version.sh'
+          - '!ci/test_python*.sh'
+          - '!ci/test_wheel*.sh'
+          - '!ci/validate_wheel.sh'
           - '!docs/**'
           - '!img/**'
           - '!java/**'
@@ -89,9 +135,24 @@ jobs:
           - '**'
           - '!.clang-format'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
+          - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/release/update-version.sh'
+          - '!ci/test_java.sh'
+          - '!ci/validate_wheel.sh'
           - '!docs/**'
           - '!img/**'
           - '!java/**'
@@ -100,10 +161,30 @@ jobs:
           - '**'
           - '!.clang-format'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
+          - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
+          - '!ci/build_docs.sh'
+          - '!ci/build_wheel*.sh'
+          - '!ci/check_style.sh'
           - '!ci/cudf_pandas_scripts/**'
           - '!ci/release/update-version.sh'
+          - '!ci/test_wheel*.sh'
+          - '!ci/validate_wheel.sh'
+          - '!ci/release/update-version.sh'
+          - '!codecov.yml'
           - '!docs/**'
           - '!img/**'
           - '!notebooks/**'
@@ -112,19 +193,95 @@ jobs:
           - '**'
           - '!.clang-format'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
+          - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
+          - '!ci/build_wheel*.sh'
           - '!ci/cudf_pandas_scripts/**'
           - '!ci/release/update-version.sh'
+          - '!ci/test_wheel*.sh'
+          - '!ci/validate_wheel.sh'
+          - '!codecov.yml'
           - '!java/**'
-        test_python:
+        test_python_conda:
           - '**'
           - '!.clang-format'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
+          - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
+          - '!ci/build_docs.sh'
+          - '!ci/build_wheel*.sh'
+          - '!ci/check_style.sh'
           - '!ci/cudf_pandas_scripts/**'
           - '!ci/release/update-version.sh'
+          - '!ci/test_java.sh'
+          - '!ci/test_wheel*.sh'
+          - '!ci/validate_wheel.sh'
+          - '!docs/**'
+          - '!img/**'
+          - '!java/**'
+          - '!notebooks/**'
+        test_python_wheels:
+          - '**'
+          - '!.clang-format'
+          - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
+          - '!.pre-commit-config.yaml'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!ci/build_cpp.sh'
+          - '!ci/build_docs.sh'
+          - '!ci/build_python_noarch.sh'
+          - '!ci/build_python.sh'
+          - '!ci/check-style.sh'
+          - '!ci/cudf_pandas_scripts/**'
+          - '!ci/release/update-version.sh'
+          - '!ci/test_cpp.sh'
+          - '!ci/test_cpp_common.sh'
+          - '!ci/test_cpp_memcheck.sh'
+          - '!ci/test_java.sh'
+          - '!ci/test_notebooks.sh'
+          - '!ci/test_python_common.sh'
+          - '!ci/test_python_cudf.sh'
+          - '!ci/test_python_other.sh'
+          - '!codecov.yml'
+          - '!conda/**'
           - '!docs/**'
           - '!img/**'
           - '!java/**'
@@ -187,7 +344,7 @@ jobs:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
@@ -197,7 +354,7 @@ jobs:
     needs: [conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda
     with:
       build_type: pull-request
       script: "ci/test_python_other.sh"
@@ -225,9 +382,10 @@ jobs:
       container_image: "rapidsai/ci-conda:26.04-latest"
       script: "ci/test_notebooks.sh"
   docs-build:
-    needs: [conda-python-build, conda-python-build-noarch]
+    needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).build_docs
     with:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
@@ -273,7 +431,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
@@ -296,7 +454,7 @@ jobs:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -307,7 +465,7 @@ jobs:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
       # (rapidsmpf compatibility already validated in rapidsmpf CI)
@@ -319,7 +477,7 @@ jobs:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -344,7 +502,7 @@ jobs:
     needs: [wheel-build-dask-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -373,7 +531,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
       # This selects the latest supported Python + CUDA minor versions for each ARCH/CUDA major version combo
       matrix_filter: group_by([(.ARCH), (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -384,7 +542,7 @@ jobs:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
@@ -400,7 +558,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
@@ -413,7 +571,7 @@ jobs:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}

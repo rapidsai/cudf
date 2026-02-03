@@ -30,13 +30,15 @@ _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
 
 
 @pytest.mark.parametrize("stream", [None, Stream()])
-@pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_names", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_indices", [None, [2, 0]])
 @pytest.mark.parametrize("source_strategy", ["inline", "set_source"])
 def test_read_parquet_basic(
     table_data,
     binary_source_or_sink,
     nrows_skiprows,
-    columns,
+    column_names,
+    column_indices,
     stream,
     source_strategy,
 ):
@@ -59,13 +61,18 @@ def test_read_parquet_basic(
         options.set_num_rows(nrows)
     if skiprows != 0:
         options.set_skip_rows(skiprows)
-    if columns is not None:
-        options.set_columns(columns)
+    if column_names is not None:
+        options.set_column_names(column_names)
+    elif column_indices is not None:
+        options.set_column_indices(column_indices)
 
     res = plc.io.parquet.read_parquet(options, stream)
 
-    if columns is not None:
-        pa_table = pa_table.select(columns)
+    if column_names is not None:
+        pa_table = pa_table.select(column_names)
+    elif column_indices is not None:
+        column_names = [pa_table.column_names[idx] for idx in column_indices]
+        pa_table = pa_table.select(column_names)
 
     # Adapt to nrows/skiprows
     pa_table = pa_table.slice(
@@ -170,16 +177,34 @@ def test_read_parquet_filters(
     )
 
 
+class FooSpan:
+    def __init__(self, owner):
+        # Keep the owning object alive
+        self._data = owner
+
+    @property
+    def ptr(self):
+        return self._data.ptr
+
+    @property
+    def size(self):
+        return self._data.size
+
+
 @pytest.mark.parametrize("num_buffers", [1, 2])
 @pytest.mark.parametrize("stream", [None, Stream()])
-@pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_names", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_indices", [None, [2, 0]])
+@pytest.mark.parametrize("use_foo_span", [False, True])
 def test_read_parquet_from_device_buffers(
     table_data,
     binary_source_or_sink,
     nrows_skiprows,
     stream,
-    columns,
+    column_names,
+    column_indices,
     num_buffers,
+    use_foo_span,
 ):
     _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
@@ -189,9 +214,10 @@ def test_read_parquet_from_device_buffers(
         binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
     )
 
-    buf = DeviceBuffer.to_device(
+    rmm_buf = DeviceBuffer.to_device(
         get_bytes_from_source(source), plc.utils._get_stream(stream)
     )
+    buf = FooSpan(rmm_buf) if use_foo_span else rmm_buf
 
     synchronize_stream(stream)
 
@@ -202,8 +228,10 @@ def test_read_parquet_from_device_buffers(
         options.set_num_rows(nrows)
     if skiprows != 0:
         options.set_skip_rows(skiprows)
-    if columns is not None:
-        options.set_columns(columns)
+    if column_names is not None:
+        options.set_column_names(column_names)
+    elif column_indices is not None:
+        options.set_column_indices(column_indices)
 
     res = plc.io.parquet.read_parquet(options, stream)
 
@@ -212,8 +240,12 @@ def test_read_parquet_from_device_buffers(
         if num_buffers == 1
         else pa.concat_tables([pa_table] * num_buffers)
     )
-    if columns is not None:
-        expected = expected.select(columns)
+    if column_names is not None:
+        expected = expected.select(column_names)
+    elif column_indices is not None:
+        column_names = [expected.column_names[idx] for idx in column_indices]
+        expected = expected.select(column_names)
+
     expected = expected.slice(skiprows, nrows if nrows > -1 else None)
 
     assert_table_and_meta_eq(expected, res, check_field_nullability=False)

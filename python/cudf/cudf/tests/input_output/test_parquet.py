@@ -18,7 +18,6 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 from fsspec.core import get_fs_token_paths
-from packaging import version
 from pyarrow import parquet as pq
 
 import cudf
@@ -2474,10 +2473,6 @@ def test_parquet_writer_list_large_mixed(tmp_path):
 
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_list_chunked(tmp_path, store_schema):
-    if store_schema and version.parse(pa.__version__) < version.parse(
-        "15.0.0"
-    ):
-        pytest.skip("https://github.com/apache/arrow/pull/37792")
     table1 = cudf.DataFrame(
         {
             "a": list_gen(string_gen, 64, 40, 25),
@@ -2671,10 +2666,6 @@ def normalized_equals(value1, value2):
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_statistics(tmp_path, pdf, add_nulls, store_schema):
-    if store_schema and version.parse(pa.__version__) < version.parse(
-        "15.0.0"
-    ):
-        pytest.skip("https://github.com/apache/arrow/pull/37792")
     file_path = tmp_path / "cudf.parquet"
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
@@ -3071,10 +3062,6 @@ def test_per_column_options_string_col(tmp_path, encoding):
     assert encoding in fmd.row_group(0).column(0).encodings
 
 
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("16.0.0"),
-    reason="https://github.com/apache/arrow/pull/39748",
-)
 def test_parquet_bss_round_trip(tmp_path):
     num_rows = 200
 
@@ -3692,10 +3679,6 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema(tmp_path, data):
 
 
 @pytest.mark.parametrize("index", [None, True, False])
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("15.0.0"),
-    reason="https://github.com/apache/arrow/pull/37792",
-)
 def test_parquet_writer_roundtrip_with_arrow_schema(index):
     # Ensure that the concrete and nested types are faithfully being roundtripped
     # across Parquet with arrow schema
@@ -3738,11 +3721,6 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
             ),
         }
     )
-
-    # Convert decimals32/64 to decimal128 if pyarrow version is < 19.0.0
-    if version.parse(pa.__version__) < version.parse("19.0.0"):
-        expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
-        expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
 
     # Write to Parquet with arrow schema for faithful roundtrip
     buffer = BytesIO()
@@ -3847,10 +3825,6 @@ def test_parquet_writer_int96_timestamps_and_arrow_schema():
     ],
 )
 @pytest.mark.parametrize("index", [None, True, False])
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("15.0.0"),
-    reason="https://github.com/apache/arrow/pull/37792",
-)
 def test_parquet_writer_roundtrip_structs_with_arrow_schema(data, index):
     # Ensure that the structs are faithfully being roundtripped across
     # Parquet with arrow schema

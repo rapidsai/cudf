@@ -16,16 +16,14 @@ from contextlib import ExitStack
 from decimal import Decimal
 from functools import cached_property
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
-from packaging import version
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-from typing_extensions import Self
 
 import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -307,14 +305,25 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     _VALID_REDUCTIONS = {
         "any",
         "all",
-        "max",
         "min",
+        "max",
     }
     _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
     plc_column: plc.Column
     _dtype: DtypeObj
     _distinct_count: dict[bool, int]
     _exposed_buffers: set[Buffer]
+    _CACHED_PROPERTY_NAMES: ClassVar[frozenset[str]] = frozenset()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        # Pre-compute the set of all cached properties for efficient cache clearing
+        cached_props = set()
+        for base_cls in cls.__mro__:
+            for attr_name, attr_value in base_cls.__dict__.items():
+                if isinstance(attr_value, cached_property):
+                    cached_props.add(attr_name)
+        cls._CACHED_PROPERTY_NAMES = frozenset(cached_props)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         raise ValueError(
@@ -398,16 +407,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _clear_cache(self) -> None:
         self._distinct_count.clear()
-        attrs = (
-            "memory_usage",
-            "is_monotonic_increasing",
-            "is_monotonic_decreasing",
-        )
-        for attr in attrs:
+        for attr_name in self._CACHED_PROPERTY_NAMES:
             try:
-                delattr(self, attr)
+                delattr(self, attr_name)
             except AttributeError:
-                # attr was not called yet, so ignore.
                 pass
 
     def set_mask(self, mask: Buffer | None) -> Self:
@@ -432,13 +435,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         new_plc_column = self.plc_column.with_mask(new_mask, new_null_count)
         return cast(
             "Self",
-            (
-                type(self)
-                .from_pylibcudf(
-                    new_plc_column,
-                )
-                ._with_type_metadata(self.dtype)
-            ),
+            ColumnBase.create(new_plc_column, self.dtype),
         )
 
     @property
@@ -619,11 +616,128 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @staticmethod
+    def create(col: plc.Column, dtype: DtypeObj) -> ColumnBase:
+        """
+        Create a Column from a pylibcudf.Column with an explicit cudf dtype.
+
+        This is the primary factory for ColumnBase construction. It always requires
+        an explicit dtype to ensure type safety. If you need to infer the dtype from
+        the pylibcudf Column, use dtype_from_pylibcudf_column() first:
+
+            dtype = dtype_from_pylibcudf_column(plc_col)
+            col = ColumnBase.create(plc_col, dtype)
+        """
+        # Wrap buffers recursively
+        wrapped = ColumnBase._wrap_buffers(col)
+
+        # Dispatch to the appropriate subclass based on dtype
+        target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
+
+        # Validate dtype compatibility with the column structure using the
+        # target subclass's _validate_args method (includes recursive validation)
+        wrapped, dtype = target_cls._validate_args(wrapped, dtype)
+
+        # Construct the instance using the subclass's _from_preprocessed method
+        # Skip validation since we already validated above
+        return target_cls._from_preprocessed(
+            plc_column=wrapped,
+            dtype=dtype,
+            validate=False,
+        )
+
+    @staticmethod
+    def _dispatch_subclass_from_dtype(dtype: DtypeObj) -> type[ColumnBase]:
+        """
+        Dispatch to the appropriate ColumnBase subclass based on dtype.
+
+        This function determines which ColumnBase subclass should be used
+        to construct a column with the given dtype.
+        """
+        # Special pandas extension types
+        if isinstance(dtype, pd.DatetimeTZDtype):
+            return cudf.core.column.datetime.DatetimeTZColumn
+        if isinstance(dtype, CategoricalDtype):
+            return cudf.core.column.CategoricalColumn
+
+        # Temporal types (by kind)
+        if dtype.kind == "M":
+            return cudf.core.column.DatetimeColumn
+        if dtype.kind == "m":
+            return cudf.core.column.TimeDeltaColumn
+
+        # String types
+        if (
+            dtype == CUDF_STRING_DTYPE
+            or (hasattr(dtype, "kind") and dtype.kind == "U")
+            or isinstance(dtype, pd.StringDtype)
+            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
+        ):
+            return cudf.core.column.StringColumn
+
+        # cuDF custom types
+        if isinstance(dtype, ListDtype):
+            return cudf.core.column.ListColumn
+        if isinstance(dtype, IntervalDtype):
+            return cudf.core.column.IntervalColumn
+        if isinstance(dtype, StructDtype):
+            return cudf.core.column.StructColumn
+
+        # Decimal types
+        if isinstance(dtype, cudf.Decimal128Dtype):
+            return cudf.core.column.Decimal128Column
+        if isinstance(dtype, cudf.Decimal64Dtype):
+            return cudf.core.column.Decimal64Column
+        if isinstance(dtype, cudf.Decimal32Dtype):
+            return cudf.core.column.Decimal32Column
+
+        # Numerical types
+        if dtype.kind in "iufb":
+            return cudf.core.column.NumericalColumn
+
+        raise TypeError(f"Unrecognized dtype: {dtype}")
+
+    @staticmethod
+    def _validate_dtype_recursively(col: plc.Column, dtype: DtypeObj) -> None:
+        """
+        Validate dtype compatibility by dispatching to the appropriate ColumnBase
+        subclass's _validate_args method.
+
+        This method is used for recursive validation in nested types (List, Struct,
+        Interval). It dispatches to the correct ColumnBase subclass based on dtype
+        and calls its _validate_args method, which may recursively call this method
+        for nested children.
+
+        Parameters
+        ----------
+        col : plc.Column
+            The pylibcudf Column to validate.
+        dtype : DtypeObj
+            The cudf dtype to validate against.
+
+        Raises
+        ------
+        ValueError
+            If the dtype is incompatible with the Column.
+        """
+        # Skip validation for empty columns (INT8 with all nulls). These are created
+        # by _wrap_buffers() from EMPTY columns and may have inaccurate dtype metadata.
+        # For example, an empty list [] has element_type=object but child is INT8.
+        if (
+            col.type().id() == plc.TypeId.INT8
+            and col.null_count() == col.size()
+        ):
+            return
+
+        # Dispatch to the appropriate subclass and use its _validate_args
+        target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
+        target_cls._validate_args(col, dtype)
+
+    @staticmethod
     def from_pylibcudf(col: plc.Column) -> ColumnBase:
         """Create a Column from a pylibcudf.Column.
 
         This function will generate a Column pointing to the provided pylibcudf
-        Column.  It will directly access the data and mask buffers of the
+        Column. It will directly access the data and mask buffers of the
         pylibcudf Column, so the newly created object is not tied to the
         lifetime of the original pylibcudf.Column.
 
@@ -637,51 +751,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
+        # Wrap buffers first so that dtypes are compatible with dtype_from_pylibcudf_column
         wrapped = ColumnBase._wrap_buffers(col)
-
         dtype = dtype_from_pylibcudf_column(wrapped)
-
-        cls: type[ColumnBase]
-        if isinstance(dtype, pd.DatetimeTZDtype):
-            cls = cudf.core.column.datetime.DatetimeTZColumn
-        elif dtype.kind == "M":
-            cls = cudf.core.column.DatetimeColumn
-        elif dtype.kind == "m":
-            cls = cudf.core.column.TimeDeltaColumn
-        elif (
-            dtype == CUDF_STRING_DTYPE
-            or dtype.kind == "U"
-            or isinstance(dtype, pd.StringDtype)
-            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
-        ):
-            cls = cudf.core.column.StringColumn
-        elif isinstance(dtype, ListDtype):
-            cls = cudf.core.column.ListColumn
-        elif isinstance(dtype, IntervalDtype):
-            cls = cudf.core.column.IntervalColumn
-        elif isinstance(dtype, StructDtype):
-            cls = cudf.core.column.StructColumn
-        elif isinstance(dtype, cudf.Decimal64Dtype):
-            cls = cudf.core.column.Decimal64Column
-        elif isinstance(dtype, cudf.Decimal32Dtype):
-            cls = cudf.core.column.Decimal32Column
-        elif isinstance(dtype, cudf.Decimal128Dtype):
-            cls = cudf.core.column.Decimal128Column
-        elif dtype.kind in "iufb":
-            cls = cudf.core.column.NumericalColumn
-        else:
-            raise TypeError(f"Unrecognized dtype: {dtype}")
-
-        return cls._from_preprocessed(
-            plc_column=wrapped,
-            dtype=dtype,
-        )
+        return ColumnBase.create(wrapped, dtype)
 
     @classmethod
     def _from_preprocessed(
         cls,
         plc_column: plc.Column,
         dtype: DtypeObj,
+        validate: bool = True,
     ) -> Self:
         # TODO: This function bypassess some of the buffer copying/wrapping that would
         # be done in from_pylibcudf, so it is only ever safe to call this in situations
@@ -690,7 +770,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # in from_pylibcudf, but for now it is necessary for the various
         # _with_type_metadata calls.
         self = cls.__new__(cls)
-        plc_column, dtype = self._validate_args(plc_column, dtype)
+        if validate:
+            plc_column, dtype = self._validate_args(plc_column, dtype)
         self.plc_column = plc_column
         self._dtype = dtype
         self._distinct_count = {}
@@ -797,35 +878,33 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         The default implementation falls back to PyArrow for the conversion.
         """
-        # This default implementation does not handle nulls in any meaningful
-        # way
         if arrow_type and nullable:
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
         pa_array = self.to_arrow()
 
-        # Check if dtype is an ArrowDtype or pd.ExtensionDtype subclass
         if arrow_type or (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
+            not nullable and isinstance(self.dtype, pd.ArrowDtype)
         ):
-            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
-        elif (
-            nullable
-            or (
-                cudf.get_option("mode.pandas_compatible")
-                and is_pandas_nullable_extension_dtype(self.dtype)
+            return pd.Index(
+                pd.arrays.ArrowExtensionArray(pa_array), copy=False
             )
-        ) and is_pandas_nullable_extension_dtype(
-            pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
+        elif nullable or (
+            not arrow_type and is_pandas_nullable_extension_dtype(self.dtype)
+        ):
+            pandas_nullable_dtype = np_dtypes_to_pandas_dtypes.get(
                 self.dtype, self.dtype
             )
-        ):
             pandas_array = pandas_nullable_dtype.__from_arrow__(pa_array)
             return pd.Index(pandas_array, copy=False)
         else:
-            return pd.Index(pa_array.to_pandas())
+            # xref https://github.com/rapidsai/cudf/issues/21120
+            # TODO: Revisit using pa_array.to_pandas() once pandas 3.0 is supported
+            return pd.Index(
+                pa_array.to_numpy(zero_copy_only=False, writable=True),
+                copy=False,
+            )
 
     @property
     def values_host(self) -> np.ndarray:
@@ -879,12 +958,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ret = self._binaryop(other, "NULL_EQUALS")
         if ret is NotImplemented:
             return False
-        return ret.all()
+        return bool(ret.all())
 
-    def all(self, skipna: bool = True) -> bool:
-        # The skipna argument is only used for numerical columns.
-        # If all entries are null the result is True, including when the column
-        # is empty.
+    def all(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> ScalarLike:
         if not isinstance(skipna, bool):
             raise ValueError(
                 f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
@@ -893,38 +971,61 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return True
         if self.null_count == self.size:
             if not skipna:
-                return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
+                return _get_nan_for_dtype(self.dtype)
             else:
                 return True
-        result = bool(self.reduce("all"))
+
+        # For all(), we want NaN values to be treated as truthy.
+        # Call _reduce() with skipna=True to get the boolean result.
+        result = self._reduce(
+            "all", skipna=True, min_count=min_count, **kwargs
+        )
+        if np.isnan(result):
+            # Empty after dropping NaN/nulls - return np.bool_
+            result = np.bool_(True)
+
+        # For pandas nullable extension dtypes with skipna=False and nulls, return NaN
         if (
             result
             and not skipna
             and self.null_count > 0
             and is_pandas_nullable_extension_dtype(self.dtype)
         ):
-            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
+            return _get_nan_for_dtype(self.dtype)
         return result
 
-    def any(self, skipna: bool = True) -> bool:
-        # Early exit for fast cases.
+    def any(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> ScalarLike:
         if not isinstance(skipna, bool):
             raise ValueError(
                 f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
             )
-        if not skipna and self.has_nulls():
+        if self.size == 0:
+            return False
+        if not skipna and (self.has_nulls() or self.nan_count > 0):
             return True
         elif skipna and self.null_count == self.size:
             return False
-        return self.reduce("any")
+
+        # For any(), we want NaN values to be treated as truthy.
+        # Call _reduce() with skipna=True to get the boolean result.
+        result = self._reduce(
+            "any", skipna=True, min_count=min_count, **kwargs
+        )
+        if np.isnan(result):
+            # Empty after dropping NaN/nulls
+            # If skipna=False, NaN values should be treated as truthy
+            result = np.bool_(not skipna)
+        return result
 
     def dropna(self) -> Self:
         if self.has_nulls():
             return cast(
                 "Self",
-                ColumnBase.from_pylibcudf(
-                    stream_compaction.drop_nulls([self])[0]
-                )._with_type_metadata(self.dtype),
+                ColumnBase.create(
+                    stream_compaction.drop_nulls([self])[0], self.dtype
+                ),
             )
         else:
             return self.copy()
@@ -1000,36 +1101,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         type=array.type.value_type,
                     )
                 )
-            if version.parse(pa.__version__) < version.parse(
-                "16"
-            ) and isinstance(codes, pa.ChunkedArray):
-                result = cls.from_pylibcudf(
-                    plc.Table.from_arrow(pa.table({None: codes})).columns()[0]
-                )
-                categories = cls.from_pylibcudf(
-                    plc.Table.from_arrow(
-                        pa.table({None: dictionary})
-                    ).columns()[0]
-                )
-            else:
-                result = cls.from_pylibcudf(plc.Column.from_arrow(codes))
-                categories = cls.from_pylibcudf(
-                    plc.Column.from_arrow(dictionary)
-                )
+            result = cls.from_pylibcudf(plc.Column.from_arrow(codes))
+            categories = cls.from_pylibcudf(plc.Column.from_arrow(dictionary))
             return result._with_type_metadata(
                 CategoricalDtype(
                     categories=categories, ordered=array.type.ordered
                 )
             )
         else:
-            if version.parse(pa.__version__) < version.parse(
-                "16"
-            ) and isinstance(array, pa.ChunkedArray):
-                result = cls.from_pylibcudf(
-                    plc.Table.from_arrow(pa.table({None: array})).columns()[0]
-                )
-            else:
-                result = cls.from_pylibcudf(plc.Column.from_arrow(array))
+            result = cls.from_pylibcudf(plc.Column.from_arrow(array))
             return result._with_type_metadata(
                 cudf_dtype_from_pa_type(array.type)
             )
@@ -1142,14 +1222,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         plc_col = self.plc_column
         if deep:
             plc_col = plc_col.copy()
-        return cast(
-            "Self",
-            (
-                type(self)
-                .from_pylibcudf(plc_col)
-                ._with_type_metadata(self.dtype)
-            ),
-        )
+        return cast("Self", ColumnBase.create(plc_col, self.dtype))
 
     def element_indexing(self, index: int) -> ScalarLike:
         """Default implementation for indexing to an element
@@ -1373,16 +1446,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
                 return cast(
                     "Self",
-                    (
-                        type(self)
-                        .from_pylibcudf(plc_table.columns()[0])
-                        ._with_type_metadata(self.dtype)
-                    ),
+                    ColumnBase.create(plc_table.columns()[0], self.dtype),
                 )
         else:
             return cast(
                 "Self",
-                ColumnBase.from_pylibcudf(
+                type(self)
+                .from_pylibcudf(
                     copying.scatter(
                         cast("list[plc.Scalar]", [value])
                         if isinstance(value, plc.Scalar)
@@ -1391,7 +1461,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         [self],
                         bounds_check=bounds_check,
                     )[0]
-                )._with_type_metadata(self.dtype),
+                )
+                ._with_type_metadata(self.dtype),
             )
 
     def _check_scatter_key_length(
@@ -1490,17 +1561,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 input_col.plc_column,
                 plc_replace,
             )
-            result = type(self).from_pylibcudf(plc_column)
         return cast(
             "Self",
-            result._with_type_metadata(self.dtype),
+            ColumnBase.create(plc_column, self.dtype),
         )
 
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.unary.is_valid(self.plc_column)
+            return ColumnBase.create(
+                plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
             )
 
     def isnan(self) -> ColumnBase:
@@ -1517,8 +1587,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return as_column(False, length=len(self))
 
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.unary.is_null(self.plc_column)
+            return ColumnBase.create(
+                plc.unary.is_null(self.plc_column), np.dtype(np.bool_)
             )
 
     def notnull(self) -> ColumnBase:
@@ -1527,8 +1597,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result = as_column(True, length=len(self))
         else:
             with self.access(mode="read", scope="internal"):
-                result = type(self).from_pylibcudf(
-                    plc.unary.is_valid(self.plc_column)
+                result = ColumnBase.create(
+                    plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
                 )
 
         if cudf.get_option("mode.pandas_compatible"):
@@ -1775,11 +1845,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self,
             other,
         ):
-            return ColumnBase.from_pylibcudf(
+            return ColumnBase.create(
                 plc.search.contains(
                     self.plc_column,
                     other.plc_column,
-                )
+                ),
+                np.dtype(np.bool_),
             )
 
     def sort_values(
@@ -1800,11 +1871,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             return cast(
                 "Self",
-                (
-                    type(self)
-                    .from_pylibcudf(plc_table.columns()[0])
-                    ._with_type_metadata(self.dtype)
-                ),
+                ColumnBase.create(plc_table.columns()[0], self.dtype),
             )
 
     def distinct_count(self, dropna: bool = True) -> int:
@@ -1924,9 +1991,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
-        return ColumnBase.from_pylibcudf(
-            stream_compaction.apply_boolean_mask([self], mask)[0]
-        )._with_type_metadata(self.dtype)
+        return ColumnBase.create(
+            stream_compaction.apply_boolean_mask([self], mask)[0], self.dtype
+        )
 
     def argsort(
         self,
@@ -2051,9 +2118,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return cast(
                 "Self",
-                ColumnBase.from_pylibcudf(
-                    stream_compaction.drop_duplicates([self], keep="first")[0]
-                )._with_type_metadata(self.dtype),
+                ColumnBase.create(
+                    stream_compaction.drop_duplicates([self], keep="first")[0],
+                    self.dtype,
+                ),
             )
 
     @staticmethod
@@ -2196,7 +2264,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         assert len(frames) == 0, (
             f"{len(frames)} frame(s) remaining after deserialization"
         )
-        return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
+        return ColumnBase.create(plc_column, dtype)
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
         raise TypeError(
@@ -2207,65 +2275,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Convert NaN to NA."""
         return self
 
-    def _reduce(
-        self,
-        op: str,
-        skipna: bool = True,
-        min_count: int = 0,
-        *args: Any,
-        **kwargs: Any,
-    ) -> ScalarLike:
-        """Compute {op} of column values.
-
-        skipna : bool
-            Whether or not na values must be skipped.
-        min_count : int, default 0
-            The minimum number of entries for the reduction, otherwise the
-            reduction returns NaN.
-        """
-        preprocessed = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
-        )
-        if isinstance(preprocessed, ColumnBase):
-            return preprocessed.reduce(op, **kwargs)
-        return preprocessed
-
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls(include_nan=False)
 
-    def _process_for_reduction(
-        self, skipna: bool = True, min_count: int = 0
-    ) -> ColumnBase | ScalarLike:
-        if not isinstance(skipna, bool):
-            raise ValueError(
-                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
-            )
-
-        if self._can_return_nan(skipna=skipna):
-            return _get_nan_for_dtype(self.dtype)
-
-        col = self.nans_to_nulls() if skipna else self
-        if col.has_nulls():
-            if skipna:
-                col = col.dropna()
-            else:
-                return _get_nan_for_dtype(self.dtype)
-
-        # TODO: If and when pandas decides to validate that `min_count` >= 0 we
-        # should insert comparable behavior.
-        # https://github.com/pandas-dev/pandas/issues/50022
-        if min_count > 0:
-            valid_count = len(col) - col.null_count
-            if valid_count < min_count:
-                return _get_nan_for_dtype(self.dtype)
-        return col
-
-    def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
+    def _reduction_result_dtype(self, op: str) -> DtypeObj:
         """
         Determine the correct dtype to pass to libcudf based on
         the input dtype, data dtype, and specific reduction op
         """
-        if reduction_op in {"any", "all"}:
+        if op in {"any", "all"}:
             return np.dtype(np.bool_)
         return self.dtype
 
@@ -2391,9 +2409,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             for col in cols:
                 yield cast(
                     "Self",
-                    type(self)
-                    .from_pylibcudf(col)
-                    ._with_type_metadata(self.dtype),
+                    ColumnBase.create(col, self.dtype),
                 )
 
     def one_hot_encode(self, categories: ColumnBase) -> Generator[ColumnBase]:
@@ -2408,53 +2424,80 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 type(self).from_pylibcudf(col) for col in plc_table.columns()
             )
 
-    def scan(self, scan_op: str, inclusive: bool, **kwargs: Any) -> Self:
+    def _scan(self, op: str, inclusive: bool = True, **kwargs: Any) -> Self:
+        """Private method for scan operations. Called by mixin-generated methods."""
+        # `inclusive` controls scan type, not passed to aggregation
         with self.access(mode="read", scope="internal"):
-            return cast(
-                "Self",
-                type(self).from_pylibcudf(
-                    plc.reduce.scan(
-                        self.plc_column,
-                        aggregation.make_aggregation(scan_op, kwargs).plc_obj,
-                        plc.reduce.ScanType.INCLUSIVE
-                        if inclusive
-                        else plc.reduce.ScanType.EXCLUSIVE,
-                    )
-                ),
+            plc_result = plc.reduce.scan(
+                self.plc_column,
+                aggregation.make_aggregation(op, kwargs).plc_obj,
+                plc.reduce.ScanType.INCLUSIVE
+                if inclusive
+                else plc.reduce.ScanType.EXCLUSIVE,
             )
+        return cast("Self", ColumnBase.create(plc_result, self.dtype))
 
-    def reduce(self, reduction_op: str, **kwargs: Any) -> ScalarLike:
-        col_dtype = self._reduction_result_dtype(reduction_op)
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Private method for reduction operations. Called by mixin-generated methods."""
+        if not isinstance(skipna, bool):
+            raise ValueError(
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
+            )
+        # Early return if we can return NaN
+        if self._can_return_nan(skipna=skipna):
+            return _get_nan_for_dtype(self.dtype)
 
-        # check empty case
-        if len(self) <= self.null_count:
-            if reduction_op == "sum" or reduction_op == "sum_of_squares":
+        # Handle skipna by converting nans to nulls and potentially dropping
+        col = self.nans_to_nulls() if skipna else self
+        if col.has_nulls():
+            if skipna:
+                col = col.dropna()
+            else:
+                return _get_nan_for_dtype(self.dtype)
+
+        # Handle min_count
+        if min_count > 0:
+            valid_count = len(col) - col.null_count
+            if valid_count < min_count:
+                return _get_nan_for_dtype(self.dtype)
+
+        # Compute reduction result dtype
+        col_dtype = col._reduction_result_dtype(op)
+
+        # Handle empty case
+        if len(col) <= col.null_count:
+            if op == "sum" or op == "sum_of_squares":
                 return col_dtype.type(0)
-            if reduction_op == "product":
+            if op == "product":
                 return col_dtype.type(1)
-            if reduction_op == "any":
-                return False
-
             return _get_nan_for_dtype(col_dtype)
 
-        with self.access(mode="read", scope="internal"):
+        # Perform the actual reduction
+        with col.access(mode="read", scope="internal"):
             plc_scalar = plc.reduce.reduce(
-                self.plc_column,
-                aggregation.make_aggregation(reduction_op, kwargs).plc_obj,
+                col.plc_column,
+                aggregation.make_aggregation(op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
-            result_col = type(self).from_pylibcudf(
+            result_col = type(col).from_pylibcudf(
                 plc.Column.from_scalar(plc_scalar, 1)
             )
-            result_col = self._adjust_reduce_result(
-                result_col, reduction_op, col_dtype, plc_scalar
+            # Hook for subclasses (e.g., DecimalBaseColumn adjusts precision)
+            result_col = col._adjust_reduce_result(
+                result_col, op, col_dtype, plc_scalar
             )
         return result_col.element_indexing(0)
 
     def _adjust_reduce_result(
         self,
         result_col: ColumnBase,
-        reduction_op: str,
+        op: str,
         col_dtype: DtypeObj,
         plc_scalar: plc.Scalar,
     ) -> ColumnBase:
@@ -3170,18 +3213,25 @@ def as_column(
         # https://github.com/apache/arrow/pull/9948
         # Hence we should let the exception propagate to
         # the user.
-        data = pa.array(
-            arbitrary,
-            type=pa.decimal128(precision=dtype.precision, scale=dtype.scale),
-        )
         if isinstance(dtype, cudf.Decimal128Dtype):
-            return cudf.core.column.Decimal128Column.from_arrow(data)
+            pa_type = pa.decimal128(
+                precision=dtype.precision, scale=dtype.scale
+            )
+            column_class = cudf.core.column.Decimal128Column
         elif isinstance(dtype, cudf.Decimal64Dtype):
-            return cudf.core.column.Decimal64Column.from_arrow(data)
+            pa_type = pa.decimal64(
+                precision=dtype.precision, scale=dtype.scale
+            )
+            column_class = cudf.core.column.Decimal64Column
         elif isinstance(dtype, cudf.Decimal32Dtype):
-            return cudf.core.column.Decimal32Column.from_arrow(data)
+            pa_type = pa.decimal32(
+                precision=dtype.precision, scale=dtype.scale
+            )
+            column_class = cudf.core.column.Decimal32Column
         else:
             raise NotImplementedError(f"{dtype} not implemented")
+        data = pa.array(arbitrary, type=pa_type)
+        return column_class.from_arrow(data)
     elif isinstance(
         dtype,
         (
@@ -3443,8 +3493,9 @@ def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
     with access_columns(  # type: ignore[assignment]
         *objs_with_len, mode="read", scope="internal"
     ) as objs_with_len:
-        return ColumnBase.from_pylibcudf(
+        return ColumnBase.create(
             plc.concatenate.concatenate(
                 [col.plc_column for col in objs_with_len]
-            )
-        )._with_type_metadata(objs_with_len[0].dtype)
+            ),
+            objs_with_len[0].dtype,
+        )
