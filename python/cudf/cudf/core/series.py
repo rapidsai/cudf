@@ -4269,9 +4269,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         res = self.series._column.weekday
         # Pandas returns int64 for weekday
         res = res.astype(
-            get_dtype_of_same_kind(
-                self.series.dtype, np.dtype("int64")
-            )
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int64"))
         )
         return self._return_result_like_self(res)
 
