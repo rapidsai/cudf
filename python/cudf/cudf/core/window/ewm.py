@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.window.rolling import _RollingBase
-from cudf.utils.dtypes import is_dtype_obj_numeric
 
 if TYPE_CHECKING:
     from cudf.core.column.column import ColumnBase
@@ -196,8 +196,8 @@ class ExponentialMovingWindow(_RollingBase):
         to_libcudf_column = source_column.astype(
             np.dtype(np.float64)
         ).nans_to_nulls()
-        return to_libcudf_column.scan(
-            agg_name, True, com=self.com, adjust=self.adjust
+        return getattr(to_libcudf_column, agg_name)(
+            inclusive=True, com=self.com, adjust=self.adjust
         )
 
 

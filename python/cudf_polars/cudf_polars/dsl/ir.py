@@ -21,9 +21,7 @@ import time
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, overload
-
-from typing_extensions import assert_never
+from typing import TYPE_CHECKING, Any, ClassVar, assert_never, overload
 
 import polars as pl
 
@@ -55,9 +53,7 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
-    from typing import Literal
-
-    from typing_extensions import Self
+    from typing import Literal, Self
 
     from polars import polars  # type: ignore[attr-defined]
 
@@ -347,7 +343,7 @@ def _parquet_physical_types(
         plc.io.SourceInfo(paths)
     ).build()
     if columns is not None:
-        options.set_columns(columns)
+        options.set_column_names(columns)
     options.set_num_rows(0)
     df = plc.io.parquet.read_parquet(options, stream=stream)
     return dict(zip(schema.keys(), [c.type() for c in df.tbl.columns()], strict=True))
@@ -818,7 +814,7 @@ class Scan(IR):
                 plc.io.SourceInfo(paths)
             ).build()
             if with_columns is not None:
-                parquet_reader_options.set_columns(with_columns)
+                parquet_reader_options.set_column_names(with_columns)
             if filters is not None:
                 parquet_reader_options.set_filter(filters)
             if n_rows != -1:

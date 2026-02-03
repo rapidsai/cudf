@@ -47,8 +47,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Sequence
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import DtypeObj
     from cudf.core.series import Series
@@ -1385,7 +1384,7 @@ def _read_parquet(
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
             if columns is not None:
-                options.set_columns(columns)
+                options.set_column_names(columns)
             if filters is not None:
                 options.set_filter(filters)
 
@@ -1453,7 +1452,7 @@ def _read_parquet(
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
             if columns is not None:
-                options.set_columns(columns)
+                options.set_column_names(columns)
             if filters is not None:
                 options.set_filter(filters)
 

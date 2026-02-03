@@ -15,6 +15,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Literal,
+    Self,
     TypeVar,
     cast,
     overload,
@@ -25,7 +26,6 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -39,7 +39,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, stream_compaction
+from cudf.core._internals import copying
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -51,6 +51,7 @@ from cudf.core.column.column import concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import BooleanMask, GatherMap
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import ListDtype
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import GroupBy
@@ -75,7 +76,6 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
-    is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
 )
@@ -526,7 +526,7 @@ class IndexedFrame(Frame):
                 else:
                     dtype = np.dtype(np.int64)
                 result_col = result_col.astype(dtype)
-            results.append(getattr(result_col, op)())
+            results.append(getattr(result_col, op)(inclusive=True))
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
         )
@@ -1544,6 +1544,11 @@ class IndexedFrame(Frame):
         >>> ser.median()
         17.0
         """
+        if "overwrite_input" in kwargs:
+            raise ValueError(
+                "the 'overwrite_input' parameter is not supported in the "
+                "pandas implementation of median()"
+            )
         return self._reduce(
             "median",
             axis=axis,
@@ -3146,21 +3151,22 @@ class IndexedFrame(Frame):
         if len(subset_cols) == 0:
             return self.copy(deep=True)
 
+        columns = (
+            list(self._columns)
+            if ignore_index
+            else list(self.index._columns + self._columns)
+        )
         keys = self._positions_from_column_names(
             subset, offset_by_index_columns=not ignore_index
         )
+        result_columns = self._drop_duplicates_columns(
+            columns,
+            keys=keys,
+            keep=keep,
+            nulls_are_equal=nulls_are_equal,
+        )
         return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.drop_duplicates(
-                    list(self._columns)
-                    if ignore_index
-                    else list(self.index._columns + self._columns),
-                    keys=keys,
-                    keep=keep,
-                    nulls_are_equal=nulls_are_equal,
-                )
-            ],
+            [ColumnBase.from_pylibcudf(col) for col in result_columns],
             self._column_names,
             self.index.names if not ignore_index else None,
         )
@@ -3615,7 +3621,8 @@ class IndexedFrame(Frame):
         else:
             col = as_column(ans_col, retty)
 
-        col = col.set_mask(ans_mask.as_mask())
+        mask_buff, null_count = ans_mask.as_mask()
+        col = col.set_mask(mask_buff, null_count)
         result = cudf.Series._from_column(
             col, index=self.index, attrs=self.attrs
         )
@@ -4455,17 +4462,17 @@ class IndexedFrame(Frame):
             return self.copy(deep=True)
 
         data_columns = [col.nans_to_nulls() for col in self._columns]
+        columns = [*self.index._columns, *data_columns]
+        keys = self._positions_from_column_names(subset)
 
+        result_columns = self._drop_nulls_columns(
+            columns,
+            keys=keys,
+            how=how,
+            thresh=thresh,
+        )
         return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.drop_nulls(
-                    [*self.index._columns, *data_columns],
-                    how=how,
-                    keys=self._positions_from_column_names(subset),
-                    thresh=thresh,
-                )
-            ],
+            [ColumnBase.from_pylibcudf(col) for col in result_columns],
             self._column_names,
             self.index.names,
         )
@@ -4482,19 +4489,28 @@ class IndexedFrame(Frame):
                 "Boolean mask has wrong length: "
                 f"{len(boolean_mask.column)} not {len(self)}"
             )
-        return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.apply_boolean_mask(
-                    list(self.index._columns + self._columns)
-                    if keep_index
-                    else list(self._columns),
-                    boolean_mask.column,
-                )
-            ],
-            column_names=self._column_names,
-            index_names=self.index.names if keep_index else None,
+        columns = (
+            list(self.index._columns + self._columns)
+            if keep_index
+            else list(self._columns)
         )
+        mask = boolean_mask.column
+        with access_columns(*columns, mask, mode="read", scope="internal") as (
+            *cols,
+            mask_col,
+        ):
+            plc_table = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([col.plc_column for col in cols]),
+                mask_col.plc_column,
+            )
+            return self._from_columns_like_self(
+                [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in plc_table.columns()
+                ],
+                column_names=self._column_names,
+                index_names=self.index.names if keep_index else None,
+            )
 
     def _pandas_repr_compatible(self) -> Self:
         """Return Self but with columns prepared for a pandas-like repr."""
@@ -5497,11 +5513,12 @@ class IndexedFrame(Frame):
 
         column_index += len(idx_cols)
         exploded = [
-            new_column._with_type_metadata(
+            ColumnBase.create(
+                new_column.plc_column,
                 element_type,
             )
             if i == column_index
-            else new_column._with_type_metadata(old_column.dtype)
+            else ColumnBase.create(new_column.plc_column, old_column.dtype)
             for i, (new_column, old_column) in enumerate(
                 zip(
                     exploded,
@@ -7064,7 +7081,9 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
             to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
-    res_col = concat_columns([old_col, val_col])._with_type_metadata(to_type)
+    res_col = ColumnBase.create(
+        concat_columns([old_col, val_col]).plc_column, to_type
+    )
     if (
         cudf.get_option("mode.pandas_compatible")
         and res_col.dtype != col.dtype

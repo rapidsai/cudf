@@ -243,15 +243,3 @@ def test_arrow_object_lifetime():
     except ValueError:
         # Ignore the exception. A failure in this test is a seg fault
         pass
-
-
-def test_deprecate_arrow_interop_apis():
-    with pytest.warns(
-        FutureWarning, match="pylibcudf.interop.from_arrow is deprecated"
-    ):
-        foo = plc.interop.from_arrow(pa.array([1]))
-
-    with pytest.warns(
-        FutureWarning, match="pylibcudf.interop.to_arrow is deprecated"
-    ):
-        plc.interop.to_arrow(foo)

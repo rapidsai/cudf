@@ -21,7 +21,7 @@ import pylibcudf as plc
 from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import aggregation, sorting, stream_compaction
+from cudf.core._internals import aggregation, sorting
 from cudf.core.abc import Serializable
 from cudf.core.column import access_columns
 from cudf.core.column.column import (
@@ -34,6 +34,7 @@ from cudf.core.column.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import (
     CategoricalDtype,
     DecimalDtype,
@@ -53,7 +54,6 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -650,10 +650,19 @@ class GroupBy(Serializable, Reducible, Scannable):
             [as_column(range(len(self.obj)), dtype=SIZE_TYPE_DTYPE)]
         )
 
-        group_keys = [
-            ColumnBase.from_pylibcudf(col)
-            for col in stream_compaction.drop_duplicates(group_keys)
-        ]
+        with access_columns(
+            *group_keys, mode="read", scope="internal"
+        ) as cols:
+            plc_table = plc.stream_compaction.stable_distinct(
+                plc.Table([col.plc_column for col in cols]),
+                list(range(len(cols))),
+                plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+                plc.types.NullEquality.EQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+            )
+            group_keys = [
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+            ]
         if len(group_keys) > 1:
             index = MultiIndex.from_arrays(group_keys)
         else:
@@ -800,11 +809,8 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         result = self.agg(rank)
 
-        if get_option("mode.pandas_compatible"):
-            # pandas always returns floats:
-            return result.astype(np.dtype(np.float64))
-
-        return result
+        # pandas always returns floats:
+        return result.astype(np.dtype(np.float64))
 
     @property
     def _groupby(self):
@@ -2494,7 +2500,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                         self.obj._data[y].plc_column,
                     ]
                 )
-            ).set_mask(None)
+            ).set_mask(None, 0)
             column_pair_structs[(x, y)] = struct_column
 
         from cudf.core.dataframe import DataFrame
@@ -3050,7 +3056,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         raise NotImplementedError("expanding is currently not implemented")
 
-    def any(self, skipna: bool = True):
+    def any(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if any value in the group is truthful, else False.
 
@@ -3058,7 +3064,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         raise NotImplementedError("any is currently not implemented")
 
-    def all(self, skipna: bool = True):
+    def all(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if all values in the group are truthful, else False.
 

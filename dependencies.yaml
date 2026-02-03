@@ -665,10 +665,6 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              py: "3.10"
-            packages:
-              - python=3.10
-          - matrix:
               py: "3.11"
             packages:
               - python=3.11
@@ -682,7 +678,7 @@ dependencies:
               - python=3.13
           - matrix:
             packages:
-              - python>=3.10,<3.14
+              - python>=3.11,<3.14
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -940,6 +936,8 @@ dependencies:
               - sqlframe
               - ibis-framework[duckdb]
               - duckdb<1.4.0
+              # Exclude broken version: https://github.com/tobymao/sqlglot/issues/6908
+              - sqlglot!=28.7.*
   depends_on_libcudf:
     common:
       - output_types: conda

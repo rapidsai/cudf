@@ -2,13 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, Any, TypeGuard
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.api import types as pd_types  # noqa: TID251
 from pandas.core.computation.common import result_type_many
 
 import pylibcudf as plc
@@ -326,6 +324,8 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
     if any(
         isinstance(dtype, cudf.core.dtypes.DecimalDtype) for dtype in dtypes
     ):
+        from cudf.core.dtype.validators import is_dtype_obj_numeric
+
         if all(
             is_dtype_obj_numeric(dtype, include_decimal=True)
             for dtype in dtypes
@@ -388,20 +388,6 @@ def _get_base_dtype(dtype: pd.DatetimeTZDtype) -> np.dtype:
         return np.dtype(f"<M8[{dtype.unit}]")
     else:
         return dtype.base
-
-
-def is_dtype_obj_numeric(
-    dtype: DtypeObj, include_decimal: bool = True
-) -> bool:
-    """Like is_numeric_dtype but does not introspect argument."""
-    is_non_decimal = dtype.kind in set("iufb")
-    if include_decimal:
-        return is_non_decimal or isinstance(
-            dtype,
-            (cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype),
-        )
-    else:
-        return is_non_decimal
 
 
 def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
@@ -600,184 +586,6 @@ def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
         )
     else:
         return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
-
-
-def is_dtype_obj_categorical(obj):
-    if obj is None:
-        return False
-
-    if isinstance(
-        obj,
-        (
-            pd.CategoricalDtype,
-            cudf.CategoricalDtype,
-        ),
-    ):
-        return True
-
-    if any(
-        obj is t
-        for t in (
-            cudf.CategoricalDtype,
-            pd.CategoricalDtype,
-            pd.CategoricalDtype.type,
-        )
-    ):
-        return True
-    if isinstance(obj, str) and obj == "category":
-        return True
-
-    # TODO: A lot of the above checks are probably redundant and should be
-    # farmed out to this function here instead.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return pd_types.is_categorical_dtype(obj)
-
-
-def is_dtype_obj_string(obj):
-    """Check whether the provided array or dtype is of the string dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array or dtype is of the string dtype.
-    """
-    return (
-        obj is CUDF_STRING_DTYPE
-        or obj is np.dtype("str")
-        or (isinstance(obj, pd.StringDtype))
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and (
-                pa.types.is_string(obj.pyarrow_dtype)
-                or pa.types.is_large_string(obj.pyarrow_dtype)
-            )
-        )
-    )
-
-
-def is_dtype_obj_list(obj):
-    """Check whether an array-like or dtype is of the list dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of the list dtype.
-    """
-    return (
-        type(obj) is cudf.ListDtype
-        or obj is cudf.ListDtype
-        or (isinstance(obj, str) and obj == cudf.ListDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_list(obj.pyarrow_dtype)
-        )
-    )
-
-
-def is_dtype_obj_struct(obj):
-    """Check whether an array-like or dtype is of the struct dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of the struct dtype.
-    """
-    # TODO: This behavior is currently inconsistent for interval types. the
-    # actual class IntervalDtype will return False, but instances (e.g.
-    # IntervalDtype(int)) will return True. For now this is not being changed
-    # since the interval dtype is being modified as part of the array refactor,
-    # but this behavior should be made consistent afterwards.
-    return (
-        isinstance(obj, cudf.StructDtype)
-        or obj is cudf.StructDtype
-        or (isinstance(obj, str) and obj == cudf.StructDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_struct(obj.pyarrow_dtype)
-        )
-    )
-
-
-def is_dtype_obj_interval(obj):
-    return (
-        isinstance(
-            obj,
-            (
-                cudf.IntervalDtype,
-                pd.IntervalDtype,
-            ),
-        )
-        or obj is cudf.IntervalDtype
-        or (isinstance(obj, str) and obj == cudf.IntervalDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_interval(obj.pyarrow_dtype)
-        )
-    )
-
-
-def is_dtype_obj_decimal(obj):
-    """Check whether an array-like or dtype is of the decimal dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of the decimal dtype.
-    """
-    return (
-        is_dtype_obj_decimal32(obj)
-        or is_dtype_obj_decimal64(obj)
-        or is_dtype_obj_decimal128(obj)
-    )
-
-
-def is_dtype_obj_decimal32(obj):
-    return (
-        type(obj) is cudf.Decimal32Dtype
-        or obj is cudf.Decimal32Dtype
-        or (isinstance(obj, str) and obj == cudf.Decimal32Dtype.name)
-    )
-
-
-def is_dtype_obj_decimal64(obj):
-    return (
-        type(obj) is cudf.Decimal64Dtype
-        or obj is cudf.Decimal64Dtype
-        or (isinstance(obj, str) and obj == cudf.Decimal64Dtype.name)
-    )
-
-
-def is_dtype_obj_decimal128(obj):
-    return (
-        type(obj) is cudf.Decimal128Dtype
-        or obj is cudf.Decimal128Dtype
-        or (isinstance(obj, str) and obj == cudf.Decimal128Dtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_decimal128(obj.pyarrow_dtype)
-        )
-    )
 
 
 SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES: dict[np.dtype[Any], plc.types.TypeId] = {
