@@ -1049,7 +1049,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     return;
   }
 
-  bool const process_nulls = is_nullable(s) && maybe_has_nulls(s);
+  bool const process_nulls = should_process_nulls(s);
 
   // shared buffer. all shared memory is suballocated out of here
   constexpr int rle_run_buffer_bytes =
