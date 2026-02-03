@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -239,6 +239,13 @@ def test_expr_is_in_empty_list():
     ldf = pl.LazyFrame({"a": [1, 2, 3, 4]})
     q = ldf.select(pl.col("a").is_in([]))
     assert_gpu_result_equal(q)
+
+
+def test_is_in_shape_mismatch_raises():
+    q = pl.LazyFrame().select(
+        pl.lit(pl.Series([0, 1, 2, 3, 4])).is_in(pl.Series([[3], [1]]))
+    )
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_boolean_is_close(request):

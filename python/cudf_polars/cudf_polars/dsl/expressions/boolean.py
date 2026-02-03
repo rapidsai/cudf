@@ -19,6 +19,7 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.dsl.expressions.literal import LiteralColumn
 
 if TYPE_CHECKING:
     from typing import Self
@@ -96,6 +97,20 @@ class BooleanFunction(Expr):
             raise NotImplementedError(
                 f"Boolean function {self.name}"
             )  # pragma: no cover
+        if self.name is BooleanFunction.Name.IsIn and len(children) == 2:
+            # Polars should raise an error ahead of time
+            # for us for these kind of shape mismatches
+            # See ...
+            needles, haystack = children
+            if (
+                isinstance(needles, LiteralColumn)
+                and isinstance(haystack, LiteralColumn)
+                and isinstance(haystack.dtype.polars_type, pl.List)
+                and len(needles.value) != len(haystack.value)
+            ):
+                raise NotImplementedError(
+                    f"arguments for `is_in` have different lengths ({len(needles.value)} != {len(haystack.value)})"
+                )
 
     @staticmethod
     def _distinct(

@@ -155,7 +155,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_parquet.py::test_binary_offset_roundtrip": "binary offset type unsupported",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[gpu]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[engine1]": "Expect this to pass because cudf-polars is installed",
-    "tests/unit/lazyframe/test_lazyframe.py::test_round[dtype1-123.55-1-123.6]": "Rounding midpoints is handled incorrectly",
+    "tests/unit/lazyframe/test_lazyframe.py::test_round[dtype2-123.55-1-123.6]": "libcudf HALF_EVEN rounding bug for Float64 with decimal_places > 0. See https://github.com/rapidsai/cudf/issues/21319",
     "tests/unit/lazyframe/test_lazyframe.py::test_cast_frame": "Casting that raises not supported on GPU",
     "tests/unit/lazyframe/test_lazyframe.py::test_lazy_cache_hit": "Debug output on stderr doesn't match",
     "tests/unit/operations/aggregation/test_aggregations.py::test_binary_op_agg_context_no_simplify_expr_12423": "groupby-agg of just literals should not produce collect_list",
@@ -233,6 +233,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-0-False]": "Aggregating a list literal: cudf#19610",
     "tests/unit/operations/namespaces/test_binary.py::test_binary_compounded_literal_aggstate_24460": "Aggregating a list literal: cudf#19610",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count": "Polars doesn't pass us any statistics for iceberg scans when use_metadata_statistics is True",
+    "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "polars doesnt hand us the hconcat options. See ...",
 }
 
 
