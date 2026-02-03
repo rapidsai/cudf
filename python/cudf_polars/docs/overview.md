@@ -805,29 +805,30 @@ the query for a given `LazyFrame`.
 the query plan in a structured format.
 
 ```python
+>>> import dataclasses
 >>> import polars as pl
 >>> from cudf_polars.experimental.explain import serialize_query
 >>> q = pl.LazyFrame({"a": ['a', 'b', 'a'], "b": [1, 2, 3]}).group_by("a").agg(pl.len())
-serialize_query(df, engine=pl.GPUEngine())
-{'roots': [2376323819],
- 'nodes': {'2376323819': {'id': 2376323819,
-   'children': [1086359873],
+>>> dataclasses.asdict(serialize_query(q, engine=pl.GPUEngine()))
+{'roots': ['2408237918'],
+ 'nodes': {'2408237918': {'id': '2408237918',
+   'children': [1009833075],
    'schema': {'a': 'STRING', 'len': 'UINT32'},
    'properties': {'columns': ['a', 'len']},
    'type': 'Select'},
-  '1086359873': {'id': 1086359873,
-   'children': [2102236744],
+  '1009833075': {'id': '1009833075',
+   'children': [3262131978],
    'schema': {'a': 'STRING', '___0': 'UINT32'},
    'properties': {'keys': ['a']},
    'type': 'GroupBy'},
-  '2102236744': {'id': 2102236744,
+  '3262131978': {'id': '3262131978',
    'children': [],
    'schema': {'a': 'STRING'},
    'properties': {},
    'type': 'DataFrameScan'}},
- 'partition_info': {'2376323819': {'count': 1, 'partitioned_on': []},
-  '1086359873': {'count': 1, 'partitioned_on': []},
-  '2102236744': {'count': 1, 'partitioned_on': []}}}
+ 'partition_info': {'2408237918': {'count': 1, 'partitioned_on': ()},
+  '1009833075': {'count': 1, 'partitioned_on': ()},
+  '3262131978': {'count': 1, 'partitioned_on': ()}}}
 ```
 
 The structured schema has three top-level fields:
