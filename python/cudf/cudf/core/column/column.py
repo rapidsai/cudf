@@ -1152,14 +1152,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         type=array.type.value_type,
                     )
                 )
-            plc_codes = plc.Column.from_arrow(codes)
-            plc_categories = plc.Column.from_arrow(dictionary)
-            result = cls.create(
-                plc_codes, dtype_from_pylibcudf_column(plc_codes)
-            )
-            categories = cls.create(
-                plc_categories, dtype_from_pylibcudf_column(plc_categories)
-            )
+            result = cls.from_pylibcudf(plc.Column.from_arrow(codes))
+            categories = cls.from_pylibcudf(plc.Column.from_arrow(dictionary))
             return result._with_type_metadata(
                 CategoricalDtype(
                     categories=categories, ordered=array.type.ordered
@@ -2861,17 +2855,16 @@ def column_empty(
                 row_count, plc.types.MaskState.ALL_NULL
             )
         )
-        plc_column = plc.Column(
-            dtype_to_pylibcudf_type(dtype),
-            row_count,
-            None,
-            mask,
-            row_count,
-            0,
-            [child.plc_column for child in children],
-        )
-        return ColumnBase.create(
-            plc_column, dtype_from_pylibcudf_column(plc_column)
+        return ColumnBase.from_pylibcudf(
+            plc.Column(
+                dtype_to_pylibcudf_type(dtype),
+                row_count,
+                None,
+                mask,
+                row_count,
+                0,
+                [child.plc_column for child in children],
+            )
         )._with_type_metadata(dtype)
     else:
         if isinstance(dtype, CategoricalDtype):
@@ -2879,12 +2872,11 @@ def column_empty(
             plc_dtype = plc.DataType(plc.TypeId.INT64)
         else:
             plc_dtype = dtype_to_pylibcudf_type(dtype)
-        plc_column = plc.Column.from_scalar(
-            plc.Scalar.from_py(None, plc_dtype),
-            row_count,
-        )
-        return ColumnBase.create(
-            plc_column, dtype_from_pylibcudf_column(plc_column)
+        return ColumnBase.from_pylibcudf(
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(None, plc_dtype),
+                row_count,
+            )
         )._with_type_metadata(dtype)
 
 
