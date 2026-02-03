@@ -27,7 +27,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, sorting, stream_compaction
+from cudf.core._internals import copying, sorting
 from cudf.core.accessors import StringMethods
 from cudf.core.column import (
     CategoricalColumn,
@@ -1234,15 +1234,15 @@ class Index(SingleColumnFrame):
         nulls_are_equal: bool, default True
             Null elements are considered equal to other null elements.
         """
+        columns = list(self._columns)
+        result_columns = self._drop_duplicates_columns(
+            columns,
+            keys=list(range(len(columns))),
+            keep=keep,
+            nulls_are_equal=nulls_are_equal,
+        )
         return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.drop_duplicates(
-                    list(self._columns),
-                    keep=keep,
-                    nulls_are_equal=nulls_are_equal,
-                )
-            ],
+            [ColumnBase.from_pylibcudf(col) for col in result_columns],
             self._column_names,
         )
 
@@ -1320,18 +1320,15 @@ class Index(SingleColumnFrame):
         if not self.hasnans:
             return self.copy(deep=False)
 
-        # This is to be consistent with IndexedFrame.dropna to handle nans
-        # as nulls by default
+        # Convert nans to nulls to be consistent with IndexedFrame.dropna
         data_columns = [col.nans_to_nulls() for col in self._columns]
-
+        result_columns = self._drop_nulls_columns(
+            data_columns,
+            keys=list(range(len(data_columns))),
+            how=how,
+        )
         return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.drop_nulls(
-                    data_columns,
-                    how=how,
-                )
-            ],
+            [ColumnBase.from_pylibcudf(col) for col in result_columns],
             self._column_names,
         )
 
@@ -1802,7 +1799,9 @@ class Index(SingleColumnFrame):
         else:
             data = concat_columns([o._column for o in non_empties])
             if cls is IntervalIndex:
-                data = data._with_type_metadata(non_empties[0]._column.dtype)
+                data = ColumnBase.create(
+                    data.plc_column, non_empties[0]._column.dtype
+                )
             result = Index._from_column(data)
 
         names = {obj.name for obj in objs}
@@ -2228,7 +2227,7 @@ class Index(SingleColumnFrame):
 
     def repeat(self, repeats, axis=None) -> Self:
         result = self._repeat([self._column], repeats, axis)[0]
-        result = result._with_type_metadata(self.dtype)
+        result = ColumnBase.create(result.plc_column, self.dtype)
         return type(self)._from_column(result, name=self.name)
 
     def __contains__(self, item) -> bool:
@@ -5348,17 +5347,18 @@ class IntervalIndex(Index):
                 0,
                 [left, right],
             )
-            interval_col = ColumnBase.from_pylibcudf(
-                plc_column
-            )._with_type_metadata(IntervalDtype(child_type, closed))
+            interval_col = ColumnBase.create(
+                plc_column, IntervalDtype(child_type, closed)
+            )
         else:
             col = as_column(data)
             if not isinstance(col, IntervalColumn):
                 raise TypeError("data must be an iterable of Interval data")
             if copy:
                 col = col.copy()
-            interval_col = col._with_type_metadata(
-                IntervalDtype(col.dtype.subtype, closed)  # type: ignore[union-attr]
+            interval_col = ColumnBase.create(
+                col.plc_column,
+                IntervalDtype(col.dtype.subtype, closed),  # type: ignore[union-attr]
             )
 
         if dtype:
@@ -5458,9 +5458,7 @@ class IntervalIndex(Index):
             [left_col, right_col],
         )
         dtype = IntervalDtype(breaks.dtype, closed)
-        interval_col = ColumnBase.from_pylibcudf(
-            plc_column
-        )._with_type_metadata(dtype)
+        interval_col = ColumnBase.create(plc_column, dtype)
         return IntervalIndex._from_column(interval_col, name=name)
 
     @cached_property

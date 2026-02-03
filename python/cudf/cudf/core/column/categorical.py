@@ -270,8 +270,8 @@ class CategoricalColumn(column.ColumnBase):
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
         if self.categories.dtype.kind == "f":
-            new_mask = self.notnull().fillna(False).as_mask()
-            col = self.set_mask(new_mask)
+            new_mask, null_count = self.notnull().fillna(False).as_mask()
+            col = self.set_mask(new_mask, null_count)
         else:
             col = self
 
@@ -598,6 +598,7 @@ class CategoricalColumn(column.ColumnBase):
         gather_map = self.codes.astype(SIZE_TYPE_DTYPE).fillna(0)
         out = self.categories.take(gather_map)
         mask = self.mask
+        new_null_count = self.null_count
         if self.offset > 0 and mask is not None:
             with mask.access(mode="read", scope="internal"):
                 mask = cudf.core.buffer.as_buffer(
@@ -607,7 +608,12 @@ class CategoricalColumn(column.ColumnBase):
                         mask.size - self.offset,
                     )
                 )
-        out = out.set_mask(mask)
+                new_null_count = plc.null_mask.null_count(
+                    mask,
+                    0,
+                    mask.size,
+                )
+        out = out.set_mask(mask, new_null_count)
         return out
 
     def copy(self, deep: bool = True) -> Self:
