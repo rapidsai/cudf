@@ -83,7 +83,7 @@ class sort_merge_join {
    * @return A pair of device vectors [`left_indices`, `right_indices`] that can be used to
    * construct the result of performing an inner join between two tables
    */
-  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                           std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(table_view const& left,
              sorted is_left_sorted,
@@ -106,7 +106,7 @@ class sort_merge_join {
    * @return A pair of device vectors [`left_indices`, `right_indices`] that can be used to
    * construct the result of performing a left join between two tables
    */
-  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                           std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(table_view const& left,
             sorted is_left_sorted,
