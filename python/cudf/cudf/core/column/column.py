@@ -50,6 +50,7 @@ from cudf.core.buffer import (
 )
 from cudf.core.column.utils import access_columns
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.dtypes import (
     CategoricalDtype,
     DecimalDtype,
@@ -70,7 +71,6 @@ from cudf.utils.dtypes import (
     dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     find_common_type,
-    get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_decimal,
     is_dtype_obj_interval,
@@ -1347,7 +1347,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         result_col = as_column(
             bool_fill_value,
-            dtype=get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+            dtype=get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_)),
             length=len(self),
         )
         if result_mask is not None:
@@ -1607,7 +1607,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return result
 
         return result._with_type_metadata(
-            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_))
         )
 
     @cached_property

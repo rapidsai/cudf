@@ -41,6 +41,7 @@ from cudf.core.column import (
 )
 from cudf.core.column.column import concat_columns
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import (
@@ -64,7 +65,6 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     _get_nan_for_dtype,
     find_common_type,
-    get_dtype_of_same_kind,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
@@ -4284,7 +4284,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         if cudf.get_option("mode.pandas_compatible"):
             # Pandas returns int64 for weekday
             res = res.astype(
-                get_dtype_of_same_kind(
+                get_dtype_of_same_variant(
                     self.series._column.dtype, np.dtype("int64")
                 )
             )
@@ -4625,7 +4625,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         if cudf.get_option("mode.pandas_compatible"):
             # Pandas returns int64 for dayofweek
             res = res.astype(
-                get_dtype_of_same_kind(
+                get_dtype_of_same_variant(
                     self.series._column.dtype, np.dtype("int64")
                 )
             )

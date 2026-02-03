@@ -452,7 +452,7 @@ def is_pandas_nullable_numpy_dtype(dtype_to_check) -> bool:
 
 def is_pandas_nullable_extension_dtype(
     dtype_to_check: Any,
-) -> TypeGuard[pd.core.dtypes.base.ExtensionDtype]:
+) -> TypeGuard[pd.api.extensions.ExtensionDtype]:
     if is_pandas_nullable_numpy_dtype(dtype_to_check) or isinstance(
         dtype_to_check, pd.ArrowDtype
     ):
@@ -531,34 +531,6 @@ def dtype_to_pandas_nullable_extension_type(dtype) -> DtypeObj:
         return np_dtypes_to_pandas_dtypes.get(dtype, dtype)
 
 
-def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
-    """
-    Given a dtype, return a dtype of the same kind.
-    If no such dtype exists, return the default dtype.
-    """
-    if isinstance(source_dtype, pd.ArrowDtype):
-        return dtype_to_pandas_arrowdtype(target_dtype)
-    elif is_pandas_nullable_extension_dtype(source_dtype):
-        if (
-            isinstance(source_dtype, pd.StringDtype)
-            and source_dtype.na_value is np.nan
-        ):
-            return target_dtype
-        elif (
-            isinstance(source_dtype, pd.StringDtype)
-            and source_dtype.storage == "pyarrow"
-        ):
-            if (
-                isinstance(target_dtype, pd.StringDtype)
-                and source_dtype == target_dtype
-            ):
-                return source_dtype
-            return dtype_to_pandas_arrowdtype(target_dtype)
-        return dtype_to_pandas_nullable_extension_type(target_dtype)
-    else:
-        return target_dtype
-
-
 def get_dtype_of_same_type(lhs_dtype: DtypeObj, rhs_dtype: DtypeObj):
     """
     Given two dtypes, checks if `lhs_dtype` translates to same libcudf
@@ -570,7 +542,9 @@ def get_dtype_of_same_type(lhs_dtype: DtypeObj, rhs_dtype: DtypeObj):
     ):
         return lhs_dtype
     else:
-        return get_dtype_of_same_kind(lhs_dtype, rhs_dtype)
+        from cudf.core.dtype.converters import get_dtype_of_same_variant
+
+        return get_dtype_of_same_variant(lhs_dtype, rhs_dtype)
 
 
 def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:

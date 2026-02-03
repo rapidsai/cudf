@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from cudf.api.types import is_dtype_equal
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -19,7 +20,6 @@ from cudf.core.dtypes import (
 from cudf.core.reshape import concat
 from cudf.utils.dtypes import (
     find_common_type,
-    get_dtype_of_same_kind,
     is_dtype_obj_numeric,
 )
 
@@ -81,9 +81,15 @@ def _match_join_keys(
         if left_is_categorical:
             if how in {"left", "leftsemi", "leftanti"}:
                 return lcol, rcol.astype(ltype)
-            common_type = get_dtype_of_same_kind(rtype, ltype.categories.dtype)  # type: ignore[union-attr]
+            common_type = get_dtype_of_same_variant(
+                rtype,
+                ltype.categories.dtype,  # type: ignore[union-attr]
+            )
         else:
-            common_type = get_dtype_of_same_kind(ltype, rtype.categories.dtype)  # type: ignore[union-attr]
+            common_type = get_dtype_of_same_variant(
+                ltype,
+                rtype.categories.dtype,  # type: ignore[union-attr]
+            )
         return lcol.astype(common_type), rcol.astype(common_type)
 
     if is_dtype_equal(ltype, rtype):

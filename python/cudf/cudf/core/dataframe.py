@@ -62,6 +62,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -105,7 +106,6 @@ from cudf.utils.dtypes import (
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
     find_common_type,
-    get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
@@ -6706,7 +6706,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         if op in {"any", "all"}:
                             res_dtype = np.dtype(np.bool_)
                     res = res.nans_to_nulls()
-                    new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
+                    new_dtype = get_dtype_of_same_variant(
+                        common_dtype, res_dtype
+                    )
                     res = res.astype(new_dtype)
 
                 return Series._from_column(res, index=idx, attrs=self.attrs)
@@ -6988,11 +6990,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     }
                     and common_dtype.kind != "f"
                 ):
-                    result_dtype = get_dtype_of_same_kind(
+                    result_dtype = get_dtype_of_same_variant(
                         common_dtype, np.dtype(np.float64)
                     )
                 else:
-                    result_dtype = get_dtype_of_same_kind(
+                    result_dtype = get_dtype_of_same_variant(
                         common_dtype, result.dtype
                     )
             if (
@@ -7000,7 +7002,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 and result_dtype.kind == "b"
                 and result.dtype.kind != "b"
             ):
-                result_dtype = get_dtype_of_same_kind(
+                result_dtype = get_dtype_of_same_variant(
                     common_dtype, result.dtype
                 )
             result = as_column(result, dtype=result_dtype)

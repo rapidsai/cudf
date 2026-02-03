@@ -19,6 +19,7 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.dtypes import (
     Decimal32Dtype,
     Decimal64Dtype,
@@ -31,7 +32,6 @@ from cudf.core.dtypes import (
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
-    get_dtype_of_same_kind,
     get_dtype_of_same_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -305,7 +305,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 lhs_comp,
                 rhs_comp,
                 op,
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_)),
             )
             if cudf.get_option("mode.pandas_compatible") and not isinstance(
                 self.dtype, pd.ArrowDtype

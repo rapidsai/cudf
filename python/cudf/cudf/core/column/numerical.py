@@ -25,6 +25,7 @@ from cudf.core.column.column import (
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.column.utils import access_columns
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
@@ -33,7 +34,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
-    get_dtype_of_same_kind,
     get_dtype_of_same_type,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
@@ -236,7 +236,7 @@ class NumericalColumn(NumericalBaseColumn):
             return result
 
         return result._with_type_metadata(
-            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_))
         )
 
     def element_indexing(self, index: int) -> ScalarLike | None:
@@ -326,10 +326,14 @@ class NumericalColumn(NumericalBaseColumn):
                 else self.dtype.type
             ):
                 return self.astype(
-                    get_dtype_of_same_kind(self.dtype, np.dtype(truediv_type))
+                    get_dtype_of_same_variant(
+                        self.dtype, np.dtype(truediv_type)
+                    )
                 )._binaryop(other, op)
         elif op in cmp_ops:
-            out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            out_dtype = get_dtype_of_same_variant(
+                self.dtype, np.dtype(np.bool_)
+            )
 
             # If `other` is a Python integer and it is out-of-bounds
             # promotion could fail but we can trivially define the result
@@ -351,7 +355,9 @@ class NumericalColumn(NumericalBaseColumn):
                     op = "__lt__"
 
         elif op in {"NULL_EQUALS", "NULL_NOT_EQUALS"}:
-            out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            out_dtype = get_dtype_of_same_variant(
+                self.dtype, np.dtype(np.bool_)
+            )
 
         reflect, op = self._check_reflected_op(op)
         if (other := self._normalize_binop_operand(other)) is NotImplemented:
@@ -372,7 +378,7 @@ class NumericalColumn(NumericalBaseColumn):
                     (isinstance(tmp, NumericalColumn) and 0 in tmp)
                     or (isinstance(tmp, pa.Scalar) and tmp.as_py() == 0)
                 ):
-                    out_dtype = get_dtype_of_same_kind(
+                    out_dtype = get_dtype_of_same_variant(
                         out_dtype, np.dtype(np.float64)
                     )
 
@@ -384,11 +390,11 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{other_cudf_dtype.type.__name__}"
                 )
             if self.dtype.kind == "b" and other_cudf_dtype.kind == "b":
-                out_dtype = get_dtype_of_same_kind(
+                out_dtype = get_dtype_of_same_variant(
                     self.dtype, np.dtype(np.bool_)
                 )
             elif self.dtype.kind == "b" or other_cudf_dtype.kind == "b":
-                out_dtype = get_dtype_of_same_kind(
+                out_dtype = get_dtype_of_same_variant(
                     out_dtype, np.dtype(np.bool_)
                 )
 
@@ -405,7 +411,7 @@ class NumericalColumn(NumericalBaseColumn):
             else (self.dtype, other_cudf_dtype)
         )
         lhs, rhs = (other, self) if reflect else (self, other)
-        if out_dtype.kind == "f" and is_pandas_nullable_extension_dtype(
+        if out_dtype.kind == "f" and is_pandas_nullable_extension_dtype(  # type: ignore[union-attr]
             out_dtype
         ):
             if (
@@ -437,7 +443,7 @@ class NumericalColumn(NumericalBaseColumn):
             res = res.nans_to_nulls()
         if op in {"__mod__", "__floordiv__"} and tmp_dtype.kind == "b":
             res = res.astype(
-                get_dtype_of_same_kind(out_dtype, np.dtype(np.int8))
+                get_dtype_of_same_variant(out_dtype, np.dtype(np.int8))
             )
         elif op == "INT_POW" and res.null_count:
             if (
@@ -520,7 +526,7 @@ class NumericalColumn(NumericalBaseColumn):
                         [self.dtype, other]
                     )
                 else:
-                    common_dtype = get_dtype_of_same_kind(
+                    common_dtype = get_dtype_of_same_variant(
                         self.dtype,
                         np.result_type(self.dtype.numpy_dtype, other),  # noqa: TID251
                     )

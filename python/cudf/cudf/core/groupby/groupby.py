@@ -34,6 +34,7 @@ from cudf.core.column.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.dtypes import (
     CategoricalDtype,
     DecimalDtype,
@@ -52,7 +53,6 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
-    get_dtype_of_same_kind,
     is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -1096,7 +1096,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     key = col_name
                 if agg in {list, "collect"}:
                     # Collect wraps the original dtype in ListDtype (e.g., int -> list<int>)
-                    new_dtype = get_dtype_of_same_kind(
+                    new_dtype = get_dtype_of_same_variant(
                         orig_dtype, ListDtype(orig_dtype)
                     )
                     col = ColumnBase.create(col.plc_column, new_dtype)
@@ -1107,7 +1107,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # Override for specific aggregation types that need dtype adjustments
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
                     data[key] = col.astype(
-                        get_dtype_of_same_kind(orig_dtype, np.dtype(np.int64))
+                        get_dtype_of_same_variant(
+                            orig_dtype, np.dtype(np.int64)
+                        )
                     )
                 elif (
                     self.obj.empty
@@ -1129,7 +1131,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                         # hence we only preserve the kind of the dtype
                         # and not the precision.
                         data[key] = col._with_type_metadata(
-                            get_dtype_of_same_kind(orig_dtype, col.dtype)
+                            get_dtype_of_same_variant(orig_dtype, col.dtype)
                         )
                     else:
                         data[key] = col._with_type_metadata(orig_dtype)

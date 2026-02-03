@@ -15,10 +15,10 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
-    get_dtype_of_same_kind,
     is_dtype_obj_list,
 )
 from cudf.utils.scalar import (
@@ -260,7 +260,7 @@ class ListColumn(ColumnBase):
         if isinstance(self.dtype, ListDtype):
             return self.dtype.element_type
         else:
-            return get_dtype_of_same_kind(
+            return get_dtype_of_same_variant(
                 self.dtype,
                 self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),  # type: ignore[union-attr]
             )

@@ -51,6 +51,7 @@ from cudf.core.column.column import concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import BooleanMask, GatherMap
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.dtypes import ListDtype
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import GroupBy
@@ -73,7 +74,6 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
     find_common_type,
-    get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
@@ -520,7 +520,7 @@ class IndexedFrame(Frame):
                 # For reductions that accumulate a value (e.g. sum, not max)
                 # pandas returns an int64 dtype for all int or bool dtypes.
                 if cudf.get_option("mode.pandas_compatible"):
-                    dtype = get_dtype_of_same_kind(
+                    dtype = get_dtype_of_same_variant(
                         result_col.dtype, np.dtype(np.int64)
                     )
                 else:

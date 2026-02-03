@@ -19,13 +19,13 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
-    get_dtype_of_same_kind,
     is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
@@ -246,16 +246,16 @@ class StringColumn(ColumnBase, Scannable):
         """
         Get the appropriate dtype for pandas-compatible mode.
 
-        For StringDtype with na_value=np.nan, returns get_dtype_of_same_kind(self.dtype, target_dtype).
-        Otherwise, returns get_dtype_of_same_kind(pd.StringDtype() or self.dtype, target_dtype).
+        For StringDtype with na_value=np.nan, returns get_dtype_of_same_variant(self.dtype, target_dtype).
+        Otherwise, returns get_dtype_of_same_variant(pd.StringDtype() or self.dtype, target_dtype).
         """
         if (
             isinstance(self.dtype, pd.StringDtype)
             and self.dtype.na_value is np.nan
         ):
-            return get_dtype_of_same_kind(self.dtype, target_dtype)
+            return get_dtype_of_same_variant(self.dtype, target_dtype)
         else:
-            return get_dtype_of_same_kind(
+            return get_dtype_of_same_variant(
                 pd.StringDtype()
                 if isinstance(self.dtype, pd.StringDtype)
                 else self.dtype,
@@ -533,7 +533,7 @@ class StringColumn(ColumnBase, Scannable):
                     return as_column(
                         op == "__ne__",
                         length=len(self),
-                        dtype=get_dtype_of_same_kind(
+                        dtype=get_dtype_of_same_variant(
                             self.dtype, np.dtype(np.bool_)
                         ),
                     ).set_mask(self.mask)
@@ -567,7 +567,7 @@ class StringColumn(ColumnBase, Scannable):
                     lhs=lhs_op,
                     rhs=rhs_op,
                     op=op,
-                    dtype=get_dtype_of_same_kind(
+                    dtype=get_dtype_of_same_variant(
                         self.dtype, np.dtype(np.bool_)
                     ),
                 )
@@ -640,7 +640,9 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     result,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.float32)),
+                    get_dtype_of_same_variant(
+                        self.dtype, np.dtype(np.float32)
+                    ),
                 ),
             )
 
@@ -732,7 +734,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     result,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.int32)),
                 ),
             )
 
@@ -852,7 +854,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.int32)),
                 ),
             )
 
@@ -869,7 +871,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_)),
                 ),
             )
 
@@ -903,7 +905,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.int32)),
                 ),
             )
 
@@ -917,7 +919,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.int32)),
                 ),
             )
 
@@ -1052,7 +1054,7 @@ class StringColumn(ColumnBase, Scannable):
                 Self,
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_)),
                 ),
             )
 
@@ -1077,7 +1079,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_)),
                 ),
             )
 
@@ -1090,7 +1092,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int64)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.int64)),
                 ),
             )
 
@@ -1103,7 +1105,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_)),
                 ),
             )
 
@@ -1116,7 +1118,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int64)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.int64)),
                 ),
             )
 
@@ -1129,7 +1131,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype("bool")),
+                    get_dtype_of_same_variant(self.dtype, np.dtype("bool")),
                 ),
             )
 
@@ -1222,7 +1224,7 @@ class StringColumn(ColumnBase, Scannable):
             res_col = type(self).from_pylibcudf(plc_column)
             if cudf.get_option("mode.pandas_compatible"):
                 if isinstance(self.dtype, pd.ArrowDtype):
-                    new_type = get_dtype_of_same_kind(
+                    new_type = get_dtype_of_same_variant(
                         self.dtype,
                         res_col.dtype,
                     )
@@ -1341,7 +1343,7 @@ class StringColumn(ColumnBase, Scannable):
                 cudf.core.column.numerical.NumericalColumn,
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_)),
                 ),
             )
 
@@ -1354,7 +1356,7 @@ class StringColumn(ColumnBase, Scannable):
                 cudf.core.column.numerical.NumericalColumn,
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_)),
                 ),
             )
 
@@ -1376,7 +1378,7 @@ class StringColumn(ColumnBase, Scannable):
             plc_column = plc.strings.attributes.count_bytes(self.plc_column)
             res = type(self).from_pylibcudf(plc_column)
             res = res._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, res.dtype)
+                get_dtype_of_same_variant(self.dtype, res.dtype)
             )
             return cast(cudf.core.column.numerical.NumericalColumn, res)
 
@@ -1451,7 +1453,7 @@ class StringColumn(ColumnBase, Scannable):
                 Self,
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_)),
                 ),
             )
 
@@ -1466,7 +1468,7 @@ class StringColumn(ColumnBase, Scannable):
                 Self,
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.bool_)),
                 ),
             )
 
@@ -1601,7 +1603,7 @@ class StringColumn(ColumnBase, Scannable):
                     res = res.fillna(False)
                     new_type = np.dtype(np.bool_)
                 else:
-                    new_type = get_dtype_of_same_kind(
+                    new_type = get_dtype_of_same_variant(
                         pd.StringDtype()
                         if isinstance(self.dtype, pd.StringDtype)
                         else self.dtype,
@@ -1763,7 +1765,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             res = type(self).from_pylibcudf(plc_result)
             res = res._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, res.dtype)
+                get_dtype_of_same_variant(self.dtype, res.dtype)
             )
             return cast(Self, res)
 
@@ -1860,7 +1862,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             res = type(self).from_pylibcudf(plc_result)
             res = res._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, res.dtype)
+                get_dtype_of_same_variant(self.dtype, res.dtype)
             )
             return cast(Self, res)
 

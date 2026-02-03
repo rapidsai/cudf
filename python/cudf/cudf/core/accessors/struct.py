@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.column.struct import StructColumn
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import get_dtype_of_same_kind, is_dtype_obj_struct
+from cudf.utils.dtypes import is_dtype_obj_struct
 
 if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
@@ -66,7 +67,7 @@ class StructMethods(BaseAccessor):
             assert isinstance(self._column, StructColumn)
             return self._return_or_inplace(
                 self._column._get_sliced_child(pos)._with_type_metadata(
-                    get_dtype_of_same_kind(
+                    get_dtype_of_same_variant(
                         self._column.dtype, struct_dtype_fields[key]
                     )
                 )

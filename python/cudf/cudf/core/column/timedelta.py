@@ -17,13 +17,13 @@ import cudf
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
-    get_dtype_of_same_kind,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -153,7 +153,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 "NULL_EQUALS",
                 "NULL_NOT_EQUALS",
             }:
-                out_dtype = get_dtype_of_same_kind(
+                out_dtype = get_dtype_of_same_variant(
                     self.dtype, np.dtype(np.bool_)
                 )
             elif op == "__mod__":
@@ -161,7 +161,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
             elif op in {"__truediv__", "__floordiv__"}:
                 common_dtype = find_common_type((self.dtype, other_cudf_dtype))
                 out_dtype = (
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.float64))
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.float64))
                     if op == "__truediv__"
                     else self._UNDERLYING_DTYPE
                 )

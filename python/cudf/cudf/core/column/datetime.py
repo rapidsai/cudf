@@ -27,11 +27,11 @@ from cudf.core._internals.timezones import (
 from cudf.core.column import as_column
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.temporal_base import TemporalBaseColumn
+from cudf.core.dtype.converters import get_dtype_of_same_variant
 from cudf.utils.dtypes import (
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
-    get_dtype_of_same_kind,
     get_dtype_of_same_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -584,12 +584,14 @@ class DatetimeColumn(TemporalBaseColumn):
             }
             and other_is_datetime64
         ):
-            out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            out_dtype = get_dtype_of_same_variant(
+                self.dtype, np.dtype(np.bool_)
+            )
         elif op == "__add__" and other_is_timedelta:
             # The only thing we can add to a datetime is a timedelta. This
             # operation is symmetric, i.e. we allow `datetime + timedelta` or
             # `timedelta + datetime`. Both result in DatetimeColumns.
-            out_dtype = get_dtype_of_same_kind(
+            out_dtype = get_dtype_of_same_variant(
                 self.dtype,
                 np.dtype(
                     f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
@@ -598,7 +600,7 @@ class DatetimeColumn(TemporalBaseColumn):
         elif op == "__sub__":
             # Subtracting a datetime from a datetime results in a timedelta.
             if other_is_datetime64:
-                out_dtype = get_dtype_of_same_kind(
+                out_dtype = get_dtype_of_same_variant(
                     self.dtype,
                     np.dtype(
                         f"timedelta64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
@@ -608,7 +610,7 @@ class DatetimeColumn(TemporalBaseColumn):
             # Not only is subtraction antisymmetric (as is normal), it is only
             # well-defined if this operation was not invoked via reflection.
             elif other_is_timedelta and not reflect:
-                out_dtype = get_dtype_of_same_kind(
+                out_dtype = get_dtype_of_same_variant(
                     self.dtype,
                     np.dtype(
                         f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
@@ -620,7 +622,9 @@ class DatetimeColumn(TemporalBaseColumn):
             "NULL_EQUALS",
             "NULL_NOT_EQUALS",
         }:
-            out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            out_dtype = get_dtype_of_same_variant(
+                self.dtype, np.dtype(np.bool_)
+            )
             if isinstance(other, ColumnBase) and not isinstance(
                 other, DatetimeColumn
             ):
