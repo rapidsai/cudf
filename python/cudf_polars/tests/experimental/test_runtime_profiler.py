@@ -19,6 +19,9 @@ def test_runtime_profiler_and_output(tmp_path):
         def __init__(self):
             self.schema = {"x": pl.Int64}
 
+        def get_hashable(self):
+            return (type(self), tuple(self.schema.items()))
+
     ir1, ir2 = MockIR(), MockIR()
 
     # Test node profiler accumulation

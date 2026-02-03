@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import operator
 from contextlib import asynccontextmanager, contextmanager
 from functools import reduce
@@ -47,37 +46,10 @@ if TYPE_CHECKING:
     from cudf_polars.typing import DataType
 
 
-def _stable_ir_id(ir_node: IR) -> int:
-    """
-    Compute a stable identifier for an IR node.
-
-    This identifier is based on the node's content (type + schema + children's IDs)
-    and is stable across process boundaries. Uses hashlib instead of Python's
-    built-in hash() because hash() uses a random per-process seed (PYTHONHASHSEED).
-
-    Parameters
-    ----------
-    ir_node
-        The IR node.
-
-    Returns
-    -------
-    int
-        A stable 64-bit identifier for this node.
-    """
-    type_name = type(ir_node).__name__
-    schema_keys = tuple(ir_node.schema.keys())
-    children_ids = tuple(_stable_ir_id(child) for child in ir_node.children)
-    content = repr((type_name, schema_keys, children_ids)).encode("utf-8")
-    # Use first 16 hex chars (64 bits) for a more concise ID
-    return int(hashlib.md5(content).hexdigest()[:16], 16)
-
-
 @asynccontextmanager
 async def shutdown_on_error(
     context: Context,
     *channels: Channel[Any],
-    ir: IR | None = None,
     node_profiler: RuntimeNodeProfiler | None = None,
 ) -> AsyncIterator[RuntimeNodeProfiler | None]:
     """
@@ -92,22 +64,19 @@ async def shutdown_on_error(
         The rapidsmpf context.
     channels
         The channels to shutdown on error.
-    ir
-        The IR node being executed (for tracing).
     node_profiler
-        Node profiler for collecting runtime statistics.
+        Optional node profiler for collecting runtime statistics.
+        If provided and tracing is enabled, structlog events are emitted.
 
     Yields
     ------
     RuntimeNodeProfiler | None
         The node profiler (if provided) for use within the context.
     """
-    # Setup tracing if enabled and ir is provided
+    # Setup tracing if enabled and profiler has ir_id
     ir_id: int | None = None
-    ir_type: str | None = None
-    if ir is not None and LOG_TRACES:
-        ir_id = _stable_ir_id(ir)
-        ir_type = type(ir).__name__
+    if node_profiler is not None and node_profiler.ir_id is not None and LOG_TRACES:
+        ir_id = node_profiler.ir_id
         structlog.contextvars.bind_contextvars(ir_id=ir_id)
 
     try:
@@ -118,17 +87,18 @@ async def shutdown_on_error(
     finally:
         # Emit structlog event on exit if tracing is enabled
         if ir_id is not None and LOG_TRACES:
+            assert node_profiler is not None  # ir_id implies node_profiler exists
             log = structlog.get_logger()
             record: dict[str, Any] = {
                 "ir_id": ir_id,
-                "ir_type": ir_type,
+                "ir_type": node_profiler.ir_type,
+                "chunks": node_profiler.chunk_count,
+                "duplicated": node_profiler.duplicated,
             }
-            if node_profiler is not None:
-                record["chunks"] = node_profiler.chunk_count
-                if node_profiler.row_count is not None:
-                    record["rows"] = node_profiler.row_count
-                if node_profiler.decision is not None:
-                    record["decision"] = node_profiler.decision
+            if node_profiler.row_count is not None:
+                record["rows"] = node_profiler.row_count
+            if node_profiler.decision is not None:
+                record["decision"] = node_profiler.decision
             log.info("Streaming Node", **record)
             structlog.contextvars.unbind_contextvars("ir_id")
 

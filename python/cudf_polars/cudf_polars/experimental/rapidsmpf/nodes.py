@@ -76,7 +76,7 @@ async def default_node_single(
     Chunks are processed in the order they are received.
     """
     async with shutdown_on_error(
-        context, ch_in, ch_out, ir=ir, node_profiler=node_profiler
+        context, ch_in, ch_out, node_profiler=node_profiler
     ) as profiler:
         # Recv/send metadata.
         metadata_in = await recv_metadata(ch_in, context)
@@ -178,7 +178,7 @@ async def default_node_multi(
         Node profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(
-        context, *chs_in, ch_out, ir=ir, node_profiler=node_profiler
+        context, *chs_in, ch_out, node_profiler=node_profiler
     ) as profiler:
         # Merge and forward basic metadata.
         local_count = 1
@@ -690,7 +690,6 @@ def generate_ir_sub_network_wrapper(
 @define_py_node()
 async def metadata_feeder_node(
     context: Context,
-    ir: IR,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     metadata: ChannelMetadata,
@@ -703,8 +702,6 @@ async def metadata_feeder_node(
     ----------
     context
         The rapidsmpf context.
-    ir
-        The IR node.
     ch_in
         The input channel to pull data from.
     ch_out
@@ -715,7 +712,7 @@ async def metadata_feeder_node(
         Node profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(
-        context, ch_in, ch_out, ir=ir, node_profiler=node_profiler
+        context, ch_in, ch_out, node_profiler=node_profiler
     ) as profiler:
         await send_metadata(ch_out, context, metadata)
         while (msg := await ch_in.recv(context)) is not None:

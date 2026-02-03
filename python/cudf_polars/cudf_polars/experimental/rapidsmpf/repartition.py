@@ -81,7 +81,7 @@ async def concatenate_node(
         Node profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(
-        context, ch_in, ch_out, ir=ir, node_profiler=node_profiler
+        context, ch_in, ch_out, node_profiler=node_profiler
     ) as profiler:
         # Receive metadata.
         input_metadata = await recv_metadata(ch_in, context)
@@ -138,6 +138,8 @@ async def concatenate_node(
                 duplicated=output_duplicated,
             )
             await send_metadata(ch_out, context, metadata)
+            if profiler is not None and output_duplicated:
+                profiler.set_duplicated()
 
             allgather = AllGatherManager(context, collective_id)
             stream = context.get_stream_from_pool()
@@ -172,6 +174,8 @@ async def concatenate_node(
                 duplicated=output_duplicated,
             )
             await send_metadata(ch_out, context, metadata)
+            if profiler is not None and output_duplicated:
+                profiler.set_duplicated()
 
             # Local repartitioning
             seq_num = 0
