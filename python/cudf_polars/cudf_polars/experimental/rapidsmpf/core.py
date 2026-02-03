@@ -39,6 +39,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
 )
+from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
@@ -93,6 +94,9 @@ def evaluate_logical_plan(
 
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
+
+    # Log the query plan structure for tracing (no-op if tracing disabled)
+    log_query_plan(ir)
 
     # Reserve shuffle IDs for the entire pipeline execution
     with ReserveOpIDs(ir) as collective_id_map:

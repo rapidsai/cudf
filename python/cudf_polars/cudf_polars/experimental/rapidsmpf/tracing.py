@@ -7,6 +7,9 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+from cudf_polars.dsl.tracing import LOG_TRACES
+from cudf_polars.dsl.traversal import traversal
+
 if TYPE_CHECKING:
     import pylibcudf as plc
 
@@ -95,3 +98,38 @@ class StreamingNodeTracer:
     def set_duplicated(self, *, duplicated: bool = True) -> None:
         """Mark output rows as duplicated across ranks."""
         self.duplicated = duplicated
+
+
+def log_query_plan(ir: IR) -> None:
+    """
+    Log the IR tree structure as a structlog event.
+
+    This should be called once on the client process after lowering,
+    before distributed execution begins. The structure can be used
+    by post-processing tools to reconstruct annotated plans.
+
+    Parameters
+    ----------
+    ir
+        The root IR node of the lowered query plan.
+
+    Notes
+    -----
+    This function is a no-op if ``CUDF_POLARS_LOG_TRACES`` is not set.
+    """
+    if not LOG_TRACES:
+        return
+
+    import structlog
+
+    nodes = [
+        {
+            "ir_id": _stable_ir_id(node),
+            "ir_type": type(node).__name__,
+            "children_ir_ids": [_stable_ir_id(c) for c in node.children],
+        }
+        for node in traversal([ir])
+    ]
+
+    log = structlog.get_logger()
+    log.info("Query Plan", scope="query", nodes=nodes)
