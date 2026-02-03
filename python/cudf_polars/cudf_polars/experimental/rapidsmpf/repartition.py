@@ -33,7 +33,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.tracing import StreamingNodeTracer
 
 
 @define_py_node()
@@ -46,7 +45,6 @@ async def concatenate_node(
     *,
     output_count: int,
     collective_id: int,
-    node_tracer: StreamingNodeTracer | None = None,
 ) -> None:
     """
     Concatenate node for rapidsmpf.
@@ -77,12 +75,8 @@ async def concatenate_node(
         The expected global number of output chunks.
     collective_id
         Pre-allocated collective ID for this operation.
-    node_tracer
-        Node tracer for collecting runtime statistics.
     """
-    async with shutdown_on_error(
-        context, ch_in, ch_out, node_tracer=node_tracer
-    ) as tracer:
+    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
         # Receive metadata.
         input_metadata = await recv_metadata(ch_in, context)
         nranks = context.comm().nranks
@@ -257,7 +251,6 @@ def _(
     collective_id = rec.state["collective_id_map"][ir][0]
 
     # Add python node
-    tracer = rec.state["tracer"]
     nodes[ir] = [
         concatenate_node(
             rec.state["context"],
@@ -267,7 +260,6 @@ def _(
             channels[ir.children[0]].reserve_output_slot(),
             output_count=partition_info[ir].count,
             collective_id=collective_id,
-            node_tracer=tracer.get_or_create(ir) if tracer else None,
         )
     ]
     return nodes, channels

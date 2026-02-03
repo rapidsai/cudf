@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
@@ -26,13 +26,11 @@ from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
-    from pathlib import Path
 
     import polars as pl
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
-    from cudf_polars.experimental.rapidsmpf.tracing import StreamingQueryTracer
 
 
 def explain_query(
@@ -170,67 +168,3 @@ def _(ir: Sort, *, offset: str = "") -> str:
 def _(ir: Scan, *, offset: str = "") -> str:
     label = f"SCAN {ir.typ.upper()}"
     return _repr_header(offset, label, ir.schema)
-
-
-def write_query_trace(
-    trace_output: str | Path,
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    tracer: StreamingQueryTracer,
-) -> None:
-    """
-    Write a post-execution trace showing actual row counts and decisions.
-
-    Parameters
-    ----------
-    trace_output
-        Path to write the trace file.
-    ir
-        The lowered IR root node.
-    partition_info
-        Partition information for the IR nodes.
-    tracer
-        The tracer with actual row counts and decisions from execution.
-    """
-    from pathlib import Path
-
-    trace_repr = _repr_trace_tree(ir, partition_info, tracer)
-    Path(trace_output).write_text(trace_repr)
-
-
-def _repr_trace_tree(
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    tracer: StreamingQueryTracer,
-    *,
-    offset: str = "",
-) -> str:
-    """Recursively build a tree representation with tracer data."""
-    header = _repr_ir(ir, offset=offset)
-    header = header.rstrip("\n")
-
-    # Get node tracer if it exists
-    if (node_tracer := tracer.node_tracers.get(ir)) is not None:
-        # Add actual row count if available
-        if node_tracer.row_count is not None:
-            header += f" rows={_fmt_row_count(node_tracer.row_count)}"
-
-        # Add decision if present
-        if node_tracer.decision is not None:
-            header += f" decision={node_tracer.decision}"
-
-        # Add actual chunk count
-        header += f" chunks={node_tracer.chunk_count}"
-
-    children_strs = [
-        _repr_trace_tree(child, partition_info, tracer, offset=offset + "  ")
-        for child in ir.children
-    ]
-
-    header += "\n"
-    return header + "".join(
-        f"{line}{offset}  (repeated {count} times)\n"
-        if (count := sum(1 for _ in group)) > 1
-        else line
-        for line, group in groupby(children_strs)
-    )

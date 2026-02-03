@@ -54,10 +54,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import ColumnStat, StatsCollector
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
-    from cudf_polars.experimental.rapidsmpf.tracing import (
-        StreamingNodeTracer,
-        StreamingQueryTracer,
-    )
+    from cudf_polars.experimental.rapidsmpf.tracing import StreamingNodeTracer
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -148,7 +145,6 @@ async def dataframescan_node(
     num_producers: int,
     rows_per_partition: int,
     estimated_chunk_bytes: int,
-    node_tracer: StreamingNodeTracer | None = None,
 ) -> None:
     """
     DataFrameScan node for rapidsmpf.
@@ -170,10 +166,8 @@ async def dataframescan_node(
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
-    node_tracer
-        The node tracer for collecting runtime statistics.
     """
-    async with shutdown_on_error(context, ch_out, node_tracer=node_tracer) as tracer:
+    async with shutdown_on_error(context, ch_out, trace_ir=ir) as tracer:
         # Find local partition count.
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
@@ -275,7 +269,6 @@ def _(
 
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
-    tracer: StreamingQueryTracer | None = rec.state["tracer"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
     nodes: dict[IR, list[Any]] = {
         ir: [
@@ -287,7 +280,6 @@ def _(
                 num_producers=num_producers,
                 rows_per_partition=rows_per_partition,
                 estimated_chunk_bytes=estimated_chunk_bytes,
-                node_tracer=tracer.get_or_create(ir) if tracer else None,
             )
         ]
     }
@@ -388,7 +380,6 @@ async def scan_node(
     plan: IOPartitionPlan,
     parquet_options: ParquetOptions,
     estimated_chunk_bytes: int,
-    node_tracer: StreamingNodeTracer | None = None,
 ) -> None:
     """
     Scan node for rapidsmpf.
@@ -412,10 +403,8 @@ async def scan_node(
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
-    node_tracer
-        The node tracer for collecting runtime statistics.
     """
-    async with shutdown_on_error(context, ch_out, node_tracer=node_tracer) as tracer:
+    async with shutdown_on_error(context, ch_out, trace_ir=ir) as tracer:
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
@@ -663,7 +652,6 @@ def _(
     parquet_options = config_options.parquet_options
     partition_info = rec.state["partition_info"][ir]
     num_producers = rec.state["max_io_threads"]
-    tracer: StreamingQueryTracer | None = rec.state["tracer"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
 
     assert partition_info.io_plan is not None, "Scan node must have a partition plan"
@@ -706,6 +694,7 @@ def _(
         # node does not send metadata.
         metadata_node = metadata_feeder_node(
             rec.state["context"],
+            ir,
             ch_in,
             ch_out,
             ChannelMetadata(
@@ -715,7 +704,6 @@ def _(
                     partition_info.count / rec.state["context"].comm().nranks
                 ),
             ),
-            node_tracer=tracer.get_or_create(ir) if tracer else None,
         )
         nodes[ir] = [native_node, metadata_node]
     else:
@@ -732,7 +720,6 @@ def _(
                 plan=plan,
                 parquet_options=parquet_options,
                 estimated_chunk_bytes=executor.target_partition_size,
-                node_tracer=tracer.get_or_create(ir) if tracer else None,
             )
         ]
     return nodes, channels

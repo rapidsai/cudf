@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
-    from cudf_polars.experimental.rapidsmpf.tracing import StreamingQueryTracer
 
 
 class EvaluatePipelineCallback(Protocol):
@@ -40,8 +39,8 @@ class EvaluatePipelineCallback(Protocol):
         rmpf_context: Context | None = None,
         *,
         collect_metadata: bool = False,
-    ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None, StreamingQueryTracer | None]:
-        """Evaluate a pipeline and return the result DataFrame, metadata, and tracer."""
+    ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+        """Evaluate a pipeline and return the result DataFrame and metadata."""
         ...
 
 
@@ -62,7 +61,7 @@ def evaluate_pipeline_dask(
     collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None, StreamingQueryTracer | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a RapidsMPF streaming pipeline on a Dask cluster.
 
@@ -85,7 +84,7 @@ def evaluate_pipeline_dask(
 
     Returns
     -------
-    The output DataFrame, metadata collector, and merged tracer.
+    The output DataFrame and metadata collector.
     """
     client = get_dask_client()
     result = client.run(
@@ -100,18 +99,12 @@ def evaluate_pipeline_dask(
     )
     dfs: list[pl.DataFrame] = []
     metadata_collector: list[ChannelMetadata] = []
-    merged_tracer: StreamingQueryTracer | None = None
-    for df, md, tracer in result.values():
+    for df, md in result.values():
         dfs.append(df)
         if md is not None:
             metadata_collector.extend(md)
-        if tracer is not None:
-            if merged_tracer is None:
-                merged_tracer = tracer
-            else:
-                merged_tracer.merge(tracer)
 
-    return pl.concat(dfs), metadata_collector or None, merged_tracer
+    return pl.concat(dfs), metadata_collector or None
 
 
 def _evaluate_pipeline_dask(
@@ -124,7 +117,7 @@ def _evaluate_pipeline_dask(
     dask_worker: Any = None,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None, StreamingQueryTracer | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
 
@@ -151,7 +144,7 @@ def _evaluate_pipeline_dask(
 
     Returns
     -------
-    The output DataFrame, metadata collector, and tracer.
+    The output DataFrame and metadata collector.
     """
     assert dask_worker is not None, "Dask worker must be provided"
     assert config_options.executor.name == "streaming", "Executor must be streaming"

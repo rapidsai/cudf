@@ -257,7 +257,6 @@ class RunConfig:
     collect_traces: bool = False
     stats_planning: bool
     dynamic_planning: bool | None = None
-    trace_output_path: str | None = None
     max_io_threads: int
     native_parquet: bool
     spill_to_pinned_memory: bool
@@ -378,7 +377,6 @@ class RunConfig:
             collect_traces=args.collect_traces,
             stats_planning=args.stats_planning,
             dynamic_planning=args.dynamic_planning,
-            trace_output_path=args.trace_output_path,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
             extra_info=args.extra_info,
@@ -479,8 +477,6 @@ def get_executor_options(
         if run_config.dynamic_planning:
             # Pass empty dict to enable with defaults; None means disabled
             executor_options["dynamic_planning"] = {}
-        if run_config.trace_output_path is not None:
-            executor_options["tracing"] = {"output_path": run_config.trace_output_path}
 
     if (
         benchmark
@@ -977,13 +973,6 @@ def parse_args(
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Enable dynamic shuffle planning (not yet implemented). ",
-    )
-    parser.add_argument(
-        "--trace-output-path",
-        dest="trace_output_path",
-        type=str,
-        default=None,
-        help="Path to write tracing output (row counts per node).",
     )
     parser.add_argument(
         "--max-io-threads",

@@ -50,13 +50,13 @@ if TYPE_CHECKING:
 async def shutdown_on_error(
     context: Context,
     *channels: Channel[Any],
-    node_tracer: StreamingNodeTracer | None = None,
+    trace_ir: IR | None = None,
 ) -> AsyncIterator[StreamingNodeTracer | None]:
     """
     Shutdown on error for rapidsmpf.
 
     This context manager handles channel cleanup on errors and optionally
-    manages node tracing with structlog integration.
+    emits structlog tracing events when LOG_TRACES is enabled.
 
     Parameters
     ----------
@@ -64,41 +64,49 @@ async def shutdown_on_error(
         The rapidsmpf context.
     channels
         The channels to shutdown on error.
-    node_tracer
-        Optional node tracer for collecting runtime statistics.
-        If provided and tracing is enabled, structlog events are emitted.
+    trace_ir
+        Optional IR node to enable tracing for this streaming node.
+        When provided and LOG_TRACES is enabled, a StreamingNodeTracer
+        is yielded for collecting stats, and a structlog event is
+        emitted on exit.
 
     Yields
     ------
     StreamingNodeTracer | None
-        The node tracer (if provided) for use within the context.
+        A node tracer for collecting stats (if tracing enabled), else None.
     """
-    # Setup tracing if enabled and tracer has ir_id
-    ir_id: int | None = None
-    if node_tracer is not None and node_tracer.ir_id is not None and LOG_TRACES:
-        ir_id = node_tracer.ir_id
+    # Create tracer only if LOG_TRACES is enabled and IR is provided
+    tracer: StreamingNodeTracer | None = None
+    if LOG_TRACES and trace_ir is not None:
+        from cudf_polars.experimental.rapidsmpf.tracing import (
+            StreamingNodeTracer,
+            _stable_ir_id,
+        )
+
+        ir_id = _stable_ir_id(trace_ir)
+        ir_type = type(trace_ir).__name__
+        tracer = StreamingNodeTracer(ir_id, ir_type)
         structlog.contextvars.bind_contextvars(ir_id=ir_id)
 
     try:
-        yield node_tracer
+        yield tracer
     except BaseException:
         await asyncio.gather(*(ch.shutdown(context) for ch in channels))
         raise
     finally:
-        # Emit structlog event on exit if tracing is enabled
-        if ir_id is not None and LOG_TRACES:
-            assert node_tracer is not None  # ir_id implies node_tracer exists
+        if tracer is not None:
             log = structlog.get_logger()
             record: dict[str, Any] = {
-                "ir_id": ir_id,
-                "ir_type": node_tracer.ir_type,
-                "chunks": node_tracer.chunk_count,
-                "duplicated": node_tracer.duplicated,
+                "scope": "streaming",
+                "ir_id": tracer.ir_id,
+                "ir_type": tracer.ir_type,
+                "chunks": tracer.chunk_count,
+                "duplicated": tracer.duplicated,
             }
-            if node_tracer.row_count is not None:
-                record["rows"] = node_tracer.row_count
-            if node_tracer.decision is not None:
-                record["decision"] = node_tracer.decision
+            if tracer.row_count is not None:
+                record["rows"] = tracer.row_count
+            if tracer.decision is not None:
+                record["decision"] = tracer.decision
             log.info("Streaming Node", **record)
             structlog.contextvars.unbind_contextvars("ir_id")
 

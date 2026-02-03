@@ -55,7 +55,6 @@ __all__ = [
     "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
-    "TracingOptions",
 ]
 
 
@@ -494,48 +493,6 @@ class DynamicPlanningOptions:
             raise ValueError("sample_chunk_count must be at least 1")
 
 
-@dataclasses.dataclass(frozen=True)
-class TracingOptions:
-    """
-    Configuration for coarse-grained streaming-node tracing (rapidsmpf only).
-
-    This class controls tracing at the *streaming-node* level, collecting
-    aggregate metrics (row counts, chunk counts, algorithm decisions) for
-    each IR node processed by the rapidsmpf runtime. When ``output_path``
-    is set, a summary is written after query execution.
-
-    For fine-grained IR-execution tracing (timing, memory, dataframe shapes),
-    use the ``CUDF_POLARS_LOG_TRACES`` environment variable instead. See the
-    `Tracing section of the usage guide
-    <https://docs.rapids.ai/api/cudf-polars/stable/cudf_polars/usage.html#tracing>`_
-    for details on available environment variables.
-
-    To also emit structlog events for each streaming node, set
-    ``CUDF_POLARS_LOG_TRACES=1``.
-
-    Parameters
-    ----------
-    output_path
-        Path to write the trace summary. The output format is similar to
-        :func:`~cudf_polars.experimental.explain.explain_query`, annotated
-        with actual row counts and algorithm decisions.
-        If ``None`` (the default), tracing data is collected in memory
-        but not written to a file.
-
-    Notes
-    -----
-    This option only applies to the ``"rapidsmpf"`` runtime.
-    """
-
-    output_path: str | None = None
-
-    def __post_init__(self) -> None:  # noqa: D105
-        if self.output_path is not None and (
-            not isinstance(self.output_path, str) or not self.output_path
-        ):
-            raise TypeError("output_path must be a non-empty str or None")
-
-
 @dataclasses.dataclass(frozen=True, eq=True)
 class MemoryResourceConfig:
     """
@@ -747,18 +704,6 @@ class StreamingExecutor:
         or use regular pageable host memory. Pinned host memory offers higher
         bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
-    tracing
-        Options controlling query tracing. When set to a
-        :class:`~cudf_polars.utils.config.TracingOptions` instance,
-        per-node metrics (such as row counts and algorithm decisions)
-        are collected during execution and written to the specified
-        output file. When ``None`` (the default), tracing is disabled.
-
-        To also emit structlog events for each streaming node, set the
-        environment variable ``CUDF_POLARS_LOG_TRACES=1``.
-
-        .. note::
-            This feature is only available for the "rapidsmpf" runtime.
 
     Notes
     -----
@@ -867,7 +812,6 @@ class StreamingExecutor:
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
-    tracing: TracingOptions | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
@@ -983,15 +927,6 @@ class StreamingExecutor:
                 self,
                 "dynamic_planning",
                 DynamicPlanningOptions(**self.dynamic_planning),
-            )
-
-        # Handle tracing.
-        # Can be None, dict, or TracingOptions
-        if isinstance(self.tracing, dict):
-            object.__setattr__(
-                self,
-                "tracing",
-                TracingOptions(**self.tracing),
             )
 
         if self.cluster == "distributed":
