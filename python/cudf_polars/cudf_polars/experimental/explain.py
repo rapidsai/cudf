@@ -299,7 +299,7 @@ class SerializableIRNode:
     """
 
     id: str
-    children: list[int]
+    children: list[str]
     schema: dict[str, Serializable]
     properties: dict[str, Serializable]
     type: str
@@ -309,7 +309,7 @@ class SerializableIRNode:
         """Build a Node from an IR Node."""
         return cls(
             id=str(ir.get_stable_id()),
-            children=[child.get_stable_id() for child in ir.children],
+            children=[str(child.get_stable_id()) for child in ir.children],
             schema={k: v.id().name for k, v in ir.schema.items()},
             properties=_serialize_properties(ir),
             type=type(ir).__name__,

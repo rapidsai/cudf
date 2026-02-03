@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 
@@ -557,4 +558,4 @@ def test_serialize_query():
                 assert node_id not in dag.roots
 
     # smoke test to ensure that the output is JSON serializable
-    json.dumps(dag.to_dict())
+    json.dumps(dataclasses.asdict(dag))
