@@ -41,6 +41,11 @@ def _create_polars_column_metadata(
             _create_polars_column_metadata(field.name, field.dtype)
             for field in dtype.fields
         ]
+    elif isinstance(dtype, pl.List):
+        children_meta = [
+            plc.interop.ColumnMetadata(name="offsets"),
+            _create_polars_column_metadata("element", dtype.inner),
+        ]
     elif isinstance(dtype, pl.Datetime):
         timezone = dtype.time_zone or timezone
     elif isinstance(dtype, pl.Decimal):

@@ -1789,6 +1789,11 @@ class GroupBy(IR):
     ):
         self.schema = schema
         self.keys = tuple(keys)
+        for dtype in schema.values():
+            if isinstance(dtype.polars_type, pl.List) and isinstance(
+                dtype.polars_type.inner, pl.Struct
+            ):
+                raise NotImplementedError("Nested list[struct] types not supported")
         for request in agg_requests:
             expr = request.value
             if isinstance(expr, unary.UnaryFunction) and expr.name == "value_counts":
