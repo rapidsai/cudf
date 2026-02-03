@@ -6,6 +6,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
@@ -23,7 +24,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -104,11 +104,12 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     // copy rotated right partition indexes that
     // fall in the interval [0, nrows):
     //(this relies on a _stable_ copy_if())
-    thrust::copy_if(rmm::exec_policy_nosync(stream),
-                    rotated_iter_begin,
-                    rotated_iter_begin + num_partitions,
-                    d_row_indices.begin(),
-                    [nrows] __device__(auto index) { return (index < nrows); });
+    cudf::detail::copy_if(
+      rotated_iter_begin,
+      rotated_iter_begin + num_partitions,
+      d_row_indices.begin(),
+      [nrows] __device__(auto index) { return (index < nrows); },
+      stream);
 
     //...and then use the result, d_row_indices, as gather map:
     auto uniq_tbl = cudf::detail::gather(input,

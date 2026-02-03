@@ -72,7 +72,7 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> 
   _metadata = std::make_unique<aggregate_reader_metadata>(
     footer_bytes,
     options.is_enabled_use_arrow_schema(),
-    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+    options.get_column_names().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
@@ -83,7 +83,7 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(FileMetaData const& parquet_met
   _metadata = std::make_unique<aggregate_reader_metadata>(
     parquet_metadata,
     options.is_enabled_use_arrow_schema(),
-    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+    options.get_column_names().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
@@ -109,17 +109,21 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   if (read_columns_mode == read_columns_mode::ALL_COLUMNS) {
     if (_is_all_columns_selected) { return; }
 
+    // list, struct, dictionary are not supported by AST filter yet.
+    auto const select_column_names =
+      get_column_projection(options, options.is_enabled_ignore_missing_columns());
+
     // Select only columns required by the options and filter.
     // Using as is from:
     // https://github.com/rapidsai/cudf/blob/a8b25cd205dc5d04b9918dcb0b3abd6b8c4e4a74/cpp/src/io/parquet/reader_impl.cpp#L556-L569
     std::optional<std::vector<std::string>> filter_only_columns_names;
-    if (options.get_filter().has_value() and options.get_columns().has_value()) {
-      filter_only_columns_names = cudf::io::parquet::detail::get_column_names_in_expression(
-        options.get_filter(), *(options.get_columns()));
+    if (options.get_filter().has_value() and select_column_names.has_value()) {
+      filter_only_columns_names = parquet::detail::get_column_names_in_expression(
+        options.get_filter(), *select_column_names, options, _extended_metadata->get_schema_tree());
       _num_filter_only_columns = filter_only_columns_names->size();
     }
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _metadata->select_columns(options.get_columns(),
+      _metadata->select_columns(select_column_names,
                                 filter_only_columns_names,
                                 options.is_enabled_use_pandas_metadata(),
                                 _strings_to_categorical,
@@ -133,17 +137,17 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     if (_is_filter_columns_selected) { return; }
 
     // list, struct, dictionary are not supported by AST filter yet.
-    _filter_columns_names =
-      names_from_expression(
-        options.get_filter(), {}, options.get_columns(), _extended_metadata->get_schema_tree())
-        .to_vector();
+    auto constexpr ignore_missing_columns = false;
+
+    _filter_columns_names = cudf::io::parquet::detail::get_column_names_in_expression(
+      options.get_filter(), {}, options, _extended_metadata->get_schema_tree());
     // Select only filter columns using the base `select_columns` method
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
       _extended_metadata->select_columns(_filter_columns_names,
                                          {},
                                          _use_pandas_metadata,
                                          _strings_to_categorical,
-                                         options.is_enabled_ignore_missing_columns(),
+                                         ignore_missing_columns,
                                          _options.timestamp_type.id());
 
     _is_filter_columns_selected  = true;
@@ -152,8 +156,10 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   } else {
     if (_is_payload_columns_selected) { return; }
 
+    auto select_column_names =
+      get_column_projection(options, options.is_enabled_ignore_missing_columns());
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _extended_metadata->select_payload_columns(options.get_columns(),
+      _extended_metadata->select_payload_columns(select_column_names,
                                                  _filter_columns_names,
                                                  _use_pandas_metadata,
                                                  _strings_to_categorical,
@@ -229,7 +235,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  auto expr_conv     = build_converted_expression(options.get_filter());
+  auto expr_conv     = build_converted_expression(options);
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _extended_metadata->filter_row_groups_with_stats(row_group_indices,
@@ -249,7 +255,7 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  auto expr_conv     = build_converted_expression(options.get_filter());
+  auto expr_conv     = build_converted_expression(options);
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   auto const bloom_filter_bytes =
@@ -279,7 +285,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  auto expr_conv     = build_converted_expression(options.get_filter());
+  auto expr_conv     = build_converted_expression(options);
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   // Collect literal and operator pairs for each input column with an (in)equality predicate
@@ -343,7 +349,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  auto expr_conv     = build_converted_expression(options.get_filter());
+  auto expr_conv     = build_converted_expression(options);
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _extended_metadata->filter_row_groups_with_bloom_filters(
@@ -379,7 +385,7 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_row_mask_with_page_
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  auto expr_conv     = build_converted_expression(options.get_filter());
+  auto expr_conv     = build_converted_expression(options);
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _extended_metadata->build_row_mask_with_page_index_stats(
@@ -495,7 +501,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  _expr_conv = build_converted_expression(options.get_filter());
+  _expr_conv = build_converted_expression(options);
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
@@ -554,7 +560,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns(
   select_columns(read_columns_mode::ALL_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  _expr_conv = build_converted_expression(options.get_filter());
+  _expr_conv = build_converted_expression(options);
 
   prepare_data(read_mode::READ_ALL, row_group_indices, column_chunk_data, {});
 
@@ -587,7 +593,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
-  _expr_conv = build_converted_expression(options.get_filter());
+  _expr_conv = build_converted_expression(options);
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
@@ -696,7 +702,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _output_chunk_read_limit = 0;
   _strings_to_categorical  = false;
   _reader_column_schema.reset();
-  _expr_conv = named_to_reference_converter(std::nullopt, {}, {});
+  _expr_conv = named_to_reference_converter{};
   _mr        = cudf::get_current_device_resource_ref();
 }
 
@@ -726,14 +732,14 @@ void hybrid_scan_reader_impl::initialize_options(
 }
 
 named_to_reference_converter hybrid_scan_reader_impl::build_converted_expression(
-  std::optional<std::reference_wrapper<const ast::expression>> filter)
+  parquet_reader_options const& options)
 {
-  if (not filter.has_value()) { return named_to_reference_converter(std::nullopt, {}, {}); }
+  if (not options.get_filter().has_value()) { return named_to_reference_converter{}; }
 
   table_metadata metadata;
   populate_metadata(metadata);
-  auto expr_conv =
-    named_to_reference_converter(filter, metadata, _extended_metadata->get_schema_tree());
+  auto expr_conv = named_to_reference_converter(
+    options.get_filter(), metadata, _extended_metadata->get_schema_tree(), options);
   CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
                "Columns names in filter expression must be convertible to index references");
   return expr_conv;

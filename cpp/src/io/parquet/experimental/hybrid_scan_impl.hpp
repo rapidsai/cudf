@@ -302,11 +302,11 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @brief Convert the input filter expression such that all column name references are replaced
    * with corresponding column references
    *
-   * @param filter Input filter expression
+   * @param options Reader options
    * @return Converted expression
    */
   [[nodiscard]] named_to_reference_converter build_converted_expression(
-    std::optional<std::reference_wrapper<const ast::expression>> filter);
+    parquet_reader_options const& options);
 
   /**
    * @brief Set the page mask for the pass pages
