@@ -2172,6 +2172,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             A compacted column (or self if not sliced)
         """
         if self._is_sliced():
+            # Check if data is spilled - if so, don't compact it
+            # Spilled data is already on CPU and calling copy() would
+            # unnecessarily bring it back to GPU and lose the spill state
+            if self.data is not None and hasattr(self.data, "owner"):
+                if (
+                    hasattr(self.data.owner, "is_spilled")
+                    and self.data.owner.is_spilled
+                ):
+                    return self
+
             # Create a copy to compact the data - only the actual slice
             # will be copied, not the entire base buffer
             return self.copy()
