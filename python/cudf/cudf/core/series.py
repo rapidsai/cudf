@@ -41,6 +41,7 @@ from cudf.core.column import (
 )
 from cudf.core.column.column import concat_columns
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import (
@@ -65,7 +66,6 @@ from cudf.utils.dtypes import (
     _get_nan_for_dtype,
     find_common_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
 )
