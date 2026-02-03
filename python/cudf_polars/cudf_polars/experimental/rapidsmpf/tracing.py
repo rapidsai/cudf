@@ -98,16 +98,22 @@ class StreamingNodeTracer:
 
     def merge(self, other: StreamingNodeTracer) -> None:
         """Merge another node tracer's stats into this one."""
-        if other.row_count is not None:
-            if self.duplicated or other.duplicated:
-                # For duplicated data, take max (don't sum across ranks)
-                self.row_count = max(self.row_count or 0, other.row_count)
-                self.duplicated = True
-            else:
+        assert self.duplicated == other.duplicated, (
+            "Nodes should have the same duplicated status"
+        )
+        if self.duplicated:
+            assert self.row_count == other.row_count, (
+                "Duplicated nodes should have the same row count"
+            )
+            assert self.decision == other.decision, (
+                "Duplicated nodes should have the same decision"
+            )
+        else:
+            self.chunk_count += other.chunk_count
+            if other.row_count is not None:
                 self.row_count = (self.row_count or 0) + other.row_count
-        self.chunk_count += other.chunk_count
-        if other.decision is not None:
-            self.decision = other.decision
+            if other.decision is not None:
+                self.decision = other.decision
 
 
 class StreamingQueryTracer:

@@ -136,8 +136,9 @@ def remap_partitioning(
     new_name_to_idx = {name: i for i, name in enumerate(new_schema.keys())}
 
     def remap_hash_scheme(hs: HashScheme | None | str) -> HashScheme | None | str:
-        if hs is None or isinstance(hs, str):
+        if hs is None or hs == "inherit":
             return hs  # None or "inherit" passes through unchanged
+        assert isinstance(hs, HashScheme), "Expected HashScheme"
         try:
             new_indices = tuple(
                 new_name_to_idx[old_names[i]] for i in hs.column_indices
@@ -152,10 +153,6 @@ def remap_partitioning(
     # If inter_rank partitioning was invalidated, the whole partitioning is invalid
     if isinstance(partitioning.inter_rank, HashScheme) and new_inter_rank is None:
         return None
-
-    # If only local partitioning was invalidated, we can still use inter_rank
-    if isinstance(partitioning.local, HashScheme) and new_local is None:
-        new_local = None
 
     return Partitioning(inter_rank=new_inter_rank, local=new_local)
 
