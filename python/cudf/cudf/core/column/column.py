@@ -40,7 +40,6 @@ from cudf.core._internals import (
     aggregation,
     copying,
     sorting,
-    stream_compaction,
 )
 from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
@@ -413,18 +412,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             except AttributeError:
                 pass
 
-    def set_mask(self, mask: Buffer | None) -> Self:
+    def set_mask(self, mask: Buffer | None, null_count: int) -> Self:
         """
         Replaces the mask buffer of the column and returns a new column.
-        The input mask is assumed to be of appropriate size for self.
+
+        Parameters
+        ----------
+        mask : Buffer or None
+            The new null mask buffer, or None to clear the mask.
+        null_count : int
+            The number of null values.
         """
         if isinstance(mask, Buffer):
-            new_null_count = plc.null_mask.null_count(
-                mask,
-                0,
-                self.size,
-            )
             new_mask = mask
+            new_null_count = null_count
         elif mask is None:
             new_mask = None
             new_null_count = 0
@@ -626,6 +627,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
             dtype = dtype_from_pylibcudf_column(plc_col)
             col = ColumnBase.create(plc_col, dtype)
+
+        Note that the input col is never directly placed into the resulting ColumnBase.
+        Rather, a new plc.Column is created with the exact same properties but with
+        suitable shallow copies of the buffers wrapped in cudf Buffers to ensure
+        consistent behavior with respect to memory semantics like copy-on-write.
         """
         # Wrap buffers recursively
         wrapped = ColumnBase._wrap_buffers(col)
@@ -831,7 +837,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if cai_mask["typestr"][1] == "t":
                 mask_buff = as_buffer(MaskCAIWrapper(mask))
             elif cai_mask["typestr"][1] == "b":
-                mask_buff = ColumnBase.from_cuda_array_interface(
+                mask_buff, null_count = ColumnBase.from_cuda_array_interface(
                     mask,
                 ).as_mask()
             else:
@@ -842,7 +848,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     f"The value for mask is smaller than expected, got {mask.size} bytes, "
                     f"expected {required_num_bytes} bytes."
                 )
-            column = column.set_mask(mask_buff)
+            # Compute null_count for external masks that don't provide it
+            if cai_mask["typestr"][1] != "b":
+                null_count = plc.null_mask.null_count(
+                    mask_buff, 0, column.size
+                )
+            column = column.set_mask(mask_buff, null_count)
         return column
 
     def __len__(self) -> int:
@@ -1021,12 +1032,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def dropna(self) -> Self:
         if self.has_nulls():
-            return cast(
-                "Self",
-                ColumnBase.create(
-                    stream_compaction.drop_nulls([self])[0], self.dtype
-                ),
-            )
+            with self.access(mode="read", scope="internal"):
+                plc_table = plc.stream_compaction.drop_nulls(
+                    plc.Table([self.plc_column]),
+                    [0],
+                    1,
+                )
+                return cast(
+                    "Self",
+                    ColumnBase.create(plc_table.columns()[0], self.dtype),
+                )
         else:
             return self.copy()
 
@@ -1264,17 +1279,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # compute mask slice
         if stride == 1:
             with self.access(mode="read", scope="internal"):
-                result = [
-                    type(self).from_pylibcudf(col)
-                    for col in plc.copying.slice(
-                        self.plc_column,
-                        [start, stop],
-                    )
-                ]
-            return cast(
-                "Self",
-                result[0]._with_type_metadata(self.dtype),
-            )
+                (result,) = plc.copying.slice(
+                    self.plc_column,
+                    [start, stop],
+                )
+            return cast("Self", ColumnBase.create(result, self.dtype))
         else:
             # Need to create a gather map for given slice with stride
             gather_map = as_column(
@@ -1349,7 +1358,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             length=len(self),
         )
         if result_mask is not None:
-            result_col = result_col.set_mask(result_mask.as_mask())
+            mask_buff, null_count = result_mask.as_mask()
+            result_col = result_col.set_mask(mask_buff, null_count)
         return result_col
 
     def _scatter_by_slice(
@@ -1451,8 +1461,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return cast(
                 "Self",
-                type(self)
-                .from_pylibcudf(
+                ColumnBase.create(
                     copying.scatter(
                         cast("list[plc.Scalar]", [value])
                         if isinstance(value, plc.Scalar)
@@ -1460,9 +1469,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         key,
                         [self],
                         bounds_check=bounds_check,
-                    )[0]
-                )
-                ._with_type_metadata(self.dtype),
+                    )[0],
+                    self.dtype,
+                ),
             )
 
     def _check_scatter_key_length(
@@ -1604,8 +1613,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if cudf.get_option("mode.pandas_compatible"):
             return result
 
-        return result._with_type_metadata(
-            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+        return ColumnBase.create(
+            result.plc_column,
+            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
         )
 
     @cached_property
@@ -1741,12 +1751,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if indices.dtype.kind not in {"u", "i"}:
             indices = indices.astype(SIZE_TYPE_DTYPE)
         GatherMap(indices, len(self), nullify=not check_bounds or nullify)
-        gathered = ColumnBase.from_pylibcudf(
-            copying.gather([self], indices, nullify=nullify)[0]  # type: ignore[arg-type]
-        )
+        gathered = copying.gather([self], indices, nullify=nullify)[0]  # type: ignore[arg-type]
         return cast(
             "Self",
-            gathered._with_type_metadata(self.dtype),
+            ColumnBase.create(gathered, self.dtype),
         )
 
     def isin(self, values: Sequence) -> ColumnBase:
@@ -1801,19 +1809,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 
-    def as_mask(self) -> Buffer:
+    def as_mask(self) -> tuple[Buffer, int]:
         """Convert booleans to bitmask
 
         Returns
         -------
-        Buffer
+        tuple[Buffer, int]
+            The mask buffer and the null count (number of False values).
         """
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
         with self.access(mode="read", scope="internal"):
-            mask, _ = plc.transform.bools_to_mask(self.plc_column)
-            return as_buffer(mask)
+            mask, null_count = plc.transform.bools_to_mask(self.plc_column)
+            return as_buffer(mask), null_count
 
     @property
     def is_unique(self) -> bool:
@@ -1967,7 +1976,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 # TODO: Make dropna shallow copy if there are no nulls?
                 cats = cats.dropna()
             dtype = CategoricalDtype(categories=cats, ordered=dtype.ordered)
-        return codes.set_mask(self.mask)._with_type_metadata(dtype)  # type: ignore[return-value]
+        return codes.set_mask(self.mask, self.null_count)._with_type_metadata(
+            dtype
+        )  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         raise NotImplementedError()
@@ -1991,9 +2002,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
-        return ColumnBase.create(
-            stream_compaction.apply_boolean_mask([self], mask)[0], self.dtype
-        )
+        with access_columns(self, mask, mode="read", scope="internal") as (
+            col,
+            mask_col,
+        ):
+            plc_table = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([col.plc_column]),
+                mask_col.plc_column,
+            )
+            return ColumnBase.create(plc_table.columns()[0], self.dtype)
 
     def argsort(
         self,
@@ -2116,13 +2133,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.is_unique:
             return self.copy()
         else:
-            return cast(
-                "Self",
-                ColumnBase.create(
-                    stream_compaction.drop_duplicates([self], keep="first")[0],
-                    self.dtype,
-                ),
-            )
+            with self.access(mode="read", scope="internal"):
+                plc_table = plc.stream_compaction.stable_distinct(
+                    plc.Table([self.plc_column]),
+                    [0],
+                    plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+                    plc.types.NullEquality.EQUAL,
+                    plc.types.NanEquality.ALL_EQUAL,
+                )
+                return cast(
+                    "Self",
+                    ColumnBase.create(plc_table.columns()[0], self.dtype),
+                )
 
     @staticmethod
     def _serialize_plc_column_recursive(
@@ -2387,18 +2409,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ) as (self, other, boolean_mask):
             return cast(
                 "Self",
-                (
-                    type(self)
-                    .from_pylibcudf(
-                        plc.copying.copy_if_else(
-                            self.plc_column,
-                            other
-                            if isinstance(other, plc.Scalar)
-                            else other.plc_column,
-                            boolean_mask.plc_column,
-                        )
-                    )
-                    ._with_type_metadata(self.dtype)
+                ColumnBase.create(
+                    plc.copying.copy_if_else(
+                        self.plc_column,
+                        other
+                        if isinstance(other, plc.Scalar)
+                        else other.plc_column,
+                        boolean_mask.plc_column,
+                    ),
+                    self.dtype,
                 ),
             )
 
@@ -2485,8 +2504,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 aggregation.make_aggregation(op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
-            result_col = type(col).from_pylibcudf(
-                plc.Column.from_scalar(plc_scalar, 1)
+            result_col = ColumnBase.create(
+                plc.Column.from_scalar(plc_scalar, 1), col_dtype
             )
             # Hook for subclasses (e.g., DecimalBaseColumn adjusts precision)
             result_col = col._adjust_reduce_result(
@@ -2666,9 +2685,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         casted_col, casted_other = self._cast_self_and_other_for_where(
             other, inplace
         )
-        return casted_col.copy_if_else(casted_other, cond)._with_type_metadata(  # type: ignore[arg-type]
-            self.dtype
-        )
+        result = casted_col.copy_if_else(casted_other, cond)  # type: ignore[arg-type]
+        return ColumnBase.create(result.plc_column, self.dtype)
 
 
 def column_empty(

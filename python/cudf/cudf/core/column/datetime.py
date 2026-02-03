@@ -763,7 +763,9 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-        return gmt_data._with_type_metadata(dtype)
+        return cast(
+            DatetimeColumn, ColumnBase.create(gmt_data.plc_column, dtype)
+        )
 
     def tz_convert(self, tz: str | None) -> DatetimeColumn:
         raise TypeError(
@@ -849,7 +851,9 @@ class DatetimeTZColumn(DatetimeColumn):
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
                 # TODO: Doesn't check that new unit is valid.
-                casted = self._with_type_metadata(dtype)
+                casted = cast(
+                    DatetimeTZColumn, ColumnBase.create(self.plc_column, dtype)
+                )
             else:
                 casted = self
             return casted.tz_convert(str(dtype.tz))
