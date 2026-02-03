@@ -29,6 +29,7 @@ from cudf_polars.utils.config import (
     CUDAStreamPoolConfig,
     ConfigOptions,
     MemoryResourceConfig,
+    TracingOptions,
 )
 from cudf_polars.utils.cuda_stream import get_cuda_stream, get_new_cuda_stream
 
@@ -954,8 +955,6 @@ def test_dynamic_planning_from_instance() -> None:
 
 
 def test_tracing_options() -> None:
-    from cudf_polars.utils.config import TracingOptions
-
     # Tracing is disabled (None) by default
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
     assert config.executor.name == "streaming"
