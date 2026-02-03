@@ -13,6 +13,11 @@ from rapidsmpf.integrations.cudf.partition import (
 from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
+from rapidsmpf.streaming.cudf.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+    Partitioning,
+)
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.dsl.expr import Col
@@ -22,8 +27,6 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    HashPartitioned,
-    Metadata,
     recv_metadata,
     send_metadata,
 )
@@ -162,15 +165,11 @@ async def shuffle_node(
     async with shutdown_on_error(context, ch_in, ch_out):
         # Receive and send updated metadata.
         _ = await recv_metadata(ch_in, context)
-        column_names = list(ir.schema.keys())
-        partitioned_on = tuple(column_names[i] for i in columns_to_hash)
-        output_metadata = Metadata(
+        output_metadata = ChannelMetadata(
             local_count=max(1, num_partitions // context.comm().nranks),
-            global_count=num_partitions,
-            partitioning=HashPartitioned(
-                columns=partitioned_on,
-                scope="global",
-                count=num_partitions,
+            partitioning=Partitioning(
+                inter_rank=HashScheme(columns_to_hash, num_partitions),
+                local="inherit",
             ),
         )
         await send_metadata(ch_out, context, output_metadata)
