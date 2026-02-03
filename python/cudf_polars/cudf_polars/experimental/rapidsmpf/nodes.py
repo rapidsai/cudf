@@ -72,7 +72,7 @@ async def default_node_single(
     preserve_partitioning
         Whether to preserve the partitioning metadata of the input chunks.
     node_tracer
-        Node profiler for collecting runtime statistics.
+        Node tracer for collecting runtime statistics.
 
     Notes
     -----
@@ -80,7 +80,7 @@ async def default_node_single(
     """
     async with shutdown_on_error(
         context, ch_in, ch_out, node_tracer=node_tracer
-    ) as profiler:
+    ) as tracer:
         # Recv/send metadata.
         metadata_in = await recv_metadata(ch_in, context)
         partitioning = None
@@ -95,8 +95,8 @@ async def default_node_single(
             duplicated=metadata_in.duplicated,
         )
         await send_metadata(ch_out, context, metadata_out)
-        if profiler is not None and metadata_in.duplicated:
-            profiler.set_duplicated()
+        if tracer is not None and metadata_in.duplicated:
+            tracer.set_duplicated()
 
         # Recv/send data.
         seq_num = 0
@@ -134,8 +134,8 @@ async def default_node_single(
                     ),
                     context=ir_context,
                 )
-                if profiler is not None:
-                    profiler.add_chunk(table=df.table)
+                if tracer is not None:
+                    tracer.add_chunk(table=df.table)
                 await ch_out.send(
                     context,
                     Message(
@@ -180,11 +180,11 @@ async def default_node_multi(
         Index of the input channel to preserve partitioning information for.
         If None, no partitioning information is preserved.
     node_tracer
-        Node profiler for collecting runtime statistics.
+        Node tracer for collecting runtime statistics.
     """
     async with shutdown_on_error(
         context, *chs_in, ch_out, node_tracer=node_tracer
-    ) as profiler:
+    ) as tracer:
         # Merge and forward basic metadata.
         local_count = 1
         duplicated = True
@@ -207,8 +207,8 @@ async def default_node_multi(
             duplicated=duplicated,
         )
         await send_metadata(ch_out, context, metadata)
-        if profiler is not None and duplicated:
-            profiler.set_duplicated()
+        if tracer is not None and duplicated:
+            tracer.set_duplicated()
 
         seq_num = 0
         n_children = len(chs_in)
@@ -273,8 +273,8 @@ async def default_node_multi(
                     *dfs,
                     context=ir_context,
                 )
-                if profiler is not None:
-                    profiler.add_chunk(table=df.table)
+                if tracer is not None:
+                    tracer.add_chunk(table=df.table)
                 await ch_out.send(
                     context,
                     Message(
@@ -553,8 +553,8 @@ def _(
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
 
-    profiler: StreamingQueryTracer | None = rec.state.get("profiler")
-    node_tracer = profiler.get_or_create(ir) if profiler is not None else None
+    tracer: StreamingQueryTracer | None = rec.state.get("tracer")
+    node_tracer = tracer.get_or_create(ir) if tracer is not None else None
 
     if len(ir.children) == 1:
         # Single-channel default node
@@ -716,18 +716,18 @@ async def metadata_feeder_node(
     metadata
         The metadata to add to the output channel.
     node_tracer
-        Node profiler for collecting runtime statistics.
+        Node tracer for collecting runtime statistics.
     """
     async with shutdown_on_error(
         context, ch_in, ch_out, node_tracer=node_tracer
-    ) as profiler:
+    ) as tracer:
         await send_metadata(ch_out, context, metadata)
-        if profiler is not None and metadata.duplicated:
-            profiler.set_duplicated()
+        if tracer is not None and metadata.duplicated:
+            tracer.set_duplicated()
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
-            if profiler is not None:
-                profiler.chunk_count += 1
+            if tracer is not None:
+                tracer.chunk_count += 1
         await ch_out.drain(context)
 
 

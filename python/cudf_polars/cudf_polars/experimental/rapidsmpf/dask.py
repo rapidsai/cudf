@@ -41,7 +41,7 @@ class EvaluatePipelineCallback(Protocol):
         *,
         collect_metadata: bool = False,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None, StreamingQueryTracer | None]:
-        """Evaluate a pipeline and return the result DataFrame, metadata, and profiler."""
+        """Evaluate a pipeline and return the result DataFrame, metadata, and tracer."""
         ...
 
 
@@ -85,7 +85,7 @@ def evaluate_pipeline_dask(
 
     Returns
     -------
-    The output DataFrame, metadata collector, and merged profiler.
+    The output DataFrame, metadata collector, and merged tracer.
     """
     client = get_dask_client()
     result = client.run(
@@ -100,18 +100,18 @@ def evaluate_pipeline_dask(
     )
     dfs: list[pl.DataFrame] = []
     metadata_collector: list[ChannelMetadata] = []
-    merged_profiler: StreamingQueryTracer | None = None
-    for df, md, profiler in result.values():
+    merged_tracer: StreamingQueryTracer | None = None
+    for df, md, tracer in result.values():
         dfs.append(df)
         if md is not None:
             metadata_collector.extend(md)
-        if profiler is not None:
-            if merged_profiler is None:
-                merged_profiler = profiler
+        if tracer is not None:
+            if merged_tracer is None:
+                merged_tracer = tracer
             else:
-                merged_profiler.merge(profiler)
+                merged_tracer.merge(tracer)
 
-    return pl.concat(dfs), metadata_collector or None, merged_profiler
+    return pl.concat(dfs), metadata_collector or None, merged_tracer
 
 
 def _evaluate_pipeline_dask(
@@ -151,7 +151,7 @@ def _evaluate_pipeline_dask(
 
     Returns
     -------
-    The output DataFrame, metadata collector, and profiler.
+    The output DataFrame, metadata collector, and tracer.
     """
     assert dask_worker is not None, "Dask worker must be provided"
     assert config_options.executor.name == "streaming", "Executor must be streaming"

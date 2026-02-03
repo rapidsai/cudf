@@ -953,39 +953,39 @@ def test_dynamic_planning_from_instance() -> None:
     assert config.executor.dynamic_planning.sample_chunk_count == 2  # default
 
 
-def test_profiling_options() -> None:
-    from cudf_polars.utils.config import ProfilingOptions
+def test_tracing_options() -> None:
+    from cudf_polars.utils.config import TracingOptions
 
-    # Profiling is disabled (None) by default
+    # Tracing is disabled (None) by default
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
     assert config.executor.name == "streaming"
-    assert config.executor.profiling is None
+    assert config.executor.tracing is None
 
     # Can enable via dict
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
-            executor_options={"profiling": {"output_path": "/tmp/profile.txt"}},
+            executor_options={"tracing": {"output_path": "/tmp/trace.txt"}},
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.profiling is not None
-    assert config.executor.profiling.output_path == "/tmp/profile.txt"
+    assert config.executor.tracing is not None
+    assert config.executor.tracing.output_path == "/tmp/trace.txt"
 
     # Can enable via instance (output_path is optional)
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
-            executor_options={"profiling": ProfilingOptions()},
+            executor_options={"tracing": TracingOptions()},
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.profiling is not None
-    assert config.executor.profiling.output_path is None
+    assert config.executor.tracing is not None
+    assert config.executor.tracing.output_path is None
 
     # Empty output_path is rejected
     with pytest.raises(TypeError, match="output_path must be a non-empty str"):
-        ProfilingOptions(output_path="")
+        TracingOptions(output_path="")
 
 
 def test_parse_memory_resource_config() -> None:

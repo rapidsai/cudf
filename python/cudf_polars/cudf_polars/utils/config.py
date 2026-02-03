@@ -48,7 +48,6 @@ __all__ = [
     "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
-    "ProfilingOptions",
     "Runtime",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
@@ -56,6 +55,7 @@ __all__ = [
     "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
+    "TracingOptions",
 ]
 
 
@@ -495,25 +495,29 @@ class DynamicPlanningOptions:
 
 
 @dataclasses.dataclass(frozen=True)
-class ProfilingOptions:
+class TracingOptions:
     """
-    Configuration for query profiling.
+    Configuration for query tracing.
 
     When enabled, the streaming executor collects per-node metrics
-    (such as row counts) and writes them to a file after execution.
-    This feature is only available for the "rapidsmpf" runtime.
+    (such as row counts and algorithm decisions) and writes them to a
+    file after execution. This feature is only available for the
+    "rapidsmpf" runtime.
 
-    To enable profiling, pass a ``ProfilingOptions`` instance
-    to ``StreamingExecutor(profiling=...)``. To disable it, pass
-    ``None`` (the default).
+    To enable tracing, pass a ``TracingOptions`` instance to
+    ``StreamingExecutor(tracing=...)``. To disable it, pass ``None``
+    (the default).
+
+    To also emit structlog events for each streaming node, set the
+    environment variable ``CUDF_POLARS_LOG_TRACES=1``.
 
     Parameters
     ----------
     output_path
-        Path to write the profiling results. The output will be in a
+        Path to write the tracing results. The output will be in a
         human-readable text format similar to
         :func:`~cudf_polars.experimental.explain.explain_query`.
-        If ``None`` (the default), profiling data is collected but not
+        If ``None`` (the default), tracing data is collected but not
         written to a file.
     """
 
@@ -737,12 +741,15 @@ class StreamingExecutor:
         or use regular pageable host memory. Pinned host memory offers higher
         bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
-    profiling
-        Options controlling query profiling. When set to a
-        :class:`~cudf_polars.utils.config.ProfilingOptions` instance,
-        per-node metrics (such as row counts) are collected during execution
-        and written to the specified output file. When ``None`` (the default),
-        profiling is disabled.
+    tracing
+        Options controlling query tracing. When set to a
+        :class:`~cudf_polars.utils.config.TracingOptions` instance,
+        per-node metrics (such as row counts and algorithm decisions)
+        are collected during execution and written to the specified
+        output file. When ``None`` (the default), tracing is disabled.
+
+        To also emit structlog events for each streaming node, set the
+        environment variable ``CUDF_POLARS_LOG_TRACES=1``.
 
         .. note::
             This feature is only available for the "rapidsmpf" runtime.
@@ -854,7 +861,7 @@ class StreamingExecutor:
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
-    profiling: ProfilingOptions | None = None
+    tracing: TracingOptions | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
@@ -972,13 +979,13 @@ class StreamingExecutor:
                 DynamicPlanningOptions(**self.dynamic_planning),
             )
 
-        # Handle profiling.
-        # Can be None, dict, or ProfilingOptions
-        if isinstance(self.profiling, dict):
+        # Handle tracing.
+        # Can be None, dict, or TracingOptions
+        if isinstance(self.tracing, dict):
             object.__setattr__(
                 self,
-                "profiling",
-                ProfilingOptions(**self.profiling),
+                "tracing",
+                TracingOptions(**self.tracing),
             )
 
         if self.cluster == "distributed":

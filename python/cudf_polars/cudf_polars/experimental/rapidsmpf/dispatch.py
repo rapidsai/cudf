@@ -75,8 +75,8 @@ class GenState(TypedDict):
         Statistics collector.
     collective_id_map
         The mapping of IR nodes to lists of collective IDs.
-    profiler
-        Runtime profiler for collecting execution statistics.
+    tracer
+        Runtime tracer for collecting execution statistics.
     """
 
     context: Context
@@ -87,7 +87,7 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     collective_id_map: dict[IR, list[int]]
-    profiler: StreamingQueryTracer | None
+    tracer: StreamingQueryTracer | None
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[
