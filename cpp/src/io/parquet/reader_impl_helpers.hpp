@@ -11,6 +11,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 
@@ -605,7 +606,9 @@ class names_from_expression : public ast::detail::expression_transformer {
   names_from_expression() = default;
 
   names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                        std::vector<std::string> const& skip_names);
+                        std::vector<std::string> const& skip_names,
+                        cudf::io::parquet_reader_options const& options,
+                        std::vector<SchemaElement> const& schema_tree);
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
@@ -635,10 +638,11 @@ class names_from_expression : public ast::detail::expression_transformer {
    */
   [[nodiscard]] std::vector<std::string> to_vector() &&;
 
- protected:
+ private:
   void visit_operands(
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
+  std::unordered_map<cudf::size_type, std::string> _column_indices_to_names;
   std::unordered_set<std::string> _column_names;
   std::unordered_set<std::string> _skip_names;
 };
@@ -740,6 +744,17 @@ class equality_literals_collector : public ast::detail::expression_transformer {
 };
 
 /**
+ * @brief Maps indices of (all or selected) columns to their names
+ *
+ * @param options Parquet reader options
+ * @param schema_tree Parquet schema tree
+ *
+ * @return Map of column indices to their names
+ */
+[[nodiscard]] std::unordered_map<cudf::size_type, std::string> map_column_indices_to_names(
+  cudf::io::parquet_reader_options const& options, std::vector<SchemaElement> const& schema_tree);
+
+/**
  * @brief Get the column names in expression object
  *
  * @param expr The optional expression object to get the column names from
@@ -748,7 +763,9 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  */
 [[nodiscard]] std::vector<std::string> get_column_names_in_expression(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
-  std::vector<std::string> const& skip_names);
+  std::vector<std::string> const& skip_names,
+  cudf::io::parquet_reader_options const& options,
+  std::vector<SchemaElement> const& schema_tree);
 
 /**
  * @brief Filter table using the provided (StatsAST or BloomfilterAST) expression and
