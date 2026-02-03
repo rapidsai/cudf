@@ -485,6 +485,7 @@ class hybrid_scan_reader {
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
@@ -516,6 +517,7 @@ class hybrid_scan_reader {
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of materialized payload columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
@@ -545,6 +547,7 @@ class hybrid_scan_reader {
    * @param column_chunk_data Device spans of column chunk data of all columns
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of all materialized columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
@@ -565,6 +568,7 @@ class hybrid_scan_reader {
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param column_chunk_data Device spans of column chunk data of filter columns
    * @param options Parquet reader options
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   void setup_chunking_for_filter_columns(
@@ -603,6 +607,7 @@ class hybrid_scan_reader {
    * @param column_chunk_data Device spans of column chunk data of payload columns
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
    */
   void setup_chunking_for_payload_columns(
     std::size_t chunk_read_limit,
