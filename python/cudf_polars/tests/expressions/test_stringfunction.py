@@ -18,6 +18,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_133,
+    POLARS_VERSION_LT_138,
 )
 
 
@@ -891,6 +892,9 @@ def test_concat_str_with_boolean():
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138, reason="Split with literal parameter added in 1.38"
+)
 def test_split_regex_not_supported():
     lf = pl.LazyFrame({"a": ["foo1bar", "baz456boo", "abc321"]})
 

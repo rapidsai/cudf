@@ -265,6 +265,7 @@ class StringFunction(Expr):
             if inclusive:
                 raise NotImplementedError(f"{inclusive=} is not supported for split")
         elif self.name is StringFunction.Name.SplitRegex:
+            # See https://github.com/pola-rs/polars/pull/26060
             raise NotImplementedError(
                 "String split with regex (literal=False) is not supported."
             )

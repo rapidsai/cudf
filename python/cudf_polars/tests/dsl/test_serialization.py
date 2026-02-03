@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from cudf_polars.dsl.expressions.string import StringFunction
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_138,
     POLARS_VERSION_LT_1321,
 )
 
@@ -63,6 +64,8 @@ def test_from_polars_all_names(function):
         }
     if POLARS_VERSION_LT_132 and function == BooleanFunction:
         cudf_polars_names_set = cudf_polars_names_set - {"IsClose"}
+    if POLARS_VERSION_LT_138 and function == StringFunction:
+        cudf_polars_names_set = cudf_polars_names_set - {"SplitRegex"}
     assert polars_names_set == cudf_polars_names_set
     names = function.Name
     if not POLARS_VERSION_LT_132 and function == StructFunction:
@@ -74,6 +77,8 @@ def test_from_polars_all_names(function):
         names = set(names) - {TemporalFunction.Name.DaysInMonth}
     if POLARS_VERSION_LT_132 and function == BooleanFunction:
         names = set(names) - {BooleanFunction.Name.IsClose}
+    if POLARS_VERSION_LT_138 and function == StringFunction:
+        names = set(names) - {StringFunction.Name.SplitRegex}
     for name in names:
         attr = getattr(polars_function, name.name)
         assert function.Name.from_polars(attr) == name
