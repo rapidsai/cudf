@@ -961,11 +961,11 @@ sort_merge_join::left_join(table_view const& left,
     stream);
 }
 
-std::unique_ptr<cudf::join_match_context>
-sort_merge_join::inner_join_match_context(table_view const& left,
-                                          sorted is_left_sorted,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr) const
+std::unique_ptr<cudf::join_match_context> sort_merge_join::inner_join_match_context(
+  table_view const& left,
+  sorted is_left_sorted,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"sort_merge_join::inner_join_match_context"};
   // Sanity checks
@@ -1028,8 +1028,7 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
   auto const left_partition_end_idx   = context.left_end_idx;
   auto null_processed_table_start_idx = left_partition_start_idx;
   auto null_processed_table_end_idx   = left_partition_end_idx;
-  if (compare_nulls == null_equality::UNEQUAL &&
-      has_nested_nulls(preprocessed_left._table_view)) {
+  if (compare_nulls == null_equality::UNEQUAL && has_nested_nulls(preprocessed_left._table_view)) {
     auto left_mapping = preprocessed_left.map_table_to_unprocessed(stream);
     null_processed_table_start_idx =
       cuda::std::distance(left_mapping.begin(),

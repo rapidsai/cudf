@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -67,9 +67,8 @@ struct join_match_context {
     _match_counts;  ///< A device vector containing the count of matching rows in the right table
                     ///< for each row in left table
 
-  join_match_context(
-    table_view left_table,
-    std::unique_ptr<rmm::device_uvector<size_type>> match_counts)
+  join_match_context(table_view left_table,
+                     std::unique_ptr<rmm::device_uvector<size_type>> match_counts)
     : _left_table{left_table}, _match_counts{std::move(match_counts)}
   {
   }
@@ -88,7 +87,7 @@ struct join_match_context {
  */
 struct join_partition_context {
   std::unique_ptr<join_match_context>
-    left_table_context;  ///< The match context from a previous inner_join_match_context call
+    left_table_context;      ///< The match context from a previous inner_join_match_context call
   size_type left_start_idx;  ///< The starting row index of the current left table partition
   size_type left_end_idx;  ///< The ending row index (exclusive) of the current left table partition
 };

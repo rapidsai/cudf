@@ -82,7 +82,7 @@ class sort_merge_join {
    * construct the result of performing an inner join between two tables
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                          std::unique_ptr<rmm::device_uvector<size_type>>>
+            std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(table_view const& left,
              sorted is_left_sorted,
              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -105,7 +105,7 @@ class sort_merge_join {
    * construct the result of performing a left join between two tables
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                          std::unique_ptr<rmm::device_uvector<size_type>>>
+            std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(table_view const& left,
             sorted is_left_sorted,
             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -132,7 +132,7 @@ class sort_merge_join {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the result device memory
    *
-   * @return A unique_ptr to join_match_context 
+   * @return A unique_ptr to join_match_context
    *         containing the left table view, match counts, and preprocessed left table state for
    *         partitioned joins
    */
@@ -175,8 +175,8 @@ class sort_merge_join {
    *
    * // Get match context for the entire left table
    * auto match_ctx = join_obj.inner_join_match_context(left_table, sorted::NO);
-   * 
-   * // Create partition context 
+   *
+   * // Create partition context
    * cudf::join_partition_context part_ctx{std::move(match_ctx), 0, 0};
    *
    * // Define partition boundaries (e.g., process 1000 rows at a time)
@@ -294,10 +294,9 @@ class sort_merge_join {
      * @param match_counts Device vector of match counts per row
      * @param preprocessed Preprocessed left table state
      */
-    sort_merge_join_match_context(
-      table_view left_table,
-      std::unique_ptr<rmm::device_uvector<size_type>> match_counts,
-      preprocessed_table preprocessed)
+    sort_merge_join_match_context(table_view left_table,
+                                  std::unique_ptr<rmm::device_uvector<size_type>> match_counts,
+                                  preprocessed_table preprocessed)
       : join_match_context{left_table, std::move(match_counts)},
         preprocessed_left{std::move(preprocessed)}
     {
