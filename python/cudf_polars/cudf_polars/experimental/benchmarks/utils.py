@@ -1134,7 +1134,10 @@ def run_polars(
             return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
 
         if client is not None:
-            all_logs = "\n".join(client.run(gather_logs).values())
+            # Gather logs from both client (for Query Plan) and workers
+            worker_logs = "\n".join(client.run(gather_logs).values())
+            client_logs = gather_logs()
+            all_logs = client_logs + "\n" + worker_logs
         else:
             all_logs = gather_logs()
 
