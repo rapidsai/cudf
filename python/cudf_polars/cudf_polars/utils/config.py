@@ -497,28 +497,34 @@ class DynamicPlanningOptions:
 @dataclasses.dataclass(frozen=True)
 class TracingOptions:
     """
-    Configuration for query tracing.
+    Configuration for coarse-grained streaming-node tracing (rapidsmpf only).
 
-    When enabled, the streaming executor collects per-node metrics
-    (such as row counts and algorithm decisions) and writes them to a
-    file after execution. This feature is only available for the
-    "rapidsmpf" runtime.
+    This class controls tracing at the *streaming-node* level, collecting
+    aggregate metrics (row counts, chunk counts, algorithm decisions) for
+    each IR node processed by the rapidsmpf runtime. When ``output_path``
+    is set, a summary is written after query execution.
 
-    To enable tracing, pass a ``TracingOptions`` instance to
-    ``StreamingExecutor(tracing=...)``. To disable it, pass ``None``
-    (the default).
+    For fine-grained IR-execution tracing (timing, memory, dataframe shapes),
+    use the ``CUDF_POLARS_LOG_TRACES`` environment variable instead. See the
+    `Tracing section of the usage guide
+    <https://docs.rapids.ai/api/cudf-polars/stable/cudf_polars/usage.html#tracing>`_
+    for details on available environment variables.
 
-    To also emit structlog events for each streaming node, set the
-    environment variable ``CUDF_POLARS_LOG_TRACES=1``.
+    To also emit structlog events for each streaming node, set
+    ``CUDF_POLARS_LOG_TRACES=1``.
 
     Parameters
     ----------
     output_path
-        Path to write the tracing results. The output will be in a
-        human-readable text format similar to
-        :func:`~cudf_polars.experimental.explain.explain_query`.
-        If ``None`` (the default), tracing data is collected but not
-        written to a file.
+        Path to write the trace summary. The output format is similar to
+        :func:`~cudf_polars.experimental.explain.explain_query`, annotated
+        with actual row counts and algorithm decisions.
+        If ``None`` (the default), tracing data is collected in memory
+        but not written to a file.
+
+    Notes
+    -----
+    This option only applies to the ``"rapidsmpf"`` runtime.
     """
 
     output_path: str | None = None
