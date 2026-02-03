@@ -587,7 +587,6 @@ class hybrid_scan_reader {
    * mask to only the rows that exist in the output table
    *
    * @param[in,out] row_mask Mutable boolean column indicating surviving rows from page pruning
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Table chunk of materialized filter columns and metadata
    */
@@ -625,7 +624,6 @@ class hybrid_scan_reader {
    * mask to the output table chunk
    *
    * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Table chunk of materialized filter columns and metadata
    */
