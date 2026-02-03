@@ -113,7 +113,7 @@ def test_log_query_plan() -> None:
 
     # Check for Query Plan event
     assert b"Query Plan" in result
-    assert b"scope=query" in result or b"'scope': 'query'" in result
+    assert b"scope=plan" in result or b"'scope': 'plan'" in result
     assert b"ir_id" in result
     assert b"ir_type" in result
     assert b"children_ir_ids" in result

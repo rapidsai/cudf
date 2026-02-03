@@ -132,4 +132,4 @@ def log_query_plan(ir: IR) -> None:
     ]
 
     log = structlog.get_logger()
-    log.info("Query Plan", scope="query", nodes=nodes)
+    log.info("Query Plan", scope="plan", nodes=nodes)
