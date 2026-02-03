@@ -31,16 +31,11 @@
 
 #include <cuco/utility/error.hpp>
 
-#include <rmm/cuda_stream.hpp>
-
 #include <algorithm>
-#include <atomic>
-#include <future>
 #include <iterator>
 #include <limits>
 #include <memory>
 #include <numeric>
-#include <thread>
 #include <utility>
 #include <vector>
 
