@@ -218,7 +218,7 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
     cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Set payload column names if provided
-  if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
+  if (payload_column_names.has_value()) { options.set_column_names(payload_column_names.value()); }
 
   auto [reader, filtered_row_group_indices, row_mask] =
     apply_parquet_filters(file_buffer_span, options, stream, mr);
@@ -287,7 +287,7 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
     cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Set payload column names if provided
-  if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
+  if (payload_column_names.has_value()) { options.set_column_names(payload_column_names.value()); }
 
   auto [reader, filtered_row_group_indices, row_mask] =
     apply_parquet_filters(file_buffer_span, options, stream, mr);
@@ -399,7 +399,7 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder().build();
 
-  if (column_names.has_value()) { options.set_columns(column_names.value()); }
+  if (column_names.has_value()) { options.set_column_names(column_names.value()); }
   if (filter_expression.has_value()) { options.set_filter(filter_expression.value()); }
 
   auto [reader, filtered_row_group_indices, _ /*row_mask*/] =
