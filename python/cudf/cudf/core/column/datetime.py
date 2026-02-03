@@ -36,6 +36,7 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
+from cudf.utils.utils import _EQUALITY_OPS
 
 if TYPE_CHECKING:
     import datetime
@@ -537,6 +538,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
+        # import pdb;pdb.set_trace()
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)
         other = self._normalize_binop_operand(other)
@@ -571,7 +573,7 @@ class DatetimeColumn(TemporalBaseColumn):
         other_is_datetime64 = other_dtype.kind == "M"
 
         out_dtype = None
-
+        # import pdb;pdb.set_trace()
         if (
             op
             in {
@@ -650,8 +652,11 @@ class DatetimeColumn(TemporalBaseColumn):
         )
 
         result_col = binaryop.binaryop(lhs_binop, rhs_binop, op, out_dtype)
+        # import pdb;pdb.set_trace()
         if out_dtype.kind != "b" and op == "__add__":
             return result_col
+        elif out_dtype.kind == "b" and op in _EQUALITY_OPS:
+            return result_col.fillna(op == "__ne__")
         else:
             return result_col
 

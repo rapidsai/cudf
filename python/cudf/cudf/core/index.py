@@ -1765,8 +1765,7 @@ class Index(SingleColumnFrame):
             if ret._column.has_nulls():
                 ret = ret.fillna(op == "__ne__")
 
-            if not isinstance(other, Frame):
-                return ret.values
+            return ret.values
         return ret
 
     @classmethod

@@ -28,6 +28,7 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from cudf._typing import (
@@ -127,6 +128,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         return super().__contains__(item.to_numpy())
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         reflect, op = self._check_reflected_op(op)
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
@@ -139,6 +141,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
             if isinstance(other, pa.Scalar)
             else other.dtype
         )
+        other_is_null_scalar = is_na_like(other)
 
         if other_cudf_dtype.kind == "m":
             # TODO: pandas will allow these operators to work but return false
@@ -209,8 +212,8 @@ class TimeDeltaColumn(TemporalBaseColumn):
 
         result = binaryop.binaryop(lhs, rhs, op, out_dtype)
         if (
-            cudf.get_option("mode.pandas_compatible")
-            and out_dtype.kind == "b"
+            out_dtype.kind == "b"
+            and not other_is_null_scalar
             and not is_pandas_nullable_extension_dtype(out_dtype)
         ):
             result = result.fillna(op == "__ne__")

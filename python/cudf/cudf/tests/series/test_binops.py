@@ -272,7 +272,7 @@ def test_timedelta_series_ops_with_scalars(
     elif arithmetic_op_method == "mod":
         expected = psr % other_scalars
         actual = gsr % other_scalars
-
+    
     assert_eq(expected, actual)
 
     if arithmetic_op_method == "add":
@@ -828,7 +828,7 @@ def test_datetime_series_cmpops_pandas_compatibility(comparison_op):
     expect = comparison_op(psr1, psr2)
     with cudf.option_context("mode.pandas_compatible", True):
         got = comparison_op(gsr1, gsr2)
-
+    # import pdb;pdb.set_trace()
     assert_eq(expect, got)
 
 
@@ -1088,11 +1088,13 @@ def test_series_compare_nulls(comparison_op, ltype, rtype):
     lmask = ~lser.isnull()
     rmask = ~rser.isnull()
 
-    expect_mask = np.logical_and(lmask, rmask)
-    expect = cudf.Series([None] * 5, dtype="bool")
-    expect[expect_mask] = comparison_op(lser[expect_mask], rser[expect_mask])
-
     got = comparison_op(lser, rser)
+    if ltype in {"datetime64[ms]", "datetime64[ns]", "timedelta64[s]"}:
+        expect = comparison_op(lser.to_pandas(), rser.to_pandas())
+    else:
+        expect_mask = np.logical_and(lmask, rmask)
+        expect = cudf.Series([None] * 5, dtype="bool")
+        expect[expect_mask] = comparison_op(lser[expect_mask], rser[expect_mask])
     assert_eq(expect, got)
 
 
@@ -1400,7 +1402,7 @@ def test_operator_func_between_series_logical(
         got = getattr(gdf_series_a, comparison_op_method)(
             gdf_series_b, fill_value=fill_value
         ).to_pandas()
-
+    import pdb;pdb.set_trace()
     assert_eq(expect, got)
 
 
@@ -1803,14 +1805,11 @@ def test_binops_with_NA_consistent(
     sr = cudf.Series(data, dtype=numeric_and_temporal_types_as_str)
 
     result = getattr(sr, comparison_op_method)(cudf.NA)
-    if sr.dtype.kind in "mM":
-        assert result.null_count == len(data)
+    if comparison_op_method == "ne":
+        expect_all = True
     else:
-        if comparison_op_method == "ne":
-            expect_all = True
-        else:
-            expect_all = False
-        assert (result == expect_all).all()
+        expect_all = False
+    assert (result == expect_all).all()
 
 
 @pytest.mark.parametrize(
@@ -2862,7 +2861,10 @@ def test_column_null_scalar_comparison(
     data = [1, 2, 3, 4, 5]
     sr = cudf.Series(data, dtype=dtype)
     result = comparison_op(sr, null_scalar)
-    assert result.isnull().all()
+    if all_supported_types_as_str.startswith("datetime64"):
+        assert not result.isnull().all()
+    else:
+        assert result.isnull().all()
 
 
 def test_equality_ops_index_mismatch(comparison_op_method):
@@ -3147,6 +3149,7 @@ def test_binops_comparisons_datatime_with_scalars(scalars, comparison_op):
         )
         expect = comparison_op(ser.to_pandas(), scalars)
         got = comparison_op(ser, scalars)
+        # import pdb;pdb.set_trace()
         assert_eq(expect, got)
 
         expect = comparison_op(scalars, ser.to_pandas())

@@ -142,7 +142,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                     except pa.ArrowNotImplementedError:
                         arrow_type = cudf_dtype_to_pa_type(
                             np.dtype(
-                                f"{other.dtype.type.__name__}[{self.time_unit}]"
+                                f"{other.dtype.type.__name__}[ns]"
                             )
                         )
                 else:
