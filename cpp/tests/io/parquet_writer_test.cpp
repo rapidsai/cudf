@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -148,7 +148,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   cudf::io::parquet_reader_options in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
       .use_pandas_metadata(true)
-      .columns({"int32s", "floats", "doubles"});
+      .column_names({"int32s", "floats", "doubles"});
   auto result = cudf::io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
