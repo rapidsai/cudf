@@ -82,16 +82,16 @@ class StreamingNodeTracer:
 
         If table is provided, both row_count and chunk_count are updated.
         If table is None, only chunk_count is incremented.
+
+        Parameters
+        ----------
+        table
+            The table to record.
         """
         if table is not None:  # pragma: no cover; Covered by rapidsmpf tests
             self.row_count = (self.row_count or 0) + table.num_rows()
         self.chunk_count += 1
 
     def set_duplicated(self, *, duplicated: bool = True) -> None:
-        """
-        Mark output rows as duplicated across ranks.
-
-        Call this after sending metadata when the output is duplicated
-        (e.g., after an allgather). Affects how rows are merged across ranks.
-        """
+        """Mark output rows as duplicated across ranks."""
         self.duplicated = duplicated

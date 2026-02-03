@@ -42,7 +42,6 @@ def test_structlog_streaming_node_events():
 
     # Build environment with tracing enabled
     env = os.environ.copy()
-    env["CUDF_POLARS__EXECUTOR"] = "streaming"
     env["CUDF_POLARS_LOG_TRACES"] = "1"
 
     result = subprocess.check_output(
@@ -83,7 +82,6 @@ def test_structlog_contains_expected_ir_types():
     """)
 
     env = os.environ.copy()
-    env["CUDF_POLARS__EXECUTOR"] = "streaming"
     env["CUDF_POLARS_LOG_TRACES"] = "1"
 
     result = subprocess.check_output(
@@ -124,7 +122,6 @@ def test_structlog_disabled_by_default():
 
     # Environment WITHOUT CUDF_POLARS_LOG_TRACES
     env = os.environ.copy()
-    env["CUDF_POLARS__EXECUTOR"] = "streaming"
     env.pop("CUDF_POLARS_LOG_TRACES", None)
 
     result = subprocess.check_output(
