@@ -589,7 +589,7 @@ def make_rapidsmpf_read_parquet_node(
         ).build()
 
         if ir.with_columns is not None:
-            parquet_reader_options.set_columns(ir.with_columns)
+            parquet_reader_options.set_column_names(ir.with_columns)
 
         # Build predicate filter if present (passed separately to read_parquet)
         filter_obj = None
