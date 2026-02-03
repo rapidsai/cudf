@@ -27,7 +27,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, sorting, stream_compaction
+from cudf.core._internals import copying, sorting
 from cudf.core.accessors import StringMethods
 from cudf.core.column import (
     CategoricalColumn,
@@ -1234,15 +1234,15 @@ class Index(SingleColumnFrame):
         nulls_are_equal: bool, default True
             Null elements are considered equal to other null elements.
         """
+        columns = list(self._columns)
+        result_columns = self._drop_duplicates_columns(
+            columns,
+            keys=list(range(len(columns))),
+            keep=keep,
+            nulls_are_equal=nulls_are_equal,
+        )
         return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.drop_duplicates(
-                    list(self._columns),
-                    keep=keep,
-                    nulls_are_equal=nulls_are_equal,
-                )
-            ],
+            [ColumnBase.from_pylibcudf(col) for col in result_columns],
             self._column_names,
         )
 
@@ -1320,18 +1320,15 @@ class Index(SingleColumnFrame):
         if not self.hasnans:
             return self.copy(deep=False)
 
-        # This is to be consistent with IndexedFrame.dropna to handle nans
-        # as nulls by default
+        # Convert nans to nulls to be consistent with IndexedFrame.dropna
         data_columns = [col.nans_to_nulls() for col in self._columns]
-
+        result_columns = self._drop_nulls_columns(
+            data_columns,
+            keys=list(range(len(data_columns))),
+            how=how,
+        )
         return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.drop_nulls(
-                    data_columns,
-                    how=how,
-                )
-            ],
+            [ColumnBase.from_pylibcudf(col) for col in result_columns],
             self._column_names,
         )
 
