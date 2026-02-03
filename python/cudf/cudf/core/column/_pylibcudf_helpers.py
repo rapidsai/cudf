@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 """Helper functions that wrap common pylibcudf operations for column classes.
 
 These functions provide efficient implementations of commonly-used patterns
-that would otherwise require multiple column API calls. By going directly to
-pylibcudf, they avoid creating temporary intermediate column objects.
+that would otherwise require multiple column API calls, eliminating
+intermediate column allocations.
 """
 
 from __future__ import annotations
@@ -16,19 +16,18 @@ import pylibcudf as plc
 
 if TYPE_CHECKING:
     from cudf.core.buffer import Buffer
-    from cudf.core.column.column import ColumnBase
-    from cudf.core.column.string import StringColumn
+    from cudf.core.column import ColumnBase
 
 __all__ = [
     "all_strings_match_type",
     "create_non_null_mask",
-    "reduce_boolean_column",
     "fillna_bool_false",
+    "reduce_boolean_column",
 ]
 
 
 def all_strings_match_type(
-    column: StringColumn,
+    column: ColumnBase,
     type_check: Literal["integer", "float"],
 ) -> bool:
     """Check if all non-null strings in a column match a type pattern.
@@ -51,15 +50,19 @@ def all_strings_match_type(
     Examples
     --------
     Instead of:
-
         if not col.is_integer().all():
             raise ValueError(...)
 
     Use:
-
-        from cudf.core.column._pylibcudf_helpers import all_strings_match_type
         if not all_strings_match_type(col, "integer"):
             raise ValueError(...)
+
+    Notes
+    -----
+    This function combines the is_X() type check and the all() reduction
+    into a single operation, eliminating the need to create an intermediate
+    boolean column. The reduction can potentially short-circuit on the first
+    False value, providing additional performance benefits.
     """
     with column.access(mode="read", scope="internal"):
         # Get boolean column for type check
@@ -72,19 +75,21 @@ def all_strings_match_type(
                 column.plc_column
             )
         else:
-            raise ValueError(f"Unknown type_check: {type_check}")
+            raise ValueError(
+                f"Unknown type_check: {type_check}. "
+                f"Must be 'integer' or 'float'."
+            )
 
         # Reduce directly without creating intermediate column
-        agg = plc.aggregation.all()
         result_scalar = plc.reduce.reduce(
             bool_plc,
-            agg,
+            plc.aggregation.all(),
             plc.types.DataType(plc.types.TypeId.BOOL8),
         )
 
         # Extract boolean value from scalar
         result = result_scalar.to_py()
-        assert isinstance(result, bool)
+        assert isinstance(result, bool), f"Expected bool, got {type(result)}"
         return result
 
 
@@ -135,12 +140,12 @@ def reduce_boolean_column(
     """Reduce a boolean column to a single bool value.
 
     This is more efficient than creating a NumericalColumn and calling
-    .all() or .any() on it.
+    .all() or .any() on it when you already have a boolean column.
 
     Parameters
     ----------
     column : ColumnBase
-        The boolean column to reduce (or a column that can be viewed as boolean)
+        The boolean column to reduce
     operation : {"all", "any"}
         The reduction operation
 
@@ -152,18 +157,23 @@ def reduce_boolean_column(
     Examples
     --------
     Instead of:
-
-        if col.is_integer().all():
+        bool_col = col.is_integer()
+        if bool_col.all():
             ...
 
     Use:
-
-        from cudf.core.column._pylibcudf_helpers import reduce_boolean_column
-        bool_col = col.is_integer()
-        if reduce_boolean_column(bool_col, "all"):
+        if reduce_boolean_column(col.is_integer(), "all"):
             ...
 
-    Or better yet, use all_strings_match_type() directly for string type checks.
+    Or better yet, use all_strings_match_type() directly for string
+    validation patterns.
+
+    Notes
+    -----
+    This function is most useful when you need to perform a reduction
+    on an already-computed boolean column. For string validation patterns,
+    prefer all_strings_match_type() which combines the type check and
+    reduction in one operation.
     """
     with column.access(mode="read", scope="internal"):
         if operation == "all":
@@ -171,15 +181,18 @@ def reduce_boolean_column(
         elif operation == "any":
             agg = plc.aggregation.any()
         else:
-            raise ValueError(f"Unknown operation: {operation}")
+            raise ValueError(
+                f"Unknown operation: {operation}. Must be 'all' or 'any'."
+            )
 
         result_scalar = plc.reduce.reduce(
             column.plc_column,
             agg,
             plc.types.DataType(plc.types.TypeId.BOOL8),
         )
+
         result = result_scalar.to_py()
-        assert isinstance(result, bool)
+        assert isinstance(result, bool), f"Expected bool, got {type(result)}"
         return result
 
 
@@ -222,7 +235,5 @@ def fillna_bool_false(column: ColumnBase) -> ColumnBase:
     with column.access(mode="read", scope="internal"):
         # Use pylibcudf replace_nulls with scalar False
         false_scalar = plc.Scalar.from_py(False)
-        result_plc = plc.replace.replace_nulls(
-            column.plc_column, false_scalar
-        )
+        result_plc = plc.replace.replace_nulls(column.plc_column, false_scalar)
         return ColumnBase.from_pylibcudf(result_plc)

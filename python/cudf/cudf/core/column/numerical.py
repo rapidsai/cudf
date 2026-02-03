@@ -725,7 +725,7 @@ class NumericalColumn(NumericalBaseColumn):
         if self.null_count == len(self):
             return self.dtype
 
-        min_value, max_value = self.min(), self.max()
+        min_value, max_value = self.minmax()
         either_is_inf = np.isinf(min_value) or np.isinf(max_value)
         if not either_is_inf and expected_type.kind == "i":
             max_bound_dtype = min_signed_type(max_value)

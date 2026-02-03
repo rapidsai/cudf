@@ -19,7 +19,7 @@ authors = [
 license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = [
-    "cuda-python>=13.0.1,<14.0",
+    "cuda-python>=12.9.2,<13.0",
     "libcudf==26.4.*,>=0.0.0a0",
     "nvtx>=0.2.1",
     "packaging",
@@ -38,7 +38,7 @@ classifiers = [
 
 [project.optional-dependencies]
 test = [
-    "cupy-cuda13x>=13.6.0",
+    "cupy-cuda12x>=13.6.0",
     "fastavro>=0.22.9",
     "hypothesis>=6.131.7",
     "mmh3",
