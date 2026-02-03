@@ -23,7 +23,6 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.copy_types import GatherMap
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible
 from cudf.core.multiindex import MultiIndex
-from cudf.options import get_option
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
@@ -257,8 +256,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         if method != "single":
             raise NotImplementedError("method is currently not supported")
 
-        if get_option("mode.pandas_compatible"):
-            obj = obj.nans_to_nulls()
+        obj = obj.nans_to_nulls()
         self.obj = obj
 
         self.window, self.min_periods = self._normalize_window_and_min_periods(
@@ -356,11 +354,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
         rolling_agg = aggregation.make_aggregation(
             agg_name,
-            {
-                "dtype": np.dtype("float64")
-                if get_option("mode.pandas_compatible")
-                else source_column.dtype
-            }
+            {"dtype": source_column.dtype}
             if callable(agg_name)
             else agg_kwargs,
         ).plc_obj
@@ -376,7 +370,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 )
             )
 
-        if isinstance(agg_name, str) and get_option("mode.pandas_compatible"):
+        if isinstance(agg_name, str):
             return col.astype(np.dtype("float64"))
         return col
 
