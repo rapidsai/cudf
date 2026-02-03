@@ -623,7 +623,6 @@ class DatetimeColumn(TemporalBaseColumn):
                 result = self._all_bools_with_nulls(
                     other, bool_fill_value=fill_value
                 )
-                import pdb;pdb.set_trace()
                 result = result.fillna(fill_value)
                 return result
 
@@ -640,9 +639,6 @@ class DatetimeColumn(TemporalBaseColumn):
         result_col = binaryop.binaryop(lhs_binop, rhs_binop, op, out_dtype)
         if out_dtype.kind != "b" and op == "__add__":
             return result_col
-        # elif out_dtype.kind == "b":
-        #     import pdb;pdb.set_trace()
-        #     return result_col.fillna(op == "__ne__")
         else:
             return result_col
 
