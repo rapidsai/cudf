@@ -5513,11 +5513,12 @@ class IndexedFrame(Frame):
 
         column_index += len(idx_cols)
         exploded = [
-            new_column._with_type_metadata(
+            ColumnBase.create(
+                new_column.plc_column,
                 element_type,
             )
             if i == column_index
-            else new_column._with_type_metadata(old_column.dtype)
+            else ColumnBase.create(new_column.plc_column, old_column.dtype)
             for i, (new_column, old_column) in enumerate(
                 zip(
                     exploded,
@@ -7080,7 +7081,9 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
             to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
-    res_col = concat_columns([old_col, val_col])._with_type_metadata(to_type)
+    res_col = ColumnBase.create(
+        concat_columns([old_col, val_col]).plc_column, to_type
+    )
     if (
         cudf.get_option("mode.pandas_compatible")
         and res_col.dtype != col.dtype
