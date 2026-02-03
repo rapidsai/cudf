@@ -76,21 +76,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
         cls, plc_column: plc.Column, dtype: DecimalDtype
     ) -> tuple[plc.Column, DecimalDtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, cls._decimal_cls)  # type: ignore[attr-defined]
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not cls._decimal_check(dtype)  # type: ignore[attr-defined]
-        ):
+        if not cls._decimal_check(dtype):  # type: ignore[attr-defined]
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
         return plc_column, dtype
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, type(self)._decimal_cls):  # type: ignore[attr-defined]
             self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
-            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
+        self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
     def _adjust_reduce_result(
@@ -301,17 +294,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 if isinstance(rhs, (int, Decimal))
                 else rhs
             )
-            result = binaryop.binaryop(
+            return binaryop.binaryop(
                 lhs_comp,
                 rhs_comp,
                 op,
                 get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
             )
-            if cudf.get_option("mode.pandas_compatible") and not isinstance(
-                self.dtype, pd.ArrowDtype
-            ):
-                result = result.fillna(op == "__ne__")
-            return result
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "

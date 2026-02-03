@@ -884,35 +884,33 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         The default implementation falls back to PyArrow for the conversion.
         """
-        # This default implementation does not handle nulls in any meaningful
-        # way
         if arrow_type and nullable:
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
         pa_array = self.to_arrow()
 
-        # Check if dtype is an ArrowDtype or pd.ExtensionDtype subclass
         if arrow_type or (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
+            not nullable and isinstance(self.dtype, pd.ArrowDtype)
         ):
-            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
-        elif (
-            nullable
-            or (
-                cudf.get_option("mode.pandas_compatible")
-                and is_pandas_nullable_extension_dtype(self.dtype)
+            return pd.Index(
+                pd.arrays.ArrowExtensionArray(pa_array), copy=False
             )
-        ) and is_pandas_nullable_extension_dtype(
-            pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
+        elif nullable or (
+            not arrow_type and is_pandas_nullable_extension_dtype(self.dtype)
+        ):
+            pandas_nullable_dtype = np_dtypes_to_pandas_dtypes.get(
                 self.dtype, self.dtype
             )
-        ):
             pandas_array = pandas_nullable_dtype.__from_arrow__(pa_array)
             return pd.Index(pandas_array, copy=False)
         else:
-            return pd.Index(pa_array.to_pandas())
+            # xref https://github.com/rapidsai/cudf/issues/21120
+            # TODO: Revisit using pa_array.to_pandas() once pandas 3.0 is supported
+            return pd.Index(
+                pa_array.to_numpy(zero_copy_only=False, writable=True),
+                copy=False,
+            )
 
     @property
     def values_host(self) -> np.ndarray:
