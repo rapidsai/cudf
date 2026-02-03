@@ -20,13 +20,12 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtype.converters import get_dtype_of_same_variant
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
-    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -117,21 +116,8 @@ class StringColumn(ColumnBase, Scannable):
         cls, plc_column: plc.Column, dtype: np.dtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and dtype != CUDF_STRING_DTYPE
-            and dtype.kind != "U"
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_string(dtype)
-        ):
-            raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(dtype, np.dtype)
-            and dtype.kind == "U"
-        ):
-            dtype = CUDF_STRING_DTYPE
+        if not is_dtype_obj_string(dtype):
+            raise ValueError("dtype must be a valid cuDF string dtype")
         return plc_column, dtype
 
     @property
@@ -536,7 +522,7 @@ class StringColumn(ColumnBase, Scannable):
                         dtype=get_dtype_of_same_variant(
                             self.dtype, np.dtype(np.bool_)
                         ),
-                    ).set_mask(self.mask)
+                    ).set_mask(self.mask, self.null_count)
                 else:
                     return NotImplemented
 

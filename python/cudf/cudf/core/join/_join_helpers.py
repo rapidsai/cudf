@@ -11,6 +11,7 @@ import numpy as np
 
 from cudf.api.types import is_dtype_equal
 from cudf.core.dtype.converters import get_dtype_of_same_variant
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -18,10 +19,7 @@ from cudf.core.dtypes import (
     Decimal128Dtype,
 )
 from cudf.core.reshape import concat
-from cudf.utils.dtypes import (
-    find_common_type,
-    is_dtype_obj_numeric,
-)
+from cudf.utils.dtypes import find_common_type
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase

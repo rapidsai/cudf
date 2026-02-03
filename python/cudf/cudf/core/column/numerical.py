@@ -479,8 +479,8 @@ class NumericalColumn(NumericalBaseColumn):
                 0,
                 self.plc_column.children(),
             )
-            mask, _ = plc.transform.nans_to_nulls(shifted_column)
-            return self.set_mask(as_buffer(mask))
+            mask, null_count = plc.transform.nans_to_nulls(shifted_column)
+            return self.set_mask(as_buffer(mask), null_count)
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):

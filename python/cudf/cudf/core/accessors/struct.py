@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.column.struct import StructColumn
 from cudf.core.dtype.converters import get_dtype_of_same_variant
+from cudf.core.dtype.validators import is_dtype_obj_struct
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import is_dtype_obj_struct
 
 if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
