@@ -34,13 +34,13 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.tracing import LOG_TRACES
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import RuntimeQueryProfiler
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
 )
+from cudf_polars.experimental.rapidsmpf.tracing import StreamingQueryTracer
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
@@ -152,7 +152,7 @@ def evaluate_pipeline(
     rmpf_context: Context | None = None,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None, RuntimeQueryProfiler | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None, StreamingQueryTracer | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
 
@@ -245,8 +245,8 @@ def evaluate_pipeline(
         metadata_collector: list[ChannelMetadata] | None = (
             [] if collect_metadata else None
         )
-        profiler: RuntimeQueryProfiler | None = (
-            RuntimeQueryProfiler()
+        profiler: StreamingQueryTracer | None = (
+            StreamingQueryTracer()
             if config_options.executor.profiling is not None or LOG_TRACES
             else None
         )
@@ -435,7 +435,7 @@ def generate_network(
     ir_context: IRExecutionContext,
     collective_id_map: dict[IR, list[int]],
     metadata_collector: list[ChannelMetadata] | None,
-    profiler: RuntimeQueryProfiler | None = None,
+    profiler: StreamingQueryTracer | None = None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.

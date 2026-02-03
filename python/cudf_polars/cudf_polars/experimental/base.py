@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition base classes."""
 
@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-import hashlib
 from collections import defaultdict
 from enum import IntEnum
 from functools import cached_property
@@ -14,8 +13,6 @@ from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator, MutableMapping
-
-    import pylibcudf as plc
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
@@ -407,136 +404,6 @@ class StatsCollector:
         self.row_count: dict[IR, ColumnStat[int]] = {}
         self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
         self.join_info = JoinInfo()
-
-
-def _stable_ir_id(ir_node: IR) -> int:
-    """
-    Compute a stable identifier for an IR node.
-
-    Uses MD5 hash of the node's hashable representation for determinism
-    across process boundaries (Python's hash() uses PYTHONHASHSEED).
-
-    Parameters
-    ----------
-    ir_node
-        The IR node.
-
-    Returns
-    -------
-    int
-        A stable 32-bit identifier for this node.
-    """
-    content = repr(ir_node.get_hashable()).encode("utf-8")
-    return int(hashlib.md5(content).hexdigest()[:8], 16)
-
-
-class RuntimeNodeProfiler:
-    """
-    Profiler for a single IR node.
-
-    Attributes
-    ----------
-    ir_id
-        Stable identifier for the IR node (for tracing/logging).
-    ir_type
-        Type name of the IR node (e.g., "Sort", "Join").
-    row_count
-        Total row count produced by this node during execution.
-        None if row counting is not available for this node.
-    chunk_count
-        Total chunk count produced by this node during execution.
-    decision
-        The algorithm decision made at runtime for this node
-        (e.g., "broadcast_left", "shuffle", "tree", etc.).
-    duplicated
-        Whether the output rows are duplicated across ranks
-        (e.g., after an allgather). Affects how rows are merged.
-    """
-
-    __slots__ = (
-        "chunk_count",
-        "decision",
-        "duplicated",
-        "ir_id",
-        "ir_type",
-        "row_count",
-    )
-
-    def __init__(self, ir_id: int | None = None, ir_type: str | None = None) -> None:
-        self.ir_id = ir_id
-        self.ir_type = ir_type
-        self.row_count: int | None = None
-        self.chunk_count: int = 0
-        self.decision: str | None = None
-        self.duplicated: bool = False
-
-    def add_chunk(self, *, table: plc.Table | None = None) -> None:
-        """
-        Record a chunk.
-
-        If table is provided, both row_count and chunk_count are updated.
-        If table is None, only chunk_count is incremented.
-        """
-        if table is not None:  # pragma: no cover; Covered by rapidsmpf tests
-            self.row_count = (self.row_count or 0) + table.num_rows()
-        self.chunk_count += 1
-
-    def set_duplicated(self, *, duplicated: bool = True) -> None:
-        """
-        Mark output rows as duplicated across ranks.
-
-        Call this after sending metadata when the output is duplicated
-        (e.g., after an allgather). Affects how rows are merged across ranks.
-        """
-        self.duplicated = duplicated
-
-    def merge(self, other: RuntimeNodeProfiler) -> None:
-        """Merge another node profiler's stats into this one."""
-        if other.row_count is not None:
-            if self.duplicated or other.duplicated:
-                # For duplicated data, take max (don't sum across ranks)
-                self.row_count = max(self.row_count or 0, other.row_count)
-                self.duplicated = True
-            else:
-                self.row_count = (self.row_count or 0) + other.row_count
-        self.chunk_count += other.chunk_count
-        if other.decision is not None:
-            self.decision = other.decision
-
-
-class RuntimeQueryProfiler:
-    """
-    Profiler for collecting runtime statistics for an entire query.
-
-    Attributes
-    ----------
-    node_profilers
-        Mapping from each IR node to its node profiler.
-    """
-
-    __slots__ = ("node_profilers",)
-    node_profilers: dict[IR, RuntimeNodeProfiler]
-
-    def __init__(self) -> None:
-        self.node_profilers = {}
-
-    def get_or_create(self, ir: IR) -> RuntimeNodeProfiler:
-        """
-        Get or create a node profiler for the given IR.
-
-        Use this when setting up profiling for a node. To check if a node
-        was profiled without creating an entry, use `node_profilers.get(ir)`.
-        """
-        if ir not in self.node_profilers:
-            ir_id = _stable_ir_id(ir)
-            ir_type = type(ir).__name__
-            self.node_profilers[ir] = RuntimeNodeProfiler(ir_id, ir_type)
-        return self.node_profilers[ir]
-
-    def merge(self, other: RuntimeQueryProfiler) -> None:
-        """Merge another query profiler's statistics into this one."""
-        for ir, node_profiler in other.node_profilers.items():
-            self.get_or_create(ir).merge(node_profiler)
 
 
 class IOPartitionFlavor(IntEnum):

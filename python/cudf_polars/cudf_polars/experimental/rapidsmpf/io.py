@@ -51,14 +51,13 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
-    from cudf_polars.experimental.base import (
-        ColumnStat,
-        RuntimeNodeProfiler,
-        RuntimeQueryProfiler,
-        StatsCollector,
-    )
+    from cudf_polars.experimental.base import ColumnStat, StatsCollector
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
+    from cudf_polars.experimental.rapidsmpf.tracing import (
+        StreamingNodeTracer,
+        StreamingQueryTracer,
+    )
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -149,7 +148,7 @@ async def dataframescan_node(
     num_producers: int,
     rows_per_partition: int,
     estimated_chunk_bytes: int,
-    node_profiler: RuntimeNodeProfiler | None = None,
+    node_tracer: StreamingNodeTracer | None = None,
 ) -> None:
     """
     DataFrameScan node for rapidsmpf.
@@ -171,12 +170,10 @@ async def dataframescan_node(
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
-    node_profiler
+    node_tracer
         The node profiler for collecting runtime statistics.
     """
-    async with shutdown_on_error(
-        context, ch_out, node_profiler=node_profiler
-    ) as profiler:
+    async with shutdown_on_error(context, ch_out, node_tracer=node_tracer) as profiler:
         # Find local partition count.
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
@@ -226,7 +223,7 @@ async def dataframescan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_profiler=profiler,
+                    node_tracer=profiler,
                 )
             await ch_out.drain(context)
             return
@@ -252,7 +249,7 @@ async def dataframescan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_profiler=profiler,
+                    node_tracer=profiler,
                 )
             await ch_out.drain(context)
 
@@ -278,7 +275,7 @@ def _(
 
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
-    profiler: RuntimeQueryProfiler | None = rec.state["profiler"]
+    profiler: StreamingQueryTracer | None = rec.state["profiler"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
     nodes: dict[IR, list[Any]] = {
         ir: [
@@ -290,7 +287,7 @@ def _(
                 num_producers=num_producers,
                 rows_per_partition=rows_per_partition,
                 estimated_chunk_bytes=estimated_chunk_bytes,
-                node_profiler=profiler.get_or_create(ir) if profiler else None,
+                node_tracer=profiler.get_or_create(ir) if profiler else None,
             )
         ]
     }
@@ -336,7 +333,7 @@ async def read_chunk(
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
-    node_profiler: RuntimeNodeProfiler | None = None,
+    node_tracer: StreamingNodeTracer | None = None,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
@@ -356,7 +353,7 @@ async def read_chunk(
     estimated_chunk_bytes
         Estimated size of the chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
-    node_profiler
+    node_tracer
         The node profiler for collecting runtime statistics.
     """
     with opaque_reservation(context, estimated_chunk_bytes):
@@ -365,8 +362,8 @@ async def read_chunk(
             *scan._non_child_args,
             context=ir_context,
         )
-        if node_profiler is not None:
-            node_profiler.add_chunk(table=df.table)
+        if node_tracer is not None:
+            node_tracer.add_chunk(table=df.table)
         await ch_out.send(
             context,
             Message(
@@ -391,7 +388,7 @@ async def scan_node(
     plan: IOPartitionPlan,
     parquet_options: ParquetOptions,
     estimated_chunk_bytes: int,
-    node_profiler: RuntimeNodeProfiler | None = None,
+    node_tracer: StreamingNodeTracer | None = None,
 ) -> None:
     """
     Scan node for rapidsmpf.
@@ -415,12 +412,10 @@ async def scan_node(
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
-    node_profiler
+    node_tracer
         The node profiler for collecting runtime statistics.
     """
-    async with shutdown_on_error(
-        context, ch_out, node_profiler=node_profiler
-    ) as profiler:
+    async with shutdown_on_error(context, ch_out, node_tracer=node_tracer) as profiler:
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
@@ -511,7 +506,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_profiler=profiler,
+                    node_tracer=profiler,
                 )
             await ch_out.drain(context)
             return
@@ -537,7 +532,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_profiler=profiler,
+                    node_tracer=profiler,
                 )
             await ch_out.drain(context)
 
@@ -668,7 +663,7 @@ def _(
     parquet_options = config_options.parquet_options
     partition_info = rec.state["partition_info"][ir]
     num_producers = rec.state["max_io_threads"]
-    profiler: RuntimeQueryProfiler | None = rec.state["profiler"]
+    profiler: StreamingQueryTracer | None = rec.state["profiler"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
 
     assert partition_info.io_plan is not None, "Scan node must have a partition plan"
@@ -720,7 +715,7 @@ def _(
                     partition_info.count / rec.state["context"].comm().nranks
                 ),
             ),
-            node_profiler=profiler.get_or_create(ir) if profiler else None,
+            node_tracer=profiler.get_or_create(ir) if profiler else None,
         )
         nodes[ir] = [native_node, metadata_node]
     else:
@@ -737,7 +732,7 @@ def _(
                 plan=plan,
                 parquet_options=parquet_options,
                 estimated_chunk_bytes=executor.target_partition_size,
-                node_profiler=profiler.get_or_create(ir) if profiler else None,
+                node_tracer=profiler.get_or_create(ir) if profiler else None,
             )
         ]
     return nodes, channels

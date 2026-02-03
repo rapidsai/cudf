@@ -31,11 +31,8 @@ if TYPE_CHECKING:
     import polars as pl
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import (
-        PartitionInfo,
-        RuntimeQueryProfiler,
-        StatsCollector,
-    )
+    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+    from cudf_polars.experimental.rapidsmpf.tracing import StreamingQueryTracer
 
 
 def explain_query(
@@ -179,7 +176,7 @@ def write_profile_output(
     profile_output: str | Path,
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    profiler: RuntimeQueryProfiler,
+    tracer: StreamingQueryTracer,
 ) -> None:
     """
     Write a post-execution profile showing actual row counts and decisions.
@@ -192,41 +189,41 @@ def write_profile_output(
         The lowered IR root node.
     partition_info
         Partition information for the IR nodes.
-    profiler
-        The profiler with actual row counts and decisions from execution.
+    tracer
+        The tracer with actual row counts and decisions from execution.
     """
     from pathlib import Path
 
-    profile_repr = _repr_profile_tree(ir, partition_info, profiler)
+    profile_repr = _repr_profile_tree(ir, partition_info, tracer)
     Path(profile_output).write_text(profile_repr)
 
 
 def _repr_profile_tree(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    profiler: RuntimeQueryProfiler,
+    tracer: StreamingQueryTracer,
     *,
     offset: str = "",
 ) -> str:
-    """Recursively build a tree representation with profiler data."""
+    """Recursively build a tree representation with tracer data."""
     header = _repr_ir(ir, offset=offset)
     header = header.rstrip("\n")
 
-    # Get node profiler if it exists
-    if (node_profiler := profiler.node_profilers.get(ir)) is not None:
+    # Get node tracer if it exists
+    if (node_tracer := tracer.node_tracers.get(ir)) is not None:
         # Add actual row count if available
-        if node_profiler.row_count is not None:
-            header += f" rows={_fmt_row_count(node_profiler.row_count)}"
+        if node_tracer.row_count is not None:
+            header += f" rows={_fmt_row_count(node_tracer.row_count)}"
 
         # Add decision if present
-        if node_profiler.decision is not None:
-            header += f" decision={node_profiler.decision}"
+        if node_tracer.decision is not None:
+            header += f" decision={node_tracer.decision}"
 
         # Add actual chunk count
-        header += f" chunks={node_profiler.chunk_count}"
+        header += f" chunks={node_tracer.chunk_count}"
 
     children_strs = [
-        _repr_profile_tree(child, partition_info, profiler, offset=offset + "  ")
+        _repr_profile_tree(child, partition_info, tracer, offset=offset + "  ")
         for child in ir.children
     ]
 

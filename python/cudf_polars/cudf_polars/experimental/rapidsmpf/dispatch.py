@@ -15,11 +15,8 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
-    from cudf_polars.experimental.base import (
-        PartitionInfo,
-        RuntimeQueryProfiler,
-        StatsCollector,
-    )
+    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+    from cudf_polars.experimental.rapidsmpf.tracing import StreamingQueryTracer
     from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
     from cudf_polars.utils.config import ConfigOptions
 
@@ -90,7 +87,7 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     collective_id_map: dict[IR, list[int]]
-    profiler: RuntimeQueryProfiler | None
+    profiler: StreamingQueryTracer | None
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

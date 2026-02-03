@@ -36,8 +36,11 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IRExecutionContext
-    from cudf_polars.experimental.base import RuntimeNodeProfiler, RuntimeQueryProfiler
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.tracing import (
+        StreamingNodeTracer,
+        StreamingQueryTracer,
+    )
 
 
 @define_py_node()
@@ -49,7 +52,7 @@ async def default_node_single(
     ch_in: Channel[TableChunk],
     *,
     preserve_partitioning: bool = False,
-    node_profiler: RuntimeNodeProfiler | None = None,
+    node_tracer: StreamingNodeTracer | None = None,
 ) -> None:
     """
     Single-channel default node for rapidsmpf.
@@ -68,7 +71,7 @@ async def default_node_single(
         The input Channel[TableChunk].
     preserve_partitioning
         Whether to preserve the partitioning metadata of the input chunks.
-    node_profiler
+    node_tracer
         Node profiler for collecting runtime statistics.
 
     Notes
@@ -76,7 +79,7 @@ async def default_node_single(
     Chunks are processed in the order they are received.
     """
     async with shutdown_on_error(
-        context, ch_in, ch_out, node_profiler=node_profiler
+        context, ch_in, ch_out, node_tracer=node_tracer
     ) as profiler:
         # Recv/send metadata.
         metadata_in = await recv_metadata(ch_in, context)
@@ -92,6 +95,8 @@ async def default_node_single(
             duplicated=metadata_in.duplicated,
         )
         await send_metadata(ch_out, context, metadata_out)
+        if profiler is not None and metadata_in.duplicated:
+            profiler.set_duplicated()
 
         # Recv/send data.
         seq_num = 0
@@ -154,7 +159,7 @@ async def default_node_multi(
     chs_in: tuple[Channel[TableChunk], ...],
     *,
     partitioning_index: int | None = None,
-    node_profiler: RuntimeNodeProfiler | None = None,
+    node_tracer: StreamingNodeTracer | None = None,
 ) -> None:
     """
     Pointwise node for rapidsmpf.
@@ -174,11 +179,11 @@ async def default_node_multi(
     partitioning_index
         Index of the input channel to preserve partitioning information for.
         If None, no partitioning information is preserved.
-    node_profiler
+    node_tracer
         Node profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(
-        context, *chs_in, ch_out, node_profiler=node_profiler
+        context, *chs_in, ch_out, node_tracer=node_tracer
     ) as profiler:
         # Merge and forward basic metadata.
         local_count = 1
@@ -202,6 +207,8 @@ async def default_node_multi(
             duplicated=duplicated,
         )
         await send_metadata(ch_out, context, metadata)
+        if profiler is not None and duplicated:
+            profiler.set_duplicated()
 
         seq_num = 0
         n_children = len(chs_in)
@@ -546,8 +553,8 @@ def _(
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
 
-    profiler: RuntimeQueryProfiler | None = rec.state.get("profiler")
-    node_profiler = profiler.get_or_create(ir) if profiler is not None else None
+    profiler: StreamingQueryTracer | None = rec.state.get("profiler")
+    node_tracer = profiler.get_or_create(ir) if profiler is not None else None
 
     if len(ir.children) == 1:
         # Single-channel default node
@@ -567,7 +574,7 @@ def _(
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
                 preserve_partitioning=preserve_partitioning,
-                node_profiler=node_profiler,
+                node_tracer=node_tracer,
             )
         ]
     else:
@@ -579,7 +586,7 @@ def _(
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
-                node_profiler=node_profiler,
+                node_tracer=node_tracer,
             )
         ]
 
@@ -693,7 +700,7 @@ async def metadata_feeder_node(
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     metadata: ChannelMetadata,
-    node_profiler: RuntimeNodeProfiler | None = None,
+    node_tracer: StreamingNodeTracer | None = None,
 ) -> None:
     """
     Forward data with new metadata.
@@ -708,13 +715,15 @@ async def metadata_feeder_node(
         The output channel to forward data to and add metadata to.
     metadata
         The metadata to add to the output channel.
-    node_profiler
+    node_tracer
         Node profiler for collecting runtime statistics.
     """
     async with shutdown_on_error(
-        context, ch_in, ch_out, node_profiler=node_profiler
+        context, ch_in, ch_out, node_tracer=node_tracer
     ) as profiler:
         await send_metadata(ch_out, context, metadata)
+        if profiler is not None and metadata.duplicated:
+            profiler.set_duplicated()
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
             if profiler is not None:
