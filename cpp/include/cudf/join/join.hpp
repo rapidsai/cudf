@@ -67,6 +67,13 @@ struct join_match_context {
     _match_counts;  ///< A device vector containing the count of matching rows in the right table
                     ///< for each row in left table
 
+  /**
+   * @brief Construct a join_match_context
+   *
+   * @param left_table View of the left table involved in the join operation
+   * @param match_counts Device vector containing the count of matching rows in the right table
+   *                     for each row in the left table
+   */
   join_match_context(table_view left_table,
                      std::unique_ptr<rmm::device_uvector<size_type>> match_counts)
     : _left_table{left_table}, _match_counts{std::move(match_counts)}
