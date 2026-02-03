@@ -3702,15 +3702,19 @@ public class ColumnVectorTest extends CudfTestBase {
     final String[] NEG_TIME_NS_STRING = {"1965-10-26 14:01:12.238297531"};
 
     // Seconds
-    try (ColumnVector unsupported_s_string_times = ColumnVector.fromStrings(NEG_TIME_S_STRING);
-         ColumnVector unsupported_s_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_S)) {
-      assertColumnsAreEqual(unsupported_s_string_times, unsupported_s_timestamps);
+    try (ColumnVector neg_s_string_times = ColumnVector.fromStrings(NEG_TIME_S_STRING);
+         ColumnVector neg_s_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_S);
+         ColumnVector timestampsAsStrings = neg_s_timestamps.asStrings("%Y-%m-%d %H:%M:%S");
+         ColumnVector timestampsAsStringsUsingDefaultFormat = neg_s_timestamps.asStrings()) {
+      assertColumnsAreEqual(neg_s_string_times, timestampsAsStrings);
+      assertColumnsAreEqual(timestampsAsStringsUsingDefaultFormat, timestampsAsStrings);
     }
 
     // Nanoseconds
-    try (ColumnVector unsupported_ns_string_times = ColumnVector.fromStrings(NEG_TIME_NS_STRING);
-         ColumnVector unsupported_ns_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_NS)) {
-      assertColumnsAreEqual(unsupported_ns_string_times, unsupported_ns_timestamps);
+    try (ColumnVector neg_ns_string_times = ColumnVector.fromStrings(NEG_TIME_NS_STRING);
+         ColumnVector neg_ns_timestamps = ColumnVector.timestampNanoSecondsFromLongs(NEG_TIME_NS);
+         ColumnVector timestampsAsStrings = neg_ns_timestamps.asStrings("%Y-%m-%d %H:%M:%S.%9f")) {
+      assertColumnsAreEqual(neg_ns_string_times, timestampsAsStrings);
     }
   }
 
