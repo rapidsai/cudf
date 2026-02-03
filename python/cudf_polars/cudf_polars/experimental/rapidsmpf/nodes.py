@@ -11,6 +11,7 @@ from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
+from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
@@ -20,12 +21,12 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    Metadata,
     empty_table_chunk,
     make_spill_function,
     opaque_reservation,
     process_children,
     recv_metadata,
+    remap_partitioning,
     send_metadata,
     shutdown_on_error,
 )
@@ -73,10 +74,15 @@ async def default_node_single(
     async with shutdown_on_error(context, ch_in, ch_out):
         # Recv/send metadata.
         metadata_in = await recv_metadata(ch_in, context)
-        metadata_out = Metadata(
+        partitioning = None
+        if preserve_partitioning:
+            # Remap partitioning if schema has changed
+            partitioning = remap_partitioning(
+                metadata_in.partitioning, ir.children[0].schema, ir.schema
+            )
+        metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
-            global_count=metadata_in.global_count,
-            partitioning=metadata_in.partitioning if preserve_partitioning else None,
+            partitioning=partitioning,
             duplicated=metadata_in.duplicated,
         )
         await send_metadata(ch_out, context, metadata_out)
@@ -162,20 +168,26 @@ async def default_node_multi(
     """
     async with shutdown_on_error(context, *chs_in, ch_out):
         # Merge and forward basic metadata.
-        metadata = Metadata(local_count=1, duplicated=True)
+        local_count = 1
+        duplicated = True
+        partitioning = None
         for idx, ch_in in enumerate(chs_in):
             md_child = await recv_metadata(ch_in, context)
             # Use simple "max" rule to determine counts.
-            metadata.local_count = max(md_child.local_count, metadata.local_count)
-            if md_child.global_count is not None:
-                metadata.global_count = max(
-                    md_child.global_count, metadata.global_count or 0
-                )
+            local_count = max(md_child.local_count, local_count)
             # Set "duplicated" to False as soon as we
             # find a non-duplicated child.
-            metadata.duplicated = metadata.duplicated and md_child.duplicated
+            duplicated = duplicated and md_child.duplicated
             if idx == partitioning_index:
-                metadata.partitioning = md_child.partitioning
+                # Remap partitioning from child schema to output schema
+                partitioning = remap_partitioning(
+                    md_child.partitioning, ir.children[idx].schema, ir.schema
+                )
+        metadata = ChannelMetadata(
+            local_count=local_count,
+            partitioning=partitioning,
+            duplicated=duplicated,
+        )
         await send_metadata(ch_out, context, metadata)
 
         seq_num = 0
@@ -581,7 +593,7 @@ async def empty_node(
             ch_out,
             context,
             # All ranks generate the same "empty" data.
-            Metadata(local_count=1, global_count=1, duplicated=True),
+            ChannelMetadata(local_count=1, duplicated=True),
         )
 
         # Evaluate the IR node to create an empty DataFrame
@@ -660,7 +672,7 @@ async def metadata_feeder_node(
     context: Context,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
-    metadata: Metadata,
+    metadata: ChannelMetadata,
 ) -> None:
     """
     Forward data with new metadata.
@@ -690,7 +702,7 @@ async def metadata_drain_node(
     ir_context: IRExecutionContext,
     ch_in: Channel[TableChunk],
     ch_out: Any,
-    metadata_collector: list[Metadata] | None,
+    metadata_collector: list[ChannelMetadata] | None,
 ) -> None:
     """
     Drain metadata and forward data to a single channel.
