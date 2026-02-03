@@ -246,11 +246,7 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
   block_size = std::min<size_t>(block_size, 1024);
 
   set_null_masks_kernel<MODE><<<num_bitmasks, block_size, 0, stream.value()>>>(
-    destinations,
-    d_begin_bits,
-    d_end_bits,
-    device_span<bool const>(d_valids.data(), d_valids.size()),
-    number_of_mask_words);
+    destinations, d_begin_bits, d_end_bits, d_valids, number_of_mask_words);
   CUDF_CHECK_CUDA(stream.value());
 }
 

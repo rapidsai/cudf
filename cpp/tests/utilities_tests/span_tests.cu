@@ -239,7 +239,7 @@ TEST(SpanTest, CanConstructFromDeviceContainers)
 
   (void)device_span<int>(d_thrust_vector.data().get(), d_thrust_vector.size());
   (void)device_span<int>(d_vector.data().get(), d_vector.size());
-  (void)device_span<int>(d_uvector.data(), d_uvector.size());
+  (void)device_span<int>(d_uvector);
 
   auto const& d_thrust_vector_c = d_thrust_vector;
   auto const& d_vector_c        = d_vector;
@@ -247,7 +247,7 @@ TEST(SpanTest, CanConstructFromDeviceContainers)
 
   (void)device_span<int const>(d_thrust_vector_c.data().get(), d_thrust_vector_c.size());
   (void)device_span<int const>(d_vector_c.data().get(), d_vector_c.size());
-  (void)device_span<int const>(d_uvector_c.data(), d_uvector_c.size());
+  (void)device_span<int const>(d_uvector_c);
 }
 
 CUDF_KERNEL void simple_device_kernel(device_span<bool> result) { result[0] = true; }

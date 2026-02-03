@@ -536,7 +536,7 @@ void decode_page_headers(pass_intermediate_data& pass,
 
   // sort the pages in chunk/schema order.
   pass.pages =
-    sort_pages(device_span<PageInfo const>(unsorted_pages.data(), unsorted_pages.size()),
+    sort_pages(unsorted_pages,
                device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
                stream);
 

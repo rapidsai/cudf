@@ -184,7 +184,7 @@ rmm::device_buffer decompress_stripe_data(
     decompressor.compression(),
     device_span<device_span<uint8_t const>>{inflate_in.data(), num_compressed_blocks},
     device_span<device_span<uint8_t>>{inflate_out.data(), num_compressed_blocks},
-    device_span<codec_exec_result>{inflate_res},
+    inflate_res,
     max_uncomp_block_size,
     total_decomp_size,
     stream);

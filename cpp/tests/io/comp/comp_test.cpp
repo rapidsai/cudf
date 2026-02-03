@@ -413,7 +413,7 @@ void roundtrip_test(cudf::io::compression_type compression)
       hd_srcs.host_to_device_async(stream);
 
       auto hd_dsts = cudf::detail::hostdevice_vector<device_span<uint8_t>>(1, stream);
-      hd_dsts[0]   = device_span<uint8_t>(d_got.data(), d_got.size());
+      hd_dsts[0]   = d_got;
       hd_dsts.host_to_device_async(stream);
 
       auto hd_stats = cudf::detail::hostdevice_vector<codec_exec_result>(1, stream);
