@@ -236,6 +236,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-len1-False]": "Aggregating a list literal: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-0-False]": "Aggregating a list literal: cudf#19610",
     "tests/unit/operations/namespaces/test_binary.py::test_binary_compounded_literal_aggstate_24460": "Aggregating a list literal: cudf#19610",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count": "Polars doesn't pass us any statistics for iceberg scans when use_metadata_statistics is True",
 }
 
 
