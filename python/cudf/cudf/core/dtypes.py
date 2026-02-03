@@ -842,11 +842,13 @@ class DecimalDtype(_BaseDtype):
         # might need to account for precision and scale here
         return decimal.Decimal
 
-    def to_arrow(self) -> pa.Decimal128Type:
+    def to_arrow(
+        self,
+    ) -> pa.Decimal128Type | pa.Decimal32Type | pa.Decimal64Type:
         """
         Return the equivalent ``pyarrow`` dtype.
         """
-        return pa.decimal128(self.precision, self.scale)
+        return type(self).PA_TYPE(self.precision, self.scale)
 
     @classmethod
     def from_arrow(
@@ -940,6 +942,7 @@ class Decimal32Dtype(DecimalDtype):
     name = "decimal32"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
     ITEMSIZE = 4
+    PA_TYPE = pa.decimal32
 
 
 @doc_apply(
@@ -951,6 +954,7 @@ class Decimal64Dtype(DecimalDtype):
     name = "decimal64"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
     ITEMSIZE = 8
+    PA_TYPE = pa.decimal64
 
 
 @doc_apply(
@@ -962,6 +966,7 @@ class Decimal128Dtype(DecimalDtype):
     name = "decimal128"
     MAX_PRECISION = 38
     ITEMSIZE = 16
+    PA_TYPE = pa.decimal128
 
 
 class IntervalDtype(_BaseDtype):
