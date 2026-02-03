@@ -11,11 +11,9 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase
+from cudf.core.dtype.validators import is_dtype_obj_struct
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import (
-    dtype_from_pylibcudf_column,
-    is_dtype_obj_struct,
-)
+from cudf.utils.dtypes import dtype_from_pylibcudf_column
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,

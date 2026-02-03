@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Self, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
 import numpy as np
 import pandas as pd
@@ -19,14 +19,16 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
+from cudf.core.dtype.validators import (
+    is_dtype_obj_decimal32,
+    is_dtype_obj_decimal64,
+    is_dtype_obj_decimal128,
+)
 from cudf.core.dtypes import (
     Decimal32Dtype,
     Decimal64Dtype,
     Decimal128Dtype,
     DecimalDtype,
-    is_decimal32_dtype,
-    is_decimal64_dtype,
-    is_decimal128_dtype,
 )
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
@@ -38,7 +40,7 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -59,14 +61,17 @@ class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
+    _decimal_type_check: ClassVar[Callable[[DtypeObj], bool]]
 
     @classmethod
     def _validate_args(  # type: ignore[override]
         cls, plc_column: plc.Column, dtype: DecimalDtype
     ) -> tuple[plc.Column, DecimalDtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if not cls._decimal_check(dtype):  # type: ignore[attr-defined]
-            raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
+        if not cls._decimal_type_check(dtype):
+            raise ValueError(
+                f"{dtype=} must be a valid decimal dtype instance"
+            )
         return plc_column, dtype
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
@@ -355,19 +360,19 @@ class DecimalBaseColumn(NumericalBaseColumn):
 class Decimal32Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL32}
     _decimal_cls = Decimal32Dtype
-    _decimal_check = is_decimal32_dtype
+    _decimal_type_check = is_dtype_obj_decimal32
 
 
 class Decimal64Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL64}
     _decimal_cls = Decimal64Dtype
-    _decimal_check = is_decimal64_dtype
+    _decimal_type_check = is_dtype_obj_decimal64
 
 
 class Decimal128Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL128}
     _decimal_cls = Decimal128Dtype
-    _decimal_check = is_decimal128_dtype
+    _decimal_type_check = is_dtype_obj_decimal128
 
 
 def _get_decimal_type(

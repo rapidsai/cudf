@@ -125,6 +125,31 @@ class ShuffleManager:
         )
 
 
+def _is_already_partitioned(
+    metadata: ChannelMetadata,
+    columns_to_hash: tuple[int, ...],
+    num_partitions: int,
+) -> bool:
+    """Check if data is already partitioned on the required keys."""
+    if metadata.partitioning is None:
+        return False
+
+    # Check that inter_rank is a HashScheme (not None or "inherit")
+    inter_rank = metadata.partitioning.inter_rank
+    if not isinstance(inter_rank, HashScheme):
+        return False
+
+    # Check that local partitioning is inherit
+    if metadata.partitioning.local != "inherit":
+        return False
+
+    # Check for exact match: same columns and same modulus
+    return (
+        inter_rank.column_indices == columns_to_hash
+        and inter_rank.modulus == num_partitions
+    )
+
+
 @define_py_node()
 async def shuffle_node(
     context: Context,
@@ -163,8 +188,19 @@ async def shuffle_node(
         The collective ID.
     """
     async with shutdown_on_error(context, ch_in, ch_out):
-        # Receive and send updated metadata.
-        _ = await recv_metadata(ch_in, context)
+        # Receive input metadata
+        metadata_in = await recv_metadata(ch_in, context)
+
+        # Check if we can skip the shuffle (already partitioned correctly)
+        if _is_already_partitioned(metadata_in, columns_to_hash, num_partitions):
+            # Forward metadata and data unchanged
+            await send_metadata(ch_out, context, metadata_in)
+            while (msg := await ch_in.recv(context)) is not None:
+                await ch_out.send(context, msg)
+            await ch_out.drain(context)
+            return
+
+        # Normal shuffle path
         output_metadata = ChannelMetadata(
             local_count=max(1, num_partitions // context.comm().nranks),
             partitioning=Partitioning(
@@ -179,14 +215,19 @@ async def shuffle_node(
             context, num_partitions, columns_to_hash, collective_id
         )
 
+        # When input is duplicated, only rank 0 should contribute data.
+        # Other ranks still participate in the shuffle protocol.
+        skip_insert = metadata_in.duplicated and context.comm().rank != 0
+
         # Process input chunks
         while (msg := await ch_in.recv(context)) is not None:
-            # Extract TableChunk from message and insert into shuffler
-            shuffle.insert_chunk(
-                TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
+            if not skip_insert:
+                # Extract TableChunk from message and insert into shuffler
+                shuffle.insert_chunk(
+                    TableChunk.from_message(msg).make_available_and_spill(
+                        context.br(), allow_overbooking=True
+                    )
                 )
-            )
             del msg
 
         # Insert finished
