@@ -249,12 +249,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def days_in_month(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return (
-                type(self)
-                .from_pylibcudf(plc.datetime.days_in_month(self.plc_column))
-                .astype(get_dtype_of_same_kind(self.dtype, np.dtype("int64")))
-            )
+        return ColumnBase.create(
+            plc.datetime.days_in_month(self.plc_column),
+            get_dtype_of_same_kind(self.dtype, np.dtype("int64")),
+        )
 
     @functools.cached_property
     def day_of_week(self) -> ColumnBase:
