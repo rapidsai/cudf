@@ -76,9 +76,9 @@ __device__ cuda::std::pair<int, int> page_bounds(
   auto const col  = &s->col;
 
   // get the level data
-  bool const should_process_def = is_nullable(s) && maybe_has_nulls(s);
-  auto const def_decode = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  auto const rep_decode = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  bool const process_nulls = should_process_nulls(s);
+  auto const def_decode    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto const rep_decode    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // if this is a bounds page, we need to do extra work to find the start and/or end value index
   if (is_bounds_pg) {
@@ -149,7 +149,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
       __syncthreads();
 
       // get absolute thread leaf index
-      int const is_new_leaf = should_process_def
+      int const is_new_leaf = process_nulls
                                 ? idx_t < s->page.num_input_values && (def_decode[idx_t] >= max_def)
                                 : idx_t < s->page.num_input_values;
       int thread_leaf_count, block_leaf_count;
@@ -227,7 +227,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
     }
   }
   // already filtered out unwanted pages, so need to count all non-null values in this page
-  else if (should_process_def) {
+  else if (process_nulls) {
     int num_nulls = 0;
     int idx_t     = t;
     while (idx_t < s->page.num_input_values) {

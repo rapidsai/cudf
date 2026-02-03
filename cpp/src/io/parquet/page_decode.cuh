@@ -154,6 +154,17 @@ __device__ inline bool maybe_has_nulls(page_state_s* s)
 }
 
 /**
+ * @brief Check if the page should process nulls
+ *
+ * @param s Page state
+ * @return True if the page should process nulls
+ */
+__device__ inline bool should_process_nulls(page_state_s* s)
+{
+  return is_nullable(s) && maybe_has_nulls(s);
+}
+
+/**
  * @brief Test if the given page is in a string column
  */
 __device__ constexpr bool is_string_col(PageInfo const& page,

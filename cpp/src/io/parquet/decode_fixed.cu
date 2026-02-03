@@ -835,7 +835,7 @@ __device__ void skip_ahead_in_decoding(page_state_s* s,
                                        dict_stream_t& dict_stream,
                                        bool_stream_t& bool_stream,
                                        bool bools_are_rle_stream,
-                                       bool should_process_nulls,
+                                       bool process_nulls,
                                        level_t const* const def,
                                        int& processed_count,
                                        int& valid_count)
@@ -872,7 +872,7 @@ __device__ void skip_ahead_in_decoding(page_state_s* s,
 
   // Count the number of valids we're skipping.
   processed_count = first_row;
-  valid_count     = !should_process_nulls
+  valid_count     = !process_nulls
                       ? first_row
                       : skip_validity_and_row_indices_nonlist<decode_block_size_t, level_t>(
                       first_row, s, def, has_nesting_t, t);
@@ -1049,7 +1049,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     return;
   }
 
-  bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
+  bool const process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
   // shared buffer. all shared memory is suballocated out of here
   constexpr int rle_run_buffer_bytes =
@@ -1067,8 +1067,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   auto bool_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
 
   // get the level data
-  level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  auto* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
@@ -1111,7 +1111,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                                   dict_stream,
                                   bool_stream,
                                   bools_are_rle_stream,
-                                  should_process_nulls,
+                                  process_nulls,
                                   def,
                                   processed_count,
                                   valid_count);
@@ -1128,7 +1128,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
 
     // only need to process definition levels if this is a nullable column
-    if (should_process_nulls) {
+    if (process_nulls) {
       if constexpr (has_lists_t) {
         next_valid_count =
           update_validity_and_row_indices_lists<decode_block_size_t, true, level_t>(
@@ -1194,7 +1194,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     if constexpr (has_lists_t) {
       decode_values.template operator()<copy_mode::INDIRECT>();
     } else {
-      if (should_process_nulls) {
+      if (process_nulls) {
         decode_values.template operator()<copy_mode::INDIRECT>();
       } else {
         decode_values.template operator()<copy_mode::DIRECT>();
@@ -1206,7 +1206,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   // Zero-fill null positions after decoding valid values
   if constexpr (has_strings_t || has_lists_t) {
-    if (should_process_nulls) {
+    if (process_nulls) {
       uint32_t const dtype_len = has_strings_t ? sizeof(cudf::size_type) : s->dtype_len;
       int const num_values     = [&]() {
         if constexpr (has_lists_t) {
@@ -1226,7 +1226,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     // column construction. Otherwise, convert string sizes to final offsets.
 
     if constexpr (!has_lists_t) {
-      if (!should_process_nulls) {
+      if (!process_nulls) {
         if (t == 0) {
           s->nesting_info[s->col.max_nesting_depth - 1].value_count = s->input_row_count;
         }

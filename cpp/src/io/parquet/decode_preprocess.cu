@@ -311,11 +311,11 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     depth += blockDim.x;
   }
 
-  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
-  bool const should_process_def = is_nullable(s) && maybe_has_nulls(s);
-  level_t* const def            = !should_process_def
-                                    ? nullptr
-                                    : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto* const rep          = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  bool const process_nulls = should_process_nulls(s);
+  level_t* const def       = !process_nulls
+                               ? nullptr
+                               : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
 
   if (!t) {
     s->page.skipped_values      = -1;
@@ -417,8 +417,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // Get the level decode buffers for this page
-  level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  auto* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // Determine how many values need to be decoded
   size_t const num_to_decode =
@@ -426,8 +426,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   if (num_to_decode == 0) { return; }
 
   // Initialize the stream decoders
-  bool const should_process_def = is_nullable(s) && maybe_has_nulls(s);
-  if (should_process_def) {
+  bool const process_nulls = should_process_nulls(s);
+  if (process_nulls) {
     decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
                                           s->abs_lvl_start[level_type::DEFINITION],
                                           s->abs_lvl_end[level_type::DEFINITION],
@@ -453,7 +453,7 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   // Must sync as shared variables in decode_next() are shared between decoders!!
   block.sync();
 
-  if (should_process_def) { decoders[level_type::DEFINITION].decode_next(t, num_to_decode); }
+  if (process_nulls) { decoders[level_type::DEFINITION].decode_next(t, num_to_decode); }
 }
 
 }  // anonymous namespace

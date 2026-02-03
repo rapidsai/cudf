@@ -74,8 +74,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   // Must be evaluated after setup_local_page_info
-  bool const has_repetition       = s->col.max_level[level_type::REPETITION] > 0;
-  bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const process_nulls  = should_process_nulls(s);
 
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
@@ -97,10 +97,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Get the level decode buffers for this page
   PageInfo* pp       = &pages[page_idx];
-  level_t* const def = !should_process_nulls
+  level_t* const def = !process_nulls
                          ? nullptr
                          : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  auto* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
@@ -280,8 +280,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   // Must be evaluated after setup_local_page_info
-  bool const has_repetition       = s->col.max_level[level_type::REPETITION] > 0;
-  bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const process_nulls  = should_process_nulls(s);
 
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
@@ -342,10 +342,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Get the level decode buffers for this page
   PageInfo* pp       = &pages[page_idx];
-  level_t* const def = !should_process_nulls
+  level_t* const def = !process_nulls
                          ? nullptr
                          : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  auto* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   auto const is_decimal =
     s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
