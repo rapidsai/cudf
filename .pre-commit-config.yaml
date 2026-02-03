@@ -162,7 +162,7 @@ repos:
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v1.3.1
+    rev: v1.4.1
     hooks:
       - id: verify-copyright
         name: verify-copyright-cudf
@@ -241,18 +241,20 @@ repos:
       - id: verify-hardcoded-version
         exclude: |
           (?x)
-            devcontainer[.]json$|
-            dependencies[.]yaml$|
-            ^[.]github/workflows/|
-            [.]md$|
-            pom[.]xml$|
+            (^|/)devcontainer[.]json$|
+            (^|/)dependencies[.]yaml$|
+            ^[.]github/(workflows|ISSUE_TEMPLATE)/|
+            (^|/)pom[.]xml$|
             ^[.]pre-commit-config[.]yaml$|
-            [.]rst$|
-            [.](avro|parquet|png|orc|gz|pkl|sas7bdat)$|
             ^conda/environments/|
-            ^python/cudf/cudf/VERSION$|
-            ^cpp/include/nvtext/byte_pair_encoding.hpp$|
-            ^python/cudf/cudf/core/byte_pair_encoding.py$
+            [.](md|rst|avro|parquet|png|orc|gz|pkl|sas7bdat)$|
+            ^python/cudf/cudf/VERSION$
+      - id: verify-pyproject-license
+        # ignore the top-level pyproject.toml, which doesn't
+        # have or need a [project] table
+        exclude: |
+          (?x)
+            ^pyproject[.]toml$
   - repo: https://github.com/rapidsai/dependency-file-generator
     rev: v1.20.2
     hooks:

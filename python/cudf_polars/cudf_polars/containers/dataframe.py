@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """A dataframe, with some properties."""
@@ -17,8 +17,9 @@ from cudf_polars.utils import conversion
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
+    from typing import Any, Self
 
-    from typing_extensions import Any, CapsuleType, Self
+    from typing_extensions import CapsuleType
 
     from rmm.pylibrmm.stream import Stream
 

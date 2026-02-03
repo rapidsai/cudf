@@ -5,13 +5,12 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 from packaging import version
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -31,7 +30,6 @@ from cudf.core.dtypes import (
 )
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
@@ -78,21 +76,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
         cls, plc_column: plc.Column, dtype: DecimalDtype
     ) -> tuple[plc.Column, DecimalDtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, cls._decimal_cls)  # type: ignore[attr-defined]
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not cls._decimal_check(dtype)  # type: ignore[attr-defined]
-        ):
+        if not cls._decimal_check(dtype):  # type: ignore[attr-defined]
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
         return plc_column, dtype
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, type(self)._decimal_cls):  # type: ignore[attr-defined]
             self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
-            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
+        self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
     def _adjust_reduce_result(
@@ -172,12 +163,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 )
                 return cast(
                     cudf.core.column.string.StringColumn,
-                    type(self).from_pylibcudf(plc_column),
+                    ColumnBase.create(plc_column, dtype),
                 )
         else:
             return cast(
                 cudf.core.column.StringColumn,
-                cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE),
+                cudf.core.column.column_empty(0, dtype=dtype),
             )
 
     def __pow__(self, other: ColumnBinaryOperand) -> ColumnBase:
@@ -187,7 +178,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     1, dtype=self.dtype, length=len(self)
                 )
                 if self.nullable:
-                    res = res.set_mask(self.mask)
+                    res = res.set_mask(self.mask, self.null_count)
                 return res
             elif other < 0:
                 raise TypeError("Power of negative integers not supported.")
@@ -303,17 +294,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 if isinstance(rhs, (int, Decimal))
                 else rhs
             )
-            result = binaryop.binaryop(
+            return binaryop.binaryop(
                 lhs_comp,
                 rhs_comp,
                 op,
                 get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
             )
-            if cudf.get_option("mode.pandas_compatible") and not isinstance(
-                self.dtype, pd.ArrowDtype
-            ):
-                result = result.fillna(op == "__ne__")
-            return result
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "

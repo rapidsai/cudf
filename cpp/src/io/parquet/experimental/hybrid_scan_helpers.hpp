@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -255,7 +255,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Filter the row groups using bloom filters based on predicate filter
    *
-   * @param bloom_filter_data Device buffers of bloom filters, one per input column chunk
+   * @param bloom_filter_data Device spans of bloom filters, one per input column chunk
    * @param row_group_indices Input row groups indices
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
@@ -265,7 +265,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @return Filtered row group indices, if any are filtered
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
-    cudf::host_span<rmm::device_buffer> bloom_filter_data,
+    cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<data_type const> output_dtypes,
     cudf::host_span<cudf::size_type const> output_column_schemas,
@@ -360,32 +360,14 @@ class dictionary_literals_collector : public equality_literals_collector {
  */
 class named_to_reference_converter : public parquet::detail::named_to_reference_converter {
  public:
+  named_to_reference_converter() = default;
+
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata,
-                               std::vector<SchemaElement> const& schema_tree);
+                               std::vector<SchemaElement> const& schema_tree,
+                               cudf::io::parquet_reader_options const& options);
 
   using parquet::detail::named_to_reference_converter::visit;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
-
- private:
-  std::unordered_map<int32_t, std::string> _column_indices_to_names;
-};
-
-/**
- * @brief Collects column names from the expression ignoring the `skip_names`
- */
-class names_from_expression : public parquet::detail::names_from_expression {
- public:
-  names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                        std::vector<std::string> const& skip_names,
-                        std::optional<std::vector<std::string>> selected_columns,
-                        std::vector<SchemaElement> const& schema_tree);
-
-  using parquet::detail::names_from_expression::visit;
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )

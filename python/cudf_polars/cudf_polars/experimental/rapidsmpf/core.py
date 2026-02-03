@@ -49,6 +49,7 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
+    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     import polars as pl
 
@@ -63,7 +64,6 @@ if TYPE_CHECKING:
         LowerState,
         SubNetGenerator,
     )
-    from cudf_polars.experimental.rapidsmpf.utils import Metadata
 
 
 def evaluate_logical_plan(
@@ -71,7 +71,7 @@ def evaluate_logical_plan(
     config_options: ConfigOptions,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -95,7 +95,7 @@ def evaluate_logical_plan(
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
     # Reserve shuffle IDs for the entire pipeline execution
-    with ReserveOpIDs(ir) as shuffle_id_map:
+    with ReserveOpIDs(ir) as collective_id_map:
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
         # for cluster == "distributed".
@@ -113,7 +113,7 @@ def evaluate_logical_plan(
                 partition_info,
                 config_options,
                 stats,
-                shuffle_id_map,
+                collective_id_map,
                 collect_metadata=collect_metadata,
             )
         else:
@@ -123,7 +123,7 @@ def evaluate_logical_plan(
                 partition_info,
                 config_options,
                 stats,
-                shuffle_id_map,
+                collective_id_map,
                 collect_metadata=collect_metadata,
             )
 
@@ -135,11 +135,11 @@ def evaluate_pipeline(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
-    collective_id_map: dict[IR, int],
+    collective_id_map: dict[IR, list[int]],
     rmpf_context: Context | None = None,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
 
@@ -154,7 +154,7 @@ def evaluate_pipeline(
     stats
         The statistics collector.
     collective_id_map
-        The mapping of IR nodes to collective IDs.
+        The mapping of IR nodes to lists of collective IDs.
     rmpf_context
         The RapidsMPF context.
     collect_metadata
@@ -229,7 +229,9 @@ def evaluate_pipeline(
 
         # Generate network nodes
         assert rmpf_context is not None, "RapidsMPF context must defined."
-        metadata_collector: list[Metadata] | None = [] if collect_metadata else None
+        metadata_collector: list[ChannelMetadata] | None = (
+            [] if collect_metadata else None
+        )
         nodes, output = generate_network(
             rmpf_context,
             ir,
@@ -412,8 +414,8 @@ def generate_network(
     stats: StatsCollector,
     *,
     ir_context: IRExecutionContext,
-    collective_id_map: dict[IR, int],
-    metadata_collector: list[Metadata] | None,
+    collective_id_map: dict[IR, list[int]],
+    metadata_collector: list[ChannelMetadata] | None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -433,7 +435,7 @@ def generate_network(
     ir_context
         The execution context for the IR node.
     collective_id_map
-        The mapping of IR nodes to collective IDs.
+        The mapping of IR nodes to lists of collective IDs.
     metadata_collector
         The list to collect the final metadata.
         This list will be mutated when the network is executed.

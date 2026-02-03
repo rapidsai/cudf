@@ -4,13 +4,12 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -105,13 +104,6 @@ class NumericalColumn(NumericalBaseColumn):
             )
         return plc_column, dtype
 
-    def _clear_cache(self) -> None:
-        super()._clear_cache()
-        try:
-            del self.nan_count
-        except AttributeError:
-            pass
-
     def __contains__(self, item: ScalarLike) -> bool:
         """
         Returns True if column contains item, else False.
@@ -187,7 +179,9 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(plc.unary.is_nan(self.plc_column))
+            return ColumnBase.create(
+                plc.unary.is_nan(self.plc_column), np.dtype(np.bool_)
+            )
 
     def notnan(self) -> ColumnBase:
         """Identify non-NaN values in a Column.
@@ -198,8 +192,8 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f":
             return as_column(True, length=len(self))
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.unary.is_not_nan(self.plc_column)
+            return ColumnBase.create(
+                plc.unary.is_not_nan(self.plc_column), np.dtype(np.bool_)
             )
 
     def isnull(self) -> ColumnBase:
@@ -211,8 +205,8 @@ class NumericalColumn(NumericalBaseColumn):
             return as_column(False, length=len(self))
 
         with self.access(mode="read", scope="internal"):
-            result = type(self).from_pylibcudf(
-                plc.unary.is_null(self.plc_column)
+            result = ColumnBase.create(
+                plc.unary.is_null(self.plc_column), np.dtype(np.bool_)
             )
 
         if self.dtype.kind == "f":
@@ -230,8 +224,8 @@ class NumericalColumn(NumericalBaseColumn):
             result = as_column(True, length=len(self))
         else:
             with self.access(mode="read", scope="internal"):
-                result = type(self).from_pylibcudf(
-                    plc.unary.is_valid(self.plc_column)
+                result = ColumnBase.create(
+                    plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
                 )
 
             if self.dtype.kind == "f":
@@ -479,8 +473,8 @@ class NumericalColumn(NumericalBaseColumn):
                 0,
                 self.plc_column.children(),
             )
-            mask, _ = plc.transform.nans_to_nulls(shifted_column)
-            return self.set_mask(as_buffer(mask))
+            mask, null_count = plc.transform.nans_to_nulls(shifted_column)
+            return self.set_mask(as_buffer(mask), null_count)
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
@@ -614,17 +608,13 @@ class NumericalColumn(NumericalBaseColumn):
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return cast(
             cudf.core.column.datetime.DatetimeColumn,
-            type(self)
-            .from_pylibcudf(self._as_temporal_column(dtype))
-            ._with_type_metadata(dtype),
+            ColumnBase.create(self._as_temporal_column(dtype), dtype),
         )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         return cast(
             cudf.core.column.timedelta.TimeDeltaColumn,
-            type(self)
-            .from_pylibcudf(self._as_temporal_column(dtype))
-            ._with_type_metadata(dtype),
+            ColumnBase.create(self._as_temporal_column(dtype), dtype),
         )
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
@@ -694,17 +684,6 @@ class NumericalColumn(NumericalBaseColumn):
                 return res  # type: ignore[return-value]
 
         return self.cast(dtype=dtype)  # type: ignore[return-value]
-
-    def all(self, skipna: bool = True) -> bool:
-        # If all entries are null the result is True, including when the column
-        # is empty.
-        result_col = self.nans_to_nulls() if skipna else self
-        return super(type(self), result_col).all(skipna=skipna)
-
-    def any(self, skipna: bool = True) -> bool:
-        # Early exit for fast cases.
-        result_col = self.nans_to_nulls() if skipna else self
-        return super(type(self), result_col).any(skipna=skipna)
 
     @functools.cached_property
     def nan_count(self) -> int:

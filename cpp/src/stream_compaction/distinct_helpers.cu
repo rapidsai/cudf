@@ -5,6 +5,8 @@
 
 #include "distinct_helpers.hpp"
 
+#include <cudf/detail/utilities/algorithm.cuh>
+
 #include <cuda/functional>
 #include <cuda/std/atomic>
 #include <cuda/std/iterator>
@@ -62,27 +64,27 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
     if (keep == duplicate_keep_option::KEEP_NONE) {
       // Reduction results with `KEEP_NONE` are either group sizes of equal rows, or `0`.
       // Thus, we only output index of the rows in the groups having group size of `1`.
-      return thrust::copy_if(
-        rmm::exec_policy_nosync(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(num_rows),
+      return cudf::detail::copy_if(
+        thrust::counting_iterator<size_type>(0),
+        thrust::counting_iterator<size_type>(num_rows),
         output_indices.begin(),
         cuda::proclaim_return_type<bool>(
           [reduction_results = reduction_results.begin()] __device__(auto const idx) {
             return reduction_results[idx] == size_type{1};
-          }));
+          }),
+        stream);
     }
 
     // Reduction results with `KEEP_FIRST` and `KEEP_LAST` are row indices of the first/last row in
     // each group of equal rows (which are the desired output indices), or the value given by
     // `reduction_init_value()`.
-    return thrust::copy_if(
-      rmm::exec_policy_nosync(stream),
+    return cudf::detail::copy_if(
       reduction_results.begin(),
       reduction_results.end(),
       output_indices.begin(),
       cuda::proclaim_return_type<bool>([init_value = reduction_init_value(keep)] __device__(
-                                         auto const idx) { return idx != init_value; }));
+                                         auto const idx) { return idx != init_value; }),
+      stream);
   }();
 
   output_indices.resize(cuda::std::distance(output_indices.begin(), map_end), stream);

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
+from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
@@ -18,7 +19,6 @@ from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    Metadata,
     empty_table_chunk,
     opaque_reservation,
     recv_metadata,
@@ -127,9 +127,8 @@ async def concatenate_node(
             # Global repartitioning via AllGather to single duplicated chunk.
 
             # Send metadata.
-            metadata = Metadata(
+            metadata = ChannelMetadata(
                 local_count=local_output_count,
-                global_count=output_count,
                 duplicated=output_duplicated,
             )
             await send_metadata(ch_out, context, metadata)
@@ -160,9 +159,8 @@ async def concatenate_node(
             # Local repartitioning (tree reduction).
 
             # Send metadata.
-            metadata = Metadata(
+            metadata = ChannelMetadata(
                 local_count=local_output_count,
-                global_count=output_count,
                 duplicated=output_duplicated,
             )
             await send_metadata(ch_out, context, metadata)
@@ -242,7 +240,7 @@ def _(
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Look up the reserved shuffle ID for this operation
-    collective_id = rec.state["collective_id_map"][ir]
+    collective_id = rec.state["collective_id_map"][ir][0]
 
     # Add python node
     nodes[ir] = [

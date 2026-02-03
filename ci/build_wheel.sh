@@ -34,7 +34,7 @@ RAPIDS_PIP_WHEEL_ARGS=(
 #
 # Passing '--build-constraint' and '--no-build-isolation` together results in an error from 'pip',
 # but we want to keep environment variable PIP_CONSTRAINT set unconditionally.
-# PIP_NO_BUILD_ISOLATION=0 means "add --no-build-isolation" (ref: https://github.com/pypa/pip/issues/573
+# PIP_NO_BUILD_ISOLATION=0 means "add --no-build-isolation" (ref: https://github.com/pypa/pip/issues/5735)
 if [[ "${PIP_NO_BUILD_ISOLATION:-}" != "0" ]]; then
     RAPIDS_PIP_WHEEL_ARGS+=(--build-constraint="${PIP_CONSTRAINT}")
 fi

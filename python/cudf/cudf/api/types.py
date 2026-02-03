@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 """Define common type operations."""
@@ -123,6 +123,15 @@ def is_string_dtype(obj):
             and not is_list_dtype(obj)
             and not is_struct_dtype(obj)
             and not _is_interval_dtype(obj)
+            and not (
+                isclass(obj)
+                and obj
+                in {
+                    cudf.Decimal32Dtype,
+                    cudf.Decimal64Dtype,
+                    cudf.Decimal128Dtype,
+                }
+            )
         )
     )
 

@@ -10,13 +10,12 @@ import warnings
 from collections.abc import Mapping
 from copy import deepcopy
 from shutil import get_terminal_size
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, Self, assert_never, overload
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self, assert_never
 
 import pylibcudf as plc  # noqa: TC002
 
@@ -269,7 +268,19 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
 
 class _SeriesiAtIndexer(_SeriesIlocIndexer):
-    pass
+    @_performance_tracking
+    def __getitem__(self, key):
+        indexing_utils.validate_scalar_key(
+            key, "iAt based indexing can only have integer indexers"
+        )
+        return super().__getitem__(key)
+
+    @_performance_tracking
+    def __setitem__(self, key, value):
+        indexing_utils.validate_scalar_key(
+            key, "iAt based indexing can only have integer indexers"
+        )
+        return super().__setitem__(key, value)
 
 
 class _SeriesLocIndexer(_FrameIndexer):
@@ -413,7 +424,19 @@ class _SeriesLocIndexer(_FrameIndexer):
 
 
 class _SeriesAtIndexer(_SeriesLocIndexer):
-    pass
+    @_performance_tracking
+    def __getitem__(self, key):
+        indexing_utils.validate_scalar_key(
+            key, "Invalid call for scalar access (getting)!"
+        )
+        return super().__getitem__(key)
+
+    @_performance_tracking
+    def __setitem__(self, key, value):
+        indexing_utils.validate_scalar_key(
+            key, "Invalid call for scalar access (getting)!"
+        )
+        return super().__setitem__(key, value)
 
 
 class Series(SingleColumnFrame, IndexedFrame):
@@ -1528,7 +1551,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         col = concat_columns([o._column for o in objs])
 
         if len(objs):
-            col = col._with_type_metadata(objs[0].dtype)
+            col = ColumnBase.create(col.plc_column, objs[0].dtype)
 
         result = cls._from_column(col, name=name, index=result_index)
         if cudf.get_option("mode.pandas_compatible"):
@@ -3200,8 +3223,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         # this condition makes sure we do too if bins is given
         if bins is not None and len(res) == len(res.index.categories):
             struct_col = res.index._column._get_decategorized_column()
-            interval_col = struct_col._with_type_metadata(
-                res.index.dtype.categories.dtype
+            interval_col = ColumnBase.create(
+                struct_col.plc_column, res.index.dtype.categories.dtype
             )
             res.index = cudf.IntervalIndex._from_column(
                 interval_col, name=res.index.name
