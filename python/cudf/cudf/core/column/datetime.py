@@ -33,6 +33,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
@@ -251,7 +252,12 @@ class DatetimeColumn(TemporalBaseColumn):
     def days_in_month(self) -> ColumnBase:
         return ColumnBase.create(
             plc.datetime.days_in_month(self.plc_column),
-            get_dtype_of_same_kind(self.dtype, np.dtype("int64")),
+            get_dtype_of_same_kind(
+                self.dtype,
+                np.dtype("int16")
+                if is_pandas_nullable_extension_dtype(self.dtype)
+                else np.dtype("int64"),
+            ),
         )
 
     @functools.cached_property
