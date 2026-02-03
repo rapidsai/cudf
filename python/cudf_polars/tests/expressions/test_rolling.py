@@ -62,7 +62,11 @@ def test_rolling_datetime(request, time_unit):
     assert_gpu_result_equal(q)
 
 
-def test_rolling_date():
+def test_rolling_date(request):
+    if not POLARS_VERSION_LT_136:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
+        )
     dates = [
         "2020-01-01",
         "2020-01-01",
@@ -84,7 +88,11 @@ def test_rolling_date():
 
 
 @pytest.mark.parametrize("dtype", [pl.Int32, pl.UInt32, pl.Int64, pl.UInt64])
-def test_rolling_integral_orderby(dtype):
+def test_rolling_integral_orderby(request, dtype):
+    if not POLARS_VERSION_LT_136:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
+        )
     df = pl.LazyFrame(
         {
             "orderby": pl.Series([1, 4, 8, 10, 12, 13, 14, 22], dtype=dtype),
@@ -96,6 +104,16 @@ def test_rolling_integral_orderby(dtype):
     )
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_136,
+    reason="Rolling expression node only exists in polars >= 1.36",
+)
+def test_rolling_translation_raises():
+    df = pl.LazyFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    q = df.with_columns(pl.col("a").sum().rolling("b", period="2i"))
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_rolling_collect_list_raises():
@@ -111,7 +129,11 @@ def test_rolling_collect_list_raises():
     )
 
 
-def test_unsorted_raises():
+def test_unsorted_raises(request):
+    if not POLARS_VERSION_LT_136:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
+        )
     df = pl.LazyFrame({"orderby": [1, 2, 4, 2], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
@@ -123,7 +145,11 @@ def test_unsorted_raises():
         q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
-def test_orderby_nulls_raises_computeerror():
+def test_orderby_nulls_raises_computeerror(request):
+    if not POLARS_VERSION_LT_136:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
+        )
     df = pl.LazyFrame({"orderby": [1, 2, 4, None], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
@@ -134,7 +160,11 @@ def test_orderby_nulls_raises_computeerror():
         q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
-def test_invalid_duration_spec_raises_in_translation():
+def test_invalid_duration_spec_raises_in_translation(request):
+    if not POLARS_VERSION_LT_136:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
+        )
     df = pl.LazyFrame({"orderby": [1, 2, 4, 5], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="3d"))
     assert_ir_translation_raises(q, pl.exceptions.InvalidOperationError)
@@ -158,7 +188,11 @@ def test_rolling_inside_groupby_raises(request):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_rolling_sum_all_null_window_returns_null():
+def test_rolling_sum_all_null_window_returns_null(request):
+    if not POLARS_VERSION_LT_136:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
+        )
     df = pl.LazyFrame(
         {
             "orderby": [1, 2, 3, 4, 5, 6],
