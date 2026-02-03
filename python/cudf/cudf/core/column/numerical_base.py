@@ -168,9 +168,11 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     indices.plc_column,
                     exact,
                 )
+                # Result dtype depends on interpolation: linear/midpoint return
+                # float64, others preserve input dtype
                 result = cast(
                     cudf.core.column.numerical_base.NumericalBaseColumn,
-                    ColumnBase.create(plc_column, self.dtype),
+                    ColumnBase.from_pylibcudf(plc_column),
                 )
         if return_scalar:
             scalar_result = result.element_indexing(0)
