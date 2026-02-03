@@ -25,6 +25,7 @@ from cudf.core.algorithms import factorize
 from cudf.core.column import access_columns
 from cudf.core.column.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.frame import Frame
 from cudf.core.index import (
     Index,
@@ -39,7 +40,6 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     is_column_like,
-    is_dtype_obj_numeric,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking

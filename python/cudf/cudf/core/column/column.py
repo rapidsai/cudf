@@ -49,6 +49,13 @@ from cudf.core.buffer import (
 )
 from cudf.core.column.utils import access_columns
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype.validators import (
+    is_dtype_obj_decimal,
+    is_dtype_obj_interval,
+    is_dtype_obj_list,
+    is_dtype_obj_numeric,
+    is_dtype_obj_struct,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     DecimalDtype,
@@ -71,11 +78,6 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
-    is_dtype_obj_decimal,
-    is_dtype_obj_interval,
-    is_dtype_obj_list,
-    is_dtype_obj_numeric,
-    is_dtype_obj_struct,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
@@ -874,7 +876,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         * null (other types)= str(pd.NA)
         """
         if self.has_nulls():
-            return self.astype(np.dtype("str")).fillna(
+            return self.astype(CUDF_STRING_DTYPE).fillna(
                 str(self._PANDAS_NA_VALUE)
             )
         return self
