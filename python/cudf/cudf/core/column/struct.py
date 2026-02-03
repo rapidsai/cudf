@@ -104,11 +104,15 @@ class StructColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        # We cannot go via Arrow's `to_pandas` because of the following issue:
-        # https://issues.apache.org/jira/browse/ARROW-12680
-        if arrow_type or nullable or isinstance(self.dtype, pd.ArrowDtype):
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        elif nullable and not arrow_type:
+            raise NotImplementedError(
+                f"pandas does not have a native nullable type for {self.dtype}."
+            )
         else:
+            # We cannot go via Arrow's `to_pandas` because of the following issue:
+            # https://github.com/apache/arrow/issues/28428
             return pd.Index(self.to_arrow().tolist(), dtype="object")
 
     def element_indexing(self, index: int) -> dict[Any, Any] | None:
