@@ -44,6 +44,11 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_source(source_info src) except +libcudf_exception_handler
         void set_filter(expression &filter) except +libcudf_exception_handler
         void set_columns(vector[string] col_names) except +libcudf_exception_handler
+        void set_column_names(
+                vector[string] col_names) except +libcudf_exception_handler
+        void set_column_indices(
+            vector[size_type] col_indices
+        ) except +libcudf_exception_handler
         void set_num_rows(int64_t val) except +libcudf_exception_handler
         void set_row_groups(
             vector[vector[size_type]] row_grp
@@ -71,6 +76,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +libcudf_exception_handler
         parquet_reader_options_builder& columns(
             vector[string] col_names
+        ) except +libcudf_exception_handler
+        parquet_reader_options_builder& column_names(
+            vector[string] col_names
+        ) except +libcudf_exception_handler
+        parquet_reader_options_builder& column_indices(
+            vector[size_type] col_indices
         ) except +libcudf_exception_handler
         parquet_reader_options_builder& row_groups(
             vector[vector[size_type]] row_grp

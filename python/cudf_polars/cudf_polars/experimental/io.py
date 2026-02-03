@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition IO Logic."""
 
@@ -707,7 +707,8 @@ class ParquetSourceInfo(DataSourceInfo):
         self._stats_planning = stats_planning
         self._unique_stats_columns = set()
         # Helper attributes
-        self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
+        # Used to fuse lazy row-group sampling
+        self._key_columns: set[str] = set()
         self._unique_stats: dict[str, UniqueStats] = {}
         self._read_columns: set[str] = set()
         self._real_rg_size: dict[str, int] = {}
@@ -767,7 +768,7 @@ class ParquetSourceInfo(DataSourceInfo):
         options = plc.io.parquet.ParquetReaderOptions.builder(
             plc.io.SourceInfo(list(samples))
         ).build()
-        options.set_columns(read_columns)
+        options.set_column_names(read_columns)
         options.set_row_groups(list(samples.values()))
         stream = get_cuda_stream()
         tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)

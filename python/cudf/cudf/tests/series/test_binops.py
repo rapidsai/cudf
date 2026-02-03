@@ -467,15 +467,8 @@ def test_compare_ops_numeric_to_null_pandas_compatible(comparison_op):
 def test_compare_ops_decimal_to_null_pandas_compatible(comparison_op):
     data = pa.array([None, 1, 3], pa.decimal128(3, 2))
     gser = cudf.Series(data)
-    expected = cudf.Series(
-        [
-            comparison_op == operator.ne,
-            comparison_op(1, 2),
-            comparison_op(3, 2),
-        ]
-    )
-    with cudf.option_context("mode.pandas_compatible", True):
-        result = comparison_op(gser, 2)
+    expected = comparison_op(gser.to_pandas(arrow_type=True), 2)
+    result = comparison_op(gser, 2).to_pandas(arrow_type=True)
     assert_eq(expected, result)
 
 
