@@ -18,6 +18,7 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
+from cudf.core.column._pylibcudf_helpers import all_strings_match_type
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
@@ -281,14 +282,14 @@ class StringColumn(ColumnBase, Scannable):
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
         if dtype.kind in {"i", "u"}:
-            if not self.is_integer().all():
+            if not all_strings_match_type(self, "integer"):
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
             cast_func = plc.strings.convert.convert_integers.to_integers
         elif dtype.kind == "f":
-            if not self.is_float().all():
+            if not all_strings_match_type(self, "float"):
                 raise ValueError(
                     "Could not convert strings to float "
                     "type due to presence of non-floating values."
@@ -431,9 +432,11 @@ class StringColumn(ColumnBase, Scannable):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in {"i", "u"} and self.is_integer().all():
+        elif to_dtype.kind in {"i", "u"} and all_strings_match_type(
+            self, "integer"
+        ):
             return True
-        elif to_dtype.kind == "f" and self.is_float().all():
+        elif to_dtype.kind == "f" and all_strings_match_type(self, "float"):
             return True
         else:
             return False
@@ -522,7 +525,7 @@ class StringColumn(ColumnBase, Scannable):
                         dtype=get_dtype_of_same_kind(
                             self.dtype, np.dtype(np.bool_)
                         ),
-                    ).set_mask(self.mask, self.null_count)
+                    ).set_mask(self.mask)
                 else:
                     return NotImplemented
 
