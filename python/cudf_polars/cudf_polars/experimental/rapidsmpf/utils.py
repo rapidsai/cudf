@@ -149,11 +149,6 @@ def remap_partitioning(
 
     new_inter_rank = remap_hash_scheme(partitioning.inter_rank)
     new_local = remap_hash_scheme(partitioning.local)
-
-    # If inter_rank partitioning was invalidated, the whole partitioning is invalid
-    if isinstance(partitioning.inter_rank, HashScheme) and new_inter_rank is None:
-        return None
-
     return Partitioning(inter_rank=new_inter_rank, local=new_local)
 
 
