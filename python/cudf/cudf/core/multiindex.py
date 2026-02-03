@@ -232,7 +232,9 @@ class MultiIndex(Index):
                 and not is_pandas_nullable_extension_dtype(level.dtype)
             ):
                 result_col = result_col.fillna(np.nan)
-            source_data[i] = result_col._with_type_metadata(level.dtype)
+            source_data[i] = ColumnBase.create(
+                result_col.plc_column, level.dtype
+            )
 
         Frame.__init__(self, ColumnAccessor(source_data))
         self._levels = new_levels

@@ -1551,7 +1551,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         col = concat_columns([o._column for o in objs])
 
         if len(objs):
-            col = col._with_type_metadata(objs[0].dtype)
+            col = ColumnBase.create(col.plc_column, objs[0].dtype)
 
         result = cls._from_column(col, name=name, index=result_index)
         if cudf.get_option("mode.pandas_compatible"):
@@ -3223,8 +3223,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         # this condition makes sure we do too if bins is given
         if bins is not None and len(res) == len(res.index.categories):
             struct_col = res.index._column._get_decategorized_column()
-            interval_col = struct_col._with_type_metadata(
-                res.index.dtype.categories.dtype
+            interval_col = ColumnBase.create(
+                struct_col.plc_column, res.index.dtype.categories.dtype
             )
             res.index = cudf.IntervalIndex._from_column(
                 interval_col, name=res.index.name
