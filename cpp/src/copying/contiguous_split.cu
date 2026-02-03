@@ -2149,4 +2149,35 @@ std::unique_ptr<chunked_pack> chunked_pack::create(cudf::table_view const& input
   return std::make_unique<chunked_pack>(input, user_buffer_size, stream, temp_mr);
 }
 
+namespace detail {
+
+std::size_t packed_size(cudf::table_view const& input,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr)
+{
+  // Handle empty table cases
+  if (input.num_columns() == 0 || input.num_rows() == 0) { return 0; }
+
+  auto const num_partitions = std::size_t{1};  // no splits, just computing size for pack
+  auto const num_src_bufs   = count_src_bufs(input.begin(), input.end());
+  auto const num_bufs       = static_cast<std::size_t>(num_src_bufs) * num_partitions;
+
+  // Compute splits to get buffer sizes
+  auto partition_buf_size_and_dst_buf_info =
+    compute_splits(input, {} /* no splits */, num_partitions, num_src_bufs, num_bufs, stream, mr);
+
+  // Return the total size for the single partition
+  return partition_buf_size_and_dst_buf_info->h_buf_sizes[0];
+}
+
+}  // namespace detail
+
+std::size_t packed_size(cudf::table_view const& input,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::packed_size(input, stream, mr);
+}
+
 };  // namespace cudf
