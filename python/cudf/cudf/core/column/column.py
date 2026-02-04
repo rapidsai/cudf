@@ -2620,8 +2620,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # Compute reduction result dtype
         col_dtype = col._reduction_result_dtype(op)
 
-        # Handle empty case
-        if len(col) <= col.null_count:
+        # Handle empty case - if column is all null or empty
+        if col.is_all_null or len(col) == 0:
             if op == "sum" or op == "sum_of_squares":
                 return col_dtype.type(0)
             if op == "product":

@@ -378,10 +378,10 @@ class CategoricalColumn(column.ColumnBase):
         Return col with *to_replace* replaced with *replacement*.
         """
         to_replace_col = column.as_column(to_replace)
-        if len(to_replace_col) == to_replace_col.null_count:
+        if to_replace_col.is_all_null:
             to_replace_col = to_replace_col.astype(self.categories.dtype)
         replacement_col = column.as_column(replacement)
-        if len(replacement_col) == replacement_col.null_count:
+        if replacement_col.is_all_null:
             replacement_col = replacement_col.astype(self.categories.dtype)
 
         if type(to_replace_col) is not type(replacement_col):
