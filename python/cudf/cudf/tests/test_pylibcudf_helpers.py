@@ -9,6 +9,8 @@ import pytest
 import cudf
 from cudf.core.column._pylibcudf_helpers import (
     all_strings_match_type,
+    count_false,
+    count_true,
     reduce_boolean_column,
 )
 
@@ -229,3 +231,71 @@ class TestIntegration:
         result = cudf.to_numeric(cudf.Series(["1.5", "2.7", "3.14"]))
         expected = cudf.Series([1.5, 2.7, 3.14], dtype="float64")
         cudf.testing.assert_series_equal(result, expected)
+
+
+class TestCountTrueCountFalse:
+    """Tests for count_true() and count_false() helper functions."""
+
+    def test_count_true_all_true(self):
+        """Test counting True values when all are True."""
+        col = cudf.core.column.as_column([True, True, True, True])
+        assert count_true(col) == 4
+
+    def test_count_true_all_false(self):
+        """Test counting True values when all are False."""
+        col = cudf.core.column.as_column([False, False, False])
+        assert count_true(col) == 0
+
+    def test_count_true_mixed(self):
+        """Test counting True values in mixed boolean column."""
+        col = cudf.core.column.as_column([True, False, True, False, True])
+        assert count_true(col) == 3
+
+    def test_count_true_with_nulls(self):
+        """Test that nulls are not counted as True."""
+        col = cudf.core.column.as_column([True, None, True, None, False])
+        assert count_true(col) == 2
+
+    def test_count_true_empty(self):
+        """Test counting True values in empty column."""
+        col = cudf.core.column.as_column([], dtype="bool")
+        assert count_true(col) == 0
+
+    def test_count_false_all_false(self):
+        """Test counting False values when all are False."""
+        col = cudf.core.column.as_column([False, False, False, False])
+        assert count_false(col) == 4
+
+    def test_count_false_all_true(self):
+        """Test counting False values when all are True."""
+        col = cudf.core.column.as_column([True, True, True])
+        assert count_false(col) == 0
+
+    def test_count_false_mixed(self):
+        """Test counting False values in mixed boolean column."""
+        col = cudf.core.column.as_column([True, False, True, False, True])
+        assert count_false(col) == 2
+
+    def test_count_false_with_nulls(self):
+        """Test that nulls are not counted as False."""
+        col = cudf.core.column.as_column([False, None, False, None, True])
+        assert count_false(col) == 2
+
+    def test_count_false_empty(self):
+        """Test counting False values in empty column."""
+        col = cudf.core.column.as_column([], dtype="bool")
+        assert count_false(col) == 0
+
+    def test_count_true_false_consistency(self):
+        """Test that count_true + count_false + null_count == len."""
+        col = cudf.core.column.as_column(
+            [True, False, None, True, False, None, True]
+        )
+        true_count = count_true(col)
+        false_count = count_false(col)
+        null_count = col.null_count
+        total = true_count + false_count + null_count
+        assert total == len(col)
+        assert true_count == 3
+        assert false_count == 2
+        assert null_count == 2

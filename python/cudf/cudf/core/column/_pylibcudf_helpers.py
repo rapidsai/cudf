@@ -391,6 +391,10 @@ def count_true(column: ColumnBase) -> int:
     uses pylibcudf's sum aggregation which treats True as 1 and False as 0.
     """
 
+    # Handle empty column case
+    if len(column) == 0:
+        return 0
+
     with column.access(mode="read", scope="internal"):
         result_scalar = plc.reduce.reduce(
             column.plc_column,
@@ -398,6 +402,9 @@ def count_true(column: ColumnBase) -> int:
             plc.types.DataType(plc.types.TypeId.INT64),
         )
         result = result_scalar.to_py()
+        # Handle None result (can happen with all-null columns)
+        if result is None:
+            return 0
         assert isinstance(result, int), f"Expected int, got {type(result)}"
         return result
 
