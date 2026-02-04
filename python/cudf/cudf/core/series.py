@@ -193,10 +193,8 @@ class _SeriesIlocIndexer(_FrameIndexer):
                 len(self._frame),
             )
         except KeyError as err:
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and "boolean label can not be used without a boolean index"
-                in str(err)
+            if "boolean label can not be used without a boolean index" in str(
+                err
             ):
                 raise ValueError(str(err)) from err
         return self._frame._getitem_preprocessed(indexing_spec)
@@ -711,17 +709,17 @@ class Series(SingleColumnFrame, IndexedFrame):
         0    12
         1    13
         2    14
-        dtype: int16
+        dtype: int32
         >>> s.dt.second
         0    0
         1    0
         2    0
-        dtype: int16
+        dtype: int32
         >>> s.dt.day
         0    3
         1    3
         2    3
-        dtype: int16
+        dtype: int32
 
         Returns
         -------
@@ -1554,12 +1552,11 @@ class Series(SingleColumnFrame, IndexedFrame):
             col = ColumnBase.create(col.plc_column, objs[0].dtype)
 
         result = cls._from_column(col, name=name, index=result_index)
-        if cudf.get_option("mode.pandas_compatible"):
-            if isinstance(result.index, DatetimeIndex):
-                try:
-                    result.index._freq = result.index.inferred_freq
-                except NotImplementedError:
-                    result.index._freq = None
+        if isinstance(result.index, DatetimeIndex):
+            try:
+                result.index._freq = result.index.inferred_freq
+            except NotImplementedError:
+                result.index._freq = None
         return result
 
     @property
@@ -1902,10 +1899,8 @@ class Series(SingleColumnFrame, IndexedFrame):
                 "The bool_only parameter is not supported for Series."
             )
         result = super().all(axis, skipna, **kwargs)
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(result, bool)
-            and not isinstance(self.dtype, pd.ArrowDtype)
+        if isinstance(result, bool) and not isinstance(
+            self.dtype, pd.ArrowDtype
         ):
             return np.bool_(result)
         return result
@@ -2033,15 +2028,6 @@ class Series(SingleColumnFrame, IndexedFrame):
     ) -> Self:
         if copy is None:
             copy = True
-        if cudf.get_option("mode.pandas_compatible"):
-            if inspect.isclass(dtype) and issubclass(
-                dtype, pd.api.extensions.ExtensionDtype
-            ):
-                msg = (
-                    f"Expected an instance of {dtype.__name__}, "
-                    "but got the class instead. Try instantiating 'dtype'."
-                )
-                raise TypeError(msg)
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:  # type: ignore[arg-type,operator]
                 raise KeyError(
@@ -2658,9 +2644,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             Parameters currently not supported is `level`.
         """
         valid_count = self.valid_count
-        if cudf.get_option("mode.pandas_compatible"):
-            return valid_count - self._column.nan_count
-        return valid_count
+        if is_pandas_nullable_extension_dtype(self.dtype):
+            return valid_count
+        return valid_count - self._column.nan_count
 
     @_performance_tracking
     def mode(self, dropna=True):
@@ -4281,13 +4267,10 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int16
         """
         res = self.series._column.weekday
-        if cudf.get_option("mode.pandas_compatible"):
-            # Pandas returns int64 for weekday
-            res = res.astype(
-                get_dtype_of_same_kind(
-                    self.series._column.dtype, np.dtype("int64")
-                )
-            )
+        # Pandas returns int64 for weekday
+        res = res.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int64"))
+        )
         return self._return_result_like_self(res)
 
     day_of_week = dayofweek
@@ -4622,13 +4605,6 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int16
         """
         res = self.series._column.days_in_month
-        if cudf.get_option("mode.pandas_compatible"):
-            # Pandas returns int64 for dayofweek
-            res = res.astype(
-                get_dtype_of_same_kind(
-                    self.series._column.dtype, np.dtype("int64")
-                )
-            )
         return self._return_result_like_self(res)
 
     daysinmonth = days_in_month

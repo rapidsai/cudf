@@ -6515,9 +6515,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     - (
                         col.null_count
                         + (
-                            col.nan_count
-                            if get_option("mode.pandas_compatible")
-                            else 0
+                            0
+                            if is_pandas_nullable_extension_dtype(col.dtype)
+                            else col.nan_count
                         )
                     )
                     for col in self._columns

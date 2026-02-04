@@ -833,10 +833,11 @@ namespace {
  * for non-dictionary, non-FLBA string pages.
  */
 struct compute_page_string_offset_size {
-  device_span<PageInfo const> pages;
   device_span<ColumnChunkDesc const> chunks;
+  size_t skip_rows;
+  size_t num_rows;
 
-  __device__ size_t operator()(size_t page_idx) const
+  __device__ size_t operator()(PageInfo const& page) const
   {
     // Mask for non-dictionary, non-delta string columns (same as used in decode kernel)
     constexpr uint32_t STRINGS_MASK_NON_DELTA_NON_DICT =
@@ -847,7 +848,6 @@ struct compute_page_string_offset_size {
             decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
             decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
 
-    auto const& page  = pages[page_idx];
     auto const& chunk = chunks[page.chunk_idx];
 
     // Check if this page is a non-dictionary string page using kernel mask
@@ -856,15 +856,41 @@ struct compute_page_string_offset_size {
     // Fixed length byte array: Offsets are fixed, no need to allocate offset buffer
     if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
 
-    // Estimate number of offsets based on page.num_input_values
-    // This is an upper bound estimate since we compute this before knowing:
-    // - exact batch sizes for list columns after preprocessing
-    // - which rows will be skipped due to subpass boundaries
-    // We add 1 for the final offset
-    auto const num_offsets = page.num_input_values + 1;
+    // Determine how many values need offsets
+    size_t const num_values = precompute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
+    if (num_values == 0) { return 0; }
+
+    // We need num_values + 1 offsets (one extra for the final offset)
+    auto const num_offsets = num_values + 1;
 
     // Return size in bytes (uint32_t per offset)
     return num_offsets * sizeof(uint32_t);
+  }
+};
+
+/**
+ * @brief Functor to compute the level decode buffer size needed for a page.
+ *
+ * This computes the memory needed to store definition and repetition levels.
+ */
+struct compute_page_level_decode_size {
+  cudf::device_span<ColumnChunkDesc const> chunks;
+  int level_type_size;
+  size_t skip_rows;
+  size_t num_rows;
+
+  __device__ size_t operator()(PageInfo const& page) const
+  {
+    size_t def_level_size = 0;
+    size_t rep_level_size = 0;
+    compute_page_level_decode_sizes(page,
+                                    chunks[page.chunk_idx],
+                                    level_type_size,
+                                    skip_rows,
+                                    num_rows,
+                                    def_level_size,
+                                    rep_level_size);
+    return def_level_size + rep_level_size;
   }
 };
 
@@ -872,18 +898,39 @@ struct compute_page_string_offset_size {
 
 rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkDesc const> chunks,
                                                         device_span<PageInfo const> pages,
-                                                        rmm::cuda_stream_view stream)
+                                                        size_t skip_rows,
+                                                        size_t num_rows,
+                                                        rmm::cuda_stream_view stream,
+                                                        rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<size_t> string_offset_sizes(pages.size(), stream);
+  rmm::device_uvector<size_t> string_offset_sizes(pages.size(), stream, mr);
 
-  auto iter = thrust::make_counting_iterator(size_t{0});
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    iter,
-                    iter + pages.size(),
+                    pages.begin(),
+                    pages.end(),
                     string_offset_sizes.begin(),
-                    compute_page_string_offset_size{pages, chunks});
+                    compute_page_string_offset_size{chunks, skip_rows, num_rows});
 
   return string_offset_sizes;
+}
+
+rmm::device_uvector<size_t> compute_level_decode_sizes(device_span<ColumnChunkDesc const> chunks,
+                                                       device_span<PageInfo const> pages,
+                                                       int level_type_size,
+                                                       size_t skip_rows,
+                                                       size_t num_rows,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::device_async_resource_ref mr)
+{
+  rmm::device_uvector<size_t> level_decode_sizes(pages.size(), stream, mr);
+
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    pages.begin(),
+                    pages.end(),
+                    level_decode_sizes.begin(),
+                    compute_page_level_decode_size{chunks, level_type_size, skip_rows, num_rows});
+
+  return level_decode_sizes;
 }
 
 }  // namespace cudf::io::parquet::detail
