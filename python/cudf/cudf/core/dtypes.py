@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import decimal
+import inspect
 import operator
 import textwrap
 import warnings
@@ -21,6 +22,7 @@ import pylibcudf as plc
 import cudf
 from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.utils.docutils import doc_apply
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -63,7 +65,14 @@ def dtype(arbitrary: Any) -> DtypeObj:
     #  first, check if `arbitrary` is one of our extension types:
     if isinstance(arbitrary, (_BaseDtype, pd.DatetimeTZDtype)):
         return arbitrary
-
+    if inspect.isclass(arbitrary) and issubclass(
+        arbitrary, pd.api.extensions.ExtensionDtype
+    ):
+        msg = (
+            f"Expected an instance of {arbitrary.__name__}, "
+            "but got the class instead. Try instantiating 'dtype'."
+        )
+        raise TypeError(msg)
     # next, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
@@ -995,9 +1004,13 @@ class IntervalDtype(_BaseDtype):
             self._fields = {}
         else:
             self._subtype = cudf.dtype(subtype)
-            if isinstance(
-                self._subtype, cudf.CategoricalDtype
-            ) or cudf.utils.dtypes.is_dtype_obj_string(self._subtype):
+            # TODO: Remove self._subtype.kind == "U" once cudf.dtype no longer accepts
+            # numpy string types
+            if (
+                isinstance(self._subtype, CategoricalDtype)
+                or is_dtype_obj_string(self._subtype)
+                or self._subtype.kind == "U"
+            ):
                 raise TypeError(
                     "category, object, and string subtypes are not supported "
                     "for IntervalDtype"
@@ -1327,26 +1340,30 @@ def is_interval_dtype(obj):
 def is_decimal32_dtype(obj):
     return (
         type(obj) is Decimal32Dtype
-        or obj is Decimal32Dtype
-        or (isinstance(obj, str) and obj == Decimal32Dtype.name)
         or (hasattr(obj, "dtype") and is_decimal32_dtype(obj.dtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and pa.types.is_decimal(obj.pyarrow_dtype)
+            and isinstance(obj.pyarrow_dtype, pa.lib.Decimal32Type)
+        )
     )
 
 
 def is_decimal64_dtype(obj):
     return (
         type(obj) is Decimal64Dtype
-        or obj is Decimal64Dtype
-        or (isinstance(obj, str) and obj == Decimal64Dtype.name)
         or (hasattr(obj, "dtype") and is_decimal64_dtype(obj.dtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and pa.types.is_decimal(obj.pyarrow_dtype)
+            and isinstance(obj.pyarrow_dtype, pa.lib.Decimal64Type)
+        )
     )
 
 
 def is_decimal128_dtype(obj):
     return (
         type(obj) is Decimal128Dtype
-        or obj is Decimal128Dtype
-        or (isinstance(obj, str) and obj == Decimal128Dtype.name)
         or (hasattr(obj, "dtype") and is_decimal128_dtype(obj.dtype))
         or (
             isinstance(obj, pd.ArrowDtype)

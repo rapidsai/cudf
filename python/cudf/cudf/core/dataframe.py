@@ -62,6 +62,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -107,7 +108,6 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
-    is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
@@ -2106,13 +2106,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             out.index.name = objs[0].index.name
             out.index.names = objs[0].index.names
 
-        # frequency inference in compat mode only
-        if cudf.get_option("mode.pandas_compatible"):
-            if isinstance(out.index, DatetimeIndex):
-                try:
-                    out.index._freq = out.index.inferred_freq
-                except NotImplementedError:
-                    out.index._freq = None
+        if isinstance(out.index, DatetimeIndex):
+            try:
+                out.index._freq = out.index.inferred_freq
+            except NotImplementedError:
+                out.index._freq = None
         return out
 
     def astype(
@@ -6517,9 +6515,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     - (
                         col.null_count
                         + (
-                            col.nan_count
-                            if get_option("mode.pandas_compatible")
-                            else 0
+                            0
+                            if is_pandas_nullable_extension_dtype(col.dtype)
+                            else col.nan_count
                         )
                     )
                     for col in self._columns
@@ -6649,67 +6647,66 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     axis_0_results = pd.Index(
                         axis_0_results, dtype=f"m8[{unit}]"
                     )
+                # For max/min operations, preserve the original dtype since
+                # Python scalars (int, float) would otherwise widen to int64/float64
+                result_dtype = common_dtype if op in {"max", "min"} else None
                 res = as_column(
                     axis_0_results,
                     nan_as_null=not cudf.get_option("mode.pandas_compatible"),
+                    dtype=result_dtype,
                 )
 
-                if cudf.get_option("mode.pandas_compatible"):
-                    res_dtype = res.dtype
-                    if res.isnull().all():
-                        if cudf.api.types.is_numeric_dtype(common_dtype):
-                            if op in {"sum", "product"}:
-                                if (
-                                    common_dtype is not None
-                                    and common_dtype.kind == "f"
-                                ):
-                                    res_dtype = (
-                                        np.dtype("float64")
-                                        if isinstance(
-                                            common_dtype, pd.ArrowDtype
-                                        )
-                                        else common_dtype
-                                    )
-                                elif (
-                                    common_dtype is not None
-                                    and common_dtype.kind == "u"
-                                ):
-                                    res_dtype = np.dtype("uint64")
-                                else:
-                                    res_dtype = np.dtype("int64")
-                            elif op == "sum_of_squares":
-                                res_dtype = find_common_type(
-                                    (common_dtype, np.dtype(np.uint64))
+                res_dtype = res.dtype
+                if res.isnull().all():
+                    if cudf.api.types.is_numeric_dtype(common_dtype):
+                        if op in {"sum", "product"}:
+                            if (
+                                common_dtype is not None
+                                and common_dtype.kind == "f"
+                            ):
+                                res_dtype = (
+                                    np.dtype("float64")
+                                    if isinstance(common_dtype, pd.ArrowDtype)
+                                    else common_dtype
                                 )
-                            elif op in {
-                                "var",
-                                "std",
-                                "mean",
-                                "skew",
-                                "median",
-                            }:
-                                if (
-                                    common_dtype is not None
-                                    and common_dtype.kind == "f"
-                                ):
-                                    res_dtype = (
-                                        np.dtype("float64")
-                                        if isinstance(
-                                            common_dtype, pd.ArrowDtype
-                                        )
-                                        else common_dtype
-                                    )
-                                else:
-                                    res_dtype = np.dtype("float64")
-                            elif op in {"max", "min"}:
-                                res_dtype = common_dtype
-                        if op in {"any", "all"}:
-                            res_dtype = np.dtype(np.bool_)
-                    res = res.nans_to_nulls()
-                    new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
-                    res = res.astype(new_dtype)
+                            elif (
+                                common_dtype is not None
+                                and common_dtype.kind == "u"
+                            ):
+                                res_dtype = np.dtype("uint64")
+                            else:
+                                res_dtype = np.dtype("int64")
+                        elif op == "sum_of_squares":
+                            res_dtype = find_common_type(
+                                (common_dtype, np.dtype(np.uint64))
+                            )
+                        elif op in {
+                            "var",
+                            "std",
+                            "mean",
+                            "skew",
+                            "median",
+                        }:
+                            if (
+                                common_dtype is not None
+                                and common_dtype.kind == "f"
+                            ):
+                                res_dtype = (
+                                    np.dtype("float64")
+                                    if isinstance(common_dtype, pd.ArrowDtype)
+                                    else common_dtype
+                                )
+                            else:
+                                res_dtype = np.dtype("float64")
+                        elif op in {"max", "min"}:
+                            res_dtype = common_dtype
+                    if op in {"any", "all"}:
+                        res_dtype = np.dtype(np.bool_)
+                res = res.nans_to_nulls()
+                new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
+                res = res.astype(new_dtype)
 
-                return Series._from_column(res, index=idx, attrs=self.attrs)
+            return Series._from_column(res, index=idx, attrs=self.attrs)
 
     @_performance_tracking
     def _scan(
@@ -6965,10 +6962,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 else None
             )
 
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and result_dtype is None
-                and is_pandas_nullable_extension_dtype(common_dtype)
+            if result_dtype is None and is_pandas_nullable_extension_dtype(
+                common_dtype
             ):
                 if (
                     method
@@ -7005,7 +7000,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             result = as_column(result, dtype=result_dtype)
             if mask is not None:
-                result = result.set_mask(mask._column.as_mask())
+                mask_buff, null_count = mask._column.as_mask()
+                result = result.set_mask(mask_buff, null_count)
             return Series._from_column(
                 result, index=self.index, attrs=self.attrs
             )
@@ -7618,12 +7614,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             with access_columns(  # type: ignore[assignment]
                 *homogenized, mode="read", scope="internal"
             ) as homogenized:
-                interleaved_col = ColumnBase.from_pylibcudf(
-                    plc.reshape.interleave_columns(
-                        plc.Table([col.plc_column for col in homogenized])
-                    )
+                interleaved_col = plc.reshape.interleave_columns(
+                    plc.Table([col.plc_column for col in homogenized])
                 )
-            stacked.append(interleaved_col._with_type_metadata(common_type))
+            stacked.append(ColumnBase.create(interleaved_col, common_type))
 
         # Construct the resulting dataframe / series
         if not has_unnamed_levels:
@@ -8486,8 +8480,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:
             cudf_cols = (
-                col._with_type_metadata(
-                    recursively_update_struct_names(col.dtype, cn)
+                ColumnBase.create(
+                    col.plc_column,
+                    recursively_update_struct_names(col.dtype, cn),
                 )
                 for col, cn in zip(
                     cudf_cols, child_names.values(), strict=True

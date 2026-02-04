@@ -11,11 +11,9 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase
+from cudf.core.dtype.validators import is_dtype_obj_struct
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import (
-    dtype_from_pylibcudf_column,
-    is_dtype_obj_struct,
-)
+from cudf.utils.dtypes import dtype_from_pylibcudf_column
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
@@ -104,11 +102,15 @@ class StructColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        # We cannot go via Arrow's `to_pandas` because of the following issue:
-        # https://issues.apache.org/jira/browse/ARROW-12680
-        if arrow_type or nullable or isinstance(self.dtype, pd.ArrowDtype):
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        elif nullable and not arrow_type:
+            raise NotImplementedError(
+                f"pandas does not have a native nullable type for {self.dtype}."
+            )
         else:
+            # We cannot go via Arrow's `to_pandas` because of the following issue:
+            # https://github.com/apache/arrow/issues/28428
             return pd.Index(self.to_arrow().tolist(), dtype="object")
 
     def element_indexing(self, index: int) -> dict[Any, Any] | None:
