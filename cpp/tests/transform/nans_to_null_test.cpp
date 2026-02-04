@@ -116,10 +116,10 @@ TYPED_TEST(NaNsToNullTest, EmptyColumn)
 {
   using T = TypeParam;
 
-  std::vector<T> input = {};
-  auto input_column    = cudf::test::fixed_width_column_wrapper<T>(input.begin(), input.end());
-  auto expected_column = this->create_expected(input);
-  this->run_test(input_column, expected_column->view());
+  // std::vector<T> input = {};
+  auto input_column = cudf::test::fixed_width_column_wrapper<T>({});
+  // auto expected_column = this->create_expected(input);
+  this->run_test(input_column, input_column);
 }
 
 struct NaNsToNullFailTest : public cudf::test::BaseFixture {};
@@ -130,7 +130,7 @@ TEST_F(NaNsToNullFailTest, StringType)
     "", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end());
 
-  EXPECT_THROW(cudf::column_nans_to_nulls(input), cudf::logic_error);
+  EXPECT_THROW(cudf::column_nans_to_nulls(input), std::invalid_argument);
 }
 
 TEST_F(NaNsToNullFailTest, IntegerType)
@@ -138,5 +138,11 @@ TEST_F(NaNsToNullFailTest, IntegerType)
   std::vector<int32_t> input = {1, 2, 3, 4, 5, 6};
   auto input_column = cudf::test::fixed_width_column_wrapper<int32_t>(input.begin(), input.end());
 
-  EXPECT_THROW(cudf::column_nans_to_nulls(input_column), cudf::logic_error);
+  EXPECT_THROW(cudf::column_nans_to_nulls(input_column), std::invalid_argument);
+}
+
+TEST_F(NaNsToNullFailTest, EmptyColumn)
+{
+  auto input_column = cudf::test::fixed_width_column_wrapper<int32_t>({});
+  EXPECT_THROW(cudf::column_nans_to_nulls(input_column), std::invalid_argument);
 }

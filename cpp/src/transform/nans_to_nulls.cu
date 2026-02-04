@@ -18,6 +18,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
@@ -32,7 +33,8 @@ struct dispatch_nan_to_null {
     auto input_device_view     = *input_device_view_ptr;
 
     auto pred = [input_device_view] __device__(cudf::size_type idx) {
-      return not(std::isnan(input_device_view.element<T>(idx)) || input_device_view.is_null(idx));
+      return not(cuda::std::isnan(input_device_view.element<T>(idx)) ||
+                 input_device_view.is_null(idx));
     };
 
     auto mask = detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
@@ -56,6 +58,9 @@ struct dispatch_nan_to_null {
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
   column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(cudf::is_floating_point(input.type()),
+               "Input must be a floating point type",
+               std::invalid_argument);
   if (input.is_empty()) { return std::pair(std::make_unique<rmm::device_buffer>(), 0); }
 
   return cudf::type_dispatcher(input.type(), dispatch_nan_to_null{}, input, stream, mr);
@@ -86,6 +91,9 @@ std::unique_ptr<column> column_nans_to_nulls(column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(cudf::is_floating_point(input.type()),
+               "Input must be a floating point type",
+               std::invalid_argument);
   if (input.is_empty()) { return make_empty_column(input.type()); }
 
   auto [null_mask, null_count] =
