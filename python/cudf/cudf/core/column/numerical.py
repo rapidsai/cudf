@@ -259,6 +259,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         else:
             col = as_column(value)
+            # Cache dtype.kind to avoid repeated attribute access
             if col.dtype.kind == "b" and self.dtype.kind != "b":
                 raise TypeError(
                     f"Invalid value {value} for dtype {self.dtype}"
@@ -266,9 +267,11 @@ class NumericalColumn(NumericalBaseColumn):
             return col.astype(self.dtype)
 
     def __invert__(self) -> ColumnBase:
-        if self.dtype.kind in "ui":
+        # Cache dtype.kind for multiple checks
+        dtype_kind = self.dtype.kind
+        if dtype_kind in "ui":
             return self.unary_operator("invert")
-        elif self.dtype.kind == "b":
+        elif dtype_kind == "b":
             return self.unary_operator("not")
         else:
             return super().__invert__()

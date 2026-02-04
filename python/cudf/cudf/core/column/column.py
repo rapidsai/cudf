@@ -2793,10 +2793,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ]
             )
         other_col = as_column(other)
+        # Cache dtype.kind to avoid repeated attribute access
+        self_kind = self.dtype.kind
+        other_kind = other_col.dtype.kind
+        common_kind = common_dtype.kind
+
         if (
             is_mixed_with_object_dtype(other_col, self)
-            or (self.dtype.kind == "b" and common_dtype.kind != "b")
-            or (other_col.dtype.kind == "b" and self.dtype.kind != "b")
+            or (self_kind == "b" and common_kind != "b")
+            or (other_kind == "b" and self_kind != "b")
         ):
             raise TypeError(mixed_err)
 
