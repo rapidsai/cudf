@@ -167,6 +167,34 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                 # Some nodes (e.g. ErrorNode) don't have a do_evaluate method
                 continue
 
+            # check that do_evaluate is a classmethod
+            if (
+                not isinstance(method_node.decorator_list, list)
+                or len(method_node.decorator_list) == 0
+            ):
+                records.append(
+                    {
+                        "cls": class_name,
+                        "arg": "do_evaluate",
+                        "error": "do_evaluate is not a classmethod",
+                        "lineno": method_node.lineno,
+                        "filename": filename,
+                    }
+                )
+            elif (
+                not isinstance(method_node.decorator_list[0], ast.Name)
+                or method_node.decorator_list[0].id != "classmethod"
+            ):
+                records.append(
+                    {
+                        "cls": class_name,
+                        "arg": "do_evaluate",
+                        "error": "do_evaluate is not a classmethod",
+                        "lineno": method_node.lineno,
+                        "filename": filename,
+                    }
+                )
+
             do_evaluate_params = get_do_evaluate_params(method_node)
 
             for i, nc in enumerate(non_child):
