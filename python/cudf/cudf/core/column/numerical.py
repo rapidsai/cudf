@@ -17,6 +17,10 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import as_buffer
+from cudf.core.column._pylibcudf_helpers import (
+    isnull_including_nan,
+    notnull_excluding_nan,
+)
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
@@ -204,16 +208,7 @@ class NumericalColumn(NumericalBaseColumn):
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
             return as_column(False, length=len(self))
 
-        with self.access(mode="read", scope="internal"):
-            result = ColumnBase.create(
-                plc.unary.is_null(self.plc_column), np.dtype(np.bool_)
-            )
-
-        if self.dtype.kind == "f":
-            # For floats, NaN should be considered null
-            result = result | self.isnan()
-
-        return result
+        return isnull_including_nan(self)
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column.
@@ -223,14 +218,7 @@ class NumericalColumn(NumericalBaseColumn):
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
             result = as_column(True, length=len(self))
         else:
-            with self.access(mode="read", scope="internal"):
-                result = ColumnBase.create(
-                    plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
-                )
-
-            if self.dtype.kind == "f":
-                # For floats, NaN should be considered null
-                result = result & self.notnan()
+            result = notnull_excluding_nan(self)
 
         if cudf.get_option("mode.pandas_compatible"):
             return result

@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 __all__ = [
     "all_strings_match_type",
     "fillna_bool_false",
+    "isnull_including_nan",
+    "notnull_excluding_nan",
     "reduce_boolean_column",
 ]
 
@@ -194,3 +196,113 @@ def fillna_bool_false(column: ColumnBase) -> ColumnBase:
         false_scalar = plc.Scalar.from_py(False)
         result_plc = plc.replace.replace_nulls(column.plc_column, false_scalar)
         return ColumnBase.from_pylibcudf(result_plc)
+
+
+def isnull_including_nan(column: ColumnBase) -> ColumnBase:
+    """Check for null values including NaN for float columns.
+
+    This is more efficient than calling is_null() | isnan() because it
+    combines both checks in a single operation.
+
+    Parameters
+    ----------
+    column : ColumnBase
+        Numerical column to check for nulls
+
+    Returns
+    -------
+    ColumnBase
+        Boolean column with True where values are null or NaN
+
+    Examples
+    --------
+    Instead of:
+
+        result = is_null_col | isnan_col  # Two column allocations
+
+    Use:
+
+        from cudf.core.column._pylibcudf_helpers import isnull_including_nan
+        result = isnull_including_nan(col)
+
+    Notes
+    -----
+    For float columns, both null mask nulls and NaN values are considered null.
+    For non-float columns, this is equivalent to is_null().
+    """
+    import numpy as np
+
+    from cudf.core.column.column import ColumnBase
+
+    with column.access(mode="read", scope="internal"):
+        # Get null mask
+        is_null_plc = plc.unary.is_null(column.plc_column)
+
+        # For float types, also check for NaN
+        if column.dtype.kind == "f":
+            is_nan_plc = plc.unary.is_nan(column.plc_column)
+            # Combine using bitwise OR
+            result_plc = plc.binaryop.binary_operation(
+                is_null_plc,
+                is_nan_plc,
+                plc.binaryop.BinaryOperator.BITWISE_OR,
+                plc.types.DataType(plc.types.TypeId.BOOL8),
+            )
+            return ColumnBase.from_pylibcudf(result_plc)
+        else:
+            return ColumnBase.create(is_null_plc, np.dtype(np.bool_))
+
+
+def notnull_excluding_nan(column: ColumnBase) -> ColumnBase:
+    """Check for non-null values excluding NaN for float columns.
+
+    This is more efficient than calling is_valid() & notnan() because it
+    combines both checks in a single operation.
+
+    Parameters
+    ----------
+    column : ColumnBase
+        Numerical column to check for non-nulls
+
+    Returns
+    -------
+    ColumnBase
+        Boolean column with True where values are not null and not NaN
+
+    Examples
+    --------
+    Instead of:
+
+        result = is_valid_col & notnan_col  # Two column allocations
+
+    Use:
+
+        from cudf.core.column._pylibcudf_helpers import notnull_excluding_nan
+        result = notnull_excluding_nan(col)
+
+    Notes
+    -----
+    For float columns, both null mask nulls and NaN values are considered null.
+    For non-float columns, this is equivalent to is_valid().
+    """
+    import numpy as np
+
+    from cudf.core.column.column import ColumnBase
+
+    with column.access(mode="read", scope="internal"):
+        # Get validity mask
+        is_valid_plc = plc.unary.is_valid(column.plc_column)
+
+        # For float types, also check for non-NaN
+        if column.dtype.kind == "f":
+            is_not_nan_plc = plc.unary.is_not_nan(column.plc_column)
+            # Combine using bitwise AND
+            result_plc = plc.binaryop.binary_operation(
+                is_valid_plc,
+                is_not_nan_plc,
+                plc.binaryop.BinaryOperator.BITWISE_AND,
+                plc.types.DataType(plc.types.TypeId.BOOL8),
+            )
+            return ColumnBase.from_pylibcudf(result_plc)
+        else:
+            return ColumnBase.create(is_valid_plc, np.dtype(np.bool_))
