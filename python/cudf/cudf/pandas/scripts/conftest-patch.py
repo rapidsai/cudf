@@ -8212,7 +8212,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS_WITH_REASON: dict[str, set[str]] = {
         "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_array[int64-__rfloordiv__]",
     },
     "https://github.com/rapidsai/cudf/issues/18659#issuecomment-3710985854": {
-        "tests/extension/test_arrow.py::test_pickle_roundtrip[decimal128(7, 3)]",
         "tests/extension/test_arrow.py::test_pickle_roundtrip[string]",
         "tests/arrays/string_/test_string_arrow.py::test_pickle_roundtrip[na_value0]",
         "tests/arrays/string_/test_string_arrow.py::test_pickle_roundtrip[nan]",
