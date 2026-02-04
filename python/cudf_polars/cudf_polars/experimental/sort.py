@@ -613,7 +613,7 @@ def _(
     if (
         config_options.executor.name == "streaming"
         and config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+    ):  # pragma: no cover; Requires rapidsmpf runtime
         return _lower_ir_fallback(
             ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
         )

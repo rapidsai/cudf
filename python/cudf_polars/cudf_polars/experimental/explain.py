@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
@@ -64,7 +64,7 @@ def explain_query(
         if (
             config.executor.name == "streaming"
             and config.executor.runtime == "rapidsmpf"
-        ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+        ):  # pragma: no cover; Requires rapidsmpf runtime
             from cudf_polars.experimental.rapidsmpf.core import (
                 lower_ir_graph as rapidsmpf_lower_ir_graph,
             )
