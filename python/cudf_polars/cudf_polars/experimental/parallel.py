@@ -230,7 +230,7 @@ def post_process_task_graph(
 def evaluate_rapidsmpf(
     ir: IR,
     config_options: ConfigOptions,
-) -> pl.DataFrame:  # pragma: no cover; Requires rapidsmpf runtime
+) -> pl.DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
     """
     Evaluate with the RapidsMPF streaming runtime.
 
@@ -275,7 +275,7 @@ def evaluate_streaming(
     assert config_options.executor.name == "streaming", "Executor must be streaming"
     if (
         config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
+    ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
         # Using the RapidsMPF streaming runtime.
         return evaluate_rapidsmpf(ir, config_options)
     else:
