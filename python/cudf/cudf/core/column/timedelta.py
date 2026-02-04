@@ -128,7 +128,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
         return super().__contains__(item.to_numpy())
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        # import pdb;pdb.set_trace()
         reflect, op = self._check_reflected_op(op)
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
