@@ -739,7 +739,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             If the dtype is incompatible with the Column.
         """
         # Skip validation for empty columns (INT8 with all nulls). These are created
-        # by _wrap_buffers() from EMPTY columns and may have inaccurate dtype metadata.
+        # by _wrap_buffers() when libcudf reports EMPTY columns and may have
+        # inaccurate dtype metadata.
         # For example, an empty list [] has element_type=object but child is INT8.
         if (
             col.type().id() == plc.TypeId.INT8
@@ -1116,6 +1117,46 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ]
         dtype: int8
         """
+
+        def _convert_null_types(typ: pa.DataType) -> pa.DataType:
+            """Recursively convert null types in nested structures to int8."""
+            if pa.types.is_null(typ):
+                return pa.int8()
+            elif pa.types.is_list(typ):
+                value_field = typ.value_field.with_type(
+                    _convert_null_types(typ.value_field.type)
+                )
+                return pa.list_(value_field)
+            elif pa.types.is_large_list(typ):
+                value_field = typ.value_field.with_type(
+                    _convert_null_types(typ.value_field.type)
+                )
+                return pa.large_list(value_field)
+            elif pa.types.is_fixed_size_list(typ):
+                value_field = typ.value_field.with_type(
+                    _convert_null_types(typ.value_field.type)
+                )
+                return pa.list_(value_field, list_size=typ.list_size)
+            elif pa.types.is_map(typ):
+                key_field = typ.key_field.with_type(
+                    _convert_null_types(typ.key_field.type)
+                )
+                item_field = typ.item_field.with_type(
+                    _convert_null_types(typ.item_field.type)
+                )
+                return cast(Any, pa.map_)(
+                    key_field, item_field, keys_sorted=typ.keys_sorted
+                )
+            elif pa.types.is_struct(typ):
+                return pa.struct(
+                    [
+                        field.with_type(_convert_null_types(field.type))
+                        for field in typ
+                    ]
+                )
+            else:
+                return typ
+
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
         elif pa.types.is_float16(array.type):
@@ -1129,6 +1170,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         elif pa.types.is_null(array.type):
             # default "empty" type
             array = array.cast(pa.string())
+        elif (
+            pa.types.is_list(array.type)
+            or pa.types.is_large_list(array.type)
+            or pa.types.is_fixed_size_list(array.type)
+            or pa.types.is_map(array.type)
+            or pa.types.is_struct(array.type)
+        ):
+            # Convert any null-typed children to int8 to match libcudf's representation
+            new_type = _convert_null_types(array.type)
+            if new_type != array.type:
+                array = array.cast(new_type)
 
         if pa.types.is_dictionary(array.type):
             if isinstance(array, pa.Array):
