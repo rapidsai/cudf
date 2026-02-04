@@ -8,7 +8,7 @@ Check IR node consistency in cudf_polars.
 Verifies that the `do_evaluate` method signatures in IR subclasses
 
 - Are a classmethod
-- Accept `*_non_child` positional arguments, followed by
+- Accept `*_non_child_args` positional arguments, followed by
 - `*children` positional arguments, followed by
 - A keyword-only `context` argument
 """
@@ -29,32 +29,15 @@ class ErrorRecord(typing.TypedDict):
     filename: str
 
 
-def extract_tuple_from_node(node: ast.AST) -> tuple[str, ...] | None:
-    """Extract a tuple of strings from an AST node."""
-    if isinstance(node, ast.Tuple):
-        return tuple(
-            str(elt.value)
-            for elt in node.elts
-            if isinstance(elt, ast.Constant)
-        )
-    return None
-
-
-def get_non_child(class_node: ast.ClassDef) -> tuple[str, ...] | None:
-    """Get _non_child attribute from a class definition."""
-    for item in class_node.body:
-        # Handle annotated assignment: _non_child: ClassVar[...] = (...)
-        if isinstance(item, ast.AnnAssign) and isinstance(
-            item.target, ast.Name
-        ):
-            if item.target.id == "_non_child" and item.value:
-                return extract_tuple_from_node(item.value)
-        # Handle regular assignment: _non_child = (...)
-        elif isinstance(item, ast.Assign):
-            for target in item.targets:
-                if isinstance(target, ast.Name) and target.id == "_non_child":
-                    return extract_tuple_from_node(item.value)
-    return None
+def extract_name_from_node(node: ast.expr) -> str | None:
+    """Extract a name from an AST node."""
+    match node:
+        case ast.Name(id=id):
+            return id
+        case ast.Attribute(value=value, attr=attr):
+            return extract_name_from_node(value) + "." + attr
+        case _:
+            return str(node)
 
 
 def get_node(class_node: ast.ClassDef, name: str) -> ast.FunctionDef | None:
@@ -81,7 +64,7 @@ def get_node(class_node: ast.ClassDef, name: str) -> ast.FunctionDef | None:
     return None
 
 
-def get_non_child_args_length(init_node: ast.FunctionDef) -> int | None:
+def get_non_child_args(init_node: ast.FunctionDef) -> list[ast.expr] | None:
     """
     Get the length of the tuple assigned to self._non_child_args in __init__.
     Returns None if the assignment is not found or is not a tuple.
@@ -99,7 +82,7 @@ def get_non_child_args_length(init_node: ast.FunctionDef) -> int | None:
                 ):
                     # Check if the value is a tuple
                     if isinstance(stmt.value, ast.Tuple):
-                        return len(stmt.value.elts)
+                        return stmt.value.elts
     return None
 
 
@@ -157,9 +140,12 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                 continue
 
             class_name = node.name
+            init_node = get_node(node, "__init__")
+            if init_node is None:
+                continue
 
-            non_child = get_non_child(node)
-            if non_child is None:
+            non_child_args = get_non_child_args(init_node)
+            if non_child_args is None:
                 continue
 
             method_node = get_node(node, "do_evaluate")
@@ -197,27 +183,20 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
 
             do_evaluate_params = get_do_evaluate_params(method_node)
 
-            for i, nc in enumerate(non_child):
-                if nc not in do_evaluate_params:
-                    records.append(
-                        {
-                            "cls": class_name,
-                            "arg": nc,
-                            "error": "Missing",
-                            "lineno": method_node.lineno,
-                            "filename": filename,
-                        }
-                    )
-                elif do_evaluate_params.index(nc) != i:
-                    records.append(
-                        {
-                            "cls": class_name,
-                            "arg": nc,
-                            "error": "Wrong position",
-                            "lineno": method_node.lineno,
-                            "filename": filename,
-                        }
-                    )
+            # Check that the self._non_child_args assignment matches IR.do_evaluate
+            if len(non_child_args) != len(
+                do_evaluate_params[: len(non_child_args)]
+            ):
+                names = [extract_name_from_node(arg) for arg in non_child_args]
+                records.append(
+                    {
+                        "cls": class_name,
+                        "arg": "non_child_args",
+                        "error": f"Mismatch between number of non-child arguments (expected {names}, found {do_evaluate_params})",
+                        "lineno": method_node.lineno,
+                        "filename": filename,
+                    }
+                )
 
             # Check that all *remaining* args in do_evaluate are 'DataFrame' type
             regular_args = [
@@ -229,8 +208,7 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
             if method_node.args.vararg is not None:
                 regular_args.append(method_node.args.vararg)
 
-            # Check args after _non_child parameters
-            for arg in regular_args[len(non_child) :]:
+            for arg in regular_args[len(non_child_args) :]:
                 type_name = get_type_annotation_name(arg.annotation)
                 if type_name != "DataFrame":
                     records.append(
@@ -279,29 +257,13 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                         }
                     )
 
-            # Check that __init__ assigns self._non_child_args with matching length
-            init_node = get_node(node, "__init__")
-            if init_node is not None:
-                non_child_args_length = get_non_child_args_length(init_node)
-                if non_child_args_length is not None:
-                    if non_child_args_length != len(non_child):
-                        records.append(
-                            {
-                                "cls": class_name,
-                                "arg": "_non_child_args",
-                                "error": "Mismatch between 'self._non_child_args' and 'cls._non_child'",
-                                "lineno": init_node.lineno,
-                                "filename": filename,
-                            }
-                        )
-
     return records
 
 
 def main() -> int:
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
-        description="Check IR node do_evaluate signatures match _non_child declarations"
+        description="Check IR node do_evaluate signatures match _non_child_args declarations"
     )
     parser.add_argument(
         "files",
