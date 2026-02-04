@@ -7,7 +7,6 @@ from __future__ import annotations
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeAlias, TypedDict
 
-from cudf_polars.dsl.ir import IR
 from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
@@ -15,35 +14,13 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import (
         PartitionInfo,
         StatsCollector,
     )
     from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
     from cudf_polars.utils.config import ConfigOptions
-
-
-class LowerState(TypedDict):
-    """
-    State used for lowering an IR node.
-
-    Parameters
-    ----------
-    config_options
-        GPUEngine configuration options.
-    stats
-        Statistics collector.
-    """
-
-    config_options: ConfigOptions
-    stats: StatsCollector
-
-
-LowerIRTransformer: TypeAlias = GenericTransformer[
-    "IR", "tuple[IR, MutableMapping[IR, PartitionInfo]]", LowerState
-]
-"""Protocol for Lowering IR nodes."""
 
 
 class FanoutInfo(NamedTuple):
@@ -94,49 +71,6 @@ SubNetGenerator: TypeAlias = GenericTransformer[
     "IR", "tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]", GenState
 ]
 """Protocol for Generating a streaming sub-network."""
-
-
-@singledispatch
-def lower_ir_node(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """
-    Rewrite an IR node and extract partitioning information.
-
-    Parameters
-    ----------
-    ir
-        IR node to rewrite.
-    rec
-        Recursive LowerIRTransformer callable.
-
-    Returns
-    -------
-    new_ir, partition_info
-        The rewritten node, and a mapping from unique nodes in
-        the full IR graph to associated partitioning information.
-
-    Notes
-    -----
-    This function is distinct from the `lower_ir_node` function
-    in the `parallel` module, because the lowering logic for the
-    streaming runtime is different for some IR sub-classes.
-
-    See Also
-    --------
-    lower_ir_graph
-    """
-    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
-
-
-@lower_ir_node.register(IR)
-def _lower_ir_node_base_fallback(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """Fallback to base task-engine lowering logic for unregistered types."""
-    from cudf_polars.experimental.dispatch import lower_ir_node as base_lower_ir_node
-
-    return base_lower_ir_node(ir, rec)
 
 
 @singledispatch

@@ -68,6 +68,12 @@ def _(
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
+    # RapidsMPF runtime: Use rapidsmpf-specific lowering
+    if config_options.executor.runtime == "rapidsmpf":
+        from cudf_polars.experimental.rapidsmpf.io import lower_dataframescan_rapidsmpf
+
+        return lower_dataframescan_rapidsmpf(ir, rec)
+
     rows_per_partition = config_options.executor.max_rows_per_partition
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
@@ -278,6 +284,16 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     partition_info: MutableMapping[IR, PartitionInfo]
     config_options = rec.state["config_options"]
+
+    # RapidsMPF runtime: Use rapidsmpf-specific lowering
+    if (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+    ):
+        from cudf_polars.experimental.rapidsmpf.io import lower_scan_rapidsmpf
+
+        return lower_scan_rapidsmpf(ir, rec)
+
     if (
         ir.typ in ("csv", "parquet", "ndjson")
         and ir.n_rows == -1
