@@ -19,15 +19,14 @@ namespace dictionary {
 
 /**
  * @brief Create a new dictionary column by adding the new keys elements
- * to the existing dictionary_column.
+ * to the existing dictionary_column
  *
- * The indices are updated if any of the new keys are sorted
- * before any of the existing dictionary elements.
+ * The indices remain the same while unique new keys are added.
  *
  * @code{.pseudo}
  * d1 = { keys=["a", "c", "d"], indices=[2, 0, 1, 0, 1]}
  * d2 = add_keys( d1, ["b", "c"] )
- * d2 is now {keys=["a", "b", "c", "d"], indices=[3, 0, 2, 0, 2]}
+ * d2 is now {keys=["a", "c", "d", "b"], indices=[2, 0, 1, 0, 1]}
  * @endcode
  *
  * The output column will have the same number of rows as the input column.

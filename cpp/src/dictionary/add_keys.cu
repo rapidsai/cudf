@@ -21,24 +21,7 @@
 namespace cudf {
 namespace dictionary {
 namespace detail {
-namespace {
-struct negate_fn {
-  __device__ bool operator()(size_type idx) const noexcept { return !b[idx]; }
-  bool const* b;
-};
-}  // namespace
 
-/**
- * @brief Create a new dictionary column by adding the new keys elements
- * to the existing dictionary_column.
- *
- * ```
- * Example:
- * d1 = {[a, b, c, d, f], {4, 0, 3, 1, 2, 2, 2, 4, 0}}
- * d2 = add_keys( d1, [d, b, e] )
- * d2 is now {[a, b, c, d, e, f], [5, 0, 3, 1, 2, 2, 2, 5, 0]}
- * ```
- */
 std::unique_ptr<column> add_keys(dictionary_column_view const& input,
                                  column_view const& new_keys,
                                  rmm::cuda_stream_view stream,
@@ -53,10 +36,9 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& input,
   auto c = cudf::detail::contains(old_keys, new_keys, stream, mr);
   auto b = column_device_view::create(c->view(), stream);
   // filter out duplicates from the input
-  auto nks = std::move(
-    cudf::detail::copy_if(cudf::table_view({new_keys}), negate_fn{b->data<bool>()}, stream, mr)
-      ->release()
-      .front());
+  auto negate_fn = [b = b->data<bool>()] __device__(size_type idx) { return !b[idx]; };
+  auto nks       = std::move(
+    cudf::detail::copy_if(cudf::table_view({new_keys}), negate_fn, stream, mr)->release().front());
   // build new keys by concatenating new ones to the end
   auto keys_column =
     (nks->size() > 0)
