@@ -34,7 +34,10 @@ from cudf.core.dtypes import (  # noqa: F401
     is_list_dtype,
     is_struct_dtype,
 )
-from cudf.utils.dtypes import is_dtype_obj_numeric, is_dtype_obj_string
+from cudf.core.dtypes.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 
 if TYPE_CHECKING:
     from cudf.core.index import CategoricalIndex

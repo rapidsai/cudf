@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from cudf.api.types import is_dtype_equal
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -19,7 +20,6 @@ from cudf.core.reshape import concat
 from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_numeric,
 )
 
 if TYPE_CHECKING:

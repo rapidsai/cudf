@@ -61,6 +61,10 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -106,8 +110,6 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
-    is_dtype_obj_numeric,
-    is_dtype_obj_string,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
@@ -6494,9 +6496,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     - (
                         col.null_count
                         + (
-                            col.nan_count
-                            if get_option("mode.pandas_compatible")
-                            else 0
+                            0
+                            if is_pandas_nullable_extension_dtype(col.dtype)
+                            else col.nan_count
                         )
                     )
                     for col in self._columns
@@ -6611,9 +6613,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     axis_0_results = pd.Index(
                         axis_0_results, dtype=f"m8[{unit}]"
                     )
+                # For max/min operations, preserve the original dtype since
+                # Python scalars (int, float) would otherwise widen to int64/float64
+                result_dtype = common_dtype if op in {"max", "min"} else None
                 res = as_column(
                     axis_0_results,
                     nan_as_null=not cudf.get_option("mode.pandas_compatible"),
+                    dtype=result_dtype,
                 )
 
                 res_dtype = res.dtype
@@ -6955,7 +6961,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             result = as_column(result, dtype=result_dtype)
             if mask is not None:
-                result = result.set_mask(mask._column.as_mask())
+                mask_buff, null_count = mask._column.as_mask()
+                result = result.set_mask(mask_buff, null_count)
             return Series._from_column(
                 result, index=self.index, attrs=self.attrs
             )
@@ -7570,12 +7577,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             with access_columns(  # type: ignore[assignment]
                 *homogenized, mode="read", scope="internal"
             ) as homogenized:
-                interleaved_col = ColumnBase.from_pylibcudf(
-                    plc.reshape.interleave_columns(
-                        plc.Table([col.plc_column for col in homogenized])
-                    )
+                interleaved_col = plc.reshape.interleave_columns(
+                    plc.Table([col.plc_column for col in homogenized])
                 )
-            stacked.append(interleaved_col._with_type_metadata(common_type))
+            stacked.append(ColumnBase.create(interleaved_col, common_type))
 
         # Construct the resulting dataframe / series
         if not has_unnamed_levels:
@@ -8356,8 +8361,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:
             cudf_cols = (
-                col._with_type_metadata(
-                    recursively_update_struct_names(col.dtype, cn)
+                ColumnBase.create(
+                    col.plc_column,
+                    recursively_update_struct_names(col.dtype, cn),
                 )
                 for col, cn in zip(
                     cudf_cols, child_names.values(), strict=True

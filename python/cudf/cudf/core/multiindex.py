@@ -24,6 +24,10 @@ from cudf.core.algorithms import factorize
 from cudf.core.column import access_columns
 from cudf.core.column.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.frame import Frame
 from cudf.core.index import (
     Index,
@@ -37,8 +41,6 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     is_column_like,
-    is_dtype_obj_numeric,
-    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -231,7 +233,9 @@ class MultiIndex(Index):
                 and not is_pandas_nullable_extension_dtype(level.dtype)
             ):
                 result_col = result_col.fillna(np.nan)
-            source_data[i] = result_col._with_type_metadata(level.dtype)
+            source_data[i] = ColumnBase.create(
+                result_col.plc_column, level.dtype
+            )
 
         Frame.__init__(self, ColumnAccessor(source_data))
         self._levels = new_levels

@@ -15,12 +15,10 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.dtype.validators import is_dtype_obj_list
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
-from cudf.utils.dtypes import (
-    get_dtype_of_same_kind,
-    is_dtype_obj_list,
-)
+from cudf.utils.dtypes import get_dtype_of_same_kind
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,

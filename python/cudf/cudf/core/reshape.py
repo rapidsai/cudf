@@ -18,11 +18,11 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.dtypes import CategoricalDtype, dtype as cudf_dtype
 from cudf.utils.dtypes import (
     DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
-    is_dtype_obj_string,
     min_unsigned_type,
 )
 

@@ -26,7 +26,7 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.core._internals import copying, sorting, stream_compaction
+from cudf.core._internals import copying, sorting
 from cudf.core.accessors import StringMethods
 from cudf.core.column import (
     CategoricalColumn,
@@ -42,6 +42,10 @@ from cudf.core.column import (
 from cudf.core.column.column import as_column, column_empty, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
 from cudf.core.frame import Frame
 from cudf.core.join._join_helpers import _match_join_keys
@@ -56,8 +60,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
-    is_dtype_obj_numeric,
-    is_dtype_obj_string,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -1232,15 +1234,15 @@ class Index(SingleColumnFrame):
         nulls_are_equal: bool, default True
             Null elements are considered equal to other null elements.
         """
+        columns = list(self._columns)
+        result_columns = self._drop_duplicates_columns(
+            columns,
+            keys=list(range(len(columns))),
+            keep=keep,
+            nulls_are_equal=nulls_are_equal,
+        )
         return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.drop_duplicates(
-                    list(self._columns),
-                    keep=keep,
-                    nulls_are_equal=nulls_are_equal,
-                )
-            ],
+            [ColumnBase.from_pylibcudf(col) for col in result_columns],
             self._column_names,
         )
 
@@ -1318,18 +1320,15 @@ class Index(SingleColumnFrame):
         if not self.hasnans:
             return self.copy(deep=False)
 
-        # This is to be consistent with IndexedFrame.dropna to handle nans
-        # as nulls by default
+        # Convert nans to nulls to be consistent with IndexedFrame.dropna
         data_columns = [col.nans_to_nulls() for col in self._columns]
-
+        result_columns = self._drop_nulls_columns(
+            data_columns,
+            keys=list(range(len(data_columns))),
+            how=how,
+        )
         return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.drop_nulls(
-                    data_columns,
-                    how=how,
-                )
-            ],
+            [ColumnBase.from_pylibcudf(col) for col in result_columns],
             self._column_names,
         )
 
@@ -1457,7 +1456,9 @@ class Index(SingleColumnFrame):
         else:
             data = concat_columns([o._column for o in objs])
             if cls is IntervalIndex:
-                data = data._with_type_metadata(objs[0]._column.dtype)
+                data = ColumnBase.create(
+                    data.plc_column, objs[0]._column.dtype
+                )
             result = Index._from_column(data)
 
         names = {obj.name for obj in objs}
@@ -1856,7 +1857,7 @@ class Index(SingleColumnFrame):
 
     def repeat(self, repeats, axis=None) -> Self:
         result = self._repeat([self._column], repeats, axis)[0]
-        result = result._with_type_metadata(self.dtype)
+        result = ColumnBase.create(result.plc_column, self.dtype)
         return type(self)._from_column(result, name=self.name)
 
     def __contains__(self, item) -> bool:
@@ -3584,7 +3585,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[us]', freq='YE-DEC')
         >>> datetime_index.year
-        Index([2000, 2001, 2002], dtype='int16')
+        Index([2000, 2001, 2002], dtype='int32')
         """
         # .year is already a cached_property
         return Index._from_column(self._column.year, name=self.name)
@@ -3604,7 +3605,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[us]', freq='ME')
         >>> datetime_index.month
-        Index([1, 2, 3], dtype='int16')
+        Index([1, 2, 3], dtype='int32')
         """
         # .month is already a cached_property
         return Index._from_column(self._column.month, name=self.name)
@@ -3624,7 +3625,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[us]', freq='24h')
         >>> datetime_index.day
-        Index([1, 2, 3], dtype='int16')
+        Index([1, 2, 3], dtype='int32')
         """
         # .day is already a cached_property
         return Index._from_column(self._column.day, name=self.name)
@@ -3646,7 +3647,7 @@ class DatetimeIndex(Index):
                     '2000-01-01 02:00:00'],
                     dtype='datetime64[us]', freq='h')
         >>> datetime_index.hour
-        Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int32')
         """
         # .hour is already a cached_property
         return Index._from_column(self._column.hour, name=self.name)
@@ -3668,7 +3669,7 @@ class DatetimeIndex(Index):
                     '2000-01-01 00:02:00'],
                     dtype='datetime64[us]', freq='min')
         >>> datetime_index.minute
-        Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int32')
         """
         # .minute is already a cached_property
         return Index._from_column(self._column.minute, name=self.name)
@@ -3690,7 +3691,7 @@ class DatetimeIndex(Index):
                     '2000-01-01 00:00:02'],
                     dtype='datetime64[us]', freq='s')
         >>> datetime_index.second
-        Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int32')
         """
         # .second is already a cached_property
         return Index._from_column(self._column.second, name=self.name)
@@ -3712,7 +3713,7 @@ class DatetimeIndex(Index):
                '2000-01-01 00:00:00.000002'],
               dtype='datetime64[us]', freq='us')
         >>> datetime_index.microsecond
-        Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int32')
         """
         # .microsecond is already a cached_property
         return Index._from_column(self._column.microsecond, name=self.name)
@@ -3735,7 +3736,7 @@ class DatetimeIndex(Index):
                        '2000-01-01 00:00:00.000000002'],
                       dtype='datetime64[ns]', freq='ns')
         >>> datetime_index.nanosecond
-        Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int32')
         """
         # .nanosecond is already a cached_property
         return Index._from_column(self._column.nanosecond, name=self.name)
@@ -3758,7 +3759,7 @@ class DatetimeIndex(Index):
                     '2017-01-08'],
                     dtype='datetime64[us]', freq='24h')
         >>> datetime_index.weekday
-        Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int32')
         """
         # .weekday is already a cached_property
         return Index._from_column(self._column.weekday, name=self.name)
@@ -3781,7 +3782,7 @@ class DatetimeIndex(Index):
                     '2017-01-08'],
                     dtype='datetime64[us]', freq='24h')
         >>> datetime_index.dayofweek
-        Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int32')
         """
         # .weekday is already a cached_property
         return Index._from_column(self._column.weekday, name=self.name)
@@ -4902,17 +4903,18 @@ class IntervalIndex(Index):
                 0,
                 [left, right],
             )
-            interval_col = ColumnBase.from_pylibcudf(
-                plc_column
-            )._with_type_metadata(IntervalDtype(child_type, closed))
+            interval_col = ColumnBase.create(
+                plc_column, IntervalDtype(child_type, closed)
+            )
         else:
             col = as_column(data)
             if not isinstance(col, IntervalColumn):
                 raise TypeError("data must be an iterable of Interval data")
             if copy:
                 col = col.copy()
-            interval_col = col._with_type_metadata(
-                IntervalDtype(col.dtype.subtype, closed)  # type: ignore[union-attr]
+            interval_col = ColumnBase.create(
+                col.plc_column,
+                IntervalDtype(col.dtype.subtype, closed),  # type: ignore[union-attr]
             )
 
         if dtype:
@@ -5012,9 +5014,7 @@ class IntervalIndex(Index):
             [left_col, right_col],
         )
         dtype = IntervalDtype(breaks.dtype, closed)
-        interval_col = ColumnBase.from_pylibcudf(
-            plc_column
-        )._with_type_metadata(dtype)
+        interval_col = ColumnBase.create(plc_column, dtype)
         return IntervalIndex._from_column(interval_col, name=name)
 
     @cached_property

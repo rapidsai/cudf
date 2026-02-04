@@ -147,7 +147,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.ip2int()
         0    212336897
         1    167772161
-        dtype: int64
+        dtype: uint32
 
         Returns 0's if any string is not an IP.
 
@@ -156,7 +156,7 @@ class StringMethods(BaseAccessor):
         0    212336897
         1    167772161
         2            0
-        dtype: int64
+        dtype: uint32
         """
         return self._return_or_inplace(self._column.ipv4_to_integers())
 

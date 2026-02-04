@@ -13,8 +13,11 @@ import pyarrow as pa
 from pandas import testing as tm
 
 import cudf
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.missing import NA, NaT
-from cudf.utils.dtypes import is_dtype_obj_numeric, is_dtype_obj_string
 
 pa_types = pa.types
 

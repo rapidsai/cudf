@@ -9,13 +9,15 @@ import numpy as np
 import pandas as pd
 
 from cudf.core.column import as_column
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype
 from cudf.core.index import ensure_index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     can_convert_to_column,
-    is_dtype_obj_numeric,
-    is_dtype_obj_string,
 )
 
 if TYPE_CHECKING:

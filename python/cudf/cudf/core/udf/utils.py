@@ -24,6 +24,7 @@ import rmm
 
 from cudf._lib import strings_udf
 from cudf.core.buffer import as_buffer
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.nrt_utils import nrt_enabled
 from cudf.core.udf.strings_typing import (
@@ -39,7 +40,6 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     STRING_TYPES,
     TIMEDELTA_TYPES,
-    is_dtype_obj_string,
 )
 
 if TYPE_CHECKING:

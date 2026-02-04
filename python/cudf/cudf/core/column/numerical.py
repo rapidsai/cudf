@@ -25,6 +25,7 @@ from cudf.core.column.column import (
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.column.utils import access_columns
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
@@ -35,7 +36,6 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
-    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -479,8 +479,8 @@ class NumericalColumn(NumericalBaseColumn):
                 0,
                 self.plc_column.children(),
             )
-            mask, _ = plc.transform.nans_to_nulls(shifted_column)
-            return self.set_mask(as_buffer(mask))
+            mask, null_count = plc.transform.nans_to_nulls(shifted_column)
+            return self.set_mask(as_buffer(mask), null_count)
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):

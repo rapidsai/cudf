@@ -303,7 +303,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     0, length=len(self), dtype=self._UNDERLYING_DTYPE
                 )
                 if self.nullable:
-                    res_col = res_col.set_mask(self.mask)
+                    res_col = res_col.set_mask(self.mask, self.null_count)
             data[result_key] = res_col
         return data
 
@@ -374,7 +374,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 0, length=len(self), dtype=self._UNDERLYING_DTYPE
             )
             if self.nullable:
-                res_col = res_col.set_mask(self.mask)
+                res_col = res_col.set_mask(self.mask, self.null_count)
             return cast("cudf.core.column.NumericalColumn", res_col)
         return (
             self % get_np_td_unit_conversion("us", None)

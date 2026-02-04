@@ -19,13 +19,13 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -108,9 +108,7 @@ class StringColumn(ColumnBase, Scannable):
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
         if not is_dtype_obj_string(dtype):
-            raise ValueError(
-                f"dtype must be a pandas.StringDtype, not {dtype}"
-            )
+            raise ValueError("dtype must be a valid cuDF string dtype")
         return plc_column, dtype
 
     @property
@@ -517,7 +515,7 @@ class StringColumn(ColumnBase, Scannable):
                         dtype=get_dtype_of_same_kind(
                             self.dtype, np.dtype(np.bool_)
                         ),
-                    ).set_mask(self.mask)
+                    ).set_mask(self.mask, self.null_count)
                 else:
                     return NotImplemented
 
@@ -1097,7 +1095,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int64)),
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.uint32)),
                 ),
             )
 

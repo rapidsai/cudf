@@ -17,6 +17,7 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -24,7 +25,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
-    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
