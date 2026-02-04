@@ -603,18 +603,36 @@ def test_sort_properties(*, descending: bool):
     assert node.properties == {"by": ["a"], "order": [order]}
 
 
-def test_filter_properties():
-    q = pl.LazyFrame({"a": [1, 2, 3]}).filter(pl.col("a") > 1)
+@pytest.mark.parametrize(
+    "predicate, expected",
+    [
+        (
+            pl.col("a") > 1,
+            {
+                "predicate": "a",
+                "op": "GREATER",
+                "left": {"type": "Col", "name": "a"},
+                "right": {"type": "Literal", "value": 1},
+            },
+        ),
+        (
+            pl.col("a") == pl.col("b"),
+            {
+                "predicate": "a",
+                "op": "EQUAL",
+                "left": {"type": "Col", "name": "a"},
+                "right": {"type": "Col", "name": "b"},
+            },
+        ),
+    ],
+)
+def test_filter_properties(predicate: pl.Expr, expected: dict):
+    q = pl.LazyFrame({"a": [1, 2, 3], "b": [2, 2, 2]}).filter(predicate)
     dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
 
     node = dag.nodes[dag.roots[0]]
     assert node.type == "Filter"
-    assert node.properties == {
-        "predicate": "a",
-        "op": "GREATER",
-        "left": {"type": "Col", "name": "a"},
-        "right": {"type": "Literal", "value": 1},
-    }
+    assert node.properties == expected
 
 
 def test_select_properties():

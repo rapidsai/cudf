@@ -12,6 +12,8 @@ from collections.abc import Mapping, Sequence
 from itertools import groupby
 from typing import TYPE_CHECKING, Self, TypeAlias
 
+import cudf_polars.dsl.expressions.binaryop
+import cudf_polars.dsl.expressions.literal
 from cudf_polars.dsl.ir import (
     Filter,
     GroupBy,
@@ -35,6 +37,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
 
@@ -268,11 +271,24 @@ def _(ir: Sort) -> dict[str, Serializable]:
     }
 
 
+def _serialize_expr(expr: Expr) -> dict[str, Serializable]:
+    match expr:
+        case cudf_polars.dsl.expressions.base.Col(name=name):
+            return {"type": "Col", "name": name}
+        case cudf_polars.dsl.expressions.literal.Literal(value=value):
+            return {"type": "Literal", "value": value}
+        case cudf_polars.dsl.expressions.binaryop.BinOp():
+            return {
+                "op": expr.op.name,
+                "left": _serialize_expr(expr.children[0]),
+                "right": _serialize_expr(expr.children[1]),
+            }
+        case _:
+            return {"type": type(expr).__name__}
+
+
 @_serialize_properties.register
 def _(ir: Filter) -> dict[str, Serializable]:
-    import cudf_polars.dsl.expressions.binaryop
-    import cudf_polars.dsl.expressions.literal
-
     value = ir.mask.value
     properties: dict[str, Serializable] = {
         "predicate": ir.mask.name,
