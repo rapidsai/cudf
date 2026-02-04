@@ -157,6 +157,7 @@ jobs:
       date: ${{ inputs.date }}
       package-name: pylibcudf
       package-type: python
+      publish-wheel-search-key: pylibcudf_wheel_python_abi3
   wheel-build-cudf:
     needs: [telemetry-setup, wheel-build-pylibcudf]
     secrets: inherit
@@ -184,6 +185,7 @@ jobs:
       date: ${{ inputs.date }}
       package-name: cudf
       package-type: python
+      publish-wheel-search-key: cudf_wheel_python_abi3
   wheel-build-dask-cudf:
     needs: [telemetry-setup, wheel-build-cudf]
     secrets: inherit
