@@ -69,7 +69,9 @@ def _(
     )
 
     # RapidsMPF runtime: Use rapidsmpf-specific lowering
-    if config_options.executor.runtime == "rapidsmpf":
+    if (
+        config_options.executor.runtime == "rapidsmpf"
+    ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
         from cudf_polars.experimental.rapidsmpf.io import lower_dataframescan_rapidsmpf
 
         return lower_dataframescan_rapidsmpf(ir, rec)
@@ -289,7 +291,7 @@ def _(
     if (
         config_options.executor.name == "streaming"
         and config_options.executor.runtime == "rapidsmpf"
-    ):
+    ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
         from cudf_polars.experimental.rapidsmpf.io import lower_scan_rapidsmpf
 
         return lower_scan_rapidsmpf(ir, rec)
@@ -601,7 +603,7 @@ def _(
     if (
         config_options.executor.name == "streaming"
         and config_options.executor.runtime == "rapidsmpf"
-    ):
+    ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
         return _lower_ir_fallback(
             ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
         )
