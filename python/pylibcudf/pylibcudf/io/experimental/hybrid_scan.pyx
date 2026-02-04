@@ -715,7 +715,7 @@ cdef class HybridScanReader:
 
     def materialize_filter_columns_chunk(
         self,
-        Column row_mask
+        Column row_mask,
         Stream stream=None,
         DeviceMemoryResource mr=None
     ):
@@ -803,7 +803,7 @@ cdef class HybridScanReader:
 
     def materialize_payload_columns_chunk(
         self,
-        Column row_mask
+        Column row_mask,
         Stream stream=None,
         DeviceMemoryResource mr=None
     ):
