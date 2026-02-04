@@ -2587,7 +2587,7 @@ class StringMethods(BaseAccessor):
 
         result_table: StringColumn | dict[int, StringColumn]
         if expand:
-            if self._column.null_count == len(self._column):
+            if self._column.is_all_null:
                 result_table = {0: self._column.copy()}
             else:
                 if regex is True:
@@ -2599,7 +2599,7 @@ class StringMethods(BaseAccessor):
                         ),
                         n,
                     )
-                if len(data) == 1 and data[0].null_count == len(self._column):
+                if len(data) == 1 and data[0].is_all_null:
                     result_table = {}
                 else:
                     result_table = data
@@ -2764,7 +2764,7 @@ class StringMethods(BaseAccessor):
 
         result_table: StringColumn | dict[int, StringColumn]
         if expand:
-            if self._column.null_count == len(self._column):
+            if self._column.is_all_null:
                 result_table = {0: self._column.copy()}
             else:
                 if regex is True:
@@ -2776,7 +2776,7 @@ class StringMethods(BaseAccessor):
                         ),
                         n,
                     )
-                if len(data) == 1 and data[0].null_count == len(self._column):
+                if len(data) == 1 and data[0].is_all_null:
                     result_table = {}
                 else:
                     result_table = data

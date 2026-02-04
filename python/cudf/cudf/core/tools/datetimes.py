@@ -370,7 +370,7 @@ def _process_col(
             col = col.astype(dtype=np.dtype(_unit_dtype_map[unit]))
 
     elif col.dtype.kind == "O":
-        if unit not in (None, "ns") or col.null_count == len(col):
+        if unit not in (None, "ns") or col.is_all_null:
             try:
                 col = col.astype(np.dtype(np.int64))
             except ValueError:

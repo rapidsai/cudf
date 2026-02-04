@@ -16,6 +16,7 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column import column
+from cudf.core.column._pylibcudf_helpers import fillna_numeric_zero
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
@@ -617,10 +618,10 @@ class CategoricalColumn(column.ColumnBase):
         return self._get_decategorized_column().as_timedelta_column(dtype)
 
     def _get_decategorized_column(self) -> ColumnBase:
-        if self.null_count == len(self):
+        if self.is_all_null:
             # self.categories is empty; just return codes
             return self.codes
-        gather_map = self.codes.astype(SIZE_TYPE_DTYPE).fillna(0)
+        gather_map = fillna_numeric_zero(self.codes.astype(SIZE_TYPE_DTYPE))
         out = self.categories.take(gather_map)
         mask = self.mask
         new_null_count = self.null_count

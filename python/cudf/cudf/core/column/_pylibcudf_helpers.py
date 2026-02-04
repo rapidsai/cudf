@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 __all__ = [
     "all_strings_match_type",
     "fillna_bool_false",
+    "fillna_numeric_zero",
     "isnull_including_nan",
     "notnull_excluding_nan",
     "reduce_boolean_column",
@@ -195,6 +196,48 @@ def fillna_bool_false(column: ColumnBase) -> ColumnBase:
         # Use pylibcudf replace_nulls with scalar False
         false_scalar = plc.Scalar.from_py(False)
         result_plc = plc.replace.replace_nulls(column.plc_column, false_scalar)
+        return ColumnBase.from_pylibcudf(result_plc)
+
+
+def fillna_numeric_zero(column: ColumnBase) -> ColumnBase:
+    """Fill null values in a numeric column with 0.
+
+    This is more efficient than calling column.fillna(0) because it
+    avoids creating intermediate column objects by using pylibcudf's
+    replace_nulls directly.
+
+    Parameters
+    ----------
+    column : ColumnBase
+        Numeric column with potential null values
+
+    Returns
+    -------
+    ColumnBase
+        Numeric column with nulls replaced by 0
+
+    Examples
+    --------
+    Instead of:
+
+        result = col.fillna(0)
+
+    Use:
+
+        from cudf.core.column._pylibcudf_helpers import fillna_numeric_zero
+        result = fillna_numeric_zero(col)
+
+    Notes
+    -----
+    This is particularly useful for numeric operations where null values
+    should be treated as zero (e.g., in join helpers, groupby operations, etc.)
+    """
+    from cudf.core.column.column import ColumnBase
+
+    with column.access(mode="read", scope="internal"):
+        # Use pylibcudf replace_nulls with scalar 0
+        zero_scalar = plc.Scalar.from_py(0)
+        result_plc = plc.replace.replace_nulls(column.plc_column, zero_scalar)
         return ColumnBase.from_pylibcudf(result_plc)
 
 

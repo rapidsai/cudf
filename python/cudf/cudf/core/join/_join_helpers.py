@@ -24,9 +24,11 @@ from cudf.utils.dtypes import (
 )
 
 if TYPE_CHECKING:
-    from cudf.core.column import ColumnBase
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.dataframe import DataFrame
+
+from cudf.core.column import ColumnBase  # noqa: TC001
+from cudf.core.column._pylibcudf_helpers import fillna_numeric_zero
 
 
 class _Indexer:
@@ -113,8 +115,8 @@ def _match_join_keys(
         common_type = max(ltype, rtype)
     elif ltype.kind in "mM" or rtype.kind in "mM":
         # Cache fillna(0) results to avoid redundant operations
-        rcol_filled = rcol.fillna(0)
-        lcol_filled = lcol.fillna(0)
+        rcol_filled = fillna_numeric_zero(rcol)
+        lcol_filled = fillna_numeric_zero(lcol)
 
         if ltype.kind in "mM" and not rcol_filled.can_cast_safely(ltype):
             raise TypeError(

@@ -153,7 +153,7 @@ class StringColumn(ColumnBase, Scannable):
         # All null string columns fail to convert in libcudf, so we must short-circuit
         # the call to super().to_arrow().
         # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if self.plc_column.num_children() == 0 or self.null_count == len(self):
+        if self.plc_column.num_children() == 0 or self.is_all_null:
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )
@@ -171,7 +171,7 @@ class StringColumn(ColumnBase, Scannable):
         if skipna:
             col = col.dropna()
 
-        if min_count > 0 and len(col) - col.null_count < min_count:
+        if min_count > 0 and col.valid_count < min_count:
             return pd.NA
 
         return (
@@ -316,7 +316,7 @@ class StringColumn(ColumnBase, Scannable):
             raise ValueError(
                 f"dtype must be datetime or timedelta type, not {dtype}"
             )
-        elif self.null_count == len(self):
+        elif self.is_all_null:
             return column_empty(len(self), dtype=dtype)  # type: ignore[return-value]
         elif (self == "None").any():
             raise ValueError(
@@ -493,7 +493,7 @@ class StringColumn(ColumnBase, Scannable):
         # division between an empty string column and a (nonempty) integer
         # column. Ideally we would disable these operators entirely, but until
         # the above issue is resolved we cannot avoid this problem.
-        if self.null_count == len(self):
+        if self.is_all_null:
             if op in {
                 "__add__",
                 "__sub__",

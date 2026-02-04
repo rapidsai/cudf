@@ -168,7 +168,7 @@ def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
         pa.types.is_nested(array_type)
         or pa.types.is_string(array_type)
         or pa.types.is_large_string(array_type)
-    ) and (arrow_array.null_count == len(arrow_array)):
+    ) and arrow_array.null_count == len(arrow_array):
         return pa.NullArray.from_buffers(
             pa.null(), len(arrow_array), [pa.py_buffer(b"")]
         )
@@ -388,6 +388,24 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         NaN inclusion is supported for specific dtypes only.
         """
         return int(self.null_count) != 0
+
+    @property
+    def is_all_null(self) -> bool:
+        """Check if all values in the column are null.
+
+        Returns True if the column is empty or all values are null.
+        This is more readable than checking null_count == len(self).
+        """
+        return self.null_count == len(self)
+
+    @property
+    def valid_count(self) -> int:
+        """Return the number of non-null values in the column.
+
+        This is equivalent to len(self) - self.null_count but cached
+        as a property for convenience.
+        """
+        return len(self) - self.null_count
 
     @property
     def mask(self) -> None | Buffer:
@@ -1831,7 +1849,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return as_column(
                     False, length=len(self), dtype=np.dtype(np.bool_)
                 )
-        elif lhs.null_count == 0 and (rhs.null_count == len(rhs)):
+        elif lhs.null_count == 0 and rhs.is_all_null:
             return as_column(False, length=len(self), dtype=np.dtype(np.bool_))
 
         result = rhs.contains(lhs)
@@ -1854,9 +1872,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         lhs = self
         rhs = as_column(values, nan_as_null=False)
-        if lhs.null_count == len(lhs):
+        if lhs.is_all_null:
             lhs = lhs.astype(rhs.dtype)
-        elif rhs.null_count == len(rhs):
+        elif rhs.is_all_null:
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 
@@ -2596,8 +2614,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         # Handle min_count
         if min_count > 0:
-            valid_count = len(col) - col.null_count
-            if valid_count < min_count:
+            if col.valid_count < min_count:
                 return _get_nan_for_dtype(self.dtype)
 
         # Compute reduction result dtype
@@ -3583,7 +3600,7 @@ def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
         # Check that all columns are the same type:
         if not is_dtype_equal(obj.dtype, head.dtype):
             # if all null, cast to appropriate dtype
-            if obj.null_count == len(obj):
+            if obj.is_all_null:
                 replacement_cols[i] = column_empty(
                     row_count=len(obj), dtype=head.dtype
                 )

@@ -18,6 +18,7 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import as_buffer
 from cudf.core.column._pylibcudf_helpers import (
+    fillna_numeric_zero,
     isnull_including_nan,
     notnull_excluding_nan,
 )
@@ -710,7 +711,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Return the smallest dtype which can represent all elements of self.
         """
-        if self.null_count == len(self):
+        if self.is_all_null:
             return self.dtype
 
         min_value, max_value = self.minmax()
@@ -752,11 +753,11 @@ class NumericalColumn(NumericalBaseColumn):
         # float64 column too, Hence we will need to type-cast
         # to self.dtype.
         to_replace_col = as_column(to_replace)
-        if to_replace_col.null_count == len(to_replace_col):
+        if to_replace_col.is_all_null:
             to_replace_col = to_replace_col.astype(self.dtype)
 
         replacement_col = as_column(replacement)
-        if replacement_col.null_count == len(replacement_col):
+        if replacement_col.is_all_null:
             replacement_col = replacement_col.astype(self.dtype)
 
         if not isinstance(to_replace_col, type(replacement_col)):
@@ -937,7 +938,7 @@ class NumericalColumn(NumericalBaseColumn):
             ):
                 return True
             else:
-                filled = self.fillna(0)
+                filled = fillna_numeric_zero(self)
                 return (
                     filled.astype(to_dtype).astype(filled.dtype) == filled
                 ).all()
@@ -957,7 +958,7 @@ class NumericalColumn(NumericalBaseColumn):
             # NOTE(seberg): it would make sense to limit to the mantissa range.
             min_val, max_val = self.minmax()
             if (float(min_val) >= min_) and (float(max_val) <= max_):
-                filled = self.fillna(0)
+                filled = fillna_numeric_zero(self)
                 return (filled % 1 == 0).all()
             else:
                 return False
@@ -1063,7 +1064,7 @@ def _normalize_find_and_replace_input(
     )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
-        if normalized_column.null_count == len(normalized_column):
+        if normalized_column.is_all_null:
             normalized_column = normalized_column.astype(input_column_dtype)
         if normalized_column.can_cast_safely(input_column_dtype):
             return normalized_column.astype(input_column_dtype)

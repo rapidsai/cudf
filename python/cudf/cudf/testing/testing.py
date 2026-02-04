@@ -236,7 +236,7 @@ def assert_column_equal(
                 msg2 = f"{right.dtype}"
                 raise_assert_detail(obj, "Dtypes are different", msg1, msg2)
     else:
-        if left.null_count == len(left) and right.null_count == len(right):
+        if left.is_all_null and right.is_all_null:
             return True
 
     if check_datetimelike_compat:
