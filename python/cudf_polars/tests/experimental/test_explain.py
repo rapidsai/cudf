@@ -504,6 +504,10 @@ def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
 
 
 def test_serialize_query():
+    # this test is sensitive to the polars version.
+    # we get a different query plan for polars < 1.35.0.
+    pytest.importorskip("polars", minversion="1.35.0")
+
     left = pl.LazyFrame({"a": ["a", "b", "a"], "b": [1, 2, 3]})
     right = pl.LazyFrame({"a": ["a", "b", "c"], "c": [4, 5, 6]})
 
@@ -518,15 +522,14 @@ def test_serialize_query():
     # We don't know the exact node IDs, but we can check the structure.
     assert len(dag.roots) == 1
     node_types = sorted({x.type for x in dag.nodes.values()})
-    assert node_types == ["DataFrameScan", "GroupBy", "Join", "Select"]
-    # On some systems (CI), this can apparently be length 6.
-    assert len(dag.nodes) >= 5
-    assert len(dag.partition_info) == 5
+    assert node_types == ["DataFrameScan", "GroupBy", "Join", "Projection", "Select"]
+    assert len(dag.nodes) == 6
+    assert len(dag.partition_info) == 6
     node_ids = set(dag.nodes)
 
     for node_id, node in dag.nodes.items():
+        assert node.id == node_id
         assert node_id in node_ids
-        assert node.id in node_ids
         assert set(node.children) <= node_ids
 
         match node.type:
@@ -537,6 +540,11 @@ def test_serialize_query():
                     "c": "INT64",
                 }
                 assert node_id not in dag.roots
+
+            case "Projection":
+                assert len(node.children) == 1
+                assert node.schema == {"b": "INT64", "c": "INT64", "a": "STRING"}
+                assert node.properties == {}
 
             case "GroupBy":
                 assert len(node.children) == 1
