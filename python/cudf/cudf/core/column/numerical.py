@@ -955,7 +955,8 @@ class NumericalColumn(NumericalBaseColumn):
             # best we can do is hope to catch it here and avoid compare
             # Use Python floats, which have precise comparison for float64.
             # NOTE(seberg): it would make sense to limit to the mantissa range.
-            if (float(self.min()) >= min_) and (float(self.max()) <= max_):
+            min_val, max_val = self.minmax()
+            if (float(min_val) >= min_) and (float(max_val) <= max_):
                 filled = self.fillna(0)
                 return (filled % 1 == 0).all()
             else:

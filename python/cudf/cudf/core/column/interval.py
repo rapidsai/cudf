@@ -12,6 +12,7 @@ from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 import pylibcudf as plc
 
 import cudf
+from cudf.core.column._pylibcudf_helpers import fillna_bool_false
 from cudf.core.column.column import ColumnBase, _handle_nulls, as_column
 from cudf.core.dtype.validators import is_dtype_obj_interval
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
@@ -154,7 +155,7 @@ class IntervalColumn(ColumnBase):
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
-        left_equals_right = (self.right == self.left).fillna(False)
+        left_equals_right = fillna_bool_false(self.right == self.left)
         not_closed_both = as_column(
             self.dtype.closed != "both",  # type: ignore[union-attr]
             length=len(self),

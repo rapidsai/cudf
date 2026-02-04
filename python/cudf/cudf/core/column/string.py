@@ -18,7 +18,10 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.column._pylibcudf_helpers import all_strings_match_type
+from cudf.core.column._pylibcudf_helpers import (
+    all_strings_match_type,
+    fillna_bool_false,
+)
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
@@ -277,7 +280,7 @@ class StringColumn(ColumnBase, Scannable):
         if dtype.kind == "b":
             result = self.count_characters() > np.int8(0)
             if not is_pandas_nullable_extension_dtype(dtype):
-                result = result.fillna(False)
+                result = fillna_bool_false(result)
             return result._with_type_metadata(dtype)
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
@@ -1580,19 +1583,28 @@ class StringColumn(ColumnBase, Scannable):
             plc_result = plc.strings.char_types.all_characters_of_type(
                 self.plc_column, char_type, case_type
             )
-            result = cast(
-                "cudf.core.column.numerical.NumericalColumn",
-                ColumnBase.create(
-                    plc_result,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
-                ),
+            res = type(self).from_pylibcudf(plc_result)
+
+            if cudf.get_option("mode.pandas_compatible"):
+                if (
+                    isinstance(self.dtype, pd.StringDtype)
+                    and self.dtype.na_value is np.nan
+                ):
+                    res = fillna_bool_false(res)
+                    new_type = np.dtype(np.bool_)
+                else:
+                    new_type = get_dtype_of_same_kind(
+                        pd.StringDtype()
+                        if isinstance(self.dtype, pd.StringDtype)
+                        else self.dtype,
+                        np.dtype(np.bool_),
+                    )
+            else:
+                new_type = np.dtype(np.bool_)
+            return cast(
+                cudf.core.column.numerical.NumericalColumn,
+                res._with_type_metadata(new_type),
             )
-            if (
-                isinstance(self.dtype, pd.StringDtype)
-                and self.dtype.na_value is np.nan
-            ):
-                result = result.fillna(False)
-            return result
 
     def filter_characters_of_type(
         self,

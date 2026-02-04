@@ -39,6 +39,7 @@ from cudf.core.column import (
     ColumnBase,
     as_column,
 )
+from cudf.core.column._pylibcudf_helpers import fillna_bool_false
 from cudf.core.column.column import concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtype.validators import is_dtype_obj_numeric
@@ -4404,7 +4405,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: bool
         """
         return self._return_result_like_self(
-            self.series._column.is_leap_year.fillna(False)
+            fillna_bool_false(self.series._column.is_leap_year)
         )
 
     @property

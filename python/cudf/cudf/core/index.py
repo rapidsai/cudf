@@ -40,6 +40,7 @@ from cudf.core.column import (
     TimeDeltaColumn,
     access_columns,
 )
+from cudf.core.column._pylibcudf_helpers import fillna_bool_false
 from cudf.core.column.column import as_column, column_empty, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
@@ -4267,7 +4268,7 @@ class DatetimeIndex(Index):
         Booleans indicating if dates belong to a leap year.
         """
         # .is_leap_year is already a cached_property
-        res = self._column.is_leap_year.fillna(False)
+        res = fillna_bool_false(self._column.is_leap_year)
         return cupy.asarray(res)
 
     @property

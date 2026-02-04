@@ -60,6 +60,7 @@ from cudf.core.column import (
     column_empty,
     concat_columns,
 )
+from cudf.core.column._pylibcudf_helpers import fillna_bool_false
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
 from cudf.core.dtype.validators import is_dtype_obj_numeric
@@ -6391,7 +6392,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         # Strings can't compare to anything else.
                         result[col] = make_false_column_like_self()
                     else:
-                        result[col] = (self_col == other_col).fillna(False)
+                        result[col] = fillna_bool_false(self_col == other_col)
                 else:
                     result[col] = make_false_column_like_self()
         elif is_dict_like(values):
