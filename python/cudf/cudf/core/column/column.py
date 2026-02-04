@@ -2770,7 +2770,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             other, inplace
         )
         result = casted_col.copy_if_else(casted_other, cond)  # type: ignore[arg-type]
-        return ColumnBase.create(result.plc_column, self.dtype)
+        return ColumnBase.create(result.plc_column, casted_col.dtype)
 
 
 def column_empty(
