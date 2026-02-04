@@ -739,8 +739,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             If the dtype is incompatible with the Column.
         """
         # Skip validation for empty columns (INT8 with all nulls). These are created
-        # by _wrap_buffers() when libcudf reports EMPTY columns and may have
-        # inaccurate dtype metadata.
+        # by _wrap_buffers() from EMPTY columns and may have inaccurate dtype metadata.
         # For example, an empty list [] has element_type=object but child is INT8.
         if (
             col.type().id() == plc.TypeId.INT8
