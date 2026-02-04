@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import functools
 import zoneinfo
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+from cudf.core.dtype.validators import is_default_cudf_dtype
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -22,38 +23,6 @@ from cudf.core.dtypes import (
 
 if TYPE_CHECKING:
     from cudf._typing import DtypeObj
-
-
-# TODO: Move this to dtype/validators.py
-def is_default_cudf_dtype(dtype_to_check: Any) -> bool:
-    from cudf.utils.dtypes import CUDF_STRING_DTYPE
-
-    if isinstance(dtype_to_check, np.dtype):
-        return (
-            dtype_to_check.kind in set("iufb")
-            or dtype_to_check == CUDF_STRING_DTYPE
-        )
-    elif isinstance(dtype_to_check, CategoricalDtype):
-        return is_default_cudf_dtype(dtype_to_check.categories.dtype)
-    elif isinstance(dtype_to_check, IntervalDtype):
-        return is_default_cudf_dtype(dtype_to_check.subtype)
-    elif isinstance(dtype_to_check, StructDtype):
-        return all(
-            is_default_cudf_dtype(field)
-            for field in dtype_to_check.fields.values()
-        )
-    elif isinstance(dtype_to_check, ListDtype):
-        return is_default_cudf_dtype(dtype_to_check.element_type)
-    else:
-        return isinstance(
-            dtype_to_check,
-            (
-                pd.DatetimeTZDtype,
-                Decimal128Dtype,
-                Decimal64Dtype,
-                Decimal32Dtype,
-            ),
-        )
 
 
 @functools.singledispatch

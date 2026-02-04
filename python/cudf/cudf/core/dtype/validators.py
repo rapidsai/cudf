@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 
@@ -12,6 +13,35 @@ from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
 if TYPE_CHECKING:
     from cudf._typing import DtypeObj
+
+
+def is_default_cudf_dtype(dtype_to_check: Any) -> bool:
+    if isinstance(dtype_to_check, np.dtype):
+        return (
+            dtype_to_check.kind in {"i", "u", "f", "b", "m", "M"}
+            or dtype_to_check == CUDF_STRING_DTYPE
+        )
+    elif isinstance(dtype_to_check, cudf.CategoricalDtype):
+        return is_default_cudf_dtype(dtype_to_check.categories.dtype)
+    elif isinstance(dtype_to_check, cudf.IntervalDtype):
+        return is_default_cudf_dtype(dtype_to_check.subtype)
+    elif isinstance(dtype_to_check, cudf.StructDtype):
+        return all(
+            is_default_cudf_dtype(field)
+            for field in dtype_to_check.fields.values()
+        )
+    elif isinstance(dtype_to_check, cudf.ListDtype):
+        return is_default_cudf_dtype(dtype_to_check.element_type)
+    else:
+        return isinstance(
+            dtype_to_check,
+            (
+                pd.DatetimeTZDtype,
+                cudf.Decimal128Dtype,
+                cudf.Decimal64Dtype,
+                cudf.Decimal32Dtype,
+            ),
+        )
 
 
 def is_dtype_obj_string(obj: DtypeObj) -> bool:
