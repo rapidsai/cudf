@@ -5,8 +5,6 @@ schema_version: 1
 context:
   version: ${{ env.get("RAPIDS_PACKAGE_VERSION") }}
   minor_version: ${{ (version | split("."))[:2] | join(".") }}
-  cuda_version: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[:2] | join(".") }}
-  cuda_major: '${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[0] }}'
   date_string: '${{ env.get("RAPIDS_DATE_STRING") }}'
   head_rev: '${{ git.head_rev(".")[:8] }}'
 
@@ -19,7 +17,7 @@ source:
 
 build:
   noarch: python
-  string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+  string: ${{ date_string }}_${{ head_rev }}
   script:
     content: |
       ./build.sh dask_cudf
@@ -30,14 +28,12 @@ requirements:
     - pip
     - rapids-build-backend >=0.4.0,<0.5.0
     - setuptools>=77.0.0
-    - cuda-version =${{ cuda_version }}
   run:
     - python
     - cudf =${{ version }}
     # 'nvidia-ml-py' provides the 'pynvml' module
     - nvidia-ml-py>=12
     - rapids-dask-dependency =${{ minor_version }}
-    - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
 
 tests:
   - python:
