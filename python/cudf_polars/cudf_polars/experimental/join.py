@@ -402,7 +402,6 @@ def _(
                 inter_key = (inter_name, part_out, j)
                 graph[(inter_name, part_out, j)] = (
                     partial(ir.do_evaluate, context=context),
-                    ir.schema,
                     ir.left_on,
                     ir.right_on,
                     ir.options,

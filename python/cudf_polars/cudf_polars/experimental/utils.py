@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition utilities."""
 
@@ -28,11 +28,7 @@ if TYPE_CHECKING:
 
 def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
-    return (
-        dfs[0]
-        if len(dfs) == 1
-        else Union.do_evaluate(None, None, *dfs, context=context)
-    )
+    return dfs[0] if len(dfs) == 1 else Union.do_evaluate(None, *dfs, context=context)
 
 
 def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:

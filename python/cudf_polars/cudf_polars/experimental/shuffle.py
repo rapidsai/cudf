@@ -144,6 +144,7 @@ class Shuffle(IR):
 
     __slots__ = ("keys", "shuffle_method", "shuffler_insertion_method")
     _non_child = ("schema", "keys", "shuffle_method", "shuffler_insertion_method")
+    _n_non_child_args = 4
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
     shuffle_method: ShuffleMethod
@@ -177,7 +178,6 @@ class Shuffle(IR):
         schema: Schema,
         keys: tuple[NamedExpr, ...],
         shuffle_method: ShuffleMethod,
-        shuffler_insertion_method: ShufflerInsertionMethod,
         df: DataFrame,
         *,
         context: IRExecutionContext,

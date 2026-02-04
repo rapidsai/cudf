@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for tracing and monitoring IR execution."""
@@ -169,7 +169,7 @@ def log_do_evaluate(
             # Anything remaining is a dataframe, except for 'context' kwarg.
             frames: list[cudf_polars.containers.DataFrame] = (
                 list(args) + [v for k, v in kwargs.items() if k != "context"]
-            )[len(cls._non_child) :]  # type: ignore[assignment]
+            )[cls._n_non_child_args :]  # type: ignore[assignment]
 
             before_start = time.monotonic_ns()
             before = make_snapshot(

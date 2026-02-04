@@ -198,6 +198,41 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                     }
                 )
 
+            # Check that the number of non-child arguments matches the _n_non_child_args class variable
+            # We can't just use node._n_non_child_args because it's a class variable and we need the value for the instance
+            n_non_child_args_value: int | None = None
+
+            for stmt in ast.walk(node):
+                if (
+                    isinstance(stmt, ast.Assign)
+                    and stmt.targets[0].id == "_n_non_child_args"
+                    and isinstance(stmt.value, ast.Constant)
+                ):
+                    n_non_child_args_value = stmt.value.value
+                    break
+
+            if n_non_child_args_value is None:
+                records.append(
+                    {
+                        "cls": class_name,
+                        "arg": "n_non_child_args",
+                        "error": "Expected 1 assignment to _n_non_child_args, found 0",
+                        "lineno": node.lineno,
+                        "filename": filename,
+                    }
+                )
+
+            if len(non_child_args) != n_non_child_args_value:
+                records.append(
+                    {
+                        "cls": class_name,
+                        "arg": "non_child_args",
+                        "error": f"Mismatch between number of non-child arguments (expected {n_non_child_args_value}, found {len(non_child_args)})",
+                        "lineno": node.lineno,
+                        "filename": filename,
+                    }
+                )
+
             # Check that all *remaining* args in do_evaluate are 'DataFrame' type
             regular_args = [
                 arg
