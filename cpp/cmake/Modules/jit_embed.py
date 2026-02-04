@@ -383,6 +383,8 @@ extern "C" {{
 
 """
 
+# TODO: use ASM embed for blobs
+
 
 # Usage: embed.py --input <input file> --output <output file>
 def main():

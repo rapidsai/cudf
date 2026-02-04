@@ -350,6 +350,13 @@ endif()
 set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
 
+
+function(add_lto_ir_target)
+
+# TODO: implement LTO target addition
+
+endfunction()
+
 list(APPEND CUDF_JIT_DEFINITIONS -DCUDF_RUNTIME_JIT -D__CUDACC_RTC__)
 list(
   APPEND

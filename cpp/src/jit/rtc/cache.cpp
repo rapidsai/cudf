@@ -93,7 +93,7 @@ void cache_t::store_blob_to_disk(sha256_hash const& sha, blob_view binary)
 
   if (!enabled_) { return; }
 
-  char temp_path[] = "/tmp/blob-XXXXXX";
+  char temp_path[] = "/tmp/cudf-blob-XXXXXX";
 
   {
     int fd = mkstemp(temp_path);
