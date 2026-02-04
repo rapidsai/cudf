@@ -34,8 +34,9 @@ class Node(Generic[T]):
     *children).``
     """
 
-    __slots__ = ("_hash_value", "_repr_value", "children")
+    __slots__ = ("_hash_value", "_repr_value", "_stable_hash_value", "children")
     _hash_value: int
+    _stable_hash_value: int
     _repr_value: str
     children: tuple[T, ...]
     _non_child: ClassVar[tuple[str, ...]] = ()
@@ -99,8 +100,12 @@ class Node(Generic[T]):
         int
             A stable 32-bit identifier for this node.
         """
-        content = repr(self.get_hashable()).encode("utf-8")
-        return int(hashlib.md5(content).hexdigest()[:8], 16)
+        try:
+            return self._stable_hash_value
+        except AttributeError:
+            content = repr(self.get_hashable()).encode("utf-8")
+            self._stable_hash_value = int(hashlib.md5(content).hexdigest()[:8], 16)
+            return self._stable_hash_value
 
     def __hash__(self) -> int:
         """
