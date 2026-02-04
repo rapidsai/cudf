@@ -3047,7 +3047,9 @@ class MapFunction(IR):
             raise NotImplementedError(
                 "Fast count unsupported for CSV scans"
             )  # pragma: no cover
-        elif self.name == "hint_sorted":
+        elif (
+            self.name == "hint_sorted"
+        ):  # pragma: no cover; polars prunes hints in some cases
             raise NotImplementedError("Hint sorted unsupported")
         self._non_child_args = (schema, name, self.options)
 

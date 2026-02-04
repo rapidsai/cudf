@@ -79,11 +79,14 @@ def to_request(
     elif isinstance(value, expr.Agg):
         child = value.children[0]
         col = child.evaluate(df, context=ExecutionContext.ROLLING)
-        if POLARS_VERSION_LT_136 and value.name == "var":
+        if POLARS_VERSION_LT_136 and value.name == "var":  # pragma: no cover
             # Polars variance produces null if nvalues <= ddof
             # libcudf produces NaN. However, we can get the polars
             # behaviour by setting the minimum window size to ddof +
             # 1.
+            #
+            # We still need this check, polars is not hitting it because
+            # of https://github.com/pola-rs/polars/pull/25117
             min_periods = value.options + 1
     else:
         col = value.evaluate(
