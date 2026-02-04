@@ -2887,12 +2887,14 @@ def column_empty(
             # CategoricalDtype needs special handling - create as INT64 codes
             # then wrap with categorical metadata via _with_type_metadata
             plc_dtype = plc.DataType(plc.TypeId.INT64)
-            return ColumnBase.from_pylibcudf(
+            codes_column = ColumnBase.create(
                 plc.Column.from_scalar(
                     plc.Scalar.from_py(None, plc_dtype),
                     row_count,
-                )
-            )._with_type_metadata(dtype)
+                ),
+                np.dtype(np.int64),
+            )
+            return codes_column._with_type_metadata(dtype)
         else:
             plc_dtype = dtype_to_pylibcudf_type(dtype)
             return ColumnBase.create(

@@ -319,9 +319,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 ),
                 get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
             )
-            if cudf.get_option(
-                "mode.pandas_compatible"
-            ) and result.dtype == np.dtype("int16"):
+            if result.dtype == np.dtype("int16"):
                 result = result.astype(np.dtype("int32"))
             return result
 
