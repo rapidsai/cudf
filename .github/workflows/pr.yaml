@@ -289,7 +289,7 @@ jobs:
   checks:
     secrets: inherit
     needs: telemetry-setup
-    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@fix/no-changed-files
     with:
       enable_check_generated_files: false
       ignored_pr_jobs: "telemetry-summarize spark-rapids-jni wheel-tests-cudf-polars-with-rapidsmpf"
