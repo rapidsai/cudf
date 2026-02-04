@@ -1022,12 +1022,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - pylibcudf-cu12==26.4.*,>=0.0.0a0
+              - pylibcudf-cu12[pyarrow]==26.4.*,>=0.0.0a0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - pylibcudf-cu13==26.4.*,>=0.0.0a0
+              - pylibcudf-cu13[pyarrow]==26.4.*,>=0.0.0a0
           - {matrix: null, packages: [*plc_unsuffixed]}
   depends_on_cudf:
     common:
