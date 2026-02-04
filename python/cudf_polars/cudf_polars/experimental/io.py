@@ -271,6 +271,7 @@ class SplitScan(IR):
             row_index,
             include_file_paths,
             predicate,
+            parquet_options,
             context=context,
         )
 
