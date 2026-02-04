@@ -79,6 +79,13 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
+    @staticmethod
+    def _validate_dtype_to_plc_column(
+        plc_column: plc.Column, dtype: DtypeObj
+    ) -> None:
+        """Validate that the dtype matches the equivalent type of the plc_column"""
+        return None
+
     @classmethod
     def _validate_args(  # type: ignore[override]
         cls, plc_column: plc.Column, dtype: CategoricalDtype

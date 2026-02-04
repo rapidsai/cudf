@@ -331,6 +331,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "ColumnBase and its subclasses must be instantiated via from_pylibcudf."
         )
 
+    @staticmethod
+    def _validate_dtype_to_plc_column(
+        plc_column: plc.Column, dtype: DtypeObj
+    ) -> None:
+        """Validate that the dtype matches the equivalent type of the plc_column"""
+        if dtype_to_pylibcudf_type(dtype) != plc_column.type():
+            # TODO: Override ListColumn, StructColumn, IntervalColumn to also validate children
+            raise ValueError(
+                f"dtype {dtype} does not match the type of the plc_column {plc_column.type().id()}"
+            )
+
     @classmethod
     def _validate_args(
         cls, plc_column: plc.Column, dtype: DtypeObj
@@ -343,6 +354,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 f"plc_column must be a pylibcudf.Column with a TypeId in {cls._VALID_PLC_TYPES}"
             )
+        cls._validate_dtype_to_plc_column(plc_column, dtype)
         return plc_column, dtype
 
     @property
@@ -2577,24 +2589,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 aggregation.make_aggregation(op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
+            # Hook for subclasses (e.g., DecimalBaseColumn adjusts precision)
+            col_dtype = col._adjust_reduce_result_dtype(
+                op, col_dtype, plc_scalar
+            )
             result_col = ColumnBase.create(
                 plc.Column.from_scalar(plc_scalar, 1), col_dtype
             )
-            # Hook for subclasses (e.g., DecimalBaseColumn adjusts precision)
-            result_col = col._adjust_reduce_result(
-                result_col, op, col_dtype, plc_scalar
-            )
         return result_col.element_indexing(0)
 
-    def _adjust_reduce_result(
+    def _adjust_reduce_result_dtype(
         self,
-        result_col: ColumnBase,
         op: str,
         col_dtype: DtypeObj,
         plc_scalar: plc.Scalar,
-    ) -> ColumnBase:
+    ) -> DtypeObj:
         """Hook for subclasses to adjust reduction result."""
-        return result_col
+        return col_dtype
 
     def minmax(self) -> tuple[ScalarLike, ScalarLike]:
         with self.access(mode="read", scope="internal"):
