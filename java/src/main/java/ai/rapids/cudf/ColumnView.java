@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -660,7 +660,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * The caller owns the output ColumnVectors and is responsible for closing them.
    *
-   * @param indices
+   * Example:
+   * <pre>{@code
+   * // col     = [10, 12, 14, 16, 18], DType = INT32
+   * // indices = [1, 3, 3, 5]
+   * ColumnVector[] result = col.slice(1, 3, 3, 5);
+   * // result[0] = [12, 14],           DType = INT32
+   * // result[1] = [16, 18],           DType = INT32
+   * }</pre>
+   *
+   * @param indices an array of indices that define left-closed, right-open slice ranges
+   *                (taken as consecutive pairs). For example {@code [1, 3, 3, 5]} produces
+   *                slices {@code [1, 3)} and {@code [3, 5)}.
    * @return A new ColumnVector array with slices from the original ColumnVector
    */
   public final ColumnVector[] slice(int... indices) {
@@ -688,7 +699,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Return a subVector from start inclusive to the end of the vector.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [10, 12, 14, 16, 18], DType = INT32
+   * ColumnVector result = col.subVector(2);
+   * // result = [14, 16, 18],         DType = INT32
+   * }</pre>
+   *
    * @param start the index to start at.
+   * @return a new ColumnVector containing rows {@code [start, rowCount)} from this column.
    */
   public final ColumnVector subVector(int start) {
     return subVector(start, (int)rows);
@@ -696,8 +716,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Return a subVector.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [10, 12, 14, 16, 18], DType = INT32
+   * ColumnVector result = col.subVector(1, 4);
+   * // result = [12, 14, 16],         DType = INT32
+   * }</pre>
+   *
    * @param start the index to start at (inclusive).
    * @param end the index to end at (exclusive).
+   * @return a new ColumnVector containing rows {@code [start, end)} from this column.
    */
   public final ColumnVector subVector(int start, int end) {
     ColumnVector [] tmp = slice(start, end);
@@ -739,9 +768,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * columns must be equal to the number of indices in the array plus one.
    *
    * Example:
-   * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
-   * splits: {2, 5, 9}
-   * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
+   * <pre>{@code
+   * // col     = [10, 12, 14, 16, 18, 20, 22, 24, 26, 28], DType = INT32
+   * // indices = [2, 5, 9]
+   * ColumnVector[] result = col.split(2, 5, 9);
+   * // result[0] = [10, 12],             DType = INT32
+   * // result[1] = [14, 16, 18],         DType = INT32
+   * // result[2] = [20, 22, 24, 26],     DType = INT32
+   * // result[3] = [28],                 DType = INT32
+   * }</pre>
    *
    * Note that this is very similar to the output from a PartitionedTable.
    *
@@ -806,12 +841,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * columns must be equal to the number of indices in the array plus one.
    *
    * Example:
-   * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
-   * splits: {2, 5, 9}
-   * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
+   * <pre>{@code
+   * // col     = [10, 12, 14, 16, 18, 20, 22, 24, 26, 28], DType = INT32
+   * // indices = [2, 5, 9]
+   * ColumnView[] result = col.splitAsViews(2, 5, 9);
+   * // result[0] = [10, 12],             DType = INT32
+   * // result[1] = [14, 16, 18],         DType = INT32
+   * // result[2] = [20, 22, 24, 26],     DType = INT32
+   * // result[3] = [28],                 DType = INT32
+   * }</pre>
    *
    * Note that this is very similar to the output from a PartitionedTable.
-   *
    *
    * @param indices the indices to split with
    * @return A new ColumnView array with slices from the original ColumnView
@@ -1280,6 +1320,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Count the number of set bit for each integer value.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [0, 1, 3, 7, 8], DType = INT32
+   * ColumnVector result = col.bitCount();
+   * // result = [0, 1, 2, 3, 1], DType = INT32
+   * }</pre>
    */
   public final ColumnVector bitCount() {
     return unaryOp(UnaryOp.BIT_COUNT);
@@ -1289,6 +1336,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Invert the bits, output is the same type as input.
    * For BOOL8 type, this is equivalent to logical not (UnaryOp.NOT), but this does not
    * matter since Spark does not support bitwise inverting on boolean type.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [0, 1],    DType = INT8
+   * ColumnVector result = col.bitInvert();
+   * // result = [-1, -2],  DType = INT8
+   * }</pre>
    */
   public final ColumnVector bitInvert() {
     return unaryOp(UnaryOp.BIT_INVERT);
@@ -1296,6 +1350,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Multiple different binary operations.
+   *
+   * Example:
+   * <pre>{@code
+   * // lhs    = [1, 2, 3],    DType = INT32
+   * // rhs    = 10,           DType = INT32
+   * ColumnVector result = lhs.binaryOp(BinaryOp.ADD, rhs, DType.INT32);
+   * // result = [11, 12, 13], DType = INT32
+   * }</pre>
+   *
    * @param op      the operation to perform
    * @param rhs     the rhs of the operation
    * @param outType the type of output you want.
@@ -1881,6 +1944,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * the first character after spaces is modified to upper-case,
    * while all the remaining characters in a word are modified to lower-case.
    *
+   * Example:
+   * <pre>{@code
+   * // col    = ["tesT1", "a tESt", "another TEST", null], DType = STRING
+   * ColumnVector result = col.toTitle();
+   * // result = ["Test1", "A Test", "Another Test", null], DType = STRING
+   * }</pre>
+   *
    * Any null string entries return corresponding null output column entries
    */
   public final ColumnVector toTitle() {
@@ -1896,11 +1966,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * any delimiter character is found.
    *
    * Example:
-   *     input = ["tesT1", "a Test", "Another Test", "a\tb"];
-   *     delimiters = ""
-   *     output is ["Test1", "A test", "Another test", "A\tb"]
-   *     delimiters = " "
-   *     output is ["Test1", "A Test", "Another Test", "A\tb"]
+   * <pre>{@code
+   * // col        = ["tesT1", "a tESt", "Another TEST", "a\tb"], DType = STRING
+   * // delimiters = " \t",                                      DType = STRING
+   * ColumnVector result = col.capitalize(delimiters);
+   * // result     = ["Test1", "A Test", "Another Test", "A\tB"], DType = STRING
+   * }</pre>
    *
    * Any null string entries return corresponding null output column entries.
    *
@@ -1921,6 +1992,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * This returns a column with one string. Any null entries are ignored unless
    * the narep parameter specifies a replacement string (not a null value).
+   *
+   * Example:
+   * <pre>{@code
+   * // col       = ["a", "b", null, "c"], DType = STRING
+   * // separator = "-",                  DType = STRING
+   * // narep     = "NA",                 DType = STRING
+   * ColumnVector result = col.joinStrings(separator, narep);
+   * // result    = ["a-b-NA-c"],          DType = STRING
+   * }</pre>
    *
    * @param separator what to insert to separate each row.
    * @param narep what to replace nulls with
@@ -2905,6 +2985,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * within each row and returns a single strings column result.
    * Each new string is created by concatenating the strings from the same row (same list element)
    * delimited by the row separator provided in the sepCol strings column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col            = [["a", null, "c"], ["d", "e"], []], DType = LIST of STRING
+   * // sepCol         = ["-", null, "+"],                   DType = STRING
+   * // separatorNarep = "/",                                DType = STRING
+   * // stringNarep    = "X",                                DType = STRING
+   * ColumnVector result = col.stringConcatenateListElements(
+   *     sepCol, separatorNarep, stringNarep, false, true);
+   * // result         = ["a-X-c", "d/e", ""],               DType = STRING
+   * }</pre>
+   *
    * @param sepCol strings column that provides separators for concatenation.
    * @param separatorNarep string scalar indicating null behavior when a separator is null.
    *                        If set to null and the separator is null the resulting string will
@@ -2938,6 +3030,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * within each row and returns a single strings column result. Each new string is created by
    * concatenating the strings from the same row (same list element) delimited by the
    * separator provided.
+   *
+   * Example:
+   * <pre>{@code
+   * // col       = [["a", null, "c"], [], ["d"]], DType = LIST of STRING
+   * // separator = "-",                          DType = STRING
+   * // narep     = "X",                          DType = STRING
+   * ColumnVector result = col.stringConcatenateListElements(separator, narep, false, false);
+   * // result    = ["a-X-c", null, "d"],         DType = STRING
+   * }</pre>
+   *
    * @param separator string scalar inserted between each string being merged.
    * @param narep string scalar indicating null behavior. If set to null and any string in the row
    *              is null the resulting string will be null. If not null, null values in any
@@ -4061,10 +4163,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * a new `LIST` column of the same type as this column, where each element is copied
    * from the row *only* if the corresponding `boolean_mask` is non-null and `true`.
    * <p>
-   * E.g.
-   * column       = { {0,1,2}, {3,4}, {5,6,7}, {8,9} };
-   * boolean_mask = { {0,1,1}, {1,0}, {1,1,1}, {0,0} };
-   * results      = { {1,2},   {3},   {5,6,7}, {} };
+   * Example:
+   * <pre>{@code
+   * // col         = [[0, 1, 2], [3, 4], [5, 6, 7], [8, 9]], DType = LIST of INT32
+   * // booleanMask = [[false, true, true], [true, false], [true, true, true], [false, false]],
+   * //               DType = LIST of BOOL8
+   * ColumnVector result = col.applyBooleanMask(booleanMask);
+   * // result      = [[1, 2], [3], [5, 6, 7], []],            DType = LIST of INT32
+   * }</pre>
    * <p>
    * This column and `boolean_mask` must have the same number of rows.
    * The output column has the same number of rows as this column.
@@ -4097,7 +4203,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Count how many rows in the column are distinct from one another.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 2, null, 3], DType = INT32
+   * int result = col.distinctCount(NullPolicy.EXCLUDE);
+   * // result = 3
+   * }</pre>
+   *
    * @param nullPolicy if nulls should be included or not.
+   * @return the number of distinct values.
    */
   public int distinctCount(NullPolicy nullPolicy) {
     return distinctCount(getNativeView(), nullPolicy.includeNulls);
@@ -4106,6 +4221,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Count how many rows in the column are distinct from one another.
    * Nulls are included.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 2, null, 3], DType = INT32
+   * int result = col.distinctCount();
+   * // result = 4
+   * }</pre>
+   *
+   * @return the number of distinct values, including null.
    */
   public int distinctCount() {
     return distinctCount(getNativeView(), true);
