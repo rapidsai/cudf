@@ -698,6 +698,9 @@ cdef class HybridScanReader:
         for span in column_chunk_data:
             spans_vec.push_back(_get_device_span(span))
 
+        self.stream = stream
+        self.mr = mr
+
         cdef column_view mask_view = row_mask.view()
         self.c_obj.get()[0].setup_chunking_for_filter_columns(
             chunk_read_limit,
@@ -715,9 +718,7 @@ cdef class HybridScanReader:
 
     def materialize_filter_columns_chunk(
         self,
-        Column row_mask,
-        Stream stream=None,
-        DeviceMemoryResource mr=None
+        Column row_mask
     ):
         """Materialize a chunk of filter columns.
 
@@ -725,10 +726,6 @@ cdef class HybridScanReader:
         ----------
         row_mask : Column
             Mutable boolean column indicating surviving rows
-        stream : Stream, optional
-            CUDA stream
-        mr : DeviceMemoryResource, optional
-            Device memory resource
         Returns
         -------
         TableWithMetadata
@@ -740,7 +737,7 @@ cdef class HybridScanReader:
                 mask_view
             )
         return TableWithMetadata.from_libcudf(
-            c_result, _get_stream(stream), _get_memory_resource(mr)
+            c_result, _get_stream(self.stream), _get_memory_resource(self.mr)
         )
 
     def setup_chunking_for_payload_columns(
@@ -786,6 +783,9 @@ cdef class HybridScanReader:
         for span in column_chunk_data:
             spans_vec.push_back(_get_device_span(span))
 
+        self.stream = stream
+        self.mr = mr
+
         cdef column_view mask_view = row_mask.view()
         self.c_obj.get()[0].setup_chunking_for_payload_columns(
             chunk_read_limit,
@@ -804,8 +804,6 @@ cdef class HybridScanReader:
     def materialize_payload_columns_chunk(
         self,
         Column row_mask,
-        Stream stream=None,
-        DeviceMemoryResource mr=None
     ):
         """Materialize a chunk of payload columns.
 
@@ -813,10 +811,6 @@ cdef class HybridScanReader:
         ----------
         row_mask : Column
             Boolean column indicating surviving rows
-        stream : Stream, optional
-            CUDA stream
-        mr : DeviceMemoryResource, optional
-            Device memory resource
         Returns
         -------
         TableWithMetadata
@@ -828,7 +822,7 @@ cdef class HybridScanReader:
                 mask_view
             )
         return TableWithMetadata.from_libcudf(
-            c_result, _get_stream(stream), _get_memory_resource(mr)
+            c_result, _get_stream(self.stream), _get_memory_resource(self.mr)
         )
 
     def has_next_table_chunk(self):

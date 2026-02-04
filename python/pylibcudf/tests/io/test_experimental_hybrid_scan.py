@@ -633,7 +633,7 @@ def test_hybrid_scan_chunked_reading(
     while simple_hybrid_scan_reader.has_next_table_chunk():
         chunk_result = (
             simple_hybrid_scan_reader.materialize_filter_columns_chunk(
-                row_mask, stream
+                row_mask
             )
         )
         assert isinstance(chunk_result, plc.io.types.TableWithMetadata)
