@@ -6,6 +6,7 @@
 #include "error.hpp"
 #include "io/comp/common.hpp"
 #include "reader_impl.hpp"
+#include "reader_impl_chunking_utils.cuh"
 #include "reader_impl_preprocess_utils.cuh"
 
 #include <cudf/detail/iterator.cuh>
@@ -27,6 +28,7 @@
 
 #include <limits>
 #include <numeric>
+#include <vector>
 
 namespace cudf::io::parquet::detail {
 
@@ -260,25 +262,58 @@ void reader_impl::allocate_level_decode_space()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
+  auto& pages   = subpass.pages;
 
-  auto& pages = subpass.pages;
+  auto const num_pages = pages.size();
+  if (num_pages == 0) { return; }
 
-  // TODO: this could be made smaller if we ignored dictionary pages and pages with no
-  // repetition data.
-  size_t const per_page_decode_buf_size = LEVEL_DECODE_BUF_SIZE * 2 * pass.level_type_size;
-  auto const decode_buf_size            = per_page_decode_buf_size * pages.size();
+  std::vector<size_t> def_level_sizes(num_pages);
+  std::vector<size_t> rep_level_sizes(num_pages);
+
+  // Loop over pages to compute sizes
+  size_t total_memory_size = 0;
+  for (size_t idx = 0; idx < num_pages; idx++) {
+    // Skip pages that are masked out - no need to allocate level decode space for them
+    if (!_subpass_page_mask.empty() && !_subpass_page_mask[idx]) {
+      def_level_sizes[idx] = 0;
+      rep_level_sizes[idx] = 0;
+      continue;
+    }
+
+    auto const& p     = pages[idx];
+    auto const& chunk = pass.chunks[p.chunk_idx];
+
+    compute_page_level_decode_sizes(p,
+                                    chunk,
+                                    pass.level_type_size,
+                                    pass.skip_rows,
+                                    pass.num_rows,
+                                    def_level_sizes[idx],
+                                    rep_level_sizes[idx]);
+
+    total_memory_size += def_level_sizes[idx] + rep_level_sizes[idx];
+  }
+
+  // Allocate the total buffer
   subpass.level_decode_data =
-    rmm::device_buffer(decode_buf_size, _stream, cudf::get_current_device_resource_ref());
+    rmm::device_buffer(total_memory_size, _stream, cudf::get_current_device_resource_ref());
 
-  // distribute the buffers
-  auto* buf = static_cast<uint8_t*>(subpass.level_decode_data.data());
-  for (size_t idx = 0; idx < pages.size(); idx++) {
-    auto& p = pages[idx];
+  // Set buffer pointers for each page using running offsets
+  auto* current_ptr = static_cast<uint8_t*>(subpass.level_decode_data.data());
+  for (size_t idx = 0; idx < num_pages; idx++) {
+    if (def_level_sizes[idx] == 0) {
+      pages[idx].lvl_decode_buf[level_type::DEFINITION] = nullptr;
+    } else {
+      pages[idx].lvl_decode_buf[level_type::DEFINITION] = current_ptr;
+      current_ptr += def_level_sizes[idx];
+    }
 
-    p.lvl_decode_buf[level_type::DEFINITION] = buf;
-    buf += (LEVEL_DECODE_BUF_SIZE * pass.level_type_size);
-    p.lvl_decode_buf[level_type::REPETITION] = buf;
-    buf += (LEVEL_DECODE_BUF_SIZE * pass.level_type_size);
+    if (rep_level_sizes[idx] == 0) {
+      pages[idx].lvl_decode_buf[level_type::REPETITION] = nullptr;
+    } else {
+      pages[idx].lvl_decode_buf[level_type::REPETITION] = current_ptr;
+      current_ptr += rep_level_sizes[idx];
+    }
   }
 }
 
@@ -657,6 +692,17 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
 
   // figure out which kernels to run
   subpass.kernel_mask = get_aggregated_decode_kernel_mask(subpass.pages, _stream);
+
+  // Decode definition and repetition levels for all subpass pages
+  // so they're available to compute_page_sizes and decode kernels.
+  // We can't determine subpass skip_rows & num_rows yet, so we use the pass values.
+  detail::preprocess_levels(subpass.pages,
+                            pass.chunks,
+                            _subpass_page_mask,
+                            pass.skip_rows,
+                            pass.num_rows,
+                            pass.level_type_size,
+                            _stream);
 
   // iterate over all input columns and determine if they contain lists.
   // TODO: we could do this once at the file level instead of every time we get in here. the set of
