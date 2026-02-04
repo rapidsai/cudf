@@ -7,6 +7,7 @@ from __future__ import annotations
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeAlias, TypedDict
 
+from cudf_polars.dsl.ir import IR
 from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.base import (
         PartitionInfo,
         StatsCollector,
@@ -126,6 +127,16 @@ def lower_ir_node(
     lower_ir_graph
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
+
+
+@lower_ir_node.register(IR)
+def _lower_ir_node_base_fallback(
+    ir: IR, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """Fallback to base task-engine lowering logic for unregistered types."""
+    from cudf_polars.experimental.dispatch import lower_ir_node as base_lower_ir_node
+
+    return base_lower_ir_node(ir, rec)
 
 
 @singledispatch

@@ -27,7 +27,6 @@ import rmm
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
-import cudf_polars.experimental.rapidsmpf.lower
 import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame

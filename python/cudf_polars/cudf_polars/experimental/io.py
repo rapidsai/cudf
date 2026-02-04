@@ -572,6 +572,28 @@ def _directory_sink_graph(
     return graph
 
 
+@lower_ir_node.register(StreamingSink)
+def _(
+    ir: StreamingSink, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    from cudf_polars.experimental.parallel import _lower_ir_pwise
+    from cudf_polars.experimental.utils import _lower_ir_fallback
+
+    config_options = rec.state["config_options"]
+
+    # RapidsMPF runtime: StreamingSink not supported, fall back to single partition
+    if (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+    ):
+        return _lower_ir_fallback(
+            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
+        )
+
+    # Default: partition-wise lowering
+    return _lower_ir_pwise(ir, rec)
+
+
 @generate_ir_tasks.register(StreamingSink)
 def _(
     ir: StreamingSink,

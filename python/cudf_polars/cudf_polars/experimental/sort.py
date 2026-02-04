@@ -601,6 +601,27 @@ def _(
     return final_sort_node, partition_info
 
 
+@lower_ir_node.register(ShuffleSorted)
+def _(
+    ir: ShuffleSorted, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    from cudf_polars.experimental.parallel import _lower_ir_pwise
+
+    config_options = rec.state["config_options"]
+
+    # RapidsMPF runtime: ShuffleSorted not supported, fall back to single partition
+    if (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+    ):
+        return _lower_ir_fallback(
+            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
+        )
+
+    # Default: partition-wise lowering
+    return _lower_ir_pwise(ir, rec)
+
+
 @generate_ir_tasks.register(ShuffleSorted)
 def _(
     ir: ShuffleSorted,
