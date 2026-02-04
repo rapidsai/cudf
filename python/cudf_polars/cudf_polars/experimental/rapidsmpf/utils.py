@@ -6,10 +6,13 @@ from __future__ import annotations
 
 import asyncio
 import operator
+import struct
 from contextlib import asynccontextmanager, contextmanager
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.collectives.allgather import AllGather
+from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
@@ -398,3 +401,46 @@ def opaque_reservation(
     yield context.br().reserve_device_memory_and_spill(
         estimated_bytes, allow_overbooking=True
     )
+
+
+async def allgather_reduce(
+    context: Context,
+    op_id: int,
+    *local_values: int,
+) -> tuple[int, ...]:
+    """
+    Allgather local scalar values and sum each across all ranks.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    op_id
+        The collective operation ID for this allgather.
+    *local_values
+        One or more local scalar values to contribute.
+
+    Returns
+    -------
+    tuple[int, ...]
+        The sum of each local_value across all ranks.
+    """
+    n = len(local_values)
+    fmt = "q" * n
+    data = struct.pack(fmt, *local_values)
+    packed = PackedData.from_host_bytes(data, context.br())
+
+    allgather = AllGather(context, op_id)
+    allgather.insert(0, packed)
+    allgather.insert_finished()
+
+    results = await allgather.extract_all(context, ordered=False)
+
+    totals = [0] * n
+    for packed_result in results:
+        result_bytes = packed_result.to_host_bytes()
+        values = struct.unpack(fmt, result_bytes)
+        for i, v in enumerate(values):
+            totals[i] += v
+
+    return tuple(totals)
