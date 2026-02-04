@@ -220,6 +220,10 @@ containing runtime execution context). To perform the
 evaluation, one should use the base class (generic) `evaluate` method
 which handles the recursive evaluation of child nodes.
 
+Plan nodes must also declare an `_n_non_child_args` attribute giving
+the length of `_n_non_child_args`. This is used by tracing to know
+how many non-child (dataframe) inputs to expect without introspection.
+
 To translate the plan node, add a case handler in `translate_ir` that
 lives in `cudf_polars/dsl/translate.py`.
 
