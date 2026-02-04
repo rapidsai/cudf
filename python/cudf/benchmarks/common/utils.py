@@ -4,6 +4,7 @@
 """Common utilities for fixture creation and benchmarking."""
 
 import inspect
+import os
 import re
 import textwrap
 from collections.abc import MutableSet
@@ -118,19 +119,26 @@ def benchmark_with_object(
         null_str = f"_nulls_{nulls}".lower()
 
     col_str = ""
+
     if cols is not None:
-        assert cols in NUM_COLS, (
-            f"You have requested a DataFrame with {cols} columns but fixtures "
-            f"only exist for the values {', '.join(str(x) for x in NUM_COLS)}"
-        )
+        if "CUDF_BENCHMARKS_DEBUG_ONLY" in os.environ:
+            cols = NUM_COLS[0]
+        else:
+            assert cols in NUM_COLS, (
+                f"You have requested a DataFrame with {cols} columns but fixtures "
+                f"only exist for the values {', '.join(str(x) for x in NUM_COLS)}"
+            )
         col_str = f"_cols_{cols}"
 
     row_str = ""
     if rows is not None:
-        assert rows in NUM_ROWS, (
-            f"You have requested a {cls} with {rows} rows but fixtures "
-            f"only exist for the values {', '.join(str(x) for x in NUM_ROWS)}"
-        )
+        if "CUDF_BENCHMARKS_DEBUG_ONLY" in os.environ:
+            cols = NUM_ROWS[0]
+        else:
+            assert rows in NUM_ROWS, (
+                f"You have requested a {cls} with {rows} rows but fixtures "
+                f"only exist for the values {', '.join(str(x) for x in NUM_ROWS)}"
+            )
         row_str = f"_rows_{rows}"
 
     fixture_name = f"{cls}{dtype_str}{null_str}{col_str}{row_str}"
