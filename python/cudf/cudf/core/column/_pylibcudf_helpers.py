@@ -15,12 +15,10 @@ from typing import TYPE_CHECKING, Literal
 import pylibcudf as plc
 
 if TYPE_CHECKING:
-    from cudf.core.buffer import Buffer
     from cudf.core.column import ColumnBase
 
 __all__ = [
     "all_strings_match_type",
-    "create_non_null_mask",
     "fillna_bool_false",
     "reduce_boolean_column",
 ]
@@ -91,47 +89,6 @@ def all_strings_match_type(
         result = result_scalar.to_py()
         assert isinstance(result, bool), f"Expected bool, got {type(result)}"
         return result
-
-
-def create_non_null_mask(column: ColumnBase) -> Buffer:
-    """Create a bitmask where only non-null elements are set to valid.
-
-    This is equivalent to column.notnull().fillna(False).as_mask()
-    but more efficient by going directly through pylibcudf.
-
-    Note: This function is not currently used but kept for potential
-    future optimizations.
-
-    Parameters
-    ----------
-    column : ColumnBase
-        The column to create mask from
-
-    Returns
-    -------
-    Buffer
-        A bitmask buffer
-
-    Examples
-    --------
-    Instead of:
-
-        mask = col.notnull().fillna(False).as_mask()
-
-    Use:
-
-        from cudf.core.column._pylibcudf_helpers import create_non_null_mask
-        mask = create_non_null_mask(col)
-    """
-    from cudf.core.buffer import as_buffer
-
-    with column.access(mode="read", scope="internal"):
-        # Get validity directly
-        bool_plc = plc.unary.is_valid(column.plc_column)
-        # Convert to bitmask - returns DeviceBuffer
-        mask_dbuffer = plc.transform.bools_to_mask(bool_plc)
-        # Wrap in Buffer
-        return as_buffer(data=mask_dbuffer)
 
 
 def reduce_boolean_column(

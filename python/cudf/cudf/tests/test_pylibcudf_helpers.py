@@ -9,10 +9,8 @@ import pytest
 import cudf
 from cudf.core.column._pylibcudf_helpers import (
     all_strings_match_type,
-    create_non_null_mask,
     reduce_boolean_column,
 )
-from cudf.core.column.column import as_column
 
 
 class TestAllStringsMatchType:
@@ -102,54 +100,6 @@ class TestAllStringsMatchType:
             assert old_result == new_result, (
                 f"Mismatch for {data}: old={old_result}, new={new_result}"
             )
-
-
-class TestCreateNonNullMask:
-    """Tests for create_non_null_mask() helper function."""
-
-    def test_no_nulls(self):
-        """Test mask creation with no nulls."""
-        col = as_column([1, 2, 3, 4, 5])
-        mask = create_non_null_mask(col)
-        # All elements should be valid
-        assert mask.size > 0
-
-    def test_with_nulls(self):
-        """Test mask creation with nulls."""
-        col = as_column([1, None, 3, None, 5])
-        mask = create_non_null_mask(col)
-        # Mask should be created
-        assert mask.size > 0
-
-    def test_all_nulls(self):
-        """Test mask creation with all nulls."""
-        col = as_column([None, None, None], dtype="int64")
-        mask = create_non_null_mask(col)
-        # Mask should be created even if all nulls
-        assert mask.size > 0
-
-    def test_string_column_with_nulls(self):
-        """Test mask creation with string column containing nulls."""
-        col = as_column(["a", None, "c", None, "e"])
-        mask = create_non_null_mask(col)
-        assert mask.size > 0
-
-    def test_equivalence_to_original_pattern(self):
-        """Test that result is equivalent to notnull().fillna(False).as_mask()."""
-        col = as_column([1, None, 3, None, 5])
-
-        # Our optimized version
-        mask_optimized = create_non_null_mask(col)
-
-        # Original pattern
-        mask_original = col.notnull().fillna(False).as_mask()
-
-        # Compare the buffers
-        assert mask_optimized.size == mask_original.size
-        # The actual bit patterns should be identical
-        assert bytes(mask_optimized.memoryview()) == bytes(
-            mask_original.memoryview()
-        )
 
 
 class TestReduceBooleanColumn:
