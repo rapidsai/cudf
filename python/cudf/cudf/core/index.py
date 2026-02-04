@@ -899,8 +899,9 @@ class Index(SingleColumnFrame):
 
         res_name = _get_result_name(self.name, other.name)
 
-        if (self._is_boolean() and other._is_numeric()) or (
-            self._is_numeric() and other._is_boolean()
+        if not (self._is_boolean() and other._is_boolean()) and (
+            (self._is_boolean() and other._is_numeric())
+            or (self._is_numeric() and other._is_boolean())
         ):
             if isinstance(self, cudf.MultiIndex):
                 return self[:0].rename(res_name)
@@ -1378,7 +1379,7 @@ class Index(SingleColumnFrame):
             "Use cudf.api.types.is_any_real_numeric_dtype instead",
             FutureWarning,
         )
-        return self._is_numeric()
+        return cudf.api.types.is_any_real_numeric_dtype(self.dtype)
 
     def is_boolean(self):
         """
@@ -2158,10 +2159,7 @@ class Index(SingleColumnFrame):
     notnull = notna
 
     def _is_numeric(self) -> bool:
-        return (
-            is_dtype_obj_numeric(self._column.dtype, include_decimal=False)
-            and self.dtype.kind != "b"
-        )
+        return is_dtype_obj_numeric(self._column.dtype, include_decimal=False)
 
     def _is_boolean(self) -> bool:
         return self.dtype.kind == "b"
