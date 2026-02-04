@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 """Common utilities for fixture creation and benchmarking."""
@@ -122,7 +122,11 @@ def benchmark_with_object(
     # DataFrame fixtures always include a number of columns, and if we're in debug mode
     # there is only a single value so no collapsing occurs. Therefore, we must have a
     # nonempty cols value so that a valid fixture is selected
-    if "CUDF_BENCHMARKS_DEBUG_ONLY" in os.environ and cols is None and cls == "dataframe":
+    if (
+        "CUDF_BENCHMARKS_DEBUG_ONLY" in os.environ
+        and cols is None
+        and cls == "dataframe"
+    ):
         cols = NUM_COLS_FIXTURES[0]
     if cols is not None:
         assert cols in NUM_COLS_FIXTURES, (
