@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -67,6 +67,8 @@ std::unique_ptr<column> transform(
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
  * preserving existing null values and also returns new null_count.
  *
+ * @deprecated in release 26.04. Use column_nans_to_nulls instead.
+ *
  * @throws cudf::logic_error if `input.type()` is a non-floating type
  *
  * @param input  An immutable view of the input column of floating-point type
@@ -75,7 +77,23 @@ std::unique_ptr<column> transform(
  * @return A pair containing a `device_buffer` with the new bitmask and its
  * null count obtained by replacing `NaN` in `input` with null.
  */
-std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
+[[deprecated]] std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
+  column_view const& input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Creates a null_mask from `input` by converting `NaN` elements to null rows
+ * and preserving existing null values
+ *
+ * @throws cudf::logic_error if `input.type()` is a non-floating type
+ *
+ * @param input  An immutable view of the input column of floating-point type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr     Device memory resource used to allocate the returned bitmask
+ * @return       A new column with the null mask created from the input column
+ */
+std::unique_ptr<column> column_nans_to_nulls(
   column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
