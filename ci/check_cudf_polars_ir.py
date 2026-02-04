@@ -198,6 +198,9 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                 if arg.arg not in ("cls", "self")
             ]
 
+            if method_node.args.vararg is not None:
+                regular_args.append(method_node.args.vararg)
+
             # Check args after _non_child parameters
             for arg in regular_args[len(non_child) :]:
                 type_name = get_type_annotation_name(arg.annotation)
