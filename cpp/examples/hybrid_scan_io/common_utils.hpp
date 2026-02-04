@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,6 +32,14 @@ enum class parquet_filter_type : uint8_t {
   FILTER_COLUMN_PAGES_WITH_PAGE_INDEX = 3,
   PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK  = 4,
 };
+
+/**
+ * @brief Get boolean from they keyword
+ *
+ * @param input keyword affirmation string such as: Y, T, YES, TRUE, ON
+ * @return true or false
+ */
+[[nodiscard]] bool get_boolean(std::string input);
 
 /**
  * @brief Create memory resource for libcudf functions
@@ -87,6 +95,41 @@ void check_tables_equal(cudf::table_view const& lhs_table,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
+ * @brief Fetches a host span of Parquet footer bytes from the input buffer span
+ *
+ * @param buffer Input buffer span
+ * @return A host span of the footer bytes
+ */
+
+cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer);
+
+/**
+ * @brief Fetches a host span of Parquet PageIndexbytes from the input buffer span
+ *
+ * @param buffer Input buffer span
+ * @param page_index_bytes Byte range of `PageIndex` to fetch
+ * @return A host span of the PageIndex bytes
+ */
+cudf::host_span<uint8_t const> fetch_page_index_bytes(
+  cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes);
+
+/**
+ * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
+ *
+ * @param host_buffer Host buffer span
+ * @param byte_ranges Byte ranges to fetch
+ * @param stream CUDA stream
+ * @param mr Device memory resource to create device buffers with
+ *
+ * @return Vector of device buffers
+ */
+std::vector<rmm::device_buffer> fetch_byte_ranges(
+  cudf::host_span<uint8_t const> host_buffer,
+  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+/**
  * @brief Read parquet file with the next-gen parquet reader
  *
  * @tparam print_progress Boolean indicating whether to print progress
@@ -100,7 +143,7 @@ void check_tables_equal(cudf::table_view const& lhs_table,
  * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
  *         row validity column
  */
-template <bool print_progress>
+template <bool print_progress, bool single_step_materialize>
 std::unique_ptr<cudf::table> hybrid_scan(io_source const& io_source,
                                          cudf::ast::expression const& filter_expression,
                                          std::unordered_set<parquet_filter_type> const& filters,

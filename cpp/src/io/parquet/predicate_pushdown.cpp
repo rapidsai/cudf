@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "reader_impl_helpers.hpp"
@@ -431,7 +431,7 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
     if (predicate.nullable()) {
       auto bitmask = cudf::detail::make_pinned_vector_async<bitmask_type>(num_bitmasks, stream);
       cudf::detail::cuda_memcpy(
-        cudf::host_span<bitmask_type>{bitmask.data(), num_bitmasks},
+        cudf::host_span<bitmask_type>{bitmask},
         cudf::device_span<bitmask_type const>{predicate.null_mask(), num_bitmasks},
         stream);
       return bitmask;

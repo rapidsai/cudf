@@ -14,7 +14,6 @@
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -614,7 +613,7 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
   // absolute row index for the whole file. chunk_row in PageInfo is relative to the beginning of
   // the chunk. so in the kernels, chunk.start_row + page.chunk_row gives us the absolute row index
   if (is_estimate_row_counts == is_estimate_row_counts::YES) {
-    thrust::for_each(rmm::exec_policy(_stream),
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
                      pass.pages.d_begin(),
                      pass.pages.d_end(),
                      set_list_row_count_estimate{pass.chunks});
@@ -1049,7 +1048,7 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
 
   auto col_string_sizes =
     cudf::detail::make_pinned_vector_async<size_t>(d_col_sizes.size(), _stream);
-  cudf::detail::cuda_memcpy(cudf::host_span<size_t>{col_string_sizes.data(), d_col_sizes.size()},
+  cudf::detail::cuda_memcpy(cudf::host_span<size_t>{col_string_sizes},
                             cudf::device_span<size_t const>{d_col_sizes.data(), d_col_sizes.size()},
                             _stream);
   return col_string_sizes;

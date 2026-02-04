@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.errors import MixedTypeError
@@ -79,22 +78,17 @@ class TimeDeltaColumn(TemporalBaseColumn):
         plc.TypeId.DURATION_NANOSECONDS,
     }
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: np.dtype,
-        exposed: bool,
-    ) -> None:
+    @classmethod
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: np.dtype
+    ) -> tuple[plc.Column, np.dtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
         if cudf.get_option("mode.pandas_compatible"):
             if not dtype.kind == "m":
                 raise ValueError("dtype must be a timedelta numpy dtype.")
         elif not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
             raise ValueError("dtype must be a timedelta numpy dtype.")
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
+        return plc_column, dtype
 
     def _clear_cache(self) -> None:
         super()._clear_cache()
@@ -243,11 +237,14 @@ class TimeDeltaColumn(TemporalBaseColumn):
         if len(self) == 0:
             return super().strftime(format)
         else:
-            with acquire_spill_lock():
-                return type(self).from_pylibcudf(  # type: ignore[return-value]
-                    plc.strings.convert.convert_durations.from_durations(
-                        self.plc_column, format
-                    )
+            with self.access(mode="read", scope="internal"):
+                return cast(
+                    cudf.core.column.string.StringColumn,
+                    type(self).from_pylibcudf(
+                        plc.strings.convert.convert_durations.from_durations(
+                            self.plc_column, format
+                        )
+                    ),
                 )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:

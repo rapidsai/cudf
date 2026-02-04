@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import (
@@ -73,25 +72,20 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: DecimalDtype,
-        exposed: bool,
-    ) -> None:
+    @classmethod
+    def _validate_args(  # type: ignore[override]
+        cls, plc_column: plc.Column, dtype: DecimalDtype
+    ) -> tuple[plc.Column, DecimalDtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
         if (
             not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, type(self)._decimal_cls)  # type: ignore[attr-defined]
+            and not isinstance(dtype, cls._decimal_cls)  # type: ignore[attr-defined]
         ) or (
             cudf.get_option("mode.pandas_compatible")
-            and not type(self)._decimal_check(dtype)  # type: ignore[attr-defined]
+            and not cls._decimal_check(dtype)  # type: ignore[attr-defined]
         ):
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
+        return plc_column, dtype
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, type(self)._decimal_cls):  # type: ignore[attr-defined]
@@ -133,7 +127,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     -data.type.scale,
                 ),
             )
-            result = cls.from_pylibcudf(plc_column, False)
+            result = cast(Self, cls.from_pylibcudf(plc_column))
             result._dtype = dtype
         result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
@@ -165,13 +159,16 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     f"Cannot cast a decimal from {self.dtype} to {dtype}"
                 )
         if len(self) > 0:
-            with acquire_spill_lock():
+            with self.access(mode="read", scope="internal"):
                 plc_column = (
                     plc.strings.convert.convert_fixed_point.from_fixed_point(
                         self.plc_column,
                     )
                 )
-                return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+                return cast(
+                    cudf.core.column.string.StringColumn,
+                    type(self).from_pylibcudf(plc_column),
+                )
         else:
             return cast(
                 cudf.core.column.StringColumn,
