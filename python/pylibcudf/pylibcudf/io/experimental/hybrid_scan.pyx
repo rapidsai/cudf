@@ -693,13 +693,11 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
 
         cdef vector[device_span[const_uint8_t]] spans_vec
-        stream = _get_stream(stream)
-        mr = _get_memory_resource(mr)
         for span in column_chunk_data:
             spans_vec.push_back(_get_device_span(span))
 
-        self.stream = stream
-        self.mr = mr
+        self.stream = _get_stream(stream)
+        self.mr = _get_memory_resource(mr)
 
         cdef column_view mask_view = row_mask.view()
         self.c_obj.get()[0].setup_chunking_for_filter_columns(
@@ -712,8 +710,8 @@ cdef class HybridScanReader:
                 <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
             ),
             options.c_obj,
-            stream.view(),
-            mr.get_mr()
+            self.stream.view(),
+            self.mr.get_mr()
         )
 
     def materialize_filter_columns_chunk(
@@ -737,7 +735,7 @@ cdef class HybridScanReader:
                 mask_view
             )
         return TableWithMetadata.from_libcudf(
-            c_result, _get_stream(self.stream), _get_memory_resource(self.mr)
+            c_result, self.stream, self.mr
         )
 
     def setup_chunking_for_payload_columns(
@@ -778,13 +776,11 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
 
         cdef vector[device_span[const_uint8_t]] spans_vec
-        stream = _get_stream(stream)
-        mr = _get_memory_resource(mr)
         for span in column_chunk_data:
             spans_vec.push_back(_get_device_span(span))
 
-        self.stream = stream
-        self.mr = mr
+        self.stream = _get_stream(stream)
+        self.mr = _get_memory_resource(mr)
 
         cdef column_view mask_view = row_mask.view()
         self.c_obj.get()[0].setup_chunking_for_payload_columns(
@@ -797,8 +793,8 @@ cdef class HybridScanReader:
                 <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
             ),
             options.c_obj,
-            stream.view(),
-            mr.get_mr()
+            self.stream.view(),
+            self.mr.get_mr()
         )
 
     def materialize_payload_columns_chunk(
@@ -822,7 +818,7 @@ cdef class HybridScanReader:
                 mask_view
             )
         return TableWithMetadata.from_libcudf(
-            c_result, _get_stream(self.stream), _get_memory_resource(self.mr)
+            c_result, self.stream, self.mr
         )
 
     def has_next_table_chunk(self):
