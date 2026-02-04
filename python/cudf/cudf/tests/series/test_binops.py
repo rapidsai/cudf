@@ -2854,7 +2854,9 @@ def test_column_null_scalar_comparison(
     data = [1, 2, 3, 4, 5]
     sr = cudf.Series(data, dtype=dtype)
     result = comparison_op(sr, null_scalar)
-    if all_supported_types_as_str.startswith("datetime64"):
+    if all_supported_types_as_str.startswith(
+        "datetime64"
+    ) or all_supported_types_as_str.startswith("timedelta64"):
         assert not result.isnull().all()
     else:
         assert result.isnull().all()

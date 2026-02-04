@@ -28,7 +28,7 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
-from cudf.utils.utils import is_na_like
+from cudf.utils.utils import _EQUALITY_OPS, is_na_like
 
 if TYPE_CHECKING:
     from cudf._typing import (
@@ -128,6 +128,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         return super().__contains__(item.to_numpy())
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         reflect, op = self._check_reflected_op(op)
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
@@ -212,7 +213,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         result = binaryop.binaryop(lhs, rhs, op, out_dtype)
         if (
             out_dtype.kind == "b"
-            and not other_is_null_scalar
+            and (op in _EQUALITY_OPS or not other_is_null_scalar)
             and not is_pandas_nullable_extension_dtype(out_dtype)
         ):
             result = result.fillna(op == "__ne__")

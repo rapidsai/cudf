@@ -285,6 +285,7 @@ class NumericalColumn(NumericalBaseColumn):
             return super().__invert__()
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         int_float_dtype_mapping = {
             np.int8: np.float32,
             np.int16: np.float32,
@@ -494,6 +495,10 @@ class NumericalColumn(NumericalBaseColumn):
 
         if is_scalar(other):
             if is_na_like(other):
+                if isinstance(
+                    other, (np.datetime64, np.timedelta64)
+                ) and np.isnat(other):
+                    return NotImplemented
                 return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             if not isinstance(other, (int, float, complex)):
                 # Go via NumPy to get the value
