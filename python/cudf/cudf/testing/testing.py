@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -13,8 +13,9 @@ import pyarrow as pa
 from pandas import testing as tm
 
 import cudf
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.missing import NA, NaT
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, is_dtype_obj_numeric
+from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
 pa_types = pa.types
 

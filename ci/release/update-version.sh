@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 ########################
 # cuDF Version Updater #
@@ -98,10 +98,6 @@ echo "${NEXT_FULL_TAG}" > VERSION
 echo "${NEXT_FULL_TAG}" > python/cudf/cudf/VERSION
 echo "${RAPIDS_BRANCH_NAME}" > RAPIDS_BRANCH
 
-# Wheel testing script
-sed_runner "s|release/[0-9]\+\.[0-9]\+|${RAPIDS_BRANCH_NAME}|g" ci/test_wheel_dask_cudf.sh
-sed_runner "s|\\bmain\\b|${RAPIDS_BRANCH_NAME}|g" ci/test_wheel_dask_cudf.sh
-
 DEPENDENCIES=(
   cudf
   cudf_kafka
@@ -154,16 +150,6 @@ for FILE in .github/workflows/*.yaml .github/workflows/*.yml; do
   sed_runner "s|:[0-9]*\\.[0-9]*-|:${NEXT_SHORT_TAG}-|g" "${FILE}"
 done
 
-# Test scripts
-sed_runner "s|release/[0-9]\+\.[0-9]\+|${RAPIDS_BRANCH_NAME}|g" ci/test_wheel_cudf_polars.sh
-sed_runner "s|\\bmain\\b|${RAPIDS_BRANCH_NAME}|g" ci/test_wheel_cudf_polars.sh
-
-sed_runner "s|release/[0-9]\+\.[0-9]\+|${RAPIDS_BRANCH_NAME}|g" ci/test_cudf_polars_polars_tests.sh
-sed_runner "s|\\bmain\\b|${RAPIDS_BRANCH_NAME}|g" ci/test_cudf_polars_polars_tests.sh
-
-sed_runner "s|release/[0-9]\+\.[0-9]\+|${RAPIDS_BRANCH_NAME}|g" ci/cudf_pandas_scripts/pandas-tests/run.sh
-sed_runner "s|-b \\bmain\\b|-b ${RAPIDS_BRANCH_NAME}|g" ci/cudf_pandas_scripts/pandas-tests/run.sh
-
 # Java files
 NEXT_FULL_JAVA_TAG="${NEXT_SHORT_TAG}.${PATCH_PEP440}-SNAPSHOT"
 sed_runner "s|<version>.*-SNAPSHOT</version>|<version>${NEXT_FULL_JAVA_TAG}</version>|g" java/pom.xml
@@ -172,13 +158,6 @@ sed_runner "s|cudf-.*-SNAPSHOT|cudf-${NEXT_FULL_JAVA_TAG}|g" java/ci/README.md
 # Java documentation references
 sed_runner "s|release/[0-9]\+\.[0-9]\+|${RAPIDS_BRANCH_NAME}|g" java/ci/README.md
 sed_runner "s|-b \\bmain\\b|-b ${RAPIDS_BRANCH_NAME}|g" java/ci/README.md
-
-# CMake thirdparty references
-sed_runner "s|GIT_TAG release/[0-9]\+\.[0-9]\+|GIT_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/libcudf_kafka/cmake/thirdparty/get_cudf.cmake
-sed_runner "s|GIT_TAG \\bmain\\b|GIT_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/libcudf_kafka/cmake/thirdparty/get_cudf.cmake
-
-sed_runner "s|GIT_TAG release/[0-9]\+\.[0-9]\+|GIT_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/cmake/thirdparty/get_kvikio.cmake
-sed_runner "s|GIT_TAG \\bmain\\b|GIT_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/cmake/thirdparty/get_kvikio.cmake
 
 # Other documentation references
 sed_runner "s|/blob/release/[0-9]\+\.[0-9]\+/|/blob/${RAPIDS_BRANCH_NAME}/|g" docs/cudf/source/pylibcudf/developer_docs.md
