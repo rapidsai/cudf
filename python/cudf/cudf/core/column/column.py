@@ -1152,20 +1152,25 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         type=array.type.value_type,
                     )
                 )
-            # For categorical, we need to infer dtypes from arrow for codes
-            # and categories, as they may have special cases (e.g., empty
-            # categoricals with null dictionary type)
-            result = cls.from_pylibcudf(plc.Column.from_arrow(codes))
-            categories = cls.from_pylibcudf(plc.Column.from_arrow(dictionary))
-            return result._with_type_metadata(
-                CategoricalDtype(
-                    categories=categories, ordered=array.type.ordered
+            # Convert codes with explicit dtype
+            codes_dtype = cudf_dtype_from_pa_type(codes.type)
+            result = cls.create(plc.Column.from_arrow(codes), codes_dtype)
+
+            # For categories, handle special cases:
+            # - NULL type (empty categoricals): use from_pylibcudf to infer type
+            # - ExtensionType (intervals): arrow conversion may return pandas dtype
+            if pa.types.is_null(dictionary.type) or isinstance(
+                dictionary.type, pa.ExtensionType
+            ):
+                categories = cls.from_pylibcudf(
+                    plc.Column.from_arrow(dictionary)
                 )
-            )
-            categories = cls.create(
-                plc.Column.from_arrow(dictionary),
-                cudf_dtype_from_pa_type(dictionary.type),
-            )
+            else:
+                categories_dtype = cudf_dtype_from_pa_type(dictionary.type)
+                categories = cls.create(
+                    plc.Column.from_arrow(dictionary), categories_dtype
+                )
+
             return result._with_type_metadata(
                 CategoricalDtype(
                     categories=categories, ordered=array.type.ordered
