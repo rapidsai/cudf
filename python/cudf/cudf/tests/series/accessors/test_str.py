@@ -768,12 +768,16 @@ def test_string_ip4_to_int():
     gsr = cudf.Series(
         ["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
     )
-    expected = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
+    expected = cudf.Series(
+        [0, None, 0, 698875905, 2130706433, 700776449], dtype="uint32"
+    )
 
     got = gsr.str.ip2int()
+    assert got.dtype == np.dtype("uint32")
     assert_eq(expected, got)
 
     got = gsr.str.ip_to_int()  # alias
+    assert got.dtype == np.dtype("uint32")
     assert_eq(expected, got)
 
 
