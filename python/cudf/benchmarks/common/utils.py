@@ -121,7 +121,7 @@ def benchmark_with_object(
     if cols is not None:
         assert cols in NUM_COLS, (
             f"You have requested a DataFrame with {cols} columns but fixtures "
-            f"only exist for the values {', '.join(NUM_COLS)}"
+            f"only exist for the values {', '.join(str(x) for x in NUM_COLS)}"
         )
         col_str = f"_cols_{cols}"
 
@@ -129,7 +129,7 @@ def benchmark_with_object(
     if rows is not None:
         assert rows in NUM_ROWS, (
             f"You have requested a {cls} with {rows} rows but fixtures "
-            f"only exist for the values {', '.join(NUM_ROWS)}"
+            f"only exist for the values {', '.join(str(x) for x in NUM_ROWS)}"
         )
         row_str = f"_rows_{rows}"
 
