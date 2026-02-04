@@ -116,9 +116,7 @@ TYPED_TEST(NaNsToNullTest, EmptyColumn)
 {
   using T = TypeParam;
 
-  // std::vector<T> input = {};
   auto input_column = cudf::test::fixed_width_column_wrapper<T>({});
-  // auto expected_column = this->create_expected(input);
   this->run_test(input_column, input_column);
 }
 
