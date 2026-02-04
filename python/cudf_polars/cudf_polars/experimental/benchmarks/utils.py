@@ -1146,7 +1146,7 @@ def run_polars(
         parsed_logs = [
             log
             for log in parsed_logs
-            if log["event"] in ("Execute IR", "Streaming Node", "Query Plan")
+            if log["event"] in ("Execute IR", "Streaming Actor", "Query Plan")
         ]
         # Now we want to augment the existing Records with the trace data.
 

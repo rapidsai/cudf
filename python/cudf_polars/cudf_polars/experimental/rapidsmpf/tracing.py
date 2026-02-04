@@ -37,9 +37,9 @@ def _stable_ir_id(ir_node: IR) -> int:
     return int(hashlib.md5(content).hexdigest()[:8], 16)
 
 
-class StreamingNodeTracer:
+class ActorTracer:
     """
-    Tracer for a single streaming IR node.
+    Tracer for a single streaming actor (IR node).
 
     Collects execution statistics and emits structured log events.
 

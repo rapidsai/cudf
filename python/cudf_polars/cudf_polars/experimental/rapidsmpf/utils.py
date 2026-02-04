@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.tracing import StreamingNodeTracer
+    from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import DataType
 
 
@@ -51,7 +51,7 @@ async def shutdown_on_error(
     context: Context,
     *channels: Channel[Any],
     trace_ir: IR | None = None,
-) -> AsyncIterator[StreamingNodeTracer | None]:
+) -> AsyncIterator[ActorTracer | None]:
     """
     Shutdown on error for rapidsmpf.
 
@@ -65,27 +65,27 @@ async def shutdown_on_error(
     channels
         The channels to shutdown on error.
     trace_ir
-        Optional IR node to enable tracing for this streaming node.
-        When provided and LOG_TRACES is enabled, a StreamingNodeTracer
+        Optional IR node to enable tracing for this streaming actor.
+        When provided and LOG_TRACES is enabled, an ActorTracer
         is yielded for collecting stats, and a structlog event is
         emitted on exit.
 
     Yields
     ------
-    StreamingNodeTracer | None
+    ActorTracer | None
         A node tracer for collecting stats (if tracing enabled), else None.
     """
     # Create tracer only if LOG_TRACES is enabled and IR is provided
-    tracer: StreamingNodeTracer | None = None
+    tracer: ActorTracer | None = None
     if LOG_TRACES and trace_ir is not None:
         from cudf_polars.experimental.rapidsmpf.tracing import (
-            StreamingNodeTracer,
+            ActorTracer,
             _stable_ir_id,
         )
 
         ir_id = _stable_ir_id(trace_ir)
         ir_type = type(trace_ir).__name__
-        tracer = StreamingNodeTracer(ir_id, ir_type)
+        tracer = ActorTracer(ir_id, ir_type)
         structlog.contextvars.bind_contextvars(ir_id=ir_id)
 
     try:
@@ -97,7 +97,7 @@ async def shutdown_on_error(
         if tracer is not None:
             log = structlog.get_logger()
             record: dict[str, Any] = {
-                "scope": "streaming",
+                "scope": "actor",
                 "ir_id": tracer.ir_id,
                 "ir_type": tracer.ir_type,
                 "chunks": tracer.chunk_count,
@@ -107,7 +107,7 @@ async def shutdown_on_error(
                 record["rows"] = tracer.row_count
             if tracer.decision is not None:
                 record["decision"] = tracer.decision
-            log.info("Streaming Node", **record)
+            log.info("Streaming Actor", **record)
             structlog.contextvars.unbind_contextvars("ir_id")
 
 

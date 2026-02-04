@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import ColumnStat, StatsCollector
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
-    from cudf_polars.experimental.rapidsmpf.tracing import StreamingNodeTracer
+    from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -325,7 +325,7 @@ async def read_chunk(
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
-    node_tracer: StreamingNodeTracer | None = None,
+    node_tracer: ActorTracer | None = None,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.

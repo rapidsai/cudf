@@ -19,7 +19,7 @@ from cudf_polars.testing.asserts import DEFAULT_CLUSTER, DEFAULT_RUNTIME
 )
 @pytest.mark.skipif(DEFAULT_CLUSTER != "single", reason="Requires 'single' cluster.")
 def test_structlog_streaming_node_events():
-    """Test that structlog emits 'Streaming Node' events when tracing is enabled."""
+    """Test that structlog emits 'Streaming Actor' events when tracing is enabled."""
     # Run in subprocess to control CUDF_POLARS_LOG_TRACES environment variable
     code = textwrap.dedent("""\
     import polars as pl
@@ -48,9 +48,9 @@ def test_structlog_streaming_node_events():
         [sys.executable, "-c", code], env=env, stderr=subprocess.STDOUT
     )
 
-    # Check for Streaming Node events emitted by shutdown_on_error
-    assert b"Streaming Node" in result
-    assert b"scope=streaming" in result or b"'scope': 'streaming'" in result
+    # Check for Streaming Actor events emitted by shutdown_on_error
+    assert b"Streaming Actor" in result
+    assert b"scope=actor" in result or b"'scope': 'actor'" in result
     assert b"ir_id=" in result
     assert b"ir_type=" in result
     assert b"chunks=" in result
@@ -128,5 +128,5 @@ def test_structlog_disabled_by_default():
         [sys.executable, "-c", code], env=env, stderr=subprocess.STDOUT
     )
 
-    # Should NOT see Streaming Node events
-    assert b"Streaming Node" not in result
+    # Should NOT see Streaming Actor events
+    assert b"Streaming Actor" not in result
