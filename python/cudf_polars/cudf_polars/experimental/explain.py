@@ -264,15 +264,39 @@ def _(ir: GroupBy) -> dict[str, Serializable]:
 def _(ir: Sort) -> dict[str, Serializable]:
     return {
         "by": [ne.name for ne in ir.by],
-        "order": [str(o) for o in ir.order],
+        "order": [o.name for o in ir.order],
     }
 
 
 @_serialize_properties.register
 def _(ir: Filter) -> dict[str, Serializable]:
-    return {
+    import cudf_polars.dsl.expressions.binaryop
+    import cudf_polars.dsl.expressions.literal
+
+    value = ir.mask.value
+    properties: dict[str, Serializable] = {
         "predicate": ir.mask.name,
     }
+
+    match value:
+        case cudf_polars.dsl.expressions.binaryop.BinOp():
+            properties["op"] = value.op.name
+            match value.children[0]:
+                case cudf_polars.dsl.expressions.base.Col(name=name):
+                    properties["left"] = {"type": "Col", "name": name}
+                case cudf_polars.dsl.expressions.literal.Literal(value=value):
+                    properties["left"] = {"type": "Literal", "value": value}
+                case _:  # pragma: no cover
+                    properties["left"] = {"type": type(value.children[0]).__name__}
+            match value.children[1]:
+                case cudf_polars.dsl.expressions.base.Col(name=name):
+                    properties["right"] = {"type": "Col", "name": name}
+                case cudf_polars.dsl.expressions.literal.Literal(value=value):
+                    properties["right"] = {"type": "Literal", "value": value}
+                case _:  # pragma: no cover
+                    properties["left"] = {"type": type(value.children[0]).__name__}
+
+    return properties
 
 
 @_serialize_properties.register

@@ -6,6 +6,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import re
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -22,6 +23,9 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture(scope="module")
@@ -570,3 +574,63 @@ def test_serialize_query():
 
     # smoke test to ensure that the output is JSON serializable
     json.dumps(dataclasses.asdict(dag))
+
+
+def test_scan_properties(tmp_path: Path):
+    pl.DataFrame({"a": [1, 2, 3]}).write_parquet(tmp_path / "test.parquet")
+
+    q = pl.scan_parquet(tmp_path / "test.parquet")
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    dag = serialize_query(q, engine)
+
+    # walk Union -> Scan
+    node = dag.nodes[dag.nodes[dag.roots[0]].children[0]]
+    assert node.type == "Scan"
+    assert node.properties == {
+        "paths": [str(tmp_path / "test.parquet")],
+        "typ": "parquet",
+    }
+
+
+@pytest.mark.parametrize("descending", [False, True])
+def test_sort_properties(*, descending: bool):
+    q = pl.LazyFrame({"a": [1, 3, 2]}).sort("a", descending=descending)
+    dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
+
+    order = "DESCENDING" if descending else "ASCENDING"
+    node = dag.nodes[dag.roots[0]]
+    assert node.type == "Sort"
+    assert node.properties == {"by": ["a"], "order": [order]}
+
+
+def test_filter_properties():
+    q = pl.LazyFrame({"a": [1, 2, 3]}).filter(pl.col("a") > 1)
+    dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
+
+    node = dag.nodes[dag.roots[0]]
+    assert node.type == "Filter"
+    assert node.properties == {
+        "predicate": "a",
+        "op": "GREATER",
+        "left": {"type": "Col", "name": "a"},
+        "right": {"type": "Literal", "value": 1},
+    }
+
+
+def test_select_properties():
+    q = pl.LazyFrame({"a": [1, 2, 3]}).select(pl.col("a") + 1)
+    dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
+
+    node = dag.nodes[dag.roots[0]]
+    assert node.type == "Select"
+    assert node.properties == {"columns": ["a"]}
+
+
+def test_hstack_properties():
+    left = pl.LazyFrame({"a": [1, 2, 3]})
+    q = left.with_columns(pl.col("a"), (pl.col("a") + 1).alias("b"))
+    dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
+
+    node = dag.nodes[dag.roots[0]]
+    assert node.type == "HStack"
+    assert node.properties == {"columns": ["a", "b"]}
