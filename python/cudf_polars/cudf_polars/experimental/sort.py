@@ -26,6 +26,7 @@ from cudf_polars.utils.config import ShuffleMethod
 from cudf_polars.utils.cuda_stream import (
     get_dask_cuda_stream,
     get_joined_cuda_stream,
+    join_cuda_streams,
 )
 
 if TYPE_CHECKING:
@@ -323,25 +324,31 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         context = get_worker_context()
 
         by = options["by"]
+        data_streams = [
+            df.stream,
+            sort_boundaries.stream,
+        ]
+        stream = get_joined_cuda_stream(get_dask_cuda_stream, upstreams=data_streams)
 
-        with context.stream_ordered_after(df, sort_boundaries) as stream:
-            splits = find_sort_splits(
-                df.select(by).table,
-                sort_boundaries.table,
-                partition_id,
-                options["order"],
-                options["null_order"],
-                stream=stream,
-            )
-            packed_inputs = split_and_pack(
-                df.table,
-                splits=splits,
-                br=context.br,
-                stream=stream,
-            )
-            # TODO: figure out handoff with rapidsmpf
-            # https://github.com/rapidsai/cudf/issues/20337
-            shuffler.insert_chunks(packed_inputs)
+        splits = find_sort_splits(
+            df.select(by).table,
+            sort_boundaries.table,
+            partition_id,
+            options["order"],
+            options["null_order"],
+            stream=stream,
+        )
+        packed_inputs = split_and_pack(
+            df.table,
+            splits=splits,
+            br=context.br,
+            stream=stream,
+        )
+        # TODO: figure out handoff with rapidsmpf
+        # https://github.com/rapidsai/cudf/issues/20337
+        shuffler.insert_chunks(packed_inputs)
+
+        join_cuda_streams(downstreams=data_streams, upstreams=[stream])
 
     @staticmethod
     def extract_partition(

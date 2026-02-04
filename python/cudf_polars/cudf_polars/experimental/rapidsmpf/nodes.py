@@ -11,6 +11,7 @@ from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
+from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
@@ -20,20 +21,22 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    Metadata,
     empty_table_chunk,
     make_spill_function,
     opaque_reservation,
     process_children,
+    recv_metadata,
+    remap_partitioning,
+    send_metadata,
     shutdown_on_error,
 )
 
 if TYPE_CHECKING:
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 @define_py_node()
@@ -41,8 +44,8 @@ async def default_node_single(
     context: Context,
     ir: IR,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    ch_in: ChannelPair,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
     *,
     preserve_partitioning: bool = False,
 ) -> None:
@@ -58,9 +61,9 @@ async def default_node_single(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output Channel[TableChunk].
     ch_in
-        The input ChannelPair.
+        The input Channel[TableChunk].
     preserve_partitioning
         Whether to preserve the partitioning metadata of the input chunks.
 
@@ -68,24 +71,28 @@ async def default_node_single(
     -----
     Chunks are processed in the order they are received.
     """
-    async with shutdown_on_error(
-        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
-    ):
+    async with shutdown_on_error(context, ch_in, ch_out):
         # Recv/send metadata.
-        metadata_in = await ch_in.recv_metadata(context)
-        metadata_out = Metadata(
-            metadata_in.count,
-            partitioned_on=metadata_in.partitioned_on if preserve_partitioning else (),
+        metadata_in = await recv_metadata(ch_in, context)
+        partitioning = None
+        if preserve_partitioning:
+            # Remap partitioning if schema has changed
+            partitioning = remap_partitioning(
+                metadata_in.partitioning, ir.children[0].schema, ir.schema
+            )
+        metadata_out = ChannelMetadata(
+            local_count=metadata_in.local_count,
+            partitioning=partitioning,
             duplicated=metadata_in.duplicated,
         )
-        await ch_out.send_metadata(context, metadata_out)
+        await send_metadata(ch_out, context, metadata_out)
 
         # Recv/send data.
         seq_num = 0
         receiving = True
         received_any = False
         while receiving:
-            msg = await ch_in.data.recv(context)
+            msg = await ch_in.recv(context)
             if msg is None:
                 receiving = False
                 if received_any:
@@ -116,7 +123,7 @@ async def default_node_single(
                     ),
                     context=ir_context,
                 )
-                await ch_out.data.send(
+                await ch_out.send(
                     context,
                     Message(
                         seq_num,
@@ -127,7 +134,7 @@ async def default_node_single(
                 )
                 del df, chunk
 
-        await ch_out.data.drain(context)
+        await ch_out.drain(context)
 
 
 @define_py_node()
@@ -135,8 +142,8 @@ async def default_node_multi(
     context: Context,
     ir: IR,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    chs_in: tuple[ChannelPair, ...],
+    ch_out: Channel[TableChunk],
+    chs_in: tuple[Channel[TableChunk], ...],
     *,
     partitioning_index: int | None = None,
 ) -> None:
@@ -152,29 +159,36 @@ async def default_node_multi(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output Channel[TableChunk].
     chs_in
-        Tuple of input ChannelPairs.
+        Tuple of input Channel[TableChunk]s.
     partitioning_index
         Index of the input channel to preserve partitioning information for.
         If None, no partitioning information is preserved.
     """
-    async with shutdown_on_error(
-        context,
-        *[ch.metadata for ch in chs_in],
-        ch_out.metadata,
-        *[ch.data for ch in chs_in],
-        ch_out.data,
-    ):
+    async with shutdown_on_error(context, *chs_in, ch_out):
         # Merge and forward basic metadata.
-        metadata = Metadata(1)
+        local_count = 1
+        duplicated = True
+        partitioning = None
         for idx, ch_in in enumerate(chs_in):
-            md_child = await ch_in.recv_metadata(context)
-            metadata.count = max(md_child.count, metadata.count)
-            metadata.duplicated = metadata.duplicated and md_child.duplicated
+            md_child = await recv_metadata(ch_in, context)
+            # Use simple "max" rule to determine counts.
+            local_count = max(md_child.local_count, local_count)
+            # Set "duplicated" to False as soon as we
+            # find a non-duplicated child.
+            duplicated = duplicated and md_child.duplicated
             if idx == partitioning_index:
-                metadata.partitioned_on = md_child.partitioned_on
-        await ch_out.send_metadata(context, metadata)
+                # Remap partitioning from child schema to output schema
+                partitioning = remap_partitioning(
+                    md_child.partitioning, ir.children[idx].schema, ir.schema
+                )
+        metadata = ChannelMetadata(
+            local_count=local_count,
+            partitioning=partitioning,
+            duplicated=duplicated,
+        )
+        await send_metadata(ch_out, context, metadata)
 
         seq_num = 0
         n_children = len(chs_in)
@@ -191,7 +205,7 @@ async def default_node_multi(
                 if ch_idx in finished_channels:
                     continue  # This channel already finished, reuse its data
 
-                msg = await ch_in.data.recv(context)
+                msg = await ch_in.recv(context)
                 if msg is None:
                     # Channel finished - keep its last chunk for reuse
                     finished_channels.add(ch_idx)
@@ -239,7 +253,7 @@ async def default_node_multi(
                     *dfs,
                     context=ir_context,
                 )
-                await ch_out.data.send(
+                await ch_out.send(
                     context,
                     Message(
                         seq_num,
@@ -255,14 +269,14 @@ async def default_node_multi(
 
         # Drain the output channel
         del ready_chunks
-        await ch_out.data.drain(context)
+        await ch_out.drain(context)
 
 
 @define_py_node()
 async def fanout_node_bounded(
     context: Context,
-    ch_in: ChannelPair,
-    *chs_out: ChannelPair,
+    ch_in: Channel[TableChunk],
+    *chs_out: Channel[TableChunk],
 ) -> None:
     """
     Bounded fanout node for rapidsmpf.
@@ -275,31 +289,25 @@ async def fanout_node_bounded(
     context
         The rapidsmpf context.
     ch_in
-        The input ChannelPair.
+        The input Channel[TableChunk].
     chs_out
-        The output ChannelPairs.
+        The output Channel[TableChunk]s.
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
-    async with shutdown_on_error(
-        context,
-        ch_in.metadata,
-        ch_in.data,
-        *[ch.metadata for ch in chs_out],
-        *[ch.data for ch in chs_out],
-    ):
+    async with shutdown_on_error(context, ch_in, *chs_out):
         # Forward metadata to all outputs.
-        metadata = await ch_in.recv_metadata(context)
-        await asyncio.gather(*(ch.send_metadata(context, metadata) for ch in chs_out))
+        metadata = await recv_metadata(ch_in, context)
+        await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
 
-        while (msg := await ch_in.data.recv(context)) is not None:
+        while (msg := await ch_in.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg).make_available_and_spill(
                 context.br(), allow_overbooking=True
             )
             seq_num = msg.sequence_number
             del msg
             for ch_out in chs_out:
-                await ch_out.data.send(
+                await ch_out.send(
                     context,
                     Message(
                         seq_num,
@@ -312,14 +320,14 @@ async def fanout_node_bounded(
                 )
             del table_chunk
 
-        await asyncio.gather(*(ch.data.drain(context) for ch in chs_out))
+        await asyncio.gather(*(ch.drain(context) for ch in chs_out))
 
 
 @define_py_node()
 async def fanout_node_unbounded(
     context: Context,
-    ch_in: ChannelPair,
-    *chs_out: ChannelPair,
+    ch_in: Channel[TableChunk],
+    *chs_out: Channel[TableChunk],
 ) -> None:
     """
     Unbounded fanout node for rapidsmpf with spilling support.
@@ -340,22 +348,16 @@ async def fanout_node_unbounded(
     context
         The rapidsmpf context.
     ch_in
-        The input ChannelPair.
+        The input Channel[TableChunk].
     chs_out
-        The output ChannelPairs.
+        The output Channel[TableChunk]s.
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
-    async with shutdown_on_error(
-        context,
-        ch_in.metadata,
-        ch_in.data,
-        *[ch.metadata for ch in chs_out],
-        *[ch.data for ch in chs_out],
-    ):
+    async with shutdown_on_error(context, ch_in, *chs_out):
         # Forward metadata to all outputs.
-        metadata = await ch_in.recv_metadata(context)
-        await asyncio.gather(*(ch.send_metadata(context, metadata) for ch in chs_out))
+        metadata = await recv_metadata(ch_in, context)
+        await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
 
         # Spillable FIFO buffer for each output channel
         output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
@@ -378,9 +380,7 @@ async def fanout_node_unbounded(
             needs_drain: set[int] = set()
 
             # Receive task
-            recv_task: asyncio.Task | None = asyncio.create_task(
-                ch_in.data.recv(context)
-            )
+            recv_task: asyncio.Task | None = asyncio.create_task(ch_in.recv(context))
 
             # Flag to indicate we should start a new receive (for backpressure)
             can_receive: bool = True
@@ -395,11 +395,11 @@ async def fanout_node_unbounded(
                 if buffer_ids[idx]:
                     mid = buffer_ids[idx].pop(0)
                     msg = output_buffers[idx].extract(mid=mid)
-                    await chs_out[idx].data.send(context, msg)
+                    await chs_out[idx].send(context, msg)
 
             async def drain_output(idx: int) -> None:
                 """Drain output channel idx."""
-                await chs_out[idx].data.drain(context)
+                await chs_out[idx].drain(context)
 
             # Main loop: coordinate receiving, sending, and draining
             while (
@@ -503,7 +503,7 @@ async def fanout_node_unbounded(
 
                             # Don't receive next chunk until at least one send completes
                             can_receive = False
-                            recv_task = asyncio.create_task(ch_in.data.recv(context))
+                            recv_task = asyncio.create_task(ch_in.recv(context))
                     else:
                         # Must be a send or drain task - find which output and remove it
                         for idx, at in list(active_tasks.items()):
@@ -571,7 +571,7 @@ async def empty_node(
     context: Context,
     ir: Empty,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
+    ch_out: Channel[TableChunk],
 ) -> None:
     """
     Empty node for rapidsmpf - produces a single empty chunk.
@@ -585,11 +585,16 @@ async def empty_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output Channel[TableChunk].
     """
-    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
+    async with shutdown_on_error(context, ch_out):
         # Send metadata indicating a single empty chunk
-        await ch_out.send_metadata(context, Metadata(1, duplicated=True))
+        await send_metadata(
+            ch_out,
+            context,
+            # All ranks generate the same "empty" data.
+            ChannelMetadata(local_count=1, duplicated=True),
+        )
 
         # Evaluate the IR node to create an empty DataFrame
         df: DataFrame = ir.do_evaluate(*ir._non_child_args, context=ir_context)
@@ -598,9 +603,9 @@ async def empty_node(
         chunk = TableChunk.from_pylibcudf_table(
             df.table, df.stream, exclusive_view=True
         )
-        await ch_out.data.send(context, Message(0, chunk))
+        await ch_out.send(context, Message(0, chunk))
 
-        await ch_out.data.drain(context)
+        await ch_out.drain(context)
 
 
 @generate_ir_sub_network.register(Empty)
@@ -665,23 +670,29 @@ def generate_ir_sub_network_wrapper(
 @define_py_node()
 async def metadata_feeder_node(
     context: Context,
-    channel: ChannelPair,
-    metadata: Metadata,
+    ch_in: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
+    metadata: ChannelMetadata,
 ) -> None:
     """
-    Feed metadata to a channel pair.
+    Forward data with new metadata.
 
     Parameters
     ----------
     context
         The rapidsmpf context.
-    channel
-        The channel pair.
+    ch_in
+        The input channel to pull data from.
+    ch_out
+        The output channel to forward data to and add metadata to.
     metadata
-        The metadata to feed.
+        The metadata to add to the output channel.
     """
-    async with shutdown_on_error(context, channel.metadata, channel.data):
-        await channel.send_metadata(context, metadata)
+    async with shutdown_on_error(context, ch_in, ch_out):
+        await send_metadata(ch_out, context, metadata)
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
+        await ch_out.drain(context)
 
 
 @define_py_node()
@@ -689,9 +700,9 @@ async def metadata_drain_node(
     context: Context,
     ir: IR,
     ir_context: IRExecutionContext,
-    ch_in: ChannelPair,
+    ch_in: Channel[TableChunk],
     ch_out: Any,
-    metadata_collector: list[Metadata] | None,
+    metadata_collector: list[ChannelMetadata] | None,
 ) -> None:
     """
     Drain metadata and forward data to a single channel.
@@ -705,7 +716,7 @@ async def metadata_drain_node(
     ir_context
         The execution context for the IR node.
     ch_in
-        The input ChannelPair (with metadata and data channels).
+        The input Channel[TableChunk] (with metadata and data channels).
     ch_out
         The output data channel.
     metadata_collector
@@ -713,15 +724,15 @@ async def metadata_drain_node(
         This list will be mutated when the network is executed.
         If None, metadata will not be collected.
     """
-    async with shutdown_on_error(context, ch_in.metadata, ch_in.data, ch_out):
+    async with shutdown_on_error(context, ch_in, ch_out):
         # Drain metadata channel (we don't need it after this point)
-        metadata = await ch_in.recv_metadata(context)
+        metadata = await recv_metadata(ch_in, context)
         send_empty = metadata.duplicated and context.comm().rank != 0
         if metadata_collector is not None:
             metadata_collector.append(metadata)
 
         # Forward non-duplicated data messages
-        while (msg := await ch_in.data.recv(context)) is not None:
+        while (msg := await ch_in.recv(context)) is not None:
             if not send_empty:
                 await ch_out.send(context, msg)
 

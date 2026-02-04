@@ -13,6 +13,11 @@ from rapidsmpf.integrations.cudf.partition import (
 from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
+from rapidsmpf.streaming.cudf.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+    Partitioning,
+)
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.dsl.expr import Col
@@ -22,11 +27,13 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    Metadata,
+    recv_metadata,
+    send_metadata,
 )
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     import pylibcudf as plc
@@ -34,7 +41,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 class ShuffleManager:
@@ -119,19 +125,44 @@ class ShuffleManager:
         )
 
 
+def _is_already_partitioned(
+    metadata: ChannelMetadata,
+    columns_to_hash: tuple[int, ...],
+    num_partitions: int,
+) -> bool:
+    """Check if data is already partitioned on the required keys."""
+    if metadata.partitioning is None:
+        return False
+
+    # Check that inter_rank is a HashScheme (not None or "inherit")
+    inter_rank = metadata.partitioning.inter_rank
+    if not isinstance(inter_rank, HashScheme):
+        return False
+
+    # Check that local partitioning is inherit
+    if metadata.partitioning.local != "inherit":
+        return False
+
+    # Check for exact match: same columns and same modulus
+    return (
+        inter_rank.column_indices == columns_to_hash
+        and inter_rank.modulus == num_partitions
+    )
+
+
 @define_py_node()
 async def shuffle_node(
     context: Context,
     ir: Shuffle,
     ir_context: IRExecutionContext,
-    ch_in: ChannelPair,
-    ch_out: ChannelPair,
+    ch_in: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
     collective_id: int,
 ) -> None:
     """
-    Execute a local shuffle pipeline in a single node.
+    Execute a global shuffle pipeline within a single node.
 
     This node combines partition_and_pack, shuffler, and unpack_and_concat
     into a single Python node using rapidsmpf.shuffler.Shuffler and utilities
@@ -146,9 +177,9 @@ async def shuffle_node(
     ir_context
         The execution context for the IR node.
     ch_in
-        Input ChannelPair with metadata and data channels.
+        Input Channel[TableChunk] with metadata and data channels.
     ch_out
-        Output ChannelPair with metadata and data channels.
+        Output Channel[TableChunk] with metadata and data channels.
     columns_to_hash
         Tuple of column indices to use for hashing.
     num_partitions
@@ -156,32 +187,47 @@ async def shuffle_node(
     collective_id
         The collective ID.
     """
-    async with shutdown_on_error(
-        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
-    ):
-        # Receive and send updated metadata.
-        _ = await ch_in.recv_metadata(context)
-        column_names = list(ir.schema.keys())
-        partitioned_on = tuple(column_names[i] for i in columns_to_hash)
-        output_metadata = Metadata(
-            max(1, num_partitions // context.comm().nranks),
-            partitioned_on=partitioned_on,
+    async with shutdown_on_error(context, ch_in, ch_out):
+        # Receive input metadata
+        metadata_in = await recv_metadata(ch_in, context)
+
+        # Check if we can skip the shuffle (already partitioned correctly)
+        if _is_already_partitioned(metadata_in, columns_to_hash, num_partitions):
+            # Forward metadata and data unchanged
+            await send_metadata(ch_out, context, metadata_in)
+            while (msg := await ch_in.recv(context)) is not None:
+                await ch_out.send(context, msg)
+            await ch_out.drain(context)
+            return
+
+        # Normal shuffle path
+        output_metadata = ChannelMetadata(
+            local_count=max(1, num_partitions // context.comm().nranks),
+            partitioning=Partitioning(
+                inter_rank=HashScheme(columns_to_hash, num_partitions),
+                local="inherit",
+            ),
         )
-        await ch_out.send_metadata(context, output_metadata)
+        await send_metadata(ch_out, context, output_metadata)
 
         # Create ShuffleManager instance
         shuffle = ShuffleManager(
             context, num_partitions, columns_to_hash, collective_id
         )
 
+        # When input is duplicated, only rank 0 should contribute data.
+        # Other ranks still participate in the shuffle protocol.
+        skip_insert = metadata_in.duplicated and context.comm().rank != 0
+
         # Process input chunks
-        while (msg := await ch_in.data.recv(context)) is not None:
-            # Extract TableChunk from message and insert into shuffler
-            shuffle.insert_chunk(
-                TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
+        while (msg := await ch_in.recv(context)) is not None:
+            if not skip_insert:
+                # Extract TableChunk from message and insert into shuffler
+                shuffle.insert_chunk(
+                    TableChunk.from_message(msg).make_available_and_spill(
+                        context.br(), allow_overbooking=True
+                    )
                 )
-            )
             del msg
 
         # Insert finished
@@ -196,7 +242,7 @@ async def shuffle_node(
             context.comm().nranks,
         ):
             # Extract and send the output chunk
-            await ch_out.data.send(
+            await ch_out.send(
                 context,
                 Message(
                     partition_id,
@@ -208,7 +254,7 @@ async def shuffle_node(
                 ),
             )
 
-        await ch_out.data.drain(context)
+        await ch_out.drain(context)
 
 
 @generate_ir_sub_network.register(Shuffle)
@@ -231,7 +277,7 @@ def _(
     num_partitions = rec.state["partition_info"][ir].count
 
     # Look up the reserved collective ID for this operation
-    collective_id = rec.state["collective_id_map"][ir]
+    collective_id = rec.state["collective_id_map"][ir][0]
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])

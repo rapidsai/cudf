@@ -398,12 +398,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   update_output_nullmasks_for_pruned_pages(_subpass_page_mask, skip_rows, num_rows);
 
   // Copy over initial string offsets from device
-  auto h_initial_str_offsets =
-    cudf::detail::make_pinned_vector_async<size_t>(initial_str_offsets.size(), _stream);
-  cudf::detail::cuda_memcpy_async(
-    cudf::host_span<size_t>{h_initial_str_offsets},
-    cudf::device_span<size_t const>{initial_str_offsets.data(), initial_str_offsets.size()},
-    _stream);
+  auto h_initial_str_offsets = cudf::detail::make_pinned_vector_async(initial_str_offsets, _stream);
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
@@ -452,12 +447,10 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     }
   }
   // Write the final offsets for list and string columns in a batched manner
-  auto pinned_final_offsets =
-    cudf::detail::make_pinned_vector_async<cudf::size_type>(final_offsets.size(), _stream);
+  auto pinned_final_offsets = cudf::detail::make_pinned_vector(
+    cudf::host_span<cudf::size_type const>{final_offsets}, _stream);
   auto pinned_out_buffers =
-    cudf::detail::make_pinned_vector_async<cudf::size_type*>(out_buffers.size(), _stream);
-  std::move(final_offsets.begin(), final_offsets.end(), pinned_final_offsets.begin());
-  std::move(out_buffers.begin(), out_buffers.end(), pinned_out_buffers.begin());
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type* const>{out_buffers}, _stream);
   write_final_offsets(pinned_final_offsets, pinned_out_buffers, _stream);
 
   // update null counts in the final column buffers
@@ -531,16 +524,16 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // Open and parse the source dataset metadata
   CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(),
                "Encountered a mismatch in the number of provided data sources and metadatas");
-  _metadata =
-    file_metadatas.empty()
-      ? std::make_unique<aggregate_reader_metadata>(
-          _sources,
-          options.is_enabled_use_arrow_schema(),
-          options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas())
-      : std::make_unique<aggregate_reader_metadata>(
-          std::forward<std::vector<FileMetaData>>(file_metadatas),
-          options.is_enabled_use_arrow_schema(),
-          options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+  _metadata = file_metadatas.empty() ? std::make_unique<aggregate_reader_metadata>(
+                                         _sources,
+                                         options.is_enabled_use_arrow_schema(),
+                                         options.get_column_names().has_value() and
+                                           options.is_enabled_allow_mismatched_pq_schemas())
+                                     : std::make_unique<aggregate_reader_metadata>(
+                                         std::forward<std::vector<FileMetaData>>(file_metadatas),
+                                         options.is_enabled_use_arrow_schema(),
+                                         options.get_column_names().has_value() and
+                                           options.is_enabled_allow_mismatched_pq_schemas());
 
   // Number of input sources
   _num_sources = _sources.size();
@@ -552,17 +545,21 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   _reader_column_schema = options.get_column_schema();
 
   // Select only columns required by the options and filter
-  std::optional<std::vector<std::string>> filter_columns_names;
-  if (options.get_filter().has_value() and options.get_columns().has_value()) {
+  auto select_column_names =
+    get_column_projection(options, options.is_enabled_ignore_missing_columns());
+
+  std::optional<std::vector<std::string>> filter_only_columns_names;
+  if (options.get_filter().has_value() and
+      (options.get_column_names().has_value() or options.get_column_indices().has_value())) {
     // list, struct, dictionary are not supported by AST filter yet.
-    // extract columns not present in get_columns() & keep count to remove at end.
-    filter_columns_names =
-      get_column_names_in_expression(options.get_filter(), *(options.get_columns()));
-    _num_filter_only_columns = filter_columns_names->size();
+    // extract columns not present in get_column_names() & keep count to remove at end.
+    filter_only_columns_names = get_column_names_in_expression(
+      options.get_filter(), *select_column_names, options, _metadata->get_schema_tree());
+    _num_filter_only_columns = filter_only_columns_names->size();
   }
   std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-    _metadata->select_columns(options.get_columns(),
-                              filter_columns_names,
+    _metadata->select_columns(select_column_names,
+                              filter_only_columns_names,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
                               options.is_enabled_ignore_missing_columns(),
@@ -818,6 +815,37 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
   return num_rows_per_source;
 }
 
+std::optional<std::vector<std::string>> reader_impl::get_column_projection(
+  parquet_reader_options const& options, bool ignore_missing_columns) const
+{
+  auto const has_column_names   = options.get_column_names().has_value();
+  auto const has_column_indices = options.get_column_indices().has_value();
+
+  CUDF_EXPECTS(
+    not(has_column_names and has_column_indices),
+    "Parquet reader encountered column selection by both names and indices simultaneously");
+
+  // No column selection specified. Return nullopt indicating all columns to be selected
+  if (not has_column_names and not has_column_indices) {
+    return std::nullopt;
+  } else if (has_column_names) {
+    return options.get_column_names();
+  } else {
+    std::vector<std::string> col_names;
+    auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
+    for (auto const index : options.get_column_indices().value_or(std::vector<cudf::size_type>{})) {
+      auto const is_valid_index =
+        std::cmp_greater_equal(index, 0) and std::cmp_less(index, top_level_schema_indices.size());
+      CUDF_EXPECTS(ignore_missing_columns or is_valid_index,
+                   "Encountered an invalid col index in the top-level column selection");
+      if (is_valid_index) {
+        col_names.emplace_back(_metadata->get_schema(top_level_schema_indices[index]).name);
+      }
+    }
+    return std::make_optional(std::move(col_names));
+  }
+}
+
 table_with_metadata reader_impl::finalize_output(read_mode mode,
                                                  table_metadata& out_metadata,
                                                  std::vector<std::unique_ptr<column>>& out_columns)
@@ -1009,18 +1037,15 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
 
   // Use a bounce buffer to avoid pageable copies
   auto pinned_null_masks =
-    cudf::detail::make_pinned_vector_async<bitmask_type*>(null_masks.size(), _stream);
-  auto pinned_begin_bits =
-    cudf::detail::make_pinned_vector_async<cudf::size_type>(begin_bits.size(), _stream);
-  auto pinned_end_bits =
-    cudf::detail::make_pinned_vector_async<cudf::size_type>(end_bits.size(), _stream);
-  std::move(null_masks.begin(), null_masks.end(), pinned_null_masks.begin());
-  std::move(begin_bits.begin(), begin_bits.end(), pinned_begin_bits.begin());
-  std::move(end_bits.begin(), end_bits.end(), pinned_end_bits.begin());
+    cudf::detail::make_pinned_vector(cudf::host_span<bitmask_type* const>{null_masks}, _stream);
+  auto const pinned_begin_bits =
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type const>{begin_bits}, _stream);
+  auto const pinned_end_bits =
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type const>{end_bits}, _stream);
 
   // Bulk update the nullmasks if the number of pages is above the threshold
-  if (null_masks.size() >= min_nullmasks_for_bulk_update) {
-    auto pinned_valids = cudf::detail::make_pinned_vector_async<bool>(null_masks.size(), _stream);
+  if (pinned_null_masks.size() >= min_nullmasks_for_bulk_update) {
+    auto pinned_valids = cudf::detail::make_pinned_vector<bool>(pinned_null_masks.size(), _stream);
     std::fill(pinned_valids.begin(), pinned_valids.end(), false);
     cudf::set_null_masks_safe(
       pinned_null_masks, pinned_begin_bits, pinned_end_bits, pinned_valids, _stream);
@@ -1030,7 +1055,7 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
     auto nullmask_iter = thrust::make_zip_iterator(cuda::std::make_tuple(
       pinned_null_masks.begin(), pinned_begin_bits.begin(), pinned_end_bits.begin()));
     std::for_each(
-      nullmask_iter, nullmask_iter + null_masks.size(), [&](auto const& nullmask_tuple) {
+      nullmask_iter, nullmask_iter + pinned_null_masks.size(), [&](auto const& nullmask_tuple) {
         cudf::set_null_mask(cuda::std::get<0>(nullmask_tuple),
                             cuda::std::get<1>(nullmask_tuple),
                             cuda::std::get<2>(nullmask_tuple),

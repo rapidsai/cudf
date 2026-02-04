@@ -5,23 +5,20 @@ from __future__ import annotations
 
 import itertools
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.dtype.validators import is_dtype_obj_list
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
-from cudf.utils.dtypes import (
-    get_dtype_of_same_kind,
-    is_dtype_obj_list,
-)
+from cudf.utils.dtypes import get_dtype_of_same_kind
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
@@ -45,42 +42,24 @@ class ListColumn(ColumnBase):
         cls, plc_column: plc.Column, dtype: ListDtype
     ) -> tuple[plc.Column, ListDtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, ListDtype)
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_list(dtype)
-        ):
+        if not is_dtype_obj_list(dtype):
             raise ValueError("dtype must be a cudf.ListDtype")
+
+        child = plc_column.list_view().child()
+        try:
+            ColumnBase._validate_dtype_recursively(child, dtype.element_type)
+        except ValueError as e:
+            raise ValueError(
+                f"List element type validation failed: {e}"
+            ) from e
+
         return plc_column, dtype
 
-    @classmethod
-    def _apply_child_metadata(
-        cls,
-        children: tuple[ColumnBase, ...],
-        dtype: ListDtype,  # type: ignore[override]
-    ) -> tuple[ColumnBase, ...]:
-        """Apply list element type metadata to elements child (child[1])."""
-        return (
-            children[0],  # Offsets column unchanged
-            children[1]._with_type_metadata(
-                dtype.element_type
-            ),  # Elements with metadata
-        )
-
-    def _get_sliced_child(self, idx: int) -> ColumnBase:
+    def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
-        if idx < 0 or idx >= len(self._children):
-            raise IndexError(
-                f"Index {idx} out of range for {len(self._children)} children"
-            )
-
-        if idx == 1:
-            sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-            return ColumnBase.from_pylibcudf(sliced_plc_col)
-
-        return self._children[idx]
+        sliced_plc_col = self.plc_column.list_view().get_sliced_child()
+        assert isinstance(self.dtype, ListDtype)
+        return ColumnBase.create(sliced_plc_col, self.dtype.element_type)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
@@ -129,20 +108,8 @@ class ListColumn(ColumnBase):
 
     @property
     def elements(self) -> ColumnBase:
-        """
-        Column containing the elements of each list (may itself be a
-        ListColumn)
-        """
-        return self._get_sliced_child(1)
-
-    @property
-    def offsets(self) -> NumericalColumn:
-        """
-        Integer offsets to elements specifying each row of the ListColumn
-        """
-        return cast(
-            cudf.core.column.numerical.NumericalColumn, self.children[0]
-        )
+        """Column containing the elements of each list (may itself be a ListColumn)"""
+        return self._get_sliced_child()
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -152,31 +119,11 @@ class ListColumn(ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, ListDtype):
-            elements = self.children[1]._with_type_metadata(dtype.element_type)
-            new_children = (
-                self.children[0],  # Offsets unchanged
-                elements,  # Elements with metadata
-            )
-            new_plc_column = plc.Column(
-                plc.DataType(plc.TypeId.LIST),
-                self.plc_column.size(),
-                self.plc_column.data(),
-                self.plc_column.null_mask(),
-                self.plc_column.null_count(),
-                self.plc_column.offset(),
-                [child.plc_column for child in new_children],
-            )
-            return type(self)._from_preprocessed(
-                plc_column=new_plc_column,
-                dtype=dtype,
-                children=new_children,
-            )
-        # For pandas dtypes, store them directly in the column's dtype property
+            self._dtype = dtype
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
             dtype.pyarrow_dtype, pa.ListType
         ):
             self._dtype = dtype
-
         return self
 
     def copy(self, deep: bool = True) -> Self:
@@ -228,7 +175,7 @@ class ListColumn(ColumnBase):
             [offset_col, data_plc_col],
         )
         return cast(
-            Self,
+            "Self",
             cls.from_pylibcudf(plc_column),
         )
 
@@ -259,7 +206,7 @@ class ListColumn(ColumnBase):
                 self._string_separators,
             )
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 type(self).from_pylibcudf(plc_column),
             )
 
@@ -269,32 +216,38 @@ class ListColumn(ColumnBase):
         """
         Return a new column like Self but with func applied to the last leaf column.
         """
-        leaf_queue: list[ListColumn] = []
-        curr_col: ColumnBase = self
+        # Store metadata for reconstruction: (plc_column, list_view)
+        # We need to keep the full plc_column for accessing size, mask, null_count, offset
+        leaf_queue: list[plc.Column] = []
+        curr_plc_col: plc.Column = self.plc_column
 
-        while isinstance(curr_col, ListColumn):
-            leaf_queue.append(curr_col)
-            curr_col = curr_col.children[1]
+        while curr_plc_col.type().id() == plc.TypeId.LIST:
+            leaf_queue.append(curr_plc_col)
+            curr_plc_col = curr_plc_col.list_view().child()
 
-        plc_leaf_col = func(curr_col, *args).plc_column
+        # Apply the transformation to the leaf column
+        # TODO: For now we convert plc.Column to ColumnBase for the func, then back to
+        # plc.Column, but we should be able to eventually avoid this double conversion.
+        leaf_col_base = ColumnBase.from_pylibcudf(curr_plc_col)
+        plc_leaf_col = func(leaf_col_base, *args).plc_column
 
-        # Rebuild the list column replacing just the leaf child
+        # Rebuild the list column hierarchy from leaf back to root
         while leaf_queue:
-            col = leaf_queue.pop()
-            offsets = col.children[0].plc_column
-            # col.mask is a Buffer which is Span-compliant
+            parent_plc_col = leaf_queue.pop()
+            offsets = parent_plc_col.list_view().offsets()
+            # parent_plc_col.null_mask() is a Span which is Span-compliant
             plc_leaf_col = plc.Column(
                 plc.DataType(plc.TypeId.LIST),
-                col.size,
+                parent_plc_col.size(),
                 None,
-                col.mask,
-                col.null_count,
-                col.offset,
+                parent_plc_col.null_mask(),
+                parent_plc_col.null_count(),
+                parent_plc_col.offset(),
                 [offsets, plc_leaf_col],
             )
         return cast(
-            Self,
-            type(self).from_pylibcudf(plc_leaf_col),
+            "Self",
+            ColumnBase.from_pylibcudf(plc_leaf_col),
         )
 
     @property
@@ -316,10 +269,7 @@ class ListColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
-        ):
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
@@ -471,7 +421,7 @@ class ListColumn(ColumnBase):
                 plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
             )
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 type(self).from_pylibcudf(plc_column),
             )
 
@@ -491,7 +441,7 @@ class ListColumn(ColumnBase):
                     )
                 seed = np.uint32(seed)
             return cast(
-                Self,
+                "Self",
                 type(self).from_pylibcudf(
                     plc.nvtext.minhash.minhash_ngrams(
                         self.plc_column,
@@ -519,7 +469,7 @@ class ListColumn(ColumnBase):
                     )
                 seed = np.uint64(seed)
             return cast(
-                Self,
+                "Self",
                 type(self).from_pylibcudf(
                     plc.nvtext.minhash.minhash64_ngrams(
                         self.plc_column,

@@ -367,7 +367,6 @@ ConfigureNVBench(
 # * nvtext benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   TEXT_NVBENCH
-  text/byte_pair_encoding.cpp
   text/deduplicate.cpp
   text/edit_distance.cpp
   text/hash_ngrams.cpp

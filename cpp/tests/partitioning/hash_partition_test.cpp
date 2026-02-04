@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -10,13 +10,16 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/devices>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -70,7 +73,7 @@ TEST_F(HashPartition, ZeroPartitions)
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
-  EXPECT_EQ(std::size_t{num_partitions}, offsets.size());
+  EXPECT_EQ(std::size_t{num_partitions + 1}, offsets.size());
 }
 
 TEST_F(HashPartition, ZeroRows)
@@ -88,7 +91,7 @@ TEST_F(HashPartition, ZeroRows)
   // Expect empty table with same number of columns and same number of partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
-  EXPECT_EQ(std::size_t{num_partitions}, offsets.size());
+  EXPECT_EQ(std::size_t{num_partitions + 1}, offsets.size());
 }
 
 TEST_F(HashPartition, ZeroColumns)
@@ -103,7 +106,43 @@ TEST_F(HashPartition, ZeroColumns)
   // Expect empty table with same number of columns and same number of partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
-  EXPECT_EQ(std::size_t{num_partitions}, offsets.size());
+  EXPECT_EQ(std::size_t{num_partitions + 1}, offsets.size());
+}
+
+// Test is very memory hungry (due to hash_partition algorithm and therefore doesn't fit in CI
+// runners).
+TEST_F(HashPartition, DISABLED_LargeRowCountNoOverflow)
+{
+  // We are also restricted by thrust 32bit offsets, so this test is quite delicate.
+  cudf::size_type const num_rows       = 200'000'000;
+  cudf::size_type const num_partitions = 5128;
+  auto value                           = cudf::numeric_scalar<bool>(true, /* is_valid = */ true);
+  auto bools                           = cudf::make_column_from_scalar(value, num_rows);
+  auto input                           = cudf::table_view({bools->view()});
+
+  auto [output, offsets] = cudf::hash_partition(input, {0}, num_partitions);
+
+  EXPECT_EQ(1, output->num_columns());
+  EXPECT_EQ(num_rows, output->num_rows());
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets.size());
+  EXPECT_EQ(num_rows, offsets.back());
+}
+
+TEST_F(HashPartition, TooManyPartitionsForSharedMemory)
+{
+  int dev;
+  CUDF_CUDA_TRY(cudaGetDevice(&dev));
+  std::size_t const smem_size =
+    cuda::device_attributes::max_shared_memory_per_block(cuda::device_ref{dev});
+  cudf::size_type const num_rows = 48 * 1024;
+  // hash_partition wants one entry in smem per output partition (stored as size_type). So if we
+  // have more partitions than will fit in smem we expect an error.
+  cudf::size_type const num_partitions = smem_size / sizeof(cudf::size_type) + 10;
+  auto value                           = cudf::numeric_scalar<bool>(true, /* is_valid = */ true);
+  auto bools                           = cudf::make_column_from_scalar(value, num_rows);
+  auto input                           = cudf::table_view({bools->view()});
+
+  EXPECT_THROW(cudf::hash_partition(input, {0}, num_partitions), std::invalid_argument);
 }
 
 TEST_F(HashPartition, MixedColumnTypes)
@@ -119,8 +158,8 @@ TEST_F(HashPartition, MixedColumnTypes)
   auto [output1, offsets1] = cudf::hash_partition(input, columns_to_hash, num_partitions);
   auto [output2, offsets2] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
-  // Expect output to have size num_partitions
-  EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
+  // Expect output to have size num_partitions + 1
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets1.size());
   EXPECT_EQ(offsets1.size(), offsets2.size());
 
   // Expect output to have same shape as input
@@ -160,8 +199,8 @@ TEST_F(HashPartition, ColumnsToHash)
   auto [second_result, second_offsets] =
     cudf::hash_partition(second_input, columns_to_hash, num_partitions);
 
-  // Expect offsets to be equal and num_partitions in length
-  EXPECT_EQ(static_cast<size_t>(num_partitions), first_offsets.size());
+  // Expect offsets to be num_partitions + 1 in length
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), first_offsets.size());
   EXPECT_TRUE(std::equal(
     first_offsets.begin(), first_offsets.end(), second_offsets.begin(), second_offsets.end()));
 
@@ -200,8 +239,8 @@ TEST_F(HashPartition, CustomSeedValue)
   auto [output2, offsets2] = cudf::hash_partition(
     input, columns_to_hash, num_partitions, cudf::hash_id::HASH_MURMUR3, 12345);
 
-  // Expect output to have size num_partitions
-  EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
+  // Expect output to have size num_partitions + 1
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets1.size());
   EXPECT_EQ(offsets1.size(), offsets2.size());
 
   // Expect output to have same shape as input
@@ -259,8 +298,8 @@ void run_fixed_width_test(size_t cols,
   auto [output1, offsets1] = cudf::hash_partition(input, columns_to_hash, num_partitions);
   auto [output2, offsets2] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
-  // Expect output to have size num_partitions
-  EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
+  // Expect output to have size num_partitions + 1
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets1.size());
   EXPECT_TRUE(std::equal(offsets1.begin(), offsets1.end(), offsets2.begin()));
 
   // Expect output to have same shape as input
@@ -269,7 +308,7 @@ void run_fixed_width_test(size_t cols,
 
   // Compute number of rows in each partition
   EXPECT_EQ(0, offsets1[0]);
-  offsets1.push_back(rows);
+  EXPECT_EQ(rows, offsets1[num_partitions]);
   std::adjacent_difference(offsets1.begin() + 1, offsets1.end(), offsets1.begin() + 1);
 
   // Compute the partition number for each row
@@ -331,8 +370,8 @@ TEST_F(HashPartition, FixedPointColumnsToHash)
   cudf::size_type const num_partitions = 1;
   auto [result, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
-  // Expect offsets to be equal and num_partitions in length
-  EXPECT_EQ(static_cast<size_t>(num_partitions), offsets.size());
+  // Expect offsets to be num_partitions + 1 in length
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets.size());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0).view(), input.column(0));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(1).view(), input.column(1));
@@ -357,8 +396,8 @@ TEST_F(HashPartition, ListWithNulls)
   auto const [second_result, second_offsets] =
     cudf::hash_partition(second_input, columns_to_hash, num_partitions);
 
-  // Expect offsets to be equal and num_partitions in length
-  EXPECT_EQ(static_cast<size_t>(num_partitions), first_offsets.size());
+  // Expect offsets to be num_partitions + 1 in length
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), first_offsets.size());
   EXPECT_TRUE(std::equal(
     first_offsets.begin(), first_offsets.end(), second_offsets.begin(), second_offsets.end()));
 
@@ -401,8 +440,8 @@ TEST_F(HashPartition, StructofStructWithNulls)
   auto const [second_result, second_offsets] =
     cudf::hash_partition(second_input, columns_to_hash, num_partitions);
 
-  // Expect offsets to be equal and num_partitions in length
-  EXPECT_EQ(static_cast<size_t>(num_partitions), first_offsets.size());
+  // Expect offsets to be num_partitions + 1 in length
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), first_offsets.size());
   EXPECT_TRUE(std::equal(
     first_offsets.begin(), first_offsets.end(), second_offsets.begin(), second_offsets.end()));
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -31,7 +31,6 @@ from cudf_polars.utils.config import (
     MemoryResourceConfig,
 )
 from cudf_polars.utils.cuda_stream import get_cuda_stream, get_new_cuda_stream
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(params=[False, True], ids=["norapidsmpf.single", "rapidsmpf.single"])
@@ -97,10 +96,7 @@ def test_use_device_not_current(monkeypatch):
 def test_invalid_device_raises(device, monkeypatch):
     monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", None)
     q = pl.LazyFrame({})
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(device=device))
-    elif isinstance(device, int):
+    if isinstance(device, int):
         with pytest.raises(rmm._cuda.gpu.CUDARuntimeError):
             q.collect(engine=pl.GPUEngine(device=device))
     elif isinstance(device, str):
@@ -112,24 +108,16 @@ def test_multiple_devices_in_same_process_raise(monkeypatch):
     # A device we haven't already seen
     monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", 4)
     q = pl.LazyFrame({})
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine())
-    else:
-        with pytest.raises(RuntimeError):
-            q.collect(engine=pl.GPUEngine())
+    with pytest.raises(RuntimeError):
+        q.collect(engine=pl.GPUEngine())
 
 
 @pytest.mark.parametrize("mr", [1, object()])
 def test_invalid_memory_resource_raises(mr, monkeypatch):
     monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", None)
     q = pl.LazyFrame({})
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(memory_resource=mr))
-    else:
-        with pytest.raises(TypeError):
-            q.collect(engine=pl.GPUEngine(memory_resource=mr))
+    with pytest.raises(TypeError):
+        q.collect(engine=pl.GPUEngine(memory_resource=mr))
 
 
 @pytest.mark.skipif(
@@ -454,6 +442,7 @@ def test_validate_shuffle_insertion_method() -> None:
         "sink_to_directory",
         "client_device_threshold",
         "max_io_threads",
+        "spill_to_pinned_memory",
     ],
 )
 def test_validate_streaming_executor_options(option: str) -> None:
@@ -909,6 +898,59 @@ def test_validate_stats_planning(option: str) -> None:
                 executor_options={"stats_planning": {option: object()}},
             )
         )
+
+
+def test_validate_dynamic_planning() -> None:
+    with pytest.raises(TypeError, match="sample_chunk_count must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"sample_chunk_count": object()}},
+            )
+        )
+
+
+def test_dynamic_planning_sample_chunk_count_min() -> None:
+    with pytest.raises(ValueError, match="sample_chunk_count must be at least 1"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"sample_chunk_count": 0}},
+            )
+        )
+
+
+def test_dynamic_planning_defaults() -> None:
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    # Dynamic planning is disabled (None) by default
+    assert config.executor.dynamic_planning is None
+
+
+def test_dynamic_planning_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "1")
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__SAMPLE_CHUNK_COUNT", "3"
+    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    # When env var is set, dynamic_planning should be a DynamicPlanningOptions
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.sample_chunk_count == 3
+
+
+def test_dynamic_planning_from_instance() -> None:
+    from cudf_polars.utils.config import DynamicPlanningOptions
+
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"dynamic_planning": DynamicPlanningOptions()},
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.sample_chunk_count == 2  # default
 
 
 def test_parse_memory_resource_config() -> None:

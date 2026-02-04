@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Core RapidsMPF streaming-engine API."""
 
 from __future__ import annotations
 
+import contextlib
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
@@ -12,6 +13,7 @@ from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
+from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
@@ -47,6 +49,7 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
+    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     import polars as pl
 
@@ -61,7 +64,6 @@ if TYPE_CHECKING:
         LowerState,
         SubNetGenerator,
     )
-    from cudf_polars.experimental.rapidsmpf.utils import Metadata
 
 
 def evaluate_logical_plan(
@@ -69,7 +71,7 @@ def evaluate_logical_plan(
     config_options: ConfigOptions,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -93,7 +95,7 @@ def evaluate_logical_plan(
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
     # Reserve shuffle IDs for the entire pipeline execution
-    with ReserveOpIDs(ir) as shuffle_id_map:
+    with ReserveOpIDs(ir) as collective_id_map:
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
         # for cluster == "distributed".
@@ -111,7 +113,7 @@ def evaluate_logical_plan(
                 partition_info,
                 config_options,
                 stats,
-                shuffle_id_map,
+                collective_id_map,
                 collect_metadata=collect_metadata,
             )
         else:
@@ -121,7 +123,7 @@ def evaluate_logical_plan(
                 partition_info,
                 config_options,
                 stats,
-                shuffle_id_map,
+                collective_id_map,
                 collect_metadata=collect_metadata,
             )
 
@@ -133,11 +135,11 @@ def evaluate_pipeline(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
-    collective_id_map: dict[IR, int],
+    collective_id_map: dict[IR, list[int]],
     rmpf_context: Context | None = None,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
 
@@ -152,7 +154,7 @@ def evaluate_pipeline(
     stats
         The statistics collector.
     collective_id_map
-        The mapping of IR nodes to collective IDs.
+        The mapping of IR nodes to lists of collective IDs.
     rmpf_context
         The RapidsMPF context.
     collect_metadata
@@ -172,6 +174,7 @@ def evaluate_pipeline(
         # Always use the RapidsMPF stream pool for now.
         br = rmpf_context.br()
         stream_pool = True
+        rmpf_context_manager = contextlib.nullcontext(rmpf_context)
     else:
         # Using "single" mode.
         # Create a new local RapidsMPF context.
@@ -199,88 +202,99 @@ def evaluate_pipeline(
             }
             | get_environment_variables()
         )
+        pinned_mr = (
+            PinnedMemoryResource.make_if_available()
+            if config_options.executor.spill_to_pinned_memory
+            else None
+        )
         if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
             stream_pool = config_options.cuda_stream_policy.build()
         local_comm = new_communicator(options)
         br = BufferResource(
-            mr, memory_available=memory_available, stream_pool=stream_pool
+            mr,
+            pinned_mr=pinned_mr,
+            memory_available=memory_available,
+            stream_pool=stream_pool,
         )
-        rmpf_context = Context(local_comm, br, options)
+        rmpf_context_manager = Context(local_comm, br, options)
 
-    # Create the IR execution context
-    if stream_pool:
-        ir_context = IRExecutionContext(
-            get_cuda_stream=rmpf_context.get_stream_from_pool
+    with rmpf_context_manager as rmpf_context:
+        # Create the IR execution context
+        if stream_pool:
+            ir_context = IRExecutionContext(
+                get_cuda_stream=rmpf_context.get_stream_from_pool
+            )
+        else:
+            ir_context = IRExecutionContext.from_config_options(config_options)
+
+        # Generate network nodes
+        assert rmpf_context is not None, "RapidsMPF context must defined."
+        metadata_collector: list[ChannelMetadata] | None = (
+            [] if collect_metadata else None
         )
-    else:
-        ir_context = IRExecutionContext.from_config_options(config_options)
-
-    # Generate network nodes
-    assert rmpf_context is not None, "RapidsMPF context must defined."
-    metadata_collector: list[Metadata] | None = [] if collect_metadata else None
-    nodes, output = generate_network(
-        rmpf_context,
-        ir,
-        partition_info,
-        config_options,
-        stats,
-        ir_context=ir_context,
-        collective_id_map=collective_id_map,
-        metadata_collector=metadata_collector,
-    )
-
-    # Run the network
-    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
-    run_streaming_pipeline(nodes=nodes, py_executor=executor)
-
-    # Extract/return the concatenated result.
-    # Keep chunks alive until after concatenation to prevent
-    # use-after-free with stream-ordered allocations
-    messages = output.release()
-    chunks = [
-        TableChunk.from_message(msg).make_available_and_spill(
-            br, allow_overbooking=True
+        nodes, output = generate_network(
+            rmpf_context,
+            ir,
+            partition_info,
+            config_options,
+            stats,
+            ir_context=ir_context,
+            collective_id_map=collective_id_map,
+            metadata_collector=metadata_collector,
         )
-        for msg in messages
-    ]
-    dfs: list[DataFrame] = []
-    if chunks:
-        dfs = [
-            DataFrame.from_table(
+
+        # Run the network
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
+        run_streaming_pipeline(nodes=nodes, py_executor=executor)
+
+        # Extract/return the concatenated result.
+        # Keep chunks alive until after concatenation to prevent
+        # use-after-free with stream-ordered allocations
+        messages = output.release()
+        chunks = [
+            TableChunk.from_message(msg).make_available_and_spill(
+                br, allow_overbooking=True
+            )
+            for msg in messages
+        ]
+        dfs: list[DataFrame] = []
+        if chunks:
+            dfs = [
+                DataFrame.from_table(
+                    chunk.table_view(),
+                    list(ir.schema.keys()),
+                    list(ir.schema.values()),
+                    chunk.stream,
+                )
+                for chunk in chunks
+            ]
+            df = _concat(*dfs, context=ir_context)
+        else:
+            # No chunks received - create an empty DataFrame with correct schema
+            stream = ir_context.get_cuda_stream()
+            chunk = empty_table_chunk(ir, rmpf_context, stream)
+            df = DataFrame.from_table(
                 chunk.table_view(),
                 list(ir.schema.keys()),
                 list(ir.schema.values()),
-                chunk.stream,
+                stream,
             )
-            for chunk in chunks
-        ]
-        df = _concat(*dfs, context=ir_context)
-    else:
-        # No chunks received - create an empty DataFrame with correct schema
-        stream = ir_context.get_cuda_stream()
-        chunk = empty_table_chunk(ir, rmpf_context, stream)
-        df = DataFrame.from_table(
-            chunk.table_view(),
-            list(ir.schema.keys()),
-            list(ir.schema.values()),
-            stream,
-        )
 
-    # We need to materialize the polars dataframe before we drop the rapidsmpf
-    # context, which keeps the CUDA streams alive.
-    stream = df.stream
-    result = df.to_polars()
-    stream.synchronize()
+        # We need to materialize the polars dataframe before we drop the rapidsmpf
+        # context, which keeps the CUDA streams alive.
+        stream = df.stream
+        result = df.to_polars()
+        stream.synchronize()
 
-    # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-    # before the Context, which ultimately contains the rmm MR, goes out of scope.
-    del nodes, output, messages, chunks, dfs, df
+        # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
+        # before the Context, which ultimately contains the rmm MR, goes out of scope.
+        del nodes, output, messages, chunks, dfs, df
 
-    # Restore the initial RMM memory resource
-    if _initial_mr is not None:
-        rmm.mr.set_current_device_resource(_original_mr)
+        # Restore the initial RMM memory resource
+        if _initial_mr is not None:
+            rmm.mr.set_current_device_resource(_original_mr)
 
-    return result, metadata_collector
+        return result, metadata_collector
 
 
 def lower_ir_graph(
@@ -400,8 +414,8 @@ def generate_network(
     stats: StatsCollector,
     *,
     ir_context: IRExecutionContext,
-    collective_id_map: dict[IR, int],
-    metadata_collector: list[Metadata] | None,
+    collective_id_map: dict[IR, list[int]],
+    metadata_collector: list[ChannelMetadata] | None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -421,7 +435,7 @@ def generate_network(
     ir_context
         The execution context for the IR node.
     collective_id_map
-        The mapping of IR nodes to collective IDs.
+        The mapping of IR nodes to lists of collective IDs.
     metadata_collector
         The list to collect the final metadata.
         This list will be mutated when the network is executed.
@@ -465,8 +479,8 @@ def generate_network(
     nodes_dict, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
-    # Add node to drain metadata channel before pull_from_channel
-    # (since pull_from_channel doesn't accept a ChannelPair)
+    # Add node to drain metadata before pull_from_channel
+    # (since pull_from_channel doesn't handle metadata messages)
     ch_final_data: Channel[TableChunk] = context.create_channel()
     drain_node = metadata_drain_node(
         context,

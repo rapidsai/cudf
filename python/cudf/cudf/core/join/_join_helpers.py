@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from cudf.api.types import is_dtype_equal
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -17,11 +18,9 @@ from cudf.core.dtypes import (
     Decimal128Dtype,
 )
 from cudf.core.reshape import concat
-from cudf.options import get_option
 from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_numeric,
 )
 
 if TYPE_CHECKING:
@@ -82,13 +81,9 @@ def _match_join_keys(
         if left_is_categorical:
             if how in {"left", "leftsemi", "leftanti"}:
                 return lcol, rcol.astype(ltype)
-            common_type = ltype.categories.dtype  # type: ignore[union-attr]
-            if get_option("mode.pandas_compatible"):
-                common_type = get_dtype_of_same_kind(rtype, common_type)
+            common_type = get_dtype_of_same_kind(rtype, ltype.categories.dtype)  # type: ignore[union-attr]
         else:
-            common_type = rtype.categories.dtype  # type: ignore[union-attr]
-            if get_option("mode.pandas_compatible"):
-                common_type = get_dtype_of_same_kind(ltype, common_type)
+            common_type = get_dtype_of_same_kind(ltype, rtype.categories.dtype)  # type: ignore[union-attr]
         return lcol.astype(common_type), rcol.astype(common_type)
 
     if is_dtype_equal(ltype, rtype):

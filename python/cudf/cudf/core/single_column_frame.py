@@ -1,13 +1,12 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 import cupy as cp
-from typing_extensions import Self
 
 import cudf
 from cudf.api.extensions import no_default
@@ -17,9 +16,10 @@ from cudf.api.types import (
 )
 from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.frame import Frame
 from cudf.core.mixins import NotIterable
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_dtype_obj_numeric
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _is_same_name
 

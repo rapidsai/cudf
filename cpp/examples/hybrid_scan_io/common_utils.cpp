@@ -214,313 +214,39 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
 
   CUDF_FUNC_RANGE();
 
+  static std::mutex mutex;
+
   std::vector<rmm::device_buffer> buffers(byte_ranges.size());
   {
     std::lock_guard<std::mutex> lock(mutex);
-    std::for_each(
-      thrust::counting_iterator<size_t>(0),
-      thrust::counting_iterator(byte_ranges.size()),
-      [&](auto const idx) {
-        auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
-        size_t const chunk_size = byte_ranges[idx].size();
+
+    std::transform(
+      byte_ranges.begin(), byte_ranges.end(), buffers.begin(), [&](auto const& byte_range) {
+        auto const chunk_offset = host_buffer.data() + byte_range.offset();
+        auto const chunk_size   = static_cast<size_t>(byte_range.size());
         auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
         cudf::detail::cuda_memcpy_async(
           cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
-          cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(chunk_offset), chunk_size},
+          cudf::host_span<uint8_t const>{chunk_offset, chunk_size},
           stream);
-        buffers[idx] = std::move(buffer);
+        return buffer;
       });
   }
+
   return buffers;
 }
 
-/**
- * @brief Combine columns from filter and payload tables into a single table
- *
- * @param filter_table Filter table
- * @param payload_table Payload table
- * @return Combined table
- */
-std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_table,
-                                            std::unique_ptr<cudf::table> payload_table)
+std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
+                                                rmm::cuda_stream_view stream)
 {
-  auto filter_columns  = filter_table->release();
-  auto payload_columns = payload_table->release();
+  if (tables.size() == 1) { return std::move(tables[0]); }
 
-  auto all_columns = std::vector<std::unique_ptr<cudf::column>>{};
-  all_columns.reserve(filter_columns.size() + payload_columns.size());
-  std::move(filter_columns.begin(), filter_columns.end(), std::back_inserter(all_columns));
-  std::move(payload_columns.begin(), payload_columns.end(), std::back_inserter(all_columns));
-  auto table = std::make_unique<cudf::table>(std::move(all_columns));
-
-  return table;
+  std::vector<cudf::table_view> table_views;
+  table_views.reserve(tables.size());
+  std::transform(
+    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
+      return tbl->view();
+    });
+  // Construct the final table
+  return cudf::concatenate(table_views, stream);
 }
-
-/**
- * @brief Read parquet file with the next-gen parquet reader
- *
- * @param io_source io source to read
- * @param filter_expression Filter expression
- * @param filters Set of parquet filters to apply
- * @param stream CUDA stream for hybrid scan reader
- * @param mr Device memory resource
- *
- * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
- *         row validity column
- */
-template <bool print_progress, bool single_step_materialize>
-std::unique_ptr<cudf::table> hybrid_scan(io_source const& io_source,
-                                         cudf::ast::expression const& filter_expression,
-                                         std::unordered_set<parquet_filter_type> const& filters,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-
-  auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
-
-  // Input file buffer span
-  auto const file_buffer_span = io_source.get_host_buffer_span();
-
-  if constexpr (print_progress) { std::cout << "\nREADER: Setup, metadata and page index...\n"; }
-  timer timer;
-
-  // Fetch footer bytes and setup reader
-  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
-  auto const reader =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
-
-  // Get page index byte range from the reader
-  auto const page_index_byte_range = reader->page_index_byte_range();
-  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
-  reader->setup_page_index(page_index_buffer);
-
-  // Get all row groups from the reader
-  auto input_row_group_indices   = reader->all_row_groups(options);
-  auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
-  if constexpr (print_progress) {
-    std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
-    timer.print_elapsed_millis();
-  }
-
-  // Filter row groups with stats
-  auto stats_filtered_row_group_indices = std::vector<cudf::size_type>{};
-  if (filters.contains(parquet_filter_type::ROW_GROUPS_WITH_STATS)) {
-    if constexpr (print_progress) {
-      std::cout << "READER: Filter row groups with stats...\n";
-      timer.reset();
-    }
-    stats_filtered_row_group_indices =
-      reader->filter_row_groups_with_stats(current_row_group_indices, options, stream);
-
-    // Update current row group indices
-    current_row_group_indices = stats_filtered_row_group_indices;
-    if constexpr (print_progress) {
-      std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
-      timer.print_elapsed_millis();
-    }
-  }
-
-  std::vector<cudf::io::text::byte_range_info> bloom_filter_byte_ranges;
-  std::vector<cudf::io::text::byte_range_info> dict_page_byte_ranges;
-
-  // Get bloom filter and dictionary page byte ranges from the reader
-  if (filters.contains(parquet_filter_type::ROW_GROUPS_WITH_DICT_PAGES) or
-      filters.contains(parquet_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS)) {
-    if constexpr (print_progress) {
-      std::cout << "READER: Get bloom filter and dictionary page byte ranges...\n";
-      timer.reset();
-    }
-    std::tie(bloom_filter_byte_ranges, dict_page_byte_ranges) =
-      reader->secondary_filters_byte_ranges(current_row_group_indices, options);
-    if constexpr (print_progress) { timer.print_elapsed_millis(); }
-  }
-
-  // Filter row groups with dictionary pages
-  std::vector<cudf::size_type> dictionary_page_filtered_row_group_indices;
-  dictionary_page_filtered_row_group_indices.reserve(current_row_group_indices.size());
-  if (filters.contains(parquet_filter_type::ROW_GROUPS_WITH_DICT_PAGES) and
-      dict_page_byte_ranges.size()) {
-    if constexpr (print_progress) {
-      std::cout << "READER: Filter row groups with dictionary pages...\n";
-      timer.reset();
-    }
-    // Fetch dictionary page buffers from the input file buffer
-    std::vector<rmm::device_buffer> dictionary_page_buffers =
-      fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
-    dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
-      dictionary_page_buffers, current_row_group_indices, options, stream);
-
-    // Update current row group indices
-    current_row_group_indices = dictionary_page_filtered_row_group_indices;
-    if constexpr (print_progress) {
-      std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
-      timer.print_elapsed_millis();
-    }
-  } else {
-    if constexpr (print_progress) {
-      std::cout << "SKIP: Row group filtering with dictionary pages...\n\n";
-    }
-  }
-
-  // Filter row groups with bloom filters
-  std::vector<cudf::size_type> bloom_filtered_row_group_indices;
-  bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
-  if (filters.contains(parquet_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS) and
-      bloom_filter_byte_ranges.size()) {
-    // Fetch 32 byte aligned bloom filter data buffers from the input file buffer
-    auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
-    auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-      mr, bloom_filter_alignment);
-    if constexpr (print_progress) {
-      std::cout << "READER: Filter row groups with bloom filters...\n";
-      timer.reset();
-    }
-    std::vector<rmm::device_buffer> bloom_filter_data =
-      fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, aligned_mr);
-    // Filter row groups with bloom filters
-    bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
-      bloom_filter_data, current_row_group_indices, options, stream);
-
-    // Update current row group indices
-    current_row_group_indices = bloom_filtered_row_group_indices;
-    if constexpr (print_progress) {
-      std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
-      timer.print_elapsed_millis();
-    }
-  } else {
-    if constexpr (print_progress) {
-      std::cout << "SKIP: Row group filtering with bloom filters...\n\n";
-    }
-  }
-
-  // Check whether to prune filter column data pages
-  using cudf::io::parquet::experimental::use_data_page_mask;
-  auto const prune_filter_data_pages =
-    filters.contains(parquet_filter_type::FILTER_COLUMN_PAGES_WITH_PAGE_INDEX);
-
-  auto row_mask = std::unique_ptr<cudf::column>{};
-  if (prune_filter_data_pages) {
-    if constexpr (print_progress) {
-      std::cout << "READER: Filter data pages of filter columns with page index stats...\n";
-      timer.reset();
-    }
-    // Filter data pages with page index stats
-    row_mask =
-      reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
-    if constexpr (print_progress) { timer.print_elapsed_millis(); }
-  } else {
-    if constexpr (print_progress) {
-      std::cout << "SKIP: Filter column data page filtering with page index stats...\n\n";
-    }
-    auto num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
-    row_mask      = cudf::make_numeric_column(
-      cudf::data_type{cudf::type_id::BOOL8}, num_rows, rmm::device_buffer{}, 0, stream, mr);
-  }
-
-  if constexpr (single_step_materialize) {
-    if constexpr (print_progress) {
-      std::cout << "READER: Materialize all columns...\n";
-      timer.reset();
-    }
-    auto const all_column_chunk_byte_ranges =
-      reader->all_column_chunks_byte_ranges(current_row_group_indices, options);
-    auto all_column_chunk_buffers =
-      fetch_byte_ranges(file_buffer_span, all_column_chunk_byte_ranges, stream, mr);
-    auto read_table =
-      reader
-        ->materialize_all_columns(
-          current_row_group_indices, std::move(all_column_chunk_buffers), options, stream)
-        .tbl;
-    if constexpr (print_progress) { timer.print_elapsed_millis(); }
-    return std::move(read_table);
-  } else {
-    if constexpr (print_progress) {
-      std::cout << "READER: Materialize filter columns...\n";
-      timer.reset();
-    }
-    // Get column chunk byte ranges from the reader
-    auto const filter_column_chunk_byte_ranges =
-      reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
-    auto filter_column_chunk_buffers =
-      fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
-
-    // Materialize the table with only the filter columns
-    auto row_mask_mutable_view = row_mask->mutable_view();
-    auto filter_table =
-      reader
-        ->materialize_filter_columns(
-          current_row_group_indices,
-          std::move(filter_column_chunk_buffers),
-          row_mask_mutable_view,
-          prune_filter_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
-          options,
-          stream)
-        .tbl;
-    if constexpr (print_progress) { timer.print_elapsed_millis(); }
-
-    // Check whether to prune payload column data pages
-    auto const prune_payload_data_pages =
-      filters.contains(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
-
-    if constexpr (print_progress) {
-      if (prune_payload_data_pages) {
-        std::cout << "READER: Filter data pages of payload columns with row mask...\n";
-      } else {
-        std::cout << "SKIP: Payload column data page filtering with row mask...\n\n";
-      }
-
-      std::cout << "READER: Materialize payload columns...\n";
-      timer.reset();
-    }
-    // Get column chunk byte ranges from the reader
-    auto const payload_column_chunk_byte_ranges =
-      reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
-    auto payload_column_chunk_buffers =
-      fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
-
-    // Materialize the table with only the payload columns
-    auto payload_table =
-      reader
-        ->materialize_payload_columns(
-          current_row_group_indices,
-          std::move(payload_column_chunk_buffers),
-          row_mask->view(),
-          prune_payload_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
-          options,
-          stream)
-        .tbl;
-    if constexpr (print_progress) { timer.print_elapsed_millis(); }
-
-    return combine_tables(std::move(filter_table), std::move(payload_table));
-  }
-}
-
-// Explicit template instantiations
-template std::unique_ptr<cudf::table> hybrid_scan<true, true>(
-  io_source const& io_source,
-  cudf::ast::expression const& filter_expression,
-  std::unordered_set<parquet_filter_type> const& filters,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
-template std::unique_ptr<cudf::table> hybrid_scan<true, false>(
-  io_source const& io_source,
-  cudf::ast::expression const& filter_expression,
-  std::unordered_set<parquet_filter_type> const& filters,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
-template std::unique_ptr<cudf::table> hybrid_scan<false, true>(
-  io_source const& io_source,
-  cudf::ast::expression const& filter_expression,
-  std::unordered_set<parquet_filter_type> const& filters,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
-template std::unique_ptr<cudf::table> hybrid_scan<false, false>(
-  io_source const& io_source,
-  cudf::ast::expression const& filter_expression,
-  std::unordered_set<parquet_filter_type> const& filters,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);

@@ -32,8 +32,7 @@ from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import ColumnLike, DtypeObj, ScalarLike
     from cudf.core.column.numerical import NumericalColumn
@@ -45,16 +44,18 @@ class TemporalBaseColumn(ColumnBase, Scannable):
     Base class for TimeDeltaColumn and DatetimeColumn.
     """
 
+    _VALID_REDUCTIONS = {
+        "mean",
+        "std",
+    }
+    _VALID_SCANS = {
+        "cummin",
+        "cummax",
+    }
     _PANDAS_NA_VALUE = pd.NaT
     _UNDERLYING_DTYPE: np.dtype[np.int64] = np.dtype(np.int64)
     _NP_SCALAR: ClassVar[type[np.datetime64] | type[np.timedelta64]]
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
-    _VALID_SCANS = {
-        "cumsum",
-        "cumprod",
-        "cummin",
-        "cummax",
-    }
 
     def __contains__(self, item: np.datetime64 | np.timedelta64) -> bool:
         """
@@ -229,27 +230,12 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
+        if nullable and not arrow_type:
+            raise NotImplementedError(
+                f"pandas does not have a native nullable type for {self.dtype}."
             )
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
-        ) or arrow_type:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-        pa_array = self.to_arrow()
-        if arrow_type:
-            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         else:
-            # Workaround until the following issue is fixed:
-            # https://github.com/apache/arrow/issues/45341
-            return pd.Index(
-                pa_array.to_numpy(zero_copy_only=False, writable=True)
-            )
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         new_plc_column = plc.Column(
@@ -345,28 +331,34 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return False
 
     def mean(
-        self, skipna: bool = True, min_count: int = 0
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE).mean(  # type:ignore[call-arg]
-                skipna=skipna, min_count=min_count
+            self.astype(self._UNDERLYING_DTYPE).mean(
+                skipna=skipna, min_count=min_count, **kwargs
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
     def std(
-        self, skipna: bool = True, min_count: int = 0, ddof: int = 1
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> pd.Timedelta:
+        # Extract ddof from kwargs, defaulting to 1
+        ddof = kwargs.pop("ddof", 1)
         return pd.Timedelta(
-            self.astype(self._UNDERLYING_DTYPE).std(  # type:ignore[call-arg]
-                skipna=skipna, min_count=min_count, ddof=ddof
+            self.astype(self._UNDERLYING_DTYPE).std(
+                skipna=skipna, min_count=min_count, ddof=ddof, **kwargs
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
-    def median(self, skipna: bool = True) -> pd.Timestamp | pd.Timedelta:
+    def median(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE).median(skipna=skipna),  # type:ignore[call-arg]
+            self.astype(self._UNDERLYING_DTYPE).median(
+                skipna=skipna, min_count=min_count, **kwargs
+            ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
