@@ -3,7 +3,7 @@
 
 """Defines pytest fixtures for internal benchmarks."""
 
-from config import NUM_ROWS, cudf
+from config import NUM_ROWS_FIXTURES, cudf
 from utils import (
     OrderedSet,
     collapse_fixtures,
@@ -13,7 +13,7 @@ from utils import (
 
 fixtures = OrderedSet()
 for dtype, column_generator in column_generators.items():
-    for nr in NUM_ROWS:
+    for nr in NUM_ROWS_FIXTURES:
 
         def column_nulls_false(request, nr=nr):
             return cudf.core.column.as_column(column_generator(nr))
