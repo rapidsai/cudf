@@ -21,7 +21,11 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132, POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_138,
+)
 
 if TYPE_CHECKING:
     from typing import Self
@@ -230,7 +234,7 @@ class StringFunction(Expr):
                 )
         elif self.name is StringFunction.Name.ReplaceMany:
             if POLARS_VERSION_LT_136:
-                (ascii_case_insensitive,) = self.options
+                (ascii_case_insensitive,) = self.options  # pragma: no cover
             else:
                 ascii_case_insensitive, leftmost = self.options
                 if leftmost:
@@ -264,7 +268,9 @@ class StringFunction(Expr):
             (_, inclusive) = self.options
             if inclusive:
                 raise NotImplementedError(f"{inclusive=} is not supported for split")
-        elif self.name is StringFunction.Name.SplitRegex:
+        elif (
+            POLARS_VERSION_LT_138 and self.name is StringFunction.Name.SplitRegex
+        ):  # pragma: no cover
             # See https://github.com/pola-rs/polars/pull/26060
             raise NotImplementedError(
                 "String split with regex (literal=False) is not supported."

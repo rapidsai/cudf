@@ -18,6 +18,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_133,
+    POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
 )
 
@@ -365,6 +366,13 @@ def test_replace_many_ascii_case(ldf):
     q = ldf.select(
         pl.col("a").str.replace_many(["a", "b", "c"], "a", ascii_case_insensitive=True)
     )
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.skipif(POLARS_VERSION_LT_136, reason="leftmost arg added in 1.36")
+def test_replace_many_leftmost(ldf):
+    q = ldf.select(pl.col("a").str.replace_many(["a", "b"], "x", leftmost=True))
 
     assert_ir_translation_raises(q, NotImplementedError)
 

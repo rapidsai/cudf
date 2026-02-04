@@ -15,6 +15,7 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
@@ -95,14 +96,17 @@ class Agg(Expr):
                 f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
             )  # pragma: no cover
         if (
-            context == ExecutionContext.FRAME
+            POLARS_VERSION_LT_136
+            and context == ExecutionContext.FRAME
             and req is not None
             and not plc.aggregation.is_valid_aggregation(dtype.plc_type, req)
         ):
             # TODO: Check which cases polars raises vs returns all-NULL column.
             # For the all-NULL column cases, we could build it using Column.all_null_like
             # at evaluation time.
-            raise NotImplementedError(f"Invalid aggregation {req} with dtype {dtype}")
+            raise NotImplementedError(
+                f"Invalid aggregation {req} with dtype {dtype}"
+            )  # pragma: no; polars may raise ahead of time
         self.request = req
         op = getattr(self, f"_{name}", None)
         if op is None:

@@ -460,7 +460,9 @@ def _(
 def _(
     ir: HStack, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.columns])):
+    if not all(
+        expr.is_pointwise for expr in traversal([e.value for e in ir.columns])
+    ):  # pragma: no cover
         # TODO: Avoid fallback if/when possible
         return _lower_ir_fallback(
             ir, rec, msg="This HStack not supported for multiple partitions."

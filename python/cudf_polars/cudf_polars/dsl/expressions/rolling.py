@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -22,6 +22,7 @@ from cudf_polars.dsl.utils.windows import (
     offsets_to_windows,
     range_window_bounds,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -78,7 +79,7 @@ def to_request(
     elif isinstance(value, expr.Agg):
         child = value.children[0]
         col = child.evaluate(df, context=ExecutionContext.ROLLING)
-        if value.name == "var":
+        if POLARS_VERSION_LT_136 and value.name == "var":
             # Polars variance produces null if nvalues <= ddof
             # libcudf produces NaN. However, we can get the polars
             # behaviour by setting the minimum window size to ddof +
@@ -92,7 +93,7 @@ def to_request(
     return plc.rolling.RollingRequest(col.obj, min_periods, value.agg_request)
 
 
-class RollingWindow(Expr):
+class RollingWindow(Expr):  # pragma: no cover; polars >1.36 uses AExpr::Rolling now
     __slots__ = (
         "closed_window",
         "following_ordinal",
@@ -142,10 +143,12 @@ class RollingWindow(Expr):
             raise NotImplementedError(
                 "Incorrect handling of empty groups for list collection"
             )
-        if not plc.rolling.is_valid_rolling_aggregation(
+        if POLARS_VERSION_LT_136 and not plc.rolling.is_valid_rolling_aggregation(
             agg.dtype.plc_type, agg.agg_request
         ):
-            raise NotImplementedError(f"Unsupported rolling aggregation {agg}")
+            raise NotImplementedError(
+                f"Unsupported rolling aggregation {agg}"
+            )  # pragma: no cover; polars may raise ahead of time
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

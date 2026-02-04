@@ -807,7 +807,13 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
-    if isinstance(node.options, plrs._expr_nodes.RollingGroupOptions):
+    if isinstance(
+        node.options, plrs._expr_nodes.RollingGroupOptions
+    ):  # pragma: no cover; polars gives Aexpr::Rolling node now
+        # TODO: As of polars 1.36.0, rolling is represented as a Rolling expression node
+        # but is currently not implemented in the python node visitor. Once we support it,
+        # we should move this branch to separate translator dispatch function for the new node.
+
         # pl.col("a").rolling(...)
         with set_expr_context(translator, ExecutionContext.ROLLING):
             agg = translator.translate_expr(n=node.function, schema=schema)

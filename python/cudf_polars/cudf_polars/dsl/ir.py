@@ -1224,8 +1224,8 @@ class Sink(IR):
         """Write the dataframe to a file."""
         target = plc.io.SinkInfo([path])
 
-        if options.get("mkdir", False):
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if POLARS_VERSION_LT_136 and options.get("mkdir", False):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)  # pragma: no cover
         if kind == "Csv":
             cls._write_csv(target, options, df)
         elif kind == "Parquet":
@@ -1796,8 +1796,14 @@ class GroupBy(IR):
                 raise NotImplementedError("Nested list[struct] types not supported")
         for request in agg_requests:
             expr = request.value
-            if isinstance(expr, unary.UnaryFunction) and expr.name == "value_counts":
-                raise NotImplementedError("value_counts is not supported in groupby")
+            if (
+                POLARS_VERSION_LT_136
+                and isinstance(expr, unary.UnaryFunction)
+                and expr.name == "value_counts"
+            ):
+                raise NotImplementedError(
+                    "value_counts is not supported in groupby"
+                )  # pragma: no cover; Nested list[struct] types not supported
             if any(
                 isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
                 for child in expr.children
@@ -2986,8 +2992,10 @@ class MapFunction(IR):
                 (to_explode,) = self.options
             else:
                 (to_explode, empty_as_null, keep_nulls) = self.options
-                if not empty_as_null or not keep_nulls:
-                    raise NotImplementedError("Explode an empty or null list/array")
+                if (POLARS_VERSION_LT_136 and not empty_as_null) or not keep_nulls:
+                    raise NotImplementedError(
+                        "Explode an empty or null list/array"
+                    )  # pragma: no cover
             if len(to_explode) > 1:
                 # TODO: straightforward, but need to error check
                 # polars requires that all to-explode columns have the
@@ -3008,7 +3016,7 @@ class MapFunction(IR):
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
             variable_name = "variable" if variable_name is None else variable_name
-            if len(pivotees) == 0:
+            if POLARS_VERSION_LT_136 and len(pivotees) == 0:  # pragma: no cover
                 index = frozenset(indices)
                 pivotees = [name for name in df.schema if name not in index]
             if not all(
