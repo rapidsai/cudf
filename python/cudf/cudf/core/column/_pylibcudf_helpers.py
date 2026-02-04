@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
 __all__ = [
     "all_strings_match_type",
+    "count_false",
+    "count_true",
     "fillna_bool_false",
     "fillna_numeric_zero",
     "isnull_including_nan",
@@ -349,3 +351,88 @@ def notnull_excluding_nan(column: ColumnBase) -> ColumnBase:
             return ColumnBase.from_pylibcudf(result_plc)
         else:
             return ColumnBase.create(is_valid_plc, np.dtype(np.bool_))
+
+
+# New helpers to add to _pylibcudf_helpers.py
+
+
+def count_true(column: ColumnBase) -> int:
+    """Count the number of True values in a boolean column.
+
+    This is more efficient than calling (column == True).sum() or column.sum()
+    because it uses pylibcudf's sum reduction directly on the boolean column.
+
+    Parameters
+    ----------
+    column : ColumnBase
+        Boolean column to count True values in
+
+    Returns
+    -------
+    int
+        The number of True values in the column
+
+    Examples
+    --------
+    Instead of:
+
+        num_true = (col == True).sum()
+        # or
+        num_true = col.sum()
+
+    Use:
+
+        from cudf.core.column._pylibcudf_helpers import count_true
+        num_true = count_true(col)
+
+    Notes
+    -----
+    This function assumes the input is a boolean column. It directly
+    uses pylibcudf's sum aggregation which treats True as 1 and False as 0.
+    """
+
+    with column.access(mode="read", scope="internal"):
+        result_scalar = plc.reduce.reduce(
+            column.plc_column,
+            plc.aggregation.sum(),
+            plc.types.DataType(plc.types.TypeId.INT64),
+        )
+        result = result_scalar.to_py()
+        assert isinstance(result, int), f"Expected int, got {type(result)}"
+        return result
+
+
+def count_false(column: ColumnBase) -> int:
+    """Count the number of False values in a boolean column.
+
+    This is more efficient than calling (column == False).sum() because it
+    computes the count as len(column) - count_true(column) - null_count.
+
+    Parameters
+    ----------
+    column : ColumnBase
+        Boolean column to count False values in
+
+    Returns
+    -------
+    int
+        The number of False values in the column
+
+    Examples
+    --------
+    Instead of:
+
+        num_false = (col == False).sum()
+
+    Use:
+
+        from cudf.core.column._pylibcudf_helpers import count_false
+        num_false = count_false(col)
+
+    Notes
+    -----
+    This function assumes the input is a boolean column. It computes
+    the count as: total_values - true_values - null_values.
+    This avoids creating an intermediate comparison column.
+    """
+    return len(column) - count_true(column) - column.null_count
