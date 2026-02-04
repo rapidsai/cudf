@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -55,7 +55,6 @@ struct page_state_s {
   uint8_t const* lvl_start[NUM_LEVEL_TYPES]{};  // [def,rep]
   uint8_t const* abs_lvl_start[NUM_LEVEL_TYPES]{};  // [def,rep]
   uint8_t const* abs_lvl_end[NUM_LEVEL_TYPES]{};    // [def,rep]
-  int32_t lvl_count[NUM_LEVEL_TYPES]{};             // how many of each of the streams we've decoded
   int32_t row_index_lower_bound{};                  // lower bound of row indices we should process
 
   // a shared-memory cache of frequently used data when decoding. The source of this data is
@@ -110,6 +109,60 @@ struct null_count_back_copier {
     }
   }
 };
+
+/**
+ * @brief Check if the page is marked nullable or not
+ *
+ * @param s Page state
+ * @return True if the page is nullable (max definition level > 0)
+ */
+__device__ inline bool is_nullable(page_state_s* s)
+{
+  auto const lvl           = level_type::DEFINITION;
+  auto const max_def_level = s->col.max_level[lvl];
+  return max_def_level > 0;
+}
+
+/**
+ * @brief For a nullable page, check if it could have nulls
+ *
+ * This function performs a quick check based on the initial RLE run to determine
+ * if the page could potentially contain null values. It returns true if:
+ * - The initial run is a literal run (could contain mixed values)
+ * - The repeated run count doesn't match the page's input value count
+ * - The repeated run value indicates nulls (not equal to max definition level)
+ *
+ * @param s Page state
+ * @return True if the page could contain null values
+ */
+__device__ inline bool maybe_has_nulls(page_state_s* s)
+{
+  auto const lvl      = level_type::DEFINITION;
+  auto const init_run = s->initial_rle_run[lvl];
+  // literal runs, lets assume they could hold nulls
+  if (is_literal_run(init_run)) { return true; }
+
+  // repeated run with number of items in the run not equal
+  // to the rows in the page, assume that means we could have nulls
+  if (s->page.num_input_values != (init_run >> 1)) { return true; }
+
+  auto const lvl_bits = s->col.level_bits[lvl];
+  auto const run_val  = lvl_bits == 0 ? 0 : s->initial_rle_value[lvl];
+
+  // the encoded repeated value isn't valid, we have (all) nulls
+  return run_val != s->col.max_level[lvl];
+}
+
+/**
+ * @brief Check if the page should process nulls
+ *
+ * @param s Page state
+ * @return True if the page should process nulls
+ */
+__device__ inline bool should_process_nulls(page_state_s* s)
+{
+  return is_nullable(s) && maybe_has_nulls(s);
+}
 
 /**
  * @brief Test if the given page is in a string column
@@ -499,105 +552,6 @@ __device__ size_type initialize_string_descriptors(page_state_s* s,
 }
 
 /**
- * @brief Decode values out of a definition or repetition stream
- *
- * @param[out] output Level buffer output
- * @param[in,out] s Page state input/output
- * @param[in] target_count Target count of stream values on output
- * @param[in] t Warp0 thread ID (0..31)
- * @param[in] lvl The level type we are decoding - DEFINITION or REPETITION
- * @tparam level_t Type used to store decoded repetition and definition levels
- * @tparam rolling_buf_size Size of the cyclic buffer used to store value data
- */
-template <typename level_t, int rolling_buf_size>
-__device__ void gpuDecodeStream(
-  level_t* output, page_state_s* s, int32_t target_count, int t, level_type lvl)
-{
-  uint8_t const* cur_def    = s->lvl_start[lvl];
-  uint8_t const* end        = s->lvl_end;
-  uint32_t level_run        = s->initial_rle_run[lvl];
-  int32_t level_val         = s->initial_rle_value[lvl];
-  int level_bits            = s->col.level_bits[lvl];
-  int32_t num_input_values  = s->num_input_values;
-  int32_t value_count       = s->lvl_count[lvl];
-  int32_t batch_coded_count = 0;
-
-  while (s->error == 0 && value_count < target_count && value_count < num_input_values) {
-    int batch_len;
-    if (level_run <= 1) {
-      // Get a new run symbol from the byte stream
-      int sym_len = 0;
-      if (!t) {
-        uint8_t const* cur = cur_def;
-        if (cur < end) { level_run = get_vlq32(cur, end); }
-        if (is_repeated_run(level_run)) {
-          if (cur < end) level_val = cur[0];
-          cur++;
-          if (level_bits > 8) {
-            if (cur < end) level_val |= cur[0] << 8;
-            cur++;
-          }
-        }
-        // If there are errors, set the error code and continue. The loop will be exited below.
-        if (cur > end) { s->set_error_code(decode_error::LEVEL_STREAM_OVERRUN); }
-        if (level_run <= 1) { s->set_error_code(decode_error::INVALID_LEVEL_RUN); }
-        sym_len = (int32_t)(cur - cur_def);
-        __threadfence_block();
-      }
-      sym_len   = shuffle(sym_len);
-      level_val = shuffle(level_val);
-      level_run = shuffle(level_run);
-      cur_def += sym_len;
-    }
-    if (s->error != 0) { break; }
-
-    batch_len = min(num_input_values - value_count, 32);
-    if (is_literal_run(level_run)) {
-      // Literal run
-      int batch_len8;
-      batch_len  = min(batch_len, (level_run >> 1) * 8);
-      batch_len8 = (batch_len + 7) >> 3;
-      if (t < batch_len) {
-        int bitpos         = t * level_bits;
-        uint8_t const* cur = cur_def + (bitpos >> 3);
-        bitpos &= 7;
-        if (cur < end) level_val = cur[0];
-        cur++;
-        if (level_bits > 8 - bitpos && cur < end) {
-          level_val |= cur[0] << 8;
-          cur++;
-          if (level_bits > 16 - bitpos && cur < end) level_val |= cur[0] << 16;
-        }
-        level_val = (level_val >> bitpos) & ((1 << level_bits) - 1);
-      }
-      level_run -= batch_len8 * 2;
-      cur_def += batch_len8 * level_bits;
-    } else {
-      // Repeated value
-      batch_len = min(batch_len, level_run >> 1);
-      level_run -= batch_len * 2;
-    }
-    if (t < batch_len) {
-      int idx                                      = value_count + t;
-      output[rolling_index<rolling_buf_size>(idx)] = level_val;
-    }
-    batch_coded_count += batch_len;
-    value_count += batch_len;
-  }
-  // issue #14597
-  // racecheck reported race between reads at the start of this function and the writes below
-  __syncwarp();
-
-  // update the stream info
-  if (!t) {
-    s->lvl_start[lvl]         = cur_def;
-    s->initial_rle_run[lvl]   = level_run;
-    s->initial_rle_value[lvl] = level_val;
-    s->lvl_count[lvl]         = value_count;
-  }
-}
-
-/**
  * @brief Store a validity mask containing value_count bits into the output validity buffer of the
  * page.
  *
@@ -676,10 +630,9 @@ inline __device__ void store_validity(int valid_map_offset,
  * @param[in] input_value_count The current count of input level values we have processed
  * @param[in] target_input_value_count The desired # of input level values we want to process
  * @param[in] t Thread index
- * @tparam rolling_buf_size Size of the cyclic buffer used to store value data
  * @tparam level_t Type used to store decoded repetition and definition levels
  */
-template <int rolling_buf_size, typename level_t>
+template <typename level_t>
 inline __device__ void get_nesting_bounds(int& start_depth,
                                           int& end_depth,
                                           int& d,
@@ -694,12 +647,13 @@ inline __device__ void get_nesting_bounds(int& start_depth,
   end_depth   = -1;
   d           = -1;
   if (input_value_count + t < target_input_value_count) {
-    int const index = rolling_index<rolling_buf_size>(input_value_count + t);
-    d               = static_cast<int>(def[index]);
+    int const index = input_value_count + t;
+    d               = (def != nullptr) ? def[index] : s->col.max_level[level_type::DEFINITION];
+
     // if we have repetition (there are list columns involved) we have to
     // bound what nesting levels we apply values to
     if (s->col.max_level[level_type::REPETITION] > 0) {
-      int r       = rep[index];
+      int const r = rep[index];
       start_depth = s->nesting_info[r].start_depth;
       end_depth   = s->nesting_info[d].end_depth;
     }
@@ -784,7 +738,7 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
     // determine the nesting bounds for this thread (the range of nesting depths we
     // will generate new value indices and validity bits for)
     int start_depth, end_depth, d;
-    get_nesting_bounds<rolling_buf_size, level_t>(
+    get_nesting_bounds<level_t>(
       start_depth, end_depth, d, s, rep, def, input_value_count, target_input_value_count, t);
 
     // 4 interesting things to track:
@@ -955,26 +909,13 @@ __device__ void gpuDecodeLevels(
   level_t* const def,
   cg::thread_block_tile<cudf::detail::warp_size, cg::thread_block> const& warp)
 {
-  auto const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
-
   auto cur_leaf_count = target_leaf_count;
   while (s->error == 0 && s->nz_count < target_leaf_count &&
          s->input_value_count < s->num_input_values) {
-    if (has_repetition) {
-      gpuDecodeStream<level_t, rolling_buf_size>(
-        rep, s, cur_leaf_count, warp.thread_rank(), level_type::REPETITION);
-    }
-    gpuDecodeStream<level_t, rolling_buf_size>(
-      def, s, cur_leaf_count, warp.thread_rank(), level_type::DEFINITION);
-    warp.sync();
-
     // because the rep and def streams are encoded separately, we cannot request an exact
     // # of values to be decoded at once. we can only process the lowest # of decoded rep/def
     // levels we get.
-    auto const actual_leaf_count = has_repetition
-                                     ? cuda::std::min<int32_t>(s->lvl_count[level_type::REPETITION],
-                                                               s->lvl_count[level_type::DEFINITION])
-                                     : s->lvl_count[level_type::DEFINITION];
+    auto const actual_leaf_count = cuda::std::min(cur_leaf_count, s->num_input_values);
 
     // process what we got back
     gpuUpdateValidityOffsetsAndRowIndices<level_t, state_buf, rolling_buf_size>(
@@ -1433,12 +1374,10 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
       s->set_error_code(decode_error::EMPTY_PAGE);
     }
 
-    s->lvl_count[level_type::REPETITION] = 0;
-    s->lvl_count[level_type::DEFINITION] = 0;
-    s->nz_count                          = 0;
-    s->num_input_values                  = s->page.num_input_values;
-    s->dict_pos                          = 0;
-    s->src_pos                           = 0;
+    s->nz_count         = 0;
+    s->num_input_values = s->page.num_input_values;
+    s->dict_pos         = 0;
+    s->src_pos          = 0;
 
     // for flat hierarchies, we can't know how many leaf values to skip unless we do a full
     // preprocess of the definition levels (since nulls will have no actual decodable value, there

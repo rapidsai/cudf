@@ -33,6 +33,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
@@ -249,10 +250,17 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def days_in_month(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.datetime.days_in_month(self.plc_column)
+        res = ColumnBase.create(
+            plc.datetime.days_in_month(self.plc_column), np.dtype("int16")
+        )
+        if is_pandas_nullable_extension_dtype(self.dtype):
+            res = res.astype(
+                get_dtype_of_same_kind(
+                    self.dtype,
+                    np.dtype("int64"),
+                ),
             )
+        return res
 
     @functools.cached_property
     def day_of_week(self) -> ColumnBase:
@@ -316,9 +324,7 @@ class DatetimeColumn(TemporalBaseColumn):
                     field,
                 )
             )
-            if cudf.get_option(
-                "mode.pandas_compatible"
-            ) and result.dtype == np.dtype("int16"):
+            if result.dtype == np.dtype("int16"):
                 result = result.astype(np.dtype("int32"))
             return result
 
@@ -759,7 +765,9 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-        return gmt_data._with_type_metadata(dtype)
+        return cast(
+            DatetimeColumn, ColumnBase.create(gmt_data.plc_column, dtype)
+        )
 
     def tz_convert(self, tz: str | None) -> DatetimeColumn:
         raise TypeError(
@@ -845,7 +853,9 @@ class DatetimeTZColumn(DatetimeColumn):
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
                 # TODO: Doesn't check that new unit is valid.
-                casted = self._with_type_metadata(dtype)
+                casted = cast(
+                    DatetimeTZColumn, ColumnBase.create(self.plc_column, dtype)
+                )
             else:
                 casted = self
             return casted.tz_convert(str(dtype.tz))

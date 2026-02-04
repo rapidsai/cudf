@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ import numpy as np
 import pandas as pd
 
 from cudf.core.column import as_column
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype
 from cudf.core.index import ensure_index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     can_convert_to_column,
-    is_dtype_obj_numeric,
 )
 
 if TYPE_CHECKING:
