@@ -751,6 +751,17 @@ class StringMethods(BaseAccessor):
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
         """
+        if (
+            na is not no_default
+            and not pd.isna(na)
+            and not isinstance(na, bool)
+        ):
+            # GH#59561
+            warnings.warn(
+                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
+                "and will raise in a future version.",
+                FutureWarning,
+            )
         if regex and isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
             pat = pat.pattern

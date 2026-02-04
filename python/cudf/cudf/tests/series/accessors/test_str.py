@@ -14,6 +14,7 @@ import pytest
 import cudf
 from cudf import concat
 from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
@@ -1158,7 +1159,16 @@ def test_string_compiled_re(ps_gs, pat, repl):
     ],
 )
 @pytest.mark.parametrize("pat", ["", " ", "a", "abc", "cat", "$", "\n"])
-@pytest.mark.parametrize("na", [no_default, True, False])
+@pytest.mark.parametrize(
+    "na",
+    [
+        None
+        if PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION
+        else no_default,
+        True,
+        False,
+    ],
+)
 def test_string_str_match(data, pat, na):
     ps = pd.Series(data)
     gs = cudf.Series(data)
@@ -2371,7 +2381,16 @@ def test_string_replace_n(n):
     "flags,flags_raise",
     [(0, 0), (re.MULTILINE | re.DOTALL, 0), (re.I, 1), (re.I | re.DOTALL, 1)],
 )
-@pytest.mark.parametrize("na", [no_default, True, False])
+@pytest.mark.parametrize(
+    "na",
+    [
+        None
+        if PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION
+        else no_default,
+        True,
+        False,
+    ],
+)
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na):
     ps, gs = ps_gs
 
