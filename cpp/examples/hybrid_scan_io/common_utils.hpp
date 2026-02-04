@@ -8,6 +8,7 @@
 #include "io_source.hpp"
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
@@ -32,6 +33,14 @@ enum class parquet_filter_type : uint8_t {
   FILTER_COLUMN_PAGES_WITH_PAGE_INDEX = 3,
   PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK  = 4,
 };
+
+/**
+ * @brief Get boolean from they keyword
+ *
+ * @param input keyword affirmation string such as: Y, T, YES, TRUE, ON
+ * @return true or false
+ */
+[[nodiscard]] bool get_boolean(std::string input);
 
 /**
  * @brief Get boolean from they keyword
@@ -95,79 +104,50 @@ void check_tables_equal(cudf::table_view const& lhs_table,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
- * @brief Fetches a host span of Parquet footer bytes from the input buffer span
+ * @brief Fetches a host buffer of Parquet footer bytes from the input data source
  *
- * @param buffer Input buffer span
- * @return A host span of the footer bytes
+ * @param datasource Input data source
+ * @return Host buffer containing footer bytes
  */
-
-cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer);
-
-/**
- * @brief Fetches a host span of Parquet PageIndexbytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @param page_index_bytes Byte range of `PageIndex` to fetch
- * @return A host span of the PageIndex bytes
- */
-cudf::host_span<uint8_t const> fetch_page_index_bytes(
-  cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes);
+std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_bytes(cudf::io::datasource& datasource);
 
 /**
- * @brief Converts a span of device buffers into a vector of corresponding device spans
+ * @brief Fetches a host buffer of Parquet page index from the input data source
  *
- * @tparam T Type of output device spans
- * @param buffers Host span of device buffers
- * @return Device spans corresponding to the input device buffers
+ * @param datasource Input datasource
+ * @param page_index_bytes Byte range of page index
+ * @return Host buffer containing page index bytes
  */
-template <typename T>
-std::vector<cudf::device_span<T const>> make_device_spans(
-  cudf::host_span<rmm::device_buffer const> buffers)
-  requires(sizeof(T) == 1)
-{
-  std::vector<cudf::device_span<T const>> device_spans(buffers.size());
-  std::transform(buffers.begin(), buffers.end(), device_spans.begin(), [](auto const& buffer) {
-    return cudf::device_span<T const>{static_cast<T const*>(buffer.data()), buffer.size()};
-  });
-  return device_spans;
-}
+std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_bytes(
+  cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes);
+
+/**
+ * @brief Converts a host buffer into a host span
+ *
+ * @param buffer Host buffer
+ * @return Host span of input host buffer
+ */
+cudf::host_span<uint8_t const> make_host_span(
+  std::reference_wrapper<cudf::io::datasource::buffer const> buffer);
 
 /**
  * @brief Fetches a list of byte ranges from a host buffer into device buffers
  *
- * @param host_buffer Host buffer span
+ * @param datasource Input datasource
  * @param byte_ranges Byte ranges to fetch
  * @param stream CUDA stream
  * @param mr Device memory resource
  *
- * @return Device buffers
+ * @return A tuple containing the device buffers, the device spans of the fetched data, and a future
+ * to wait on the read tasks
  */
-std::vector<rmm::device_buffer> fetch_byte_ranges(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
-/**
- * @brief Read parquet file with the next-gen parquet reader
- *
- * @tparam print_progress Boolean indicating whether to print progress
- *
- * @param io_source io source to read
- * @param filter_expression Filter expression
- * @param filters Set of parquet filters to apply
- * @param stream CUDA stream for hybrid scan reader
- * @param mr Device memory resource
- *
- * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
- *         row validity column
- */
-template <bool print_progress, bool single_step_materialize>
-std::unique_ptr<cudf::table> hybrid_scan(io_source const& io_source,
-                                         cudf::ast::expression const& filter_expression,
-                                         std::unordered_set<parquet_filter_type> const& filters,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr);
+std::tuple<std::vector<rmm::device_buffer>,
+           std::vector<cudf::device_span<uint8_t const>>,
+           std::future<void>>
+fetch_byte_ranges(cudf::io::datasource& datasource,
+                  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Concatenate a vector of tables and return the resultant table
