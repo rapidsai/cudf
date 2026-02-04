@@ -32,12 +32,14 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& input,
   CUDF_EXPECTS(
     cudf::have_same_types(new_keys, old_keys), "Keys must be the same type", cudf::data_type_error);
 
-  // first, find duplicate keys
-  auto c = cudf::detail::contains(old_keys, new_keys, stream, mr);
-  auto b = column_device_view::create(c->view(), stream);
+  // first, find duplicate keys; returns bools where the keys intersect
+  auto intersect   = cudf::detail::contains(old_keys, new_keys, stream, mr);
+  auto d_intersect = column_device_view::create(intersect->view(), stream);
   // filter out duplicates from the input
-  auto negate_fn = [b = b->data<bool>()] __device__(size_type idx) { return !b[idx]; };
-  auto nks       = std::move(
+  auto negate_fn = [d_intersect = d_intersect->data<bool>()] __device__(size_type idx) {
+    return !d_intersect[idx];
+  };
+  auto nks = std::move(
     cudf::detail::copy_if(cudf::table_view({new_keys}), negate_fn, stream, mr)->release().front());
   // build new keys by concatenating new ones to the end
   auto keys_column =
