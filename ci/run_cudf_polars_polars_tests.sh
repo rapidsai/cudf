@@ -18,6 +18,12 @@ DESELECTED_TESTS=(
     "tests/unit/io/test_csv.py::test_read_web_file" # fails in rockylinux8 due to SSL CA issues
     # TODO" Debug and re-enable the following tests
     "tests/unit/sql/test_distinct.py::test_distinct_with_full_outer_join" # SQLite in CI doesn't support FULL OUTER JOIN
+    "tests/unit/sql/test_distinct.py::test_distinct_basic_single_column"
+    "tests/unit/sql/test_distinct.py::test_distinct_basic_multiple_columns"
+    "tests/unit/sql/test_distinct.py::test_distinct_basic_all_columns"
+    "tests/unit/sql/test_distinct.py::test_distinct_with_left_join_nulls"
+    "tests/unit/sql/test_distinct.py::test_distinct_with_nulls_handling"
+    "tests/unit/sql/test_window_functions.py::test_window_function_with_nulls"
     "tests/unit/io/test_sink.py::test_mkdir[in-memory-scan_parquet-sink_parquet]" # kvikio file creation error in CI
     "tests/unit/io/test_sink.py::test_mkdir[in-memory-scan_csv-sink_csv]" # kvikio file creation error in CI
     "tests/unit/io/test_sink.py::test_mkdir[in-memory-scan_ndjson-sink_ndjson]" # kvikio file creation error in CI

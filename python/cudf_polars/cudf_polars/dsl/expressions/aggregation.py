@@ -100,7 +100,7 @@ class Agg(Expr):
             and context == ExecutionContext.FRAME
             and req is not None
             and not plc.aggregation.is_valid_aggregation(dtype.plc_type, req)
-        ):  # pragma: no; polars may raise ahead of time
+        ):  # pragma: no cover; polars may raise ahead of time
             # TODO: Check which cases polars raises vs returns all-NULL column.
             # For the all-NULL column cases, we could build it using Column.all_null_like
             # at evaluation time.
