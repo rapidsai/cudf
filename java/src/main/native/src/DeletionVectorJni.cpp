@@ -169,9 +169,8 @@ Java_ai_rapids_cudf_DeletionVector_readParquet(JNIEnv* env,
       cudf::jni::native_jlongArray n_addrs_sizes(env, addrs_and_sizes);
       multi_buffer_source.reset(new cudf::jni::multi_host_buffer_source(n_addrs_sizes));
     }
-    cudf::io::source_info source =
-      read_buffer ? cudf::io::source_info(multi_buffer_source.get())
-                  : cudf::io::source_info(filenames.as_cpp_vector());
+    cudf::io::source_info source = read_buffer ? cudf::io::source_info(multi_buffer_source.get())
+                                               : cudf::io::source_info(filenames.as_cpp_vector());
 
     cudf::io::parquet_reader_options opts = make_parquet_reader_options(
       env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
@@ -260,9 +259,8 @@ Java_ai_rapids_cudf_DeletionVector_createParquetChunkedReader(JNIEnv* env,
       cudf::jni::native_jlongArray n_addrs_sizes(env, addrs_sizes);
       multi_buffer_source.reset(new cudf::jni::multi_host_buffer_source(n_addrs_sizes));
     }
-    cudf::io::source_info source =
-      read_buffer ? cudf::io::source_info(multi_buffer_source.get())
-                  : cudf::io::source_info(filenames.as_cpp_vector());
+    cudf::io::source_info source = read_buffer ? cudf::io::source_info(multi_buffer_source.get())
+                                               : cudf::io::source_info(filenames.as_cpp_vector());
 
     cudf::io::parquet_reader_options opts = make_parquet_reader_options(
       env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
