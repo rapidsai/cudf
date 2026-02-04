@@ -133,8 +133,6 @@ def serialize_query(
     >>> q = pl.LazyFrame({"a": [1, 2, 3]}).select("a")
     >>> engine = pl.GPUEngine(executor="streaming")
     >>> dag = serialize_query(q, engine, physical=False)
-    >>> json.dumps(dag.to_dict())  # doctest: +SKIP
-    '{"roots": [...], "nodes": {...}, "partition_info": null}'
     """
     return DAG.from_query(q, engine, lowered=physical)
 
@@ -283,34 +281,15 @@ def _serialize_expr(expr: Expr) -> dict[str, Serializable]:
                 "left": _serialize_expr(expr.children[0]),
                 "right": _serialize_expr(expr.children[1]),
             }
-        case _:
+        case _:  # pragma: no cover
             return {"type": type(expr).__name__}
 
 
 @_serialize_properties.register
 def _(ir: Filter) -> dict[str, Serializable]:
     value = ir.mask.value
-    properties: dict[str, Serializable] = {
-        "predicate": ir.mask.name,
-    }
-
-    match value:
-        case cudf_polars.dsl.expressions.binaryop.BinOp():
-            properties["op"] = value.op.name
-            match value.children[0]:
-                case cudf_polars.dsl.expressions.base.Col(name=name):
-                    properties["left"] = {"type": "Col", "name": name}
-                case cudf_polars.dsl.expressions.literal.Literal(value=value):
-                    properties["left"] = {"type": "Literal", "value": value}
-                case _:  # pragma: no cover
-                    properties["left"] = {"type": type(value.children[0]).__name__}
-            match value.children[1]:
-                case cudf_polars.dsl.expressions.base.Col(name=name):
-                    properties["right"] = {"type": "Col", "name": name}
-                case cudf_polars.dsl.expressions.literal.Literal(value=value):
-                    properties["right"] = {"type": "Literal", "value": value}
-                case _:  # pragma: no cover
-                    properties["left"] = {"type": type(value.children[0]).__name__}
+    properties = _serialize_expr(value)
+    properties["predicate"] = ir.mask.name
 
     return properties
 
@@ -355,16 +334,6 @@ class SerializableIRNode:
             type=type(ir).__name__,
         )
 
-    def to_dict(self) -> dict[str, Serializable]:
-        """Convert to a JSON-serializable dictionary."""
-        return {
-            "id": self.id,
-            "children": self.children,
-            "schema": self.schema,
-            "properties": self.properties,
-            "type": self.type,
-        }
-
 
 @dataclasses.dataclass
 class SerializablePartitionInfo:
@@ -372,13 +341,6 @@ class SerializablePartitionInfo:
 
     count: int
     partitioned_on: tuple[Serializable, ...]
-
-    def to_dict(self) -> dict[str, Serializable]:
-        """Convert to a JSON-serializable dictionary."""
-        return {
-            "count": self.count,
-            "partitioned_on": list(self.partitioned_on),
-        }
 
 
 @dataclasses.dataclass
@@ -422,7 +384,7 @@ class DAG:
             if (
                 config.executor.name == "streaming"
                 and config.executor.runtime == "rapidsmpf"
-            ):
+            ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
                 from cudf_polars.experimental.rapidsmpf.core import (
                     lower_ir_graph as rapidsmpf_lower_ir_graph,
                 )
