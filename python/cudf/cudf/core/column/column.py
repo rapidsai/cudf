@@ -2041,8 +2041,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # Compute categories from self
             cats = self.unique().sort_values()
             codes = self._label_encoding(cats=cats)
-            if self.has_nulls():
-                # TODO: Make dropna shallow copy if there are no nulls?
+            # Only dropna if cats actually has nulls (self having nulls doesn't mean cats does)
+            if cats.has_nulls():
                 cats = cats.dropna()
             dtype = CategoricalDtype(categories=cats, ordered=dtype.ordered)
         return codes.set_mask(self.mask, self.null_count)._with_type_metadata(
