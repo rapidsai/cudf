@@ -250,15 +250,17 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def days_in_month(self) -> ColumnBase:
-        return ColumnBase.create(
-            plc.datetime.days_in_month(self.plc_column),
-            get_dtype_of_same_kind(
-                self.dtype,
-                np.dtype("int16")
-                if is_pandas_nullable_extension_dtype(self.dtype)
-                else np.dtype("int64"),
-            ),
+        res = ColumnBase.create(
+            plc.datetime.days_in_month(self.plc_column), np.dtype("int16")
         )
+        if is_pandas_nullable_extension_dtype(self.dtype):
+            res = res.astype(
+                get_dtype_of_same_kind(
+                    self.dtype,
+                    np.dtype("int64"),
+                ),
+            )
+        return res
 
     @functools.cached_property
     def day_of_week(self) -> ColumnBase:
