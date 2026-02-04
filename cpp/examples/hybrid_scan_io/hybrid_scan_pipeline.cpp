@@ -126,7 +126,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
 {
   CUDF_FUNC_RANGE();
 
-  if (verbose) { std::cout << "\nREADER: Setup, metadata and page index...\n"; }
+  if constexpr (verbose) { std::cout << "\nREADER: Setup, metadata and page index...\n"; }
   timer timer;
 
   // Input file buffer span
@@ -144,7 +144,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
 
   auto const row_groups_indices = reader->all_row_groups(options);
 
-  if (verbose) {
+  if constexpr (verbose) {
     timer.print_elapsed_millis();
     std::cout << "Setup partitions... \n";
   }
@@ -163,15 +163,15 @@ auto hybrid_scan_pipelined(io_source const& io_source,
       std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(metadata, options));
   }
 
-  if (verbose) { timer.print_elapsed_millis(); }
+  if constexpr (verbose) { timer.print_elapsed_millis(); }
 
   if (num_partitions > 1) {
-    if (verbose) { std::cout << "Creating row group partitions... \n"; }
+    if constexpr (verbose) { std::cout << "Creating row group partitions... \n"; }
     timer.reset();
   }
 
   if (num_partitions == 1) {
-    if (verbose) { std::cout << "Reading as single partition... \n"; }
+    if constexpr (verbose) { std::cout << "Reading as single partition... \n"; }
     timer.reset();
     hybrid_scan_fn{.table              = std::ref(tables.front()),
                    .reader             = std::move(readers.front()),
@@ -181,7 +181,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
                    .options            = options,
                    .stream             = stream_pool.get_stream(),
                    .mr                 = mr}();
-    if (verbose) { timer.print_elapsed_millis(); }
+    if constexpr (verbose) { timer.print_elapsed_millis(); }
     return std::move(tables.front());
   }
 
@@ -213,7 +213,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
         readers.front()->filter_row_groups_with_byte_range(row_groups_indices, split_options);
       if (filtered_row_groups.empty()) {
         num_partitions--;
-        if (verbose) {
+        if constexpr (verbose) {
           std::cout << "Adjusting number of partitions to " << num_partitions << "\n";
         }
       } else {
@@ -223,7 +223,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
     }
   }
 
-  if (verbose) {
+  if constexpr (verbose) {
     timer.print_elapsed_millis();
     std::cout << "Pipelining " << num_partitions << " table reads... \n";
   }
@@ -255,7 +255,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
     t.join();
   }
 
-  if (verbose) {
+  if constexpr (verbose) {
     timer.print_elapsed_millis();
     std::cout << "Concatenating tables... \n";
   }
@@ -264,7 +264,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
 
   auto table = concatenate_tables(std::move(tables), stream_pool.get_stream());
 
-  if (verbose) { timer.print_elapsed_millis(); }
+  if constexpr (verbose) { timer.print_elapsed_millis(); }
 
   return std::move(table);
 }
@@ -352,8 +352,7 @@ int main(int argc, char const** argv)
           data_source, num_partitions, split_strategy, use_page_index, stream_pool, stats_mr);
       },
       iterations);
-  }
-  {
+
     std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
     benchmark([&] { std::ignore = read_parquet(data_source, default_stream); }, iterations);
   }
