@@ -2907,7 +2907,23 @@ def test_parquet_writer_nulls_pandas_read(tmp_path, pdf):
 
 @pytest.mark.parametrize(
     "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    [
+        pytest.param(
+            cudf.Decimal32Dtype,
+            marks=pytest.mark.xfail(
+                reason="Requires https://github.com/apache/arrow/pull/45583",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype,
+            marks=pytest.mark.xfail(
+                reason="Requires https://github.com/apache/arrow/pull/45583",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        cudf.Decimal128Dtype,
+    ],
 )
 def test_parquet_decimal_precision(tmp_path, decimal_type):
     df = cudf.DataFrame({"val": ["3.5", "4.2"]}).astype(decimal_type(5, 2))
