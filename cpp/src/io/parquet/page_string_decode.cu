@@ -7,7 +7,6 @@
 #include "error.hpp"
 #include "page_decode.cuh"
 #include "page_string_utils.cuh"
-#include "rle_stream.cuh"
 
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -29,7 +28,6 @@ namespace {
 constexpr int preprocess_block_size    = 512;
 constexpr int delta_preproc_block_size = 64;
 constexpr int delta_length_block_size  = 32;
-constexpr int preproc_buf_size         = LEVEL_DECODE_BUF_SIZE;
 
 /**
  * @brief Compute the start and end page value bounds for this page
@@ -45,16 +43,10 @@ constexpr int preproc_buf_size         = LEVEL_DECODE_BUF_SIZE;
  * @param decoders Definition and repetition level decoders
  * @return pair containing start and end value indexes
  * @tparam level_t Type used to store decoded repetition and definition levels
- * @tparam rle_buf_size Size of the buffer used when decoding repetition and definition levels
  */
-template <typename level_t, int rle_buf_size>
+template <typename level_t>
 __device__ cuda::std::pair<int, int> page_bounds(
-  page_state_s* const s,
-  size_t min_row,
-  size_t num_rows,
-  bool is_bounds_pg,
-  bool has_repetition,
-  rle_stream<level_t, rle_buf_size, preproc_buf_size>* decoders)
+  page_state_s* const s, size_t min_row, size_t num_rows, bool is_bounds_pg, bool has_repetition)
 {
   using block_reduce = cub::BlockReduce<int, preprocess_block_size>;
   using block_scan   = cub::BlockScan<int, preprocess_block_size>;
@@ -63,10 +55,9 @@ __device__ cuda::std::pair<int, int> page_bounds(
     typename block_scan::TempStorage scan_storage;
   } temp_storage;
 
-  auto const t = threadIdx.x;
+  auto const block = cg::this_thread_block();
+  auto const t     = block.thread_rank();
 
-  // decode batches of level stream data using rle_stream objects and use the results to
-  // calculate start and end value positions in the encoded string data.
   int const max_depth = s->col.max_nesting_depth;
   int const max_def   = s->nesting_info[max_depth - 1].max_def_level;
 
@@ -84,25 +75,10 @@ __device__ cuda::std::pair<int, int> page_bounds(
   auto const pp   = &s->page;
   auto const col  = &s->col;
 
-  // initialize the stream decoders (requires values computed in setup_local_page_info)
-  auto const def_decode = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  auto const rep_decode = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
-  decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
-                                        s->abs_lvl_start[level_type::DEFINITION],
-                                        s->abs_lvl_end[level_type::DEFINITION],
-                                        def_decode,
-                                        s->page.num_input_values);
-  // only need repetition if this is a bounds page. otherwise all we need is def level info
-  // to count the nulls.
-  if (has_repetition && is_bounds_pg) {
-    decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
-                                          s->abs_lvl_start[level_type::REPETITION],
-                                          s->abs_lvl_end[level_type::REPETITION],
-                                          rep_decode,
-                                          s->page.num_input_values);
-  }
-
-  int processed = 0;
+  // get the level data
+  bool const process_nulls = should_process_nulls(s);
+  auto const def_decode    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto const rep_decode    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // if this is a bounds page, we need to do extra work to find the start and/or end value index
   if (is_bounds_pg) {
@@ -155,101 +131,88 @@ __device__ cuda::std::pair<int, int> page_bounds(
       __syncthreads();
     }
 
+    int processed = 0;
     while (processed < s->page.num_input_values) {
-      thread_index_type start_val = processed;
-
-      if (has_repetition) {
-        decoders[level_type::REPETITION].decode_next(t);
-        __syncthreads();
-
+      if (has_repetition && (processed == 0) && (rep_decode[0] != 0)) {
         // special case where page does not begin at a row boundary
-        if (processed == 0 && rep_decode[0] != 0) {
-          end_row++;  // need to finish off the previous row
-          row_fudge = 0;
+        end_row++;  // need to finish off the previous row
+        row_fudge = 0;
+      }
+
+      // get absolute thread row index
+      int const idx_t = processed + t;
+      int const is_new_row =
+        idx_t < s->page.num_input_values && (!has_repetition || rep_decode[idx_t] == 0);
+      int thread_row_count, block_row_count;
+      block_scan(temp_storage.scan_storage)
+        .InclusiveSum(is_new_row, thread_row_count, block_row_count);
+      __syncthreads();
+
+      // get absolute thread leaf index
+      int const is_new_leaf = process_nulls
+                                ? idx_t < s->page.num_input_values && (def_decode[idx_t] >= max_def)
+                                : idx_t < s->page.num_input_values;
+      int thread_leaf_count, block_leaf_count;
+      block_scan(temp_storage.scan_storage)
+        .InclusiveSum(is_new_leaf, thread_leaf_count, block_leaf_count);
+      __syncthreads();
+
+      // if we have not set skipped values yet, see if we found the first in-bounds row
+      if (!skipped_values_set && row_count + block_row_count > begin_row) {
+        // if this thread is in row bounds
+        int const row_index = thread_row_count + row_count - 1;
+        int const in_row_bounds =
+          idx_t < s->page.num_input_values && (row_index >= begin_row) && (row_index < end_row);
+
+        int local_count, global_count;
+        block_scan(temp_storage.scan_storage)
+          .InclusiveSum(in_row_bounds, local_count, global_count);
+        __syncthreads();
+
+        // we found it
+        if (global_count > 0) {
+          // this is the thread that represents the first row. need to test in_row_bounds for
+          // the case where we only want one row and local_count == 1 for many threads.
+          if (local_count == 1 && in_row_bounds) {
+            skipped_values = idx_t;
+            skipped_leaf_values =
+              leaf_count + (is_new_leaf ? thread_leaf_count - 1 : thread_leaf_count);
+          }
+          skipped_values_set = true;
         }
       }
 
-      // the # of rep/def levels will always be the same size
-      processed += decoders[level_type::DEFINITION].decode_next(t);
-      __syncthreads();
+      // test if row_count will exceed end_row in this batch
+      if (row_count + block_row_count >= end_row) {
+        // if this thread exceeds row bounds. row_fudge change depending on whether we've faked
+        // the end row to account for starting a page in the middle of a row.
+        int const row_index          = thread_row_count + row_count + row_fudge;
+        int const exceeds_row_bounds = row_index >= end_row;
 
-      // do something with the level data
-      while (start_val < processed) {
-        auto const idx_t = start_val + t;
-        auto const idx   = rolling_index<preproc_buf_size>(idx_t);
-
-        // get absolute thread row index
-        int is_new_row = idx_t < processed && (!has_repetition || rep_decode[idx] == 0);
-        int thread_row_count, block_row_count;
+        int local_count, global_count;
         block_scan(temp_storage.scan_storage)
-          .InclusiveSum(is_new_row, thread_row_count, block_row_count);
+          .InclusiveSum(exceeds_row_bounds, local_count, global_count);
         __syncthreads();
 
-        // get absolute thread leaf index
-        int const is_new_leaf = idx_t < processed && (def_decode[idx] >= max_def);
-        int thread_leaf_count, block_leaf_count;
-        block_scan(temp_storage.scan_storage)
-          .InclusiveSum(is_new_leaf, thread_leaf_count, block_leaf_count);
-        __syncthreads();
-
-        // if we have not set skipped values yet, see if we found the first in-bounds row
-        if (!skipped_values_set && row_count + block_row_count > begin_row) {
-          // if this thread is in row bounds
-          int const row_index = thread_row_count + row_count - 1;
-          int const in_row_bounds =
-            idx_t < processed && (row_index >= begin_row) && (row_index < end_row);
-
-          int local_count, global_count;
-          block_scan(temp_storage.scan_storage)
-            .InclusiveSum(in_row_bounds, local_count, global_count);
-          __syncthreads();
-
-          // we found it
-          if (global_count > 0) {
-            // this is the thread that represents the first row. need to test in_row_bounds for
-            // the case where we only want one row and local_count == 1 for many threads.
-            if (local_count == 1 && in_row_bounds) {
-              skipped_values = idx_t;
-              skipped_leaf_values =
-                leaf_count + (is_new_leaf ? thread_leaf_count - 1 : thread_leaf_count);
-            }
-            skipped_values_set = true;
+        // we found it
+        if (global_count > 0) {
+          // this is the thread that represents the end row.
+          if (local_count == 1) {
+            last_input_value = idx_t;
+            end_val_idx = leaf_count + (is_new_leaf ? thread_leaf_count - 1 : thread_leaf_count);
           }
+          end_value_set = true;
+          break;
         }
-
-        // test if row_count will exceed end_row in this batch
-        if (!end_value_set && row_count + block_row_count >= end_row) {
-          // if this thread exceeds row bounds. row_fudge change depending on whether we've faked
-          // the end row to account for starting a page in the middle of a row.
-          int const row_index          = thread_row_count + row_count + row_fudge;
-          int const exceeds_row_bounds = row_index >= end_row;
-
-          int local_count, global_count;
-          block_scan(temp_storage.scan_storage)
-            .InclusiveSum(exceeds_row_bounds, local_count, global_count);
-          __syncthreads();
-
-          // we found it
-          if (global_count > 0) {
-            // this is the thread that represents the end row.
-            if (local_count == 1) {
-              last_input_value = idx_t;
-              end_val_idx = leaf_count + (is_new_leaf ? thread_leaf_count - 1 : thread_leaf_count);
-            }
-            end_value_set = true;
-            break;
-          }
-        }
-
-        row_count += block_row_count;
-        leaf_count += block_leaf_count;
-
-        start_val += preprocess_block_size;
       }
-      __syncthreads();
-      if (end_value_set) { break; }
+
+      row_count += block_row_count;
+      leaf_count += block_leaf_count;
+      processed += preprocess_block_size;
     }
 
+    // Sync shared variables like end_val_idx, skipped_leaf_values, etc.
+    __syncthreads();
     start_value = skipped_values_set ? skipped_leaf_values : 0;
     end_value   = end_value_set ? end_val_idx : leaf_count;
 
@@ -264,31 +227,27 @@ __device__ cuda::std::pair<int, int> page_bounds(
     }
   }
   // already filtered out unwanted pages, so need to count all non-null values in this page
-  else {
+  else if (process_nulls) {
     int num_nulls = 0;
-    while (processed < s->page.num_input_values) {
-      thread_index_type start_val = processed;
-      processed += decoders[level_type::DEFINITION].decode_next(t);
-      __syncthreads();
-
-      while (start_val < processed) {
-        auto const idx_t = start_val + t;
-        if (idx_t < processed) {
-          auto const idx = rolling_index<preproc_buf_size>(idx_t);
-          if (def_decode[idx] < max_def) { num_nulls++; }
-        }
-        start_val += preprocess_block_size;
-      }
-      __syncthreads();
+    int idx_t     = t;
+    while (idx_t < s->page.num_input_values) {
+      if (def_decode[idx_t] < max_def) { num_nulls++; }
+      idx_t += preprocess_block_size;
     }
 
     int const null_count = block_reduce(temp_storage.reduce_storage).Sum(num_nulls);
+    __syncthreads();
 
     if (t == 0) {
       pp->num_nulls  = null_count;
       pp->num_valids = pp->num_input_values - null_count;
     }
     end_value -= null_count;
+  } else {
+    if (t == 0) {
+      pp->num_nulls  = 0;
+      pp->num_valids = pp->num_input_values;
+    }
   }
 
   return {start_value, end_value};
@@ -574,16 +533,6 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // whether or not we have repetition levels (lists)
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
-  // the required number of runs in shared memory we will need to provide the
-  // rle_stream object
-  constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<preprocess_block_size>();
-
-  // the level stream decoders
-  __shared__ rle_run def_runs[rle_run_buffer_size];
-  __shared__ rle_run rep_runs[rle_run_buffer_size];
-  rle_stream<level_t, preprocess_block_size, preproc_buf_size>
-    decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
-
   // setup page info
   if (!setup_local_page_info(s,
                              pp,
@@ -613,7 +562,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   // find start/end value indices
   auto const [start_value, end_value] =
-    page_bounds(s, min_row, num_rows, is_bounds_pg, has_repetition, decoders);
+    page_bounds<level_t>(s, min_row, num_rows, is_bounds_pg, has_repetition);
 
   // need to save num_nulls and num_valids calculated in page_bounds in this page
   if (t == 0) {
