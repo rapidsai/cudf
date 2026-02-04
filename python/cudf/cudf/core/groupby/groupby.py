@@ -34,6 +34,7 @@ from cudf.core.column.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import (
     CategoricalDtype,
     DecimalDtype,
@@ -53,7 +54,6 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
