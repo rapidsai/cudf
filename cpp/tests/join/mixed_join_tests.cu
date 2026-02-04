@@ -379,12 +379,9 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::ast::operation predicate,
                       cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    // Test both approaches and verify they produce the same results
     auto mixed_result = cudf::mixed_inner_join(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
 
-    // Alternative approach: hash_join + filter_join_indices
-    // Skip hash_join approach for empty tables (hash_join doesn't support empty tables)
     if (left_equality.num_rows() > 0 && right_equality.num_rows() > 0) {
       cudf::hash_join hash_joiner(right_equality, compare_nulls);
       auto hash_join_result = hash_joiner.inner_join(left_equality);
@@ -397,8 +394,13 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
         predicate,
         cudf::join_kind::INNER_JOIN);
 
-      // Verify both approaches produce the same results
       this->compare_join_results(mixed_result, hash_filter_result);
+
+      cudf::mixed_join mixed_joiner(right_equality, compare_nulls);
+      auto class_result =
+        mixed_joiner.inner_join(left_equality, left_conditional, right_conditional, predicate);
+
+      this->compare_join_results(mixed_result, class_result);
     }
 
     return mixed_result;
@@ -730,12 +732,9 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::ast::operation predicate,
                       cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    // Test both approaches and verify they produce the same results
     auto mixed_result = cudf::mixed_left_join(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
 
-    // Alternative approach: hash_join + filter_join_indices
-    // Skip hash_join approach for empty right table (hash_join doesn't support empty build tables)
     if (right_equality.num_rows() > 0) {
       cudf::hash_join hash_joiner(right_equality, compare_nulls);
       auto hash_join_result = hash_joiner.left_join(left_equality);
@@ -748,8 +747,13 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
         predicate,
         cudf::join_kind::LEFT_JOIN);
 
-      // Verify both approaches produce the same results
       this->compare_join_results(mixed_result, hash_filter_result);
+
+      cudf::mixed_join mixed_joiner(right_equality, compare_nulls);
+      auto class_result =
+        mixed_joiner.left_join(left_equality, left_conditional, right_conditional, predicate);
+
+      this->compare_join_results(mixed_result, class_result);
     }
 
     return mixed_result;
@@ -903,12 +907,9 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::ast::operation predicate,
                       cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    // Test both approaches and verify they produce the same results
     auto mixed_result = cudf::mixed_full_join(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
 
-    // Alternative approach: hash_join + filter_join_indices
-    // Skip hash_join approach for empty tables (hash_join doesn't support empty tables)
     if (left_equality.num_rows() > 0 && right_equality.num_rows() > 0) {
       cudf::hash_join hash_joiner(right_equality, compare_nulls);
       auto hash_join_result = hash_joiner.full_join(left_equality);
@@ -921,8 +922,13 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
         predicate,
         cudf::join_kind::FULL_JOIN);
 
-      // Verify both approaches produce the same results
       this->compare_join_results(mixed_result, hash_filter_result);
+
+      cudf::mixed_join mixed_joiner(right_equality, compare_nulls);
+      auto class_result =
+        mixed_joiner.full_join(left_equality, left_conditional, right_conditional, predicate);
+
+      this->compare_join_results(mixed_result, class_result);
     }
 
     return mixed_result;
