@@ -187,16 +187,32 @@ size_t find_start_index(cudf::host_span<cumulative_page_info const> aggregated_i
          start;
 }
 
+/**
+ * @brief Template version of find_next_split that accepts a size extractor function.
+ *
+ * This allows using different size fields (size_bytes, string_size_bytes) for splitting.
+ *
+ * @param cur_pos Current position in the sizes array
+ * @param cur_row_index Current row index
+ * @param cur_cumulative_size Current cumulative size (will be subtracted from extracted sizes)
+ * @param sizes Array of cumulative page info
+ * @param size_limit Maximum size limit for a chunk
+ * @param min_row_count Minimum number of rows to advance
+ * @param get_size Function to extract size from cumulative_page_info
+ * @return The inclusive index within `sizes` where the next split should happen
+ */
+template <typename SizeExtractor>
 int64_t find_next_split(int64_t cur_pos,
                         size_t cur_row_index,
                         size_t cur_cumulative_size,
                         cudf::host_span<cumulative_page_info const> sizes,
                         size_t size_limit,
-                        size_t min_row_count)
+                        size_t min_row_count,
+                        SizeExtractor get_size)
 {
   auto const start = thrust::make_transform_iterator(
     sizes.begin(),
-    [&](cumulative_page_info const& i) { return i.size_bytes - cur_cumulative_size; });
+    [&](cumulative_page_info const& i) { return get_size(i) - cur_cumulative_size; });
   auto const end = start + sizes.size();
 
   int64_t split_pos = thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit) - start;
@@ -204,7 +220,7 @@ int64_t find_next_split(int64_t cur_pos,
   // if we're past the end, or if the returned bucket is > than the chunk_read_limit, move back
   // one as long as this doesn't put us before our starting point.
   if (static_cast<size_t>(split_pos) >= sizes.size() ||
-      ((split_pos > cur_pos) && (sizes[split_pos].size_bytes - cur_cumulative_size > size_limit))) {
+      ((split_pos > cur_pos) && (get_size(sizes[split_pos]) - cur_cumulative_size > size_limit))) {
     split_pos--;
   }
 
@@ -217,6 +233,23 @@ int64_t find_next_split(int64_t cur_pos,
   }
 
   return split_pos;
+}
+
+// Original version using size_bytes field (for backward compatibility)
+int64_t find_next_split(int64_t cur_pos,
+                        size_t cur_row_index,
+                        size_t cur_cumulative_size,
+                        cudf::host_span<cumulative_page_info const> sizes,
+                        size_t size_limit,
+                        size_t min_row_count)
+{
+  return find_next_split(cur_pos,
+                         cur_row_index,
+                         cur_cumulative_size,
+                         sizes,
+                         size_limit,
+                         min_row_count,
+                         [](cumulative_page_info const& i) { return i.size_bytes; });
 }
 
 [[nodiscard]] std::tuple<int32_t, std::optional<LogicalType>> conversion_info(
@@ -253,18 +286,42 @@ std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg)
   return {compressed_size, total_size};
 }
 
-std::pair<rmm::device_uvector<cumulative_page_info>, rmm::device_uvector<int32_t>>
-adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
-                        device_span<PageInfo const> pages,
-                        rmm::cuda_stream_view stream)
+/**
+ * @brief Sorts cumulative page info by row count and prepares data structures for aggregation
+ *
+ * This helper function performs common sorting and preparation operations needed by both
+ * adjust_cumulative_sizes and adjust_cumulative_sizes_max. It:
+ * 1. Sorts cumulative page info by end row index
+ * 2. Extracts page keys grouped by split
+ * 3. Computes key offsets for efficient lookup
+ *
+ * @param c_info Cumulative page information to be sorted
+ * @param pages Page information for key generation
+ * @param stream CUDA stream for operations
+ * @param mr Memory resource for returned buffers (temporary allocations use current device
+ * resource)
+ * @return Tuple of (sorted c_info, page_keys_by_split, key_offsets, num_unique_keys)
+ */
+std::tuple<rmm::device_uvector<cumulative_page_info>,
+           rmm::device_uvector<int32_t>,
+           rmm::device_uvector<size_type>,
+           size_t>
+sort_and_prepare_aggregation(device_span<cumulative_page_info const> c_info,
+                             device_span<PageInfo const> pages,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
 {
   // sort by row count
-  rmm::device_uvector<cumulative_page_info> c_info_sorted(c_info.size(), stream);
+  rmm::device_uvector<cumulative_page_info> c_info_sorted(c_info.size(), stream, mr);
   {
-    rmm::device_uvector<size_t> end_row_indices(c_info.size(), stream);
-    rmm::device_uvector<size_t> sorted_end_row_indices(c_info.size(), stream);
-    rmm::device_uvector<size_t> indices(c_info.size(), stream);
-    rmm::device_uvector<size_t> sort_order(c_info.size(), stream);
+    rmm::device_uvector<size_t> end_row_indices(
+      c_info.size(), stream, cudf::get_current_device_resource_ref());
+    rmm::device_uvector<size_t> sorted_end_row_indices(
+      c_info.size(), stream, cudf::get_current_device_resource_ref());
+    rmm::device_uvector<size_t> indices(
+      c_info.size(), stream, cudf::get_current_device_resource_ref());
+    rmm::device_uvector<size_t> sort_order(
+      c_info.size(), stream, cudf::get_current_device_resource_ref());
 
     thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), 0);
     thrust::transform(rmm::exec_policy_nosync(stream),
@@ -284,7 +341,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                                     0,
                                     sizeof(size_t) * 8,
                                     stream.value());
-    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, cudf::get_current_device_resource_ref());
     cub::DeviceRadixSort::SortPairs(tmp_stg.data(),
                                     tmp_bytes,
                                     end_row_indices.begin(),         // keys in
@@ -303,8 +360,10 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                       [c_info] __device__(std::size_t i) { return c_info[i]; });
   }
 
-  // page keys grouped by split.
-  rmm::device_uvector<int32_t> page_keys_by_split{c_info.size(), stream};
+  // Page keys grouped by split
+
+  // Extract page keys for each entry in sorted order
+  rmm::device_uvector<int32_t> page_keys_by_split{c_info.size(), stream, mr};
   thrust::transform(rmm::exec_policy_nosync(stream),
                     c_info_sorted.begin(),
                     c_info_sorted.end(),
@@ -312,9 +371,10 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                     cuda::proclaim_return_type<int>(
                       [] __device__(cumulative_page_info const& c) { return c.key; }));
 
-  // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
-  // key
-  rmm::device_uvector<size_type> key_offsets(pages.size() + 1, stream);
+  // Generate key offsets
+
+  // Compute offsets for each unique key to enable partitioned access
+  rmm::device_uvector<size_type> key_offsets(pages.size() + 1, stream, mr);
   auto page_keys             = make_page_key_iterator(pages);
   auto const key_offsets_end = cudf::detail::reduce_by_key(page_keys,
                                                            page_keys + pages.size(),
@@ -329,6 +389,21 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   thrust::exclusive_scan(
     rmm::exec_policy_nosync(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
 
+  return {std::move(c_info_sorted),
+          std::move(page_keys_by_split),
+          std::move(key_offsets),
+          num_unique_keys};
+}
+
+std::pair<rmm::device_uvector<cumulative_page_info>, rmm::device_uvector<int32_t>>
+adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
+                        device_span<PageInfo const> pages,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr)
+{
+  auto [c_info_sorted, page_keys_by_split, key_offsets, num_unique_keys] =
+    sort_and_prepare_aggregation(c_info, pages, stream, mr);
+
   // adjust the cumulative info such that for each row count, the size includes any pages that span
   // that row count. this is so that if we have this case:
   //              page row counts
@@ -339,7 +414,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   // at that point.  So we have to proceed as if we are taking the bytes from all 200 rows of that
   // page.
   //
-  rmm::device_uvector<cumulative_page_info> aggregated_info(c_info.size(), stream);
+  rmm::device_uvector<cumulative_page_info> aggregated_info(c_info.size(), stream, mr);
   thrust::transform(rmm::exec_policy_nosync(stream),
                     c_info_sorted.begin(),
                     c_info_sorted.end(),
@@ -348,6 +423,14 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   return {std::move(aggregated_info), std::move(page_keys_by_split)};
 }
 
+/**
+ * @brief Functor to compute the maximum column size across all columns at a given row
+ *
+ * For each cumulative page info entry, this functor finds the corresponding entry
+ * in each column (identified by key) and returns the maximum size among all columns.
+ * This is crucial for string column overflow detection where we need to ensure
+ * no single column exceeds INT32_MAX bytes.
+ */
 struct page_max_size {
   cumulative_page_info const* c_info;
   size_type const* key_offsets;
@@ -365,90 +448,25 @@ struct page_max_size {
         }));
       auto const page_index =
         thrust::lower_bound(thrust::seq, iter + start, iter + end, i.end_row_index) - iter;
-      max_size = cuda::std::max(max_size, c_info[page_index].size_bytes);
+      max_size = cuda::std::max(max_size, c_info[page_index].string_size_bytes);
     }
-    return {i.end_row_index, max_size, i.key};
+    return {i.end_row_index, size_t{0}, max_size, i.key};
   }
 };
 
 std::pair<rmm::device_uvector<cumulative_page_info>, rmm::device_uvector<int32_t>>
 adjust_cumulative_sizes_max(device_span<cumulative_page_info const> c_info,
                             device_span<PageInfo const> pages,
-                            rmm::cuda_stream_view stream)
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr)
 {
-  // sort by row count
-  rmm::device_uvector<cumulative_page_info> c_info_sorted(c_info.size(), stream);
-  {
-    rmm::device_uvector<size_t> end_row_indices(c_info.size(), stream);
-    rmm::device_uvector<size_t> sorted_end_row_indices(c_info.size(), stream);
-    rmm::device_uvector<size_t> indices(c_info.size(), stream);
-    rmm::device_uvector<size_t> sort_order(c_info.size(), stream);
-
-    thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), 0);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      c_info.begin(),
-                      c_info.end(),
-                      end_row_indices.begin(),
-                      [] __device__(auto const& c) { return c.end_row_index; });
-
-    auto tmp_bytes = std::size_t{0};
-    cub::DeviceRadixSort::SortPairs(nullptr,
-                                    tmp_bytes,
-                                    end_row_indices.begin(),         // keys in
-                                    sorted_end_row_indices.begin(),  // sorted keys out
-                                    indices.begin(),                 // values in
-                                    sort_order.begin(),              // sorted values out
-                                    c_info.size(),
-                                    0,
-                                    sizeof(size_t) * 8,
-                                    stream.value());
-    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
-    cub::DeviceRadixSort::SortPairs(tmp_stg.data(),
-                                    tmp_bytes,
-                                    end_row_indices.begin(),         // keys in
-                                    sorted_end_row_indices.begin(),  // sorted keys out
-                                    indices.begin(),                 // values in
-                                    sort_order.begin(),              // sorted values out
-                                    c_info.size(),
-                                    0,
-                                    sizeof(size_t) * 8,
-                                    stream.value());
-
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      sort_order.begin(),
-                      sort_order.end(),
-                      c_info_sorted.begin(),
-                      [c_info] __device__(std::size_t i) { return c_info[i]; });
-  }
-
-  // page keys grouped by split.
-  rmm::device_uvector<int32_t> page_keys_by_split{c_info.size(), stream};
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    c_info_sorted.begin(),
-                    c_info_sorted.end(),
-                    page_keys_by_split.begin(),
-                    cuda::proclaim_return_type<int>(
-                      [] __device__(cumulative_page_info const& c) { return c.key; }));
-
-  // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
-  // key
-  rmm::device_uvector<size_type> key_offsets(pages.size() + 1, stream);
-  auto page_keys             = make_page_key_iterator(pages);
-  auto const key_offsets_end = cudf::detail::reduce_by_key(page_keys,
-                                                           page_keys + pages.size(),
-                                                           thrust::make_constant_iterator(1),
-                                                           thrust::make_discard_iterator(),
-                                                           key_offsets.begin(),
-                                                           cuda::std::plus<>{},
-                                                           stream)
-                                 .second;
-
-  size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
-  thrust::exclusive_scan(
-    rmm::exec_policy_nosync(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
+  auto [c_info_sorted, page_keys_by_split, key_offsets, num_unique_keys] =
+    sort_and_prepare_aggregation(c_info, pages, stream, mr);
 
   // adjust the cumulative info such that for each row count, the size reflects the max column size
-  rmm::device_uvector<cumulative_page_info> aggregated_info(c_info.size(), stream);
+  rmm::device_uvector<cumulative_page_info> aggregated_info(c_info.size(), stream, mr);
+  // Transform each entry to contain the maximum column size at that row,
+  // rather than cumulative size
   thrust::transform(rmm::exec_policy_nosync(stream),
                     c_info_sorted.begin(),
                     c_info_sorted.end(),
@@ -457,18 +475,34 @@ adjust_cumulative_sizes_max(device_span<cumulative_page_info const> c_info,
   return {std::move(aggregated_info), std::move(page_keys_by_split)};
 }
 
-std::vector<row_range> compute_page_splits_by_row_max(
-  device_span<cumulative_page_info const> c_info,
-  device_span<PageInfo const> pages,
+/**
+ * @brief Common implementation for computing page splits from aggregated info
+ *
+ * This helper function contains the common logic for computing page splits.
+ * It takes pre-aggregated cumulative page info and computes the row ranges
+ * that satisfy both the size limit and string limit constraints.
+ *
+ * @param aggregated_info Pre-aggregated cumulative page information for output size
+ * @param aggregated_info_str Pre-aggregated cumulative page information for string size
+ * @param skip_rows Starting row index
+ * @param num_rows Number of rows to process
+ * @param size_limit Maximum output size per chunk (0 = no limit)
+ * @param string_limit Maximum string size per chunk (0 = no limit)
+ * @param stream CUDA stream
+ * @return Vector of row ranges representing the computed splits
+ */
+std::vector<row_range> compute_splits_from_aggregated_info(
+  device_span<cumulative_page_info const> aggregated_info,
+  device_span<cumulative_page_info const> aggregated_info_str,
   size_t skip_rows,
   size_t num_rows,
   size_t size_limit,
+  size_t string_limit,
   rmm::cuda_stream_view stream)
 {
-  auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes_max(c_info, pages, stream);
-
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
+  auto h_aggregated_info     = cudf::detail::make_pinned_vector(aggregated_info, stream);
+  auto h_aggregated_info_str = cudf::detail::make_pinned_vector(aggregated_info_str, stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -477,19 +511,62 @@ std::vector<row_range> compute_page_splits_by_row_max(
   std::vector<row_range> splits;
   // note: we are working with absolute row indices so skip_rows represents the absolute min row
   // index we care about
-  size_t cur_pos             = find_start_index(h_aggregated_info, skip_rows);
-  size_t cur_row_index       = skip_rows;
-  size_t cur_cumulative_size = 0;
-  auto const max_row = std::min(skip_rows + num_rows, h_aggregated_info.back().end_row_index);
+  size_t cur_pos                    = find_start_index(h_aggregated_info, skip_rows);
+  size_t cur_pos_str                = find_start_index(h_aggregated_info_str, skip_rows);
+  size_t cur_row_index              = skip_rows;
+  size_t cur_cumulative_size        = 0;
+  size_t cur_cumulative_string_size = 0;
+
+  auto const max_row = std::min(
+    skip_rows + num_rows,
+    std::min(h_aggregated_info.back().end_row_index, h_aggregated_info_str.back().end_row_index));
+
   while (cur_row_index < max_row) {
-    auto const split_pos = find_next_split(
-      cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit, 1);
+    // Find split position based on output size limit
+    auto const split_pos_size =
+      (size_limit > 0)
+        ? find_next_split(
+            cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit, 1)
+        : h_aggregated_info.size() - 1;
+
+    // Find split position based on string size limit
+    // Use string_size_bytes extractor since h_aggregated_info_str contains max string column sizes
+    auto const split_pos_str =
+      (string_limit > 0)
+        ? find_next_split(cur_pos_str,
+                          cur_row_index,
+                          cur_cumulative_string_size,
+                          h_aggregated_info_str,
+                          string_limit,
+                          1,
+                          [](cumulative_page_info const& i) { return i.string_size_bytes; })
+        : h_aggregated_info_str.size() - 1;
+
+    // Take the more restrictive (earlier) split
+    auto const split_row_size = h_aggregated_info[split_pos_size].end_row_index;
+    auto const split_row_str  = h_aggregated_info_str[split_pos_str].end_row_index;
+    auto const split_row      = std::min(split_row_size, split_row_str);
 
     auto const start_row = cur_row_index;
-    cur_row_index        = std::min(max_row, h_aggregated_info[split_pos].end_row_index);
+    cur_row_index        = std::min(max_row, split_row);
     splits.push_back({start_row, cur_row_index - start_row});
-    cur_pos             = split_pos;
-    cur_cumulative_size = h_aggregated_info[split_pos].size_bytes;
+
+    // Update positions for both trackers
+    while (cur_pos < h_aggregated_info.size() &&
+           h_aggregated_info[cur_pos].end_row_index <= split_row) {
+      cur_pos++;
+    }
+    cur_cumulative_size = (cur_pos > 0 && cur_pos <= h_aggregated_info.size())
+                            ? h_aggregated_info[cur_pos - 1].size_bytes
+                            : 0;
+
+    while (cur_pos_str < h_aggregated_info_str.size() &&
+           h_aggregated_info_str[cur_pos_str].end_row_index <= split_row) {
+      cur_pos_str++;
+    }
+    cur_cumulative_string_size = (cur_pos_str > 0 && cur_pos_str <= h_aggregated_info_str.size())
+                                   ? h_aggregated_info_str[cur_pos_str - 1].string_size_bytes
+                                   : 0;
   }
 
 #if defined(CHUNKING_DEBUG)
@@ -511,7 +588,8 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   bool has_page_index,
   rmm::cuda_stream_view stream)
 {
-  auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
+  auto const mr                              = cudf::get_current_device_resource_ref();
+  auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream, mr);
 
   // bring back to the cpu
   auto h_aggregated_info = cudf::detail::make_pinned_vector(aggregated_info, stream);
@@ -561,40 +639,15 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                                                   size_t skip_rows,
                                                   size_t num_rows,
                                                   size_t size_limit,
+                                                  size_t string_limit,
                                                   rmm::cuda_stream_view stream)
 {
-  auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
-
-  // bring back to the cpu
-  auto h_aggregated_info = cudf::detail::make_pinned_vector(aggregated_info, stream);
-
-#if defined(CHUNKING_DEBUG)
-  print_cumulative_page_info(h_aggregated_info, "adjusted");
-#endif  // CHUNKING_DEBUG
-
-  std::vector<row_range> splits;
-  // note: we are working with absolute row indices so skip_rows represents the absolute min row
-  // index we care about
-  size_t cur_pos             = find_start_index(h_aggregated_info, skip_rows);
-  size_t cur_row_index       = skip_rows;
-  size_t cur_cumulative_size = 0;
-  auto const max_row = std::min(skip_rows + num_rows, h_aggregated_info.back().end_row_index);
-  while (cur_row_index < max_row) {
-    auto const split_pos = find_next_split(
-      cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit, 1);
-
-    auto const start_row = cur_row_index;
-    cur_row_index        = std::min(max_row, h_aggregated_info[split_pos].end_row_index);
-    splits.push_back({start_row, cur_row_index - start_row});
-    cur_pos             = split_pos;
-    cur_cumulative_size = h_aggregated_info[split_pos].size_bytes;
-  }
-
-#if defined(CHUNKING_DEBUG)
-  print_cumulative_page_info(h_aggregated_info, "adjusted w/splits", splits);
-#endif  // CHUNKING_DEBUG
-
-  return splits;
+  auto const mr                              = cudf::get_current_device_resource_ref();
+  auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream, mr);
+  auto [aggregated_info_str, page_keys_by_split_str] =
+    adjust_cumulative_sizes_max(c_info, pages, stream, mr);
+  return compute_splits_from_aggregated_info(
+    aggregated_info, aggregated_info_str, skip_rows, num_rows, size_limit, string_limit, stream);
 }
 
 [[nodiscard]] std::pair<rmm::device_buffer, rmm::device_buffer> decompress_page_data(

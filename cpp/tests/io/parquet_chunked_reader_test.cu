@@ -2203,3 +2203,60 @@ INSTANTIATE_TEST_CASE_P(Host,
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::ZSTD)));
+
+TEST_F(ParquetChunkedReaderTest, StringColumnSizeOverflow)
+{
+  // Test parameters designed to ensure splitting is due to string column size limit,
+  // not output size limit:
+  // - String column size: ~2.2GB (just over INT32_MAX ~2.1GB)
+  // - Total table size: ~2.2GB
+  // - chunk_read_limit: 10GB (much larger than total table size)
+  // This ensures the 2-chunk split is caused by string column overflow protection,
+  // not by the output size limit.
+  constexpr int num_rows      = 2'000'000;
+  constexpr int string_length = 1100;  // 2M * 1100 bytes = 2.2GB > INT32_MAX
+
+  std::vector<std::string> strings;
+  strings.reserve(num_rows);
+  std::string str_a(string_length, 'a');
+  std::string str_b(string_length, 'b');
+  for (int i = 0; i < num_rows; ++i) {
+    strings.push_back(i % 2 == 0 ? str_a : str_b);
+  }
+
+  auto id_col =
+    int32s_col(thrust::make_counting_iterator(0), thrust::make_counting_iterator(num_rows));
+  auto str_col = strings_col(strings.begin(), strings.end());
+
+  std::vector<std::unique_ptr<cudf::column>> cols;
+  cols.push_back(id_col.release());
+  cols.push_back(str_col.release());
+
+  auto expected = std::make_unique<cudf::table>(std::move(cols));
+
+  auto const filepath = temp_env->get_temp_filepath("string_overflow.parquet");
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view());
+  cudf::io::write_parquet(write_opts);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+
+  // Set chunk_read_limit larger than total table size (~2.2GB)
+  // to ensure splitting is only due to string column size limit
+  constexpr size_t chunk_read_limit = 5L * 1024 * 1024 * 1024;  // 5GB
+  auto reader                       = cudf::io::chunked_parquet_reader(chunk_read_limit, read_opts);
+
+  auto tables = std::vector<std::unique_ptr<cudf::table>>{};
+  while (reader.has_next()) {
+    auto chunk = reader.read_chunk();
+    tables.push_back(std::move(chunk.tbl));
+  }
+
+  // Verify that the data was split into exactly 2 chunks due to string column size limit
+  // (not output size limit, since chunk_read_limit > total table size)
+  EXPECT_EQ(tables.size(), 2);
+
+  auto result = cudf::concatenate(cudf::detail::tables_to_views(tables));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+}

@@ -109,7 +109,8 @@ std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg);
 std::pair<rmm::device_uvector<cumulative_page_info>, rmm::device_uvector<int32_t>>
 adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                         device_span<PageInfo const> pages,
-                        rmm::cuda_stream_view stream);
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes the next subpass within the current pass
@@ -168,18 +169,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                                                   size_t skip_rows,
                                                   size_t num_rows,
                                                   size_t size_limit,
+                                                  size_t string_limit,
                                                   rmm::cuda_stream_view stream);
-
-/**
- * @brief Computes page splits based on the max per-column size (not sum).
- */
-std::vector<row_range> compute_page_splits_by_row_max(
-  device_span<cumulative_page_info const> c_info,
-  device_span<PageInfo const> pages,
-  size_t skip_rows,
-  size_t num_rows,
-  size_t size_limit,
-  rmm::cuda_stream_view stream);
 
 /**
  * @brief Decompresses a mix of dictionary and non-dictionary pages from a set of column chunks
@@ -265,9 +256,10 @@ struct split_info {
  * @brief
  */
 struct cumulative_page_info {
-  size_t end_row_index;  // end row index (start_row + num_rows for the corresponding page)
-  size_t size_bytes;     // cumulative size in bytes
-  cudf::size_type key;   // schema index
+  size_t end_row_index;      // end row index (start_row + num_rows for the corresponding page)
+  size_t size_bytes;         // cumulative size in bytes (total output size)
+  size_t string_size_bytes;  // cumulative string column size in bytes (0 for non-string columns)
+  cudf::size_type key;       // schema index
 };
 
 /**
@@ -323,7 +315,8 @@ struct cumulative_page_sum {
   __device__ inline cumulative_page_info operator()(cumulative_page_info const& a,
                                                     cumulative_page_info const& b) const
   {
-    return cumulative_page_info{0, a.size_bytes + b.size_bytes, a.key};
+    return cumulative_page_info{
+      size_t{0}, a.size_bytes + b.size_bytes, a.string_size_bytes + b.string_size_bytes, a.key};
   }
 };
 
@@ -478,7 +471,7 @@ struct get_page_output_size {
   __device__ cumulative_page_info operator()(PageInfo const& page) const
   {
     if (page.flags & PAGEINFO_FLAGS_DICTIONARY) {
-      return cumulative_page_info{0, 0, page.src_col_schema};
+      return cumulative_page_info{size_t{0}, size_t{0}, size_t{0}, page.src_col_schema};
     }
 
     // total nested size, not counting string data
@@ -488,25 +481,11 @@ struct get_page_output_size {
         return cudf::type_dispatcher(
           data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
       }));
-    return {0,
+    return {size_t{0},
             thrust::reduce(thrust::seq, iter, iter + page.num_output_nesting_levels) +
               static_cast<size_t>(page.str_bytes_all),
+            static_cast<size_t>(page.str_bytes_all),
             page.src_col_schema};
-  }
-};
-
-/**
- * @brief Functor which computes the total output cudf data size for string bytes only
- *
- * Returns zero for non-string pages. Uses PageInfo::str_bytes_all.
- */
-struct get_page_string_only_size {
-  __device__ cumulative_page_info operator()(PageInfo const& page) const
-  {
-    if (page.flags & PAGEINFO_FLAGS_DICTIONARY) {
-      return cumulative_page_info{0, 0, page.src_col_schema};
-    }
-    return {0, static_cast<size_t>(page.str_bytes_all), page.src_col_schema};
   }
 };
 
@@ -518,8 +497,11 @@ struct get_page_input_size {
   {
     // we treat dictionary page sizes as 0 for subpasses because we have already paid the price for
     // them at the pass level.
-    if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return {0, 0, page.src_col_schema}; }
-    return {0, static_cast<size_t>(page.uncompressed_page_size), page.src_col_schema};
+    if (page.flags & PAGEINFO_FLAGS_DICTIONARY) {
+      return {size_t{0}, size_t{0}, size_t{0}, page.src_col_schema};
+    }
+    return {
+      size_t{0}, static_cast<size_t>(page.uncompressed_page_size), size_t{0}, page.src_col_schema};
   }
 };
 
@@ -566,7 +548,8 @@ struct page_total_size {
   __device__ cumulative_page_info operator()(cumulative_page_info const& i) const
   {
     // sum sizes for each input column at this row
-    size_t sum = 0;
+    size_t sum        = 0;
+    size_t string_sum = 0;
     for (auto idx = 0; std::cmp_less(idx, num_keys); idx++) {
       auto const start = key_offsets[idx];
       auto const end   = key_offsets[idx + 1];
@@ -577,8 +560,9 @@ struct page_total_size {
       auto const page_index =
         thrust::lower_bound(thrust::seq, iter + start, iter + end, i.end_row_index) - iter;
       sum += c_info[page_index].size_bytes;
+      string_sum += c_info[page_index].string_size_bytes;
     }
-    return {i.end_row_index, sum, i.key};
+    return {i.end_row_index, sum, string_sum, i.key};
   }
 };
 
