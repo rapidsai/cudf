@@ -503,7 +503,6 @@ class Scan(IR):
             schema,
             typ,
             reader_options,
-            cloud_options,
             paths,
             with_columns,
             skip_rows,
@@ -676,7 +675,6 @@ class Scan(IR):
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
-        cloud_options: dict[str, Any] | None,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -972,14 +970,7 @@ class Sink(IR):
         self.options = options
         self.cloud_options = cloud_options
         self.children = (df,)
-        self._non_child_args = (
-            schema,
-            kind,
-            path,
-            parquet_options,
-            options,
-            cloud_options,
-        )
+        self._non_child_args = (schema, kind, path, parquet_options, options)
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None
             for k in ("config", "credential_provider")
@@ -1221,7 +1212,6 @@ class Sink(IR):
         path: str,
         parquet_options: ParquetOptions,
         options: dict[str, Any],
-        cloud_options: dict[str, Any],
         df: DataFrame,
         *,
         context: IRExecutionContext,
@@ -1260,7 +1250,7 @@ class Cache(IR):
         self.key = key
         self.refcount = refcount
         self.children = (value,)
-        self._non_child_args = (schema, key, refcount)
+        self._non_child_args = (key, refcount)
 
     def get_hashable(self) -> Hashable:  # noqa: D102
         # Polars arranges that the keys are unique across all cache
@@ -1279,7 +1269,6 @@ class Cache(IR):
     @nvtx_annotate_cudf_polars(message="Cache")
     def do_evaluate(
         cls,
-        schema: Schema,
         key: int,
         refcount: int | None,
         df: DataFrame,
@@ -1453,7 +1442,7 @@ class Select(IR):
         self.exprs = tuple(exprs)
         self.should_broadcast = should_broadcast
         self.children = (df,)
-        self._non_child_args = (schema, self.exprs, should_broadcast)
+        self._non_child_args = (self.exprs, should_broadcast)
         if (
             Select._is_len_expr(self.exprs)
             and isinstance(df, Scan)
@@ -1477,7 +1466,6 @@ class Select(IR):
     @nvtx_annotate_cudf_polars(message="Select")
     def do_evaluate(
         cls,
-        schema: Schema,
         exprs: tuple[expr.NamedExpr, ...],
         should_broadcast: bool,  # noqa: FBT001
         df: DataFrame,
@@ -1563,14 +1551,13 @@ class Reduce(IR):
         self.schema = schema
         self.exprs = tuple(exprs)
         self.children = (df,)
-        self._non_child_args = (schema, self.exprs)
+        self._non_child_args = (self.exprs,)
 
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Reduce")
     def do_evaluate(
         cls,
-        schema: Schema,
         exprs: tuple[expr.NamedExpr, ...],
         df: DataFrame,
         *,
@@ -1662,7 +1649,6 @@ class Rolling(IR):
         self.zlice = zlice
         self.children = (df,)
         self._non_child_args = (
-            schema,
             index,
             index_dtype,
             preceding_ordinal,
@@ -1678,22 +1664,21 @@ class Rolling(IR):
     @nvtx_annotate_cudf_polars(message="Rolling")
     def do_evaluate(
         cls,
-        schema: Schema,
         index: expr.NamedExpr,
         index_dtype: plc.DataType,
         preceding_ordinal: int,
         following_ordinal: int,
         closed_window: ClosedInterval,
-        keys: Sequence[expr.NamedExpr],
-        agg_requests: Sequence[expr.NamedExpr],
+        keys_in: Sequence[expr.NamedExpr],
+        aggs: Sequence[expr.NamedExpr],
         zlice: Zlice | None,
         df: DataFrame,
         *,
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        keys_cols = broadcast(
-            *(k.evaluate(df) for k in keys),
+        keys = broadcast(
+            *(k.evaluate(df) for k in keys_in),
             target_length=df.num_rows,
             stream=df.stream,
         )
@@ -1720,9 +1705,9 @@ class Rolling(IR):
             raise RuntimeError(
                 f"Index column '{index.name}' in rolling may not contain nulls"
             )
-        if len(keys) > 0:
+        if len(keys_in) > 0:
             # Must always check sortedness
-            table = plc.Table([*(k.obj for k in keys_cols), orderby_obj])
+            table = plc.Table([*(k.obj for k in keys), orderby_obj])
             n = table.num_columns()
             if not plc.sorting.is_sorted(
                 table,
@@ -1741,25 +1726,22 @@ class Rolling(IR):
                     f"Index column '{index.name}' in rolling is not sorted, please sort first"
                 )
         values = plc.rolling.grouped_range_rolling_window(
-            plc.Table([k.obj for k in keys_cols]),
+            plc.Table([k.obj for k in keys]),
             orderby_obj,
             plc.types.Order.ASCENDING,  # Polars requires ascending orderby.
             plc.types.NullOrder.BEFORE,  # Doesn't matter, polars doesn't allow nulls in orderby
             preceding_window,
             following_window,
-            [
-                rolling.to_request(request.value, orderby, df)
-                for request in agg_requests
-            ],
+            [rolling.to_request(request.value, orderby, df) for request in aggs],
             stream=df.stream,
         )
         return DataFrame(
             itertools.chain(
-                keys_cols,
+                keys,
                 [orderby],
                 (
                     Column(col, name=request.name, dtype=request.value.dtype)
-                    for col, request in zip(values.columns(), agg_requests, strict=True)
+                    for col, request in zip(values.columns(), aggs, strict=True)
                 ),
             ),
             stream=df.stream,
@@ -1829,7 +1811,7 @@ class GroupBy(IR):
     def do_evaluate(
         cls,
         schema: Schema,
-        keys: Sequence[expr.NamedExpr],
+        keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         zlice: Zlice | None,
@@ -1838,22 +1820,22 @@ class GroupBy(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        keys_cols = broadcast(
-            *(k.evaluate(df) for k in keys),
+        keys = broadcast(
+            *(k.evaluate(df) for k in keys_in),
             target_length=df.num_rows,
             stream=df.stream,
         )
         sorted = (
             plc.types.Sorted.YES
-            if all(k.is_sorted for k in keys_cols)
+            if all(k.is_sorted for k in keys)
             else plc.types.Sorted.NO
         )
         grouper = plc.groupby.GroupBy(
-            plc.Table([k.obj for k in keys_cols]),
+            plc.Table([k.obj for k in keys]),
             null_handling=plc.types.NullPolicy.INCLUDE,
             keys_are_sorted=sorted,
-            column_order=[k.order for k in keys_cols],
-            null_precedence=[k.null_order for k in keys_cols],
+            column_order=[k.order for k in keys],
+            null_precedence=[k.null_order for k in keys],
         )
         requests = []
         names = []
@@ -1862,7 +1844,7 @@ class GroupBy(IR):
             value = request.value
             if isinstance(value, expr.Len):
                 # A count aggregation, we need a column so use a key column
-                col = keys_cols[0].obj
+                col = keys[0].obj
             elif isinstance(value, expr.Agg):
                 if value.name == "quantile":
                     child = value.children[0]
@@ -1872,9 +1854,9 @@ class GroupBy(IR):
             else:
                 # Anything else, we pre-evaluate
                 column = value.evaluate(df, context=ExecutionContext.GROUPBY)
-                if column.size != keys_cols[0].size:
+                if column.size != keys[0].size:
                     column = broadcast(
-                        column, target_length=keys_cols[0].size, stream=df.stream
+                        column, target_length=keys[0].size, stream=df.stream
                     )[0]
                 col = column.obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
@@ -1891,14 +1873,14 @@ class GroupBy(IR):
         ]
         result_keys = [
             Column(grouped_key, name=key.name, dtype=key.dtype)
-            for key, grouped_key in zip(keys_cols, group_keys.columns(), strict=True)
+            for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
         broadcasted = broadcast(*result_keys, *results, stream=df.stream)
         # Handle order preservation of groups
         if maintain_order and not sorted:
             # The order we want
             want = plc.stream_compaction.stable_distinct(
-                plc.Table([k.obj for k in keys_cols]),
+                plc.Table([k.obj for k in keys]),
                 list(range(group_keys.num_columns())),
                 plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
                 plc.types.NullEquality.EQUAL,
@@ -1906,7 +1888,7 @@ class GroupBy(IR):
                 stream=df.stream,
             )
             # The order we have
-            have = plc.Table([key.obj for key in broadcasted[: len(keys_cols)]])
+            have = plc.Table([key.obj for key in broadcasted[: len(keys)]])
 
             # We know an inner join is OK because by construction
             # want and have are permutations of each other.
@@ -2130,15 +2112,14 @@ class ConditionalJoin(IR):
         assert not nulls_equal
         assert not coalesce
         assert maintain_order == "none"
-        self._non_child_args = (schema, predicate_wrapper, options)
+        self._non_child_args = (predicate_wrapper, options)
 
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="ConditionalJoin")
     def do_evaluate(
         cls,
-        schema: Schema,
-        predicate: Predicate,
+        predicate_wrapper: Predicate,
         options: tuple,
         left: DataFrame,
         right: DataFrame,
@@ -2147,13 +2128,15 @@ class ConditionalJoin(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         with context.stream_ordered_after(left, right) as stream:
-            left_casts, right_casts = _collect_decimal_binop_casts(predicate.predicate)
+            left_casts, right_casts = _collect_decimal_binop_casts(
+                predicate_wrapper.predicate
+            )
             _, _, zlice, suffix, _, _ = options
 
             lg, rg = plc.join.conditional_inner_join(
                 _apply_casts(left, left_casts).table,
                 _apply_casts(right, right_casts).table,
-                predicate.ast,
+                predicate_wrapper.ast,
                 stream=stream,
             )
             left_result = DataFrame.from_table(
@@ -2244,7 +2227,7 @@ class Join(IR):
         self.right_on = tuple(right_on)
         self.options = options
         self.children = (left, right)
-        self._non_child_args = (schema, self.left_on, self.right_on, self.options)
+        self._non_child_args = (self.left_on, self.right_on, self.options)
 
     @staticmethod
     @cache
@@ -2420,9 +2403,8 @@ class Join(IR):
     @nvtx_annotate_cudf_polars(message="Join")
     def do_evaluate(
         cls,
-        schema: Schema,
-        left_on: Sequence[expr.NamedExpr],
-        right_on: Sequence[expr.NamedExpr],
+        left_on_exprs: Sequence[expr.NamedExpr],
+        right_on_exprs: Sequence[expr.NamedExpr],
         options: tuple[
             Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
             bool,
@@ -2480,12 +2462,16 @@ class Join(IR):
             else:
                 # how != "Cross"
                 # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
-                left_on_ = DataFrame(
-                    broadcast(*(e.evaluate(left) for e in left_on), stream=stream),
+                left_on = DataFrame(
+                    broadcast(
+                        *(e.evaluate(left) for e in left_on_exprs), stream=stream
+                    ),
                     stream=stream,
                 )
-                right_on_ = DataFrame(
-                    broadcast(*(e.evaluate(right) for e in right_on), stream=stream),
+                right_on = DataFrame(
+                    broadcast(
+                        *(e.evaluate(right) for e in right_on_exprs), stream=stream
+                    ),
                     stream=stream,
                 )
                 null_equality = (
@@ -2496,7 +2482,7 @@ class Join(IR):
                 join_fn, left_policy, right_policy = cls._joiners(how)
                 if right_policy is None:
                     # Semi join
-                    lg = join_fn(left_on_.table, right_on_.table, null_equality, stream)
+                    lg = join_fn(left_on.table, right_on.table, null_equality, stream)
                     table = plc.copying.gather(
                         left.table, lg, left_policy, stream=stream
                     )
@@ -2507,11 +2493,11 @@ class Join(IR):
                     if how == "Right":
                         # Right join is a left join with the tables swapped
                         left, right = right, left
-                        left_on_, right_on_ = right_on_, left_on_
+                        left_on, right_on = right_on, left_on
                         maintain_order = Join.SWAPPED_ORDER[maintain_order]
 
                     lg, rg = join_fn(
-                        left_on_.table, right_on_.table, null_equality, stream=stream
+                        left_on.table, right_on.table, null_equality, stream=stream
                     )
                     if (
                         how in ("Inner", "Left", "Right", "Full")
@@ -2536,13 +2522,13 @@ class Join(IR):
                             # We need to specify `stream` here. We know that `{left,right}_on`
                             # is valid on `stream`, which is ordered after `{left,right}.stream`.
                             left = left.with_columns(
-                                left_on_.columns, replace_only=True, stream=stream
+                                left_on.columns, replace_only=True, stream=stream
                             )
                             right = right.with_columns(
-                                right_on_.columns, replace_only=True, stream=stream
+                                right_on.columns, replace_only=True, stream=stream
                             )
                         else:
-                            right = right.discard_columns(right_on_.column_names_set)
+                            right = right.discard_columns(right_on.column_names_set)
                     left = DataFrame.from_table(
                         plc.copying.gather(left.table, lg, left_policy, stream=stream),
                         left.column_names,
@@ -2568,15 +2554,15 @@ class Join(IR):
                                     dtype=left_col.dtype,
                                 )
                                 for left_col, right_col in zip(
-                                    left.select_columns(left_on_.column_names_set),
-                                    right.select_columns(right_on_.column_names_set),
+                                    left.select_columns(left_on.column_names_set),
+                                    right.select_columns(right_on.column_names_set),
                                     strict=True,
                                 )
                             ),
                             replace_only=True,
                             stream=stream,
                         )
-                        right = right.discard_columns(right_on_.column_names_set)
+                        right = right.discard_columns(right_on.column_names_set)
                     if how == "Right":
                         # Undo the swap for right join before gluing together.
                         left, right = right, left
@@ -2611,7 +2597,7 @@ class HStack(IR):
         self.schema = schema
         self.columns = tuple(columns)
         self.should_broadcast = should_broadcast
-        self._non_child_args = (schema, self.columns, self.should_broadcast)
+        self._non_child_args = (self.columns, self.should_broadcast)
         self.children = (df,)
 
     @classmethod
@@ -2619,18 +2605,17 @@ class HStack(IR):
     @nvtx_annotate_cudf_polars(message="HStack")
     def do_evaluate(
         cls,
-        schema: Schema,
-        columns: Sequence[expr.NamedExpr],
+        exprs: Sequence[expr.NamedExpr],
         should_broadcast: bool,  # noqa: FBT001
         df: DataFrame,
         *,
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        columns_ = [c.evaluate(df) for c in columns]
+        columns = [c.evaluate(df) for c in exprs]
         if should_broadcast:
-            columns_ = broadcast(
-                *columns_,
+            columns = broadcast(
+                *columns,
                 target_length=df.num_rows if df.num_columns != 0 else None,
                 stream=df.stream,
             )
@@ -2642,8 +2627,8 @@ class HStack(IR):
             # table that might have mismatching column lengths will
             # never be turned into a pylibcudf Table with all columns
             # by the Select, which is why this is safe.
-            assert all(e.name.startswith("__POLARS_CSER_0x") for e in columns)
-        return df.with_columns(columns_, stream=df.stream)
+            assert all(e.name.startswith("__POLARS_CSER_0x") for e in exprs)
+        return df.with_columns(columns, stream=df.stream)
 
 
 class Distinct(IR):
@@ -2675,7 +2660,7 @@ class Distinct(IR):
         self.subset = subset
         self.zlice = zlice
         self.stable = stable
-        self._non_child_args = (schema, keep, subset, zlice, stable)
+        self._non_child_args = (keep, subset, zlice, stable)
         self.children = (df,)
 
     _KEEP_MAP: ClassVar[dict[str, plc.stream_compaction.DuplicateKeepOption]] = {
@@ -2690,7 +2675,6 @@ class Distinct(IR):
     @nvtx_annotate_cudf_polars(message="Distinct")
     def do_evaluate(
         cls,
-        schema: Schema,
         keep: plc.stream_compaction.DuplicateKeepOption,
         subset: frozenset[str] | None,
         zlice: Zlice | None,
@@ -2774,7 +2758,6 @@ class Sort(IR):
         self.stable = stable
         self.zlice = zlice
         self._non_child_args = (
-            schema,
             self.by,
             self.order,
             self.null_order,
@@ -2788,7 +2771,6 @@ class Sort(IR):
     @nvtx_annotate_cudf_polars(message="Sort")
     def do_evaluate(
         cls,
-        schema: Schema,
         by: Sequence[expr.NamedExpr],
         order: Sequence[plc.types.Order],
         null_order: Sequence[plc.types.NullOrder],
@@ -2839,20 +2821,14 @@ class Slice(IR):
         self.schema = schema
         self.offset = offset
         self.length = length
-        self._non_child_args = (schema, offset, length)
+        self._non_child_args = (offset, length)
         self.children = (df,)
 
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Slice")
     def do_evaluate(
-        cls,
-        schema: Schema,
-        offset: int,
-        length: int,
-        df: DataFrame,
-        *,
-        context: IRExecutionContext,
+        cls, offset: int, length: int, df: DataFrame, *, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         return df.slice((offset, length))
@@ -2869,25 +2845,20 @@ class Filter(IR):
     def __init__(self, schema: Schema, mask: expr.NamedExpr, df: IR):
         self.schema = schema
         self.mask = mask
-        self._non_child_args = (schema, mask)
+        self._non_child_args = (mask,)
         self.children = (df,)
 
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Filter")
     def do_evaluate(
-        cls,
-        schema: Schema,
-        mask: expr.NamedExpr,
-        df: DataFrame,
-        *,
-        context: IRExecutionContext,
+        cls, mask_expr: expr.NamedExpr, df: DataFrame, *, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        (mask_col,) = broadcast(
-            mask.evaluate(df), target_length=df.num_rows, stream=df.stream
+        (mask,) = broadcast(
+            mask_expr.evaluate(df), target_length=df.num_rows, stream=df.stream
         )
-        return df.filter(mask_col)
+        return df.filter(mask)
 
 
 class Projection(IR):
@@ -2937,13 +2908,13 @@ class MergeSorted(IR):
         self.schema = schema
         self.key = key
         self.children = (left, right)
-        self._non_child_args = (schema, key)
+        self._non_child_args = (key,)
 
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="MergeSorted")
     def do_evaluate(
-        cls, schema: Schema, key: str, *dfs: DataFrame, context: IRExecutionContext
+        cls, key: str, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         with context.stream_ordered_after(*dfs) as stream:
@@ -3181,7 +3152,7 @@ class Union(IR):
     def __init__(self, schema: Schema, zlice: Zlice | None, *children: IR):
         self.schema = schema
         self.zlice = zlice
-        self._non_child_args = (schema, zlice)
+        self._non_child_args = (zlice,)
         self.children = children
         schema = self.children[0].schema
 
@@ -3189,11 +3160,7 @@ class Union(IR):
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Union")
     def do_evaluate(
-        cls,
-        schema: Schema,
-        zlice: Zlice | None,
-        *dfs: DataFrame,
-        context: IRExecutionContext,
+        cls, zlice: Zlice | None, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         with context.stream_ordered_after(*dfs) as stream:
@@ -3220,7 +3187,7 @@ class HConcat(IR):
     ):
         self.schema = schema
         self.should_broadcast = should_broadcast
-        self._non_child_args = (schema, should_broadcast)
+        self._non_child_args = (should_broadcast,)
         self.children = children
 
     @staticmethod
@@ -3261,7 +3228,6 @@ class HConcat(IR):
     @nvtx_annotate_cudf_polars(message="HConcat")
     def do_evaluate(
         cls,
-        schema: Schema,
         should_broadcast: bool,  # noqa: FBT001
         *dfs: DataFrame,
         context: IRExecutionContext,
