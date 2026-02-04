@@ -21,6 +21,14 @@
  */
 
 /**
+ * @brief Get boolean from they keyword
+ *
+ * @param input keyword affirmation string such as: Y, T, YES, TRUE, ON
+ * @return true or false
+ */
+[[nodiscard]] bool get_boolean(std::string input);
+
+/**
  * @brief Create memory resource for libcudf functions
  *
  * @param pool Whether to use a pool memory resource.
@@ -66,8 +74,7 @@ void check_tables_equal(cudf::table_view const& lhs_table,
  * @param datasource Input data source
  * @return Host buffer containing footer bytes
  */
-std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_bytes(
-  std::reference_wrapper<cudf::io::datasource> datasource);
+std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_bytes(cudf::io::datasource& datasource);
 
 /**
  * @brief Fetches a host buffer of Parquet page index from the input data source
@@ -77,8 +84,7 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_bytes(
  * @return Host buffer containing page index bytes
  */
 std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_bytes(
-  std::reference_wrapper<cudf::io::datasource> datasource,
-  cudf::io::text::byte_range_info const page_index_bytes);
+  cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes);
 
 /**
  * @brief Converts a host buffer into a host span
@@ -103,7 +109,7 @@ cudf::host_span<uint8_t const> make_host_span(
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,
            std::future<void>>
-fetch_byte_ranges(std::reference_wrapper<cudf::io::datasource> datasource,
+fetch_byte_ranges(cudf::io::datasource& datasource,
                   cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
                   rmm::cuda_stream_view stream,
                   rmm::device_async_resource_ref mr);

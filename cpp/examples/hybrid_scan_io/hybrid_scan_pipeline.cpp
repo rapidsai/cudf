@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "benchmark.hpp"
 #include "common_utils.hpp"
 #include "io_source.hpp"
 #include "timer.hpp"
@@ -115,16 +116,17 @@ struct hybrid_scan_fn {
  * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
  *         row validity column
  */
+template <bool verbose>
 auto hybrid_scan_pipelined(io_source const& io_source,
                            cudf::size_type num_partitions,
                            split_strategy split_strategy,
                            bool use_page_index,
-                           rmm::cuda_stream_pool& stream_pool,
+                           rmm::cuda_stream_pool const& stream_pool,
                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
-  std::cout << "\nREADER: Setup, metadata and page index...\n";
+  if (verbose) { std::cout << "\nREADER: Setup, metadata and page index...\n"; }
   timer timer;
 
   // Input file buffer span
@@ -142,9 +144,11 @@ auto hybrid_scan_pipelined(io_source const& io_source,
 
   auto const row_groups_indices = reader->all_row_groups(options);
 
-  timer.print_elapsed_millis();
+  if (verbose) {
+    timer.print_elapsed_millis();
+    std::cout << "Setup partitions... \n";
+  }
 
-  std::cout << "Setup partitions... \n";
   timer.reset();
 
   // Adjust the number of partitions if needed
@@ -159,15 +163,15 @@ auto hybrid_scan_pipelined(io_source const& io_source,
       std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(metadata, options));
   }
 
-  timer.print_elapsed_millis();
+  if (verbose) { timer.print_elapsed_millis(); }
 
   if (num_partitions > 1) {
-    std::cout << "Creating row group partitions... \n";
+    if (verbose) { std::cout << "Creating row group partitions... \n"; }
     timer.reset();
   }
 
   if (num_partitions == 1) {
-    std::cout << "Reading as single partition... \n";
+    if (verbose) { std::cout << "Reading as single partition... \n"; }
     timer.reset();
     hybrid_scan_fn{.table              = std::ref(tables.front()),
                    .reader             = std::move(readers.front()),
@@ -177,7 +181,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
                    .options            = options,
                    .stream             = stream_pool.get_stream(),
                    .mr                 = mr}();
-    timer.print_elapsed_millis();
+    if (verbose) { timer.print_elapsed_millis(); }
     return std::move(tables.front());
   }
 
@@ -209,7 +213,9 @@ auto hybrid_scan_pipelined(io_source const& io_source,
         readers.front()->filter_row_groups_with_byte_range(row_groups_indices, split_options);
       if (filtered_row_groups.empty()) {
         num_partitions--;
-        std::cout << "Adjusting number of partitions to " << num_partitions << "\n";
+        if (verbose) {
+          std::cout << "Adjusting number of partitions to " << num_partitions << "\n";
+        }
       } else {
         row_group_parts[i].assign(filtered_row_groups.begin(), filtered_row_groups.end());
       }
@@ -217,9 +223,11 @@ auto hybrid_scan_pipelined(io_source const& io_source,
     }
   }
 
-  timer.print_elapsed_millis();
+  if (verbose) {
+    timer.print_elapsed_millis();
+    std::cout << "Pipelining " << num_partitions << " table reads... \n";
+  }
 
-  std::cout << "Pipelining " << num_partitions << " table reads... \n";
   timer.reset();
 
   std::vector<hybrid_scan_fn> read_tasks;
@@ -247,14 +255,16 @@ auto hybrid_scan_pipelined(io_source const& io_source,
     t.join();
   }
 
-  timer.print_elapsed_millis();
+  if (verbose) {
+    timer.print_elapsed_millis();
+    std::cout << "Concatenating tables... \n";
+  }
 
-  std::cout << "Concatenating tables... \n";
   timer.reset();
 
   auto table = concatenate_tables(std::move(tables), stream_pool.get_stream());
 
-  timer.print_elapsed_millis();
+  if (verbose) { timer.print_elapsed_millis(); }
 
   return std::move(table);
 }
@@ -264,13 +274,14 @@ auto hybrid_scan_pipelined(io_source const& io_source,
  */
 void inline print_usage()
 {
-  std::cout << std::endl
-            << "Usage: hybrid_scan_pipeline <input parquet file> <number of partitions> <io source "
-               "type> <split strategy>\n\n"
-            << "Available IO source types: FILEPATH, HOST_BUFFER (Default), PINNED_BUFFER, "
-               "DEVICE_BUFFER \n\n"
-            << "Available split strategies: ROW_GROUPS (Default), BYTE_RANGES \n\n"
-            << "Example usage: hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS \n\n";
+  std::cout
+    << std::endl
+    << "Usage: hybrid_scan_pipeline <input parquet file> <number of partitions> <io source "
+       "type> <split strategy> <iterations> <verbose>\n\n"
+    << "Available IO source types: FILEPATH, HOST_BUFFER (Default), PINNED_BUFFER, "
+       "DEVICE_BUFFER \n\n"
+    << "Available split strategies: ROW_GROUPS (Default), BYTE_RANGES \n\n"
+    << "Example usage: hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS 4 true \n\n";
 }
 
 }  // namespace
@@ -283,19 +294,25 @@ void inline print_usage()
  * 2. number of read partitions (default: 2)
  * 3. io source type (default: "HOST_BUFFER")
  * 4. split strategy (default: "ROW_GROUPS")
+ * 5. iterations (default: 4)
+ * 6. verbose (default: false)
  *
  * Example invocation from directory `cudf/cpp/examples/hybrid_scan`:
- * ./build/hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS
+ * ./build/hybrid_scan_pipeline example.parquet 2 FILEPATH HOST_BUFFER 4 true
  *
  */
 int main(int argc, char const** argv)
 {
   auto input_filepath = std::string{"example.parquet"};
   auto num_partitions = 2;
-  auto io_source_type = io_source_type::HOST_BUFFER;
+  auto io_source_type = io_source_type::FILEPATH;
   auto split_strategy = split_strategy::ROW_GROUPS;
+  auto iterations     = 4;
+  auto verbose        = false;
 
   switch (argc) {
+    case 7: verbose = get_boolean(argv[6]); [[fallthrough]];
+    case 6: iterations = std::stoi(argv[5]); [[fallthrough]];
     case 5: split_strategy = get_split_strategy(argv[4]); [[fallthrough]];
     case 4: io_source_type = get_io_source_type(argv[3]); [[fallthrough]];
     case 3: num_partitions = std::max<cudf::size_type>(1, std::stoi(argv[2])); [[fallthrough]];
@@ -325,31 +342,33 @@ int main(int argc, char const** argv)
   // Create io source
   auto const data_source = io_source{input_filepath, io_source_type, default_stream};
 
-  // Read with the main reader without timing
+  constexpr bool use_page_index = false;
   {
-    std::cout << "\nReading " << input_filepath << "...\n";
-    std::cout << "Note: Not timing this initial parquet read as it may include\n"
-                 "times for nvcomp, cufile loading and RMM growth.\n\n";
-    std::ignore = read_parquet(data_source, default_stream);
+    std::cout << "Reading " << input_filepath
+              << " with next-gen parquet reader and no page index...\n";
+    benchmark(
+      [&] {
+        std::ignore = hybrid_scan_pipelined<false>(
+          data_source, num_partitions, split_strategy, use_page_index, stream_pool, stats_mr);
+      },
+      iterations);
+  }
+  {
+    std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
+    benchmark([&] { std::ignore = read_parquet(data_source, default_stream); }, iterations);
   }
 
-  std::cout << "Reading " << input_filepath << " with next-gen parquet reader...\n";
-  timer timer;
-
-  constexpr bool use_page_index = false;
-  auto pipeline_table           = hybrid_scan_pipelined(
-    data_source, num_partitions, split_strategy, use_page_index, stream_pool, stats_mr);
-
-  timer.print_elapsed_millis();
-
-  std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
-  timer.reset();
-
-  auto [main_table, metadata] = read_parquet(data_source, default_stream);
-
-  timer.print_elapsed_millis();
-
   // Check for validity
+  auto pipeline_table = [&] {
+    if (verbose) {
+      return hybrid_scan_pipelined<true>(
+        data_source, num_partitions, split_strategy, use_page_index, stream_pool, stats_mr);
+    } else {
+      return hybrid_scan_pipelined<false>(
+        data_source, num_partitions, split_strategy, use_page_index, stream_pool, stats_mr);
+    }
+  }();
+  auto main_table = std::move(read_parquet(data_source, default_stream).tbl);
   check_tables_equal(pipeline_table->view(), main_table->view(), default_stream);
 
   return 0;
