@@ -1152,8 +1152,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         type=array.type.value_type,
                     )
                 )
+            # For categorical, we need to infer dtypes from arrow for codes
+            # and categories, as they may have special cases (e.g., empty
+            # categoricals with null dictionary type)
             result = cls.from_pylibcudf(plc.Column.from_arrow(codes))
             categories = cls.from_pylibcudf(plc.Column.from_arrow(dictionary))
+            return result._with_type_metadata(
+                CategoricalDtype(
+                    categories=categories, ordered=array.type.ordered
+                )
+            )
+            categories = cls.create(
+                plc.Column.from_arrow(dictionary),
+                cudf_dtype_from_pa_type(dictionary.type),
+            )
             return result._with_type_metadata(
                 CategoricalDtype(
                     categories=categories, ordered=array.type.ordered
@@ -2855,29 +2867,36 @@ def column_empty(
                 row_count, plc.types.MaskState.ALL_NULL
             )
         )
-        return ColumnBase.from_pylibcudf(
-            plc.Column(
-                dtype_to_pylibcudf_type(dtype),
-                row_count,
-                None,
-                mask,
-                row_count,
-                0,
-                [child.plc_column for child in children],
-            )
-        )._with_type_metadata(dtype)
+        plc_column = plc.Column(
+            dtype_to_pylibcudf_type(dtype),
+            row_count,
+            None,
+            mask,
+            row_count,
+            0,
+            [child.plc_column for child in children],
+        )
+        return ColumnBase.create(plc_column, dtype)
     else:
         if isinstance(dtype, CategoricalDtype):
-            # May get downcast in _with_type_metadata
+            # CategoricalDtype needs special handling - create as INT64 codes
+            # then wrap with categorical metadata via _with_type_metadata
             plc_dtype = plc.DataType(plc.TypeId.INT64)
+            return ColumnBase.from_pylibcudf(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(None, plc_dtype),
+                    row_count,
+                )
+            )._with_type_metadata(dtype)
         else:
             plc_dtype = dtype_to_pylibcudf_type(dtype)
-        return ColumnBase.from_pylibcudf(
-            plc.Column.from_scalar(
-                plc.Scalar.from_py(None, plc_dtype),
-                row_count,
+            return ColumnBase.create(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(None, plc_dtype),
+                    row_count,
+                ),
+                dtype,
             )
-        )._with_type_metadata(dtype)
 
 
 def check_invalid_array(shape: tuple, dtype: np.dtype) -> None:

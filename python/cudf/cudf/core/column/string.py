@@ -23,6 +23,7 @@ from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
@@ -668,7 +669,7 @@ class StringColumn(ColumnBase, Scannable):
             # Returns INT32 suffix array indices, not strings
             return cast(
                 Self,
-                ColumnBase.from_pylibcudf(result),
+                ColumnBase.create(result, np.dtype(np.int32)),
             )
 
     def resolve_duplicates(self, sa: Self, min_width: int) -> Self:
@@ -903,13 +904,13 @@ class StringColumn(ColumnBase, Scannable):
             )
 
     def character_tokenize(self) -> Self:
-        # Returns LIST<STRING>, not STRING - keep using from_pylibcudf
-        # since return type differs from input type
+        # Returns LIST<STRING>, not STRING
         with self.access(mode="read", scope="internal"):
             return cast(
                 Self,
-                type(self).from_pylibcudf(
-                    plc.nvtext.tokenize.character_tokenize(self.plc_column)
+                ColumnBase.create(
+                    plc.nvtext.tokenize.character_tokenize(self.plc_column),
+                    cudf.ListDtype(CUDF_STRING_DTYPE),
                 ),
             )
 
@@ -919,17 +920,20 @@ class StringColumn(ColumnBase, Scannable):
         delimiter: str,
         default_id: int,
     ) -> Self:
-        # Returns INT32 token IDs, not STRING - keep using from_pylibcudf
+        # Returns LIST<INT32> token IDs
         with self.access(mode="read", scope="internal"):
             return cast(
                 Self,
-                type(self).from_pylibcudf(
+                ColumnBase.create(
                     plc.nvtext.tokenize.tokenize_with_vocabulary(
                         self.plc_column,
                         vocabulary,
                         pa_scalar_to_plc_scalar(pa.scalar(delimiter)),
                         default_id,
-                    )
+                    ),
+                    cudf.ListDtype(
+                        get_dtype_of_same_kind(self.dtype, np.dtype(np.int32))
+                    ),
                 ),
             )
 
@@ -938,16 +942,19 @@ class StringColumn(ColumnBase, Scannable):
         vocabulary: plc.nvtext.wordpiece_tokenize.WordPieceVocabulary,
         max_words_per_row: int,
     ) -> Self:
-        # Returns LIST<INT32> token IDs, not STRING - keep using from_pylibcudf
+        # Returns LIST<INT32> token IDs
         with self.access(mode="read", scope="internal"):
             return cast(
                 Self,
-                type(self).from_pylibcudf(
+                ColumnBase.create(
                     plc.nvtext.wordpiece_tokenize.wordpiece_tokenize(
                         self.plc_column,
                         vocabulary,
                         max_words_per_row,
-                    )
+                    ),
+                    cudf.ListDtype(
+                        get_dtype_of_same_kind(self.dtype, np.dtype(np.int32))
+                    ),
                 ),
             )
 
@@ -1735,8 +1742,10 @@ class StringColumn(ColumnBase, Scannable):
         pat: str,
         flags: int = 0,
     ) -> Self:
-        # Return type depends on method: findall->ListColumn, find_re->NumericalColumn
-        # Using from_pylibcudf since the type is determined at runtime
+        # Return type depends on method parameter at runtime:
+        # - plc.strings.findall.findall -> LIST<STRING>
+        # - plc.strings.findall.find_re -> INT32
+        # Keep using from_pylibcudf since dtype cannot be determined at call site
         with self.access(mode="read", scope="internal"):
             if len(self) == 0:
                 return cast(
