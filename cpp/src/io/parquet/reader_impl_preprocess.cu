@@ -438,7 +438,7 @@ std::pair<bool, std::future<void>> reader_impl::read_column_chunks()
   std::vector<size_type> chunk_source_map(num_chunks);
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  raw_page_data = std::vector<rmm::device_buffer>(num_chunks);
+  raw_page_data = std::vector<rmm::device_buffer>(_num_sources);
 
   // Keep track of column chunk file offsets
   std::vector<size_t> column_chunk_offsets(num_chunks);
