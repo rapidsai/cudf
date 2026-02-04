@@ -49,6 +49,13 @@ from cudf.core.buffer import (
 )
 from cudf.core.column.utils import access_columns
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype.validators import (
+    is_dtype_obj_decimal,
+    is_dtype_obj_interval,
+    is_dtype_obj_list,
+    is_dtype_obj_numeric,
+    is_dtype_obj_struct,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     DecimalDtype,
@@ -71,11 +78,6 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
-    is_dtype_obj_decimal,
-    is_dtype_obj_interval,
-    is_dtype_obj_list,
-    is_dtype_obj_numeric,
-    is_dtype_obj_struct,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
@@ -873,7 +875,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         * null (other types)= str(pd.NA)
         """
         if self.has_nulls():
-            return self.astype(np.dtype("str")).fillna(
+            return self.astype(CUDF_STRING_DTYPE).fillna(
                 str(self._PANDAS_NA_VALUE)
             )
         return self
@@ -1141,7 +1143,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _plc_memory_usage(col: plc.Column) -> int:
         n = 0
         if (data := col.data()) is not None:
-            n += cast("Buffer", data).size
+            try:
+                # Only count the actual data in use, not the entire base buffer
+                # For sliced columns, col.size() * itemsize gives actual usage
+                typestr: str = col.type().typestr  # type: ignore[assignment]
+                itemsize = np.dtype(typestr).itemsize
+                n += col.size() * itemsize
+            except NotImplementedError:
+                # No typestr available (e.g. STRING)
+                n += data.size
         if col.null_mask() is not None:
             n += plc.null_mask.bitmask_allocation_size_bytes(col.size())
         for child in col.children():
@@ -2153,6 +2163,61 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     ColumnBase.create(plc_table.columns()[0], self.dtype),
                 )
 
+    def _is_sliced(self) -> bool:
+        """
+        Check if this column is a sliced view of a larger buffer.
+
+        A column is considered sliced if:
+        - It has a non-zero offset, OR
+        - Its logical size is less than the base buffer size
+
+        Returns
+        -------
+        bool
+            True if the column is sliced, False otherwise
+        """
+        if self.offset != 0:
+            return True
+
+        # Check if size is less than base buffer size
+        # Note: Some dtypes (like CategoricalDtype) don't have itemsize
+        if self.data is not None and hasattr(self.dtype, "itemsize"):
+            base_size_elements = self.data.size // self.dtype.itemsize
+            if self.size < base_size_elements:
+                return True
+
+        return False
+
+    def _compact_for_transfer(self) -> ColumnBase:
+        """
+        Create a compact copy of this column for network transfer.
+
+        If the column is sliced (offset != 0 or size < base buffer size),
+        this creates a copy that contains only the data that's actually
+        needed, not the entire base buffer. This significantly reduces
+        network transfer overhead when serializing sliced columns.
+
+        Returns
+        -------
+        ColumnBase
+            A compacted column (or self if not sliced)
+        """
+        if self._is_sliced():
+            # Check if data is spilled - if so, don't compact it
+            # Spilled data is already on CPU and calling copy() would
+            # unnecessarily bring it back to GPU and lose the spill state
+            if self.data is not None and hasattr(self.data, "owner"):
+                if (
+                    hasattr(self.data.owner, "is_spilled")
+                    and self.data.owner.is_spilled
+                ):
+                    return self
+
+            # Create a copy to compact the data - only the actual slice
+            # will be copied, not the entire base buffer
+            return self.copy()
+        return self
+
     @staticmethod
     def _serialize_plc_column_recursive(
         plc_col: plc.Column,
@@ -2243,32 +2308,40 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         Produces nested metadata header and flattened list of buffers (frames).
         Each header has frame_count indicating frames consumed during deserialization.
         """
+        # Compact sliced columns before serialization to avoid transferring
+        # entire base buffers over the network. This is critical for
+        # performance when working with distributed systems like Dask.
+        # Only affects sliced columns (offset != 0 or size < base buffer size).
+        col_to_serialize = self._compact_for_transfer()
+
         header: dict[Any, Any] = {}
         frames = []
 
         # Serialize dtype
         try:
-            header["dtype"], dtype_frames = self.dtype.device_serialize()  # type: ignore[union-attr]
+            header["dtype"], dtype_frames = (
+                col_to_serialize.dtype.device_serialize()  # type: ignore[union-attr]
+            )
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
             header["dtype"] = (
-                pickle.dumps(self.dtype)
-                if is_pandas_nullable_extension_dtype(self.dtype)
-                else self.dtype.str
+                pickle.dumps(col_to_serialize.dtype)
+                if is_pandas_nullable_extension_dtype(col_to_serialize.dtype)
+                else col_to_serialize.dtype.str
             )
             header["dtype-is-cudf-serialized"] = False
 
         # Serialize entire plc_column (data, mask, children)
         plc_header, plc_frames = self._serialize_plc_column_recursive(
-            self.plc_column
+            col_to_serialize.plc_column
         )
         frames.extend(plc_frames)
         header["plc_column"] = plc_header
 
-        header["size"] = self.size
+        header["size"] = col_to_serialize.size
         header["frame_count"] = len(frames)
-        header["offset"] = self.offset
+        header["offset"] = col_to_serialize.offset
         return header, frames
 
     @classmethod

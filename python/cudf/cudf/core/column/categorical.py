@@ -79,6 +79,15 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
+    @classmethod
+    def _validate_args(  # type: ignore[override]
+        cls, plc_column: plc.Column, dtype: CategoricalDtype
+    ) -> tuple[plc.Column, CategoricalDtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
+        if not isinstance(dtype, CategoricalDtype):
+            raise ValueError(f"{dtype=} must be a CategoricalDtype instance")
+        return plc_column, dtype
+
     def __contains__(self, item: ScalarLike) -> bool:
         try:
             encoded = self._encode(item)
