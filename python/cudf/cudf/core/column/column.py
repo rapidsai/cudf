@@ -1152,7 +1152,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         type=array.type.value_type,
                     )
                 )
-            # Convert codes with explicit dtype
             codes_dtype = cudf_dtype_from_pa_type(codes.type)
             result = cls.create(plc.Column.from_arrow(codes), codes_dtype)
 
