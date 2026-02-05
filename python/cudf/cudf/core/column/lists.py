@@ -220,19 +220,16 @@ class ListColumn(ColumnBase):
         # We need to keep the full plc_column for accessing size, mask, null_count, offset
         leaf_queue: list[plc.Column] = []
         curr_plc_col: plc.Column = self.plc_column
+        leaf_dtype = self.dtype
 
         while curr_plc_col.type().id() == plc.TypeId.LIST:
             leaf_queue.append(curr_plc_col)
             curr_plc_col = curr_plc_col.list_view().child()
+            leaf_dtype = cast(ListDtype, leaf_dtype).element_type
 
         # Apply the transformation to the leaf column
         # TODO: For now we convert plc.Column to ColumnBase for the func, then back to
         # plc.Column, but we should be able to eventually avoid this double conversion.
-        # Get the leaf element dtype by traversing through nested ListDtypes
-        leaf_dtype = self.dtype
-        for _ in leaf_queue:
-            if isinstance(leaf_dtype, ListDtype):
-                leaf_dtype = leaf_dtype.element_type
         leaf_col_base = ColumnBase.create(curr_plc_col, leaf_dtype)
         transformed_leaf = func(leaf_col_base, *args)
         plc_leaf_col = transformed_leaf.plc_column
