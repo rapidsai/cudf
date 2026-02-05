@@ -235,7 +235,6 @@ class ListColumn(ColumnBase):
         plc_leaf_col = transformed_leaf.plc_column
 
         # Rebuild the list column hierarchy from leaf back to root
-        # Also rebuild the dtype hierarchy
         result_dtype = transformed_leaf.dtype
         while leaf_queue:
             parent_plc_col = leaf_queue.pop()

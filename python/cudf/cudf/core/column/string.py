@@ -1208,9 +1208,7 @@ class StringColumn(ColumnBase, Scannable):
                 delimiter,
                 maxsplit,
             )
-            if cudf.get_option("mode.pandas_compatible") and isinstance(
-                self.dtype, pd.ArrowDtype
-            ):
+            if isinstance(self.dtype, pd.ArrowDtype):
                 element_dtype = get_dtype_of_same_kind(
                     self.dtype,
                     CUDF_STRING_DTYPE,
@@ -1742,7 +1740,6 @@ class StringColumn(ColumnBase, Scannable):
         # Return type depends on method parameter at runtime:
         # - plc.strings.findall.findall -> LIST<STRING>
         # - plc.strings.findall.find_re -> INT32
-        # Keep using from_pylibcudf since dtype cannot be determined at call site
         with self.access(mode="read", scope="internal"):
             if len(self) == 0:
                 return cast(
