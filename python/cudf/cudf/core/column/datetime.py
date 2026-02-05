@@ -868,9 +868,7 @@ class DatetimeTZColumn(DatetimeColumn):
             target_dtype = get_dtype_of_same_kind(
                 self.dtype, np.dtype(np.int16)
             )
-            if cudf.get_option(
-                "mode.pandas_compatible"
-            ) and target_dtype == np.dtype("int16"):
+            if target_dtype == np.dtype("int16"):
                 target_dtype = np.dtype("int32")
             result = ColumnBase.create(
                 plc.datetime.extract_datetime_component(
