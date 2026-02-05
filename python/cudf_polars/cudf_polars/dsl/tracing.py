@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import enum
 import functools
 import os
 import time
@@ -48,6 +49,14 @@ if TYPE_CHECKING:
 
     import cudf_polars.containers
     from cudf_polars.dsl import ir
+
+
+class Scope(str, enum.Enum):
+    """Scope values for structured logging."""
+
+    PLAN = "plan"
+    ACTOR = "actor"
+    EVALUATE_IR_NODE = "evaluate_ir_node"
 
 
 @functools.cache
@@ -199,7 +208,7 @@ def log_do_evaluate(
                 before
                 | after
                 | {
-                    "scope": "do_evaluate",
+                    "scope": Scope.EVALUATE_IR_NODE,
                     "overhead_duration": (before_end - before_start)
                     + (after_end - after_start),
                 }

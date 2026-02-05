@@ -51,9 +51,9 @@ def test_structlog_streaming_node_events():
     # Check for Streaming Actor events emitted by shutdown_on_error
     assert b"Streaming Actor" in result
     assert b"scope=actor" in result or b"'scope': 'actor'" in result
-    assert b"ir_id=" in result
-    assert b"ir_type=" in result
-    assert b"chunks=" in result
+    assert b"actor_ir_id=" in result
+    assert b"actor_ir_type=" in result
+    assert b"chunk_count=" in result
 
 
 @pytest.mark.skipif(

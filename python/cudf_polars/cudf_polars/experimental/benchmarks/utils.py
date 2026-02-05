@@ -45,6 +45,7 @@ except ImportError:
 
 try:
     from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
@@ -1143,11 +1144,8 @@ def run_polars(
 
         parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
         # Some other log records can end up in here. Filter those out.
-        parsed_logs = [
-            log
-            for log in parsed_logs
-            if log["event"] in ("Execute IR", "Streaming Actor", "Query Plan")
-        ]
+        scope_values = {s.value for s in Scope}
+        parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
         # Now we want to augment the existing Records with the trace data.
 
         def group_key(x: dict) -> int:

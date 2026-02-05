@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager, contextmanager
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-from cudf_polars.dsl.tracing import LOG_TRACES
+from cudf_polars.dsl.tracing import LOG_TRACES, Scope
 
 try:
     import structlog
@@ -86,7 +86,7 @@ async def shutdown_on_error(
         ir_id = _stable_ir_id(trace_ir)
         ir_type = type(trace_ir).__name__
         tracer = ActorTracer(ir_id, ir_type)
-        structlog.contextvars.bind_contextvars(ir_id=ir_id)
+        structlog.contextvars.bind_contextvars(actor_ir_id=ir_id, actor_ir_type=ir_type)
 
     try:
         yield tracer
@@ -97,10 +97,10 @@ async def shutdown_on_error(
         if tracer is not None:
             log = structlog.get_logger()
             record: dict[str, Any] = {
-                "scope": "actor",
-                "ir_id": tracer.ir_id,
-                "ir_type": tracer.ir_type,
-                "chunks": tracer.chunk_count,
+                "scope": Scope.ACTOR,
+                "actor_ir_id": tracer.ir_id,
+                "actor_ir_type": tracer.ir_type,
+                "chunk_count": tracer.chunk_count,
                 "duplicated": tracer.duplicated,
             }
             if tracer.row_count is not None:
@@ -108,7 +108,7 @@ async def shutdown_on_error(
             if tracer.decision is not None:
                 record["decision"] = tracer.decision
             log.info("Streaming Actor", **record)
-            structlog.contextvars.unbind_contextvars("ir_id")
+            structlog.contextvars.unbind_contextvars("actor_ir_id", "actor_ir_type")
 
 
 def remap_partitioning(

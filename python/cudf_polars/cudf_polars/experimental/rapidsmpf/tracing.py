@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.tracing import LOG_TRACES
+from cudf_polars.dsl.tracing import LOG_TRACES, Scope
 from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
@@ -132,4 +132,4 @@ def log_query_plan(ir: IR) -> None:
     ]
 
     log = structlog.get_logger()
-    log.info("Query Plan", scope="plan", nodes=nodes)
+    log.info("Query Plan", scope=Scope.PLAN, nodes=nodes)
