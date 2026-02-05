@@ -214,7 +214,7 @@ async def dataframescan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_tracer=tracer,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
             return
@@ -240,7 +240,7 @@ async def dataframescan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_tracer=tracer,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
 
@@ -322,7 +322,7 @@ async def read_chunk(
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
-    node_tracer: ActorTracer | None = None,
+    tracer: ActorTracer | None = None,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
@@ -342,8 +342,8 @@ async def read_chunk(
     estimated_chunk_bytes
         Estimated size of the chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
-    node_tracer
-        The node tracer for collecting runtime statistics.
+    tracer
+        The actor tracer for collecting runtime statistics.
     """
     with opaque_reservation(context, estimated_chunk_bytes):
         df = await asyncio.to_thread(
@@ -351,8 +351,8 @@ async def read_chunk(
             *scan._non_child_args,
             context=ir_context,
         )
-        if node_tracer is not None:
-            node_tracer.add_chunk(table=df.table)
+        if tracer is not None:
+            tracer.add_chunk(table=df.table)
         await ch_out.send(
             context,
             Message(
@@ -492,7 +492,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_tracer=tracer,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
             return
@@ -518,7 +518,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    node_tracer=tracer,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
 

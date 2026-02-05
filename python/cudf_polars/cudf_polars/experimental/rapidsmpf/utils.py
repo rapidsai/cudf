@@ -73,7 +73,7 @@ async def shutdown_on_error(
     Yields
     ------
     ActorTracer | None
-        A node tracer for collecting stats (if tracing enabled), else None.
+        An actor tracer for collecting stats (if tracing enabled), else None.
     """
     # Create tracer only if LOG_TRACES is enabled and IR is provided
     tracer: ActorTracer | None = None
