@@ -1378,35 +1378,31 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
 }
 
 /**
- * @brief Compute the number of partitions, number of source buffers, and number of buffers.
+ * @brief Compute the number of source buffers, number of buffers, and splits information.
  *
  * @param input source table view
  * @param splits the numeric value (in rows) for each split, empty for 1 partition
  * @param stream Optional CUDA stream on which to execute kernels
  * @param temp_mr A memory resource for temporary and scratch space
- * @param[out] num_src_bufs number of buffers for the source columns including children
- * @param[out] num_bufs num_src_bufs times the number of partitions
- * @param[out] partition_buf_size_and_dst_buf_info the partition-level buffer size and destination
- *             buffer info
+ * @return A tuple containing (num_src_bufs, num_bufs, partition_buf_size_and_dst_buf_info)
  */
-void compute_num_bufs_and_splits(
-  cudf::table_view const& input,
-  std::vector<size_type> const& splits,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref temp_mr,
-  size_type& num_src_bufs,
-  std::size_t& num_bufs,
-  std::unique_ptr<packed_partition_buf_size_and_dst_buf_info>& partition_buf_size_and_dst_buf_info)
+std::tuple<size_type, std::size_t, std::unique_ptr<packed_partition_buf_size_and_dst_buf_info>>
+compute_num_bufs_and_splits(cudf::table_view const& input,
+                            std::vector<size_type> const& splits,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref temp_mr)
 {
   std::size_t const num_partitions = splits.size() + 1;
-  num_src_bufs                     = count_src_bufs(input.begin(), input.end());
-  num_bufs                         = num_src_bufs * num_partitions;
+  auto num_src_bufs                = count_src_bufs(input.begin(), input.end());
+  auto num_bufs                    = num_src_bufs * num_partitions;
 
   // First pass over the source tables to generate a `dst_buf_info` per split and column buffer
   // (`num_bufs`). After this, contiguous_split uses `dst_buf_info` to further subdivide the work
   // into 1MB batches in `compute_batches`
-  partition_buf_size_and_dst_buf_info =
+  auto partition_buf_size_and_dst_buf_info =
     compute_splits(input, splits, num_partitions, num_src_bufs, num_bufs, stream, temp_mr);
+
+  return std::make_tuple(num_src_bufs, num_bufs, std::move(partition_buf_size_and_dst_buf_info));
 }
 
 /**
@@ -1971,13 +1967,10 @@ struct contiguous_split_state {
     // is the result.
     if (is_empty) { return; }
 
-    compute_num_bufs_and_splits(input,
-                                splits,
-                                stream,
-                                temp_mr,
-                                const_cast<size_type&>(num_src_bufs),
-                                const_cast<std::size_t&>(num_bufs),
-                                partition_buf_size_and_dst_buf_info);
+    auto result  = compute_num_bufs_and_splits(input, splits, stream, temp_mr);
+    num_src_bufs = std::get<0>(result);
+    num_bufs     = std::get<1>(result);
+    partition_buf_size_and_dst_buf_info = std::move(std::get<2>(result));
 
     // Second pass: uses `dst_buf_info` to break down the work into 1MB batches.
     chunk_iter_state = compute_batches(num_bufs,
@@ -2084,9 +2077,9 @@ struct contiguous_split_state {
   // This can be 1 if `contiguous_split` is just packing and not splitting
   std::size_t const num_partitions;  ///< The number of partitions to produce
 
-  size_type const num_src_bufs{};  ///< Number of source buffers including children
+  size_type num_src_bufs{};  ///< Number of source buffers including children
 
-  std::size_t const num_bufs{};  ///< Number of source buffers including children * number of splits
+  std::size_t num_bufs{};  ///< Number of source buffers including children * number of splits
 
   std::unique_ptr<packed_partition_buf_size_and_dst_buf_info>
     partition_buf_size_and_dst_buf_info;  ///< Per-partition buffer size and destination buffer info
@@ -2188,12 +2181,9 @@ std::size_t packed_size(cudf::table_view const& input,
   // Handle empty table cases
   if (input.num_columns() == 0 || input.num_rows() == 0) { return 0; }
 
-  [[maybe_unused]] size_type num_src_bufs;
-  [[maybe_unused]] std::size_t num_bufs;
-  std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> partition_buf_size_and_dst_buf_info;
+  auto result = compute_num_bufs_and_splits(input, {}, stream, temp_mr);
+  auto const& partition_buf_size_and_dst_buf_info = std::get<2>(result);
 
-  compute_num_bufs_and_splits(
-    input, {}, stream, temp_mr, num_src_bufs, num_bufs, partition_buf_size_and_dst_buf_info);
   // Return the total size for the single partition
   return partition_buf_size_and_dst_buf_info->h_buf_sizes[0];
 }
