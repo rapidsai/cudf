@@ -382,6 +382,60 @@ class DAG:
     partition_info: dict[str, SerializablePartitionInfo] | None = None
 
     @classmethod
+    def from_ir(
+        cls, ir: IR, *, config_options: ConfigOptions, lowered: bool = False
+    ) -> Self:
+        """
+        Construct a DAG from an IR node.
+
+        Parameters
+        ----------
+        ir
+            The IR node to construct the DAG from.
+        config_options
+            The configuration options.
+        lowered
+            If True, lower the IR to the physical plan and include partition info.
+
+        Returns
+        -------
+        DAG
+            A serializable DAG representation of the query plan.
+        """
+        partition_info_dict: dict[str, SerializablePartitionInfo] | None = None
+        if lowered:
+            if (
+                config_options.executor.name == "streaming"
+                and config_options.executor.runtime == "rapidsmpf"
+            ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+                from cudf_polars.experimental.rapidsmpf.core import (
+                    lower_ir_graph as rapidsmpf_lower_ir_graph,
+                )
+
+                ir, partition_info_d, _ = rapidsmpf_lower_ir_graph(ir, config_options)
+            else:
+                ir, partition_info_d, _ = lower_ir_graph(ir, config_options)
+            partition_info_dict = {}
+
+        nodes: dict[str, SerializableIRNode] = {}
+        for ir_node in traversal([ir]):
+            stable_id = str(ir_node.get_stable_id())
+            nodes[stable_id] = SerializableIRNode.from_ir(ir_node)
+            if lowered and partition_info_dict is not None:
+                partition_info_dict[stable_id] = SerializablePartitionInfo(
+                    count=partition_info_d[ir_node].count,
+                    partitioned_on=tuple(
+                        expr.name for expr in partition_info_d[ir_node].partitioned_on
+                    ),
+                )
+
+        return cls(
+            roots=[str(ir.get_stable_id())],
+            nodes=nodes,
+            partition_info=partition_info_dict,
+        )
+
+    @classmethod
     def from_query(
         cls,
         q: pl.LazyFrame,
@@ -406,38 +460,6 @@ class DAG:
         DAG
             A serializable DAG representation of the query plan.
         """
-        config = ConfigOptions.from_polars_engine(engine)
+        config_options = ConfigOptions.from_polars_engine(engine)
         ir = Translator(q._ldf.visit(), engine).translate_ir()
-
-        partition_info_dict: dict[str, SerializablePartitionInfo] | None = None
-        if lowered:
-            if (
-                config.executor.name == "streaming"
-                and config.executor.runtime == "rapidsmpf"
-            ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
-                from cudf_polars.experimental.rapidsmpf.core import (
-                    lower_ir_graph as rapidsmpf_lower_ir_graph,
-                )
-
-                ir, partition_info_d, _ = rapidsmpf_lower_ir_graph(ir, config)
-            else:
-                ir, partition_info_d, _ = lower_ir_graph(ir, config)
-            partition_info_dict = {}
-
-        nodes: dict[str, SerializableIRNode] = {}
-        for ir_node in traversal([ir]):
-            stable_id = str(ir_node.get_stable_id())
-            nodes[stable_id] = SerializableIRNode.from_ir(ir_node)
-            if lowered and partition_info_dict is not None:
-                partition_info_dict[stable_id] = SerializablePartitionInfo(
-                    count=partition_info_d[ir_node].count,
-                    partitioned_on=tuple(
-                        expr.name for expr in partition_info_d[ir_node].partitioned_on
-                    ),
-                )
-
-        return cls(
-            roots=[str(ir.get_stable_id())],
-            nodes=nodes,
-            partition_info=partition_info_dict,
-        )
+        return cls.from_ir(ir, config_options=config_options, lowered=lowered)

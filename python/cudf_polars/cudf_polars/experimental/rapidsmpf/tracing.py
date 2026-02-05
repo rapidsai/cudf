@@ -4,15 +4,17 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.tracing import LOG_TRACES, Scope
-from cudf_polars.dsl.traversal import traversal
+from cudf_polars.experimental.explain import DAG
 
 if TYPE_CHECKING:
     import pylibcudf as plc
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.utils.config import ConfigOptions
 
 
 class ActorTracer:
@@ -78,7 +80,7 @@ class ActorTracer:
         self.duplicated = duplicated
 
 
-def log_query_plan(ir: IR) -> None:
+def log_query_plan(ir: IR, config_options: ConfigOptions) -> None:
     """
     Log the IR tree structure as a structlog event.
 
@@ -90,6 +92,8 @@ def log_query_plan(ir: IR) -> None:
     ----------
     ir
         The root IR node of the lowered query plan.
+    config_options
+        The GPU engine configuration options.
 
     Notes
     -----
@@ -100,14 +104,8 @@ def log_query_plan(ir: IR) -> None:
 
     import structlog
 
-    nodes = [
-        {
-            "ir_id": node.get_stable_id(),
-            "ir_type": type(node).__name__,
-            "children_ir_ids": [c.get_stable_id() for c in node.children],
-        }
-        for node in traversal([ir])
-    ]
+    dag = DAG.from_ir(ir, config_options=config_options)
+    raw = dataclasses.asdict(dag)
 
     log = structlog.get_logger()
-    log.info("Query Plan", scope=Scope.PLAN.value, nodes=nodes)
+    log.info("Query Plan", scope=Scope.PLAN.value, plan=raw)
