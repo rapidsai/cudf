@@ -86,6 +86,11 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
+   * @copydoc cudf::io::experimental::hybrid_scan::reset_column_selection
+   */
+  void reset_column_selection();
+
+  /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_byte_range
    */
   [[nodiscard]] std::vector<std::vector<cudf::size_type>> filter_row_groups_with_byte_range(
@@ -163,7 +168,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     cudf::mutable_column_view& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream);
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 
   /**
    * @brief Fetches byte ranges of column chunks of payload columns
@@ -186,7 +192,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream);
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 
   /**
    * @brief Fetches byte ranges for all (or selected) column chunks
@@ -207,7 +214,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream);
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::setup_chunking_for_filter_columns
@@ -220,13 +228,14 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     use_data_page_mask mask_data_pages,
     cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream);
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns_chunk
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
-    cudf::mutable_column_view& row_mask, rmm::cuda_stream_view stream);
+    cudf::mutable_column_view& row_mask);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::setup_chunking_for_payload_columns
@@ -239,13 +248,14 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     use_data_page_mask mask_data_pages,
     cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream);
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_payload_columns_chunk
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
-    cudf::column_view const& row_mask, rmm::cuda_stream_view stream);
+    cudf::column_view const& row_mask);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::has_next_table_chunk
@@ -281,10 +291,12 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param row_group_indices Row group indices to read
    * @param options Reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
    */
   void initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
                           parquet_reader_options const& options,
-                          rmm::cuda_stream_view stream);
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr);
 
   /**
    * @brief Convert the input filter expression such that all column name references are replaced
