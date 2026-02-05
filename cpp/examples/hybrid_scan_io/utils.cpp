@@ -3,30 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "common_utils.hpp"
-
-#include "timer.hpp"
+#include "utils.hpp"
 
 #include <cudf/ast/expressions.hpp>
-#include <cudf/column/column_factories.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/aligned_resource_adaptor.hpp>
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 #include <rmm/mr/cuda_memory_resource.hpp>
 #include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
+#include <filesystem>
 #include <numeric>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 /**
@@ -99,13 +95,11 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
   parquet_files.reserve(std::max<size_t>(thread_count, input_multiplier * parquet_files.size()));
 
   // Append the input files by input_multiplier times
-  std::for_each(thrust::make_counting_iterator(1),
-                thrust::make_counting_iterator(input_multiplier),
-                [&](auto i) {
-                  parquet_files.insert(parquet_files.end(),
-                                       parquet_files.begin(),
-                                       parquet_files.begin() + initial_size);
-                });
+  std::for_each(
+    thrust::counting_iterator(1), thrust::counting_iterator(input_multiplier), [&](auto i) {
+      parquet_files.insert(
+        parquet_files.end(), parquet_files.begin(), parquet_files.begin() + initial_size);
+    });
 
   if (parquet_files.size() < thread_count) {
     // Cycle append parquet files from the existing ones if less than the thread_count
@@ -216,6 +210,8 @@ fetch_byte_ranges(cudf::io::datasource& datasource,
                   rmm::device_async_resource_ref mr)
 {
   static std::mutex mutex;
+
+  CUDF_FUNC_RANGE();
 
   // Allocate device spans for each column chunk
   std::vector<cudf::device_span<uint8_t const>> column_chunk_data{};

@@ -15,8 +15,11 @@ compute-sanitizer --tool memcheck basic_example
 popd || exit
 
 pushd hybrid_scan_io || exit
-compute-sanitizer --tool memcheck hybrid_scan_io example.parquet string_col 0000001  PINNED_BUFFER
-compute-sanitizer --tool memcheck hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS
+compute-sanitizer --tool memcheck hybrid_scan_io example.parquet string_col 0000001 PINNED_BUFFER
+compute-sanitizer --tool memcheck hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS 2
+compute-sanitizer --tool memcheck hybrid_scan_pipeline example.parquet 2 FILEPATH BYTE_RANGES 2
+compute-sanitizer --tool memcheck hybrid_scan_multifile example.parquet 10 2 YES DEVICE_BUFFER 2 string_col 0000001
+compute-sanitizer --tool memcheck hybrid_scan_multifile example.parquet 10 2 NO FILEPATH 2 string_col 0000001
 popd || exit
 
 pushd nested_types || exit

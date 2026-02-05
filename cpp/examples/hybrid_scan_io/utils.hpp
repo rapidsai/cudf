@@ -14,25 +14,15 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <string>
-#include <unordered_set>
+#include <vector>
 
 /**
  * @file common_utils.hpp
  * @brief Utilities for `hybrid_scan_io` example
  */
-
-/**
- * @brief Enum to represent the available parquet filters
- */
-enum class parquet_filter_type : uint8_t {
-  ROW_GROUPS_WITH_STATS               = 0,
-  ROW_GROUPS_WITH_DICT_PAGES          = 1,
-  ROW_GROUPS_WITH_BLOOM_FILTERS       = 2,
-  FILTER_COLUMN_PAGES_WITH_PAGE_INDEX = 3,
-  PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK  = 4,
-};
 
 /**
  * @brief Get boolean from they keyword

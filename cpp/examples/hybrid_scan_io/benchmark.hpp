@@ -1,5 +1,8 @@
 #include "timer.hpp"
 
+#include <thrust/iterator/counting_iterator.h>
+
+#include <chrono>
 #include <iostream>
 
 #pragma once
@@ -7,20 +10,22 @@
 template <std::invocable F>
 void benchmark(F&& f, std::size_t iterations)
 {
-  double total_time_millis{0.0};
-  for (std::size_t i = 0; i < iterations; ++i) {
-    timer timer;
-    timer.reset();
+  auto total_time = double{0.0};
 
-    f();
+  std::for_each(
+    thrust::counting_iterator<size_t>(0), thrust::counting_iterator(iterations), [&](auto iter) {
+      timer timer;
 
-    auto elapsed_time_ms =
-      static_cast<double>(std::chrono::duration_cast<timer::micros>(timer.elapsed()).count()) /
-      1000.0;
-    std::cout << "Iteration: " << i << ", time: " << elapsed_time_ms << " ms\n";
-    if (i != 0) { total_time_millis += elapsed_time_ms; }
-  }
+      f();
 
-  std::cout << "Average time (first iteration excluded): " << total_time_millis / (iterations - 1)
-            << " ms\n\n";
+      auto elapsed_time_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(timer.elapsed()).count();
+
+      std::cout << "Iteration: " << iter << ", time: " << elapsed_time_ms << " ms\n";
+
+      if (iterations == 1 or (iter != 0)) { total_time += elapsed_time_ms; }
+    });
+
+  std::cout << "Average time (first iteration excluded if iterations > 1): "
+            << total_time / std::max<std::size_t>(1, iterations - 1) << " ms\n\n";
 }

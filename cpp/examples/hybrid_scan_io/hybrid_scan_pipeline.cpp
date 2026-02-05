@@ -4,9 +4,9 @@
  */
 
 #include "benchmark.hpp"
-#include "common_utils.hpp"
 #include "io_source.hpp"
 #include "timer.hpp"
+#include "utils.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -277,7 +277,7 @@ void inline print_usage()
   std::cout
     << std::endl
     << "Usage: hybrid_scan_pipeline <input parquet file> <number of partitions> <io source "
-       "type> <split strategy> <iterations> <verbose>\n\n"
+       "type> <split strategy> <iterations> <verbose:Y/N>\n\n"
     << "Available IO source types: FILEPATH, HOST_BUFFER (Default), PINNED_BUFFER, "
        "DEVICE_BUFFER \n\n"
     << "Available split strategies: ROW_GROUPS (Default), BYTE_RANGES \n\n"
