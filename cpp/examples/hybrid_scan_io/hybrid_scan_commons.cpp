@@ -29,28 +29,37 @@ namespace detail {
 
 std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasource,
                                                  cudf::io::parquet_reader_options const& options,
-                                                 bool use_page_index,
                                                  bool verbose)
 {
-  if (verbose) { std::cout << "READER: Setup, metadata and page index...\n"; }
+  if (verbose) { std::cout << "READER: Setup reader...\n"; }
 
   timer timer;
   // Fetch footer bytes and setup reader
   auto const footer_buffer = fetch_footer_bytes(datasource);
   auto reader              = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
     make_host_span(*footer_buffer), options);
-
-  if (use_page_index) {
-    auto const page_index_byte_range = reader->page_index_byte_range();
-    if (page_index_byte_range.is_empty()) {
-      throw std::runtime_error("Page index is not present in the input parquet file");
-    }
-    auto const page_index_buffer = fetch_page_index_bytes(datasource, page_index_byte_range);
-    reader->setup_page_index(make_host_span(*page_index_buffer));
-  }
   if (verbose) { timer.print_elapsed_millis(); }
 
   return std::move(reader);
+}
+
+void setup_page_index(cudf::io::datasource& datasource,
+                      cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+                      bool single_step_read,
+                      bool verbose)
+{
+  if (verbose) { std::cout << "READER: Setup page index...\n"; }
+
+  timer timer;
+  auto const page_index_byte_range = reader.page_index_byte_range();
+  CUDF_EXPECTS(
+    not page_index_byte_range.is_empty() or single_step_read,
+    "Parquet source does not contain a page index, needed by the Hybrid Scan for two-step read");
+  if (not page_index_byte_range.is_empty()) {
+    auto const page_index_buffer = fetch_page_index_bytes(datasource, page_index_byte_range);
+    reader.setup_page_index(make_host_span(*page_index_buffer));
+  }
+  if (verbose) { timer.print_elapsed_millis(); }
 }
 
 std::vector<cudf::size_type> apply_row_group_filters(

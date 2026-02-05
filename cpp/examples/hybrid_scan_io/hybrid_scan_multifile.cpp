@@ -42,6 +42,7 @@ struct hybrid_scan_fn {
   int const tid;
   int const num_threads;
   bool const single_step_read;
+  bool const use_page_index;
   bool const verbose;
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
@@ -55,12 +56,16 @@ struct hybrid_scan_fn {
 
     for (auto source_idx : strided_indices) {
       if (single_step_read) {
-        constexpr bool use_page_index = false;
-        std::ignore                   = hybrid_scan<true, use_page_index>(
-          input_sources[source_idx], filter_expression, filters, false, stream, mr);
+        if (use_page_index) {
+          std::ignore = hybrid_scan<true, true>(
+            input_sources[source_idx], filter_expression, filters, false, stream, mr);
+        } else {
+          std::ignore = hybrid_scan<true, false>(
+            input_sources[source_idx], filter_expression, filters, false, stream, mr);
+        }
       } else {
-        constexpr bool use_page_index = true;
-        std::ignore                   = hybrid_scan<false, use_page_index>(
+        // Use page index must always be true regardless of the input for two-step read
+        std::ignore = hybrid_scan<false, true>(
           input_sources[source_idx], filter_expression, filters, false, stream, mr);
       }
     }
@@ -82,6 +87,7 @@ struct hybrid_scan_fn {
  * @param filters Set of hybrid scan filters to apply
  * @param num_threads Number of threads
  * @param single_step_read Whether to use two-step table materialization
+ * @param use_page_index Whether to use page index
  * @param stream_pool CUDA stream pool
  * @param mr Memory resource to use for threads
  */
@@ -90,6 +96,7 @@ void hybrid_scan_multithreaded(std::vector<io_source> const& input_sources,
                                std::unordered_set<hybrid_scan_filter_type> const& filters,
                                cudf::size_type num_threads,
                                bool single_step_read,
+                               bool use_page_index,
                                bool verbose,
                                rmm::cuda_stream_pool& stream_pool,
                                rmm::device_async_resource_ref mr)
@@ -108,6 +115,7 @@ void hybrid_scan_multithreaded(std::vector<io_source> const& input_sources,
                        .tid               = tid,
                        .num_threads       = num_threads,
                        .single_step_read  = single_step_read,
+                       .use_page_index    = use_page_index,
                        .verbose           = verbose,
                        .stream            = stream_pool.get_stream(),
                        .mr                = mr});
@@ -135,7 +143,7 @@ void inline print_usage()
     << "\nUsage: hybrid_scan_io_multithreaded <comma delimited list of dirs and/or files> "
        "<input multiplier>\n"
        "                                    <thread count> <single step read:Y/N> "
-       "<io source type>\n"
+       "<use page index:Y/N> <io source type>\n"
        "                                    <iterations> <column name> <literal> <verbose:Y/N>\n\n"
 
        "Available IO source types: FILEPATH (Default), HOST_BUFFER, PINNED_BUFFER\n\n"
@@ -152,11 +160,12 @@ void inline print_usage()
  * 2. input multiplier (default: 1)
  * 3. thread count (default: 2)
  * 4. single step read (default: true)
- * 5. io source type (default: "FILEPATH")
- * 6. iterations (default: 1)
- * 7. column name for filter expression (default: "string_col")
- * 8. literal for filter expression (default: "0000001")
- * 6. verbose (default: false)
+ * 5. use page index (default: true)
+ * 6. io source type (default: "FILEPATH")
+ * 7. iterations (default: 1)
+ * 8. column name for filter expression (default: "string_col")
+ * 9. literal for filter expression (default: "0000001")
+ * 10. verbose (default: false)
  *
  * Example invocation from directory `cudf/cpp/examples/hybrid_scan`:
  * ./build/hybrid_scan_multifile example.parquet 8 2 YES FILEPATH 1 string_col 0000001 NO
@@ -171,6 +180,7 @@ int main(int argc, char const** argv)
   auto input_multiplier = 1;
   auto num_threads      = 2;
   auto single_step_read = true;
+  auto use_page_index   = true;
   auto io_source_type   = io_source_type::FILEPATH;
   auto iterations       = 1;
   auto column_name      = std::string{"string_col"};
@@ -179,11 +189,12 @@ int main(int argc, char const** argv)
 
   // Set to the provided args
   switch (argc) {
-    case 10: verbose = get_boolean(argv[9]); [[fallthrough]];
-    case 9: literal_value = argv[8]; [[fallthrough]];
-    case 8: column_name = argv[7]; [[fallthrough]];
-    case 7: iterations = std::stoi(argv[6]); [[fallthrough]];
-    case 6: io_source_type = get_io_source_type(argv[5]); [[fallthrough]];
+    case 11: verbose = get_boolean(argv[10]); [[fallthrough]];
+    case 10: literal_value = argv[9]; [[fallthrough]];
+    case 9: column_name = argv[8]; [[fallthrough]];
+    case 8: iterations = std::stoi(argv[7]); [[fallthrough]];
+    case 7: io_source_type = get_io_source_type(argv[6]); [[fallthrough]];
+    case 6: use_page_index = get_boolean(argv[5]); [[fallthrough]];
     case 5: single_step_read = get_boolean(argv[4]); [[fallthrough]];
     case 4:
       num_threads =
@@ -265,6 +276,7 @@ int main(int argc, char const** argv)
                                 filters,
                                 num_threads,
                                 single_step_read,
+                                use_page_index,
                                 verbose,
                                 stream_pool,
                                 stats_mr);

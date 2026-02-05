@@ -43,15 +43,26 @@ namespace detail {
  *
  * @param datasource Data source
  * @param options Parquet reader options
- * @param use_page_index Whether to set up page index
  * @param verbose Whether to print verbose output
  *
  * @return Hybrid scan reader
  */
 std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasource,
                                                  cudf::io::parquet_reader_options const& options,
-                                                 bool use_page_index,
                                                  bool verbose);
+
+/**
+ * @brief Sets up the page index for the hybrid scan reader
+ *
+ * @param datasource Data source
+ * @param reader Hybrid scan reader
+ * @param single_step_read Whether to use single step read mode
+ * @param verbose Whether to print verbose output
+ */
+void setup_page_index(cudf::io::datasource& datasource,
+                      cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+                      bool single_step_read,
+                      bool verbose);
 
 /**
  * @brief Applies specified row group filters
@@ -155,8 +166,13 @@ std::unique_ptr<cudf::table> inline hybrid_scan(
   auto datasource_ref = std::ref(*datasource);
 
   // Setup reader
-  auto reader           = detail::setup_reader(datasource_ref, options, use_page_index, verbose);
+  auto reader           = detail::setup_reader(datasource_ref, options, verbose);
   auto const reader_ref = std::cref(*reader);
+
+  // Setup page index if needed
+  if constexpr (use_page_index) {
+    detail::setup_page_index(datasource_ref, reader_ref, single_step_read, verbose);
+  }
 
   // Start with all row groups
   auto all_row_group_indices = reader->all_row_groups(options);

@@ -138,7 +138,7 @@ int main(int argc, char const** argv)
     filters.insert(hybrid_scan_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
   }
 
-  // Hybrid scan parameters
+  // Hybrid scan parameters (must use page index for two-step read)
   auto constexpr single_step_read = false;
   auto constexpr use_page_index   = true;
 
