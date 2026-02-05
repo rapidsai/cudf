@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import itertools
@@ -615,3 +615,10 @@ def interval_closed(request):
 def dropna_how(request):
     """Param for `how` argument"""
     return request.param
+
+
+@pytest.fixture(params=[True, False])
+def pandas_compatible(request):
+    """Param for `pandas_compatible` option"""
+    with cudf.option_context("mode.pandas_compatible", request.param):
+        yield

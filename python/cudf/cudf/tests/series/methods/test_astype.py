@@ -1329,7 +1329,7 @@ def test_series_astype_no_copy(copy):
     assert (result is gsr) is (not copy)
 
 
-def test_series_astype_string_data_to_str():
+def test_series_astype_string_data_to_str(pandas_compatible):
     result = cudf.Series(["a"]).astype("str")
     expected = pd.Series(["a"]).astype("str")
     assert_eq(result, expected)
