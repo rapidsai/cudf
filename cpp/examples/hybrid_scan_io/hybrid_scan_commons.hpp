@@ -64,7 +64,7 @@ std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasourc
  * @param verbose Whether to print verbose output
  */
 void setup_page_index(cudf::io::datasource& datasource,
-                      cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+                      hybrid_scan_reader const& reader,
                       bool single_step_read,
                       bool verbose);
 
@@ -83,7 +83,7 @@ void setup_page_index(cudf::io::datasource& datasource,
  */
 std::vector<cudf::size_type> apply_row_group_filters(
   cudf::io::datasource& datasource,
-  cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+  hybrid_scan_reader const& reader,
   std::unordered_set<hybrid_scan_filter_type> const& filters,
   cudf::host_span<cudf::size_type> input_row_group_indices,
   cudf::io::parquet_reader_options const& options,
@@ -105,7 +105,7 @@ std::vector<cudf::size_type> apply_row_group_filters(
  */
 std::unique_ptr<cudf::table> single_step_materialize(
   cudf::io::datasource& datasource,
-  cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+  hybrid_scan_reader const& reader,
   cudf::host_span<cudf::size_type> current_row_group_indices,
   cudf::io::parquet_reader_options const& options,
   bool verbose,
@@ -128,7 +128,7 @@ std::unique_ptr<cudf::table> single_step_materialize(
  */
 std::unique_ptr<cudf::table> two_step_materialize(
   cudf::io::datasource& datasource,
-  cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+  hybrid_scan_reader const& reader,
   std::unordered_set<hybrid_scan_filter_type> const& filters,
   cudf::host_span<cudf::size_type> current_row_group_indices,
   cudf::io::parquet_reader_options const& options,
