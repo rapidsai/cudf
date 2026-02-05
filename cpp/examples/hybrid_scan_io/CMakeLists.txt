@@ -54,7 +54,7 @@ install(TARGETS hybrid_scan_pipeline DESTINATION bin/examples/libcudf/hybrid_sca
 add_executable(hybrid_scan_multifile_single_step hybrid_scan_multifile_single_step.cpp)
 target_link_libraries(
   hybrid_scan_multifile_single_step PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-                                $<TARGET_OBJECTS:hybrid_scan_utils>
+                                            $<TARGET_OBJECTS:hybrid_scan_utils>
 )
 target_compile_features(hybrid_scan_multifile_single_step PRIVATE cxx_std_20)
 install(TARGETS hybrid_scan_multifile_single_step DESTINATION bin/examples/libcudf/hybrid_scan_io)
@@ -63,7 +63,7 @@ install(TARGETS hybrid_scan_multifile_single_step DESTINATION bin/examples/libcu
 add_executable(hybrid_scan_multifile_two_step hybrid_scan_multifile_two_step.cpp)
 target_link_libraries(
   hybrid_scan_multifile_two_step PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-                                $<TARGET_OBJECTS:hybrid_scan_utils>
+                                         $<TARGET_OBJECTS:hybrid_scan_utils>
 )
 target_compile_features(hybrid_scan_multifile_two_step PRIVATE cxx_std_20)
 install(TARGETS hybrid_scan_multifile_two_step DESTINATION bin/examples/libcudf/hybrid_scan_io)

@@ -215,7 +215,7 @@ std::unique_ptr<cudf::table> inline hybrid_scan(
  * @param hybrid_scan_fn Functor instance to execute in each thread with different tid values
  */
 template <typename Functor>
-void hybrid_scan_multifile(cudf::size_type num_threads, Functor const& hybrid_scan_fn)
+void inline hybrid_scan_multifile(cudf::size_type num_threads, Functor const& hybrid_scan_fn)
 {
   std::vector<std::thread> threads;
   threads.reserve(num_threads);
