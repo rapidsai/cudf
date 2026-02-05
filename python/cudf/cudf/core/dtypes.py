@@ -79,11 +79,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
     except TypeError:
         pass
     else:
-        if np_dtype.kind == "O":
-            return CUDF_STRING_DTYPE
-        elif np_dtype.kind == "U":
-            if cudf.get_option("mode.pandas_compatible"):
-                return np_dtype
+        if np_dtype.kind in {"O", "U"}:
             return CUDF_STRING_DTYPE
         elif np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
