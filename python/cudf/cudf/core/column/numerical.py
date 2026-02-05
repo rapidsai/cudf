@@ -215,7 +215,7 @@ class NumericalColumn(NumericalBaseColumn):
                     plc.binaryop.BinaryOperator.BITWISE_OR,
                     plc.types.DataType(plc.types.TypeId.BOOL8),
                 )
-                return ColumnBase.from_pylibcudf(result_plc)
+                return ColumnBase.create(result_plc, np.dtype(np.bool_))
             return ColumnBase.create(is_null_plc, np.dtype(np.bool_))
 
     def notnull(self) -> ColumnBase:
@@ -236,7 +236,7 @@ class NumericalColumn(NumericalBaseColumn):
                         plc.binaryop.BinaryOperator.BITWISE_AND,
                         plc.types.DataType(plc.types.TypeId.BOOL8),
                     )
-                    result = ColumnBase.from_pylibcudf(result_plc)
+                    result = ColumnBase.create(result_plc, np.dtype(np.bool_))
                 else:
                     result = ColumnBase.create(
                         is_valid_plc, np.dtype(np.bool_)
