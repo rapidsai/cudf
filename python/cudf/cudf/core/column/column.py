@@ -86,7 +86,6 @@ from cudf.utils.dtypes import (
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import (
     _array_ufunc,
-    _is_null_host_scalar,
     is_na_like,
 )
 
@@ -935,7 +934,29 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def values_host(self) -> np.ndarray:
         """
         Return a numpy representation of the Column.
+
+        .. deprecated:: 26.04
+            `values_host` is deprecated and will be removed in a future version.
+            Use `to_numpy()` instead.
         """
+        warnings.warn(
+            "values_host is deprecated and will be removed in a future version. "
+            "Use to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self.to_pandas().to_numpy()
+
+    def to_numpy(self) -> np.ndarray:
+        """
+        Convert the Column to a NumPy array.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        if is_dtype_obj_numeric(self.dtype):
+            return self.values.get()
         return self.to_pandas().to_numpy()
 
     @property
@@ -1563,7 +1584,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=True):
             return self.copy()
         elif method is None:
-            if is_scalar(fill_value) and _is_null_host_scalar(fill_value):
+            if is_scalar(fill_value) and (
+                is_na_like(fill_value)
+                or (
+                    self.dtype.kind == "f"
+                    and is_pandas_nullable_extension_dtype(self.dtype)
+                    and isinstance(fill_value, float)
+                    and np.isnan(fill_value)
+                )
+            ):
                 return self.copy()
             else:
                 fill_value = self._validate_fillna_value(fill_value)

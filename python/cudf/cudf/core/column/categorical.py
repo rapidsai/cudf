@@ -26,7 +26,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.utils import _is_null_host_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableSequence, Sequence
@@ -133,7 +133,7 @@ class CategoricalColumn(column.ColumnBase):
         return self.dtype.ordered
 
     def __setitem__(self, key: Any, value: Any) -> None:
-        if is_scalar(value) and _is_null_host_scalar(value):
+        if is_scalar(value) and is_na_like(value):
             to_add_categories = 0
         else:
             if is_scalar(value):
@@ -295,7 +295,7 @@ class CategoricalColumn(column.ColumnBase):
         codes = (
             col.codes.astype(signed_dtype)
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
-            .values_host
+            .to_numpy()
         )
 
         cats = col.categories.nans_to_nulls()

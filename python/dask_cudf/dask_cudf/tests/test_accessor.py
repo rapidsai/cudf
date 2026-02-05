@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from contextlib import nullcontext as does_not_raise
@@ -47,7 +47,7 @@ def test_series(data):
     sr = Series(pdsr)
     dsr = dask_cudf.from_cudf(sr, npartitions=5)
 
-    np.testing.assert_equal(np.array(pdsr), dsr.compute().values_host)
+    np.testing.assert_equal(np.array(pdsr), dsr.compute().to_numpy())
 
 
 @pytest.mark.parametrize("data", [data_dt_1()])
@@ -120,7 +120,7 @@ def test_categorical_basic(data):
     sr = Series(cat)
     dsr = dask_cudf.from_cudf(sr, npartitions=2)
     result = dsr.compute()
-    np.testing.assert_array_equal(cat.codes, result.cat.codes.values_host)
+    np.testing.assert_array_equal(cat.codes, result.cat.codes.to_numpy())
 
     assert dsr.dtype.to_pandas() == pdsr.dtype
     # Test attributes
@@ -129,7 +129,7 @@ def test_categorical_basic(data):
     assert_eq(pdsr.cat.categories, dsr.cat.categories)
 
     np.testing.assert_array_equal(
-        pdsr.cat.codes.values, result.cat.codes.values_host
+        pdsr.cat.codes.values, result.cat.codes.to_numpy()
     )
 
     assert str(result) == str(pdsr)
@@ -210,12 +210,12 @@ def test_categorical_compare_ordered(data):
     # Test equality
     out = dsr1 == dsr1
     assert out.dtype == np.bool_
-    assert np.all(out.compute().values_host)
+    assert np.all(out.compute().to_numpy())
     assert np.all(pdsr1 == pdsr1)
 
     # Test inequality
     out = dsr1 != dsr1
-    assert not np.any(out.compute().values_host)
+    assert not np.any(out.compute().to_numpy())
     assert not np.any(pdsr1 != pdsr1)
 
     assert dsr1.cat.ordered
@@ -223,10 +223,10 @@ def test_categorical_compare_ordered(data):
 
     # Test ordered operators
     np.testing.assert_array_equal(
-        pdsr1 < pdsr2, (dsr1 < dsr2).compute().values_host
+        pdsr1 < pdsr2, (dsr1 < dsr2).compute().to_numpy()
     )
     np.testing.assert_array_equal(
-        pdsr1 > pdsr2, (dsr1 > dsr2).compute().values_host
+        pdsr1 > pdsr2, (dsr1 > dsr2).compute().to_numpy()
     )
 
 
@@ -281,10 +281,10 @@ def test_categorical_as_known():
     # calling `compute`), then we need to check that
     # the initial order of rows was preserved.
     assert set(expected.cat.categories) == set(
-        actual.cat.categories.values_host
+        actual.cat.categories.to_numpy()
     )
     assert set(expected.compute().cat.categories) == set(
-        actual.compute().cat.categories.values_host
+        actual.compute().cat.categories.to_numpy()
     )
     dd.assert_eq(expected, actual, check_categorical=False)
 
