@@ -276,7 +276,7 @@ fi
 # If `RAPIDS_PY_VERSION` is set, use that as the lower-bound for the stable ABI CPython version
 # This is only applied to pylibcudf, cudf, and cudf_kafka, not other Python packages
 PYTHON_ARGS_WITH_PY_API=("${PYTHON_ARGS_FOR_INSTALL[@]}")
-if [ -n "${RAPIDS_PY_VERSION}" ]; then
+if [ -n "${RAPIDS_PY_VERSION:-}" ]; then
     RAPIDS_PY_API="cp${RAPIDS_PY_VERSION//./}"
     PYTHON_ARGS_WITH_PY_API+=("--config-settings" "skbuild.wheel.py-api=${RAPIDS_PY_API}")
 fi
