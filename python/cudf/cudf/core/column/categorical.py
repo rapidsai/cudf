@@ -288,7 +288,7 @@ class CategoricalColumn(column.ColumnBase):
         codes = (
             col.codes.astype(signed_dtype)
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
-            .values_host
+            .to_numpy()
         )
 
         cats = col.categories.nans_to_nulls()

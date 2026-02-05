@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import operator
 from contextlib import contextmanager
@@ -380,7 +380,7 @@ def test_dataframe_basic():
     np.testing.assert_equal(df["vals"].to_numpy(), hvals)
 
     # As matrix
-    mat = df.values_host
+    mat = df.to_numpy()
 
     expect = np.vstack([hkeys, hvals]).T
 
