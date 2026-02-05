@@ -40,7 +40,7 @@ build:
       NVCC_APPEND_FLAGS: ${{ env.get("NVCC_APPEND_FLAGS", default="") }}
       PARALLEL_LEVEL: ${{ env.get("PARALLEL_LEVEL", default="8") }}
       RAPIDS_ARTIFACTS_DIR: ${{ env.get("RAPIDS_ARTIFACTS_DIR", default="") }}
-      RAPIDS_PY_VERSION: ${{ env.get("RAPIDS_PY_VERSION", default="") }}
+      RAPIDS_PY_VERSION: ${{ py_abi_min }}
       SCCACHE_BUCKET: ${{ env.get("SCCACHE_BUCKET", default="") }}
       SCCACHE_DIST_AUTH_TYPE: ${{ env.get("SCCACHE_DIST_AUTH_TYPE", default="token") }}
       SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE: ${{ env.get("SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE", default="false") }}
