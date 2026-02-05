@@ -504,41 +504,34 @@ class DatetimeColumn(TemporalBaseColumn):
         format = _dtype_to_format_conversion.get(
             self.dtype.name, "%Y-%m-%d %H:%M:%S"
         )
-        if cudf.get_option("mode.pandas_compatible"):
-            if isinstance(dtype, np.dtype) and dtype.kind == "O":
-                raise TypeError(
-                    f"Cannot astype a datetimelike from {self.dtype} to {dtype}"
-                )
-            if format.endswith("f"):
-                sub_second_res_len = 3
-            else:
-                sub_second_res_len = 0
+        if format.endswith("f"):
+            sub_second_res_len = 3
+        else:
+            sub_second_res_len = 0
 
-            has_nanos = self.time_unit == "ns" and self.nanosecond.any()
-            has_micros = (
-                self.time_unit in {"ns", "us"} and self.microsecond.any()
-            )
-            has_millis = (
-                self.time_unit in {"ns", "us", "ms"} and self.millisecond.any()
-            )
-            has_seconds = self.second.any()
-            has_minutes = self.minute.any()
-            has_hours = self.hour.any()
-            if sub_second_res_len:
-                if has_nanos:
-                    # format should be intact and rest of the
-                    # following conditions shouldn't execute.
-                    pass
-                elif has_micros:
-                    format = format[:-sub_second_res_len] + "%6f"
-                elif has_millis:
-                    format = format[:-sub_second_res_len] + "%3f"
-                elif has_seconds or has_minutes or has_hours:
-                    format = format[:-4]
-                else:
-                    format = format.split(" ")[0]
-            elif not (has_seconds or has_minutes or has_hours):
+        has_nanos = self.time_unit == "ns" and self.nanosecond.any()
+        has_micros = self.time_unit in {"ns", "us"} and self.microsecond.any()
+        has_millis = (
+            self.time_unit in {"ns", "us", "ms"} and self.millisecond.any()
+        )
+        has_seconds = self.second.any()
+        has_minutes = self.minute.any()
+        has_hours = self.hour.any()
+        if sub_second_res_len:
+            if has_nanos:
+                # format should be intact and rest of the
+                # following conditions shouldn't execute.
+                pass
+            elif has_micros:
+                format = format[:-sub_second_res_len] + "%6f"
+            elif has_millis:
+                format = format[:-sub_second_res_len] + "%3f"
+            elif has_seconds or has_minutes or has_hours:
+                format = format[:-4]
+            else:
                 format = format.split(" ")[0]
+        elif not (has_seconds or has_minutes or has_hours):
+            format = format.split(" ")[0]
         return self.strftime(format)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:

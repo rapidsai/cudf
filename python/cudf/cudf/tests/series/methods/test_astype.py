@@ -49,24 +49,11 @@ def test_list_astype():
     assert_eq(s.list.leaves.astype("string"), s2.list.leaves)
 
 
-def test_series_typecast_to_object_error():
+@pytest.mark.parametrize("to_dtype", [object, np.dtype("object"), "str"])
+def test_series_typecast_to_object(to_dtype):
     actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
-    with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(TypeError):
-            actual.astype(object)
-        with pytest.raises(TypeError):
-            actual.astype(np.dtype("object"))
-        new_series = actual.astype("str")
-        assert new_series[0] == "1970-01-01 00:00:00.000000001"
-
-
-def test_series_typecast_to_object():
-    actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
-    with cudf.option_context("mode.pandas_compatible", False):
-        new_series = actual.astype(object)
-        assert new_series[0] == "1970-01-01 00:00:00.000000001"
-        new_series = actual.astype(np.dtype("object"))
-        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+    new_series = actual.astype(to_dtype)
+    assert new_series[0] == "1970-01-01 00:00:00.000000001"
 
 
 @pytest.mark.parametrize(
@@ -941,20 +928,10 @@ def test_series_astype_datetime_to_other(as_dtype):
     assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
 
 
-@pytest.mark.parametrize(
-    "inp",
-    [
-        ("datetime64[ns]", "2011-01-01 00:00:00.000000000"),
-        ("datetime64[us]", "2011-01-01 00:00:00.000000"),
-        ("datetime64[ms]", "2011-01-01 00:00:00.000"),
-        ("datetime64[s]", "2011-01-01 00:00:00"),
-    ],
-)
-def test_series_astype_datetime_to_string(inp):
-    dtype, expect = inp
-    base_date = "2011-01-01"
-    sr = cudf.Series([base_date], dtype=dtype)
-    got = sr.astype(str)[0]
+def test_series_astype_datetime_to_string(datetime_types_as_str):
+    expect = "2011-01-01"
+    got = cudf.Series([expect], dtype=datetime_types_as_str).astype(str)[0]
+    expect = pd.Series([expect], dtype=datetime_types_as_str).astype(str)[0]
     assert expect == got
 
 
@@ -1089,10 +1066,10 @@ def test_series_astype_null_cases():
 
     # datetime to other
     data = [
-        "2001-01-01 00:00:00.000000",
-        "2001-02-01 00:00:00.000000",
+        "2001-01-01",
+        "2001-02-01",
         None,
-        "2001-03-01 00:00:00.000000",
+        "2001-03-01",
     ]
     assert_eq(
         cudf.Series(data),
@@ -1350,3 +1327,9 @@ def test_series_astype_no_copy(copy):
     result = gsr.astype("int64", copy=copy)
     assert_eq(result, gsr)
     assert (result is gsr) is (not copy)
+
+
+def test_series_astype_string_data_to_str():
+    result = cudf.Series(["a"]).astype("str")
+    expected = pd.Series(["a"]).astype("str")
+    assert_eq(result, expected)
