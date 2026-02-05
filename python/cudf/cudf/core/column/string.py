@@ -904,7 +904,6 @@ class StringColumn(ColumnBase, Scannable):
             )
 
     def character_tokenize(self) -> Self:
-        # Returns LIST<STRING>, not STRING
         with self.access(mode="read", scope="internal"):
             return cast(
                 Self,
@@ -920,7 +919,6 @@ class StringColumn(ColumnBase, Scannable):
         delimiter: str,
         default_id: int,
     ) -> Self:
-        # Returns LIST<INT32> token IDs
         with self.access(mode="read", scope="internal"):
             return cast(
                 Self,
@@ -942,7 +940,6 @@ class StringColumn(ColumnBase, Scannable):
         vocabulary: plc.nvtext.wordpiece_tokenize.WordPieceVocabulary,
         max_words_per_row: int,
     ) -> Self:
-        # Returns LIST<INT32> token IDs
         with self.access(mode="read", scope="internal"):
             return cast(
                 Self,
