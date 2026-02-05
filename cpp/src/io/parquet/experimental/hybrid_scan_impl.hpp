@@ -288,13 +288,12 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   /**
    * @brief Initialize the necessary options related internal variables for use later on
    *
-   * @param row_group_indices Row group indices to read
    * @param options Reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
    */
-  void initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                          parquet_reader_options const& options,
+  void initialize_options(parquet_reader_options const& options,
+                          std::size_t num_sources,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr);
 
@@ -332,6 +331,30 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
   get_input_column_chunk_byte_ranges(
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
+
+  /**
+   * @brief Helper to prepare converted filter expression and output column data types
+   *
+   * @param options Parquet reader options
+   * @return A pair of a converted filter expression and a vector of ouptut column data types
+   */
+  std::pair<named_to_reference_converter, std::vector<cudf::data_type>>
+  prepare_filter_and_output_types(parquet_reader_options const& options);
+
+  /**
+   * @brief Helper to prepare column materialization
+   *
+   * @param read_columns_mode Read mode indicating if we are reading filter or payload columns
+   * @param num_sources Number of input sources
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output columns
+   */
+  void prepare_materialization(read_columns_mode read_columns_mode,
+                               std::size_t num_sources,
+                               parquet_reader_options const& options,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr);
 
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on
