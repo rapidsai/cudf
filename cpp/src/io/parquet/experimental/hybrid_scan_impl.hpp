@@ -336,7 +336,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @brief Helper to prepare converted filter expression and output column data types
    *
    * @param options Parquet reader options
-   * @return A pair of a converted filter expression and a vector of ouptut column data types
+   * @return A pair of a converted filter expression and a vector of output column data types
    */
   std::pair<named_to_reference_converter, std::vector<cudf::data_type>>
   prepare_filter_and_output_types(parquet_reader_options const& options);
