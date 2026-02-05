@@ -78,6 +78,7 @@ NARWHALS_POLARS_GPU=1 \
     -p xdist \
     -p env \
     -p no:pytest_benchmark \
+    -W ignore::DeprecationWarning:polars \
     -k "not ( \
         ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS} \
     )" \
