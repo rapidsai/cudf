@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ import pytest
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
-from cudf.testing.dataset_generator import rand_dataframe
 
 
 def cudf_from_avro_util(schema: dict, records: list) -> cudf.DataFrame:
@@ -224,26 +223,15 @@ def test_avro_decompression(set_decomp_env_vars, rows, codec):
         ],
     }
 
-    # N.B. rand_dataframe() is brutally slow for some reason.  Switching to
-    #      np.random() speeds things up by a factor of 10.
-    #      See also: https://github.com/rapidsai/cudf/issues/13128
-    df = rand_dataframe(
-        [
-            {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
-            {
-                "dtype": "str",
-                "null_frequency": 0,
-                "cardinality": 100,
-                "max_string_length": 10,
-            },
-        ],
-        rows,
-        seed=0,
-        use_threads=False,
-    )
-    expected_df = cudf.DataFrame.from_arrow(df)
+    rng = np.random.default_rng(0)
+    int_vals = rng.integers(0, 1000, size=rows, dtype="int32")
+    str_vals = [
+        "".join(rng.choice(list("abcdefghij"), size=rng.integers(1, 11)))
+        for _ in range(rows)
+    ]
+    expected_df = cudf.DataFrame({"0": int_vals, "1": str_vals})
 
-    records = df.to_pandas().to_dict(orient="records")
+    records = expected_df.to_pandas().to_dict(orient="records")
 
     buffer = io.BytesIO()
     fastavro.writer(buffer, schema, records, codec=codec)
@@ -591,10 +579,6 @@ def test_avro_reader_multiblock(
         assert dtype in ("float32", "float64")
         avro_type = "float" if dtype == "float32" else "double"
         rng = np.random.default_rng(seed=0)
-        # We don't use rand_dataframe() here, because it increases the
-        # execution time of each test by a factor of 10 or more (it appears
-        # to use a very costly approach to generating random data).
-        # See also: https://github.com/rapidsai/cudf/issues/13128
         values = rng.random(total_rows).astype(dtype)
         bytes_per_row = values.dtype.itemsize
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import math
 import pickle
@@ -11,7 +11,6 @@ from pandas.api.indexers import BaseIndexer
 
 import cudf
 from cudf.testing import assert_eq
-from cudf.testing.dataset_generator import rand_dataframe
 
 
 @pytest.fixture(params=[True, False])
@@ -152,36 +151,31 @@ def test_rolling_var_std_large(agg, ddof, center, window_size):
     flower_bound = -math.sqrt(abs(np.finfo(np.float64).min) / window_size)
 
     n_rows = 1_000
-    data = rand_dataframe(
-        dtypes_meta=[
-            {
-                "dtype": "int64",
-                "null_frequency": 0.4,
-                "cardinality": n_rows,
-                "min_bound": ilower_bound,
-                "max_bound": iupper_bound,
-            },
-            {
-                "dtype": "float64",
-                "null_frequency": 0.4,
-                "cardinality": n_rows,
-                "min_bound": flower_bound,
-                "max_bound": fupper_bound,
-            },
-            {
-                "dtype": "decimal64",
-                "null_frequency": 0.4,
-                "cardinality": n_rows,
-                "min_bound": ilower_bound,
-                "max_bound": iupper_bound,
-            },
-        ],
-        rows=n_rows,
-        use_threads=False,
-        seed=100,
+    rng = np.random.default_rng(0)
+
+    int_vals = rng.integers(int(ilower_bound), int(iupper_bound), size=n_rows)
+    float_vals = rng.uniform(flower_bound, fupper_bound, size=n_rows)
+    decimal_vals = rng.integers(
+        int(ilower_bound), int(iupper_bound), size=n_rows
     )
-    pdf = data.to_pandas()
+
+    null_mask_0 = rng.random(n_rows) < 0.4
+    null_mask_1 = rng.random(n_rows) < 0.4
+    null_mask_2 = rng.random(n_rows) < 0.4
+
+    pdf = pd.DataFrame(
+        {
+            "0": pd.array(int_vals, dtype="Int64"),
+            "1": pd.array(float_vals, dtype="Float64"),
+            "2": pd.array(decimal_vals, dtype="Int64"),
+        }
+    )
+    pdf.loc[null_mask_0, "0"] = pd.NA
+    pdf.loc[null_mask_1, "1"] = pd.NA
+    pdf.loc[null_mask_2, "2"] = pd.NA
+
     gdf = cudf.from_pandas(pdf)
+    gdf["2"] = gdf["2"].astype(cudf.Decimal64Dtype(precision=18, scale=0))
 
     expect = getattr(pdf.rolling(window_size, 1, center), agg)(ddof=ddof)
     got = getattr(gdf.rolling(window_size, 1, center), agg)(ddof=ddof)

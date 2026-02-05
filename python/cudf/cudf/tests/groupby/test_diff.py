@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -12,7 +12,6 @@ from cudf.core._compat import (
     PANDAS_VERSION,
 )
 from cudf.testing import assert_groupby_results_equal
-from cudf.testing.dataset_generator import rand_dataframe
 
 
 @pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
@@ -33,29 +32,32 @@ def test_groupby_diff_row(shift_perc, direction):
 @pytest.mark.parametrize("direction", [1, -1])
 def test_groupby_diff_row_mixed_numerics(shift_perc, direction):
     nelem = 20
-    t = rand_dataframe(
-        dtypes_meta=[
-            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
-            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
-            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
-            {"dtype": "decimal64", "null_frequency": 0.4, "cardinality": 10},
-            {
-                "dtype": "datetime64[ns]",
-                "null_frequency": 0.4,
-                "cardinality": 10,
-            },
-            {
-                "dtype": "timedelta64[ns]",
-                "null_frequency": 0.4,
-                "cardinality": 10,
-            },
-        ],
-        rows=nelem,
-        use_threads=False,
-        seed=0,
+    rng = np.random.default_rng(0)
+
+    int_key = rng.integers(0, 10, size=nelem)
+    int_vals = rng.integers(0, 100, size=nelem)
+    float_vals = rng.random(size=nelem).astype("float32")
+    datetime_vals = pd.to_datetime(
+        rng.integers(0, 10**12, size=nelem), unit="ns"
     )
-    pdf = t.to_pandas()
+    timedelta_vals = pd.to_timedelta(rng.integers(0, 10**9, size=nelem))
+
+    null_masks = {col: rng.random(nelem) < 0.4 for col in ["1", "2", "3", "4"]}
+
+    pdf = pd.DataFrame(
+        {
+            "0": int_key,
+            "1": int_vals,
+            "2": float_vals,
+            "3": datetime_vals,
+            "4": timedelta_vals,
+        }
+    )
+    for col, mask in null_masks.items():
+        pdf.loc[mask, col] = None
+
     gdf = cudf.from_pandas(pdf)
+    pdf = gdf.to_pandas()
     n_shift = int(nelem * shift_perc) * direction
 
     expected = pdf.groupby(["0"]).diff(periods=n_shift)
@@ -66,27 +68,31 @@ def test_groupby_diff_row_mixed_numerics(shift_perc, direction):
 
 def test_groupby_diff_row_zero_shift():
     nelem = 20
-    t = rand_dataframe(
-        dtypes_meta=[
-            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
-            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
-            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
-            {
-                "dtype": "datetime64[ns]",
-                "null_frequency": 0.4,
-                "cardinality": 10,
-            },
-            {
-                "dtype": "timedelta64[ns]",
-                "null_frequency": 0.4,
-                "cardinality": 10,
-            },
-        ],
-        rows=nelem,
-        use_threads=False,
-        seed=0,
+    rng = np.random.default_rng(0)
+
+    int_key = rng.integers(0, 10, size=nelem)
+    int_vals = rng.integers(0, 100, size=nelem)
+    float_vals = rng.random(size=nelem).astype("float32")
+    datetime_vals = pd.to_datetime(
+        rng.integers(0, 10**12, size=nelem), unit="ns"
     )
-    gdf = cudf.from_pandas(t.to_pandas())
+    timedelta_vals = pd.to_timedelta(rng.integers(0, 10**9, size=nelem))
+
+    null_masks = {col: rng.random(nelem) < 0.4 for col in ["1", "2", "3", "4"]}
+
+    pdf = pd.DataFrame(
+        {
+            "0": int_key,
+            "1": int_vals,
+            "2": float_vals,
+            "3": datetime_vals,
+            "4": timedelta_vals,
+        }
+    )
+    for col, mask in null_masks.items():
+        pdf.loc[mask, col] = None
+
+    gdf = cudf.from_pandas(pdf)
 
     expected = gdf
     got = gdf.groupby(["0"]).shift(periods=0)
@@ -102,39 +108,47 @@ def test_groupby_diff_row_zero_shift():
 )
 def test_groupby_fillna_multi_value():
     nelem = 20
-    t = rand_dataframe(
-        dtypes_meta=[
-            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
-            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
-            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
-            {
-                "dtype": "datetime64[ms]",
-                "null_frequency": 0.4,
-                "cardinality": 10,
-            },
-            {
-                "dtype": "timedelta64[ns]",
-                "null_frequency": 0.4,
-                "cardinality": 10,
-            },
-            {"dtype": "decimal64", "null_frequency": 0.4, "cardinality": 10},
-            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
-        ],
-        rows=nelem,
-        use_threads=False,
-        seed=0,
+    rng = np.random.default_rng(0)
+
+    int_key = rng.integers(0, 10, size=nelem)
+    int_vals = rng.integers(0, 100, size=nelem)
+    float_vals = rng.random(size=nelem).astype("float32")
+    datetime_vals = pd.to_datetime(
+        rng.integers(0, 10**12, size=nelem), unit="ms"
     )
+    timedelta_vals = pd.to_timedelta(rng.integers(0, 10**9, size=nelem))
+    decimal_vals = rng.integers(0, 1000, size=nelem)
+    str_vals = [f"str_{rng.integers(0, 100)}" for _ in range(nelem)]
+
+    null_masks = {
+        col: rng.random(nelem) < 0.4 for col in ["1", "2", "3", "4", "5", "6"]
+    }
+
+    pdf = pd.DataFrame(
+        {
+            "0": int_key,
+            "1": int_vals,
+            "2": float_vals,
+            "3": datetime_vals,
+            "4": timedelta_vals,
+            "5": decimal_vals,
+            "6": str_vals,
+        }
+    )
+    for col, mask in null_masks.items():
+        pdf.loc[mask, col] = None
+
+    gdf = cudf.from_pandas(pdf)
+    gdf["5"] = gdf["5"].astype(cudf.Decimal64Dtype(precision=10, scale=2))
+
     key_col = "0"
     value_cols = ["1", "2", "3", "4", "5", "6"]
-    pdf = t.to_pandas()
-    gdf = cudf.from_pandas(pdf)
+    pdf = gdf.to_pandas()
 
-    # fill the dataframe with the first non-null item in the column
     fill_values = {
         name: pdf[name].loc[pdf[name].first_valid_index()]
         for name in value_cols
     }
-    # cudf can't fillna with a pandas.Timedelta type
     fill_values["4"] = fill_values["4"].to_numpy()
     with pytest.warns(FutureWarning):
         expect = pdf.groupby(key_col).fillna(value=fill_values)
@@ -144,45 +158,50 @@ def test_groupby_fillna_multi_value():
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
 
-# TODO: cudf.fillna does not support decimal column to column fill yet
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="warning not present in older pandas versions",
 )
 def test_groupby_fillna_multi_value_df():
     nelem = 20
-    t = rand_dataframe(
-        dtypes_meta=[
-            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
-            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
-            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
-            {
-                "dtype": "datetime64[ms]",
-                "null_frequency": 0.4,
-                "cardinality": 10,
-            },
-            {
-                "dtype": "timedelta64[ns]",
-                "null_frequency": 0.4,
-                "cardinality": 10,
-            },
-            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
-        ],
-        rows=nelem,
-        use_threads=False,
-        seed=0,
+    rng = np.random.default_rng(0)
+
+    int_key = rng.integers(0, 10, size=nelem)
+    int_vals = rng.integers(0, 100, size=nelem)
+    float_vals = rng.random(size=nelem).astype("float32")
+    datetime_vals = pd.to_datetime(
+        rng.integers(0, 10**12, size=nelem), unit="ms"
     )
-    key_col = "0"
-    value_cols = ["1", "2", "3", "4", "5"]
-    pdf = t.to_pandas()
+    timedelta_vals = pd.to_timedelta(rng.integers(0, 10**9, size=nelem))
+    str_vals = [f"str_{rng.integers(0, 100)}" for _ in range(nelem)]
+
+    null_masks = {
+        col: rng.random(nelem) < 0.4 for col in ["1", "2", "3", "4", "5"]
+    }
+
+    pdf = pd.DataFrame(
+        {
+            "0": int_key,
+            "1": int_vals,
+            "2": float_vals,
+            "3": datetime_vals,
+            "4": timedelta_vals,
+            "5": str_vals,
+        }
+    )
+    for col, mask in null_masks.items():
+        pdf.loc[mask, col] = None
+
     gdf = cudf.from_pandas(pdf)
 
-    # fill the dataframe with the first non-null item in the column
+    key_col = "0"
+    value_cols = ["1", "2", "3", "4", "5"]
+    pdf = gdf.to_pandas()
+
     fill_values = {
         name: pdf[name].loc[pdf[name].first_valid_index()]
         for name in value_cols
     }
-    # cudf can't fillna with a pandas.Timedelta type
     fill_values["4"] = fill_values["4"].to_numpy()
     fill_values = pd.DataFrame(fill_values, index=pdf.index)
     with pytest.warns(FutureWarning):

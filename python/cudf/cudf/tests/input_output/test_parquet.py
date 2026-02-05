@@ -1385,20 +1385,18 @@ def test_delta_binary(
     null_frequency = 0.25 if add_nulls else 0
 
     # Create a pandas dataframe with random data of mixed types
-    arrow_table = dg.rand_dataframe(
-        dtypes_meta=[
-            {
-                "dtype": signed_integer_types_as_str,
-                "null_frequency": null_frequency,
-                "cardinality": delta_num_rows,
-            },
-        ],
-        rows=delta_num_rows,
-        seed=0,
-        use_threads=False,
+    rng = np.random.default_rng(0)
+    dtype = np.dtype(signed_integer_types_as_str)
+    int_vals = rng.integers(
+        np.iinfo(dtype).min,
+        np.iinfo(dtype).max,
+        size=delta_num_rows,
+        dtype=dtype,
     )
-    # Roundabout conversion to pandas to preserve nulls/data types
-    cudf_table = cudf.DataFrame.from_arrow(arrow_table)
+    cudf_table = cudf.DataFrame({"0": int_vals})
+    if null_frequency > 0:
+        null_mask = rng.random(delta_num_rows) < null_frequency
+        cudf_table["0"] = cudf_table["0"].where(~null_mask)
     test_pdf = cudf_table.to_pandas(nullable=True)
     pdf_fname = tmp_path / "pdfv2.parquet"
     test_pdf.to_parquet(
@@ -1438,19 +1436,25 @@ def test_delta_byte_array_roundtrip(
     null_frequency = 0.25 if add_nulls else 0
 
     # Create a pandas dataframe with random data of mixed lengths
-    test_pdf = dg.rand_dataframe(
-        dtypes_meta=[
-            {
-                "dtype": "str",
-                "null_frequency": null_frequency,
-                "cardinality": delta_num_rows,
-                "max_string_length": max_string_length,
-            },
-        ],
-        rows=delta_num_rows,
-        seed=0,
-        use_threads=False,
-    ).to_pandas()
+    rng = np.random.default_rng(0)
+    str_vals = [
+        "".join(
+            rng.choice(
+                list(ascii_letters),
+                size=rng.integers(1, max_string_length + 1),
+            )
+        )
+        for _ in range(delta_num_rows)
+    ]
+    if null_frequency > 0:
+        null_mask = rng.random(delta_num_rows) < null_frequency
+        str_vals = [
+            None if null_mask[i] else v for i, v in enumerate(str_vals)
+        ]
+    # Create pandas DataFrame with string dtype (ArrowDtype) for proper parquet encoding
+    test_pdf = pd.DataFrame(
+        {"0": pd.array(str_vals, dtype=pd.ArrowDtype(pa.string()))}
+    )
 
     pdf_fname = tmp_path / "pdfdeltaba.parquet"
     test_pdf.to_parquet(
