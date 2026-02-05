@@ -63,7 +63,6 @@ std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasourc
  * @param options Parquet reader options
  * @param verbose Whether to print verbose output
  * @param stream CUDA stream
- * @param mr Device memory resource
  *
  * @return Filtered row group indices
  */
@@ -74,8 +73,7 @@ std::vector<cudf::size_type> apply_row_group_filters(
   cudf::host_span<cudf::size_type> input_row_group_indices,
   cudf::io::parquet_reader_options const& options,
   bool verbose,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::cuda_stream_view stream);
 
 /**
  * @brief Materializes all parquet columns in single step mode
@@ -165,7 +163,7 @@ std::unique_ptr<cudf::table> inline hybrid_scan(
 
   // Filter row groups
   auto filtered_row_group_indices = detail::apply_row_group_filters(
-    datasource_ref, reader_ref, filters, all_row_group_indices, options, verbose, stream, mr);
+    datasource_ref, reader_ref, filters, all_row_group_indices, options, verbose, stream);
 
   // Materialize filter and payload columns separately
   if constexpr (single_step_read) {

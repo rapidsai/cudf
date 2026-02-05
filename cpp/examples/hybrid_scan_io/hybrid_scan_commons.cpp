@@ -60,8 +60,7 @@ std::vector<cudf::size_type> apply_row_group_filters(
   cudf::host_span<cudf::size_type> input_row_group_indices,
   cudf::io::parquet_reader_options const& options,
   bool verbose,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
   // Span to track current row group indices
   auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
@@ -100,6 +99,8 @@ std::vector<cudf::size_type> apply_row_group_filters(
     if (verbose) { timer.print_elapsed_millis(); }
   }
 
+  auto temp_mr = cudf::get_current_device_resource_ref();
+
   // Filter row groups with dictionary pages
   std::vector<cudf::size_type> dictionary_page_filtered_row_group_indices;
   dictionary_page_filtered_row_group_indices.reserve(current_row_group_indices.size());
@@ -111,7 +112,7 @@ std::vector<cudf::size_type> apply_row_group_filters(
     // Fetch dictionary page buffers and corresponding device spans from the input file buffer
     nvtxRangePush("fetch_dict_page_byte_ranges");
     auto [dictionary_page_buffers, dictionary_page_data, dict_read_tasks] =
-      fetch_byte_ranges(datasource, dict_page_byte_ranges, stream, mr);
+      fetch_byte_ranges(datasource, dict_page_byte_ranges, stream, temp_mr);
     dict_read_tasks.get();
     nvtxRangePop();
 
@@ -135,7 +136,7 @@ std::vector<cudf::size_type> apply_row_group_filters(
     // Fetch 32-byte aligned bloom filter data buffers from the input file buffer
     auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
     auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-      mr, bloom_filter_alignment);
+      temp_mr, bloom_filter_alignment);
     if (verbose) { std::cout << "READER: Filter row groups with bloom filters...\n"; }
     timer.reset();
     nvtxRangePush("fetch_bloom_filter_byte_ranges");
@@ -187,10 +188,10 @@ std::unique_ptr<cudf::table> single_step_materialize(
   all_column_chunk_read_tasks.get();
   nvtxRangePop();
 
-  auto read_table =
-    reader
-      .materialize_all_columns(current_row_group_indices, all_column_chunk_data, options, stream)
-      .tbl;
+  auto read_table = reader
+                      .materialize_all_columns(
+                        current_row_group_indices, all_column_chunk_data, options, stream, mr)
+                      .tbl;
 
   if (verbose) { timer.print_elapsed_millis(); }
 
@@ -256,7 +257,8 @@ std::unique_ptr<cudf::table> two_step_materialize(
         row_mask_mutable_view,
         prune_filter_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
         options,
-        stream)
+        stream,
+        mr)
       .tbl;
   if (verbose) { timer.print_elapsed_millis(); }
 
@@ -292,7 +294,8 @@ std::unique_ptr<cudf::table> two_step_materialize(
         row_mask->view(),
         prune_payload_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
         options,
-        stream)
+        stream,
+        mr)
       .tbl;
 
   if (verbose) { timer.print_elapsed_millis(); }
