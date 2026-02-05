@@ -38,8 +38,6 @@ namespace CUDF_EXPORT cudf {
  */
 class sort_merge_join {
  public:
-  struct sort_merge_join_match_context;  ///< Forward declaration
-
   sort_merge_join()                                  = delete;
   sort_merge_join(sort_merge_join const&)            = delete;
   sort_merge_join(sort_merge_join&&)                 = delete;
@@ -276,7 +274,6 @@ class sort_merge_join {
     rmm::device_uvector<size_type> map_table_to_unprocessed(rmm::cuda_stream_view stream) const;
   };
 
- public:
   /**
    * @brief Extended match context for sort-merge join with preprocessed table state.
    *
@@ -303,7 +300,6 @@ class sort_merge_join {
     }
   };
 
- private:
   preprocessed_table preprocessed_right;  ///< Preprocessed right table
   null_equality compare_nulls;            ///< Null comparison mode
 
