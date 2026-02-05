@@ -142,12 +142,14 @@ int main(int argc, char const** argv)
   auto constexpr single_step_read = false;
   auto constexpr use_page_index   = true;
 
+  auto const filter_expression_opt =
+    std::make_optional<cudf::ast::operation const>(filter_expression);
   {
     std::cout << "Benchmarking " << input_filepath << "read with next-gen parquet reader...\n";
     benchmark(
       [&] {
         std::ignore = hybrid_scan<single_step_read, use_page_index>(
-          data_source, filter_expression, filters, false, stream, stats_mr);
+          data_source, filter_expression_opt, filters, false, stream, stats_mr);
       },
       iterations);
 
@@ -158,7 +160,7 @@ int main(int argc, char const** argv)
 
   // Check for validity
   auto table_next_gen_reader = hybrid_scan<single_step_read, use_page_index>(
-    data_source, filter_expression, filters, verbose, stream, stats_mr);
+    data_source, filter_expression_opt, filters, verbose, stream, stats_mr);
   auto table_main_reader = std::move(read_parquet(data_source, filter_expression, stream).tbl);
   check_tables_equal(table_next_gen_reader->view(), table_main_reader->view(), stream);
 

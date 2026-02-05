@@ -148,7 +148,7 @@ std::unique_ptr<cudf::table> two_step_materialize(
 template <bool single_step_read, bool use_page_index>
 std::unique_ptr<cudf::table> inline hybrid_scan(
   io_source const& io_source,
-  cudf::ast::expression const& filter_expression,
+  std::optional<cudf::ast::operation const> filter_expression,
   std::unordered_set<hybrid_scan_filter_type> const& filters,
   bool verbose,
   rmm::cuda_stream_view stream,
@@ -159,7 +159,13 @@ std::unique_ptr<cudf::table> inline hybrid_scan(
 
   CUDF_FUNC_RANGE();
 
-  auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+  auto const has_filter_expr = filter_expression.has_value();
+  if (not single_step_read and not has_filter_expr) {
+    throw std::runtime_error("Filter expression must be provided for two-step hybrid scan");
+  }
+
+  auto options = cudf::io::parquet_reader_options::builder().build();
+  if (has_filter_expr) { options.set_filter(filter_expression.value()); }
 
   // Input file buffer span
   auto datasource     = std::move(cudf::io::make_datasources(io_source.get_source_info()).front());
@@ -175,24 +181,22 @@ std::unique_ptr<cudf::table> inline hybrid_scan(
   }
 
   // Start with all row groups
-  auto all_row_group_indices = reader->all_row_groups(options);
+  auto row_group_indices         = reader->all_row_groups(options);
+  auto current_row_group_indices = cudf::host_span<cudf::size_type>(row_group_indices);
 
   // Filter row groups
-  auto filtered_row_group_indices = detail::apply_row_group_filters(
-    datasource_ref, reader_ref, filters, all_row_group_indices, options, verbose, stream);
+  if (has_filter_expr) {
+    row_group_indices = detail::apply_row_group_filters(
+      datasource_ref, reader_ref, filters, current_row_group_indices, options, verbose, stream);
+    current_row_group_indices = cudf::host_span<cudf::size_type>(row_group_indices);
+  }
 
   // Materialize filter and payload columns separately
   if constexpr (single_step_read) {
     return detail::single_step_materialize(
-      datasource_ref, reader_ref, filtered_row_group_indices, options, verbose, stream, mr);
+      datasource_ref, reader_ref, current_row_group_indices, options, verbose, stream, mr);
   } else {
-    return detail::two_step_materialize(datasource_ref,
-                                        reader_ref,
-                                        filters,
-                                        filtered_row_group_indices,
-                                        options,
-                                        verbose,
-                                        stream,
-                                        mr);
+    return detail::two_step_materialize(
+      datasource_ref, reader_ref, filters, current_row_group_indices, options, verbose, stream, mr);
   }
 }

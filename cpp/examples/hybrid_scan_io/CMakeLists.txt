@@ -50,14 +50,23 @@ target_link_libraries(
 target_compile_features(hybrid_scan_pipeline PRIVATE cxx_std_20)
 install(TARGETS hybrid_scan_pipeline DESTINATION bin/examples/libcudf/hybrid_scan_io)
 
-# Build and install hybrid_scan_multifile
-add_executable(hybrid_scan_multifile hybrid_scan_multifile.cpp)
+# Build and install hybrid_scan_multifile_single_step
+add_executable(hybrid_scan_multifile_single_step hybrid_scan_multifile_single_step.cpp)
 target_link_libraries(
-  hybrid_scan_multifile PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+  hybrid_scan_multifile_single_step PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
                                 $<TARGET_OBJECTS:hybrid_scan_utils>
 )
-target_compile_features(hybrid_scan_multifile PRIVATE cxx_std_20)
-install(TARGETS hybrid_scan_multifile DESTINATION bin/examples/libcudf/hybrid_scan_io)
+target_compile_features(hybrid_scan_multifile_single_step PRIVATE cxx_std_20)
+install(TARGETS hybrid_scan_multifile_single_step DESTINATION bin/examples/libcudf/hybrid_scan_io)
+
+# Build and install hybrid_scan_multifile_two_step
+add_executable(hybrid_scan_multifile_two_step hybrid_scan_multifile_two_step.cpp)
+target_link_libraries(
+  hybrid_scan_multifile_two_step PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+                                $<TARGET_OBJECTS:hybrid_scan_utils>
+)
+target_compile_features(hybrid_scan_multifile_two_step PRIVATE cxx_std_20)
+install(TARGETS hybrid_scan_multifile_two_step DESTINATION bin/examples/libcudf/hybrid_scan_io)
 
 # Install the example.parquet file
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet
