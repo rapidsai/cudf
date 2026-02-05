@@ -1098,24 +1098,6 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  byte[][] sliceBytes(byte[] data, int slices) {
-    slices = Math.min(data.length, slices);
-    // We are not going to worry about making it super even here.
-    // The last one gets the extras.
-    int bytesPerSlice = data.length / slices;
-    byte[][] ret = new byte[slices][];
-    int startingAt = 0;
-    for (int i = 0; i < (slices - 1); i++) {
-      ret[i] = new byte[bytesPerSlice];
-      System.arraycopy(data, startingAt, ret[i], 0, bytesPerSlice);
-      startingAt += bytesPerSlice;
-    }
-    // Now for the last one
-    ret[slices - 1] = new byte[data.length - startingAt];
-    System.arraycopy(data, startingAt, ret[slices - 1], 0, data.length - startingAt);
-    return ret;
-  }
-
   @Test
   void testReadCSVBufferMultiBuffer() {
     CSVOptions opts = CSVOptions.builder()
@@ -1126,7 +1108,7 @@ public class TableTest extends CudfTestBase {
             .withQuote('\'')
             .withNullValue("NULL")
             .build();
-    byte[][] data = sliceBytes(CSV_DATA_BUFFER, 10);
+    byte[][] data = TableTestUtils.sliceBytes(CSV_DATA_BUFFER, 10);
     try (Table expected = new Table.TestBuilder()
             .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
             .column(110.0, 111.0, 112.0, 113.0, 114.0, 115.0, 116.0, null, 118.2, 119.8)
@@ -1135,25 +1117,6 @@ public class TableTest extends CudfTestBase {
          Table table = Table.readCSV(TableTest.CSV_DATA_BUFFER_SCHEMA, opts, source)) {
       assertTablesAreEqual(expected, table);
     }
-  }
-
-  public static byte[] arrayFrom(File f) throws IOException {
-    long len = f.length();
-    if (len > Integer.MAX_VALUE) {
-      throw new IllegalArgumentException("Sorry cannot read " + f +
-              " into an array it does not fit");
-    }
-    int remaining = (int)len;
-    byte[] ret = new byte[remaining];
-    try (java.io.FileInputStream fin = new java.io.FileInputStream(f)) {
-      int at = 0;
-      while (remaining > 0) {
-        int amount = fin.read(ret, at, remaining);
-        at += amount;
-        remaining -= amount;
-      }
-    }
-    return ret;
   }
 
   public static MultiBufferDataSource sourceFrom(File f) throws IOException {
@@ -1544,7 +1507,7 @@ public class TableTest extends CudfTestBase {
             .includeColumn("zip")
             .includeColumn("num_units")
             .build();
-    byte [][] data = sliceBytes(arrayFrom(TEST_PARQUET_FILE), 10);
+    byte [][] data = TableTestUtils.sliceBytes(TableTestUtils.arrayFrom(TEST_PARQUET_FILE), 10);
     try (MultiBufferDataSource source = sourceFrom(data);
          Table table = Table.readParquet(opts, source)) {
       long rows = table.getRowCount();

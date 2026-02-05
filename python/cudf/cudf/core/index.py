@@ -69,7 +69,6 @@ if TYPE_CHECKING:
 
     from cudf._typing import ColumnLike, Dtype
     from cudf.core.dataframe import DataFrame
-    from cudf.core.frame import Frame
     from cudf.core.multiindex import MultiIndex
     from cudf.core.series import Series
     from cudf.core.tools.datetimes import DateOffset, MonthEnd, YearEnd
@@ -1734,7 +1733,7 @@ class Index(SingleColumnFrame):
 
     def _binaryop(
         self,
-        other: Frame,
+        other: Any,
         op: str,
         fill_value: Any = None,
         *args,
@@ -2869,11 +2868,24 @@ class RangeIndex(Index):
     @cached_property
     @_performance_tracking
     def values_host(self) -> np.ndarray:
+        """
+        Return a numpy array from the RangeIndex.
+
+        .. deprecated:: 26.04
+            `values_host` is deprecated and will be removed in a future version.
+            Use `to_numpy()` instead.
+        """
+        warnings.warn(
+            "values_host is deprecated and will be removed in a future version. "
+            "Use to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         return np.arange(self.start, self.stop, self.step)
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
-        return self.values_host
+        return np.arange(self.start, self.stop, self.step)
 
     @_performance_tracking
     def to_cupy(self) -> cupy.ndarray:
@@ -3988,7 +4000,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]', freq='YE-DEC')
         >>> datetime_index.year
-        Index([2000, 2001, 2002], dtype='int16')
+        Index([2000, 2001, 2002], dtype='int32')
         """
         # .year is already a cached_property
         return Index._from_column(self._column.year, name=self.name)
@@ -4008,7 +4020,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]', freq='ME')
         >>> datetime_index.month
-        Index([1, 2, 3], dtype='int16')
+        Index([1, 2, 3], dtype='int32')
         """
         # .month is already a cached_property
         return Index._from_column(self._column.month, name=self.name)
@@ -4028,7 +4040,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day
-        Index([1, 2, 3], dtype='int16')
+        Index([1, 2, 3], dtype='int32')
         """
         # .day is already a cached_property
         return Index._from_column(self._column.day, name=self.name)
@@ -4050,7 +4062,7 @@ class DatetimeIndex(Index):
                     '2000-01-01 02:00:00'],
                     dtype='datetime64[ns]', freq='h')
         >>> datetime_index.hour
-        Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int32')
         """
         # .hour is already a cached_property
         return Index._from_column(self._column.hour, name=self.name)
@@ -4072,7 +4084,7 @@ class DatetimeIndex(Index):
                     '2000-01-01 00:02:00'],
                     dtype='datetime64[ns]', freq='min')
         >>> datetime_index.minute
-        Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int32')
         """
         # .minute is already a cached_property
         return Index._from_column(self._column.minute, name=self.name)
@@ -4094,7 +4106,7 @@ class DatetimeIndex(Index):
                     '2000-01-01 00:00:02'],
                     dtype='datetime64[ns]', freq='s')
         >>> datetime_index.second
-        Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int32')
         """
         # .second is already a cached_property
         return Index._from_column(self._column.second, name=self.name)
@@ -4116,7 +4128,7 @@ class DatetimeIndex(Index):
                '2000-01-01 00:00:00.000002'],
               dtype='datetime64[ns]', freq='us')
         >>> datetime_index.microsecond
-        Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int32')
         """
         # .microsecond is already a cached_property
         return Index._from_column(self._column.microsecond, name=self.name)
@@ -4139,7 +4151,7 @@ class DatetimeIndex(Index):
                        '2000-01-01 00:00:00.000000002'],
                       dtype='datetime64[ns]', freq='ns')
         >>> datetime_index.nanosecond
-        Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int32')
         """
         # .nanosecond is already a cached_property
         return Index._from_column(self._column.nanosecond, name=self.name)
@@ -4162,7 +4174,7 @@ class DatetimeIndex(Index):
                     '2017-01-08'],
                     dtype='datetime64[ns]', freq='D')
         >>> datetime_index.weekday
-        Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int32')
         """
         # .weekday is already a cached_property
         return Index._from_column(self._column.weekday, name=self.name)
@@ -4185,7 +4197,7 @@ class DatetimeIndex(Index):
                     '2017-01-08'],
                     dtype='datetime64[ns]', freq='D')
         >>> datetime_index.dayofweek
-        Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int32')
         """
         # .weekday is already a cached_property
         return Index._from_column(self._column.weekday, name=self.name)

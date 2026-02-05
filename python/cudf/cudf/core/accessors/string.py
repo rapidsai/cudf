@@ -147,7 +147,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.ip2int()
         0    212336897
         1    167772161
-        dtype: int64
+        dtype: uint32
 
         Returns 0's if any string is not an IP.
 
@@ -156,7 +156,7 @@ class StringMethods(BaseAccessor):
         0    212336897
         1    167772161
         2            0
-        dtype: int64
+        dtype: uint32
         """
         return self._return_or_inplace(self._column.ipv4_to_integers())
 
@@ -655,6 +655,11 @@ class StringMethods(BaseAccessor):
             accepted.
         flags : int, default 0 (no flags)
             Flags to pass through to the regex engine (e.g. re.MULTILINE)
+        na : scalar, optional
+            Fill value for missing values. The default depends on dtype of the
+            array. For the ``"str"`` dtype, ``False`` is used. For object
+            dtype, ``numpy.nan`` is used. For the nullable ``StringDtype``,
+            ``pandas.NA`` is used.
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
             If False, treats the pattern as a literal string.
@@ -743,7 +748,7 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.contains`
 
-            The parameters `case` and `na` are not yet supported and will
+            The parameter `case` is not yet supported and will
             raise a NotImplementedError if anything other than the default
             value is set.
             The `flags` parameter currently only supports re.DOTALL and
@@ -760,8 +765,6 @@ class StringMethods(BaseAccessor):
                 "and will raise in a future version.",
                 FutureWarning,
             )
-        if na not in {no_default, np.nan}:
-            raise NotImplementedError("`na` parameter is not yet supported")
         if regex and isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
             pat = pat.pattern
@@ -794,6 +797,8 @@ class StringMethods(BaseAccessor):
             else:
                 input_column = self._column
             result_col = input_column.str_contains(col_pat)  # type: ignore[arg-type]
+        if na is not no_default:
+            result_col = result_col.fillna(na)
         return self._return_or_inplace(result_col)
 
     def like(self, pat: str, esc: str | None = None) -> Series | Index:
@@ -4266,7 +4271,11 @@ class StringMethods(BaseAccessor):
             return result
 
     def match(
-        self, pat: str, case: bool = True, flags: int = 0
+        self,
+        pat: str,
+        case: bool = True,
+        flags: int = 0,
+        na=no_default,
     ) -> Series | Index:
         """
         Determine if each string matches a regular expression.
@@ -4277,6 +4286,11 @@ class StringMethods(BaseAccessor):
             Character sequence or regular expression.
         flags : int, default 0 (no flags)
             Flags to pass through to the regex engine (e.g. re.MULTILINE)
+        na : scalar, optional
+            Fill value for missing values. The default depends on dtype of the
+            array. For the ``"str"`` dtype, ``False`` is used. For object
+            dtype, ``numpy.nan`` is used. For the nullable ``StringDtype``,
+            ``pandas.NA`` is used.
 
         Returns
         -------
@@ -4306,7 +4320,7 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.match`
 
-            Parameters `case` and `na` are currently not supported.
+            Parameter `case` is currently not supported.
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
         """
@@ -4323,7 +4337,10 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
-        return self._return_or_inplace(self._column.matches_re(pat, flags))
+        result = self._column.matches_re(pat, flags)
+        if na is not no_default:
+            result = result.fillna(na)
+        return self._return_or_inplace(result)
 
     def url_decode(self) -> Series | Index:
         """
