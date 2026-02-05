@@ -78,7 +78,7 @@ async def concatenate_node(
     collective_id
         Pre-allocated collective ID for this operation.
     """
-    async with shutdown_on_error(context, ch_in, ch_out):
+    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
         # Receive metadata.
         input_metadata = await recv_metadata(ch_in, context)
         nranks = context.comm().nranks
@@ -134,6 +134,8 @@ async def concatenate_node(
                 duplicated=output_duplicated,
             )
             await send_metadata(ch_out, context, metadata)
+            if tracer is not None and output_duplicated:
+                tracer.set_duplicated()
 
             allgather = AllGatherManager(context, collective_id)
             stream = context.get_stream_from_pool()
@@ -146,6 +148,8 @@ async def concatenate_node(
 
             # Extract concatenated result
             result_table = await allgather.extract_concatenated(stream)
+            if tracer is not None:
+                tracer.add_chunk(table=result_table)
 
             # If no chunks were gathered, result_table has 0 columns.
             # We need to create an empty table with the correct schema.
@@ -166,6 +170,8 @@ async def concatenate_node(
                 duplicated=output_duplicated,
             )
             await send_metadata(ch_out, context, metadata)
+            if tracer is not None and output_duplicated:
+                tracer.set_duplicated()
 
             # Local repartitioning
             seq_num = 0
@@ -202,6 +208,8 @@ async def concatenate_node(
                             context=ir_context,
                         )
                         del chunks
+                    if tracer is not None:
+                        tracer.add_chunk(table=df.table)
                     await ch_out.send(
                         context,
                         Message(

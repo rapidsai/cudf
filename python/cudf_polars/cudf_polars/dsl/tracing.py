@@ -1,10 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for tracing and monitoring IR execution."""
 
 from __future__ import annotations
 
+import enum
 import functools
 import os
 import time
@@ -48,6 +49,14 @@ if TYPE_CHECKING:
 
     import cudf_polars.containers
     from cudf_polars.dsl import ir
+
+
+class Scope(str, enum.Enum):
+    """Scope values for structured logging."""
+
+    PLAN = "plan"
+    ACTOR = "actor"
+    EVALUATE_IR_NODE = "evaluate_ir_node"
 
 
 @functools.cache
@@ -199,8 +208,9 @@ def log_do_evaluate(
                 before
                 | after
                 | {
+                    "scope": Scope.EVALUATE_IR_NODE.value,
                     "overhead_duration": (before_end - before_start)
-                    + (after_end - after_start)
+                    + (after_end - after_start),
                 }
             )
             log.info("Execute IR", **record)

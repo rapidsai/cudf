@@ -74,7 +74,7 @@ async def default_node_single(
     -----
     Chunks are processed in the order they are received.
     """
-    async with shutdown_on_error(context, ch_in, ch_out):
+    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
         # Recv/send metadata.
         metadata_in = await recv_metadata(ch_in, context)
         partitioning = None
@@ -89,6 +89,8 @@ async def default_node_single(
             duplicated=metadata_in.duplicated,
         )
         await send_metadata(ch_out, context, metadata_out)
+        if tracer is not None and metadata_in.duplicated:
+            tracer.set_duplicated()
 
         # Recv/send data.
         seq_num = 0
@@ -129,6 +131,8 @@ async def default_node_single(
                     ),
                     context=ir_context,
                 )
+            if tracer is not None:
+                tracer.add_chunk(table=df.table)
             await ch_out.send(
                 context,
                 Message(
@@ -172,7 +176,7 @@ async def default_node_multi(
         Index of the input channel to preserve partitioning information for.
         If None, no partitioning information is preserved.
     """
-    async with shutdown_on_error(context, *chs_in, ch_out):
+    async with shutdown_on_error(context, *chs_in, ch_out, trace_ir=ir) as tracer:
         # Merge and forward basic metadata.
         local_count = 1
         duplicated = True
@@ -195,6 +199,8 @@ async def default_node_multi(
             duplicated=duplicated,
         )
         await send_metadata(ch_out, context, metadata)
+        if tracer is not None and duplicated:
+            tracer.set_duplicated()
 
         seq_num = 0
         n_children = len(chs_in)
@@ -260,6 +266,8 @@ async def default_node_multi(
                     context=ir_context,
                 )
                 del dfs
+            if tracer is not None:
+                tracer.add_chunk(table=df.table)
             await ch_out.send(
                 context,
                 Message(
@@ -677,6 +685,7 @@ def generate_ir_sub_network_wrapper(
 @define_py_node()
 async def metadata_feeder_node(
     context: Context,
+    ir: IR,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     metadata: ChannelMetadata,
@@ -688,6 +697,8 @@ async def metadata_feeder_node(
     ----------
     context
         The rapidsmpf context.
+    ir
+        The IR node (for tracing).
     ch_in
         The input channel to pull data from.
     ch_out
@@ -695,10 +706,14 @@ async def metadata_feeder_node(
     metadata
         The metadata to add to the output channel.
     """
-    async with shutdown_on_error(context, ch_in, ch_out):
+    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
         await send_metadata(ch_out, context, metadata)
+        if tracer is not None and metadata.duplicated:
+            tracer.set_duplicated()
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
+            if tracer is not None:
+                tracer.chunk_count += 1
         await ch_out.drain(context)
 
 
