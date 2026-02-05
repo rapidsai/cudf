@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import itertools
 import string
@@ -1449,8 +1449,8 @@ def test_merge_combinations(
         else:
             expected, other, other_unique = right, left, left_unique
         if how == "inner":
-            keep_values = set(left["key"].values_host).intersection(
-                right["key"].values_host
+            keep_values = set(left["key"].to_numpy()).intersection(
+                right["key"].to_numpy()
             )
             keep_mask = expected["key"].isin(keep_values)
             expected = expected[keep_mask]
@@ -1472,8 +1472,8 @@ def test_merge_combinations(
             right_counts = right["key"].value_counts()
             expected_counts = left_counts.mul(right_counts, fill_value=1)
             expected_counts = expected_counts.astype(np.intp)
-            expected = expected_counts.index.values_host.repeat(
-                expected_counts.values_host
+            expected = expected_counts.index.to_numpy().repeat(
+                expected_counts.to_numpy()
             )
             expected = cudf.DataFrame({"key": expected})
             expected = expected.sort_values("key")

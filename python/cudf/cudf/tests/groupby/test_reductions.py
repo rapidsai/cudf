@@ -74,7 +74,7 @@ def test_groupby_cats():
         {"cats": pd.Categorical(list("aabaacaab")), "vals": rng.random(9)}
     )
 
-    cats = df["cats"].values_host
+    cats = df["cats"].to_numpy()
     vals = df["vals"].to_numpy()
 
     grouped = df.groupby(["cats"], as_index=False).mean()

@@ -380,7 +380,7 @@ def test_dataframe_basic():
     np.testing.assert_equal(df["vals"].to_numpy(), hvals)
 
     # As matrix
-    mat = df.values_host
+    mat = df.to_numpy()
 
     expect = np.vstack([hkeys, hvals]).T
 

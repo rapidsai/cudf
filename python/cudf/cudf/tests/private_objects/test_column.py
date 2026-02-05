@@ -445,7 +445,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data["a"]]
-    got_mask = gd_data["a"]._column._get_mask_as_column().values_host
+    got_mask = gd_data["a"]._column._get_mask_as_column().to_numpy()
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
@@ -481,7 +481,7 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data]
-    got_mask = gd_data._column._get_mask_as_column().values_host
+    got_mask = gd_data._column._get_mask_as_column().to_numpy()
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 

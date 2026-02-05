@@ -9,6 +9,10 @@ import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.core.memory_reserve_or_wait import (
+    reserve_memory,
+)
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -37,7 +41,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    opaque_reservation,
     send_metadata,
 )
 
@@ -345,25 +348,29 @@ async def read_chunk(
     tracer
         The actor tracer for collecting runtime statistics.
     """
-    with opaque_reservation(context, estimated_chunk_bytes):
+    with opaque_memory_usage(
+        await reserve_memory(
+            context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
+        )
+    ):
         df = await asyncio.to_thread(
             scan.do_evaluate,
             *scan._non_child_args,
             context=ir_context,
         )
-        if tracer is not None:
-            tracer.add_chunk(table=df.table)
-        await ch_out.send(
-            context,
-            Message(
-                seq_num,
-                TableChunk.from_pylibcudf_table(
-                    df.table,
-                    df.stream,
-                    exclusive_view=True,
-                ),
+    if tracer is not None:
+        tracer.add_chunk(table=df.table)
+    await ch_out.send(
+        context,
+        Message(
+            seq_num,
+            TableChunk.from_pylibcudf_table(
+                df.table,
+                df.stream,
+                exclusive_view=True,
             ),
-        )
+        ),
+    )
 
 
 @define_py_node()

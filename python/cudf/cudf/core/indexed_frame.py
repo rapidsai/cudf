@@ -184,7 +184,7 @@ doc_binop_template = textwrap.dedent(
 def _get_unique_drop_labels(array):
     """Return labels to be dropped for IndexFrame.drop."""
     if isinstance(array, (cudf.Series, cudf.Index, ColumnBase)):
-        yield from np.unique(as_column(array).values_host)
+        yield from np.unique(as_column(array).to_numpy())
     elif is_scalar(array):
         yield array
     else:
@@ -6493,7 +6493,7 @@ class IndexedFrame(Frame):
                 if col.dtype == "category"
             ],
             normalize_token(self.index),
-            normalize_token(self.hash_values().values_host),
+            normalize_token(self.hash_values().to_numpy()),
         ]
 
 
@@ -6820,7 +6820,7 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     val_col = as_column(
         value,
         dtype=col.dtype
-        if (cudf.utils.utils.is_na_like(value) or value is np.nan)
+        if (cudf.utils.utils.is_na_like(value) or value in {None, np.nan})
         else None,
     )
     if val_col.dtype.kind != "f" and val_col.can_cast_safely(col.dtype):
