@@ -865,17 +865,20 @@ class DatetimeTZColumn(DatetimeColumn):
         with self._local_time.access(
             mode="read", scope="internal"
         ) as local_time:
+            target_dtype = get_dtype_of_same_kind(
+                self.dtype, np.dtype(np.int16)
+            )
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and target_dtype == np.dtype("int16"):
+                target_dtype = np.dtype("int32")
             result = ColumnBase.create(
                 plc.datetime.extract_datetime_component(
                     local_time.plc_column,
                     field,
                 ),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
+                target_dtype,
             )
-            if cudf.get_option(
-                "mode.pandas_compatible"
-            ) and result.dtype == np.dtype("int16"):
-                result = result.astype(np.dtype("int32"))
             return result
 
     def __repr__(self) -> str:
