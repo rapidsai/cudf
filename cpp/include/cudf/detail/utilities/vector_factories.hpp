@@ -162,28 +162,6 @@ rmm::device_uvector<T> make_device_uvector_async(std::vector<T, Allocator> const
 }
 
 /**
- * @brief Asynchronously construct a `device_uvector` from a `std::string`
- *
- * @note This function does not synchronize `stream`.
- *
- * @tparam CharT The character type of the string
- * @tparam Traits The character traits type
- * @tparam Allocator The allocator type of the std::string
- * @param source_data The std::string of data to deep copy
- * @param stream The stream on which to allocate memory and perform the copy
- * @param mr The memory resource to use for allocating the returned device_uvector
- * @return A device_uvector containing the copied data
- */
-template <typename CharT, typename Traits, typename Allocator>
-rmm::device_uvector<CharT> make_device_uvector_async(
-  std::basic_string<CharT, Traits, Allocator> const& source_data,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  return make_device_uvector_async(host_span<CharT const>{source_data}, stream, mr);
-}
-
-/**
  * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a
  * `device_span`
  *
@@ -292,29 +270,6 @@ rmm::device_uvector<T> make_device_uvector(std::vector<T, Allocator> const& sour
                                            rmm::device_async_resource_ref mr)
 {
   return make_device_uvector(host_span<T const>{source_data}, stream, mr);
-}
-
-/**
- * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
- * `std::basic_string`
- *
- * @note This function synchronizes `stream`.
- *
- * @tparam CharT The character type of the string
- * @tparam Traits The character traits of the string
- * @tparam Allocator The allocator type of the string
- * @param source_data The string of data to deep copy
- * @param stream The stream on which to allocate memory and perform the copy
- * @param mr The memory resource to use for allocating the returned device_uvector
- * @return A device_uvector containing the copied data
- */
-template <typename CharT, typename Traits, typename Allocator>
-rmm::device_uvector<CharT> make_device_uvector(
-  std::basic_string<CharT, Traits, Allocator> const& source_data,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  return make_device_uvector(host_span<CharT const>{source_data}, stream, mr);
 }
 
 /**
