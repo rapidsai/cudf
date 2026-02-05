@@ -17,11 +17,7 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import as_buffer
-from cudf.core.column._pylibcudf_helpers import (
-    fillna_numeric_zero,
-    isnull_including_nan,
-    notnull_excluding_nan,
-)
+from cudf.core.column._pylibcudf_helpers import fillna_numeric_zero
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
@@ -209,7 +205,18 @@ class NumericalColumn(NumericalBaseColumn):
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
             return as_column(False, length=len(self))
 
-        return isnull_including_nan(self)
+        with self.access(mode="read", scope="internal"):
+            is_null_plc = plc.unary.is_null(self.plc_column)
+            if self.dtype.kind == "f":
+                is_nan_plc = plc.unary.is_nan(self.plc_column)
+                result_plc = plc.binaryop.binary_operation(
+                    is_null_plc,
+                    is_nan_plc,
+                    plc.binaryop.BinaryOperator.BITWISE_OR,
+                    plc.types.DataType(plc.types.TypeId.BOOL8),
+                )
+                return ColumnBase.from_pylibcudf(result_plc)
+            return ColumnBase.create(is_null_plc, np.dtype(np.bool_))
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column.
@@ -219,7 +226,21 @@ class NumericalColumn(NumericalBaseColumn):
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
             result = as_column(True, length=len(self))
         else:
-            result = notnull_excluding_nan(self)
+            with self.access(mode="read", scope="internal"):
+                is_valid_plc = plc.unary.is_valid(self.plc_column)
+                if self.dtype.kind == "f":
+                    is_not_nan_plc = plc.unary.is_not_nan(self.plc_column)
+                    result_plc = plc.binaryop.binary_operation(
+                        is_valid_plc,
+                        is_not_nan_plc,
+                        plc.binaryop.BinaryOperator.BITWISE_AND,
+                        plc.types.DataType(plc.types.TypeId.BOOL8),
+                    )
+                    result = ColumnBase.from_pylibcudf(result_plc)
+                else:
+                    result = ColumnBase.create(
+                        is_valid_plc, np.dtype(np.bool_)
+                    )
 
         if cudf.get_option("mode.pandas_compatible"):
             return result
