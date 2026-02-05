@@ -426,7 +426,7 @@ async def allgather_reduce(
         The sum of each local_value across all ranks.
     """
     n = len(local_values)
-    fmt = "q" * n
+    fmt = f"<{'q' * n}"
     data = struct.pack(fmt, *local_values)
     packed = PackedData.from_host_bytes(data, context.br())
 
