@@ -11,8 +11,8 @@ from contextlib import asynccontextmanager, contextmanager
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.collectives.allgather import AllGather
 from rapidsmpf.memory.packed_data import PackedData
+from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
