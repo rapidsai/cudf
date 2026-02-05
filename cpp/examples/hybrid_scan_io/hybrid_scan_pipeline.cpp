@@ -98,7 +98,8 @@ struct hybrid_scan_fn {
       fetch_byte_ranges(file_buffer_span, all_column_chunk_byte_ranges, stream, mr);
     auto all_column_chunk_data = make_device_spans<uint8_t>(all_column_chunk_buffers);
     table.get()                = std::move(
-      reader->materialize_all_columns(row_groups_indices, all_column_chunk_data, options, stream)
+      reader
+        ->materialize_all_columns(row_groups_indices, all_column_chunk_data, options, stream, mr)
         .tbl);
     stream.synchronize_no_throw();
   }
