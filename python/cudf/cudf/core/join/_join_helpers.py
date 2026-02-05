@@ -28,8 +28,6 @@ if TYPE_CHECKING:
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.dataframe import DataFrame
 
-from cudf.core.column._pylibcudf_helpers import fillna_numeric_zero
-
 
 class _Indexer:
     # Indexer into a column (either a data column or index level).
@@ -113,25 +111,19 @@ def _match_join_keys(
         ltype.kind == "m" and rtype.kind == "m"
     ):
         common_type = max(ltype, rtype)
-    elif ltype.kind in "mM" or rtype.kind in "mM":
-        # Cache fillna(0) results to avoid redundant operations
-        rcol_filled = fillna_numeric_zero(rcol)
-        lcol_filled = fillna_numeric_zero(lcol)
+    elif ltype.kind in "mM" and not rcol.fillna(0).can_cast_safely(ltype):
+        raise TypeError(
+            f"Cannot join between {ltype} and {rtype}, please type-cast both "
+            "columns to the same type."
+        )
+    elif rtype.kind in "mM" and not lcol.fillna(0).can_cast_safely(rtype):
+        raise TypeError(
+            f"Cannot join between {rtype} and {ltype}, please type-cast both "
+            "columns to the same type."
+        )
 
-        if ltype.kind in "mM" and not rcol_filled.can_cast_safely(ltype):
-            raise TypeError(
-                f"Cannot join between {ltype} and {rtype}, please type-cast both "
-                "columns to the same type."
-            )
-        if rtype.kind in "mM" and not lcol_filled.can_cast_safely(rtype):
-            raise TypeError(
-                f"Cannot join between {rtype} and {ltype}, please type-cast both "
-                "columns to the same type."
-            )
-
-        if how == "left" and rcol_filled.can_cast_safely(ltype):
-            return lcol, rcol.astype(ltype)
-
+    if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
+        return lcol, rcol.astype(ltype)
     if common_type is None:
         common_type = np.dtype(np.float64)
     return lcol.astype(common_type), rcol.astype(common_type)
