@@ -19,6 +19,11 @@
 #include <unordered_set>
 
 /**
+ * @file hybrid_scan_commons.hpp
+ * @brief Common hybrid scan related functions for hybrid_scan examples
+ */
+
+/**
  * @brief Enum to represent the available hybrid scan filters
  */
 enum class hybrid_scan_filter_type : uint8_t {

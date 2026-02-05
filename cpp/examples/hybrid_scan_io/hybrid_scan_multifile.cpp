@@ -4,9 +4,9 @@
  */
 
 #include "benchmark.hpp"
+#include "common_utils.hpp"
 #include "hybrid_scan_commons.hpp"
 #include "io_source.hpp"
-#include "utils.hpp"
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/io/parquet.hpp>

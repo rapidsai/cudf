@@ -5,8 +5,8 @@
 
 #include "hybrid_scan_commons.hpp"
 
+#include "io_utils.hpp"
 #include "timer.hpp"
-#include "utils.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
@@ -17,7 +17,10 @@
 
 #include <unordered_set>
 
-namespace detail {
+/**
+ * @file hybrid_scan_commons.cpp
+ * @brief Definitions for common hybrid scan related functions for hybrid_scan examples
+ */
 
 namespace {
 
@@ -52,6 +55,8 @@ std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_
 }
 
 }  // namespace
+
+namespace detail {
 
 std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasource,
                                                  cudf::io::parquet_reader_options const& options,
