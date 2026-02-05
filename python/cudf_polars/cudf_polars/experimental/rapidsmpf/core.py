@@ -33,6 +33,7 @@ import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.experimental.dispatch import make_lowering_wrapper
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import (
@@ -336,7 +337,9 @@ def lower_ir_graph(
         "config_options": config_options,
         "stats": collect_statistics(ir, config_options),
     }
-    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
+    mapper: LowerIRTransformer = CachingVisitor(
+        make_lowering_wrapper(lower_ir_node), state=state
+    )
     return *mapper(ir), state["stats"]
 
 

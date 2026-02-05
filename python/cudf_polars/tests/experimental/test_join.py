@@ -273,8 +273,8 @@ def test_cache_preserves_partitioning_join():
     # Use joined result twice to trigger Cache (CSE)
     q = pl.concat(
         [
-            joined.group_by("key").agg(pl.col("val_a").sum()),
-            joined.group_by("key").agg(pl.col("val_b").sum()),
+            joined.group_by("key").agg(pl.col("val_a").sum().alias("val")),
+            joined.group_by("key").agg(pl.col("val_b").sum().alias("val")),
         ]
     )
 
@@ -297,3 +297,4 @@ def test_cache_preserves_partitioning_join():
         1 for node in traversal([lowered_ir]) if isinstance(node, Shuffle)
     )
     assert num_shuffles == 2, f"Expected 2 shuffles, got {num_shuffles}"
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
