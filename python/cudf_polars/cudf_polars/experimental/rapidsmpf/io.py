@@ -29,10 +29,7 @@ from cudf_polars.experimental.base import (
     PartitionInfo,
 )
 from cudf_polars.experimental.io import SplitScan, scan_partition_plan
-from cudf_polars.experimental.rapidsmpf.dispatch import (
-    generate_ir_sub_network,
-    lower_ir_node,
-)
+from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import (
     define_py_node,
     metadata_feeder_node,
@@ -52,8 +49,9 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import ColumnStat, StatsCollector
+    from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
+    from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -113,10 +111,10 @@ class Lineariser:
         await self.ch_out.drain(self.context)
 
 
-@lower_ir_node.register(DataFrameScan)
-def _(
+def lower_dataframescan_rapidsmpf(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """Lower a DataFrameScan node for the RapidsMPF streaming runtime."""
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'lower_ir_node_rapidsmpf'"
@@ -166,7 +164,7 @@ async def dataframescan_node(
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    async with shutdown_on_error(context, ch_out):
+    async with shutdown_on_error(context, ch_out, trace_ir=ir) as tracer:
         # Find local partition count.
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
@@ -216,6 +214,7 @@ async def dataframescan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
             return
@@ -241,6 +240,7 @@ async def dataframescan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
 
@@ -284,10 +284,10 @@ def _(
     return nodes, channels
 
 
-@lower_ir_node.register(Scan)
-def _(
+def lower_scan_rapidsmpf(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """Lower a Scan node for the RapidsMPF streaming runtime."""
     config_options = rec.state["config_options"]
     if (
         ir.typ in ("csv", "parquet", "ndjson")
@@ -322,6 +322,7 @@ async def read_chunk(
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
+    tracer: ActorTracer | None = None,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
@@ -341,6 +342,8 @@ async def read_chunk(
     estimated_chunk_bytes
         Estimated size of the chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
+    tracer
+        The actor tracer for collecting runtime statistics.
     """
     with opaque_reservation(context, estimated_chunk_bytes):
         df = await asyncio.to_thread(
@@ -348,6 +351,8 @@ async def read_chunk(
             *scan._non_child_args,
             context=ir_context,
         )
+        if tracer is not None:
+            tracer.add_chunk(table=df.table)
         await ch_out.send(
             context,
             Message(
@@ -396,7 +401,7 @@ async def scan_node(
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    async with shutdown_on_error(context, ch_out):
+    async with shutdown_on_error(context, ch_out, trace_ir=ir) as tracer:
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
@@ -487,6 +492,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
             return
@@ -512,6 +518,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
 
@@ -684,6 +691,7 @@ def _(
         # node does not send metadata.
         metadata_node = metadata_feeder_node(
             rec.state["context"],
+            ir,
             ch_in,
             ch_out,
             ChannelMetadata(

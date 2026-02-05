@@ -27,18 +27,19 @@ import rmm
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
-import cudf_polars.experimental.rapidsmpf.lower
 import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
-from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
+from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
 from cudf_polars.experimental.rapidsmpf.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
 )
+from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
@@ -57,11 +58,13 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+    from cudf_polars.experimental.dispatch import (
+        LowerIRTransformer,
+        State as LowerState,
+    )
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
-        LowerIRTransformer,
-        LowerState,
         SubNetGenerator,
     )
 
@@ -93,6 +96,9 @@ def evaluate_logical_plan(
 
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
+
+    # Log the query plan structure for tracing (no-op if tracing disabled)
+    log_query_plan(ir)
 
     # Reserve shuffle IDs for the entire pipeline execution
     with ReserveOpIDs(ir) as collective_id_map:
