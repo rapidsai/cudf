@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.window.rolling import _RollingBase
-from cudf.utils.dtypes import is_dtype_obj_numeric
 
 if TYPE_CHECKING:
     from cudf.core.column.column import ColumnBase

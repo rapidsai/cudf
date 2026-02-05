@@ -222,9 +222,15 @@ void generate_depth_remappings(
         auto fut = source->device_read_async(io_offset, io_size, dest, stream);
         read_tasks.emplace_back(std::move(fut));
       } else {
-        auto const read_buffer = source->host_read(io_offset, io_size);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(
-          dest, read_buffer->data(), read_buffer->size(), cudaMemcpyDefault, stream));
+        read_tasks.emplace_back(std::async(
+          std::launch::deferred, [source = std::ref(*source), io_offset, io_size, dest, stream]() {
+            auto const read_buffer = source.get().host_read(io_offset, io_size);
+            cudf::detail::cuda_memcpy_async(
+              cudf::device_span<uint8_t>{static_cast<uint8_t*>(dest), io_size},
+              cudf::host_span<uint8_t const>{read_buffer->data(), io_size},
+              stream);
+            return io_size;
+          }));
       }
 
       // Set compressed_data pointers for all coalesced chunks
