@@ -675,9 +675,10 @@ class NumericalColumn(NumericalBaseColumn):
                     self._dtype = dtype
                     return self
             if self.dtype.kind == "f" and dtype.kind in "iu":
-                if (
-                    not is_pandas_nullable_extension_dtype(dtype)
-                    and self.nan_count > 0
+                if not is_pandas_nullable_extension_dtype(dtype) and (
+                    self.nan_count > 0
+                    or np.isinf(self.min())
+                    or np.isinf(self.max())
                 ):
                     raise TypeError(
                         "Cannot convert non-finite values (NA or inf) to integer"

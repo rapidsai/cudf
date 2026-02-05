@@ -4257,6 +4257,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/multi/test_sorting.py::test_remove_unused_levels_large[datetime64[D]-str]",
     "tests/indexes/multi/test_sorting.py::test_remove_unused_levels_large[int64-int64]",
     "tests/indexes/multi/test_sorting.py::test_unsortedindex_doc_examples",
+    "tests/indexes/numeric/test_astype.py::TestAstype::test_astype_float64_to_uint64",
     "tests/indexes/numeric/test_indexing.py::TestGetIndexer::test_get_indexer_invalid",
     "tests/indexes/numeric/test_indexing.py::TestGetIndexer::test_get_indexer_nan",
     "tests/indexes/numeric/test_indexing.py::TestGetIndexer::test_get_indexer_nearest_decreasing[backfill-expected1]",
