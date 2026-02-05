@@ -163,6 +163,7 @@ add_library(
   src/CompiledExpression.cpp
   src/ContiguousTableJni.cpp
   src/DataSourceHelperJni.cpp
+  src/DeletionVectorJni.cpp
   src/HashJoinJni.cpp
   src/HostMemoryBufferNativeUtilsJni.cpp
   src/KeyRemappingJni.cpp
