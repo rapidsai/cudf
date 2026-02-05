@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,15 +33,6 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream,
                     rmm::device_async_resource_ref mr);
-
-/**
- * @copydoc cudf::packed_size
- *
- * @param stream Optional CUDA stream on which to execute kernels
- **/
-std::size_t packed_size(cudf::table_view const& input,
-                        rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr);
 
 // opaque implementation of `metadata_builder` since it needs to use
 // `serialized_column`, which is only defined in pack.cpp
