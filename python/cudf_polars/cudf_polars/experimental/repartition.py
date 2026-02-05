@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Repartitioning Logic."""
 
@@ -37,6 +37,7 @@ class Repartition(IR):
 
     __slots__ = ()
     _non_child = ("schema",)
+    _n_non_child_args = 0
 
     def __init__(self, schema: Schema, df: IR):
         self.schema = schema
