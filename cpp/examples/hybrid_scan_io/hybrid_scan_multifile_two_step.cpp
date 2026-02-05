@@ -47,9 +47,6 @@ struct hybrid_scan_two_step_fn {
 
   void operator()(int tid)
   {
-    auto strided_indices = std::views::iota(size_t{0}, input_sources.size()) |
-                           std::views::filter([&](auto idx) { return idx % num_threads == tid; });
-
     timer timer;
 
     auto constexpr single_step_read = false;
@@ -57,6 +54,9 @@ struct hybrid_scan_two_step_fn {
 
     auto const filter_expression_opt = std::make_optional<cudf::ast::operation const>(
       filter_expressions[tid % filter_expressions.size()]);
+
+    auto strided_indices = std::views::iota(size_t{0}, input_sources.size()) |
+                           std::views::filter([&](auto idx) { return idx % num_threads == tid; });
     for (auto source_idx : strided_indices) {
       std::ignore = hybrid_scan<single_step_read, use_page_index>(
         input_sources[source_idx], filter_expression_opt, filters, false, stream, mr);
