@@ -43,6 +43,76 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
   return std::make_shared<rmm::mr::cuda_async_memory_resource>();
 }
 
+cudf::ast::operation create_filter_expression(std::string const& column_name,
+                                              std::string const& literal_value)
+{
+  auto const column_reference = cudf::ast::column_name_reference(column_name);
+  auto scalar                 = cudf::string_scalar(literal_value);
+  auto literal                = cudf::ast::literal(scalar);
+  return cudf::ast::operation(cudf::ast::ast_operator::EQUAL, column_reference, literal);
+}
+
+std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_table,
+                                            std::unique_ptr<cudf::table> payload_table)
+{
+  auto filter_columns  = filter_table->release();
+  auto payload_columns = payload_table->release();
+
+  auto all_columns = std::vector<std::unique_ptr<cudf::column>>{};
+  all_columns.reserve(filter_columns.size() + payload_columns.size());
+  std::move(filter_columns.begin(), filter_columns.end(), std::back_inserter(all_columns));
+  std::move(payload_columns.begin(), payload_columns.end(), std::back_inserter(all_columns));
+  auto table = std::make_unique<cudf::table>(std::move(all_columns));
+
+  return std::move(table);
+}
+
+void check_tables_equal(cudf::table_view const& lhs_table,
+                        cudf::table_view const& rhs_table,
+                        rmm::cuda_stream_view stream)
+{
+  try {
+    // Left anti-join the original and transcoded tables identical tables should not throw an
+    // exception and return an empty indices vector
+    cudf::filtered_join join_obj(
+      lhs_table, cudf::null_equality::EQUAL, cudf::set_as_build_table::RIGHT, stream);
+    auto const indices = join_obj.anti_join(rhs_table, stream);
+    // No exception thrown, check indices
+    auto const tables_equal = indices->size() == 0;
+    if (tables_equal) {
+      std::cout << "Tables identical: " << std::boolalpha << tables_equal << "\n\n";
+    } else {
+      // Helper to write parquet data for inspection
+      auto const write_parquet =
+        [](cudf::table_view table, std::string filepath, rmm::cuda_stream_view stream) {
+          auto sink_info = cudf::io::sink_info(filepath);
+          auto opts      = cudf::io::parquet_writer_options::builder(sink_info, table).build();
+          cudf::io::write_parquet(opts, stream);
+        };
+      write_parquet(lhs_table, "lhs_table.parquet", stream);
+      write_parquet(rhs_table, "rhs_table.parquet", stream);
+      throw std::logic_error("Tables identical: false\n\n");
+    }
+  } catch (std::exception& e) {
+    std::cout << e.what() << std::endl;
+  }
+}
+
+std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
+                                                rmm::cuda_stream_view stream)
+{
+  if (tables.size() == 1) { return std::move(tables[0]); }
+
+  std::vector<cudf::table_view> table_views;
+  table_views.reserve(tables.size());
+  std::transform(
+    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
+      return tbl->view();
+    });
+  // Construct the final table
+  return cudf::concatenate(table_views, stream);
+}
+
 std::vector<io_source> extract_input_sources(std::string const& paths,
                                              int32_t input_multiplier,
                                              int32_t thread_count,
@@ -118,59 +188,4 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
     [&](auto const& file_name) { return io_source{file_name, io_source_type, stream}; });
   stream.synchronize();
   return input_sources;
-}
-
-cudf::ast::operation create_filter_expression(std::string const& column_name,
-                                              std::string const& literal_value)
-{
-  auto const column_reference = cudf::ast::column_name_reference(column_name);
-  auto scalar                 = cudf::string_scalar(literal_value);
-  auto literal                = cudf::ast::literal(scalar);
-  return cudf::ast::operation(cudf::ast::ast_operator::EQUAL, column_reference, literal);
-}
-
-void check_tables_equal(cudf::table_view const& lhs_table,
-                        cudf::table_view const& rhs_table,
-                        rmm::cuda_stream_view stream)
-{
-  try {
-    // Left anti-join the original and transcoded tables identical tables should not throw an
-    // exception and return an empty indices vector
-    cudf::filtered_join join_obj(
-      lhs_table, cudf::null_equality::EQUAL, cudf::set_as_build_table::RIGHT, stream);
-    auto const indices = join_obj.anti_join(rhs_table, stream);
-    // No exception thrown, check indices
-    auto const tables_equal = indices->size() == 0;
-    if (tables_equal) {
-      std::cout << "Tables identical: " << std::boolalpha << tables_equal << "\n\n";
-    } else {
-      // Helper to write parquet data for inspection
-      auto const write_parquet =
-        [](cudf::table_view table, std::string filepath, rmm::cuda_stream_view stream) {
-          auto sink_info = cudf::io::sink_info(filepath);
-          auto opts      = cudf::io::parquet_writer_options::builder(sink_info, table).build();
-          cudf::io::write_parquet(opts, stream);
-        };
-      write_parquet(lhs_table, "lhs_table.parquet", stream);
-      write_parquet(rhs_table, "rhs_table.parquet", stream);
-      throw std::logic_error("Tables identical: false\n\n");
-    }
-  } catch (std::exception& e) {
-    std::cout << e.what() << std::endl;
-  }
-}
-
-std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
-                                                rmm::cuda_stream_view stream)
-{
-  if (tables.size() == 1) { return std::move(tables[0]); }
-
-  std::vector<cudf::table_view> table_views;
-  table_views.reserve(tables.size());
-  std::transform(
-    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
-      return tbl->view();
-    });
-  // Construct the final table
-  return cudf::concatenate(table_views, stream);
 }

@@ -5,6 +5,7 @@
 
 #include "hybrid_scan_commons.hpp"
 
+#include "common_utils.hpp"
 #include "io_utils.hpp"
 #include "timer.hpp"
 
@@ -21,40 +22,6 @@
  * @file hybrid_scan_commons.cpp
  * @brief Definitions for common hybrid scan related functions for hybrid_scan examples
  */
-
-namespace {
-
-/**
- * @brief Combine columns from filter and payload tables into a single table
- *
- * @param filter_table Filter table
- * @param payload_table Payload table
- * @param verbose Whether to print verbose output
- *
- * @return Combined table
- */
-std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_table,
-                                            std::unique_ptr<cudf::table> payload_table,
-                                            bool verbose)
-{
-  if (verbose) { std::cout << "READER: Combine tables...\n"; }
-
-  timer timer;
-  auto filter_columns  = filter_table->release();
-  auto payload_columns = payload_table->release();
-
-  auto all_columns = std::vector<std::unique_ptr<cudf::column>>{};
-  all_columns.reserve(filter_columns.size() + payload_columns.size());
-  std::move(filter_columns.begin(), filter_columns.end(), std::back_inserter(all_columns));
-  std::move(payload_columns.begin(), payload_columns.end(), std::back_inserter(all_columns));
-  auto table = std::make_unique<cudf::table>(std::move(all_columns));
-
-  if (verbose) { timer.print_elapsed_millis(); }
-
-  return std::move(table);
-}
-
-}  // namespace
 
 namespace detail {
 
@@ -316,7 +283,7 @@ std::unique_ptr<cudf::table> two_step_materialize(
 
   if (verbose) { timer.print_elapsed_millis(); }
 
-  return combine_tables(std::move(filter_table), std::move(payload_table), verbose);
+  return combine_tables(std::move(filter_table), std::move(payload_table));
 }
 
 }  // namespace detail
