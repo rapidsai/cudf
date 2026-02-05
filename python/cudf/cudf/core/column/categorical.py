@@ -350,6 +350,15 @@ class CategoricalColumn(column.ColumnBase):
 
         return self.codes, other
 
+    def where(
+        self, cond: ColumnBase, other: ScalarLike | ColumnBase, inplace: bool
+    ) -> ColumnBase:
+        casted_col, casted_other = self._cast_self_and_other_for_where(
+            other, inplace
+        )
+        result = casted_col.copy_if_else(casted_other, cond)  # type: ignore[arg-type]
+        return column.ColumnBase.create(result.plc_column, self.dtype)
+
     def _encode(self, value: ScalarLike) -> ScalarLike:
         return self.categories.find_first_value(value)
 
