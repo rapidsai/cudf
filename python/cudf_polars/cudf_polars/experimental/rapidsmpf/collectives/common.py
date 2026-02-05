@@ -58,7 +58,7 @@ class ReserveOpIDs:
     Notes
     -----
     This context manager:
-    1. Identifies all Shuffle nodes in the IR
+    1. Identifies all IR nodes that may require collective operations
     2. Reserves collective IDs from the vacancy pool
     3. Creates a mapping from IR nodes to their reserved IDs
     4. Releases all IDs back to the pool on __exit__
