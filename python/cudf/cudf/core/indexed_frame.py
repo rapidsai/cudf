@@ -519,12 +519,9 @@ class IndexedFrame(Frame):
             if cast_to_int and result_col.dtype.kind in "uib":
                 # For reductions that accumulate a value (e.g. sum, not max)
                 # pandas returns an int64 dtype for all int or bool dtypes.
-                if cudf.get_option("mode.pandas_compatible"):
-                    dtype = get_dtype_of_same_kind(
-                        result_col.dtype, np.dtype(np.int64)
-                    )
-                else:
-                    dtype = np.dtype(np.int64)
+                dtype = get_dtype_of_same_kind(
+                    result_col.dtype, np.dtype(np.int64)
+                )
                 result_col = result_col.astype(dtype)
             results.append(getattr(result_col, op)(inclusive=True))
         return self._from_data_like_self(
@@ -7054,8 +7051,7 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
         to_type = col.dtype
     else:
         if (
-            cudf.get_option("mode.pandas_compatible")
-            and is_pandas_nullable_extension_dtype(col.dtype)
+            is_pandas_nullable_extension_dtype(col.dtype)
             and val_col.dtype.kind == "f"
         ):
             # If the column is a pandas nullable extension type, we need to
@@ -7072,9 +7068,7 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
             and is_mixed_with_object_dtype(val_col, col)
         ):
             raise MixedTypeError("Cannot append mixed types")
-        if cudf.get_option(
-            "mode.pandas_compatible"
-        ) and val_col.can_cast_safely(col.dtype):
+        if val_col.can_cast_safely(col.dtype):
             to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)

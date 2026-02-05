@@ -232,12 +232,11 @@ class NumericalColumn(NumericalBaseColumn):
                 # For floats, NaN should be considered null
                 result = result & self.notnan()
 
-        if cudf.get_option("mode.pandas_compatible"):
-            return result
+        return result
 
-        return result._with_type_metadata(
-            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-        )
+        # return result._with_type_metadata(
+        #     get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+        # )
 
     def element_indexing(self, index: int) -> ScalarLike | None:
         result = super().element_indexing(index)

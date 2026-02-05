@@ -1918,10 +1918,8 @@ class Series(SingleColumnFrame, IndexedFrame):
                 "The bool_only parameter is not supported for Series."
             )
         result = super().any(axis, skipna, **kwargs)
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(result, bool)
-            and not isinstance(self.dtype, pd.ArrowDtype)
+        if isinstance(result, bool) and not isinstance(
+            self.dtype, pd.ArrowDtype
         ):
             return np.bool_(result)
         return result

@@ -1060,14 +1060,13 @@ class IntervalDtype(_BaseDtype):
         )
 
     def to_pandas(self) -> pd.IntervalDtype:
-        if cudf.get_option("mode.pandas_compatible"):
-            return pd.IntervalDtype(
-                subtype=self.subtype.numpy_dtype
-                if is_pandas_nullable_extension_dtype(self.subtype)
-                else self.subtype,
-                closed=self.closed,
-            )
-        return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
+        return pd.IntervalDtype(
+            subtype=self.subtype.numpy_dtype
+            if is_pandas_nullable_extension_dtype(self.subtype)
+            else self.subtype,
+            closed=self.closed,
+        )
+        # return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, str):

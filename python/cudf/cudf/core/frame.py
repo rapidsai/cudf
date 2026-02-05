@@ -725,9 +725,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     elif to_dtype.kind in "ui":
                         to_dtype = np.dtype("float64")
 
-            if cudf.get_option(
-                "mode.pandas_compatible"
-            ) and is_pandas_nullable_extension_dtype(to_dtype):
+            if is_pandas_nullable_extension_dtype(to_dtype):
                 to_dtype = getattr(to_dtype, "numpy_dtype", to_dtype)
                 if getattr(to_dtype, "kind", None) == "U":
                     to_dtype = np.dtype(object)

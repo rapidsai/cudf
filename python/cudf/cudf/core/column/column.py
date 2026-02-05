@@ -1649,13 +1649,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
                 )
 
-        if cudf.get_option("mode.pandas_compatible"):
-            return result
+        return result
 
-        return ColumnBase.create(
-            result.plc_column,
-            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
-        )
+        # return ColumnBase.create(
+        #     result.plc_column,
+        #     get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+        # )
 
     @cached_property
     def nan_count(self) -> int:
@@ -3016,8 +3015,7 @@ def as_column(
                     )
                 )
             elif (
-                cudf.get_option("mode.pandas_compatible")
-                and isinstance(arbitrary.dtype, pd.CategoricalDtype)
+                isinstance(arbitrary.dtype, pd.CategoricalDtype)
                 and is_pandas_nullable_extension_dtype(
                     arbitrary.dtype.categories.dtype
                 )

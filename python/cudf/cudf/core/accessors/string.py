@@ -24,7 +24,6 @@ from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.accessors.lists import ListMethods
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
-from cudf.options import get_option
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     can_convert_to_column,
@@ -4200,10 +4199,8 @@ class StringMethods(BaseAccessor):
 
         if (result == -1).any():
             raise ValueError("substring not found")
-        elif get_option("mode.pandas_compatible"):
-            return result.astype(np.dtype(np.int64))
         else:
-            return result
+            return result.astype(np.dtype(np.int64))
 
     def rindex(
         self, sub: str, start: int = 0, end: int | None = None
@@ -4262,10 +4259,8 @@ class StringMethods(BaseAccessor):
 
         if (result == -1).any():
             raise ValueError("substring not found")
-        elif get_option("mode.pandas_compatible"):
-            return result.astype(np.dtype(np.int64))
         else:
-            return result
+            return result.astype(np.dtype(np.int64))
 
     def match(
         self,
