@@ -86,7 +86,6 @@ from cudf.utils.dtypes import (
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import (
     _array_ufunc,
-    _is_null_host_scalar,
     is_na_like,
 )
 
@@ -1551,7 +1550,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=True):
             return self.copy()
         elif method is None:
-            if is_scalar(fill_value) and _is_null_host_scalar(fill_value):
+            if is_scalar(fill_value) and (
+                is_na_like(fill_value)
+                or (
+                    self.dtype.kind == "f"
+                    and is_pandas_nullable_extension_dtype(self.dtype)
+                    and isinstance(fill_value, float)
+                    and np.isnan(fill_value)
+                )
+            ):
                 return self.copy()
             else:
                 fill_value = self._validate_fillna_value(fill_value)

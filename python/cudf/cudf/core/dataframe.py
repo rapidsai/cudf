@@ -120,7 +120,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import (
     _EQUALITY_OPS,
     _external_only_api,
-    _is_null_host_scalar,
+    is_na_like,
 )
 
 if TYPE_CHECKING:
@@ -3582,7 +3582,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 if dtype.kind == "U":
                     dtype = CUDF_STRING_DTYPE
                 value = value.item()
-            if _is_null_host_scalar(value):
+            if is_na_like(value):
                 dtype = CUDF_STRING_DTYPE
             value = as_column(
                 value,

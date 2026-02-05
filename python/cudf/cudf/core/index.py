@@ -69,7 +69,6 @@ if TYPE_CHECKING:
 
     from cudf._typing import ColumnLike, Dtype
     from cudf.core.dataframe import DataFrame
-    from cudf.core.frame import Frame
     from cudf.core.multiindex import MultiIndex
     from cudf.core.series import Series
     from cudf.core.tools.datetimes import DateOffset, MonthEnd, YearEnd
@@ -1734,7 +1733,7 @@ class Index(SingleColumnFrame):
 
     def _binaryop(
         self,
-        other: Frame,
+        other: Any,
         op: str,
         fill_value: Any = None,
         *args,
