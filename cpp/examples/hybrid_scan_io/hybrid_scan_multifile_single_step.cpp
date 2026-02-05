@@ -204,13 +204,6 @@ int main(int argc, char const** argv)
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
   rmm::mr::set_current_device_resource(&stats_mr);
 
-  // Insert which hybrid scan filters to apply
-  std::unordered_set<hybrid_scan_filter_type> filters;
-  {
-    filters.insert(hybrid_scan_filter_type::ROW_GROUPS_WITH_STATS);
-    filters.insert(hybrid_scan_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS);
-  }
-
   // List of input sources from the input_paths string.
   auto const input_sources = [&]() {
     try {
@@ -235,6 +228,9 @@ int main(int argc, char const** argv)
 
   std::cout << "Note that the first read may include times for nvcomp, cufile loading and RMM "
                "growth.\n\n";
+
+  // No hybrid scan filters to be applied
+  std::unordered_set<hybrid_scan_filter_type> filters{};
 
   benchmark(
     [&] {
