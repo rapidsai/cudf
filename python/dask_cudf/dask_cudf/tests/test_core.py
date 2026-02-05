@@ -307,7 +307,7 @@ def test_assign():
 
     # Using `loc[:, ["x", "y"]]` was broken for dask-expr 0.4.0
     dd.assert_eq(got[["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"].compute().values_host, pdcol)
+    np.testing.assert_array_equal(got["z"].compute().to_numpy(), pdcol.values)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])

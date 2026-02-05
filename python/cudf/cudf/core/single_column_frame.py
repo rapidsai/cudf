@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, Self
 
 import cupy as cp
@@ -168,7 +169,20 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore[explicit-override]
     @_performance_tracking
     def values_host(self) -> np.ndarray:
-        return self._column.values_host
+        """
+        Return a numpy representation of the data.
+
+        .. deprecated:: 26.04
+            `values_host` is deprecated and will be removed in a future version.
+            Use `to_numpy()` instead.
+        """
+        warnings.warn(
+            "values_host is deprecated and will be removed in a future version. "
+            "Use to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self._column.to_numpy()
 
     @classmethod
     @_performance_tracking

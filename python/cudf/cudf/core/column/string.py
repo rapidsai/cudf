@@ -1104,7 +1104,7 @@ class StringColumn(ColumnBase, Scannable):
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
                     plc_column,
-                    get_dtype_of_same_variant(self.dtype, np.dtype(np.int64)),
+                    get_dtype_of_same_variant(self.dtype, np.dtype(np.uint32)),
                 ),
             )
 
