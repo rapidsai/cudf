@@ -167,8 +167,10 @@ fetch_byte_ranges(cudf::io::datasource& datasource,
       return acc + range.size();
     });
 
-  std::vector<std::future<size_t>> read_tasks{};
-  read_tasks.reserve(byte_ranges.size());
+  std::vector<std::future<size_t>> device_read_tasks{};
+  std::vector<std::future<size_t>> host_read_tasks{};
+  device_read_tasks.reserve(byte_ranges.size());
+  host_read_tasks.reserve(byte_ranges.size());
   {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -188,11 +190,12 @@ fetch_byte_ranges(cudf::io::datasource& datasource,
         // Directly read the column chunk data to the device
         // buffer if supported
         if (datasource.supports_device_read() and datasource.is_device_read_preferred(io_size)) {
-          read_tasks.emplace_back(datasource.device_read_async(io_offset, io_size, dest, stream));
+          device_read_tasks.emplace_back(
+            datasource.device_read_async(io_offset, io_size, dest, stream));
         } else {
           // Read the column chunk data to the host buffer and
           // copy it to the device buffer
-          read_tasks.emplace_back(
+          host_read_tasks.emplace_back(
             std::async(std::launch::deferred, [&datasource, io_offset, io_size, dest, stream]() {
               auto host_buffer = datasource.host_read(io_offset, io_size);
               cudf::detail::cuda_memcpy_async(
@@ -207,14 +210,21 @@ fetch_byte_ranges(cudf::io::datasource& datasource,
     }
   }
 
-  auto sync_function = [](decltype(read_tasks) read_tasks) {
-    for (auto& task : read_tasks) {
+  auto sync_function = [](decltype(host_read_tasks) host_read_tasks,
+                          decltype(device_read_tasks) device_read_tasks) {
+    for (auto& task : host_read_tasks) {
+      task.get();
+    }
+    for (auto& task : device_read_tasks) {
       task.get();
     }
   };
   return {std::move(column_chunk_buffers),
           std::move(column_chunk_data),
-          std::async(std::launch::deferred, sync_function, std::move(read_tasks))};
+          std::async(std::launch::deferred,
+                     sync_function,
+                     std::move(host_read_tasks),
+                     std::move(device_read_tasks))};
 }
 
 std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
