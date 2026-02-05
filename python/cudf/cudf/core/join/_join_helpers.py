@@ -24,10 +24,10 @@ from cudf.utils.dtypes import (
 )
 
 if TYPE_CHECKING:
+    from cudf.core.column import ColumnBase
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.dataframe import DataFrame
 
-from cudf.core.column import ColumnBase  # noqa: TC001
 from cudf.core.column._pylibcudf_helpers import fillna_numeric_zero
 
 

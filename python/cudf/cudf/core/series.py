@@ -1568,6 +1568,12 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @property
     @_performance_tracking
+    def is_all_null(self) -> bool:
+        """Check if all values in the Series are null."""
+        return self._column.is_all_null
+
+    @property
+    @_performance_tracking
     def null_count(self) -> int:
         """Number of null values"""
         return self._column.null_count

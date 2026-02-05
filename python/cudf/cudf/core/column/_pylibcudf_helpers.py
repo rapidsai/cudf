@@ -235,10 +235,13 @@ def fillna_numeric_zero(column: ColumnBase) -> ColumnBase:
     should be treated as zero (e.g., in join helpers, groupby operations, etc.)
     """
     from cudf.core.column.column import ColumnBase
+    from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
     with column.access(mode="read", scope="internal"):
-        # Use pylibcudf replace_nulls with scalar 0
-        zero_scalar = plc.Scalar.from_py(0)
+        # Use pylibcudf replace_nulls with a typed scalar zero
+        zero_scalar = plc.Scalar.from_py(
+            0, dtype_to_pylibcudf_type(column.dtype)
+        )
         result_plc = plc.replace.replace_nulls(column.plc_column, zero_scalar)
         return ColumnBase.from_pylibcudf(result_plc)
 
@@ -353,13 +356,10 @@ def notnull_excluding_nan(column: ColumnBase) -> ColumnBase:
             return ColumnBase.create(is_valid_plc, np.dtype(np.bool_))
 
 
-# New helpers to add to _pylibcudf_helpers.py
-
-
 def count_true(column: ColumnBase) -> int:
     """Count the number of True values in a boolean column.
 
-    This is more efficient than calling (column == True).sum() or column.sum()
+    This is more efficient than calling column.sum()
     because it uses pylibcudf's sum reduction directly on the boolean column.
 
     Parameters
@@ -376,8 +376,6 @@ def count_true(column: ColumnBase) -> int:
     --------
     Instead of:
 
-        num_true = (col == True).sum()
-        # or
         num_true = col.sum()
 
     Use:
@@ -412,7 +410,7 @@ def count_true(column: ColumnBase) -> int:
 def count_false(column: ColumnBase) -> int:
     """Count the number of False values in a boolean column.
 
-    This is more efficient than calling (column == False).sum() because it
+    This is more efficient than calling (~column).sum() because it
     computes the count as len(column) - count_true(column) - null_count.
 
     Parameters
@@ -429,7 +427,7 @@ def count_false(column: ColumnBase) -> int:
     --------
     Instead of:
 
-        num_false = (col == False).sum()
+        num_false = (~col).sum()
 
     Use:
 
