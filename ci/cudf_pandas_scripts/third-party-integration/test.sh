@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 # Common setup steps shared by Python test jobs
@@ -25,7 +25,7 @@ main() {
     if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
         rapids-logger "Downloading artifacts from this pr jobs"
         CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
-        PYTHON_CHANNEL=$(rapids-download-conda-from-github python)
+        PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf --stable --cuda)")
     fi
 
     ANY_FAILURES=0
