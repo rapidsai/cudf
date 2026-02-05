@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import operator
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
@@ -23,9 +23,8 @@ import pylibcudf as plc
 from cudf_polars.containers import DataFrame
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+    from collections.abc import AsyncIterator, Callable, Mapping
 
-    from rapidsmpf.memory.memory_reservation import MemoryReservation
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -374,27 +373,3 @@ def make_spill_function(
         return spilled
 
     return spill_func
-
-
-@contextmanager
-def opaque_reservation(
-    context: Context,
-    estimated_bytes: int,
-) -> Iterator[MemoryReservation]:
-    """
-    Reserve memory for opaque allocations.
-
-    Parameters
-    ----------
-    context
-        The RapidsMPF context.
-    estimated_bytes
-        The estimated number of bytes to reserve.
-
-    Yields
-    ------
-    The memory reservation.
-    """
-    yield context.br().reserve_device_memory_and_spill(
-        estimated_bytes, allow_overbooking=True
-    )
