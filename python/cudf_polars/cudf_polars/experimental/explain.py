@@ -345,7 +345,35 @@ class SerializablePartitionInfo:
 
 @dataclasses.dataclass
 class DAG:
-    """A DAG of nodes."""
+    """
+    A DAG of plan nodes, which is serializable to JSON.
+
+    Parameters
+    ----------
+    roots
+        The IDs of the root nodes of the DAG.
+    nodes
+        A mapping from node ID to node details.
+    partition_info
+        Information about the partitions of the DAG.
+
+    Notes
+    -----
+    All integers node IDs are stored as strings to make round-tripping
+    to JSON easier. Node IDs will appear in
+
+    - ``roots``
+    - the keys of ``nodes``
+    - the ``children`` of each node in ``nodes``
+    - the keys in ``partition_info``
+
+    You can safely rely on every key being present in ``nodes``.
+
+    See Also
+    --------
+    serialize_query
+        A function that builds a DAG from a LazyFrame query.
+    """
 
     roots: list[str]
     nodes: dict[str, SerializableIRNode]
