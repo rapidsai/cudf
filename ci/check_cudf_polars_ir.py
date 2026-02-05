@@ -35,7 +35,9 @@ def extract_name_from_node(node: ast.expr) -> str | None:
         case ast.Name(id=id):
             return id
         case ast.Attribute(value=value, attr=attr):
-            return extract_name_from_node(value) + "." + attr
+            v = extract_name_from_node(value)
+            assert v is not None
+            return f"{v}.{attr}"
         case _:
             return str(node)
 
@@ -184,9 +186,7 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
             do_evaluate_params = get_do_evaluate_params(method_node)
 
             # Check that the self._non_child_args assignment matches IR.do_evaluate
-            if len(non_child_args) != len(
-                do_evaluate_params[: len(non_child_args)]
-            ):
+            if len(non_child_args) > len(do_evaluate_params):
                 names = [extract_name_from_node(arg) for arg in non_child_args]
                 records.append(
                     {
@@ -206,10 +206,23 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
             for stmt in ast.walk(node):
                 if (
                     isinstance(stmt, ast.Assign)
+                    and len(stmt.targets) > 0
+                    and isinstance(stmt.targets[0], ast.Name)
                     and stmt.targets[0].id == "_n_non_child_args"
                     and isinstance(stmt.value, ast.Constant)
                 ):
-                    n_non_child_args_value = stmt.value.value
+                    if not isinstance(stmt.value.value, int):
+                        records.append(
+                            {
+                                "cls": class_name,
+                                "arg": "n_non_child_args",
+                                "error": f"Expected int value for _n_non_child_args, found {type(stmt.value.value)}",
+                                "lineno": node.lineno,
+                                "filename": filename,
+                            }
+                        )
+                    else:
+                        n_non_child_args_value = stmt.value.value
                     break
 
             if n_non_child_args_value is None:
