@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
 
 import cudf
 
@@ -170,15 +172,13 @@ def is_na_like(obj: Any) -> bool:
     Check if `obj` is a cudf NA value,
     i.e., None, cudf.NA or cudf.NaT
     """
-    return obj is None or obj is pd.NA or obj is pd.NaT
-
-
-def _is_null_host_scalar(slr: Any) -> bool:
-    # slr is NA like or NaT like
     return (
-        is_na_like(slr)
-        or (isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr))
-        or slr is pd.NaT
+        obj is None
+        or obj is pd.NA
+        or obj is pd.NaT
+        or (isinstance(obj, (np.datetime64, np.timedelta64)) and np.isnat(obj))
+        or obj is pd.NaT
+        or (isinstance(obj, pa.Scalar) and pc.is_null(obj).as_py())
     )
 
 
