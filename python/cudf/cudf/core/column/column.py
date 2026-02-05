@@ -2886,7 +2886,7 @@ def column_empty(
         if isinstance(dtype, CategoricalDtype):
             # CategoricalDtype needs special handling - create codes column
             # then wrap with categorical metadata via _with_type_metadata
-            codes_dtype = dtype._codes_dtype()
+            codes_dtype = dtype._codes_dtype
             plc_dtype = dtype_to_pylibcudf_type(codes_dtype)
             codes_column = ColumnBase.create(
                 plc.Column.from_scalar(

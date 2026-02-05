@@ -252,6 +252,7 @@ class CategoricalDtype(_BaseDtype):
         """
         return self._ordered
 
+    @cached_property
     def _codes_dtype(self) -> np.dtype:
         """Return the dtype used for categorical codes."""
         return min_unsigned_type(len(self.categories))
