@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -209,6 +209,12 @@ def test_df_astype_datetime_to_other(as_dtype):
             [690595200000, 1102118400000, 1473724800000, None], dtype="int64"
         )
     elif as_dtype == "str":
+        data = [
+            "1991-11-20",
+            "2004-12-04",
+            "2016-09-13",
+            None,
+        ]
         expect["foo"] = cudf.Series(data, dtype="str")
         expect["bar"] = cudf.Series(data, dtype="str")
     elif as_dtype == "category":

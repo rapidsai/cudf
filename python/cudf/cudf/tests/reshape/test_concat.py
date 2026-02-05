@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
@@ -1682,8 +1682,8 @@ def test_concat_decimal_numeric_series(
             [
                 "955.22",
                 "8.20",
-                "2007-06-12 00:00:00",
-                "2006-03-14 00:00:00",
+                "2007-06-12",
+                "2006-03-14",
             ],
             None,
             [0, 1, 0, 1],
