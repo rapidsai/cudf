@@ -251,13 +251,13 @@ packed_columns pack(cudf::table_view const& input,
  *
  * @param input View of the table to compute the packed size for
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr An optional memory resource to use for temporary allocations
+ * @param temp_mr An optional memory resource to use for temporary allocations
  * @return The size in bytes required to store the packed table data (not including metadata)
  */
 std::size_t packed_size(
   cudf::table_view const& input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref temp_mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Produce the metadata used for packing a table stored in a contiguous buffer.

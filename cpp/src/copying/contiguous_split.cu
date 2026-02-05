@@ -2181,11 +2181,9 @@ std::unique_ptr<chunked_pack> chunked_pack::create(cudf::table_view const& input
   return std::make_unique<chunked_pack>(input, user_buffer_size, stream, temp_mr);
 }
 
-namespace detail {
-
 std::size_t packed_size(cudf::table_view const& input,
                         rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr)
+                        rmm::device_async_resource_ref temp_mr)
 {
   // Handle empty table cases
   if (input.num_columns() == 0 || input.num_rows() == 0) { return 0; }
@@ -2195,19 +2193,9 @@ std::size_t packed_size(cudf::table_view const& input,
   std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> partition_buf_size_and_dst_buf_info;
 
   compute_num_bufs_and_splits(
-    input, {}, stream, mr, num_src_bufs, num_bufs, partition_buf_size_and_dst_buf_info);
+    input, {}, stream, temp_mr, num_src_bufs, num_bufs, partition_buf_size_and_dst_buf_info);
   // Return the total size for the single partition
   return partition_buf_size_and_dst_buf_info->h_buf_sizes[0];
-}
-
-}  // namespace detail
-
-std::size_t packed_size(cudf::table_view const& input,
-                        rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::packed_size(input, stream, mr);
 }
 
 };  // namespace cudf
