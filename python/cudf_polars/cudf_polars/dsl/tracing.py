@@ -165,7 +165,7 @@ def log_do_evaluate(
             pid = _getpid()
             log = structlog.get_logger()
 
-            # By convention, all non-dataframe arguments (non_child) come first.
+            # By convention, all non-dataframe arguments (non-child) come first.
             # Anything remaining is a dataframe, except for 'context' kwarg.
             frames: list[cudf_polars.containers.DataFrame] = (
                 list(args) + [v for k, v in kwargs.items() if k != "context"]

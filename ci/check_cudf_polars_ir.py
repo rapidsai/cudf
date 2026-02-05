@@ -199,7 +199,8 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                 )
 
             # Check that the number of non-child arguments matches the _n_non_child_args class variable
-            # We can't just use node._n_non_child_args because it's a class variable and we need the value for the instance
+            # We can't just use node._n_non_child_args because it's a class variable and we need
+            # the value for the instance
             n_non_child_args_value: int | None = None
 
             for stmt in ast.walk(node):
