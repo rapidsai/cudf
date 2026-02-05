@@ -239,9 +239,11 @@ def _serialize_properties(ir: IR) -> dict[str, Serializable]:
 
 @_serialize_properties.register
 def _(ir: Scan) -> dict[str, Serializable]:
+    # for polars<1.31, paths is a list[Path]
+    # for polars>=1.31, paths is a list[str]
     return {
         "typ": ir.typ,
-        "paths": ir.paths,
+        "paths": [str(path) for path in ir.paths],
     }
 
 
