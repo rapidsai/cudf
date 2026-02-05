@@ -68,6 +68,14 @@ def _(
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
+    # RapidsMPF runtime: Use rapidsmpf-specific lowering
+    if (
+        config_options.executor.runtime == "rapidsmpf"
+    ):  # pragma: no cover; Requires rapidsmpf runtime
+        from cudf_polars.experimental.rapidsmpf.io import lower_dataframescan_rapidsmpf
+
+        return lower_dataframescan_rapidsmpf(ir, rec)
+
     rows_per_partition = config_options.executor.max_rows_per_partition
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
@@ -278,6 +286,16 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     partition_info: MutableMapping[IR, PartitionInfo]
     config_options = rec.state["config_options"]
+
+    # RapidsMPF runtime: Use rapidsmpf-specific lowering
+    if (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+    ):  # pragma: no cover; Requires rapidsmpf runtime
+        from cudf_polars.experimental.rapidsmpf.io import lower_scan_rapidsmpf
+
+        return lower_scan_rapidsmpf(ir, rec)
+
     if (
         ir.typ in ("csv", "parquet", "ndjson")
         and ir.n_rows == -1
@@ -570,6 +588,30 @@ def _directory_sink_graph(
     }
     graph[setup_name] = (_prepare_sink_directory, sink.path)
     return graph
+
+
+@lower_ir_node.register(StreamingSink)
+def _(
+    ir: StreamingSink, rec: LowerIRTransformer
+) -> tuple[
+    IR, MutableMapping[IR, PartitionInfo]
+]:  # pragma: no cover; Requires rapidsmpf runtime
+    from cudf_polars.experimental.parallel import _lower_ir_pwise
+    from cudf_polars.experimental.utils import _lower_ir_fallback
+
+    config_options = rec.state["config_options"]
+
+    # RapidsMPF runtime: StreamingSink not supported, fall back to single partition
+    if (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+    ):
+        return _lower_ir_fallback(
+            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
+        )
+
+    # Default: partition-wise lowering
+    return _lower_ir_pwise(ir, rec)
 
 
 @generate_ir_tasks.register(StreamingSink)
