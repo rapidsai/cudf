@@ -810,25 +810,25 @@ the query plan in a structured format.
 >>> from cudf_polars.experimental.explain import serialize_query
 >>> q = pl.LazyFrame({"a": ['a', 'b', 'a'], "b": [1, 2, 3]}).group_by("a").agg(pl.len())
 >>> dataclasses.asdict(serialize_query(q, engine=pl.GPUEngine()))
-{'roots': ['2408237918'],
- 'nodes': {'2408237918': {'id': '2408237918',
-   'children': [1009833075],
+{'roots': ['526964741'],
+ 'nodes': {'526964741': {'id': '526964741',
+   'children': ['1694929589'],
    'schema': {'a': 'STRING', 'len': 'UINT32'},
    'properties': {'columns': ['a', 'len']},
    'type': 'Select'},
-  '1009833075': {'id': '1009833075',
-   'children': [3262131978],
+  '1694929589': {'id': '1694929589',
+   'children': ['2632275007'],
    'schema': {'a': 'STRING', '___0': 'UINT32'},
    'properties': {'keys': ['a']},
    'type': 'GroupBy'},
-  '3262131978': {'id': '3262131978',
+  '2632275007': {'id': '2632275007',
    'children': [],
    'schema': {'a': 'STRING'},
    'properties': {},
    'type': 'DataFrameScan'}},
- 'partition_info': {'2408237918': {'count': 1, 'partitioned_on': ()},
-  '1009833075': {'count': 1, 'partitioned_on': ()},
-  '3262131978': {'count': 1, 'partitioned_on': ()}}}
+ 'partition_info': {'526964741': {'count': 1, 'partitioned_on': ()},
+  '1694929589': {'count': 1, 'partitioned_on': ()},
+  '2632275007': {'count': 1, 'partitioned_on': ()}}}
 ```
 
 The structured schema has three top-level fields:
@@ -838,3 +838,6 @@ The structured schema has three top-level fields:
 3. `nodes`: A mapping from integer node id to node details. Each node ID
    that appears in the output will be present in this mapping.
    Inspect `children` to understand which nodes this node depends on.
+
+Note that all integers are stored as strings to make round-tripping
+to JSON easier.
