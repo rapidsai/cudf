@@ -1982,7 +1982,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             plc_column = plc.unary.cast(
                 self.plc_column, dtype_to_pylibcudf_type(dtype)
             )
-            result = type(self).create(
+            result = ColumnBase.create(
                 plc_column, dtype_from_pylibcudf_column(plc_column)
             )
             # Adjust decimal result: in pandas compat mode with non-decimal target,
@@ -2698,7 +2698,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             return cast(
                 "Self",
-                type(self).create(
+                ColumnBase.create(
                     plc_column, dtype_from_pylibcudf_column(plc_column)
                 ),
             )
@@ -2714,7 +2714,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         with self.access(mode="read", scope="internal"):
             return cast(
                 "cudf.core.column.numerical.NumericalColumn",
-                type(self).create(
+                ColumnBase.create(
                     plc.labeling.label_bins(
                         self.plc_column,
                         left_edge.plc_column,
