@@ -287,18 +287,18 @@ void inline print_usage()
 }  // namespace
 
 /**
- * @brief Main for hybrid scan example
+ * @brief Main for hybrid scan pipelined example
  *
  * Command line parameters:
  * 1. parquet input file name/path (default: "example.parquet")
  * 2. number of read partitions (default: 2)
  * 3. io source type (default: "HOST_BUFFER")
  * 4. split strategy (default: "ROW_GROUPS")
- * 5. iterations (default: 4)
+ * 5. iterations (default: 2)
  * 6. verbose (default: false)
  *
  * Example invocation from directory `cudf/cpp/examples/hybrid_scan`:
- * ./build/hybrid_scan_pipeline example.parquet 2 FILEPATH HOST_BUFFER 4 true
+ * ./build/hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS 2 NO
  *
  */
 int main(int argc, char const** argv)
@@ -307,7 +307,7 @@ int main(int argc, char const** argv)
   auto num_partitions = 2;
   auto io_source_type = io_source_type::FILEPATH;
   auto split_strategy = split_strategy::ROW_GROUPS;
-  auto iterations     = 4;
+  auto iterations     = 2;
   auto verbose        = false;
 
   switch (argc) {

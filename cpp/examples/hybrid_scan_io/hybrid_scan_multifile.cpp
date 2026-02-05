@@ -23,25 +23,17 @@
 #include <thread>
 
 /**
- * @file hybrid_scan_io_multithreaded.cpp
+ * @file hybrid_scan_multifile.cpp
  *
- * @brief Demonstrates reading parquet data from the specified io source with libcudf's next-gen
- * parquet reader (hybrid scan reader) subject to a highly selective point lookup (col_name ==
- * literal) filter using multiple threads.
- *
- * The input parquet data is provided via files which are converted to the specified io source type
- * to be read using multiple threads. Optionally, the parquet data read by each thread can be
- * written to corresponding files and checked for validatity of the output files against the input
- * data.
- *
- * Run: ``hybrid_scan_io_multithreaded -h`` to see help with input args and more information.
- *
- * The following io source types are supported:
- * IO source types: HOST_BUFFER, PINNED_BUFFER
+ * @brief This example demonstrates reading multiple parquet files in parallel using multiple
+ * threads where each thread reads a subset of files using the next-gen parquet reader. Profiles
+ * collected with Nsight Systems should demonstrate near perfect parallelism and pipelining across
+ * IO and compute tasks.
  */
 
 /**
- * @brief Functor for multithreaded parquet reading based on the provided read_mode
+ * @brief Functor to read a subset of parquet files for a given thread using the next-gen parquet
+ * reader
  */
 struct hybrid_scan_fn {
   std::vector<io_source> const& input_sources;
@@ -56,7 +48,6 @@ struct hybrid_scan_fn {
 
   void operator()()
   {
-    // Sweep through input sources (strided by num_threads, starting at tid)
     auto strided_indices = std::views::iota(size_t{0}, input_sources.size()) |
                            std::views::filter([&](auto idx) { return idx % num_threads == tid; });
 
@@ -84,7 +75,7 @@ struct hybrid_scan_fn {
 };
 
 /**
- * @brief Helper to setup and launch multithreaded hybrid scan reading
+ * @brief Helper to set up and launch parquet reader threads
  *
  * @param input_sources List of input sources
  * @param filter_expressions List of filter expressions (one per source; cycled)
@@ -154,7 +145,22 @@ void inline print_usage()
 }
 
 /**
- * @brief The main function
+ * @brief Main for hybrid scan multifile example
+ *
+ * Command line parameters:
+ * 1. parquet input file name/path (default: "example.parquet")
+ * 2. input multiplier (default: 1)
+ * 3. thread count (default: 2)
+ * 4. single step read (default: true)
+ * 5. io source type (default: "FILEPATH")
+ * 6. iterations (default: 1)
+ * 7. column name for filter expression (default: "string_col")
+ * 8. literal for filter expression (default: "0000001")
+ * 6. verbose (default: false)
+ *
+ * Example invocation from directory `cudf/cpp/examples/hybrid_scan`:
+ * ./build/hybrid_scan_multifile example.parquet 8 2 YES FILEPATH 1 string_col 0000001 NO
+ *
  */
 int main(int argc, char const** argv)
 {

@@ -18,7 +18,7 @@
 #include <unordered_set>
 
 /**
- * @file hybrid_scan.cpp
+ * @file hybrid_scan_io.cpp
  *
  * @brief This example demonstrates the use of libcudf next-gen parquet reader to optimally read
  * a parquet file subject to a highly selective string-type point lookup (col_name ==
@@ -70,13 +70,13 @@ void inline print_usage()
  * 2. column name for filter expression (default: "string_col")
  * 3. literal for filter expression (default: "0000001")
  * 4. io source type (default: "PINNED_BUFFER")
- * 5. iterations (default: 4)
+ * 5. iterations (default: 2)
  * 6. verbose (default: false)
  *
  * The filter expression will be of the form col_name == literal (default: string_col == 0000001)
  *
  * Example invocation from directory `cudf/cpp/examples/hybrid_scan`:
- * ./build/hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER
+ * ./build/hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER 2 NO
  *
  */
 int main(int argc, char const** argv)
