@@ -41,14 +41,16 @@ struct hybrid_scan_single_step_fn {
   int const num_threads;
   bool const use_page_index;
   bool const verbose;
-  rmm::cuda_stream_view stream;
+  rmm::cuda_stream_pool const& stream_pool;
   rmm::device_async_resource_ref mr;
 
   void operator()(int tid)
   {
     timer timer;
     auto constexpr single_step_read = true;
-    auto strided_indices            = std::views::iota(size_t{0}, input_sources.size()) |
+    auto const stream               = stream_pool.get_stream();
+
+    auto strided_indices = std::views::iota(size_t{0}, input_sources.size()) |
                            std::views::filter([&](auto idx) { return idx % num_threads == tid; });
     for (auto source_idx : strided_indices) {
       if (use_page_index) {
@@ -183,7 +185,7 @@ int main(int argc, char const** argv)
                                                        .num_threads    = num_threads,
                                                        .use_page_index = use_page_index,
                                                        .verbose        = verbose,
-                                                       .stream         = stream_pool.get_stream(),
+                                                       .stream_pool    = stream_pool,
                                                        .mr             = stats_mr};
 
       hybrid_scan_multifile(num_threads, hybrid_scan_fn);

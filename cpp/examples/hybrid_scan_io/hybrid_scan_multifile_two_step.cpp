@@ -42,7 +42,7 @@ struct hybrid_scan_two_step_fn {
   std::unordered_set<hybrid_scan_filter_type> const& filters;
   int const num_threads;
   bool const verbose;
-  rmm::cuda_stream_view stream;
+  rmm::cuda_stream_pool const& stream_pool;
   rmm::device_async_resource_ref mr;
 
   void operator()(int tid)
@@ -54,6 +54,7 @@ struct hybrid_scan_two_step_fn {
 
     auto const filter_expression_opt = std::make_optional<cudf::ast::operation const>(
       filter_expressions[tid % filter_expressions.size()]);
+    auto const stream = stream_pool.get_stream();
 
     auto strided_indices = std::views::iota(size_t{0}, input_sources.size()) |
                            std::views::filter([&](auto idx) { return idx % num_threads == tid; });
@@ -207,7 +208,7 @@ int main(int argc, char const** argv)
                                                     .filters            = filters,
                                                     .num_threads        = num_threads,
                                                     .verbose            = verbose,
-                                                    .stream             = stream_pool.get_stream(),
+                                                    .stream_pool        = stream_pool,
                                                     .mr                 = stats_mr};
 
       hybrid_scan_multifile(num_threads, hybrid_scan_fn);
