@@ -903,12 +903,35 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return pd.Index(pa_array.to_pandas())
 
+    @_performance_tracking
+    def to_numpy(self) -> np.ndarray:
+        """
+        Convert this Column to a NumPy array.
+
+        Fast path for non-null numeric columns uses CuPy device->host copy.
+        Fallback uses pandas/arrow conversion (handles nulls and complex dtypes).
+        """
+        # Fast path: primitive numeric + no nulls
+        if self.dtype.kind in "iufb" and not self.has_nulls():
+            return cp.asarray(self).get()
+
+        # Correct fallback (null-safe)
+        return self.to_pandas().to_numpy()
+
+
     @property
     def values_host(self) -> np.ndarray:
         """
         Return a numpy representation of the Column.
         """
-        return self.to_pandas().to_numpy()
+        warnings.warn(
+            f"{type(self).__name__}.values_host is deprecated and will be removed in a "
+            "future release. Use .to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self.to_numpy()
+
 
     @property
     def values(self) -> cp.ndarray:

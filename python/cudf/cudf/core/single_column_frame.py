@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 """Base class for Frame types that only have a single column."""
-
+import warnings
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Self
@@ -167,7 +167,14 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore[explicit-override]
     @_performance_tracking
     def values_host(self) -> np.ndarray:
-        return self._column.values_host
+        warnings.warn(
+            f"{type(self).__name__}.values_host is deprecated and will be removed in a "
+            "future release. Use .to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self.to_numpy()
+
 
     @classmethod
     @_performance_tracking

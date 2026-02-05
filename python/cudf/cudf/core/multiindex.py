@@ -1312,30 +1312,30 @@ class MultiIndex(Index):
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
-        return self.values_host
-
-    def to_flat_index(self):
-        """
-        Convert a MultiIndex to an Index of Tuples containing the level values.
-
-        This is not currently implemented
-        """
-        # TODO: Could implement as Index of ListDtype?
-        raise NotImplementedError("to_flat_index is not currently supported.")
+        return self.to_pandas().values
+    
+        def to_flat_index(self):
+            """
+            Convert a MultiIndex to an Index of Tuples containing the level values.
+    
+            This is not currently implemented
+            """
+            # TODO: Could implement as Index of ListDtype?
+            raise NotImplementedError("to_flat_index is not currently supported.")
 
     @property
     @_performance_tracking
     def values_host(self) -> np.ndarray:
         """
         Return a numpy representation of the MultiIndex.
-
+    
         Only the values in the MultiIndex will be returned.
-
+    
         Returns
         -------
         out : numpy.ndarray
             The values of the MultiIndex.
-
+    
         Examples
         --------
         >>> import cudf
@@ -1349,7 +1349,14 @@ class MultiIndex(Index):
         >>> type(midx.values_host)
         <class 'numpy.ndarray'>
         """
-        return self.to_pandas().values
+        warnings.warn(
+            "MultiIndex.values_host is deprecated and will be removed in a future "
+            "release. Use MultiIndex.to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self.to_numpy()
+
 
     @property
     @_performance_tracking

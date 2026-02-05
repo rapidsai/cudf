@@ -2874,11 +2874,18 @@ class RangeIndex(Index):
     @cached_property
     @_performance_tracking
     def values_host(self) -> np.ndarray:
-        return np.arange(self.start, self.stop, self.step)
-
+        warnings.warn(
+            "RangeIndex.values_host is deprecated and will be removed in a future "
+            "release. Use RangeIndex.to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self.to_numpy()
+    
     @_performance_tracking
-    def to_numpy(self) -> np.ndarray:
-        return self.values_host
+    def to_numpy(self, dtype=None, copy=False, na_value=None) -> np.ndarray:
+        out = np.arange(self.start, self.stop, self.step, dtype=dtype)
+        return out.copy() if copy else out
 
     @_performance_tracking
     def to_cupy(self) -> cupy.ndarray:

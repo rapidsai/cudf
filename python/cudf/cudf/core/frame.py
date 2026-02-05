@@ -542,16 +542,23 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def values_host(self) -> np.ndarray:
         """
         Return a NumPy representation of the data.
-
+    
         Only the values in the DataFrame will be returned, the axes labels will
         be removed.
-
+    
         Returns
         -------
         numpy.ndarray
             A host representation of the underlying data.
         """
+        warnings.warn(
+            f"{type(self).__name__}.values_host is deprecated and will be removed in a "
+            "future release. Use .to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         return self.to_numpy()
+
 
     @_performance_tracking
     def __array__(self, dtype=None, copy=None):
