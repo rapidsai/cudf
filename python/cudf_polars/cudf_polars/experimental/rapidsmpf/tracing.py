@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.tracing import LOG_TRACES, Scope
@@ -14,27 +13,6 @@ if TYPE_CHECKING:
     import pylibcudf as plc
 
     from cudf_polars.dsl.ir import IR
-
-
-def _stable_ir_id(ir_node: IR) -> int:
-    """
-    Compute a stable identifier for an IR node.
-
-    Uses MD5 hash of the node's hashable representation for determinism
-    across process boundaries (Python's hash() uses PYTHONHASHSEED).
-
-    Parameters
-    ----------
-    ir_node
-        The IR node.
-
-    Returns
-    -------
-    int
-        A stable 32-bit identifier for this node.
-    """
-    content = repr(ir_node.get_hashable()).encode("utf-8")
-    return int(hashlib.md5(content).hexdigest()[:8], 16)
 
 
 class ActorTracer:
@@ -124,9 +102,9 @@ def log_query_plan(ir: IR) -> None:
 
     nodes = [
         {
-            "ir_id": _stable_ir_id(node),
+            "ir_id": node.get_stable_id(),
             "ir_type": type(node).__name__,
-            "children_ir_ids": [_stable_ir_id(c) for c in node.children],
+            "children_ir_ids": [c.get_stable_id() for c in node.children],
         }
         for node in traversal([ir])
     ]

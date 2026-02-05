@@ -79,10 +79,9 @@ async def shutdown_on_error(
     if LOG_TRACES and trace_ir is not None:
         from cudf_polars.experimental.rapidsmpf.tracing import (
             ActorTracer,
-            _stable_ir_id,
         )
 
-        ir_id = _stable_ir_id(trace_ir)
+        ir_id = trace_ir.get_stable_id()
         ir_type = type(trace_ir).__name__
         tracer = ActorTracer(ir_id, ir_type)
         structlog.contextvars.bind_contextvars(actor_ir_id=ir_id, actor_ir_type=ir_type)
