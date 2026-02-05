@@ -114,6 +114,15 @@ repos:
           np.random.seed
         language: pygrep
         types: [python]
+      - id: cudf-polars-ir-signatures
+        name: cudf-polars-ir-signatures
+        description: 'Validate cudf-polars IR.do_evaluate signatures.'
+        entry: ./ci/check_cudf_polars_ir.py
+        language: python
+        files: ^python/cudf_polars/cudf_polars/(dsl/ir|experimental/(shuffle|io|sort))\.py$
+        pass_filenames: true
+        verbose: true
+        types: [python]
       - id: cmake-format
         name: cmake-format
         entry: ./cpp/scripts/run-cmake-format.sh cmake-format

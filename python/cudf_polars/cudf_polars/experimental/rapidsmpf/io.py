@@ -9,6 +9,10 @@ import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.core.memory_reserve_or_wait import (
+    reserve_memory,
+)
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -37,7 +41,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    opaque_reservation,
     send_metadata,
 )
 
@@ -51,6 +54,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import ColumnStat, StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -163,7 +167,7 @@ async def dataframescan_node(
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    async with shutdown_on_error(context, ch_out):
+    async with shutdown_on_error(context, ch_out, trace_ir=ir) as tracer:
         # Find local partition count.
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
@@ -213,6 +217,7 @@ async def dataframescan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
             return
@@ -238,6 +243,7 @@ async def dataframescan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
 
@@ -319,6 +325,7 @@ async def read_chunk(
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
+    tracer: ActorTracer | None = None,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
@@ -338,24 +345,32 @@ async def read_chunk(
     estimated_chunk_bytes
         Estimated size of the chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
+    tracer
+        The actor tracer for collecting runtime statistics.
     """
-    with opaque_reservation(context, estimated_chunk_bytes):
+    with opaque_memory_usage(
+        await reserve_memory(
+            context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
+        )
+    ):
         df = await asyncio.to_thread(
             scan.do_evaluate,
             *scan._non_child_args,
             context=ir_context,
         )
-        await ch_out.send(
-            context,
-            Message(
-                seq_num,
-                TableChunk.from_pylibcudf_table(
-                    df.table,
-                    df.stream,
-                    exclusive_view=True,
-                ),
+    if tracer is not None:
+        tracer.add_chunk(table=df.table)
+    await ch_out.send(
+        context,
+        Message(
+            seq_num,
+            TableChunk.from_pylibcudf_table(
+                df.table,
+                df.stream,
+                exclusive_view=True,
             ),
-        )
+        ),
+    )
 
 
 @define_py_node()
@@ -393,7 +408,7 @@ async def scan_node(
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    async with shutdown_on_error(context, ch_out):
+    async with shutdown_on_error(context, ch_out, trace_ir=ir) as tracer:
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
@@ -484,6 +499,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
             return
@@ -509,6 +525,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
+                    tracer=tracer,
                 )
             await ch_out.drain(context)
 
@@ -681,6 +698,7 @@ def _(
         # node does not send metadata.
         metadata_node = metadata_feeder_node(
             rec.state["context"],
+            ir,
             ch_in,
             ch_out,
             ChannelMetadata(
