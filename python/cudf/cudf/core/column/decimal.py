@@ -302,7 +302,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if isinstance(self.dtype, (Decimal32Dtype, Decimal64Dtype)):
             # pyarrow.Scalar only supports Decimal128 so conversion
             # from pyarrow would only return a pylibcudf.Scalar with Decimal128
-            # We need to infer the Decimal128 type first, then cast to target type
             col = ColumnBase.from_pylibcudf(
                 plc.Column.from_scalar(plc_scalar, 1)
             ).astype(self.dtype)
