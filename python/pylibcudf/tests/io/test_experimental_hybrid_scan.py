@@ -408,6 +408,90 @@ def test_hybrid_scan_materialize_columns(
     assert expected_arrow.equals(hybrid_arrow)
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
+def test_hybrid_scan_single_step_materialize(
+    simple_parquet_bytes,
+    simple_hybrid_scan_reader,
+    simple_parquet_options,
+    num_rows,
+    stream,
+):
+    """Test full workflow of single step materialization."""
+    # Create filter: col0 >= num_rows // 10 (filter out first 10%)
+    filter_threshold = num_rows // 10
+    filter_expression = Operation(
+        ASTOperator.GREATER_EQUAL,
+        ColumnNameReference("col0"),
+        Literal(
+            plc.Scalar.from_arrow(
+                pa.scalar(filter_threshold, type=pa.uint32()), stream=stream
+            )
+        ),
+    )
+
+    simple_parquet_options.set_filter(filter_expression)
+
+    # Get filtered row groups
+    all_row_groups = simple_hybrid_scan_reader.all_row_groups(
+        simple_parquet_options
+    )
+
+    filtered_row_groups = (
+        simple_hybrid_scan_reader.filter_row_groups_with_stats(
+            all_row_groups, simple_parquet_options, stream
+        )
+    )
+
+    # Get filter column data
+    all_columns_ranges = (
+        simple_hybrid_scan_reader.all_column_chunks_byte_ranges(
+            filtered_row_groups, simple_parquet_options
+        )
+    )
+
+    all_columns_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                simple_parquet_bytes[r.offset : r.offset + r.size],
+                plc.utils._get_stream(stream),
+            )
+        )
+        for r in all_columns_ranges
+    ]
+
+    synchronize_stream(stream)
+
+    # Materialize filter columns (mr is optional, defaults to None)
+    single_step_result = simple_hybrid_scan_reader.materialize_all_columns(
+        filtered_row_groups,
+        all_columns_data,
+        simple_parquet_options,
+        stream,
+    )
+
+    synchronize_stream(stream)
+
+    assert single_step_result.tbl.num_columns() == 3
+    assert single_step_result.tbl.num_rows() == num_rows - filter_threshold
+
+    # Verify results match regular parquet reader
+    # Create a fresh BytesIO to avoid buffer position issues
+    comparison_buffer = io.BytesIO(simple_parquet_bytes)
+    comparison_source = plc.io.SourceInfo([comparison_buffer])
+    comparison_options = plc.io.parquet.ParquetReaderOptions.builder(
+        comparison_source
+    ).build()
+    comparison_options.set_filter(filter_expression)
+    expected_result = plc.io.parquet.read_parquet(comparison_options, stream)
+
+    synchronize_stream(stream)
+
+    result = plc.Table(single_step_result.tbl.columns()).to_arrow()
+    expected = expected_result.tbl.to_arrow()
+
+    assert expected.equals(result)
+
+
 def test_hybrid_scan_has_next_table_chunk(
     simple_parquet_bytes,
     simple_hybrid_scan_reader,
@@ -549,7 +633,7 @@ def test_hybrid_scan_chunked_reading(
     while simple_hybrid_scan_reader.has_next_table_chunk():
         chunk_result = (
             simple_hybrid_scan_reader.materialize_filter_columns_chunk(
-                row_mask, stream
+                row_mask
             )
         )
         assert isinstance(chunk_result, plc.io.types.TableWithMetadata)
