@@ -40,7 +40,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.utils import _is_null_host_scalar, is_na_like
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -494,6 +494,10 @@ class NumericalColumn(NumericalBaseColumn):
 
         if is_scalar(other):
             if is_na_like(other):
+                if isinstance(
+                    other, (np.datetime64, np.timedelta64)
+                ) and np.isnat(other):
+                    return NotImplemented
                 return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             if not isinstance(other, (int, float, complex)):
                 # Go via NumPy to get the value
@@ -671,9 +675,10 @@ class NumericalColumn(NumericalBaseColumn):
                     self._dtype = dtype
                     return self
             if self.dtype.kind == "f" and dtype.kind in "iu":
-                if (
-                    not is_pandas_nullable_extension_dtype(dtype)
-                    and self.nan_count > 0
+                if not is_pandas_nullable_extension_dtype(dtype) and (
+                    self.nan_count > 0
+                    or np.isinf(self.min())
+                    or np.isinf(self.max())
                 ):
                     raise TypeError(
                         "Cannot convert non-finite values (NA or inf) to integer"
@@ -1078,7 +1083,7 @@ def _normalize_find_and_replace_input(
         )
         # Scalar case
         if len(col_to_normalize) == 1:
-            if _is_null_host_scalar(col_to_normalize[0]):
+            if is_na_like(col_to_normalize[0]):
                 return normalized_column.astype(input_column_dtype)
             if np.isinf(col_to_normalize[0]):
                 return normalized_column
