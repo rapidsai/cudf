@@ -208,7 +208,7 @@ def log_do_evaluate(
                 before
                 | after
                 | {
-                    "scope": Scope.EVALUATE_IR_NODE,
+                    "scope": Scope.EVALUATE_IR_NODE.value,
                     "overhead_duration": (before_end - before_start)
                     + (after_end - after_start),
                 }

@@ -97,7 +97,7 @@ async def shutdown_on_error(
         if tracer is not None:
             log = structlog.get_logger()
             record: dict[str, Any] = {
-                "scope": Scope.ACTOR,
+                "scope": Scope.ACTOR.value,
                 "actor_ir_id": tracer.ir_id,
                 "actor_ir_type": tracer.ir_type,
                 "chunk_count": tracer.chunk_count,
