@@ -221,7 +221,8 @@ auto hybrid_scan(io_source const& io_source,
         row_mask_mutable_view,
         prune_filter_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
         options,
-        stream)
+        stream,
+        mr)
       .tbl;
   timer.print_elapsed_millis();
 
@@ -253,7 +254,8 @@ auto hybrid_scan(io_source const& io_source,
         row_mask->view(),
         prune_payload_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
         options,
-        stream)
+        stream,
+        mr)
       .tbl;
   timer.print_elapsed_millis();
 

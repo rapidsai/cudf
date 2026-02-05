@@ -29,10 +29,7 @@ from cudf_polars.experimental.base import (
     PartitionInfo,
 )
 from cudf_polars.experimental.io import SplitScan, scan_partition_plan
-from cudf_polars.experimental.rapidsmpf.dispatch import (
-    generate_ir_sub_network,
-    lower_ir_node,
-)
+from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import (
     define_py_node,
     metadata_feeder_node,
@@ -52,8 +49,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import ColumnStat, StatsCollector
+    from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.utils.config import ParquetOptions
 
@@ -114,10 +111,10 @@ class Lineariser:
         await self.ch_out.drain(self.context)
 
 
-@lower_ir_node.register(DataFrameScan)
-def _(
+def lower_dataframescan_rapidsmpf(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """Lower a DataFrameScan node for the RapidsMPF streaming runtime."""
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'lower_ir_node_rapidsmpf'"
@@ -287,10 +284,10 @@ def _(
     return nodes, channels
 
 
-@lower_ir_node.register(Scan)
-def _(
+def lower_scan_rapidsmpf(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """Lower a Scan node for the RapidsMPF streaming runtime."""
     config_options = rec.state["config_options"]
     if (
         ir.typ in ("csv", "parquet", "ndjson")
