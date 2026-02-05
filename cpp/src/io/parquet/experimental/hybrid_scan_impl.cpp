@@ -201,6 +201,13 @@ size_type hybrid_scan_reader_impl::total_rows_in_row_groups(
   return _extended_metadata->total_rows_in_row_groups(row_group_indices);
 }
 
+void hybrid_scan_reader_impl::reset_column_selection()
+{
+  _is_all_columns_selected     = false;
+  _is_filter_columns_selected  = false;
+  _is_payload_columns_selected = false;
+}
+
 std::vector<std::vector<cudf::size_type>>
 hybrid_scan_reader_impl::filter_row_groups_with_byte_range(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -479,7 +486,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   cudf::mutable_column_view& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
@@ -488,7 +496,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
 
   reset_internal_state();
 
-  initialize_options(row_group_indices, options, stream);
+  initialize_options(row_group_indices, options, stream, mr);
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
@@ -512,7 +520,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(row_mask.null_count() == 0,
@@ -520,7 +529,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
 
   reset_internal_state();
 
-  initialize_options(row_group_indices, options, stream);
+  initialize_options(row_group_indices, options, stream, mr);
 
   select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
 
@@ -539,13 +548,14 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
   parquet_reader_options const& options,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
 
   reset_internal_state();
 
-  initialize_options(row_group_indices, options, stream);
+  initialize_options(row_group_indices, options, stream, mr);
 
   select_columns(read_columns_mode::ALL_COLUMNS, options);
 
@@ -566,7 +576,8 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
   use_data_page_mask mask_data_pages,
   cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
   parquet_reader_options const& options,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
@@ -575,7 +586,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
 
   reset_internal_state();
 
-  initialize_options(row_group_indices, options, stream);
+  initialize_options(row_group_indices, options, stream, mr);
   _input_pass_read_limit   = pass_read_limit;
   _output_chunk_read_limit = chunk_read_limit;
 
@@ -594,7 +605,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns_chunk(
-  cudf::mutable_column_view& row_mask, rmm::cuda_stream_view stream)
+  cudf::mutable_column_view& row_mask)
 {
   CUDF_EXPECTS(_file_preprocessed, "Chunking for filter columns not yet setup");
 
@@ -620,7 +631,8 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
   use_data_page_mask mask_data_pages,
   cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
   parquet_reader_options const& options,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(row_mask.null_count() == 0,
@@ -628,7 +640,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
 
   reset_internal_state();
 
-  initialize_options(row_group_indices, options, stream);
+  initialize_options(row_group_indices, options, stream, mr);
   _input_pass_read_limit   = pass_read_limit;
   _output_chunk_read_limit = chunk_read_limit;
 
@@ -644,7 +656,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns_chunk(
-  cudf::column_view const& row_mask, rmm::cuda_stream_view stream)
+  cudf::column_view const& row_mask)
 {
   CUDF_EXPECTS(_file_preprocessed, "Chunking for payload columns not yet setup");
 
@@ -691,12 +703,14 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _strings_to_categorical  = false;
   _reader_column_schema.reset();
   _expr_conv = named_to_reference_converter{};
+  _mr        = cudf::get_current_device_resource_ref();
 }
 
 void hybrid_scan_reader_impl::initialize_options(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
@@ -712,6 +726,9 @@ void hybrid_scan_reader_impl::initialize_options(
 
   // CUDA stream to use for internal operations
   _stream = stream;
+
+  // Device memory resource to use for allocations
+  _mr = mr;
 }
 
 named_to_reference_converter hybrid_scan_reader_impl::build_converted_expression(
