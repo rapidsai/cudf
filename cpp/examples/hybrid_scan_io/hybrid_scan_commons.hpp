@@ -16,6 +16,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
+#include <algorithm>
+#include <thread>
 #include <unordered_set>
 
 /**
@@ -198,5 +202,31 @@ std::unique_ptr<cudf::table> inline hybrid_scan(
   } else {
     return detail::two_step_materialize(
       datasource_ref, reader_ref, filters, current_row_group_indices, options, verbose, stream, mr);
+  }
+}
+
+/**
+ * @brief Helper to set up multifile hybrid scan tasks
+ *
+ * @tparam Functor Type of the task functor to execute in each thread.
+ *                 Must have an operator()(int tid) method.
+ *
+ * @param num_threads Number of threads to launch
+ * @param hybrid_scan_fn Functor instance to execute in each thread with different tid values
+ */
+template <typename Functor>
+void hybrid_scan_multifile(cudf::size_type num_threads, Functor const& hybrid_scan_fn)
+{
+  std::vector<std::thread> threads;
+  threads.reserve(num_threads);
+
+  // Create and launch threads
+  std::for_each(thrust::counting_iterator(0),
+                thrust::counting_iterator(num_threads),
+                [&](auto tid) { threads.emplace_back(hybrid_scan_fn, tid); });
+
+  // Wait for all threads to complete
+  for (auto& t : threads) {
+    t.join();
   }
 }

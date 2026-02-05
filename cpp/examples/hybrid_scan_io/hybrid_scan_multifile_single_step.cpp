@@ -38,22 +38,18 @@
 struct hybrid_scan_single_step_fn {
   std::vector<io_source> const& input_sources;
   std::unordered_set<hybrid_scan_filter_type> const& filters;
-  int const tid;
   int const num_threads;
   bool const use_page_index;
   bool const verbose;
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
 
-  void operator()()
+  void operator()(int tid)
   {
-    auto strided_indices = std::views::iota(size_t{0}, input_sources.size()) |
-                           std::views::filter([&](auto idx) { return idx % num_threads == tid; });
-
     timer timer;
-
     auto constexpr single_step_read = true;
-
+    auto strided_indices            = std::views::iota(size_t{0}, input_sources.size()) |
+                           std::views::filter([&](auto idx) { return idx % num_threads == tid; });
     for (auto source_idx : strided_indices) {
       if (use_page_index) {
         std::ignore = hybrid_scan<single_step_read, true>(
@@ -63,65 +59,13 @@ struct hybrid_scan_single_step_fn {
           input_sources[source_idx], {}, filters, false, stream, mr);
       }
     }
-
     stream.synchronize_no_throw();
-
     if (verbose) {
       std::cout << "Thread " << tid << " ";
       timer.print_elapsed_millis();
     }
   }
 };
-
-/**
- * @brief Helper to set up and launch parquet reader threads
- *
- * @param input_sources List of input sources
- * @param filter_expressions List of filter expressions (one per source; cycled)
- * @param filters Set of hybrid scan filters to apply
- * @param num_threads Number of threads
- * @param single_step_read Whether to use two-step table materialization
- * @param use_page_index Whether to use page index
- * @param stream_pool CUDA stream pool
- * @param mr Memory resource to use for threads
- */
-void hybrid_scan_single_step_multithreaded(
-  std::vector<io_source> const& input_sources,
-  std::unordered_set<hybrid_scan_filter_type> const& filters,
-  cudf::size_type num_threads,
-  bool use_page_index,
-  bool verbose,
-  rmm::cuda_stream_pool& stream_pool,
-  rmm::device_async_resource_ref mr)
-{
-  std::vector<hybrid_scan_single_step_fn> read_tasks;
-  read_tasks.reserve(num_threads);
-
-  // Emplace parquet read tasks
-  std::for_each(
-    thrust::counting_iterator(0), thrust::counting_iterator(num_threads), [&](auto tid) {
-      read_tasks.emplace_back(hybrid_scan_single_step_fn{.input_sources  = input_sources,
-                                                         .filters        = filters,
-                                                         .tid            = tid,
-                                                         .num_threads    = num_threads,
-                                                         .use_page_index = use_page_index,
-                                                         .verbose        = verbose,
-                                                         .stream         = stream_pool.get_stream(),
-                                                         .mr             = mr});
-    });
-
-  // Create and launch threads
-  std::vector<std::thread> threads;
-  threads.reserve(num_threads);
-  for (auto& c : read_tasks) {
-    threads.emplace_back(c);
-  }
-
-  // Wait for all threads to complete
-  for (auto& t : threads) {
-    t.join();
-  }
-}
 
 /**
  * @brief Function to print example usage and argument information
@@ -234,8 +178,15 @@ int main(int argc, char const** argv)
 
   benchmark(
     [&] {
-      hybrid_scan_single_step_multithreaded(
-        input_sources, filters, num_threads, use_page_index, verbose, stream_pool, stats_mr);
+      auto hybrid_scan_fn = hybrid_scan_single_step_fn{.input_sources  = input_sources,
+                                                       .filters        = filters,
+                                                       .num_threads    = num_threads,
+                                                       .use_page_index = use_page_index,
+                                                       .verbose        = verbose,
+                                                       .stream         = stream_pool.get_stream(),
+                                                       .mr             = stats_mr};
+
+      hybrid_scan_multifile(num_threads, hybrid_scan_fn);
     },
     iterations);
 
