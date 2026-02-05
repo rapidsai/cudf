@@ -289,6 +289,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @brief Initialize the necessary options related internal variables for use later on
    *
    * @param options Reader options
+   * @param num_sources Number of input sources
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
    */
