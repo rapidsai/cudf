@@ -91,6 +91,8 @@ int main(int argc, char const** argv)
   switch (argc) {
     case 7: verbose = get_boolean(argv[6]); [[fallthrough]];
     case 6: iterations = std::stoi(argv[5]); [[fallthrough]];
+    case 7: verbose = get_boolean(argv[6]); [[fallthrough]];
+    case 6: iterations = std::stoi(argv[5]); [[fallthrough]];
     case 5: io_source_type = get_io_source_type(argv[4]); [[fallthrough]];
     case 4: literal_value = argv[3]; [[fallthrough]];
     case 3: column_name = argv[2]; [[fallthrough]];

@@ -101,7 +101,7 @@ def evaluate_logical_plan(
     log_query_plan(ir)
 
     # Reserve shuffle IDs for the entire pipeline execution
-    with ReserveOpIDs(ir) as collective_id_map:
+    with ReserveOpIDs(ir, config_options) as collective_id_map:
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
         # for cluster == "distributed".
