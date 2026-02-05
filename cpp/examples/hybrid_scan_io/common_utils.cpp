@@ -62,9 +62,7 @@ std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_
   all_columns.reserve(filter_columns.size() + payload_columns.size());
   std::move(filter_columns.begin(), filter_columns.end(), std::back_inserter(all_columns));
   std::move(payload_columns.begin(), payload_columns.end(), std::back_inserter(all_columns));
-  auto table = std::make_unique<cudf::table>(std::move(all_columns));
-
-  return std::move(table);
+  return std::make_unique<cudf::table>(std::move(all_columns));
 }
 
 void check_tables_equal(cudf::table_view const& lhs_table,
