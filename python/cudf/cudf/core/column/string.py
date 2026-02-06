@@ -666,7 +666,6 @@ class StringColumn(ColumnBase, Scannable):
             result = plc.nvtext.deduplicate.build_suffix_array(
                 self.plc_column, min_width
             )
-            # Returns INT32 suffix array indices, not strings
             return cast(
                 Self,
                 ColumnBase.create(result, np.dtype(np.int32)),
