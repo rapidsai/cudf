@@ -22,8 +22,6 @@ namespace cudf::io::parquet {
 
 std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::datasource& datasource)
 {
-  using namespace cudf::io::parquet;
-
   constexpr auto header_len = sizeof(file_header_s);
   constexpr auto ender_len  = sizeof(file_ender_s);
   size_t const len          = datasource.size();
