@@ -79,6 +79,13 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
+    @staticmethod
+    def _validate_dtype_to_plc_column(
+        plc_column: plc.Column, dtype: DtypeObj
+    ) -> None:
+        """Validate that the dtype matches the equivalent type of the plc_column"""
+        return None
+
     @classmethod
     def _validate_args(  # type: ignore[override]
         cls, plc_column: plc.Column, dtype: CategoricalDtype
@@ -342,6 +349,15 @@ class CategoricalColumn(column.ColumnBase):
             other = other.codes  # type: ignore[union-attr]
 
         return self.codes, other
+
+    def where(
+        self, cond: ColumnBase, other: ScalarLike | ColumnBase, inplace: bool
+    ) -> ColumnBase:
+        casted_col, casted_other = self._cast_self_and_other_for_where(
+            other, inplace
+        )
+        result = casted_col.copy_if_else(casted_other, cond)  # type: ignore[arg-type]
+        return column.ColumnBase.create(result.plc_column, self.dtype)
 
     def _encode(self, value: ScalarLike) -> ScalarLike:
         return self.categories.find_first_value(value)
