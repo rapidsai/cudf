@@ -1151,6 +1151,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
   // Input datasource
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()));
+  auto datasource_ref   = std::ref(*datasource);
 
   // First literal value
   auto literal_value1 = []() {
