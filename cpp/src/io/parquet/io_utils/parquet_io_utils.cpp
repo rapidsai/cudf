@@ -74,7 +74,7 @@ fetch_byte_ranges_to_device_async(
   auto buffer_data = static_cast<uint8_t*>(column_chunk_buffers.back().data());
   std::ignore      = std::accumulate(
     byte_ranges.begin(), byte_ranges.end(), std::size_t{0}, [&](auto acc, auto const& range) {
-      column_chunk_data.emplace_back(buffer_data + acc, range.size());
+      column_chunk_data.emplace_back(buffer_data + acc, static_cast<size_t>(range.size()));
       return acc + range.size();
     });
 
@@ -86,9 +86,9 @@ fetch_byte_ranges_to_device_async(
     std::lock_guard<std::mutex> lock(mutex);
 
     for (size_t chunk = 0; chunk < byte_ranges.size();) {
-      size_t const io_offset = byte_ranges[chunk].offset();
-      size_t io_size         = byte_ranges[chunk].size();
-      size_t next_chunk      = chunk + 1;
+      auto const io_offset = static_cast<size_t>(byte_ranges[chunk].offset());
+      auto io_size         = static_cast<size_t>(byte_ranges[chunk].size());
+      size_t next_chunk    = chunk + 1;
       while (next_chunk < byte_ranges.size()) {
         size_t const next_offset = byte_ranges[next_chunk].offset();
         if (next_offset != io_offset + io_size) { break; }
