@@ -16,7 +16,56 @@
 
 #include <vector>
 
+using cudf::io::parquet::experimental::hybrid_scan_reader;
+
 namespace {
+
+/**
+ * @brief Converts a datasource buffer to a host span
+ *
+ * @param buffer Datasource buffer
+ *
+ * @return Host span of the datasource buffer
+ */
+cudf::host_span<uint8_t const> make_host_span(cudf::io::datasource::buffer const& buffer)
+{
+  return cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(buffer.data()), buffer.size()};
+}
+
+/**
+ * @brief Sets up the a hybrid scan reader instance
+ *
+ * @param datasource Data source
+ * @param options Parquet reader options
+ * @param verbose Whether to print verbose output
+ *
+ * @return Hybrid scan reader
+ */
+
+std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasource,
+                                                 cudf::io::parquet_reader_options const& options)
+{
+  // Fetch footer bytes and setup reader
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource);
+  return std::make_unique<hybrid_scan_reader>(make_host_span(*footer_buffer), options);
+}
+
+/**
+ * @brief Sets up the page index for the hybrid scan reader
+ *
+ * @param datasource Data source
+ * @param reader Hybrid scan reader
+ */
+void setup_page_index(cudf::io::datasource& datasource, hybrid_scan_reader const& reader)
+{
+  auto const page_index_byte_range = reader.page_index_byte_range();
+  if (not page_index_byte_range.is_empty()) {
+    auto const page_index_buffer =
+      cudf::io::parquet::fetch_page_index_to_host(datasource, page_index_byte_range);
+    reader.setup_page_index(make_host_span(*page_index_buffer));
+  }
+}
+
 /*
  * @brief Concatenate a vector of tables and return the resultant table
  *
@@ -43,46 +92,27 @@ std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf
 }  // namespace
 
 auto apply_hybrid_scan_filters(cudf::io::datasource& datasource,
+                               hybrid_scan_reader const& reader,
                                cudf::io::parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
-  // Fetch footer and page index bytes from the buffer.
-  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource);
-
-  // Create hybrid scan reader with footer bytes
-  auto reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-    cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffer->data()),
-                                   footer_buffer->size()},
-    options);
-
-  // Get page index byte range from the reader
-  auto const page_index_byte_range = reader->page_index_byte_range();
-
-  // Fetch page index bytes from the input buffer
-  auto const page_index_buffer =
-    cudf::io::parquet::fetch_page_index_to_host(datasource, page_index_byte_range);
-
-  // Setup page index
-  reader->setup_page_index(cudf::host_span<uint8_t const>{
-    static_cast<uint8_t const*>(page_index_buffer->data()), page_index_buffer->size()});
-
   // Get all row groups from the reader
-  auto input_row_group_indices = reader->all_row_groups(options);
+  auto input_row_group_indices = reader.all_row_groups(options);
 
   // Span to track current row group indices
   auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
 
   // Filter row groups with stats
   auto stats_filtered_row_group_indices =
-    reader->filter_row_groups_with_stats(current_row_group_indices, options, stream);
+    reader.filter_row_groups_with_stats(current_row_group_indices, options, stream);
 
   // Update current row group indices
   current_row_group_indices = stats_filtered_row_group_indices;
 
   // Get bloom filter and dictionary page byte ranges from the reader
   auto [bloom_filter_byte_ranges, dict_page_byte_ranges] =
-    reader->secondary_filters_byte_ranges(current_row_group_indices, options);
+    reader.secondary_filters_byte_ranges(current_row_group_indices, options);
 
   // If we have dictionary page byte ranges, filter row groups with dictionary pages
   std::vector<cudf::size_type> dictionary_page_filtered_row_group_indices;
@@ -95,7 +125,7 @@ auto apply_hybrid_scan_filters(cudf::io::datasource& datasource,
     dict_read_tasks.get();
 
     // Filter row groups with dictionary pages
-    dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
+    dictionary_page_filtered_row_group_indices = reader.filter_row_groups_with_dictionary_pages(
       dict_page_data, current_row_group_indices, options, stream);
 
     // Update current row group indices
@@ -116,7 +146,7 @@ auto apply_hybrid_scan_filters(cudf::io::datasource& datasource,
     bloom_read_tasks.get();
 
     // Filter row groups with bloom filters
-    bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
+    bloom_filtered_row_group_indices = reader.filter_row_groups_with_bloom_filters(
       bloom_filter_data, current_row_group_indices, options, stream);
 
     // Update current row group indices
@@ -126,17 +156,17 @@ auto apply_hybrid_scan_filters(cudf::io::datasource& datasource,
   // Build row mask using page index stats or all true if no filter is provided
   auto row_mask = [&]() {
     if (options.get_filter().has_value()) {
-      return reader->build_row_mask_with_page_index_stats(
+      return reader.build_row_mask_with_page_index_stats(
         current_row_group_indices, options, stream, mr);
     } else {
-      return reader->build_all_true_row_mask(current_row_group_indices, stream, mr);
+      return reader.build_all_true_row_mask(current_row_group_indices, stream, mr);
     }
   }();
 
   std::vector<cudf::size_type> final_row_group_indices(current_row_group_indices.begin(),
                                                        current_row_group_indices.end());
 
-  return std::tuple{std::move(reader), std::move(final_row_group_indices), std::move(row_mask)};
+  return std::tuple{std::move(final_row_group_indices), std::move(row_mask)};
 }
 
 std::tuple<std::unique_ptr<cudf::table>,
@@ -159,8 +189,13 @@ hybrid_scan(cudf::io::datasource& datasource,
   // Set payload column names if provided
   if (payload_column_names.has_value()) { options.set_column_names(payload_column_names.value()); }
 
-  auto [reader, filtered_row_group_indices, row_mask] =
-    apply_hybrid_scan_filters(datasource, options, stream, mr);
+  auto const reader = setup_reader(datasource, options);
+  auto reader_ref   = std::ref(*reader);
+
+  setup_page_index(datasource, reader_ref);
+
+  auto [filtered_row_group_indices, row_mask] =
+    apply_hybrid_scan_filters(datasource, reader_ref, options, stream, mr);
 
   auto current_row_group_indices = cudf::host_span<cudf::size_type>(filtered_row_group_indices);
 
@@ -232,8 +267,13 @@ chunked_hybrid_scan(cudf::io::datasource& datasource,
   // Set payload column names if provided
   if (payload_column_names.has_value()) { options.set_column_names(payload_column_names.value()); }
 
-  auto [reader, filtered_row_group_indices, row_mask] =
-    apply_hybrid_scan_filters(datasource, options, stream, mr);
+  auto const reader = setup_reader(datasource, options);
+  auto reader_ref   = std::ref(*reader);
+
+  setup_page_index(datasource, reader_ref);
+
+  auto [filtered_row_group_indices, row_mask] =
+    apply_hybrid_scan_filters(datasource, reader_ref, options, stream, mr);
 
   auto current_row_group_indices = cudf::host_span<cudf::size_type>(filtered_row_group_indices);
 
@@ -349,8 +389,13 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
   if (column_names.has_value()) { options.set_column_names(column_names.value()); }
   if (filter_expression.has_value()) { options.set_filter(filter_expression.value()); }
 
-  auto [reader, filtered_row_group_indices, _ /*row_mask*/] =
-    apply_hybrid_scan_filters(datasource, options, stream, mr);
+  auto const reader = setup_reader(datasource, options);
+  auto reader_ref   = std::ref(*reader);
+
+  setup_page_index(datasource, reader_ref);
+
+  auto [filtered_row_group_indices, _ /* row_mask */] =
+    apply_hybrid_scan_filters(datasource, reader_ref, options, stream, mr);
 
   auto current_row_group_indices = cudf::host_span<cudf::size_type>(filtered_row_group_indices);
 
