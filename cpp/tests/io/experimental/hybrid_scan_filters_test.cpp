@@ -120,9 +120,10 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
   // Input file buffer span
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(file_buffer.data()), file_buffer.size()));
+  auto datasource_ref   = std::ref(*datasource);
 
   // Fetch footer and page index bytes from the buffer.
-  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
 
   // Create hybrid scan reader with footer bytes
   auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
@@ -142,7 +143,7 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
 
   // Fetch page index bytes from the input buffer
   auto const page_index_buffer =
-    cudf::io::parquet::fetch_page_index_to_host(*datasource, page_index_byte_range);
+    cudf::io::parquet::fetch_page_index_to_host(datasource_ref, page_index_byte_range);
 
   // Setup page index
   reader->setup_page_index(cudf::host_span<uint8_t const>{
@@ -181,9 +182,10 @@ TEST_F(HybridScanFiltersTest, TestExternalMetadata)
     // Input file buffer span
     auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
       reinterpret_cast<std::byte const*>(file_buffer.data()), file_buffer.size()));
+    auto datasource_ref   = std::ref(*datasource);
 
     // Fetch footer and page index bytes from the buffer.
-    auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+    auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
 
     auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
       cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffer->data()),
@@ -195,7 +197,7 @@ TEST_F(HybridScanFiltersTest, TestExternalMetadata)
 
     // Fetch page index bytes from the input buffer
     auto const page_index_buffer =
-      cudf::io::parquet::fetch_page_index_to_host(*datasource, page_index_byte_range);
+      cudf::io::parquet::fetch_page_index_to_host(datasource_ref, page_index_byte_range);
 
     // Setup page index
     reader->setup_page_index(cudf::host_span<uint8_t const>{
