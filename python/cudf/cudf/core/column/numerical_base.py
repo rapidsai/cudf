@@ -168,16 +168,13 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     indices.plc_column,
                     exact,
                 )
-                # Result dtype depends on exact parameter: when exact=True
-                # (default), linear/midpoint interpolations return float64,
-                # while others preserve input dtype
-                if exact and interpolation in {"linear", "midpoint"}:
-                    result_dtype = np.dtype(np.float64)
-                else:
-                    result_dtype = self.dtype
+                # plc.quantiles.quantile always returns FLOAT64, use the actual
+                # type from the result column
                 result = cast(
                     cudf.core.column.numerical_base.NumericalBaseColumn,
-                    ColumnBase.create(plc_column, result_dtype),
+                    ColumnBase.create(
+                        plc_column, dtype_from_pylibcudf_column(plc_column)
+                    ),
                 )
         if return_scalar:
             scalar_result = result.element_indexing(0)

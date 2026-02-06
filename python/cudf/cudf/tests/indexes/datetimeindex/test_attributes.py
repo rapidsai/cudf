@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -43,7 +43,8 @@ def test_tz_aware_attributes_local():
     ]
     dti = cudf.DatetimeIndex(data).tz_localize("UTC").tz_convert("US/Eastern")
     result = dti.hour
-    expected = cudf.Index([9, 9, 9], dtype="int16")
+    # Hour is always widened to int32 (from int16) for both tz-aware and tz-naive
+    expected = cudf.Index([9, 9, 9], dtype="int32")
     assert_eq(result, expected)
 
 

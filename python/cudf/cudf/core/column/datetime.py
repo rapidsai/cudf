@@ -211,9 +211,10 @@ class DatetimeColumn(TemporalBaseColumn):
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            last_day_col = ColumnBase.create(
+            # last_day_of_month returns TIMESTAMP_DAYS, which gets wrapped to
+            # TIMESTAMP_SECONDS, so we use from_pylibcudf to infer the dtype
+            last_day_col = ColumnBase.from_pylibcudf(
                 plc.datetime.last_day_of_month(self.plc_column),
-                self.dtype,
             )
         return (self.day == cast("Self", last_day_col).day).fillna(False)
 
@@ -865,18 +866,15 @@ class DatetimeTZColumn(DatetimeColumn):
         with self._local_time.access(
             mode="read", scope="internal"
         ) as local_time:
-            target_dtype = get_dtype_of_same_kind(
-                self.dtype, np.dtype(np.int16)
+            plc_result = plc.datetime.extract_datetime_component(
+                local_time.plc_column,
+                field,
             )
-            if target_dtype == np.dtype("int16"):
-                target_dtype = np.dtype("int32")
-            result = ColumnBase.create(
-                plc.datetime.extract_datetime_component(
-                    local_time.plc_column,
-                    field,
-                ),
-                target_dtype,
-            )
+            # extract_datetime_component returns INT16, use from_pylibcudf
+            # to infer the dtype, then cast to int32 for pandas compatibility
+            result = ColumnBase.from_pylibcudf(plc_result)
+            if result.dtype == np.dtype("int16"):
+                result = result.astype(np.dtype("int32"))
             return result
 
     def __repr__(self) -> str:
