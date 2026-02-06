@@ -158,6 +158,7 @@ class SplitScan(IR):
         "total_splits",
         "parquet_options",
     )
+    _n_non_child_args = 13
     base_scan: Scan
     """Scan operation this node is based on."""
     split_index: int
@@ -182,7 +183,17 @@ class SplitScan(IR):
         self._non_child_args = (
             split_index,
             total_splits,
-            *base_scan._non_child_args,
+            base_scan.schema,
+            base_scan.typ,
+            base_scan.reader_options,
+            base_scan.paths,
+            base_scan.with_columns,
+            base_scan.skip_rows,
+            base_scan.n_rows,
+            base_scan.row_index,
+            base_scan.include_file_paths,
+            base_scan.predicate,
+            base_scan.parquet_options,
         )
         self.parquet_options = parquet_options
         self.children = ()
@@ -369,6 +380,7 @@ class StreamingSink(IR):
 
     __slots__ = ("executor_options", "sink")
     _non_child = ("schema", "sink", "executor_options")
+    _n_non_child_args = 0
 
     sink: Sink
     executor_options: StreamingExecutor
@@ -383,6 +395,7 @@ class StreamingSink(IR):
         self.schema = schema
         self.sink = sink
         self.executor_options = executor_options
+        self._non_child_args = ()
         self.children = (df,)
 
     def get_hashable(self) -> Hashable:

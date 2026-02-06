@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Shuffle Logic."""
 
@@ -144,6 +144,7 @@ class Shuffle(IR):
 
     __slots__ = ("keys", "shuffle_method", "shuffler_insertion_method")
     _non_child = ("schema", "keys", "shuffle_method", "shuffler_insertion_method")
+    _n_non_child_args = 4
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
     shuffle_method: ShuffleMethod

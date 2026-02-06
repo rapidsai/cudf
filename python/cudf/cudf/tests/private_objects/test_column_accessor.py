@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -46,7 +46,7 @@ def test_to_pandas_simple(simple_data):
     assert_eq(
         ca.to_pandas_index,
         pd.DataFrame(
-            {key: value.values_host for key, value in simple_data.items()}
+            {key: value.to_numpy() for key, value in simple_data.items()}
         ).columns,
         exact=False,
     )
@@ -67,7 +67,7 @@ def test_to_pandas_multiindex(keys):
     assert_eq(
         ca.to_pandas_index,
         pd.DataFrame(
-            {key: value.values_host for key, value in mi_data.items()}
+            {key: value.to_numpy() for key, value in mi_data.items()}
         ).columns,
     )
 

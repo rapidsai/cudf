@@ -462,6 +462,7 @@ class ShuffleSorted(IR):
 
     __slots__ = ("by", "null_order", "order", "shuffle_method")
     _non_child = ("schema", "by", "order", "null_order", "shuffle_method")
+    _n_non_child_args = 5
     by: tuple[NamedExpr, ...]
     """Keys by which the data was sorted."""
     order: tuple[plc.types.Order, ...]
