@@ -50,8 +50,8 @@ class Merge:
                 plc.types.NullEquality.EQUAL,
             )
             return (
-                ColumnBase.from_pylibcudf(left_rows),
-                ColumnBase.from_pylibcudf(right_rows),
+                ColumnBase.create(left_rows, SIZE_TYPE_DTYPE),
+                ColumnBase.create(right_rows, SIZE_TYPE_DTYPE),
             )
 
     def __init__(
@@ -288,7 +288,7 @@ class Merge:
             # If how is right, right map is primary sort key.
             key_order = reversed(key_order)
         return [
-            ColumnBase.from_pylibcudf(col)
+            ColumnBase.create(col, SIZE_TYPE_DTYPE)
             for col in sorting.sort_by_key(
                 maps,
                 key_order,
@@ -338,7 +338,7 @@ class Merge:
             )
             left_result = DataFrame._from_data(
                 {
-                    col: ColumnBase.from_pylibcudf(lib_col)
+                    col: ColumnBase.create(lib_col, self.lhs._data[col].dtype)
                     for col, lib_col in zip(
                         left_names, columns[: len(left_names)], strict=True
                     )
@@ -346,7 +346,7 @@ class Merge:
             )
             right_result = DataFrame._from_data(
                 {
-                    col: ColumnBase.from_pylibcudf(lib_col)
+                    col: ColumnBase.create(lib_col, self.rhs._data[col].dtype)
                     for col, lib_col in zip(
                         right_names, columns[len(left_names) :], strict=True
                     )
@@ -529,7 +529,12 @@ class Merge:
                 stable=True,
             )
             result = result._from_columns_like_self(
-                [ColumnBase.from_pylibcudf(col) for col in result_columns],
+                [
+                    ColumnBase.create(col, original.dtype)
+                    for col, original in zip(
+                        result_columns, to_sort, strict=True
+                    )
+                ],
                 result._column_names,
                 index_names,
             )
@@ -686,12 +691,13 @@ class MergeSemi(Merge):
             n_lhs = len(lhs)
             lhs = accessed[:n_lhs]  # type: ignore[assignment]
             rhs = accessed[n_lhs:]  # type: ignore[assignment]
-            return ColumnBase.from_pylibcudf(
+            return ColumnBase.create(
                 join_func(
                     plc.Table([col.plc_column for col in lhs]),
                     plc.Table([col.plc_column for col in rhs]),
                     plc.types.NullEquality.EQUAL,
-                )
+                ),
+                SIZE_TYPE_DTYPE,
             ), None
 
     def _merge_results(self, lhs: DataFrame, rhs: DataFrame):
