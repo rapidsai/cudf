@@ -65,7 +65,7 @@ def _detect_backend_type():
     -----
     Detection logic:
     1. If RAPIDSMPF_COORD_DIR is set -> use AUTO (will choose FILE)
-    2. If running under Slurm without COORD_DIR -> explicitly use SLURM if available
+    2. If running under Slurm without COORD_DIR -> set up FILE backend with temp dir
     3. Otherwise use AUTO (default)
     """
     if not BOOTSTRAP_AVAILABLE:
@@ -75,7 +75,8 @@ def _detect_backend_type():
     if "RAPIDSMPF_COORD_DIR" in os.environ:
         return bootstrap.BackendType.AUTO
 
-    # If running under Slurm without COORD_DIR, try to use SLURM backend explicitly
+    # If running under Slurm without COORD_DIR, we need to set one up
+    # because the SLURM backend is not available in Python bindings yet
     if is_running_under_slurm():
         # Check if SLURM backend is available in the Python bindings
         if hasattr(bootstrap.BackendType, "SLURM"):
@@ -85,11 +86,32 @@ def _detect_backend_type():
             )
             return bootstrap.BackendType.SLURM
         else:
-            # SLURM not in Python enum, but AUTO should still detect it in C++
-            print(
-                f"[Rank {get_rank()}] Detected Slurm environment, using AUTO backend (will select SLURM in C++)",
-                flush=True,
-            )
+            # SLURM backend not available in Python bindings
+            # Create a temporary coordination directory as workaround
+
+            # Use a shared temp directory based on Slurm job ID
+            job_id = os.environ.get("SLURM_JOB_ID", "unknown")
+            coord_dir = f"/tmp/rapidsmpf-coord-{job_id}"
+
+            # All ranks create the directory (exist_ok=True avoids race)
+            rank = get_rank()
+            os.makedirs(coord_dir, exist_ok=True)
+
+            if rank == 0:
+                print(
+                    f"[Rank {rank}] SLURM backend not available in Python bindings, "
+                    f"using FILE backend with coordination directory: {coord_dir}",
+                    flush=True,
+                )
+                print(
+                    f"[Rank {rank}] NOTE: Clean up {coord_dir} after job completes "
+                    "(or it will be reused on next job with same ID)",
+                    flush=True,
+                )
+
+            # Set the environment variable for all ranks
+            os.environ["RAPIDSMPF_COORD_DIR"] = coord_dir
+
             return bootstrap.BackendType.AUTO
 
     # Default to AUTO
