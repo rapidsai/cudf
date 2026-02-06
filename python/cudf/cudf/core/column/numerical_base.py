@@ -168,8 +168,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     indices.plc_column,
                     exact,
                 )
-                # plc.quantiles.quantile always returns FLOAT64, use the actual
-                # type from the result column
                 result = cast(
                     cudf.core.column.numerical_base.NumericalBaseColumn,
                     ColumnBase.create(

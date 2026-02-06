@@ -43,7 +43,6 @@ def test_tz_aware_attributes_local():
     ]
     dti = cudf.DatetimeIndex(data).tz_localize("UTC").tz_convert("US/Eastern")
     result = dti.hour
-    # Hour is always widened to int32 (from int16) for both tz-aware and tz-naive
     expected = cudf.Index([9, 9, 9], dtype="int32")
     assert_eq(result, expected)
 

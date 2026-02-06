@@ -211,8 +211,8 @@ class DatetimeColumn(TemporalBaseColumn):
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            # last_day_of_month returns TIMESTAMP_DAYS, which gets wrapped to
-            # TIMESTAMP_SECONDS, so we use from_pylibcudf to infer the dtype
+            # Currently this needs to use from_pylibcudf because we need to infer the
+            # type after _wrap_buffers so we can't use dtype_from_pylibcudf_column
             last_day_col = ColumnBase.from_pylibcudf(
                 plc.datetime.last_day_of_month(self.plc_column),
             )
