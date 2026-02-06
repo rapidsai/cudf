@@ -640,9 +640,12 @@ add_library(
   src/reductions/mean.cu
   src/reductions/min.cu
   src/reductions/minmax.cu
+  src/reductions/distinct_count.cu
   src/reductions/nth_element.cu
   src/reductions/nunique.cpp
   src/reductions/product.cu
+  src/reductions/unique_count.cu
+  src/reductions/unique_count_column.cu
   src/reductions/quantile.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
@@ -713,15 +716,12 @@ add_library(
   src/sort/top_k.cu
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
-  src/stream_compaction/distinct_count.cu
   src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/filter/filter.cu
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
-  src/stream_compaction/unique_count.cu
-  src/stream_compaction/unique_count_column.cu
   src/strings/attributes.cu
   src/strings/capitalize.cu
   src/strings/case.cu

@@ -137,11 +137,9 @@ ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH
   stream_compaction/apply_boolean_mask.cpp
   stream_compaction/distinct.cpp
-  stream_compaction/distinct_count.cpp
   stream_compaction/stable_distinct.cpp
   stream_compaction/stream_compaction_common.cpp
   stream_compaction/unique.cpp
-  stream_compaction/unique_count.cpp
 )
 
 # ##################################################################################################
@@ -212,6 +210,7 @@ ConfigureNVBench(
   REDUCTION_NVBENCH
   reduction/anyall.cpp
   reduction/dictionary.cpp
+  reduction/distinct_count.cpp
   reduction/histogram.cpp
   reduction/minmax.cpp
   reduction/rank.cpp
@@ -219,6 +218,7 @@ ConfigureNVBench(
   reduction/scan.cpp
   reduction/scan_structs.cpp
   reduction/segmented_reduce.cpp
+  reduction/unique_count.cpp
 )
 
 # ##################################################################################################
