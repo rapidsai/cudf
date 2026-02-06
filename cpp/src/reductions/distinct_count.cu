@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "../stream_compaction/stream_compaction_common.cuh"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
@@ -15,6 +13,7 @@
 #include <cudf/reduction/detail/distinct_count.hpp>
 #include <cudf/reduction/distinct_count.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -38,6 +37,20 @@
 namespace cudf {
 namespace detail {
 namespace {
+
+class row_validity {
+ public:
+  row_validity(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
+
+  __device__ inline bool operator()(size_type const& i) const noexcept
+  {
+    return cudf::bit_is_set(_row_bitmask, i);
+  }
+
+ private:
+  bitmask_type const* _row_bitmask;
+};
+
 /**
  * @brief Functor to check for `NaN` at an index in a `column_device_view`.
  *
