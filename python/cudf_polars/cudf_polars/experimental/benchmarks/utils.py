@@ -559,7 +559,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
     if scheduler_address is not None:
         # Connect to existing cluster via scheduler address
         client = Client(address=scheduler_address)
-        n_workers = len(client.scheduler_info().get("workers", {}))
+        n_workers = client.scheduler_info()["n_workers"]
         print(
             f"Connected to existing Dask cluster at {scheduler_address} "
             f"with {n_workers} workers"
@@ -567,7 +567,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
     elif scheduler_file is not None:
         # Connect to existing cluster via scheduler file
         client = Client(scheduler_file=scheduler_file)
-        n_workers = len(client.scheduler_info().get("workers", {}))
+        n_workers = client.scheduler_info()["n_workers"]
         print(
             f"Connected to existing Dask cluster via scheduler file: {scheduler_file} "
             f"with {n_workers} workers"
@@ -1033,7 +1033,7 @@ def run_polars(
 
     # Update n_workers from the actual cluster when using scheduler file/address
     if client is not None:
-        actual_n_workers = len(client.scheduler_info().get("workers", {}))
+        actual_n_workers = client.scheduler_info()["n_workers"]
         run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
