@@ -91,13 +91,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
         self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
-    def _adjust_reduce_result(
+    def _adjust_reduce_result_dtype(
         self,
-        result_col: ColumnBase,
         reduction_op: str,
         col_dtype: DtypeObj,
         plc_scalar: plc.Scalar,
-    ) -> ColumnBase:
+    ) -> DtypeObj:
         """Adjust decimal precision based on reduction operation."""
         scale = -plc_scalar.type().scale()
         # Narrow type for mypy - we know col_dtype is a decimal type
@@ -118,8 +117,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 f"{reduction_op} not implemented for decimal types."
             )
         precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)
-        new_dtype = type(col_dtype)(precision, scale)
-        return result_col.astype(new_dtype)
+        return type(col_dtype)(precision, scale)
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
