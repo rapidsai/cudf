@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "io/parquet/parquet_common.hpp"
+
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -31,9 +34,8 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::dat
   auto ender_buffer  = datasource.host_read(len - ender_len, ender_len);
   auto const ender   = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
   CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
-  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-               "Corrupted header or footer");
+  CUDF_EXPECTS(header->magic == detail::parquet_magic, "Corrupted header");
+  CUDF_EXPECTS(ender->magic == detail::parquet_magic, "Corrupted footer");
   CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                "Incorrect footer length");
 
@@ -72,7 +74,7 @@ fetch_byte_ranges_to_device_async(
   auto buffer_data = static_cast<uint8_t*>(column_chunk_buffers.back().data());
   std::ignore      = std::accumulate(
     byte_ranges.begin(), byte_ranges.end(), std::size_t{0}, [&](auto acc, auto const& range) {
-      column_chunk_data.emplace_back(buffer_data + acc, static_cast<size_t>(range.size()));
+      column_chunk_data.emplace_back(buffer_data + acc, range.size());
       return acc + range.size();
     });
 
@@ -84,9 +86,9 @@ fetch_byte_ranges_to_device_async(
     std::lock_guard<std::mutex> lock(mutex);
 
     for (size_t chunk = 0; chunk < byte_ranges.size();) {
-      auto const io_offset = static_cast<size_t>(byte_ranges[chunk].offset());
-      auto io_size         = static_cast<size_t>(byte_ranges[chunk].size());
-      size_t next_chunk    = chunk + 1;
+      size_t const io_offset = byte_ranges[chunk].offset();
+      size_t io_size         = byte_ranges[chunk].size();
+      size_t next_chunk      = chunk + 1;
       while (next_chunk < byte_ranges.size()) {
         size_t const next_offset = byte_ranges[next_chunk].offset();
         if (next_offset != io_offset + io_size) { break; }
