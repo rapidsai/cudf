@@ -5,7 +5,9 @@ from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from pylibcudf.libcudf cimport distinct_count as cpp_distinct_count
 from pylibcudf.libcudf cimport stream_compaction as cpp_stream_compaction
+from pylibcudf.libcudf cimport unique_count as cpp_unique_count
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.stream_compaction cimport duplicate_keep_option
 from pylibcudf.libcudf.table.table cimport table
@@ -361,7 +363,7 @@ cpdef size_type unique_count(
     """
     stream = _get_stream(stream)
 
-    return cpp_stream_compaction.unique_count(
+    return cpp_unique_count.unique_count(
         source.view(), null_handling, nan_handling, stream.view()
     )
 
@@ -392,7 +394,7 @@ cpdef size_type distinct_count(
     """
     stream = _get_stream(stream)
 
-    return cpp_stream_compaction.distinct_count(
+    return cpp_distinct_count.distinct_count(
         source.view(), null_handling, nan_handling, stream.view()
     )
 
