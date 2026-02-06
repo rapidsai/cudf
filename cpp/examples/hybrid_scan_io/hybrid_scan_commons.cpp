@@ -10,6 +10,7 @@
 #include "timer.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -36,15 +37,14 @@ std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasourc
   timer timer;
   // Fetch footer bytes and setup reader
   auto const footer_buffer = fetch_footer_bytes(datasource);
-  auto reader              = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-    make_host_span(*footer_buffer), options);
+  auto reader = std::make_unique<hybrid_scan_reader>(make_host_span(*footer_buffer), options);
   if (verbose) { timer.print_elapsed_millis(); }
 
   return std::move(reader);
 }
 
 void setup_page_index(cudf::io::datasource& datasource,
-                      cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+                      hybrid_scan_reader const& reader,
                       bool single_step_read,
                       bool verbose)
 {
@@ -64,7 +64,7 @@ void setup_page_index(cudf::io::datasource& datasource,
 
 std::vector<cudf::size_type> apply_row_group_filters(
   cudf::io::datasource& datasource,
-  cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+  hybrid_scan_reader const& reader,
   std::unordered_set<hybrid_scan_filter_type> const& filters,
   cudf::host_span<cudf::size_type> input_row_group_indices,
   cudf::io::parquet_reader_options const& options,
@@ -177,7 +177,7 @@ std::vector<cudf::size_type> apply_row_group_filters(
 
 std::unique_ptr<cudf::table> single_step_materialize(
   cudf::io::datasource& datasource,
-  cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+  hybrid_scan_reader const& reader,
   cudf::host_span<cudf::size_type> current_row_group_indices,
   cudf::io::parquet_reader_options const& options,
   bool verbose,
@@ -209,7 +209,7 @@ std::unique_ptr<cudf::table> single_step_materialize(
 
 std::unique_ptr<cudf::table> two_step_materialize(
   cudf::io::datasource& datasource,
-  cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+  hybrid_scan_reader const& reader,
   std::unordered_set<hybrid_scan_filter_type> const& filters,
   cudf::host_span<cudf::size_type> current_row_group_indices,
   cudf::io::parquet_reader_options const& options,
