@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "hybrid_scan.hpp"
+#include "hybrid_scan_composer.hpp"
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/memory_stats.hpp>
@@ -23,18 +23,11 @@
 
 #include <vector>
 
-size_t get_num_reads(nvbench::state const& state) { return state.get_int64("num_threads"); }
-
-size_t get_read_size(nvbench::state const& state)
-{
-  auto const num_reads = get_num_reads(state);
-  return state.get_int64("total_data_size") / num_reads;
-}
-
 std::string get_label(std::string const& test_name, nvbench::state const& state)
 {
   auto const num_cols       = state.get_int64("num_cols");
-  size_t const read_size_mb = get_read_size(state) / (1024 * 1024);
+  auto const num_reads      = state.get_int64("num_threads");
+  size_t const read_size_mb = state.get_int64("total_data_size") / num_reads;
   return {test_name + ", " + std::to_string(num_cols) + " columns, " +
           std::to_string(state.get_int64("num_iterations")) + " iterations, " +
           std::to_string(state.get_int64("num_threads")) + " threads " + " (" +
@@ -50,8 +43,8 @@ std::tuple<std::vector<cuio_source_sink_pair>, size_t, size_t> write_file_data(
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
   cudf::size_type const num_cols    = state.get_int64("num_cols");
-  size_t const num_files            = get_num_reads(state);
-  size_t const per_file_data_size   = get_read_size(state);
+  size_t const num_files            = state.get_int64("num_threads");
+  size_t const per_file_data_size   = state.get_int64("total_data_size") / num_files;
 
   std::vector<cuio_source_sink_pair> source_sink_vector;
 
@@ -142,76 +135,36 @@ void BM_hybrid_scan_multithreaded_read_common(nvbench::state& state,
   state.add_buffer_size(total_file_size, "encoded_file_size", "encoded_file_size");
 }
 
-void BM_hybrid_scan_multithreaded_read_mixed(nvbench::state& state)
+void BM_hybrid_scan_multithreaded_read(nvbench::state& state)
 {
-  auto label = get_label("mixed", state);
-  nvtxRangePushA(label.c_str());
-  BM_hybrid_scan_multithreaded_read_common(
-    state, {cudf::type_id::INT32, cudf::type_id::DECIMAL64, cudf::type_id::STRING}, label);
-  nvtxRangePop();
-}
+  auto const data_type = state.get_string("data_type");
+  auto label           = get_label(data_type, state);
 
-void BM_hybrid_scan_multithreaded_read_fixed_width(nvbench::state& state)
-{
-  auto label = get_label("fixed width", state);
-  nvtxRangePushA(label.c_str());
-  BM_hybrid_scan_multithreaded_read_common(state, {cudf::type_id::INT32}, label);
-  nvtxRangePop();
-}
+  auto const dtypes = [&]() {
+    if (data_type == "mixed") {
+      return std::vector<cudf::type_id>{
+        cudf::type_id::INT32, cudf::type_id::DECIMAL64, cudf::type_id::STRING};
+    } else if (data_type == "fixed_width") {
+      return std::vector<cudf::type_id>{cudf::type_id::INT32};
+    } else if (data_type == "string") {
+      return std::vector<cudf::type_id>{cudf::type_id::STRING};
+    } else if (data_type == "list") {
+      return std::vector<cudf::type_id>{cudf::type_id::LIST};
+    } else {
+      CUDF_FAIL("Invalid data type: " + data_type);
+    }
+  }();
 
-void BM_hybrid_scan_multithreaded_read_string(nvbench::state& state)
-{
-  auto label = get_label("string", state);
   nvtxRangePushA(label.c_str());
-  BM_hybrid_scan_multithreaded_read_common(state, {cudf::type_id::STRING}, label);
-  nvtxRangePop();
-}
-
-void BM_hybrid_scan_multithreaded_read_list(nvbench::state& state)
-{
-  auto label = get_label("list", state);
-  nvtxRangePushA(label.c_str());
-  BM_hybrid_scan_multithreaded_read_common(state, {cudf::type_id::LIST}, label);
+  BM_hybrid_scan_multithreaded_read_common(state, dtypes, label);
   nvtxRangePop();
 }
 
 // mixed data types: fixed width and strings
-NVBENCH_BENCH(BM_hybrid_scan_multithreaded_read_mixed)
-  .set_name("hybrid_scan_multithreaded_read_decode_mixed")
+NVBENCH_BENCH(BM_hybrid_scan_multithreaded_read)
+  .set_name("hybrid_scan_multithreaded_read")
   .set_min_samples(4)
-  .add_int64_axis("cardinality", {1000})
-  .add_int64_axis("total_data_size", {512 * 1024 * 1024, 1024 * 1024 * 1024})
-  .add_int64_axis("num_threads", {1, 2, 4, 8})
-  .add_int64_axis("num_iterations", {1})
-  .add_int64_axis("num_cols", {4})
-  .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
-
-NVBENCH_BENCH(BM_hybrid_scan_multithreaded_read_fixed_width)
-  .set_name("hybrid_scan_multithreaded_read_decode_fixed_width")
-  .set_min_samples(4)
-  .add_int64_axis("cardinality", {1000})
-  .add_int64_axis("total_data_size", {512 * 1024 * 1024, 1024 * 1024 * 1024})
-  .add_int64_axis("num_threads", {1, 2, 4, 8})
-  .add_int64_axis("num_iterations", {1})
-  .add_int64_axis("num_cols", {4})
-  .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
-
-NVBENCH_BENCH(BM_hybrid_scan_multithreaded_read_string)
-  .set_name("hybrid_scan_multithreaded_read_decode_string")
-  .set_min_samples(4)
-  .add_int64_axis("cardinality", {1000})
-  .add_int64_axis("total_data_size", {512 * 1024 * 1024, 1024 * 1024 * 1024})
-  .add_int64_axis("num_threads", {1, 2, 4, 8})
-  .add_int64_axis("num_iterations", {1})
-  .add_int64_axis("num_cols", {4})
-  .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
-
-NVBENCH_BENCH(BM_hybrid_scan_multithreaded_read_list)
-  .set_name("hybrid_scan_multithreaded_read_decode_list")
-  .set_min_samples(4)
+  .add_string_axis("data_type", {"mixed", "fixed_width", "string", "list"})
   .add_int64_axis("cardinality", {1000})
   .add_int64_axis("total_data_size", {512 * 1024 * 1024, 1024 * 1024 * 1024})
   .add_int64_axis("num_threads", {1, 2, 4, 8})

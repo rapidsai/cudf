@@ -15,19 +15,19 @@
 #include <unordered_set>
 
 /**
- * @file hybrid_scan.hpp
- * @brief Common hybrid scan function(s)
+ * @file hybrid_scan_composer.hpp
+ * @brief Hybrid scan composer function(s)
  */
 
 /**
- * @brief Enum to represent the available hybrid scan filters
+ * @brief Enum to represent the currenlty used hybrid scan filters
  */
 enum class hybrid_scan_filter_type : uint8_t {
-  ROW_GROUPS_WITH_STATS               = 0,
-  ROW_GROUPS_WITH_DICT_PAGES          = 1,
-  ROW_GROUPS_WITH_BLOOM_FILTERS       = 2,
-  FILTER_COLUMN_PAGES_WITH_PAGE_INDEX = 3,
-  PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK  = 4,
+  ROW_GROUPS_WITH_STATS         = 0,
+  ROW_GROUPS_WITH_DICT_PAGES    = 1,
+  ROW_GROUPS_WITH_BLOOM_FILTERS = 2,
+  // FILTER_COLUMN_PAGES_WITH_PAGE_INDEX = 3,
+  // PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK  = 4,
 };
 
 /**

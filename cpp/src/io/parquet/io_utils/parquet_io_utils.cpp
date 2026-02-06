@@ -5,6 +5,7 @@
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -13,11 +14,13 @@
 #include <numeric>
 
 /**
- * @file io_utils.cpp
- * @brief Definitions for IO utilities for hybrid_scan examples
+ * @file parquet_io_utils.cpp
+ * @brief Definitions for IO utilities for the Parquet and hybrid scan readers
  */
 
-std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_bytes(cudf::io::datasource& datasource)
+namespace cudf::io::parquet {
+
+std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::datasource& datasource)
 {
   using namespace cudf::io::parquet;
 
@@ -39,26 +42,20 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_bytes(cudf::io::datas
   return datasource.host_read(len - ender->footer_len - ender_len, ender->footer_len);
 }
 
-std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_bytes(
+std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
   cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes)
 {
   return datasource.host_read(page_index_bytes.offset(), page_index_bytes.size());
 }
 
-cudf::host_span<uint8_t const> make_host_span(
-  std::reference_wrapper<cudf::io::datasource::buffer const> buffer)
-{
-  return cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(buffer.get().data()),
-                                        buffer.get().size()};
-}
-
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,
            std::future<void>>
-fetch_byte_ranges(cudf::io::datasource& datasource,
-                  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-                  rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr)
+fetch_byte_ranges_to_device_async(
+  cudf::io::datasource& datasource,
+  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   static std::mutex mutex;
 
@@ -140,3 +137,5 @@ fetch_byte_ranges(cudf::io::datasource& datasource,
                      std::move(host_read_tasks),
                      std::move(device_read_tasks))};
 }
+
+}  // namespace cudf::io::parquet

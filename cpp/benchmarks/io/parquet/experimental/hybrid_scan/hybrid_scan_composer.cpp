@@ -4,22 +4,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "hybrid_scan.hpp"
-
-#include "io_utils.hpp"
+#include "hybrid_scan_composer.hpp"
 
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 
+#include <unordered_set>
 #include <vector>
 
 /**
- * @file hybrid_scan.cpp
- * @brief Definitions for hybrid scan function(s)
+ * @file hybrid_scan_composer.cpp
+ * @brief Definitions for hybrid scan composer function(s)
  */
 
 namespace {
@@ -30,13 +30,18 @@ std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasourc
                                                  cudf::io::parquet_reader_options const& options)
 {
   // Fetch footer bytes and setup reader
-  auto const footer_buffer = fetch_footer_bytes(datasource);
-  auto reader = std::make_unique<hybrid_scan_reader>(make_host_span(*footer_buffer), options);
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource);
+  auto reader              = std::make_unique<hybrid_scan_reader>(
+    cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffer->data()),
+                                                footer_buffer->size()},
+    options);
 
   auto const page_index_byte_range = reader->page_index_byte_range();
   if (not page_index_byte_range.is_empty()) {
-    auto const page_index_buffer = fetch_page_index_bytes(datasource, page_index_byte_range);
-    reader->setup_page_index(make_host_span(*page_index_buffer));
+    auto const page_index_buffer =
+      cudf::io::parquet::fetch_page_index_to_host(datasource, page_index_byte_range);
+    reader->setup_page_index(cudf::host_span<uint8_t const>{
+      static_cast<uint8_t const*>(page_index_buffer->data()), page_index_buffer->size()});
   }
   return reader;
 }
@@ -83,7 +88,8 @@ std::vector<cudf::size_type> apply_row_group_filters(
   if (filters.contains(hybrid_scan_filter_type::ROW_GROUPS_WITH_DICT_PAGES) and
       dict_page_byte_ranges.size()) {
     auto [dictionary_page_buffers, dictionary_page_data, dict_read_tasks] =
-      fetch_byte_ranges(datasource, dict_page_byte_ranges, stream, mr);
+      cudf::io::parquet::fetch_byte_ranges_to_device_async(
+        datasource, dict_page_byte_ranges, stream, mr);
     dict_read_tasks.get();
 
     dict_page_filtered_row_groups = reader.filter_row_groups_with_dictionary_pages(
@@ -103,7 +109,8 @@ std::vector<cudf::size_type> apply_row_group_filters(
     auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
       mr, bloom_filter_alignment);
     auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
-      fetch_byte_ranges(datasource, bloom_filter_byte_ranges, stream, aligned_mr);
+      cudf::io::parquet::fetch_byte_ranges_to_device_async(
+        datasource, bloom_filter_byte_ranges, stream, aligned_mr);
     bloom_read_tasks.get();
 
     bloom_filtered_row_groups = reader.filter_row_groups_with_bloom_filters(
@@ -127,7 +134,8 @@ std::unique_ptr<cudf::table> single_step_materialize(
   auto const all_column_chunk_byte_ranges =
     reader.all_column_chunks_byte_ranges(current_row_group_indices, options);
   auto [all_column_chunk_buffers, all_column_chunk_data, all_column_chunk_read_tasks] =
-    fetch_byte_ranges(datasource, all_column_chunk_byte_ranges, stream, mr);
+    cudf::io::parquet::fetch_byte_ranges_to_device_async(
+      datasource, all_column_chunk_byte_ranges, stream, mr);
   all_column_chunk_read_tasks.get();
 
   return reader
