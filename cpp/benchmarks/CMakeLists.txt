@@ -254,10 +254,32 @@ ConfigureNVBench(
 ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp hashing/partition.cpp)
 
 # ##################################################################################################
-# * hybrid scan benchmark
+# * hybrid scan common (library)
 # ----------------------------------------------------------------------
-add_library(hybrid_scan_common OBJECT io/parquet/experimental/hybrid_scan/io_utils.cpp)
+add_library(hybrid_scan_common OBJECT io/parquet/experimental/hybrid_scan/io_utils.cpp
+                                      io/parquet/experimental/hybrid_scan/hybrid_scan.cpp)
 target_compile_features(hybrid_scan_common PRIVATE cxx_std_20)
+
+target_compile_options(
+  hybrid_scan_common PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                      "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+
+target_link_libraries(
+  hybrid_scan_common
+  PUBLIC cudf cudf::cudftestutil nvtx3::nvtx3-cpp
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
+
+target_include_directories(
+  hybrid_scan_common
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
+
+# ##################################################################################################
+# * hybrid scan filters benchmark
+# ----------------------------------------------------------------------
 
 ConfigureNVBench(
   HYBRID_SCAN_FILTERS_NVBENCH io/parquet/experimental/hybrid_scan/dict_page_filter.cpp

@@ -2,6 +2,7 @@
  * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
+#include "io_utils.hpp"
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/memory_stats.hpp>
@@ -49,13 +50,14 @@ void BM_filter_string_row_groups_with_dicts_common(nvbench::state& state,
   auto const read_opts = cudf::io::parquet_reader_options::builder().filter(filter_expr).build();
 
   // Read table from parquet
-  auto const io_source = cudf::io::source_info(parquet_buffer);
+  auto const io_source = cudf::io::source_info(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
   auto datasource      = std::move(cudf::io::make_datasources(io_source).front());
   auto datasource_ref  = std::ref(*datasource);
 
   auto const footer_buffer = fetch_footer_bytes(datasource_ref);
-  auto const reader =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, read_opts);
+  auto const reader        = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+    make_host_span(*footer_buffer), read_opts);
 
   auto const page_index_byte_range = reader->page_index_byte_range();
   CUDF_EXPECTS(not page_index_byte_range.is_empty(),
@@ -63,11 +65,13 @@ void BM_filter_string_row_groups_with_dicts_common(nvbench::state& state,
 
   // Setup page index
   auto const page_index_buffer = fetch_page_index_bytes(datasource_ref, page_index_byte_range);
-  reader->setup_page_index(page_index_buffer);
+  reader->setup_page_index(make_host_span(*page_index_buffer));
 
   auto input_row_group_indices = reader->all_row_groups(read_opts);
+  auto dict_page_byte_ranges   = std::vector<cudf::io::text::byte_range_info>{};
 
-  auto const dict_page_byte_ranges = std::vector<cudf::io::text::byte_range_info>{};
+  auto mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       try_drop_l3_cache();
@@ -80,9 +84,9 @@ void BM_filter_string_row_groups_with_dicts_common(nvbench::state& state,
       CUDF_EXPECTS(not dict_page_byte_ranges.empty(), "No dictionary page byte ranges found");
 
       // Fetch dictionary page data
-      auto [dictionary_page_buffers, dictionary_page_data, future] = fetch_byte_ranges(
+      auto [dictionary_page_buffers, dictionary_page_data, read_task] = fetch_byte_ranges(
         datasource_ref, dict_page_byte_ranges, stream, cudf::get_current_device_resource_ref());
-      std::ignore = future.wait();
+      read_task.get();
 
       // Filter row groups with dictionary pages
       std::ignore = reader->filter_row_groups_with_dictionary_pages(
@@ -129,7 +133,7 @@ void BM_filter_string_rowgroups_with_dicts(nvbench::state& state)
   auto filter_expr_many_literals =
     cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, filter_expr_few_literals, expr3);
 
-  return BM_filter_string_rowgroups_with_dicts_common(
+  return BM_filter_string_row_groups_with_dicts_common(
     state,
     table_profile,
     is_inline_eval ? filter_expr_few_literals : filter_expr_many_literals,

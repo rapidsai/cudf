@@ -5,26 +5,18 @@
 
 #pragma once
 
-#include "io_source.hpp"
-
-#include <cudf/ast/expressions.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/io/datasource.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
-#include <algorithm>
-#include <thread>
 #include <unordered_set>
 
 /**
  * @file hybrid_scan.hpp
- * @brief Common hybrid scan functions
+ * @brief Common hybrid scan function(s)
  */
 
 /**

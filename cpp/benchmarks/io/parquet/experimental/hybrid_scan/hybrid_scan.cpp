@@ -7,20 +7,19 @@
 #include "hybrid_scan.hpp"
 
 #include "io_utils.hpp"
-#include "timer.hpp"
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
-#include <cudf/io/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 
 #include <vector>
+
 /**
- * @file hybrid_scan_commons.cpp
- * @brief Definitions for common hybrid scan related functions for hybrid_scan examples
+ * @file hybrid_scan.cpp
+ * @brief Definitions for hybrid scan function(s)
  */
 
 namespace {
@@ -32,19 +31,14 @@ std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasourc
 {
   // Fetch footer bytes and setup reader
   auto const footer_buffer = fetch_footer_bytes(datasource);
-  return std::make_unique<hybrid_scan_reader>(make_host_span(*footer_buffer), options);
-}
+  auto reader = std::make_unique<hybrid_scan_reader>(make_host_span(*footer_buffer), options);
 
-void setup_page_index(cudf::io::datasource& datasource,
-                      hybrid_scan_reader const& reader,
-                      bool single_step_read,
-                      bool verbose)
-{
-  auto const page_index_byte_range = reader.page_index_byte_range();
+  auto const page_index_byte_range = reader->page_index_byte_range();
   if (not page_index_byte_range.is_empty()) {
     auto const page_index_buffer = fetch_page_index_bytes(datasource, page_index_byte_range);
-    reader.setup_page_index(make_host_span(*page_index_buffer));
+    reader->setup_page_index(make_host_span(*page_index_buffer));
   }
+  return reader;
 }
 
 std::vector<cudf::size_type> apply_row_group_filters(
@@ -153,12 +147,9 @@ std::unique_ptr<cudf::table> hybrid_scan(cudf::io::parquet_reader_options const&
   auto datasource      = std::move(cudf::io::make_datasources(io_source).front());
   auto datasource_ref  = std::ref(*datasource);
 
-  // Setup reader
+  // Setup reader and page index
   auto reader           = setup_reader(datasource_ref, options);
   auto const reader_ref = std::cref(*reader);
-
-  // Setup page index
-  setup_page_index(datasource_ref, reader_ref);
 
   // Start with all row groups
   auto row_group_indices         = reader->all_row_groups(options);
@@ -166,8 +157,8 @@ std::unique_ptr<cudf::table> hybrid_scan(cudf::io::parquet_reader_options const&
 
   // Filter row groups
   if (options.get_filter().has_value()) {
-    row_group_indices =
-      apply_row_group_filters(datasource_ref, reader_ref, filters, options, stream, mr);
+    row_group_indices = apply_row_group_filters(
+      datasource_ref, reader_ref, current_row_group_indices, filters, options, stream, mr);
     current_row_group_indices = cudf::host_span<cudf::size_type>(row_group_indices);
   }
 
