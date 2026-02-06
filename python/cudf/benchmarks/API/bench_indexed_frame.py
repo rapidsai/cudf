@@ -14,7 +14,7 @@ def bench_scans(benchmark, op, indexedframe):
 
 
 @benchmark_with_object(cls="indexedframe", dtype="int")
-@pytest.mark.parametrize("op", ["sum", "product", "mean"])
+@pytest.mark.parametrize("op", ["sum", "mean"])
 def bench_reductions(benchmark, op, indexedframe):
     benchmark(getattr(indexedframe, op))
 
