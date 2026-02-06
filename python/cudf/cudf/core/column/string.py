@@ -1813,15 +1813,17 @@ class StringColumn(ColumnBase, Scannable):
                 start,
                 end,
             )
-            res = ColumnBase.create(
-                plc_result,
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
-            )
+            base_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.int32))
+            target_dtype = base_dtype
             if cudf.get_option("mode.pandas_compatible"):
-                res = res.astype(np.dtype("int64"))._with_type_metadata(
-                    self._get_pandas_compatible_dtype(np.dtype("int64"))
+                target_dtype = self._get_pandas_compatible_dtype(
+                    np.dtype("int64")
                 )
-            return cast(Self, res)
+            if target_dtype != base_dtype:
+                plc_result = plc.unary.cast(
+                    plc_result, dtype_to_pylibcudf_type(np.dtype("int64"))
+                )
+            return cast(Self, ColumnBase.create(plc_result, target_dtype))
 
     def matches_re(self, pattern: str, flags: int) -> Self:
         with self.access(mode="read", scope="internal"):
