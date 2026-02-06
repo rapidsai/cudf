@@ -254,6 +254,25 @@ ConfigureNVBench(
 ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp hashing/partition.cpp)
 
 # ##################################################################################################
+# * hybrid scan benchmark
+# ----------------------------------------------------------------------
+add_library(hybrid_scan_common OBJECT io/parquet/experimental/hybrid_scan/io_utils.cpp)
+target_compile_features(hybrid_scan_common PRIVATE cxx_std_20)
+
+ConfigureNVBench(
+  HYBRID_SCAN_FILTERS_NVBENCH io/parquet/experimental/hybrid_scan/dict_page_filter.cpp
+)
+target_link_libraries(HYBRID_SCAN_FILTERS_NVBENCH PRIVATE hybrid_scan_common)
+
+# ##################################################################################################
+# * hybrid scan multithread benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(
+  HYBRID_SCAN_MULTITHREAD_NVBENCH io/parquet/experimental/hybrid_scan/hybrid_scan_multithread.cpp
+)
+target_link_libraries(HYBRID_SCAN_MULTITHREAD_NVBENCH PRIVATE hybrid_scan_common)
+
+# ##################################################################################################
 # * interop benchmark ------------------------------------------------------------------------------
 ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp interop/interop_stringview.cpp)
 target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow::nanoarrow)
@@ -291,17 +310,11 @@ ConfigureNVBench(
 ConfigureNVBench(PARQUET_READER_FILTER_NVBENCH io/parquet/parquet_reader_filter.cpp)
 
 # ##################################################################################################
-# * parquet experimental reader benchmark
-# ----------------------------------------------------------------------
-ConfigureNVBench(
-  PARQUET_EXPERIMENTAL_READER_NVBENCH io/parquet/experimental/parquet_dictionary_page_filter.cpp
-)
-
-# ##################################################################################################
 # * parquet deletion vector benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(
-  PARQUET_DELETION_VECTORS_NVBENCH io/parquet/experimental/parquet_deletion_vectors.cpp
+  PARQUET_DELETION_VECTORS_NVBENCH
+  io/parquet/experimental/deletion_vectors/parquet_deletion_vectors.cpp
 )
 target_compile_definitions(
   PARQUET_DELETION_VECTORS_NVBENCH
