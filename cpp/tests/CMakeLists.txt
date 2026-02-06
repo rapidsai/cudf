@@ -340,7 +340,7 @@ ConfigureTest(
 )
 ConfigureTest(
   HYBRID_SCAN_TEST
-  io/experimental/hybrid_scan_common.cpp
+  io/experimental/hybrid_scan_composer.cpp
   io/experimental/hybrid_scan_filters_test.cpp
   io/experimental/hybrid_scan_test.cpp
   io/parquet_common.cpp
@@ -752,8 +752,7 @@ ConfigureTest(
 ConfigureTest(STREAM_IO_ORC_TEST streams/io/orc_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_IO_PARQUET_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
 ConfigureTest(
-  STREAM_IO_HYBRID_SCAN_TEST io/experimental/hybrid_scan_common.cpp
-  streams/io/experimental/hybrid_scan_test.cpp STREAM_MODE testing
+  STREAM_IO_HYBRID_SCAN_TEST streams/io/experimental/hybrid_scan_test.cpp STREAM_MODE testing
 )
 ConfigureTest(STREAM_JOIN_TEST streams/join_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
