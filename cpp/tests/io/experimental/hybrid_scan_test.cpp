@@ -212,13 +212,13 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
     cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
-  auto parquet_datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+  auto datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
+  auto datasource_ref = std::ref(*datasource);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-    hybrid_scan(
-      *parquet_datasource, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
+    hybrid_scan(datasource_ref, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
   // Read parquet using the chunked hybrid scan reader
   auto [read_filter_table_chunked,
@@ -227,7 +227,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
         read_payload_meta_chunked,
         row_mask_chunked] =
     chunked_hybrid_scan(
-      *parquet_datasource, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
+      datasource_ref, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
   CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                "Filter and payload tables should have the same number of rows");
@@ -368,6 +368,7 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
   auto datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()));
   auto datasource_ref = std::ref(*datasource);
+
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
     hybrid_scan(datasource_ref, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
