@@ -146,6 +146,6 @@ NVBENCH_BENCH(BM_filter_string_rowgroups_with_dicts)
   .set_min_samples(4)
   .add_int64_axis("num_row_groups", {32, 64, 128})
   .add_int64_axis("min_length", {4})
-  .add_int64_axis("max_length", {32, 64, 128})
-  .add_int64_axis("cardinality", {100, 1'000, 10'000})
+  .add_int64_axis("max_length", {64, 128})
+  .add_int64_axis("cardinality", {1'000, 10'000})
   .add_int64_axis("is_inline", {true, false});
