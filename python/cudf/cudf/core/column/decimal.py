@@ -298,15 +298,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             )
         else:
             pa_scalar = scalar.cast(cudf_dtype_to_pa_type(self.dtype))
-        plc_scalar = pa_scalar_to_plc_scalar(pa_scalar)
-        if isinstance(self.dtype, (Decimal32Dtype, Decimal64Dtype)):
-            # pyarrow.Scalar only supports Decimal128 so conversion
-            # from pyarrow would only return a pylibcudf.Scalar with Decimal128
-            col = ColumnBase.from_pylibcudf(
-                plc.Column.from_scalar(plc_scalar, 1)
-            ).astype(self.dtype)
-            return plc.copying.get_element(col.plc_column, 0)
-        return plc_scalar
+        return pa_scalar_to_plc_scalar(pa_scalar)
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
