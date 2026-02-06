@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import math
 import pickle
@@ -180,8 +180,8 @@ def test_rolling_var_std_large(agg, ddof, center, window_size):
         use_threads=False,
         seed=100,
     )
-    pdf = data.to_pandas()
-    gdf = cudf.from_pandas(pdf)
+    gdf = cudf.DataFrame.from_arrow(data)
+    pdf = gdf.to_pandas()
 
     expect = getattr(pdf.rolling(window_size, 1, center), agg)(ddof=ddof)
     got = getattr(gdf.rolling(window_size, 1, center), agg)(ddof=ddof)

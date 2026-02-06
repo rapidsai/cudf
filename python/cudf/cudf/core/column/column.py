@@ -1159,9 +1159,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
             )
         else:
-            result = cls.from_pylibcudf(plc.Column.from_arrow(array))
-            return result._with_type_metadata(
-                cudf_dtype_from_pa_type(array.type)
+            return cls.create(
+                plc.Column.from_arrow(array),
+                cudf_dtype_from_pa_type(array.type),
             )
 
     def _get_mask_as_column(self) -> ColumnBase:
