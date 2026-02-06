@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for RapidsMPF spilling functionality."""
@@ -15,7 +15,9 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
-from cudf_polars.experimental.rapidsmpf.utils import make_spill_function
+from cudf_polars.experimental.rapidsmpf.utils import (
+    make_spill_function,
+)
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context

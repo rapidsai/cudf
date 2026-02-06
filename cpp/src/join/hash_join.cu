@@ -1,10 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/join/hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -12,6 +14,7 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/utilities/error.hpp>
@@ -27,7 +30,6 @@
 
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
-#include <thrust/count.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -42,8 +44,35 @@ namespace detail {
 namespace {
 using hash_table_t = cudf::hash_join::impl_type::hash_table_t;
 
-// Multimap type used for mixed joins. TODO: This is a temporary alias used
-// TODO: `pair_equal` to be moved to common utils during mixed-join migration
+/**
+ * @brief Checks if a join operation is trivial (empty tables or certain join types with empty
+ * data).
+ */
+bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
+{
+  // If there is nothing to join, then send empty table with all columns
+  if (left.is_empty() || right.is_empty()) { return true; }
+
+  // If left join and the left table is empty, return immediately
+  if ((join_kind::LEFT_JOIN == join_type) && (0 == left.num_rows())) { return true; }
+
+  // If Inner Join and either table is empty, return immediately
+  if ((join_kind::INNER_JOIN == join_type) && ((0 == left.num_rows()) || (0 == right.num_rows()))) {
+    return true;
+  }
+
+  // If left semi join (contains) and right table is empty,
+  // return immediately
+  if ((join_kind::LEFT_SEMI_JOIN == join_type) && (0 == right.num_rows())) { return true; }
+
+  // If left semi- or anti- join, and the left table is empty, return immediately
+  if ((join_kind::LEFT_SEMI_JOIN == join_type || join_kind::LEFT_ANTI_JOIN == join_type) &&
+      (0 == left.num_rows())) {
+    return true;
+  }
+
+  return false;
+}
 
 template <typename Equal>
 class pair_equal {
@@ -486,10 +515,8 @@ std::size_t get_full_join_size(
                        valid);                      // Stencil Predicate
 
     // Create list of indices that have been marked as invalid
-    left_join_complement_size = thrust::count_if(rmm::exec_policy_nosync(stream),
-                                                 invalid_index_map->begin(),
-                                                 invalid_index_map->end(),
-                                                 cuda::std::identity());
+    left_join_complement_size = cudf::detail::count_if(
+      invalid_index_map->begin(), invalid_index_map->end(), cuda::std::identity{}, stream);
   }
   return join_size + left_join_complement_size;
 }

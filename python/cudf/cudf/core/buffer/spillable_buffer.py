@@ -7,11 +7,10 @@ import collections.abc
 import time
 import weakref
 from threading import RLock
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import numpy
 import nvtx
-from typing_extensions import Self
 
 import rmm
 
@@ -22,6 +21,7 @@ from cudf.core.buffer.buffer import (
     host_memory_allocation,
 )
 from cudf.core.buffer.string import format_bytes
+from cudf.options import get_option
 from cudf.utils.performance_tracking import _get_color_for_nvtx
 
 if TYPE_CHECKING:
@@ -38,125 +38,65 @@ class _SpillableBufferAccessContext(_BufferAccessContext):
     Extends the base BufferAccessContext to add spill lock management.
     """
 
-    __slots__ = ("_scope", "_spill_lock")
+    __slots__ = ("_pending_scope", "_spill_lock_stack")
 
     _buffer: "SpillableBuffer"  # Type hint for mypy
-    _spill_lock: SpillLock | None
+    _spill_lock_stack: list[SpillLock | None]
 
-    def __init__(
-        self,
-        buffer: "SpillableBuffer",
-        mode: Literal["read", "write"],
-        scope: Literal["internal", "external"],
-    ):
+    def __init__(self, buffer: "SpillableBuffer"):
         """Initialize the context manager.
 
         Parameters
         ----------
         buffer : SpillableBuffer
             The buffer to manage access for.
-        mode : {"read", "write"}
-            Access mode for copy-on-write.
-        scope : {"internal", "external"}
-            Spill scope - internal for temporary access, external for permanent exposure.
         """
-        # Initialize base class (just stores buffer and mode)
-        super().__init__(buffer, mode)
-        self._scope = scope
-        self._spill_lock = None
+        # Initialize base class (just stores buffer)
+        super().__init__(buffer)
+        self._pending_scope: Literal["internal", "external"] | None = None
+        self._spill_lock_stack: list[SpillLock | None] = []
 
     def __enter__(self) -> "SpillableBuffer":
         """Enter the context, setting up mode stack and spill locks."""
         # Call parent to push mode onto stack
-        result = super().__enter__()
+        buffer = super().__enter__()
 
-        # Handle spill locking based on scope
-        if self._scope == "internal":
-            # Create temporary spill lock for this context
-            self._spill_lock = SpillLock()
-            with self._buffer._owner.lock:
-                self._buffer._owner._spill_locks.add(self._spill_lock)
-        elif self._scope == "external":
+        # Handle spill locking based on pending scope
+        if self._pending_scope == "internal":
+            # Create temporary spill lock for this context entry
+            spill_lock = SpillLock()
+            with buffer._owner.lock:
+                buffer._owner._spill_locks.add(spill_lock)
+            # Push to stack to handle nesting
+            self._spill_lock_stack.append(spill_lock)
+        elif self._pending_scope == "external":
             # Permanently mark as exposed (unspillable)
-            self._buffer._owner.mark_exposed()
+            buffer._owner.mark_exposed()
+            # Push None to maintain stack alignment
+            self._spill_lock_stack.append(None)
         else:
             raise ValueError(
-                f"Invalid scope: {self._scope!r}. Must be 'internal' or 'external'."
+                f"Invalid scope: {self._pending_scope!r}. Must be 'internal' or 'external'."
             )
 
-        return result
+        return buffer
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> Literal[False]:
         """Exit the context, cleaning up mode stack and releasing spill lock.
 
         Note: Spill lock cleanup happens automatically via weakref
-        when self._spill_lock goes out of scope. We explicitly clear
-        the reference to ensure immediate cleanup.
+        when the lock goes out of scope. We pop it from the stack
+        to ensure immediate cleanup.
         """
         # Call parent to pop mode from stack
         super().__exit__(exc_type, exc_val, exc_tb)
 
-        # Explicitly release the spill lock reference
+        # Pop and release the spill lock reference for this exit
         # This allows the WeakSet to remove it immediately
-        self._spill_lock = None
+        if self._spill_lock_stack:
+            self._spill_lock_stack.pop()
 
         return False
-
-
-class DelayedPointerTuple(collections.abc.Sequence):
-    """
-    A delayed version of the "data" field in __cuda_array_interface__.
-
-    The idea is to delay the access to `Buffer.ptr` until the user
-    actually accesses the data pointer.
-
-    For instance, in many cases __cuda_array_interface__ is accessed
-    only to determine whether an object is a CUDA object or not.
-
-    TODO: this doesn't support libraries such as PyTorch that declare
-    the tuple of __cuda_array_interface__["data"] in Cython. In such
-    cases, Cython will raise an error because DelayedPointerTuple
-    isn't a "real" tuple.
-    """
-
-    def __init__(self, buffer) -> None:
-        self._buf = buffer
-
-    def __len__(self):
-        return 2
-
-    def __getitem__(self, i):
-        if i == 0:
-            # Accessing via __cuda_array_interface__ exposes the pointer externally
-            with self._buf.access(mode="write", scope="external"):
-                return self._buf.ptr
-        elif i == 1:
-            return False
-        raise IndexError("tuple index out of range")
-
-
-class SpillableBufferCAIWrapper:
-    # A wrapper that exposes the __cuda_array_interface__ of a SpillableBuffer without
-    # actually accessing __cuda_array_interface__, which triggers spilling.
-
-    _buf: SpillableBuffer
-
-    def __init__(self, buf: SpillableBuffer) -> None:
-        self._buf = buf
-        self._spill_lock = SpillLock()
-
-    @property
-    def __cuda_array_interface__(self) -> dict:
-        self._buf.spill_lock(self._spill_lock)
-        # Accessing _memory_info doesn't trigger spilling
-        ptr, size, _ = self._buf.memory_info()
-        return {
-            "data": (ptr, False),
-            "shape": (size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 3,
-        }
 
 
 class SpillableBufferOwner(BufferOwner):
@@ -206,6 +146,7 @@ class SpillableBufferOwner(BufferOwner):
         self._spill_locks = weakref.WeakSet()
         self._last_accessed = time.monotonic()
         self._ptr_desc = ptr_desc
+        self._exposed: bool = False
         manager = get_global_manager()
         if manager is None:
             raise ValueError(
@@ -217,7 +158,7 @@ class SpillableBufferOwner(BufferOwner):
         self._manager.add(self)
 
     @classmethod
-    def from_device_memory(cls, data: Any, exposed: bool) -> Self:
+    def from_device_memory(cls, data: Any) -> Self:
         """Create a spillabe buffer from device memory.
 
         No data is being copied.
@@ -226,24 +167,19 @@ class SpillableBufferOwner(BufferOwner):
         ----------
         data : device-buffer-like
             An object implementing the CUDA Array Interface.
-        exposed : bool
-            Mark the buffer as permanently exposed (unspillable).
 
         Returns
         -------
         SpillableBufferOwner
             Buffer representing the same device memory as `data`
         """
-        ret = super().from_device_memory(data, exposed=exposed)
+        ret = super().from_device_memory(data)
         ret._finalize_init(ptr_desc={"type": "gpu"})
         return ret
 
     @classmethod
-    def from_host_memory(cls, data: Any) -> Self:
-        """Create a spillabe buffer from host memory.
-
-        Data must implement `__array_interface__`, the buffer protocol, and/or
-        be convertible to a buffer object using `numpy.asanyarray()`
+    def from_host_memory(cls, data: memoryview) -> Self:
+        """Create a spillable buffer from host memory.
 
         The new buffer is marked as spilled to host memory already.
 
@@ -251,7 +187,7 @@ class SpillableBufferOwner(BufferOwner):
 
         Parameters
         ----------
-        data : Any
+        data : memoryview
             An object that represents host memory.
 
         Returns
@@ -259,16 +195,12 @@ class SpillableBufferOwner(BufferOwner):
         SpillableBufferOwner
             Buffer representing a copy of `data`.
         """
-
-        # Convert to a memoryview using numpy array, this will not copy data
-        # in most cases.
-        data = memoryview(numpy.asanyarray(data))
         if not data.c_contiguous:
             raise ValueError("Buffer data must be C-contiguous")
         data = data.cast("B")  # Make sure itemsize==1
 
         # Create an already spilled buffer
-        ret = cls(ptr=0, size=data.nbytes, owner=None, exposed=False)
+        ret = cls(ptr=0, size=data.nbytes, owner=None)
         ret._finalize_init(ptr_desc={"type": "cpu", "memoryview": data})
         return ret
 
@@ -356,7 +288,7 @@ class SpillableBufferOwner(BufferOwner):
             if not self.exposed:
                 self._manager.statistics.log_expose(self)
             self.spill(target="gpu")
-            super().mark_exposed()
+            self._exposed = True
             self._last_accessed = time.monotonic()
 
     def spill_lock(self, spill_lock: SpillLock) -> None:
@@ -379,32 +311,20 @@ class SpillableBufferOwner(BufferOwner):
     def ptr(self) -> int:
         """Device pointer to the start of the buffer (Span protocol).
 
-        If this is called within an `acquire_spill_lock` context or
-        an `access(scope="internal")` context, a reference to this
-        buffer is added to spill_lock, which disables spilling of
-        this buffer while in the context.
+        If this is called within an `access(scope="internal")` context,
+        the buffer is unspilled if needed and spilling is disabled
+        while in the context.
 
-        If this is *not* called within any spill lock context, this
+        If this is *not* called within any access context, this
         buffer is marked as unspillable permanently.
         """
-        from cudf.core.buffer.utils import get_spill_lock
-
-        # Check for thread-local spill lock (old mechanism)
-        spill_lock = get_spill_lock()
-
-        # If no thread-local lock but we have spill locks active
-        # (from access context), don't mark as exposed
-        if spill_lock is None and len(self._spill_locks) == 0:
+        # If no context-based spill locks, mark as exposed
+        if len(self._spill_locks) == 0:
             self.mark_exposed()
-        elif spill_lock is not None:
-            # Only add thread-local lock if it exists
-            self.spill_lock(spill_lock)
-            self._last_accessed = time.monotonic()
-        # If we have context-based spill locks, unspill if needed
-        elif len(self._spill_locks) > 0:
-            with self.lock:
-                if self.is_spilled:
-                    self.spill(target="gpu")
+        else:
+            # If we have context-based spill locks, unspill if needed
+            if self.is_spilled:
+                self.spill(target="gpu")
             self._last_accessed = time.monotonic()
         return self._ptr
 
@@ -431,7 +351,16 @@ class SpillableBufferOwner(BufferOwner):
             ptr = numpy.array(
                 self._ptr_desc["memoryview"], copy=False
             ).__array_interface__["data"][0]
-        return (ptr, self.nbytes, self._ptr_desc["type"])
+        return (ptr, self.size, self._ptr_desc["type"])
+
+    @property
+    def exposed(self) -> bool:
+        """The current exposure status of the buffer
+
+        This is used by copy-on-write to determine when a deep copy
+        is required and by SpillableBuffer to mark the buffer unspillable.
+        """
+        return self._exposed
 
     @property
     def spillable(self) -> bool:
@@ -440,16 +369,6 @@ class SpillableBufferOwner(BufferOwner):
     @property
     def last_accessed(self) -> float:
         return self._last_accessed
-
-    @property
-    def __cuda_array_interface__(self) -> dict:
-        return {
-            "data": DelayedPointerTuple(self),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 3,
-        }
 
     def memoryview(
         self, *, offset: int = 0, size: int | None = None
@@ -485,10 +404,77 @@ class SpillableBufferOwner(BufferOwner):
         )
 
 
+class DelayedPointerTuple(collections.abc.Sequence):
+    """
+    A delayed version of the "data" field in __cuda_array_interface__.
+
+    The idea is to delay the access to `Buffer.ptr` until the user
+    actually accesses the data pointer.
+
+    For instance, in many cases __cuda_array_interface__ is accessed
+    only to determine whether an object is a CUDA object or not.
+
+    TODO: this doesn't support libraries such as PyTorch that declare
+    the tuple of __cuda_array_interface__["data"] in Cython. In such
+    cases, Cython will raise an error because DelayedPointerTuple
+    isn't a "real" tuple.
+    """
+
+    def __init__(self, buffer) -> None:
+        self._buf = buffer
+
+    def __len__(self):
+        return 2
+
+    def __getitem__(self, i):
+        if i == 0:
+            # Accessing via __cuda_array_interface__ exposes the pointer externally
+            with self._buf.access(mode="write", scope="external"):
+                return self._buf.ptr
+        elif i == 1:
+            return False
+        raise IndexError("tuple index out of range")
+
+
+class SpillableBufferCAIWrapper:
+    # A wrapper that exposes the __cuda_array_interface__ of a SpillableBuffer without
+    # actually accessing __cuda_array_interface__, which triggers spilling.
+
+    _buf: SpillableBuffer
+
+    def __init__(self, buf: SpillableBuffer) -> None:
+        self._buf = buf
+        self._spill_lock = SpillLock()
+
+    @property
+    def __cuda_array_interface__(self) -> dict:
+        self._buf._owner.spill_lock(self._spill_lock)
+        # Accessing _memory_info doesn't trigger spilling
+        ptr, size, _ = self._buf.memory_info()
+        return {
+            "data": (ptr, False),
+            "shape": (size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 3,
+        }
+
+
 class SpillableBuffer(Buffer):
     """A slice of a spillable buffer"""
 
     _owner: SpillableBufferOwner
+    _access_context: _SpillableBufferAccessContext
+
+    def __init__(
+        self,
+        *,
+        owner: "SpillableBufferOwner",
+        offset: int = 0,
+        size: int | None = None,
+    ) -> None:
+        super().__init__(owner=owner, offset=offset, size=size)
+        self._access_context = _SpillableBufferAccessContext(self)
 
     def access(
         self,
@@ -499,61 +485,17 @@ class SpillableBuffer(Buffer):
     ) -> _SpillableBufferAccessContext:
         """Context manager for controlled buffer access with spill locking.
 
-        Parameters
-        ----------
-        mode : {"read", "write"}
-            Access mode for copy-on-write:
-            - "read": ptr access will not trigger copy-on-write
-            - "write": ptr access will trigger copy-on-write if needed
-        scope : {"internal", "external"}, default "internal"
-            Spill scope for the buffer access:
-            - "internal" (default): Temporary ptr access within the context only.
-                         Buffer is spill-locked during context but can be
-                         spilled afterward. Use for passing to pylibcudf
-                         functions that won't retain the pointer.
-            - "external": Ptr may leak outside the context (e.g., exposed
-                         via __cuda_array_interface__ to external libraries).
-                         Buffer is permanently marked as unspillable.
-
-            NOTE: In future versions, this parameter will be required with
-            no default to ensure explicit scope specification.
-
-        Returns
-        -------
-        _SpillableBufferAccessContext
-            A context manager controlling both COW and spill behavior.
-
-        Examples
-        --------
-        For internal pylibcudf operations:
-
-        >>> with column.access(mode="read", scope="internal"):
-        ...     result = plc.some_operation(column.plc_column)
-
-        For external exposure:
-
-        >>> with column.access(mode="write", scope="external"):
-        ...     ptr = column.ptr  # Permanently marks as unspillable
+        This context augments the parent `Buffer.access()` context manager
+        to also manage spill locks based on the specified `scope` of access, internal or
+        external.
         """
-        return _SpillableBufferAccessContext(self, mode, scope)
-
-    def spill(self, target: str = "cpu") -> None:
-        return self._owner.spill(target=target)
-
-    @property
-    def is_spilled(self) -> bool:
-        return self._owner.is_spilled
-
-    @property
-    def spillable(self) -> bool:
-        return self._owner.spillable
-
-    def spill_lock(self, spill_lock: SpillLock) -> None:
-        self._owner.spill_lock(spill_lock=spill_lock)
+        self._access_context._pending_mode = mode
+        self._access_context._pending_scope = scope
+        return self._access_context
 
     def memory_info(self) -> tuple[int, int, str]:
         (ptr, _, device_type) = self._owner.memory_info()
-        return (ptr + self._offset, self.nbytes, device_type)
+        return (ptr + self._offset, self.size, device_type)
 
     def serialize(self) -> tuple[dict, list]:
         """Serialize the Buffer
@@ -563,23 +505,19 @@ class SpillableBuffer(Buffer):
         later accessed through `__cuda_array_interface__`, which is exactly
         what libraries like Dask+UCX would do when communicating!
 
-        The sound solution is to modify Dask et al. so that they access the
-        frames through `.get_ptr()` and holds on to the `spill_lock` until
-        the frame has been transferred. However, until this adaptation we
-        use a hack where the frame is a `Buffer` with a `spill_lock` as the
-        owner, which makes `self` unspillable while the frame is alive but
-        doesn't expose `self` when `__cuda_array_interface__` is accessed.
-
-        Warning, this hack means that the returned frame must be copied before
-        given to `.deserialize()`, otherwise we would have a `Buffer` pointing
-        to memory already owned by an existing `SpillableBufferOwner`.
+        To avoid this, we use a hack where the frame is a `Buffer` with a `spill_lock`
+        as the owner, which makes `self` unspillable while the frame is alive but
+        doesn't expose `self` when `__cuda_array_interface__` is accessed. Warning, this
+        hack means that the returned frame must be copied before given to
+        `.deserialize()`, otherwise we would have a `Buffer` pointing to memory already
+        owned by an existing `SpillableBufferOwner`.
         """
         header: dict[str, Any] = {}
         frames: list[Buffer | memoryview]
         with self._owner.lock:
             header["owner-type-serialized-name"] = type(self._owner).__name__
             header["frame_count"] = 1
-            if self.is_spilled:
+            if self._owner.is_spilled:
                 frames = [self.memoryview()]
             else:
                 # TODO: Use `frames=[self]` instead of this hack, see doc above
@@ -587,26 +525,26 @@ class SpillableBuffer(Buffer):
                     Buffer(
                         owner=BufferOwner.from_device_memory(
                             SpillableBufferCAIWrapper(self),
-                            exposed=False,
                         )
                     )
                 ]
             return header, frames
 
     def copy(self, deep: bool = True) -> Self:
-        from cudf.core.buffer.utils import acquire_spill_lock
+        if get_option("copy_on_write"):
+            deep = deep or self._owner.exposed
 
         if not deep:
             return super().copy(deep=False)
 
-        if self.is_spilled:
+        if self._owner.is_spilled:
             # In this case, we make the new copy point to the same spilled
             # data in host memory. We can do this since spilled data is never
             # modified.
             owner = self._owner.from_host_memory(self.memoryview())
             return self.__class__(owner=owner, offset=0, size=owner.size)
 
-        with acquire_spill_lock():
+        with self.access(mode="read", scope="internal"):
             return super().copy(deep=deep)
 
     @property
@@ -618,3 +556,11 @@ class SpillableBuffer(Buffer):
             "typestr": "|u1",
             "version": 3,
         }
+
+    def make_single_owner_inplace(self) -> None:
+        # Override the parent method to also transfer spill locks
+        if len(self._owner._slices) > 1:
+            old_owner = self._owner
+            super().make_single_owner_inplace()
+            # Transfer spill locks to the new owner
+            self._owner._spill_locks |= old_owner._spill_locks

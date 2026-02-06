@@ -12,6 +12,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <utility>
+
 namespace cudf::groupby::detail::hash {
 template <typename SetType>
 std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global_memory_aggs(

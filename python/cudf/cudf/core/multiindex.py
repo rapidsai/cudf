@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -22,9 +22,10 @@ from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core import column
 from cudf.core._internals import sorting
 from cudf.core.algorithms import factorize
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import access_columns
 from cudf.core.column.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.frame import Frame
 from cudf.core.index import (
     Index,
@@ -39,7 +40,6 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     is_column_like,
-    is_dtype_obj_numeric,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -51,9 +51,9 @@ from cudf.utils.utils import (
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, MutableMapping
+    from typing import Self
 
     import pyarrow as pa
-    from typing_extensions import Self
 
     from cudf._typing import DataFrameOrSeries, Dtype
     from cudf.core.dataframe import DataFrame
@@ -232,7 +232,9 @@ class MultiIndex(Index):
                 and not is_pandas_nullable_extension_dtype(level.dtype)
             ):
                 result_col = result_col.fillna(np.nan)
-            source_data[i] = result_col._with_type_metadata(level.dtype)
+            source_data[i] = ColumnBase.create(
+                result_col.plc_column, level.dtype
+            )
 
         Frame.__init__(self, ColumnAccessor(source_data))
         self._levels = new_levels
@@ -1312,7 +1314,7 @@ class MultiIndex(Index):
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
-        return self.values_host
+        return self.to_pandas().values
 
     def to_flat_index(self):
         """
@@ -1331,6 +1333,10 @@ class MultiIndex(Index):
 
         Only the values in the MultiIndex will be returned.
 
+        .. deprecated:: 26.04
+            `values_host` is deprecated and will be removed in a future version.
+            Use `to_numpy()` instead.
+
         Returns
         -------
         out : numpy.ndarray
@@ -1344,11 +1350,17 @@ class MultiIndex(Index):
         ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
         ...         names=["x", "y"],
         ...     )
-        >>> midx.values_host
+        >>> midx.values_host  # doctest: +SKIP
         array([(1, 1), (1, 5), (3, 2), (4, 2), (5, 1)], dtype=object)
-        >>> type(midx.values_host)
+        >>> type(midx.values_host)  # doctest: +SKIP
         <class 'numpy.ndarray'>
         """
+        warnings.warn(
+            "values_host is deprecated and will be removed in a future version. "
+            "Use to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         return self.to_pandas().values
 
     @property
@@ -1728,7 +1740,7 @@ class MultiIndex(Index):
                 level.to_pandas(nullable=nullable, arrow_type=arrow_type)
                 for level in self.levels
             ],
-            codes=[col.values_host for col in pd_codes],
+            codes=[col.to_numpy() for col in pd_codes],
             names=self.names,
         )
 
@@ -1981,12 +1993,13 @@ class MultiIndex(Index):
             _match_join_keys(lcol, rcol, "inner")
             for lcol, rcol in zip(target._columns, self._columns, strict=True)
         ]
-        join_keys = map(list, zip(*join_keys, strict=True))
-        with acquire_spill_lock():
-            plc_tables = [
-                plc.Table([col.plc_column for col in cols])
-                for cols in join_keys
-            ]
+        join_keys = list(map(list, zip(*join_keys, strict=True)))
+        # Flatten for access_columns
+        flattened = [col for cols in join_keys for col in cols]
+        with access_columns(*flattened, mode="read", scope="internal"):
+            plc_tables = []
+            for cols in join_keys:
+                plc_tables.append(plc.Table([col.plc_column for col in cols]))
             left_plc, right_plc = plc.join.inner_join(
                 plc_tables[0],
                 plc_tables[1],

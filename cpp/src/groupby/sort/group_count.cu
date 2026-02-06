@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -18,7 +19,6 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 
 namespace cudf {
 namespace groupby {
@@ -49,19 +49,21 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
                                         return static_cast<size_type>(b);
                                       }));
 
-    thrust::reduce_by_key(rmm::exec_policy(stream),
-                          group_labels.begin(),
-                          group_labels.end(),
-                          bitmask_iterator,
-                          thrust::make_discard_iterator(),
-                          result->mutable_view().begin<size_type>());
+    cudf::detail::reduce_by_key_async(group_labels.begin(),
+                                      group_labels.end(),
+                                      bitmask_iterator,
+                                      thrust::make_discard_iterator(),
+                                      result->mutable_view().begin<size_type>(),
+                                      cuda::std::plus<size_type>(),
+                                      stream);
   } else {
-    thrust::reduce_by_key(rmm::exec_policy(stream),
-                          group_labels.begin(),
-                          group_labels.end(),
-                          thrust::make_constant_iterator(1),
-                          thrust::make_discard_iterator(),
-                          result->mutable_view().begin<size_type>());
+    cudf::detail::reduce_by_key_async(group_labels.begin(),
+                                      group_labels.end(),
+                                      thrust::make_constant_iterator(1),
+                                      thrust::make_discard_iterator(),
+                                      result->mutable_view().begin<size_type>(),
+                                      cuda::std::plus<size_type>(),
+                                      stream);
   }
 
   return result;
@@ -79,7 +81,7 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
 
   if (num_groups == 0) { return result; }
 
-  thrust::adjacent_difference(rmm::exec_policy(stream),
+  thrust::adjacent_difference(rmm::exec_policy_nosync(stream),
                               group_offsets.begin() + 1,
                               group_offsets.end(),
                               result->mutable_view().begin<size_type>());

@@ -1,38 +1,38 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from contextlib import ExitStack
 from typing import TYPE_CHECKING, cast
 
 import pylibcudf as plc
 
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column.utils import access_columns
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Sequence
 
     from cudf.core.column import ColumnBase
     from cudf.core.column.numerical import NumericalColumn
 
 
-@acquire_spill_lock()
 def gather(
-    columns: Iterable[ColumnBase],
+    columns: Sequence[ColumnBase],
     gather_map: NumericalColumn,
     nullify: bool = False,
 ) -> list[plc.Column]:
-    plc_tbl = plc.copying.gather(
-        plc.Table([col.plc_column for col in columns]),
-        gather_map.plc_column,
-        plc.copying.OutOfBoundsPolicy.NULLIFY
-        if nullify
-        else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-    )
-    return plc_tbl.columns()
+    with access_columns(
+        *columns, gather_map, mode="read", scope="internal"
+    ) as (*columns, gather_map):
+        plc_tbl = plc.copying.gather(
+            plc.Table([col.plc_column for col in columns]),
+            gather_map.plc_column,
+            plc.copying.OutOfBoundsPolicy.NULLIFY
+            if nullify
+            else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        )
+        return plc_tbl.columns()
 
 
-@acquire_spill_lock()
 def scatter(
     sources: list[ColumnBase] | list[plc.Scalar],
     scatter_map: NumericalColumn,
@@ -62,18 +62,14 @@ def scatter(
                 f"index out of bounds for column of size {n_rows}"
             )
 
-    stack = ExitStack()
-    with stack:
-        for col in target_columns:
-            stack.enter_context(col.access(mode="write"))
+    with access_columns(  # type: ignore[assignment]
+        *target_columns, mode="write", scope="internal"
+    ) as target_columns:
         plc_tbl = plc.copying.scatter(
             cast(list[plc.Scalar], sources)
             if isinstance(sources[0], plc.Scalar)
             else plc.Table(
-                [
-                    col.plc_column  # type: ignore[union-attr]
-                    for col in sources
-                ]
+                [col.plc_column for col in cast("list[ColumnBase]", sources)]
             ),
             scatter_map.plc_column,
             plc.Table([col.plc_column for col in target_columns]),
@@ -82,14 +78,16 @@ def scatter(
     return plc_tbl.columns()
 
 
-@acquire_spill_lock()
 def columns_split(
-    input_columns: Iterable[ColumnBase], splits: list[int]
+    input_columns: Sequence[ColumnBase], splits: list[int]
 ) -> list[list[plc.Column]]:
-    return [
-        plc_tbl.columns()
-        for plc_tbl in plc.copying.split(
-            plc.Table([col.plc_column for col in input_columns]),
-            splits,
-        )
-    ]
+    with access_columns(
+        *input_columns, mode="read", scope="internal"
+    ) as input_columns:
+        return [
+            plc_tbl.columns()
+            for plc_tbl in plc.copying.split(
+                plc.Table([col.plc_column for col in input_columns]),
+                splits,
+            )
+        ]

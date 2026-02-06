@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "join_common_utils.cuh"
@@ -10,6 +10,7 @@
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join/distinct_hash_join.hpp>
 #include <cudf/join/join.hpp>
@@ -20,6 +21,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
@@ -302,13 +304,13 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
   auto const output_begin =
     thrust::make_zip_iterator(build_indices->begin(), probe_indices->begin());
   auto const output_end =
-    thrust::copy_if(rmm::exec_policy_nosync(stream),
-                    tuple_iter,
-                    tuple_iter + probe_table_num_rows,
-                    found_indices.begin(),
-                    output_begin,
-                    cuda::proclaim_return_type<bool>(
-                      [] __device__(size_type idx) { return idx != cudf::JoinNoMatch; }));
+    cudf::detail::copy_if(tuple_iter,
+                          tuple_iter + probe_table_num_rows,
+                          found_indices.begin(),
+                          output_begin,
+                          cuda::proclaim_return_type<bool>(
+                            [] __device__(size_type idx) { return idx != cudf::JoinNoMatch; }),
+                          stream);
   auto const actual_size = std::distance(output_begin, output_end);
 
   build_indices->resize(actual_size, stream);

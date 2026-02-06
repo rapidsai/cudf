@@ -1,10 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import decimal
 import operator
 import re
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
 
 import cupy as cp
 import numpy as np
@@ -466,15 +467,8 @@ def test_compare_ops_numeric_to_null_pandas_compatible(comparison_op):
 def test_compare_ops_decimal_to_null_pandas_compatible(comparison_op):
     data = pa.array([None, 1, 3], pa.decimal128(3, 2))
     gser = cudf.Series(data)
-    expected = cudf.Series(
-        [
-            comparison_op == operator.ne,
-            comparison_op(1, 2),
-            comparison_op(3, 2),
-        ]
-    )
-    with cudf.option_context("mode.pandas_compatible", True):
-        result = comparison_op(gser, 2)
+    expected = comparison_op(gser.to_pandas(arrow_type=True), 2)
+    result = comparison_op(gser, 2).to_pandas(arrow_type=True)
     assert_eq(expected, result)
 
 
@@ -548,12 +542,12 @@ def test_datetime_series_binops_pandas(
     datetime_types_as_str, datetime_types_as_str2
 ):
     dti = pd.date_range("20010101", "20020215", freq="400h", name="times")
-    pd_data_1 = pd.Series(dti)
-    pd_data_2 = pd_data_1
+    pd_data_1 = pd.Series(dti).astype(datetime_types_as_str)
+    pd_data_2 = pd_data_1.copy().astype(datetime_types_as_str2)
     gdf_data_1 = cudf.Series(pd_data_1).astype(datetime_types_as_str)
     gdf_data_2 = cudf.Series(pd_data_2).astype(datetime_types_as_str2)
-    assert_eq(pd_data_1, gdf_data_1.astype("datetime64[ns]"))
-    assert_eq(pd_data_2, gdf_data_2.astype("datetime64[ns]"))
+    assert_eq(pd_data_1, gdf_data_1)
+    assert_eq(pd_data_2, gdf_data_2)
     assert_eq(pd_data_1 < pd_data_2, gdf_data_1 < gdf_data_2)
     assert_eq(pd_data_1 > pd_data_2, gdf_data_1 > gdf_data_2)
     assert_eq(pd_data_1 == pd_data_2, gdf_data_1 == gdf_data_2)
@@ -827,7 +821,6 @@ def test_datetime_series_cmpops_pandas_compatibility(comparison_op):
     expect = comparison_op(psr1, psr2)
     with cudf.option_context("mode.pandas_compatible", True):
         got = comparison_op(gsr1, gsr2)
-
     assert_eq(expect, got)
 
 
@@ -1087,11 +1080,15 @@ def test_series_compare_nulls(comparison_op, ltype, rtype):
     lmask = ~lser.isnull()
     rmask = ~rser.isnull()
 
-    expect_mask = np.logical_and(lmask, rmask)
-    expect = cudf.Series([None] * 5, dtype="bool")
-    expect[expect_mask] = comparison_op(lser[expect_mask], rser[expect_mask])
-
     got = comparison_op(lser, rser)
+    if ltype in {"datetime64[ms]", "datetime64[ns]", "timedelta64[s]"}:
+        expect = comparison_op(lser.to_pandas(), rser.to_pandas())
+    else:
+        expect_mask = np.logical_and(lmask, rmask)
+        expect = cudf.Series([None] * 5, dtype="bool")
+        expect[expect_mask] = comparison_op(
+            lser[expect_mask], rser[expect_mask]
+        )
     assert_eq(expect, got)
 
 
@@ -1099,20 +1096,21 @@ def test_str_series_compare_str(comparison_op):
     str_series_cmp_data = pd.Series(
         ["a", "b", None, "d", "e", None], dtype="string"
     )
-    expect = comparison_op(str_series_cmp_data, "a")
-    got = comparison_op(cudf.Series(str_series_cmp_data), "a")
-
-    assert_eq(expect, got.to_pandas(nullable=True))
+    with cudf.option_context("mode.pandas_compatible", True):
+        expect = comparison_op(str_series_cmp_data, "a")
+        got = comparison_op(cudf.Series(str_series_cmp_data), "a")
+        assert_eq(expect, got)
 
 
 def test_str_series_compare_str_reflected(comparison_op):
     str_series_cmp_data = pd.Series(
         ["a", "b", None, "d", "e", None], dtype="string"
     )
-    expect = comparison_op("a", str_series_cmp_data)
-    got = comparison_op("a", cudf.Series(str_series_cmp_data))
+    with cudf.option_context("mode.pandas_compatible", True):
+        expect = comparison_op("a", str_series_cmp_data)
+        got = comparison_op("a", cudf.Series(str_series_cmp_data))
 
-    assert_eq(expect, got.to_pandas(nullable=True))
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("cmp_scalar", [1, 1.5, True])
@@ -1122,10 +1120,11 @@ def test_str_series_compare_num(comparison_op, cmp_scalar):
     str_series_cmp_data = pd.Series(
         ["a", "b", None, "d", "e", None], dtype="string"
     )
-    expect = comparison_op(str_series_cmp_data, cmp_scalar)
-    got = comparison_op(cudf.Series(str_series_cmp_data), cmp_scalar)
+    with cudf.option_context("mode.pandas_compatible", True):
+        expect = comparison_op(str_series_cmp_data, cmp_scalar)
+        got = comparison_op(cudf.Series(str_series_cmp_data), cmp_scalar)
 
-    assert_eq(expect, got.to_pandas(nullable=True))
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("cmp_scalar", [1, 1.5, True])
@@ -1135,10 +1134,11 @@ def test_str_series_compare_num_reflected(comparison_op, cmp_scalar):
     str_series_cmp_data = pd.Series(
         ["a", "b", None, "d", "e", None], dtype="string"
     )
-    expect = comparison_op(cmp_scalar, str_series_cmp_data)
-    got = comparison_op(cmp_scalar, cudf.Series(str_series_cmp_data))
+    with cudf.option_context("mode.pandas_compatible", True):
+        expect = comparison_op(cmp_scalar, str_series_cmp_data)
+        got = comparison_op(cmp_scalar, cudf.Series(str_series_cmp_data))
 
-    assert_eq(expect, got.to_pandas(nullable=True))
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -1379,37 +1379,23 @@ def test_operator_func_series_and_scalar(
 def test_operator_func_between_series_logical(
     float_types_as_str, comparison_op_method, scalar_a, scalar_b, fill_value
 ):
-    gdf_series_a = cudf.Series([scalar_a], nan_as_null=False).astype(
-        float_types_as_str
-    )
-    gdf_series_b = cudf.Series([scalar_b], nan_as_null=False).astype(
-        float_types_as_str
-    )
+    with cudf.option_context("mode.pandas_compatible", True):
+        gdf_series_a = cudf.Series([scalar_a], nan_as_null=False).astype(
+            float_types_as_str.capitalize()
+        )
+        gdf_series_b = cudf.Series([scalar_b], nan_as_null=False).astype(
+            float_types_as_str.capitalize()
+        )
 
-    pdf_series_a = gdf_series_a.to_pandas(nullable=True)
-    pdf_series_b = gdf_series_b.to_pandas(nullable=True)
+        pdf_series_a = gdf_series_a.to_pandas()
+        pdf_series_b = gdf_series_b.to_pandas()
 
-    gdf_series_result = getattr(gdf_series_a, comparison_op_method)(
-        gdf_series_b, fill_value=fill_value
-    )
-    pdf_series_result = getattr(pdf_series_a, comparison_op_method)(
-        pdf_series_b, fill_value=fill_value
-    )
-    expect = pdf_series_result
-    got = gdf_series_result.to_pandas(nullable=True)
-
-    # If fill_value is np.nan, things break down a bit,
-    # because setting a NaN into a pandas nullable float
-    # array still gets transformed to <NA>. As such,
-    # pd_series_with_nulls.fillna(np.nan) has no effect.
-    if (
-        (pdf_series_a.isnull().sum() != pdf_series_b.isnull().sum())
-        and np.isscalar(fill_value)
-        and np.isnan(fill_value)
-    ):
-        with pytest.raises(AssertionError):
-            assert_eq(expect, got)
-        return
+        expect = getattr(pdf_series_a, comparison_op_method)(
+            pdf_series_b, fill_value=fill_value
+        )
+        got = getattr(gdf_series_a, comparison_op_method)(
+            gdf_series_b, fill_value=fill_value
+        ).to_pandas()
     assert_eq(expect, got)
 
 
@@ -1802,7 +1788,6 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     # __eq__ operator and avoid a DeprecationWarning from numpy.
     expected = data.to_pandas() == val
     got = data == val
-
     assert_eq(expected, got)
 
 
@@ -1813,14 +1798,11 @@ def test_binops_with_NA_consistent(
     sr = cudf.Series(data, dtype=numeric_and_temporal_types_as_str)
 
     result = getattr(sr, comparison_op_method)(cudf.NA)
-    if sr.dtype.kind in "mM":
-        assert result.null_count == len(data)
+    if comparison_op_method == "ne":
+        expect_all = True
     else:
-        if comparison_op_method == "ne":
-            expect_all = True
-        else:
-            expect_all = False
-        assert (result == expect_all).all()
+        expect_all = False
+    assert (result == expect_all).all()
 
 
 @pytest.mark.parametrize(
@@ -2272,9 +2254,11 @@ def test_binops_decimal_pow(powers):
             decimal.Decimal("5"),
         ]
     )
-    ps = s.to_pandas()
-
-    assert_eq(s**powers, ps**powers, check_dtype=False)
+    ps = s.to_pandas(arrow_type=True)
+    got = s**powers
+    expect = ps**powers
+    expect = expect.astype(pd.ArrowDtype(got.dtype.to_arrow()))
+    assert_eq(got, expect, check_dtype=False)
 
 
 def test_binops_raise_error():
@@ -2870,8 +2854,12 @@ def test_column_null_scalar_comparison(
     data = [1, 2, 3, 4, 5]
     sr = cudf.Series(data, dtype=dtype)
     result = comparison_op(sr, null_scalar)
-
-    assert result.isnull().all()
+    if all_supported_types_as_str.startswith(
+        "datetime64"
+    ) or all_supported_types_as_str.startswith("timedelta64"):
+        assert not result.isnull().all()
+    else:
+        assert result.isnull().all()
 
 
 def test_equality_ops_index_mismatch(comparison_op_method):
@@ -3174,3 +3162,20 @@ def test_timedelta_arrow_backed_comparisions_pandas_compat():
         gs = cudf.from_pandas(s)
         assert_eq(s == s, gs == gs)
         assert_eq(s != s, gs != gs)
+
+
+def test_decimal_arrow_backed_comparisons_pandas_compat(comparison_op):
+    s = pd.Series(
+        pd.arrays.ArrowExtensionArray(
+            pa.array(
+                [Decimal("1.234"), Decimal("0.000"), None],
+                type=pa.decimal128(7, 3),
+            )
+        )
+    )
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        gs = cudf.from_pandas(s)
+        expect = comparison_op(s, s)
+        got = comparison_op(gs, gs)
+        assert_eq(expect, got)

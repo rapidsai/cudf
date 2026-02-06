@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ from cudf_polars.testing.asserts import (
     DEFAULT_RUNTIME,
     assert_gpu_result_equal,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -97,8 +96,6 @@ def test_groupby_agg_config_options(df, op, keys):
     )
     agg = getattr(pl.col("x"), op)()
     if op in ("sum", "mean"):
-        if POLARS_VERSION_LT_130:
-            agg = agg.cast(pl.Float64)
         agg = agg.round(2)  # Unary test coverage
     q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
@@ -124,9 +121,7 @@ def test_groupby_fallback(df, engine, fallback_mode):
         ctx = contextlib.nullcontext()
     elif fallback_mode == "raise":
         ctx = pytest.raises(
-            pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else NotImplementedError,
+            NotImplementedError,
             match=match,
         )
     elif fallback_mode == "foo":

@@ -1,13 +1,13 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cu)
+add_library(cudf_datagen STATIC common/generate_input.cu common/generate_nested_types.cpp)
 target_compile_features(cudf_datagen PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
@@ -147,8 +147,18 @@ ConfigureNVBench(
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
-  JOIN_NVBENCH join/left_join.cu join/conditional_join.cu join/join.cu join/mixed_join.cu
-  join/distinct_join.cu join/filter_join_indices.cu join/multiplicity_join.cu
+  JOIN_NVBENCH
+  join/left_join.cu
+  join/conditional_join.cu
+  join/join.cu
+  join/mixed_join.cu
+  join/distinct_join.cu
+  join/filter_join_indices.cu
+  join/multiplicity_join.cu
+  join/sort_merge_join.cu
+  join/join_heuristics.cu
+  join/key_remap_build.cu
+  join/join_on_int32.cu
 )
 
 # ##################################################################################################
@@ -357,7 +367,6 @@ ConfigureNVBench(
 # * nvtext benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   TEXT_NVBENCH
-  text/byte_pair_encoding.cpp
   text/deduplicate.cpp
   text/edit_distance.cpp
   text/hash_ngrams.cpp

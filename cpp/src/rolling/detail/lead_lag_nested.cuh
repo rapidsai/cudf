@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/scatter.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -22,7 +23,6 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -130,7 +130,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
   auto const input_size = input.size();
   auto const null_index = input.size();
   if (op == aggregation::LEAD) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(size_type{0}),
                       thrust::make_counting_iterator(size_type{input.size()}),
                       gather_map.begin<size_type>(),
@@ -139,7 +139,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                           return (row_offset > following[i]) ? null_index : (i + row_offset);
                         }));
   } else {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(size_type{0}),
                       thrust::make_counting_iterator(size_type{input.size()}),
                       gather_map.begin<size_type>(),
@@ -163,11 +163,11 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
 
   // Find all indices at which LEAD/LAG computed nulls previously.
   auto scatter_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(size_type{0}),
-                    thrust::make_counting_iterator(size_type{input.size()}),
-                    scatter_map.begin(),
-                    is_null_index_predicate(input.size(), gather_map.begin<size_type>()));
+    cudf::detail::copy_if(thrust::counting_iterator(size_type{0}),
+                          thrust::counting_iterator(size_type{input.size()}),
+                          scatter_map.begin(),
+                          is_null_index_predicate(input.size(), gather_map.begin<size_type>()),
+                          stream);
 
   scatter_map.resize(cuda::std::distance(scatter_map.begin(), scatter_map_end), stream);
   // Bail early, if all LEAD/LAG computations succeeded. No defaults need be substituted.

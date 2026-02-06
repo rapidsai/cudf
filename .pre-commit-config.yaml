@@ -98,6 +98,12 @@ repos:
         entry: 'pytest\.xfail'
         language: pygrep
         types: [python]
+      - id: use-exec-policy-nosync
+        name: use-exec-policy-nosync
+        description: 'Enforce that rmm::exec_policy_nosync is used instead of rmm::exec_policy (see developer guide)'
+        entry: 'rmm::exec_policy\('
+        language: pygrep
+        types_or: [c, c++, cuda]
       - id: no-unseeded-default-rng
         name: no-unseeded-default-rng
         description: 'Enforce that no non-seeded default_rng is used and default_rng is used instead of np.random.seed'
@@ -107,6 +113,15 @@ repos:
           # Check for usage of np.random.seed (NPY002 only disallows this being called)
           np.random.seed
         language: pygrep
+        types: [python]
+      - id: cudf-polars-ir-signatures
+        name: cudf-polars-ir-signatures
+        description: 'Validate cudf-polars IR.do_evaluate signatures.'
+        entry: ./ci/check_cudf_polars_ir.py
+        language: python
+        files: ^python/cudf_polars/cudf_polars/(dsl/ir|experimental/(shuffle|io|sort))\.py$
+        pass_filenames: true
+        verbose: true
         types: [python]
       - id: cmake-format
         name: cmake-format
@@ -156,7 +171,7 @@ repos:
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v1.2.1
+    rev: v1.4.1
     hooks:
       - id: verify-copyright
         name: verify-copyright-cudf
@@ -232,6 +247,23 @@ repos:
       - id: verify-alpha-spec
       - id: verify-codeowners
         args: [--fix, --project-prefix=cudf]
+      - id: verify-hardcoded-version
+        exclude: |
+          (?x)
+            (^|/)devcontainer[.]json$|
+            (^|/)dependencies[.]yaml$|
+            ^[.]github/(workflows|ISSUE_TEMPLATE)/|
+            (^|/)pom[.]xml$|
+            ^[.]pre-commit-config[.]yaml$|
+            ^conda/environments/|
+            [.](md|rst|avro|parquet|png|orc|gz|pkl|sas7bdat)$|
+            ^python/cudf/cudf/VERSION$
+      - id: verify-pyproject-license
+        # ignore the top-level pyproject.toml, which doesn't
+        # have or need a [project] table
+        exclude: |
+          (?x)
+            ^pyproject[.]toml$
   - repo: https://github.com/rapidsai/dependency-file-generator
     rev: v1.20.2
     hooks:

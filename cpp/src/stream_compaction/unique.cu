@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,7 @@
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -28,7 +29,6 @@
 
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
-#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -67,17 +67,17 @@ std::unique_ptr<table> unique(table_view const& input,
       auto d_results = rmm::device_uvector<bool>(num_rows, stream);
       auto itr       = thrust::make_counting_iterator<size_type>(0);
       thrust::transform(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         itr,
         itr + num_rows,
         d_results.begin(),
         unique_copy_fn<decltype(itr), decltype(row_equal)>{itr, keep, row_equal, num_rows - 1});
-      auto result_end = thrust::copy_if(rmm::exec_policy(stream),
-                                        itr,
-                                        itr + num_rows,
-                                        d_results.begin(),
-                                        mutable_view->begin<size_type>(),
-                                        cuda::std::identity{});
+      auto result_end = cudf::detail::copy_if(itr,
+                                              itr + num_rows,
+                                              d_results.begin(),
+                                              mutable_view->begin<size_type>(),
+                                              cuda::std::identity{},
+                                              stream);
       return static_cast<size_type>(
         cuda::std::distance(mutable_view->begin<size_type>(), result_end));
     } else {

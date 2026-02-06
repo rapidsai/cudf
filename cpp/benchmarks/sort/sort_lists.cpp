@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_nested_types.hpp>
 
-#include <cudf/detail/sorting.hpp>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -22,8 +23,7 @@ void sort_multiple_lists(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::detail::sorted_order(
-      *input_table, {}, {}, stream, cudf::get_current_device_resource_ref());
+    cudf::sorted_order(*input_table, {}, {}, stream, cudf::get_current_device_resource_ref());
   });
 }
 
@@ -66,8 +66,7 @@ void sort_lists_of_structs(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
-    cudf::detail::sorted_order(
-      input_table, {}, {}, stream, cudf::get_current_device_resource_ref());
+    cudf::sorted_order(input_table, {}, {}, stream, cudf::get_current_device_resource_ref());
   });
 }
 
@@ -85,7 +84,7 @@ void nvbench_sort_lists(nvbench::state& state)
 
 NVBENCH_BENCH(nvbench_sort_lists)
   .set_name("sort_list")
-  .add_int64_power_of_two_axis("size_bytes", {10, 18, 24, 28})
+  .add_int64_power_of_two_axis("size_bytes", {18, 24, 28})
   .add_int64_axis("depth", {1, 4})
   .add_int64_axis("num_columns", {1})
   .add_int64_axis("lists_of_structs", {0, 1})

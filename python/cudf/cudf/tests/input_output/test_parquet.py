@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import datetime
@@ -2474,10 +2474,6 @@ def test_parquet_writer_list_large_mixed(tmp_path):
 
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_list_chunked(tmp_path, store_schema):
-    if store_schema and version.parse(pa.__version__) < version.parse(
-        "15.0.0"
-    ):
-        pytest.skip("https://github.com/apache/arrow/pull/37792")
     table1 = cudf.DataFrame(
         {
             "a": list_gen(string_gen, 64, 40, 25),
@@ -2671,10 +2667,6 @@ def normalized_equals(value1, value2):
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_statistics(tmp_path, pdf, add_nulls, store_schema):
-    if store_schema and version.parse(pa.__version__) < version.parse(
-        "15.0.0"
-    ):
-        pytest.skip("https://github.com/apache/arrow/pull/37792")
     file_path = tmp_path / "cudf.parquet"
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
@@ -2824,7 +2816,23 @@ def test_parquet_writer_nested(tmp_path, data):
 
 @pytest.mark.parametrize(
     "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    [
+        pytest.param(
+            cudf.Decimal32Dtype,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/apache/arrow/issues/45570 from pandas.read_parquet",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/apache/arrow/issues/45570 from pandas.read_parquet",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        cudf.Decimal128Dtype,
+    ],
 )
 @pytest.mark.parametrize("data", [[1, 2, 3], [0.00, 0.01, None, 0.5]])
 def test_parquet_writer_decimal(decimal_type, data):
@@ -2899,7 +2907,23 @@ def test_parquet_writer_nulls_pandas_read(tmp_path, pdf):
 
 @pytest.mark.parametrize(
     "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    [
+        pytest.param(
+            cudf.Decimal32Dtype,
+            marks=pytest.mark.xfail(
+                reason="Requires https://github.com/apache/arrow/pull/45583",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype,
+            marks=pytest.mark.xfail(
+                reason="Requires https://github.com/apache/arrow/pull/45583",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        cudf.Decimal128Dtype,
+    ],
 )
 def test_parquet_decimal_precision(tmp_path, decimal_type):
     df = cudf.DataFrame({"val": ["3.5", "4.2"]}).astype(decimal_type(5, 2))
@@ -2914,7 +2938,7 @@ def test_parquet_decimal_precision(tmp_path, decimal_type):
 def test_parquet_decimal_precision_empty(tmp_path):
     df = (
         cudf.DataFrame({"val": ["3.5", "4.2"]})
-        .astype(cudf.Decimal64Dtype(5, 2))
+        .astype(cudf.Decimal128Dtype(5, 2))
         .iloc[:0]
     )
     assert df.val.dtype.precision == 5
@@ -3071,10 +3095,6 @@ def test_per_column_options_string_col(tmp_path, encoding):
     assert encoding in fmd.row_group(0).column(0).encodings
 
 
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("16.0.0"),
-    reason="https://github.com/apache/arrow/pull/39748",
-)
 def test_parquet_bss_round_trip(tmp_path):
     num_rows = 200
 
@@ -3226,7 +3246,7 @@ def test_parquet_row_group_metadata(tmp_path, large_int64_gdf, size_rows):
 def test_parquet_reader_decimal_columns():
     df = cudf.DataFrame(
         {
-            "col1": cudf.Series([1, 2, 3], dtype=cudf.Decimal64Dtype(10, 2)),
+            "col1": cudf.Series([1, 2, 3], dtype=cudf.Decimal128Dtype(10, 2)),
             "col2": [10, 11, 12],
             "col3": [12, 13, 14],
             "col4": ["a", "b", "c"],
@@ -3692,9 +3712,9 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema(tmp_path, data):
 
 
 @pytest.mark.parametrize("index", [None, True, False])
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("15.0.0"),
-    reason="https://github.com/apache/arrow/pull/37792",
+@pytest.mark.xfail(
+    condition=version.parse(pa.__version__) < version.parse("20"),
+    reason="Requires https://github.com/apache/arrow/pull/45583",
 )
 def test_parquet_writer_roundtrip_with_arrow_schema(index):
     # Ensure that the concrete and nested types are faithfully being roundtripped
@@ -3738,11 +3758,6 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
             ),
         }
     )
-
-    # Convert decimals32/64 to decimal128 if pyarrow version is < 19.0.0
-    if version.parse(pa.__version__) < version.parse("19.0.0"):
-        expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
-        expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
 
     # Write to Parquet with arrow schema for faithful roundtrip
     buffer = BytesIO()
@@ -3847,10 +3862,6 @@ def test_parquet_writer_int96_timestamps_and_arrow_schema():
     ],
 )
 @pytest.mark.parametrize("index", [None, True, False])
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("15.0.0"),
-    reason="https://github.com/apache/arrow/pull/37792",
-)
 def test_parquet_writer_roundtrip_structs_with_arrow_schema(data, index):
     # Ensure that the structs are faithfully being roundtripped across
     # Parquet with arrow schema
@@ -4336,6 +4347,10 @@ def test_parquet_reader_with_mismatched_schemas_error():
         )
 
 
+@pytest.mark.xfail(
+    condition=version.parse(pa.__version__) < version.parse("20"),
+    reason="Requires https://github.com/apache/arrow/pull/45583",
+)
 def test_parquet_roundtrip_zero_rows_no_column_mask():
     expected = cudf.DataFrame._from_data(
         {
@@ -4781,3 +4796,8 @@ def test_read_many_colchunks_with_threadpool():
     pq.write_table(expected, buffer, row_group_size=100, write_page_index=True)
 
     assert_eq(expected, cudf.read_parquet(buffer))
+
+
+def test_parquet_decode_column_index_thrift_bool_list(datadir):
+    fname = datadir / "column_index_thrift_bool_list.parquet"
+    cudf.read_parquet(fname)

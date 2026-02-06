@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Re-chunking logic for the RapidsMPF streaming runtime."""
 
@@ -7,9 +7,14 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
+from rapidsmpf.streaming.cudf.table_chunk import (
+    TableChunk,
+    make_table_chunks_available_or_wait,
+)
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
@@ -17,18 +22,19 @@ from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    Metadata,
     empty_table_chunk,
+    recv_metadata,
+    send_metadata,
 )
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 @define_py_node()
@@ -36,14 +42,24 @@ async def concatenate_node(
     context: Context,
     ir: Repartition,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    ch_in: ChannelPair,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
     *,
     output_count: int,
     collective_id: int,
 ) -> None:
     """
     Concatenate node for rapidsmpf.
+
+    This node reduces the number of chunks via tree-like concatenation.
+    The interpretation of output_count depends on whether input is duplicated:
+
+    - Duplicated input: Each rank reduces locally to output_count chunks.
+      Output remains duplicated.
+    - Non-duplicated, output_count=1: AllGather to produce single duplicated
+      chunk across all ranks.
+    - Non-duplicated, output_count>1: Local reduction, distribute chunks
+      across ranks (local_count = ceil(output_count / nranks)).
 
     Parameters
     ----------
@@ -54,57 +70,86 @@ async def concatenate_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output Channel[TableChunk].
     ch_in
-        The input ChannelPair.
+        The input Channel[TableChunk].
     output_count
-        The expected number of output chunks.
+        The expected global number of output chunks.
     collective_id
         Pre-allocated collective ID for this operation.
     """
-    async with shutdown_on_error(
-        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
-    ):
+    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
         # Receive metadata.
-        input_metadata = await ch_in.recv_metadata(context)
-        metadata = Metadata(output_count)
+        input_metadata = await recv_metadata(ch_in, context)
+        nranks = context.comm().nranks
 
-        # max_chunks corresponds to the number of chunks we can
-        # concatenate together. If None, we must concatenate everything.
-        # Since a single-partition operation gets "special treatment",
-        # we must make sure `output_count == 1` is always satisfied.
+        # Interpret output_count as the GLOBAL target chunk count.
+        # Calculate local target based on whether data is duplicated.
+        if input_metadata.duplicated:
+            # Duplicated input: each rank reduces locally to output_count chunks.
+            # Output remains duplicated (identical on all ranks).
+            local_output_count = output_count
+            output_duplicated = True
+        elif output_count == 1 and nranks > 1:
+            # Special case: non-duplicated input reducing to 1 global chunk.
+            # Requires AllGather, output becomes duplicated.
+            local_output_count = 1
+            output_duplicated = True
+        else:
+            # Non-duplicated input with output_count > 1 (or single rank).
+            # Distribute chunks across ranks.
+            local_output_count = max(1, math.ceil(output_count / nranks))
+            output_duplicated = False
+
+        # NOTE: For now, Repartiton (e.g. concatenate_node) always destroys
+        # partitioning metadata. However, this may change when we support
+        # partitioning types other than HashPartitioned. For example, when
+        # we adopt multi-stage shuffling (a global shuffle between ranks,
+        # followed by a local shuffle within each rank), some cases will
+        # preserve global partitioning.
+
+        # max_chunks corresponds to the number of input chunks we can
+        # concatenate together per output chunk.
+        # If None, we must concatenate everything into a single chunk.
         max_chunks: int | None = None
-        if output_count > 1:
+        if local_output_count > 1:
             # Make sure max_chunks is at least 2.
-            max_chunks = max(2, math.ceil(input_metadata.count / output_count))
+            max_chunks = max(
+                2, math.ceil(input_metadata.local_count / local_output_count)
+            )
 
-        # Check if we need global communication.
+        # Check if we need global communication (AllGather).
         need_global_repartition = (
-            # Avoid allgather of already-duplicated data
-            context.comm().nranks > 1
-            and not input_metadata.duplicated
-            and output_count == 1
+            nranks > 1 and not input_metadata.duplicated and output_count == 1
         )
 
         chunks: list[TableChunk]
         msg: TableChunk | None
         if need_global_repartition:
-            # Assume this means "global repartitioning" for now
+            # Global repartitioning via AllGather to single duplicated chunk.
 
             # Send metadata.
-            metadata.duplicated = True
-            await ch_out.send_metadata(context, metadata)
+            metadata = ChannelMetadata(
+                local_count=local_output_count,
+                duplicated=output_duplicated,
+            )
+            await send_metadata(ch_out, context, metadata)
+            if tracer is not None and output_duplicated:
+                tracer.set_duplicated()
 
             allgather = AllGatherManager(context, collective_id)
             stream = context.get_stream_from_pool()
             seq_num = 0
-            while (msg := await ch_in.data.recv(context)) is not None:
+            while (msg := await ch_in.recv(context)) is not None:
                 allgather.insert(seq_num, TableChunk.from_message(msg))
                 seq_num += 1
+                del msg
             allgather.insert_finished()
 
             # Extract concatenated result
             result_table = await allgather.extract_concatenated(stream)
+            if tracer is not None:
+                tracer.add_chunk(table=result_table)
 
             # If no chunks were gathered, result_table has 0 columns.
             # We need to create an empty table with the correct schema.
@@ -115,44 +160,57 @@ async def concatenate_node(
                     result_table, stream, exclusive_view=True
                 )
 
-            await ch_out.data.send(context, Message(0, output_chunk))
+            await ch_out.send(context, Message(0, output_chunk))
         else:
+            # Local repartitioning (tree reduction).
+
             # Send metadata.
-            metadata.duplicated = input_metadata.duplicated
-            await ch_out.send_metadata(context, metadata)
+            metadata = ChannelMetadata(
+                local_count=local_output_count,
+                duplicated=output_duplicated,
+            )
+            await send_metadata(ch_out, context, metadata)
+            if tracer is not None and output_duplicated:
+                tracer.set_duplicated()
 
             # Local repartitioning
             seq_num = 0
             while True:
                 chunks = []
-                msg = None
+                done_receiving = False
 
                 # Collect chunks up to max_chunks or until end of stream
                 while len(chunks) < (max_chunks or float("inf")):
-                    msg = await ch_in.data.recv(context)
+                    msg = await ch_in.recv(context)
                     if msg is None:
+                        done_receiving = True
                         break
-                    chunks.append(
-                        TableChunk.from_message(msg).make_available_and_spill(
-                            context.br(), allow_overbooking=True
-                        )
-                    )
+                    chunks.append(TableChunk.from_message(msg))
 
-                # Process collected chunks
                 if chunks:
-                    df = _concat(
-                        *(
-                            DataFrame.from_table(
-                                chunk.table_view(),
-                                list(ir.schema.keys()),
-                                list(ir.schema.values()),
-                                chunk.stream,
-                            )
-                            for chunk in chunks
-                        ),
-                        context=ir_context,
+                    chunks, extra = await make_table_chunks_available_or_wait(
+                        context,
+                        chunks,
+                        reserve_extra=sum(chunk.data_alloc_size() for chunk in chunks),
+                        net_memory_delta=0,
                     )
-                    await ch_out.data.send(
+                    with opaque_memory_usage(extra):
+                        df = _concat(
+                            *(
+                                DataFrame.from_table(
+                                    chunk.table_view(),
+                                    list(ir.schema.keys()),
+                                    list(ir.schema.values()),
+                                    chunk.stream,
+                                )
+                                for chunk in chunks
+                            ),
+                            context=ir_context,
+                        )
+                        del chunks
+                    if tracer is not None:
+                        tracer.add_chunk(table=df.table)
+                    await ch_out.send(
                         context,
                         Message(
                             seq_num,
@@ -162,12 +220,13 @@ async def concatenate_node(
                         ),
                     )
                     seq_num += 1
+                    del df
 
                 # Break if we reached end of stream
-                if msg is None:
+                if done_receiving:
                     break
 
-        await ch_out.data.drain(context)
+        await ch_out.drain(context)
 
 
 @generate_ir_sub_network.register(Repartition)
@@ -190,7 +249,7 @@ def _(
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Look up the reserved shuffle ID for this operation
-    collective_id = rec.state["collective_id_map"][ir]
+    collective_id = rec.state["collective_id_map"][ir][0]
 
     # Add python node
     nodes[ir] = [

@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/testing_main.hpp>
 
@@ -94,9 +95,10 @@ TEST_F(CountBitmaskTest, NegativeStart)
 {
   auto mask = make_mask(1);
   EXPECT_THROW(cudf::detail::count_set_bits(mask.data(), -1, 32, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::detail::valid_count(mask.data(), -1, 32, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
+  EXPECT_THROW(cudf::index_of_first_set_bit(mask.data(), -1, 32), std::invalid_argument);
 
   std::vector<cudf::size_type> indices = {0, 16, -1, 32};
   EXPECT_THROW(
@@ -111,9 +113,10 @@ TEST_F(CountBitmaskTest, StartLargerThanStop)
 {
   auto mask = make_mask(1);
   EXPECT_THROW(cudf::detail::count_set_bits(mask.data(), 32, 31, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::detail::valid_count(mask.data(), 32, 31, cudf::get_default_stream()),
-               cudf::logic_error);
+               std::invalid_argument);
+  EXPECT_THROW(cudf::index_of_first_set_bit(mask.data(), 32, 31), std::invalid_argument);
 
   std::vector<cudf::size_type> indices = {0, 16, 31, 30};
   EXPECT_THROW(
@@ -129,6 +132,7 @@ TEST_F(CountBitmaskTest, EmptyRange)
   auto mask = make_mask(1);
   EXPECT_EQ(0, cudf::detail::count_set_bits(mask.data(), 17, 17, cudf::get_default_stream()));
   EXPECT_EQ(0, cudf::detail::valid_count(mask.data(), 17, 17, cudf::get_default_stream()));
+  EXPECT_THROW(cudf::index_of_first_set_bit(mask.data(), 17, 17), std::invalid_argument);
 
   std::vector<cudf::size_type> indices = {0, 0, 17, 17};
   auto set_counts =
@@ -332,6 +336,73 @@ TEST_F(CountBitmaskTest, MultipleWordsSingleBit)
   auto valid_counts =
     cudf::detail::segmented_valid_count(mask.data(), indices, cudf::get_default_stream());
   EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{1, 1, 1}));
+}
+
+TEST_F(CountBitmaskTest, BatchNullCount)
+{
+  using cudf::test::iterators::nulls_at;
+  using col_type  = cudf::test::fixed_width_column_wrapper<int32_t>;
+  auto const col0 = col_type{{0, 1, 2, 3, 4, 5}, nulls_at({1, 3, 5})};
+  auto const col1 = col_type{{0, 1, 2, 3, 4, 5}, nulls_at({0, 2, 4})};
+  auto const col2 = col_type{{0, 1, 2, 3, 4, 5}, nulls_at({2, 3})};
+  auto const col3 = col_type{{0, 1, 2, 3, 4, 5}, nulls_at({4})};
+  auto const col4 = col_type{{0, 1, 2, 3, 4, 5}, nulls_at({0, 1, 2, 3, 4, 5})};
+  auto const col5 = col_type{0, 1, 2, 3, 4, 5};
+
+  auto const bitmasks =
+    std::vector<cudf::bitmask_type const*>{static_cast<cudf::column_view>(col0).null_mask(),
+                                           static_cast<cudf::column_view>(col1).null_mask(),
+                                           static_cast<cudf::column_view>(col2).null_mask(),
+                                           static_cast<cudf::column_view>(col3).null_mask(),
+                                           static_cast<cudf::column_view>(col4).null_mask(),
+                                           static_cast<cudf::column_view>(col5).null_mask()};
+
+  auto const null_counts =
+    cudf::batch_null_count(bitmasks, 0, static_cast<cudf::column_view>(col0).size());
+  EXPECT_THAT(null_counts,
+              ::testing::ElementsAreArray(std::vector<cudf::size_type>{3, 3, 2, 1, 6, 0}));
+}
+
+struct iofub_test_parameter {
+  cudf::size_type size;
+  cudf::size_type set_index;
+  cudf::size_type start_index;
+  cudf::size_type result;
+};
+
+TEST_F(CountBitmaskTest, IndexOfFirstUnsetBit)
+{
+  auto parameters = std::vector<iofub_test_parameter>({
+    // clang-format off
+    // rows  set  start result
+    {  28,    0,    0,    0},  // less than sizeof bitmask_type
+    {  28,   10,   10,    0},
+    {  32,    0,    0,    0},  // equal to sizeof bitmask_type
+    {  32,   10,   10,    0},
+    {  32,   10,   11,   21},  // set bit is not in range
+    {  64,   33,    0,   33},  // exactly 2x sizeof bitmask_type
+    { 260,  258,    0,  258},  // greater than 256 bits
+    { 260,  258,   32,  226},
+    { 320,  260,   60,  200},
+    { 320,  260,  256,    4},
+    {9000,    2,   0,     2},  // more than one CUDA block
+    {9000,  260,  256,    4},
+    {9000, 8193,    0, 8193},
+    {9000, 8193, 8192,    1},
+    {9000,    8,   80, 8920},  // set bit is not in range
+    // clang-format on
+  });
+  for (auto parm : parameters) {
+    auto data            = std::vector<bool>(parm.size, false);
+    data[parm.set_index] = true;
+    std::fill(data.begin() + parm.set_index + 1, data.end(), (parm.set_index >= parm.start_index));
+    auto input =
+      cudf::test::fixed_width_column_wrapper<int, bool>(data.begin(), data.end(), data.begin())
+        .release();
+    auto result = cudf::index_of_first_set_bit(
+      input->view().null_mask(), parm.start_index, input->view().size());
+    EXPECT_EQ(result, parm.result);
+  }
 }
 
 using CountUnsetBitsTest = CountBitmaskTest;

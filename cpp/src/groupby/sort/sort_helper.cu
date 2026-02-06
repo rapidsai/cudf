@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,7 @@
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/memory_resource.hpp>
@@ -148,17 +149,13 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
     auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
     auto const ufn    = cudf::detail::unique_copy_fn<decltype(itr), decltype(row_eq)>{
       itr, duplicate_keep_option::KEEP_FIRST, row_eq, size - 1};
-    thrust::transform(rmm::exec_policy(stream), itr, itr + size, result.begin(), ufn);
-    result_end = thrust::copy_if(rmm::exec_policy(stream),
-                                 itr,
-                                 itr + size,
-                                 result.begin(),
-                                 group_offsets->begin(),
-                                 cuda::std::identity{});
+    thrust::transform(rmm::exec_policy_nosync(stream), itr, itr + size, result.begin(), ufn);
+    result_end = cudf::detail::copy_if(
+      itr, itr + size, result.begin(), group_offsets->begin(), cuda::std::identity{}, stream);
   } else {
     auto const d_key_equal = comparator.equal_to<false>(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
-    result_end = thrust::unique_copy(rmm::exec_policy(stream),
+    result_end = thrust::unique_copy(rmm::exec_policy_nosync(stream),
                                      thrust::counting_iterator<size_type>(0),
                                      thrust::counting_iterator<size_type>(size),
                                      group_offsets->begin(),

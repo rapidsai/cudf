@@ -11,7 +11,11 @@
 
 #include <algorithm>
 #include <format>
+#include <iterator>
 #include <numeric>
+#include <span>
+#include <stdexcept>
+#include <utility>
 
 namespace cudf {
 

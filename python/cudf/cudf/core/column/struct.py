@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -11,18 +11,18 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase
+from cudf.core.dtype.validators import is_dtype_obj_struct
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import is_dtype_obj_struct
+from cudf.utils.dtypes import dtype_from_pylibcudf_column
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
 )
-from cudf.utils.utils import _is_null_host_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import DtypeObj
     from cudf.core.column.string import StringColumn
@@ -32,7 +32,7 @@ def _maybe_na_to_none(value: Any) -> Any:
     """
     Convert NA-like values to None for pyarrow.
     """
-    if _is_null_host_scalar(value):
+    if is_na_like(value):
         return None
     else:
         return value
@@ -48,45 +48,43 @@ class StructColumn(ColumnBase):
 
     _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
 
-    def __init__(
-        self,
-        plc_column: plc.Column,
-        dtype: StructDtype,
-        exposed: bool,
-    ):
-        dtype = self._validate_dtype_instance(dtype)
-        super().__init__(
-            plc_column=plc_column,
-            dtype=dtype,
-            exposed=exposed,
-        )
+    @classmethod
+    def _validate_args(  # type: ignore[override]
+        cls, plc_column: plc.Column, dtype: StructDtype
+    ) -> tuple[plc.Column, StructDtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
+        if not is_dtype_obj_struct(dtype):
+            raise ValueError(f"{type(dtype).__name__} must be a StructDtype.")
 
-    def _get_children_from_pylibcudf_column(
-        self,
-        plc_column: plc.Column,
-        dtype: StructDtype,  # type: ignore[override]
-        exposed: bool,
-    ) -> tuple[ColumnBase, ...]:
-        return tuple(
-            child._with_type_metadata(field_dtype)
-            for child, field_dtype in zip(
-                super()._get_children_from_pylibcudf_column(
-                    plc_column, dtype=dtype, exposed=exposed
-                ),
-                dtype.fields.values(),
-                strict=True,
+        # Check field count
+        if len(dtype.fields) != plc_column.num_children():
+            raise ValueError(
+                f"StructDtype has {len(dtype.fields)} fields, "
+                f"but column has {plc_column.num_children()} children"
             )
-        )
+
+        for i, (field_name, field_dtype) in enumerate(dtype.fields.items()):
+            child = plc_column.child(i)
+            try:
+                ColumnBase._validate_dtype_recursively(child, field_dtype)
+            except ValueError as e:
+                raise ValueError(
+                    f"Field '{field_name}' (index {i}) validation failed: {e}"
+                ) from e
+
+        return plc_column, dtype
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
-        if idx < 0 or idx >= len(self._children):
+        if idx < 0 or idx >= self.plc_column.num_children():
             raise IndexError(
-                f"Index {idx} out of range for {len(self._children)} children"
+                f"Index {idx} out of range for {self.plc_column.num_children()} children"
             )
 
         sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
-        return type(self._children[idx]).from_pylibcudf(sliced_plc_col)
+        dtype = cast(StructDtype, self.dtype)
+        sub_dtype = list(dtype.fields.values())[idx]
+        return ColumnBase.create(sliced_plc_col, sub_dtype)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
@@ -98,39 +96,21 @@ class StructColumn(ColumnBase):
         # TODO: handle if self.has_nulls(): case
         return self
 
-    @staticmethod
-    def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
-        # IntervalDtype is a subclass of StructDtype, so compare types exactly
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and type(dtype) is not StructDtype
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_struct(dtype)
-        ):
-            raise ValueError(
-                f"{type(dtype).__name__} must be a StructDtype exactly."
-            )
-        return dtype
-
     def to_pandas(
         self,
         *,
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        # We cannot go via Arrow's `to_pandas` because of the following issue:
-        # https://issues.apache.org/jira/browse/ARROW-12680
-        if (
-            arrow_type
-            or nullable
-            or (
-                cudf.get_option("mode.pandas_compatible")
-                and isinstance(self.dtype, pd.ArrowDtype)
-            )
-        ):
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        elif nullable and not arrow_type:
+            raise NotImplementedError(
+                f"pandas does not have a native nullable type for {self.dtype}."
+            )
         else:
+            # We cannot go via Arrow's `to_pandas` because of the following issue:
+            # https://github.com/apache/arrow/issues/28428
             return pd.Index(self.to_arrow().tolist(), dtype="object")
 
     def element_indexing(self, index: int) -> dict[Any, Any] | None:
@@ -169,39 +149,41 @@ class StructColumn(ColumnBase):
             "Structs are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _with_type_metadata(
-        self: StructColumn, dtype: DtypeObj
-    ) -> StructColumn:
-        from cudf.core.column import IntervalColumn
+    def _with_type_metadata(self: StructColumn, dtype: DtypeObj) -> ColumnBase:
+        # Import here to avoid circular dependency (interval imports from column)
         from cudf.core.dtypes import IntervalDtype
 
         # Check IntervalDtype first because it's a subclass of StructDtype
         if isinstance(dtype, IntervalDtype):
-            new_children = [
-                child.astype(dtype.subtype).plc_column
-                for child in self.children
-            ]
-            new_plc_column = plc.Column(
-                plc.DataType(plc.TypeId.STRUCT),
-                self.plc_column.size(),
-                self.plc_column.data(),
-                self.plc_column.null_mask(),
-                self.plc_column.null_count(),
-                self.plc_column.offset(),
-                new_children,
+            # Import here to avoid circular dependency (interval imports from column)
+            from cudf.core.column.interval import IntervalColumn
+
+            # Determine the current subtype from the first child
+            first_child = ColumnBase.from_pylibcudf(
+                self.plc_column.children()[0]
             )
-            return IntervalColumn(
-                plc_column=new_plc_column,
-                dtype=dtype,
-                exposed=False,
+            current_dtype = IntervalDtype(
+                subtype=first_child.dtype, closed=dtype.closed
             )
+
+            # Convert to IntervalColumn and apply target metadata
+            interval_col = IntervalColumn._from_preprocessed(
+                plc_column=self.plc_column,
+                dtype=current_dtype,
+            )
+            return interval_col._with_type_metadata(dtype)
         elif isinstance(dtype, StructDtype):
-            new_children = [
-                self.children[i]
-                ._with_type_metadata(dtype.fields[f])
-                .plc_column
-                for i, f in enumerate(dtype.fields.keys())
-            ]
+            # TODO: For nested structures, stored field dtype might not reflect actual
+            # child column type due to dtype metadata updates being skipped during
+            # certain operations.
+            new_children = tuple(
+                ColumnBase.create(child, dtype_from_pylibcudf_column(child))
+                for child, f in zip(
+                    self.plc_column.children(),
+                    dtype.fields.keys(),
+                    strict=True,
+                )
+            )
             new_plc_column = plc.Column(
                 plc.DataType(plc.TypeId.STRUCT),
                 self.plc_column.size(),
@@ -209,12 +191,11 @@ class StructColumn(ColumnBase):
                 self.plc_column.null_mask(),
                 self.plc_column.null_count(),
                 self.plc_column.offset(),
-                new_children,
+                [child.plc_column for child in new_children],
             )
-            return StructColumn(
+            return StructColumn._from_preprocessed(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                exposed=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(

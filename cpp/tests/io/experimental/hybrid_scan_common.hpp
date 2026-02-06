@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -42,14 +42,32 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
   cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes);
 
 /**
- * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
+ * @brief Converts a span of device buffers into a vector of corresponding device spans
+ *
+ * @tparam T Type of output device spans
+ * @param buffers Host span of device buffers
+ * @return Device spans corresponding to the input device buffers
+ */
+template <typename T>
+std::vector<cudf::device_span<T const>> make_device_spans(
+  cudf::host_span<rmm::device_buffer const> buffers)
+  requires(sizeof(T) == 1)
+{
+  std::vector<cudf::device_span<T const>> device_spans(buffers.size());
+  std::transform(buffers.begin(), buffers.end(), device_spans.begin(), [](auto const& buffer) {
+    return cudf::device_span<T const>{static_cast<T const*>(buffer.data()), buffer.size()};
+  });
+  return device_spans;
+}
+
+/**
+ * @brief Fetches a list of byte ranges from a host buffer into device buffers
  *
  * @param host_buffer Host buffer span
  * @param byte_ranges Byte ranges to fetch
  * @param stream CUDA stream
- * @param mr Device memory resource to create device buffers with
  *
- * @return Vector of device buffers
+ * @return Device buffers
  */
 std::vector<rmm::device_buffer> fetch_byte_ranges(
   cudf::host_span<uint8_t const> host_buffer,
@@ -244,7 +262,7 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
 /**
  * @brief Read parquet file with the hybrid scan reader
  *
- * @param buffer Buffer containing the parquet file
+ * @param file_buffer_span Input parquet buffer span
  * @param filter_expression Filter expression
  * @param num_filter_columns Number of filter columns
  * @param payload_column_names List of paths of select payload column names, if any
@@ -259,7 +277,7 @@ std::tuple<std::unique_ptr<cudf::table>,
            cudf::io::table_metadata,
            cudf::io::table_metadata,
            std::unique_ptr<cudf::column>>
-hybrid_scan(std::vector<char>& buffer,
+hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
             cudf::ast::operation const& filter_expression,
             cudf::size_type num_filter_columns,
             std::optional<std::vector<std::string>> const& payload_column_names,
@@ -270,7 +288,7 @@ hybrid_scan(std::vector<char>& buffer,
 /**
  * @brief Read parquet file with the hybrid scan reader
  *
- * @param buffer Buffer containing the parquet file
+ * @param file_buffer_span Input parquet buffer span
  * @param filter_expression Filter expression
  * @param num_filter_columns Number of filter columns
  * @param payload_column_names List of paths of select payload column names, if any
@@ -285,10 +303,28 @@ std::tuple<std::unique_ptr<cudf::table>,
            cudf::io::table_metadata,
            cudf::io::table_metadata,
            std::unique_ptr<cudf::column>>
-chunked_hybrid_scan(std::vector<char> const& buffer,
+chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
                     cudf::ast::operation const& filter_expression,
                     cudf::size_type num_filter_columns,
                     std::optional<std::vector<std::string>> const& payload_column_names,
                     rmm::cuda_stream_view stream,
                     rmm::device_async_resource_ref mr,
                     rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
+
+/**
+ * @brief Read parquet file with the hybrid scan reader in a single step
+ *
+ * @param file_buffer_span Input parquet buffer span
+ * @param filter_expression Filter expression, if any
+ * @param column_names List of column names to read, if any
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ *
+ * @return Read table and metadata
+ */
+cudf::io::table_with_metadata hybrid_scan_single_step(
+  cudf::host_span<uint8_t const> file_buffer_span,
+  std::optional<cudf::ast::operation> filter_expression,
+  std::optional<std::vector<std::string>> const& column_names,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);

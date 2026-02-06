@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -147,7 +147,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.ip2int()
         0    212336897
         1    167772161
-        dtype: int64
+        dtype: uint32
 
         Returns 0's if any string is not an IP.
 
@@ -156,7 +156,7 @@ class StringMethods(BaseAccessor):
         0    212336897
         1    167772161
         2            0
-        dtype: int64
+        dtype: uint32
         """
         return self._return_or_inplace(self._column.ipv4_to_integers())
 
@@ -652,6 +652,11 @@ class StringMethods(BaseAccessor):
             accepted.
         flags : int, default 0 (no flags)
             Flags to pass through to the regex engine (e.g. re.MULTILINE)
+        na : scalar, optional
+            Fill value for missing values. The default depends on dtype of the
+            array. For the ``"str"`` dtype, ``False`` is used. For object
+            dtype, ``numpy.nan`` is used. For the nullable ``StringDtype``,
+            ``pandas.NA`` is used.
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
             If False, treats the pattern as a literal string.
@@ -740,7 +745,7 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.contains`
 
-            The parameters `case` and `na` are not yet supported and will
+            The parameter `case` is not yet supported and will
             raise a NotImplementedError if anything other than the default
             value is set.
             The `flags` parameter currently only supports re.DOTALL and
@@ -757,8 +762,6 @@ class StringMethods(BaseAccessor):
                 "and will raise in a future version.",
                 FutureWarning,
             )
-        if na not in {no_default, np.nan}:
-            raise NotImplementedError("`na` parameter is not yet supported")
         if regex and isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
             pat = pat.pattern
@@ -791,6 +794,8 @@ class StringMethods(BaseAccessor):
             else:
                 input_column = self._column
             result_col = input_column.str_contains(col_pat)  # type: ignore[arg-type]
+        if na is not no_default:
+            result_col = result_col.fillna(na)
         return self._return_or_inplace(result_col)
 
     def like(self, pat: str, esc: str | None = None) -> Series | Index:
@@ -2785,6 +2790,41 @@ class StringMethods(BaseAccessor):
 
         return self._return_or_inplace(result_table, expand=expand)
 
+    def split_part(
+        self, delimiter: str | None = None, index: int = 0
+    ) -> Series | Index:
+        """
+        Splits the string by delimiter and returns the token at the given index.
+
+        Parameters
+        ----------
+        delimiter : str, default None
+            The string to split on. If not specified, split on whitespace.
+        index : int, default 0
+            The index of the token to retrieve.
+
+        Returns
+        -------
+        Series or Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["a_b_c", "d_e", "f"])
+        >>> s.str.split_part(delimiter="_", index=1)
+        0       b
+        1       e
+        2    None
+        dtype: object
+        """
+
+        if delimiter is None:
+            delimiter = ""
+        delim_scalar = plc.Scalar.from_py(delimiter)
+        return self._return_or_inplace(
+            self._column.split_part(delim_scalar, index)
+        )
+
     def partition(self, sep: str = " ", expand: bool = True) -> Series | Index:
         """
         Split the string at the first occurrence of sep.
@@ -4228,7 +4268,11 @@ class StringMethods(BaseAccessor):
             return result
 
     def match(
-        self, pat: str, case: bool = True, flags: int = 0
+        self,
+        pat: str,
+        case: bool = True,
+        flags: int = 0,
+        na=no_default,
     ) -> Series | Index:
         """
         Determine if each string matches a regular expression.
@@ -4239,6 +4283,11 @@ class StringMethods(BaseAccessor):
             Character sequence or regular expression.
         flags : int, default 0 (no flags)
             Flags to pass through to the regex engine (e.g. re.MULTILINE)
+        na : scalar, optional
+            Fill value for missing values. The default depends on dtype of the
+            array. For the ``"str"`` dtype, ``False`` is used. For object
+            dtype, ``numpy.nan`` is used. For the nullable ``StringDtype``,
+            ``pandas.NA`` is used.
 
         Returns
         -------
@@ -4268,7 +4317,7 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.match`
 
-            Parameters `case` and `na` are currently not supported.
+            Parameter `case` is currently not supported.
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
         """
@@ -4285,7 +4334,10 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
-        return self._return_or_inplace(self._column.matches_re(pat, flags))
+        result = self._column.matches_re(pat, flags)
+        if na is not no_default:
+            result = result.fillna(na)
+        return self._return_or_inplace(result)
 
     def url_decode(self) -> Series | Index:
         """
@@ -4630,7 +4682,9 @@ class StringMethods(BaseAccessor):
         2    .
         dtype: object
         """
-        result_col = self._column.character_tokenize().children[1]
+        result_col = ColumnBase.from_pylibcudf(
+            self._column.character_tokenize().plc_column.children()[1]
+        )
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)
