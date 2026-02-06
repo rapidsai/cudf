@@ -1351,15 +1351,11 @@ class StringColumn(ColumnBase, Scannable):
             plc_column = plc.strings.attributes.count_characters(
                 self.plc_column
             )
+            dtype = self._get_pandas_compatible_dtype(np.dtype(np.int32))
             res = ColumnBase.create(
                 plc_column,
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+                dtype,
             )
-            if cudf.get_option("mode.pandas_compatible"):
-                new_type = self._get_pandas_compatible_dtype(
-                    np.dtype(np.int64)
-                )
-                res = res.astype(new_type)
             return cast(cudf.core.column.numerical.NumericalColumn, res)
 
     def count_bytes(self) -> NumericalColumn:
@@ -1426,10 +1422,7 @@ class StringColumn(ColumnBase, Scannable):
                     plc_flags_from_re_flags(flags),
                 ),
             )
-            if cudf.get_option("mode.pandas_compatible"):
-                dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
-            else:
-                dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
             return cast(Self, ColumnBase.create(plc_column, dtype))
 
     def str_contains(self, pattern: str | Self) -> Self:
@@ -1720,13 +1713,8 @@ class StringColumn(ColumnBase, Scannable):
             )
             res = ColumnBase.create(
                 plc_result,
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+                self._get_pandas_compatible_dtype(np.dtype(np.int32)),
             )
-            if cudf.get_option("mode.pandas_compatible"):
-                if not isinstance(self.dtype, pd.ArrowDtype):
-                    res = res.astype(np.dtype(np.int64))
-                new_type = self._get_pandas_compatible_dtype(res.dtype)
-                res = res._with_type_metadata(new_type)
             return cast(cudf.core.column.numerical.NumericalColumn, res)
 
     def findall(
@@ -1808,10 +1796,7 @@ class StringColumn(ColumnBase, Scannable):
                 raise TypeError(
                     f"expected a str or tuple[str, ...], not {type(pat).__name__}"
                 )
-            if cudf.get_option("mode.pandas_compatible"):
-                dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
-            else:
-                dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
             return cast(Self, ColumnBase.create(plc_result, dtype))
 
     def find(
@@ -1846,10 +1831,7 @@ class StringColumn(ColumnBase, Scannable):
                     pattern, plc_flags_from_re_flags(flags)
                 ),
             )
-            if cudf.get_option("mode.pandas_compatible"):
-                dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
-            else:
-                dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
             return cast(Self, ColumnBase.create(plc_result, dtype))
 
     def code_points(self) -> Self:
