@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
 
+from cudf_polars.dsl.ir import Distinct, GroupBy
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.join import Join
 from cudf_polars.experimental.repartition import Repartition
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.utils.config import ConfigOptions
 
 
 # Set of available collective IDs
@@ -50,11 +52,13 @@ class ReserveOpIDs:
     ----------
     ir : IR
         The root IR node of the pipeline.
+    config_options : ConfigOptions, optional
+        Configuration options (needed for dynamic planning).
 
     Notes
     -----
     This context manager:
-    1. Identifies all Shuffle nodes in the IR
+    1. Identifies all IR nodes that may require collective operations
     2. Reserves collective IDs from the vacancy pool
     3. Creates a mapping from IR nodes to their reserved IDs
     4. Releases all IDs back to the pool on __exit__
@@ -63,12 +67,24 @@ class ReserveOpIDs:
     (e.g., for metadata gathering, shuffling multiple sides of a join).
     """
 
-    def __init__(self, ir: IR):
+    def __init__(self, ir: IR, config_options: ConfigOptions | None = None):
+        self.config_options = config_options
+
+        # Check if dynamic planning is enabled
+        self.dynamic_planning_enabled = (
+            config_options is not None
+            and config_options.executor.name == "streaming"
+            and config_options.executor.dynamic_planning is not None
+        )
+
         # Find all collective IR nodes.
+        collective_types: tuple[type, ...] = (Shuffle, Join, Repartition)
+        if self.dynamic_planning_enabled:
+            # Include GroupBy and Distinct when dynamic planning is enabled
+            collective_types = (Shuffle, Join, Repartition, GroupBy, Distinct)
+
         self.collective_nodes: list[IR] = [
-            node
-            for node in traversal([ir])
-            if isinstance(node, (Shuffle, Join, Repartition))
+            node for node in traversal([ir]) if isinstance(node, collective_types)
         ]
         self.collective_id_map: dict[IR, list[int]] = {}
 
@@ -85,7 +101,21 @@ class ReserveOpIDs:
         """
         # Reserve IDs and map nodes to a list of IDs
         for node in self.collective_nodes:
-            self.collective_id_map[node] = [_get_new_collective_id()]
+            if isinstance(node, (GroupBy, Distinct)) and self.dynamic_planning_enabled:
+                # GroupBy/Distinct need 2 IDs: one for size allgather, one for shuffle
+                self.collective_id_map[node] = [
+                    _get_new_collective_id(),
+                    _get_new_collective_id(),
+                ]
+            elif isinstance(node, Join) and self.dynamic_planning_enabled:
+                # Join needs 3 IDs: size allgather, left shuffle/bcast, right shuffle/bcast
+                self.collective_id_map[node] = [
+                    _get_new_collective_id(),
+                    _get_new_collective_id(),
+                    _get_new_collective_id(),
+                ]
+            else:
+                self.collective_id_map[node] = [_get_new_collective_id()]
 
         return self.collective_id_map
 

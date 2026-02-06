@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import asyncio
 import operator
-from contextlib import asynccontextmanager, contextmanager
+import struct
+from contextlib import asynccontextmanager
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,8 @@ try:
 except ImportError:
     pass
 
+from rapidsmpf.memory.packed_data import PackedData
+from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
@@ -31,9 +34,8 @@ import pylibcudf as plc
 from cudf_polars.containers import DataFrame
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+    from collections.abc import AsyncIterator, Callable, Mapping
 
-    from rapidsmpf.memory.memory_reservation import MemoryReservation
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -420,25 +422,44 @@ def make_spill_function(
     return spill_func
 
 
-@contextmanager
-def opaque_reservation(
+async def allgather_reduce(
     context: Context,
-    estimated_bytes: int,
-) -> Iterator[MemoryReservation]:
+    op_id: int,
+    *local_values: int,
+) -> tuple[int, ...]:
     """
-    Reserve memory for opaque allocations.
+    Allgather local scalar values and sum each across all ranks.
 
     Parameters
     ----------
     context
-        The RapidsMPF context.
-    estimated_bytes
-        The estimated number of bytes to reserve.
+        The rapidsmpf context.
+    op_id
+        The collective operation ID for this allgather.
+    *local_values
+        One or more local scalar values to contribute.
 
-    Yields
-    ------
-    The memory reservation.
+    Returns
+    -------
+    tuple[int, ...]
+        The sum of each local_value across all ranks.
     """
-    yield context.br().reserve_device_memory_and_spill(
-        estimated_bytes, allow_overbooking=True
-    )
+    n = len(local_values)
+    fmt = f"<{'q' * n}"
+    data = struct.pack(fmt, *local_values)
+    packed = PackedData.from_host_bytes(data, context.br())
+
+    allgather = AllGather(context, op_id)
+    allgather.insert(0, packed)
+    allgather.insert_finished()
+
+    results = await allgather.extract_all(context, ordered=False)
+
+    totals = [0] * n
+    for packed_result in results:
+        result_bytes = packed_result.to_host_bytes()
+        values = struct.unpack(fmt, result_bytes)
+        for i, v in enumerate(values):
+            totals[i] += v
+
+    return tuple(totals)

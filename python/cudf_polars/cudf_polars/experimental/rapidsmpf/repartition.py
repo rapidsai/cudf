@@ -7,11 +7,14 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+from rapidsmpf.streaming.cudf.table_chunk import (
+    TableChunk,
+    make_table_chunks_available_or_wait,
+)
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
@@ -20,7 +23,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     empty_table_chunk,
-    opaque_reservation,
     recv_metadata,
     send_metadata,
 )
@@ -183,18 +185,16 @@ async def concatenate_node(
                     if msg is None:
                         done_receiving = True
                         break
-                    chunks.append(
-                        TableChunk.from_message(msg).make_available_and_spill(
-                            context.br(), allow_overbooking=True
-                        )
-                    )
-                    del msg
+                    chunks.append(TableChunk.from_message(msg))
 
                 if chunks:
-                    input_bytes = sum(
-                        chunk.data_alloc_size(MemoryType.DEVICE) for chunk in chunks
+                    chunks, extra = await make_table_chunks_available_or_wait(
+                        context,
+                        chunks,
+                        reserve_extra=sum(chunk.data_alloc_size() for chunk in chunks),
+                        net_memory_delta=0,
                     )
-                    with opaque_reservation(context, input_bytes):
+                    with opaque_memory_usage(extra):
                         df = _concat(
                             *(
                                 DataFrame.from_table(
@@ -207,19 +207,20 @@ async def concatenate_node(
                             ),
                             context=ir_context,
                         )
-                        if tracer is not None:
-                            tracer.add_chunk(table=df.table)
-                        await ch_out.send(
-                            context,
-                            Message(
-                                seq_num,
-                                TableChunk.from_pylibcudf_table(
-                                    df.table, df.stream, exclusive_view=True
-                                ),
+                        del chunks
+                    if tracer is not None:
+                        tracer.add_chunk(table=df.table)
+                    await ch_out.send(
+                        context,
+                        Message(
+                            seq_num,
+                            TableChunk.from_pylibcudf_table(
+                                df.table, df.stream, exclusive_view=True
                             ),
-                        )
-                        seq_num += 1
-                        del df, chunks
+                        ),
+                    )
+                    seq_num += 1
+                    del df
 
                 # Break if we reached end of stream
                 if done_receiving:
