@@ -256,13 +256,15 @@ ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp hashing/partition.cpp)
 # ##################################################################################################
 # * hybrid scan common (library)
 # ----------------------------------------------------------------------
-add_library(hybrid_scan_common OBJECT io/parquet/experimental/hybrid_scan/io_utils.cpp
-                                      io/parquet/experimental/hybrid_scan/hybrid_scan.cpp)
+add_library(
+  hybrid_scan_common OBJECT io/parquet/experimental/hybrid_scan/io_utils.cpp
+                            io/parquet/experimental/hybrid_scan/hybrid_scan.cpp
+)
 target_compile_features(hybrid_scan_common PRIVATE cxx_std_20)
 
 target_compile_options(
   hybrid_scan_common PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                      "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+                            "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
 
 target_link_libraries(
