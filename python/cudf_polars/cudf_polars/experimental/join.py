@@ -286,7 +286,7 @@ def _(
 
     # Check for dynamic planning - may have more partitions at runtime
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming"  # For type narrowing
+    assert config_options.executor.name == "streaming"
     dynamic_planning = _dynamic_planning_on(config_options)
 
     left, right = children
