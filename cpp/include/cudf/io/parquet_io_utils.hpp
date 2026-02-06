@@ -46,7 +46,7 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
   cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes);
 
 /**
- * @brief Fetches a list of byte ranges from a host buffer into device buffers
+ * @brief Fetches a list of byte ranges from a datasource into device buffers
  *
  * @ingroup io_readers
  *
