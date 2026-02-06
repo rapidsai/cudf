@@ -1967,10 +1967,8 @@ struct contiguous_split_state {
     // is the result.
     if (is_empty) { return; }
 
-    auto result  = compute_num_bufs_and_splits(input, splits, stream, temp_mr);
-    num_src_bufs = std::get<0>(result);
-    num_bufs     = std::get<1>(result);
-    partition_buf_size_and_dst_buf_info = std::move(std::get<2>(result));
+    std::tie(num_src_bufs, num_bufs, partition_buf_size_and_dst_buf_info) =
+      compute_num_bufs_and_splits(input, splits, stream, temp_mr);
 
     // Second pass: uses `dst_buf_info` to break down the work into 1MB batches.
     chunk_iter_state = compute_batches(num_bufs,
