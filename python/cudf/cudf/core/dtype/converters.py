@@ -46,6 +46,7 @@ def _(dtype) -> pd.ArrowDtype:
 @_convert_to_arrowdtype.register(pd.UInt32Dtype)
 @_convert_to_arrowdtype.register(pd.UInt64Dtype)
 @_convert_to_arrowdtype.register(pd.Float32Dtype)
+@_convert_to_arrowdtype.register(pd.Float64Dtype)
 def _(dtype) -> pd.ArrowDtype:
     return pd.ArrowDtype(pa.from_numpy_dtype(dtype.numpy_dtype))
 
@@ -91,6 +92,7 @@ def _convert_to_pandas_nullable_extension_type(dtype: DtypeObj) -> DtypeObj:
 
 
 @_convert_to_pandas_nullable_extension_type.register(pd.BooleanDtype)
+@_convert_to_pandas_nullable_extension_type.register(pd.Int8Dtype)
 @_convert_to_pandas_nullable_extension_type.register(pd.Int16Dtype)
 @_convert_to_pandas_nullable_extension_type.register(pd.Int32Dtype)
 @_convert_to_pandas_nullable_extension_type.register(pd.Int64Dtype)
@@ -99,6 +101,7 @@ def _convert_to_pandas_nullable_extension_type(dtype: DtypeObj) -> DtypeObj:
 @_convert_to_pandas_nullable_extension_type.register(pd.UInt32Dtype)
 @_convert_to_pandas_nullable_extension_type.register(pd.UInt64Dtype)
 @_convert_to_pandas_nullable_extension_type.register(pd.Float32Dtype)
+@_convert_to_pandas_nullable_extension_type.register(pd.Float64Dtype)
 @_convert_to_pandas_nullable_extension_type.register(pd.StringDtype)
 def _(dtype) -> DtypeObj:
     return dtype
@@ -212,7 +215,7 @@ def _(dtype) -> DtypeObj:
     if dtype.kind in {"i", "u", "f", "b", "m"} or (
         dtype.kind == "M" and dtype.tz is None
     ):
-        return pa_dtype.to_pandas_dtype()
+        return dtype.numpy_dtype
     elif dtype.kind == "M" and dtype.tz is not None:
         # pyarrow returns a pytz object, but cuDF expects a zoneinfo object
         return pd.DatetimeTZDtype(
@@ -238,6 +241,28 @@ def _(dtype) -> DtypeObj:
         return IntervalDtype.from_arrow(pa_dtype)
     else:
         raise TypeError(f"Cannot convert {dtype} to a default cudf dtype")
+
+
+@_convert_to_default_cudf_dtype.register(pd.BooleanDtype)
+@_convert_to_default_cudf_dtype.register(pd.Int8Dtype)
+@_convert_to_default_cudf_dtype.register(pd.Int16Dtype)
+@_convert_to_default_cudf_dtype.register(pd.Int32Dtype)
+@_convert_to_default_cudf_dtype.register(pd.Int64Dtype)
+@_convert_to_default_cudf_dtype.register(pd.UInt8Dtype)
+@_convert_to_default_cudf_dtype.register(pd.UInt16Dtype)
+@_convert_to_default_cudf_dtype.register(pd.UInt32Dtype)
+@_convert_to_default_cudf_dtype.register(pd.UInt64Dtype)
+@_convert_to_default_cudf_dtype.register(pd.Float32Dtype)
+@_convert_to_default_cudf_dtype.register(pd.Float64Dtype)
+def _(dtype) -> DtypeObj:
+    return dtype.numpy_dtype
+
+
+@_convert_to_default_cudf_dtype.register(pd.StringDtype)
+def _(dtype) -> DtypeObj:
+    from cudf.utils.dtypes import CUDF_STRING_DTYPE
+
+    return CUDF_STRING_DTYPE
 
 
 def get_dtype_of_same_variant(
