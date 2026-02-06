@@ -20,6 +20,15 @@
  */
 
 /**
+ * @brief Converts a host buffer into a host span
+ *
+ * @param buffer Host buffer
+ * @return Host span of input host buffer
+ */
+cudf::host_span<uint8_t const> make_host_span(
+  std::reference_wrapper<cudf::io::datasource::buffer const> buffer);
+
+/**
  * @brief Fetches a host buffer of Parquet footer bytes from the input data source
  *
  * @param datasource Input data source
@@ -38,15 +47,6 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_bytes(
   cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes);
 
 /**
- * @brief Converts a host buffer into a host span
- *
- * @param buffer Host buffer
- * @return Host span of input host buffer
- */
-cudf::host_span<uint8_t const> make_host_span(
-  std::reference_wrapper<cudf::io::datasource::buffer const> buffer);
-
-/**
  * @brief Fetches a list of byte ranges from a host buffer into device buffers
  *
  * @param datasource Input datasource
@@ -60,7 +60,7 @@ cudf::host_span<uint8_t const> make_host_span(
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,
            std::future<void>>
-fetch_byte_ranges(cudf::io::datasource& datasource,
-                  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-                  rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr);
+fetch_byte_ranges_async(cudf::io::datasource& datasource,
+                        cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr);

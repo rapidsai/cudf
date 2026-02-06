@@ -5,7 +5,7 @@
 
 #include "benchmark.hpp"
 #include "common_utils.hpp"
-#include "hybrid_scan_commons.hpp"
+#include "hybrid_scan_composer.hpp"
 #include "io_source.hpp"
 
 #include <cudf/table/table_view.hpp>

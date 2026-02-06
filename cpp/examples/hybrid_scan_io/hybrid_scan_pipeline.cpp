@@ -10,6 +10,7 @@
 #include "timer.hpp"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/types.hpp>
@@ -60,6 +61,28 @@ enum class split_strategy : uint8_t {
 }
 
 /**
+ * @brief Concatenate a vector of tables and return the resultant table
+ *
+ * @param tables Vector of tables to concatenate
+ * @param stream CUDA stream to use
+ *
+ * @return Unique pointer to the resultant concatenated table.
+ */
+std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
+                                                rmm::cuda_stream_view stream)
+{
+  if (tables.size() == 1) { return std::move(tables[0]); }
+
+  std::vector<cudf::table_view> table_views;
+  table_views.reserve(tables.size());
+  std::transform(
+    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
+      return tbl->view();
+    });
+  // Construct the final table
+  return cudf::concatenate(table_views, stream);
+}
+/**
  * @brief Read parquet input using the main parquet reader from io source
  *
  * @param io_source io source to read
@@ -96,7 +119,7 @@ struct hybrid_scan_fn {
     auto const all_column_chunk_byte_ranges =
       reader->all_column_chunks_byte_ranges(row_groups_indices, options);
     auto [all_column_chunk_buffers, all_column_chunk_data, all_col_read_tasks] =
-      fetch_byte_ranges(datasource, all_column_chunk_byte_ranges, stream, mr);
+      fetch_byte_ranges_async(datasource, all_column_chunk_byte_ranges, stream, mr);
     all_col_read_tasks.get();
     table.get() = std::move(
       reader

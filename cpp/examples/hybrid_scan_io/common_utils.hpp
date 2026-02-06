@@ -52,6 +52,15 @@ cudf::ast::operation create_filter_expression(std::string const& column_name,
                                               std::string const& literal_value);
 
 /**
+ * @brief Create a host span from a datasource buffer
+ *
+ * @param buffer Datasource buffer
+ * @return Corresponding host span
+ */
+[[nodiscard]] cudf::host_span<uint8_t const> make_host_span(
+  cudf::io::datasource::buffer const& buffer);
+
+/**
  * @brief Combine columns from filter and payload tables into a single table
  *
  * @param filter_table Filter table
@@ -71,17 +80,6 @@ std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_
 void check_tables_equal(cudf::table_view const& lhs_table,
                         cudf::table_view const& rhs_table,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-/**
- * @brief Concatenate a vector of tables and return the resultant table
- *
- * @param tables Vector of tables to concatenate
- * @param stream CUDA stream to use
- *
- * @return Unique pointer to the resultant concatenated table.
- */
-std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
-                                                rmm::cuda_stream_view stream);
 
 /**
  * @brief Function to process comma delimited input paths string to parquet files and/or dirs

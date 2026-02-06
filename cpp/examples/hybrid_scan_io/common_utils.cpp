@@ -6,7 +6,6 @@
 #include "common_utils.hpp"
 
 #include <cudf/ast/expressions.hpp>
-#include <cudf/concatenate.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/table/table_view.hpp>
@@ -52,6 +51,11 @@ cudf::ast::operation create_filter_expression(std::string const& column_name,
   return cudf::ast::operation(cudf::ast::ast_operator::EQUAL, column_reference, literal);
 }
 
+cudf::host_span<uint8_t const> make_host_span(cudf::io::datasource::buffer const& buffer)
+{
+  return cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(buffer.data()), buffer.size()};
+}
+
 std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_table,
                                             std::unique_ptr<cudf::table> payload_table)
 {
@@ -94,21 +98,6 @@ void check_tables_equal(cudf::table_view const& lhs_table,
   } catch (std::exception& e) {
     std::cout << e.what() << std::endl;
   }
-}
-
-std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
-                                                rmm::cuda_stream_view stream)
-{
-  if (tables.size() == 1) { return std::move(tables[0]); }
-
-  std::vector<cudf::table_view> table_views;
-  table_views.reserve(tables.size());
-  std::transform(
-    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
-      return tbl->view();
-    });
-  // Construct the final table
-  return cudf::concatenate(table_views, stream);
 }
 
 std::vector<io_source> extract_input_sources(std::string const& paths,
@@ -179,11 +168,12 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
   std::vector<io_source> input_sources;
   input_sources.reserve(parquet_files.size());
   // Transform input files to the specified io sources
-  std::transform(
-    parquet_files.begin(),
-    parquet_files.end(),
-    std::back_inserter(input_sources),
-    [&](auto const& file_name) { return io_source{file_name, io_source_type, stream}; });
+  std::transform(parquet_files.begin(),
+                 parquet_files.end(),
+                 std::back_inserter(input_sources),
+                 [&](auto const& file_name) {
+                   return io_source{file_name, io_source_type, stream};
+                 });
   stream.synchronize();
   return input_sources;
 }

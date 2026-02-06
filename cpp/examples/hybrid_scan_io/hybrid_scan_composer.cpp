@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "hybrid_scan_commons.hpp"
+#include "hybrid_scan_composer.hpp"
 
 #include "common_utils.hpp"
 #include "io_utils.hpp"
@@ -11,6 +11,7 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
+#include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -25,6 +26,8 @@
  * @file hybrid_scan_commons.cpp
  * @brief Definitions for common hybrid scan related functions for hybrid_scan examples
  */
+
+using cudf::io::parquet::experimental::hybrid_scan_reader;
 
 namespace detail {
 
@@ -121,7 +124,7 @@ std::vector<cudf::size_type> apply_row_group_filters(
     // Fetch dictionary page buffers and corresponding device spans from the input file buffer
     nvtxRangePush("fetch_dict_page_byte_ranges");
     auto [dictionary_page_buffers, dictionary_page_data, dict_read_tasks] =
-      fetch_byte_ranges(datasource, dict_page_byte_ranges, stream, temp_mr);
+      fetch_byte_ranges_async(datasource, dict_page_byte_ranges, stream, temp_mr);
     dict_read_tasks.get();
     nvtxRangePop();
 
@@ -150,7 +153,7 @@ std::vector<cudf::size_type> apply_row_group_filters(
     timer.reset();
     nvtxRangePush("fetch_bloom_filter_byte_ranges");
     auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
-      fetch_byte_ranges(datasource, bloom_filter_byte_ranges, stream, aligned_mr);
+      fetch_byte_ranges_async(datasource, bloom_filter_byte_ranges, stream, aligned_mr);
     bloom_read_tasks.get();
     nvtxRangePop();
 
@@ -193,7 +196,7 @@ std::unique_ptr<cudf::table> single_step_materialize(
 
   nvtxRangePush("fetch_all_col_byte_ranges");
   auto [all_column_chunk_buffers, all_column_chunk_data, all_column_chunk_read_tasks] =
-    fetch_byte_ranges(datasource, all_column_chunk_byte_ranges, stream, mr);
+    fetch_byte_ranges_async(datasource, all_column_chunk_byte_ranges, stream, mr);
   all_column_chunk_read_tasks.get();
   nvtxRangePop();
 
@@ -253,7 +256,7 @@ std::unique_ptr<cudf::table> two_step_materialize(
     reader.filter_column_chunks_byte_ranges(current_row_group_indices, options);
   nvtxRangePush("fetch_filter_col_byte_ranges");
   auto [filter_column_chunk_buffers, filter_column_chunk_data, filter_col_read_tasks] =
-    fetch_byte_ranges(datasource, filter_column_chunk_byte_ranges, stream, mr);
+    fetch_byte_ranges_async(datasource, filter_column_chunk_byte_ranges, stream, mr);
   filter_col_read_tasks.get();
   nvtxRangePop();
 
@@ -291,7 +294,7 @@ std::unique_ptr<cudf::table> two_step_materialize(
     reader.payload_column_chunks_byte_ranges(current_row_group_indices, options);
   nvtxRangePush("fetch_payload_col_byte_ranges");
   auto [payload_column_chunk_buffers, payload_column_chunk_data, payload_col_read_tasks] =
-    fetch_byte_ranges(datasource, payload_column_chunk_byte_ranges, stream, mr);
+    fetch_byte_ranges_async(datasource, payload_column_chunk_byte_ranges, stream, mr);
   payload_col_read_tasks.get();
   nvtxRangePop();
 

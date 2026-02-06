@@ -27,7 +27,7 @@ rapids_cmake_build_type("Release")
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 add_library(
-  hybrid_scan_utils OBJECT common_utils.cpp io_source.cpp io_utils.cpp hybrid_scan_commons.cpp
+  hybrid_scan_utils OBJECT common_utils.cpp io_source.cpp io_utils.cpp hybrid_scan_composer.cpp
 )
 target_compile_features(hybrid_scan_utils PRIVATE cxx_std_20)
 target_link_libraries(hybrid_scan_utils PRIVATE cudf::cudf)
