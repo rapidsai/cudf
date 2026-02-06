@@ -312,6 +312,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     plc_column: plc.Column
     _dtype: DtypeObj
     _distinct_count: dict[bool, int]
+    _has_nulls: dict[bool, bool]
     _exposed_buffers: set[Buffer]
     _CACHED_PROPERTY_NAMES: ClassVar[frozenset[str]] = frozenset()
 
@@ -369,16 +370,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def dtype(self) -> DtypeObj:
         return self._dtype
 
-    @property
+    @cached_property
     def size(self) -> int:
         return self.plc_column.size()
 
-    @property
+    @cached_property
     def data(self) -> None | Buffer:
         """Get data buffer from pylibcudf column."""
         return cast("Buffer | None", self.plc_column.data())
 
-    @property
+    @cached_property
     def nullable(self) -> bool:
         return self.mask is not None
 
@@ -387,9 +388,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         NaN inclusion is supported for specific dtypes only.
         """
-        return int(self.null_count) != 0
+        try:
+            return self._has_nulls[include_nan]
+        except KeyError:
+            result = int(self.null_count) != 0
+            self._has_nulls[include_nan] = result
+            return result
 
-    @property
+    @cached_property
     def is_all_null(self) -> bool:
         """Check if all values in the column are null.
 
@@ -398,7 +404,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         return self.null_count == len(self)
 
-    @property
+    @cached_property
     def valid_count(self) -> int:
         """Return the number of non-null values in the column.
 
@@ -407,7 +413,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         return len(self) - self.null_count
 
-    @property
+    @cached_property
     def mask(self) -> None | Buffer:
         """Get mask buffer from pylibcudf column."""
         return cast("Buffer | None", self.plc_column.null_mask())
@@ -437,6 +443,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _clear_cache(self) -> None:
         self._distinct_count.clear()
+        self._has_nulls.clear()
         for attr_name in self._CACHED_PROPERTY_NAMES:
             try:
                 delattr(self, attr_name)
@@ -470,11 +477,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             ColumnBase.create(new_plc_column, self.dtype),
         )
 
-    @property
+    @cached_property
     def null_count(self) -> int:
         return self.plc_column.null_count()
 
-    @property
+    @cached_property
     def offset(self) -> int:
         return self.plc_column.offset()
 
@@ -812,6 +819,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.plc_column = plc_column
         self._dtype = dtype
         self._distinct_count = {}
+        self._has_nulls = {}
         # The set of exposed buffers associated with this column. These buffers must be
         # kept alive for the lifetime of this column since anything that accessed the
         # CAI of this column will still be pointing to those buffers. As such objects
@@ -1895,7 +1903,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def is_unique(self) -> bool:
-        # distinct_count might already be cached
         return self.distinct_count(dropna=False) == len(self)
 
     @cached_property
