@@ -59,7 +59,7 @@ except ImportError:
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from cudf_polars.experimental.explain import DAG
+    from cudf_polars.experimental.explain import SerializablePlan
 
 
 try:
@@ -239,7 +239,7 @@ class RunConfig:
         default_factory=PackageVersions.collect
     )
     records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
-    plans: dict[int, DAG] = dataclasses.field(default_factory=dict)
+    plans: dict[int, SerializablePlan] = dataclasses.field(default_factory=dict)
     dataset_path: Path
     scale_factor: int | float
     shuffle: Literal["rapidsmpf", "tasks"] | None = None
@@ -1055,7 +1055,7 @@ def run_polars(
         run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
-    plans: dict[int, DAG] = {}
+    plans: dict[int, SerializablePlan] = {}
     engine: pl.GPUEngine | None = None
 
     if run_config.executor != "cpu":

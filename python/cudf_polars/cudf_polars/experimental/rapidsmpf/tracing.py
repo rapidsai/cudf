@@ -8,7 +8,7 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.tracing import LOG_TRACES, Scope
-from cudf_polars.experimental.explain import DAG
+from cudf_polars.experimental.explain import SerializablePlan
 
 if TYPE_CHECKING:
     import pylibcudf as plc
@@ -104,7 +104,7 @@ def log_query_plan(ir: IR, config_options: ConfigOptions) -> None:
 
     import structlog
 
-    dag = DAG.from_ir(ir, config_options=config_options)
+    dag = SerializablePlan.from_ir(ir, config_options=config_options)
     raw = dataclasses.asdict(dag)
 
     log = structlog.get_logger()

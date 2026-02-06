@@ -106,7 +106,7 @@ def serialize_query(
     engine: pl.GPUEngine,
     *,
     physical: bool = True,
-) -> DAG:
+) -> SerializablePlan:
     """
     Return a structured, serializable representation of the IR plan.
 
@@ -122,8 +122,8 @@ def serialize_query(
 
     Returns
     -------
-    DAG
-        A structured DAG representation of the query plan that can be
+    plan
+        A structured representation of the query plan that can be
         serialized to JSON.
 
     Examples
@@ -134,7 +134,7 @@ def serialize_query(
     >>> engine = pl.GPUEngine(executor="streaming")
     >>> dag = serialize_query(q, engine, physical=False)
     """
-    return DAG.from_query(q, engine, lowered=physical)
+    return SerializablePlan.from_query(q, engine, lowered=physical)
 
 
 def _fmt_row_count(value: int | None) -> str:
@@ -313,7 +313,7 @@ def _(ir: HStack) -> dict[str, Serializable]:
 @dataclasses.dataclass
 class SerializableIRNode:
     """
-    A node in the DAG.
+    A node in the plan.
 
     This node is *serializable* and cannot be executed like a
     cudf_polars.dsl.ir.IR node.
@@ -346,18 +346,18 @@ class SerializablePartitionInfo:
 
 
 @dataclasses.dataclass
-class DAG:
+class SerializablePlan:
     """
-    A DAG of plan nodes, which is serializable to JSON.
+    A serializable representation of a query plan.
 
     Parameters
     ----------
     roots
-        The IDs of the root nodes of the DAG.
+        The IDs of the root nodes of the plan.
     nodes
         A mapping from node ID to node details.
     partition_info
-        Information about the partitions of the DAG.
+        Information about the partitions of the plan.
 
     Notes
     -----
@@ -374,7 +374,7 @@ class DAG:
     See Also
     --------
     serialize_query
-        A function that builds a DAG from a LazyFrame query.
+        A function that builds a serializable plan from a LazyFrame query.
     """
 
     roots: list[str]
@@ -386,12 +386,12 @@ class DAG:
         cls, ir: IR, *, config_options: ConfigOptions, lowered: bool = False
     ) -> Self:
         """
-        Construct a DAG from an IR node.
+        Construct a serializable plan from an IR node.
 
         Parameters
         ----------
         ir
-            The IR node to construct the DAG from.
+            The IR node to construct the serializable plan from.
         config_options
             The configuration options.
         lowered
@@ -399,8 +399,8 @@ class DAG:
 
         Returns
         -------
-        DAG
-            A serializable DAG representation of the query plan.
+        plan
+            A serializable representation of the query plan.
         """
         partition_info_dict: dict[str, SerializablePartitionInfo] | None = None
         if lowered:
@@ -444,7 +444,7 @@ class DAG:
         lowered: bool = False,
     ) -> Self:
         """
-        Build a DAG from a LazyFrame query.
+        Build a serializable plan from a LazyFrame query.
 
         Parameters
         ----------
@@ -457,8 +457,8 @@ class DAG:
 
         Returns
         -------
-        DAG
-            A serializable DAG representation of the query plan.
+        plan
+            A serializable representation of the query plan.
         """
         config_options = ConfigOptions.from_polars_engine(engine)
         ir = Translator(q._ldf.visit(), engine).translate_ir()
