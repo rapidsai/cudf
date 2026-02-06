@@ -6,7 +6,6 @@
 #pragma once
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/detail/parquet_io_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
