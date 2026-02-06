@@ -523,10 +523,8 @@ add_library(
   src/io/orc/writer_impl.cu
   src/io/parquet/arrow_schema_writer.cpp
   src/io/parquet/bloom_filter_reader.cu
-  src/io/parquet/chunk_dict.cu
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
-  src/io/parquet/decode_fixed.cu
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
   src/io/parquet/experimental/deletion_vectors.cu
@@ -539,6 +537,7 @@ add_library(
   src/io/parquet/experimental/page_index_filter_utils.cu
   src/io/parquet/io_utils/parquet_io_utils.cpp
   src/io/parquet/page_data.cu
+  src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
   src/io/parquet/page_delta_decode.cu
@@ -554,6 +553,7 @@ add_library(
   src/io/parquet/stats_filter_helpers.cpp
   src/io/parquet/writer_impl.cu
   src/io/parquet/writer_impl_helpers.cpp
+  src/io/parquet/decode_fixed.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
