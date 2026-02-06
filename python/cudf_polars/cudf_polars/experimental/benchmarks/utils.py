@@ -547,6 +547,25 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
     Client or None
         A Dask distributed Client, or None if not using distributed mode.
     """
+    # Check if running with rrun
+    try:
+        from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+            get_nranks,
+            get_rank,
+            is_running_with_rrun,
+        )
+
+        if is_running_with_rrun():
+            rank = get_rank()
+            nranks = get_nranks()
+            if rank == 0:
+                print(
+                    f"[rrun] Detected rrun execution environment with {nranks} ranks"
+                )
+            return None  # No Dask client needed for rrun
+    except ImportError:
+        pass  # rapidsmpf not available, continue with normal path
+
     if run_config.cluster != "distributed":
         return None
 
@@ -1029,6 +1048,28 @@ def run_polars(
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
 
+    # Check if running with rrun
+    is_rrun = False
+    rank = 0
+    nranks = 1
+    try:
+        from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+            get_nranks,
+            get_rank,
+            is_running_with_rrun,
+        )
+
+        if is_running_with_rrun():
+            is_rrun = True
+            rank = get_rank()
+            nranks = get_nranks()
+            # Update cluster and n_workers for rrun mode
+            run_config = dataclasses.replace(
+                run_config, cluster="rrun", n_workers=nranks
+            )
+    except ImportError:
+        pass  # rapidsmpf not available
+
     client = initialize_dask_cluster(run_config, args)
 
     # Update n_workers from the actual cluster when using scheduler file/address
@@ -1078,10 +1119,22 @@ def run_polars(
             try:
                 result = execute_query(q_id, i, q, run_config, args, engine)
             except Exception:
-                print(f"❌ query={q_id} iteration={i} failed!")
-                print(traceback.format_exc())
+                if not is_rrun or rank == 0:
+                    print(f"❌ query={q_id} iteration={i} failed!")
+                    print(traceback.format_exc())
                 query_failures.append((q_id, i))
                 continue
+
+            # In rrun mode, result is None for non-root ranks
+            if is_rrun and result is None:
+                # Non-root ranks: skip result processing but record timing
+                t1 = time.monotonic()
+                record = Record(
+                    query=q_id, iteration=i, duration=t1 - t0, shuffle_stats=None
+                )
+                records[q_id].append(record)
+                continue
+
             if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
                 from rapidsmpf.integrations.dask.shuffler import (
                     clear_shuffle_statistics,
@@ -1101,28 +1154,31 @@ def run_polars(
                         executor=run_config.executor,
                         check_exact=False,
                     )
-                    print(f"✅ Query {q_id} passed validation!")
+                    if not is_rrun or rank == 0:
+                        print(f"✅ Query {q_id} passed validation!")
                 except AssertionError as e:
                     validation_failures.append(q_id)
-                    print(f"❌ Query {q_id} failed validation!\n{e}")
+                    if not is_rrun or rank == 0:
+                        print(f"❌ Query {q_id} failed validation!\n{e}")
 
             t1 = time.monotonic()
             record = Record(
                 query=q_id, iteration=i, duration=t1 - t0, shuffle_stats=shuffle_stats
             )
-            if args.print_results:
+            if args.print_results and (not is_rrun or rank == 0):
                 print(result)
 
-            if args.results_directory is not None and i == 0:
+            if args.results_directory is not None and i == 0 and (not is_rrun or rank == 0):
                 results_dir = Path(args.results_directory)
                 results_dir.mkdir(parents=True, exist_ok=True)
                 output_path = results_dir / f"q_{q_id:02d}.parquet"
                 result.write_parquet(output_path)
 
-            print(
-                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
-                flush=True,
-            )
+            if not is_rrun or rank == 0:
+                print(
+                    f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                    flush=True,
+                )
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
@@ -1176,24 +1232,26 @@ def run_polars(
 
             run_config.records[query_id] = new_records
 
-    if args.summarize:
-        run_config.summarize()
+    # Only rank 0 should print summaries and write output
+    if not is_rrun or rank == 0:
+        if args.summarize:
+            run_config.summarize()
+
+        if args.validate and run_config.executor != "cpu":
+            print("\nValidation Summary")
+            print("==================")
+            if validation_failures:
+                print(
+                    f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
+                )
+            else:
+                print("All validated queries passed.")
+
+        args.output.write(json.dumps(run_config.serialize(engine=engine)))
+        args.output.write("\n")
 
     if client is not None:
         client.close(timeout=60)
-
-    if args.validate and run_config.executor != "cpu":
-        print("\nValidation Summary")
-        print("==================")
-        if validation_failures:
-            print(
-                f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
-            )
-        else:
-            print("All validated queries passed.")
-
-    args.output.write(json.dumps(run_config.serialize(engine=engine)))
-    args.output.write("\n")
 
     if query_failures or validation_failures:
         sys.exit(1)

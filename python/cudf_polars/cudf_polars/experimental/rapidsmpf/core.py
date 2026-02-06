@@ -74,7 +74,7 @@ def evaluate_logical_plan(
     config_options: ConfigOptions,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+) -> tuple[pl.DataFrame | None, list[ChannelMetadata] | None]:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -90,11 +90,20 @@ def evaluate_logical_plan(
     Returns
     -------
     The output DataFrame and metadata collector.
+    For rrun execution, non-root ranks return (None, None).
     """
     assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
-    # Lower the IR graph on the client process (for now).
+    # Check if running with rrun
+    from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+        get_rank,
+        is_running_with_rrun,
+    )
+
+    is_rrun = is_running_with_rrun()
+
+    # Lower the IR graph on all processes (for rrun) or client process (for dask).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
     # Log the query plan structure for tracing (no-op if tracing disabled)
@@ -104,8 +113,29 @@ def evaluate_logical_plan(
     with ReserveOpIDs(ir) as collective_id_map:
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
-        # for cluster == "distributed".
+        # for cluster == "distributed" or cluster == "rrun".
         if (
+            config_options.executor.cluster == "rrun" or is_rrun
+        ):  # pragma: no cover; block depends on executor type and rrun cluster
+            # SPMD execution: All ranks execute, only rank 0 returns result
+            result, metadata_collector = evaluate_pipeline(
+                ir,
+                partition_info,
+                config_options,
+                stats,
+                collective_id_map,
+                collect_metadata=collect_metadata,
+            )
+
+            # Only rank 0 returns result to caller
+            rank = get_rank()
+            if rank == 0:
+                return result, metadata_collector
+            else:
+                # Non-root ranks return None
+                return None, None
+
+        elif (
             config_options.executor.cluster == "distributed"
         ):  # pragma: no cover; block depends on executor type and Distributed cluster
             # Distributed execution: Use client.run
@@ -122,6 +152,7 @@ def evaluate_logical_plan(
                 collective_id_map,
                 collect_metadata=collect_metadata,
             )
+            return result, metadata_collector
         else:
             # Single-process execution: Run locally
             result, metadata_collector = evaluate_pipeline(
@@ -132,8 +163,7 @@ def evaluate_logical_plan(
                 collective_id_map,
                 collect_metadata=collect_metadata,
             )
-
-    return result, metadata_collector
+            return result, metadata_collector
 
 
 def evaluate_pipeline(
@@ -175,12 +205,62 @@ def evaluate_pipeline(
 
     _initial_mr: Any = None
     stream_pool: CudaStreamPool | bool = False
+
+    # Check if running with rrun
+    from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+        get_bootstrap_context,
+        is_running_with_rrun,
+    )
+
+    is_rrun = is_running_with_rrun()
+
     if rmpf_context is not None:
-        # Using "distributed" mode.
+        # Using "distributed" mode (Dask).
         # Always use the RapidsMPF stream pool for now.
         br = rmpf_context.br()
         stream_pool = True
         rmpf_context_manager = contextlib.nullcontext(rmpf_context)
+    elif is_rrun and rmpf_context is None:
+        # Using "rrun" mode - initialize from bootstrap context
+        # Create a new distributed RapidsMPF context using the bootstrap communicator
+        _original_mr = rmm.mr.get_current_device_resource()
+        mr = RmmResourceAdaptor(_original_mr)
+        rmm.mr.set_current_device_resource(mr)
+
+        # Get the bootstrap-initialized communicator
+        bootstrap_ctx = get_bootstrap_context()
+
+        options = Options(
+            {
+                # By default, set the number of streaming threads to the max
+                # number of IO threads. The user may override this with an
+                # environment variable (i.e. RAPIDSMPF_NUM_STREAMING_THREADS)
+                "num_streaming_threads": str(
+                    max(config_options.executor.max_io_threads, 1)
+                )
+            }
+            | get_environment_variables()
+        )
+        pinned_mr = (
+            PinnedMemoryResource.make_if_available()
+            if config_options.executor.spill_to_pinned_memory
+            else None
+        )
+        if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
+            stream_pool = config_options.cuda_stream_policy.build()
+        else:
+            stream_pool = True  # Use stream pool for distributed execution
+
+        # Note: For rrun, we use the communicator from bootstrap_ctx
+        # The BufferResource is created but memory limits are not enforced
+        # in the same way as single-GPU mode
+        br = BufferResource(
+            mr,
+            pinned_mr=pinned_mr,
+            memory_available=None,  # No memory limits for distributed
+            stream_pool=stream_pool,
+        )
+        rmpf_context_manager = Context(bootstrap_ctx, br, options)
     else:
         # Using "single" mode.
         # Create a new local RapidsMPF context.

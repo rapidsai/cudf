@@ -173,7 +173,15 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
 
     cluster = config_options.executor.cluster
 
-    if (
+    # Check if running with rrun
+    from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import is_running_with_rrun
+
+    if is_running_with_rrun() or cluster == "rrun":
+        # rrun mode: use synchronous scheduler (already rank-aware via streaming)
+        from cudf_polars.experimental.scheduler import synchronous_scheduler
+
+        return synchronous_scheduler
+    elif (
         cluster == "distributed"
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
         from distributed import get_client

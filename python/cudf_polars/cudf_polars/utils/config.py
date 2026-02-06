@@ -167,10 +167,14 @@ class Cluster(str, enum.Enum):
     * ``Cluster.DISTRIBUTED`` : Multi-GPU distributed execution. Currently
       uses a Dask-based distributed scheduler and requires an
       active Dask cluster.
+    * ``Cluster.RRUN`` : Multi-GPU distributed execution using rrun-based
+      coordination with RapidsMPF bootstrap. Uses SPMD execution model
+      where all ranks execute the same code.
     """
 
     SINGLE = "single"
     DISTRIBUTED = "distributed"
+    RRUN = "rrun"
 
 
 class Scheduler(str, enum.Enum):
@@ -354,10 +358,10 @@ def default_blocksize(cluster: str) -> int:
         return 1_000_000_000
 
     if (
-        cluster == "distributed"
+        cluster in ("distributed", "rrun")
         or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
     ):
-        # Distributed execution requires a conservative
+        # Distributed/rrun execution requires a conservative
         # blocksize for now. We are also more conservative
         # when UVM is disabled.
         blocksize = int(device_size * 0.025)
@@ -861,10 +865,28 @@ class StreamingExecutor:
                 stacklevel=2,
             )
 
+        # rrun cluster requires rapidsmpf runtime
+        if self.cluster == "rrun":
+            if self.runtime != "rapidsmpf":
+                raise ValueError(
+                    "cluster='rrun' requires runtime='rapidsmpf'. "
+                    "Please set runtime='rapidsmpf' when using rrun."
+                )
+            # Force shuffle_method to rapidsmpf for rrun
+            if self.shuffle_method is not None and self.shuffle_method != "rapidsmpf":
+                warnings.warn(
+                    f"Ignoring shuffle_method='{self.shuffle_method}' for rrun cluster. "
+                    "Using shuffle_method='rapidsmpf' instead.",
+                    stacklevel=2,
+                )
+            object.__setattr__(self, "shuffle_method", "rapidsmpf")
+
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
-            if self.cluster == "distributed" and rapidsmpf_distributed_available():
-                # For distributed cluster, prefer rapidsmpf if available
+            if (
+                self.cluster == "distributed" or self.cluster == "rrun"
+            ) and rapidsmpf_distributed_available():
+                # For distributed/rrun cluster, prefer rapidsmpf if available
                 object.__setattr__(self, "shuffle_method", "rapidsmpf")
             else:
                 # Otherwise, use task-based shuffle for now.
@@ -882,6 +904,10 @@ class StreamingExecutor:
             elif self.cluster == "single" and not rapidsmpf_single_available():
                 raise ValueError(
                     "rapidsmpf shuffle method requested, but rapidsmpf is not installed."
+                )
+            elif self.cluster == "rrun" and not rapidsmpf_single_available():
+                raise ValueError(
+                    "rrun cluster requires rapidsmpf to be installed."
                 )
             # Select "rapidsmpf-single" for single-GPU
             if self.cluster == "single":
@@ -902,7 +928,7 @@ class StreamingExecutor:
                 self,
                 "broadcast_join_limit",
                 # Usually better to avoid shuffling for single gpu with UVM
-                2 if self.cluster == "distributed" else 32,
+                2 if self.cluster in ("distributed", "rrun") else 32,
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
@@ -929,10 +955,10 @@ class StreamingExecutor:
                 DynamicPlanningOptions(**self.dynamic_planning),
             )
 
-        if self.cluster == "distributed":
+        if self.cluster in ("distributed", "rrun"):
             if self.sink_to_directory is False:
                 raise ValueError(
-                    "The distributed cluster requires sink_to_directory=True"
+                    f"The {self.cluster} cluster requires sink_to_directory=True"
                 )
             object.__setattr__(self, "sink_to_directory", True)
         elif self.sink_to_directory is None:
