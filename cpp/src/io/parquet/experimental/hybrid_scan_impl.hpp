@@ -258,6 +258,23 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     cudf::column_view const& row_mask);
 
   /**
+   * @copydoc cudf::io::experimental::hybrid_scan::setup_chunking_for_all_columns
+   */
+  void setup_chunking_for_all_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::materialize_all_columns_chunk
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns_chunk();
+
+  /**
    * @copydoc cudf::io::experimental::hybrid_scan::has_next_table_chunk
    */
   [[nodiscard]] bool has_next_table_chunk();

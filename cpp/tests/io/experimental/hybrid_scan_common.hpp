@@ -328,3 +328,21 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
   std::optional<std::vector<std::string>> const& column_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Read parquet file with the hybrid scan reader in a single step using chunked reading
+ *
+ * @param file_buffer_span Input parquet buffer span
+ * @param filter_expression Filter expression, if any
+ * @param column_names List of column names to read, if any
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ *
+ * @return Read table and metadata
+ */
+cudf::io::table_with_metadata chunked_hybrid_scan_single_step(
+  cudf::host_span<uint8_t const> file_buffer_span,
+  std::optional<cudf::ast::operation> filter_expression,
+  std::optional<std::vector<std::string>> const& column_names,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);

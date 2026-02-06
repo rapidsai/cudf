@@ -326,6 +326,28 @@ table_with_metadata hybrid_scan_reader::materialize_payload_columns_chunk(
   return _impl->materialize_payload_columns_chunk(row_mask);
 }
 
+void hybrid_scan_reader::setup_chunking_for_all_columns(
+  std::size_t chunk_read_limit,
+  std::size_t pass_read_limit,
+  cudf::host_span<size_type const> row_group_indices,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  // Temporary vector with row group indices from the first source
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+
+  return _impl->setup_chunking_for_all_columns(
+    chunk_read_limit, pass_read_limit, input_row_group_indices, column_chunk_data, options, stream, mr);
+}
+
+table_with_metadata hybrid_scan_reader::materialize_all_columns_chunk() const
+{
+  return _impl->materialize_all_columns_chunk();
+}
+
 bool hybrid_scan_reader::has_next_table_chunk() const { return _impl->has_next_table_chunk(); }
 
 }  // namespace cudf::io::parquet::experimental
