@@ -206,10 +206,30 @@ def _(
             msg="Slice not supported in ConditionalJoin for multiple partitions.",
         )
 
+    config_options = rec.state["config_options"]
+
     # Lower children
     left, right = ir.children
     left, pi_left = rec(left)
     right, pi_right = rec(right)
+
+    # For rapidsmpf runtime, always repartition both sides to single partition
+    # to handle dynamic planning correctly
+    if (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+    ):  # pragma: no cover; Requires rapidsmpf runtime
+        # Repartition left if needed
+        left = Repartition(left.schema, left)
+        pi_left[left] = PartitionInfo(count=1)
+        # Repartition right if needed
+        right = Repartition(right.schema, right)
+        pi_right[right] = PartitionInfo(count=1)
+
+        new_node = ir.reconstruct([left, right])
+        partition_info = reduce(operator.or_, (pi_left, pi_right))
+        partition_info[new_node] = PartitionInfo(count=1)
+        return new_node, partition_info
 
     # Fallback to single partition on the smaller table
     left_count = pi_left[left].count
@@ -220,11 +240,11 @@ def _(
         if left_count > 1:
             left = Repartition(left.schema, left)
             pi_left[left] = PartitionInfo(count=1)
-            _fallback_inform(fallback_msg, rec.state["config_options"])
+            _fallback_inform(fallback_msg, config_options)
     elif right_count > 1:
-        right = Repartition(left.schema, right)
+        right = Repartition(right.schema, right)
         pi_right[right] = PartitionInfo(count=1)
-        _fallback_inform(fallback_msg, rec.state["config_options"])
+        _fallback_inform(fallback_msg, config_options)
 
     # Reconstruct and return
     new_node = ir.reconstruct([left, right])
@@ -259,9 +279,18 @@ def _(
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
 
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_join'"
+    )
+    dynamic_planning = (
+        config_options.executor.runtime == "rapidsmpf"
+        and config_options.executor.dynamic_planning is not None
+    )
+
     left, right = children
     output_count = max(partition_info[left].count, partition_info[right].count)
-    if output_count == 1:
+    if output_count == 1 and not dynamic_planning:
         new_node = ir.reconstruct(children)
         partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
@@ -270,18 +299,22 @@ def _(
             ir, rec, msg="Cross join not support for multiple partitions."
         )
 
-    config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_join'"
-    )
-
     maintain_order = ir.options[5]
-    if maintain_order != "none" and output_count > 1:
+    if maintain_order != "none" and (output_count > 1 or dynamic_planning):
         return _lower_ir_fallback(
             ir,
             rec,
             msg=f"Join({maintain_order=}) not supported for multiple partitions.",
         )
+
+    # Check for dynamic planning - defer broadcast vs shuffle decision to runtime
+    # Only use dynamic planning for inner/left/semi/anti joins (not right/full)
+    join_type = ir.options[0]
+    if dynamic_planning and join_type in ("Inner", "Left", "Semi", "Anti"):
+        # Don't insert Shuffle nodes - let runtime decide strategy
+        new_node = ir.reconstruct(children)
+        partition_info[new_node] = PartitionInfo(count=output_count)
+        return new_node, partition_info
 
     if _should_bcast_join(
         ir,

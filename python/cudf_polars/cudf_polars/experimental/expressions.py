@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """
 Multi-partition Expr classes and utilities.
@@ -451,8 +451,19 @@ def _decompose_expr_node(
         partition_info[input_ir] = PartitionInfo(count=1)
 
     partition_count = partition_info[input_ir].count
-    if partition_count == 1 or expr.is_pointwise:
-        # Single-partition and pointwise expressions are always supported.
+
+    # Check for dynamic planning - may have more partitions at runtime
+    dynamic_planning = (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+        and config_options.executor.dynamic_planning is not None
+    )
+
+    if expr.is_pointwise:
+        # Pointwise expressions are always supported as-is.
+        return expr, input_ir, partition_info
+    elif partition_count == 1 and not dynamic_planning:
+        # Single-partition without dynamic planning - no decomposition needed.
         return expr, input_ir, partition_info
     elif isinstance(expr, Len) or (
         isinstance(expr, Agg) and expr.name in _SUPPORTED_AGGS
