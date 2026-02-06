@@ -20,6 +20,7 @@ from cudf_polars.experimental.expressions import decompose_expr_graph
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import (
     _contains_unsupported_fill_strategy,
+    _dynamic_planning_on,
     _lower_ir_fallback,
 )
 
@@ -276,8 +277,6 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
-
-    from cudf_polars.experimental.utils import _dynamic_planning_on
 
     config_options = rec.state["config_options"]
     single_partition = pi.count == 1 and not _dynamic_planning_on(config_options)
