@@ -635,21 +635,19 @@ add_library(
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/count.cpp
+  src/reductions/distinct_count.cu
   src/reductions/histogram.cu
   src/reductions/max.cu
   src/reductions/mean.cu
   src/reductions/min.cu
   src/reductions/minmax.cu
-  src/reductions/distinct_count.cu
   src/reductions/nth_element.cu
   src/reductions/nunique.cpp
   src/reductions/product.cu
-  src/reductions/unique_count.cu
-  src/reductions/unique_count_column.cu
   src/reductions/quantile.cu
   src/reductions/reductions.cpp
-  src/reductions/scan/rank_scan.cu
   src/reductions/scan/ewm.cu
+  src/reductions/scan/rank_scan.cu
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
@@ -671,6 +669,8 @@ add_library(
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
   src/reductions/sum_with_overflow.cu
+  src/reductions/unique_count.cu
+  src/reductions/unique_count_column.cu
   src/reductions/var.cu
   src/replace/clamp.cu
   src/replace/nans.cu
