@@ -112,13 +112,60 @@ function(jit_add_options)
 
 endfunction()
 
-# pass the encoded args to the jit_embed.py script to generate the source and options maps
-function(jit_embed)
+function(jit_add_blob)
   set(TARGET ${ARGV0})
-  cmake_parse_arguments(ARG "" "${ONE_VALUE_ARGS}" "" ${ARGN})
+  set(OPTIONS "")
+  set(ONE_VALUE_ARGS "FILE;DEST")
+  set(MULTI_VALUE_ARGS "")
+  cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
   if(NOT DEFINED TARGET)
     message(FATAL_ERROR "TARGET argument is required")
+  endif()
+
+  if(NOT ARG_FILE)
+    message(FATAL_ERROR "FILE argument is required")
+  endif()
+
+  if(NOT ARG_DEST)
+    message(FATAL_ERROR "DEST argument is required")
+  endif()
+
+  set(blob_files ${jitembed_${TARGET}_blob__files})
+  set(blob_dests ${jitembed_${TARGET}_blob__dests})
+
+  list(APPEND blob_files "${ARG_FILE}")
+  list(APPEND blob_dests "${ARG_DEST}")
+
+  set(jitembed_${TARGET}_blob__files
+      ${blob_files}
+      PARENT_SCOPE
+  )
+
+  set(jitembed_${TARGET}_blob__dests
+      ${blob_dests}
+      PARENT_SCOPE
+  )
+endfunction()
+
+# pass the encoded args to the jit_embed.py script to generate the source and options maps
+function(jit_embed)
+  set(TARGET ${ARGV0})
+  set(OPTIONS "")
+  set(ONE_VALUE_ARGS "COMPRESSION")
+  set(MULTI_VALUE_ARGS "")
+  cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
+
+  if(NOT DEFINED TARGET)
+    message(FATAL_ERROR "TARGET argument is required")
+  endif()
+
+  if(NOT DEFINED ARG_COMPRESSION)
+    message(FATAL_ERROR "COMPRESSION argument is required")
+  endif()
+
+  if(NOT ARG_COMPRESSION STREQUAL "none" AND NOT ARG_COMPRESSION STREQUAL "lz4")
+    message(FATAL_ERROR "COMPRESSION argument must be either none or lz4")
   endif()
 
   string(APPEND TARGET_YAML "\"${TARGET}_sources\":\n")
@@ -148,6 +195,8 @@ function(jit_embed)
       string(APPEND TARGET_YAML "  - \"${INCLUDE_DIR}\"\n")
     endforeach()
 
+    string(APPEND TARGET_YAML " compression: ${ARG_COMPRESSION}\n")
+
   endif()
 
   string(APPEND TARGET_YAML "\n\n")
@@ -169,37 +218,68 @@ function(jit_embed)
 
   endif()
 
+  string(APPEND TARGET_YAML "\n\n")
+
+  if(DEFINED jitembed_${TARGET}_blob__files)
+
+    string(APPEND TARGET_YAML "\"${TARGET}_blobs\":\n")
+    string(APPEND TARGET_YAML " type: \"blobs\"\n")
+
+    # gather blobs
+    string(APPEND TARGET_YAML " blobs:\n")
+
+    list(LENGTH jitembed_${TARGET}_blob__files NUM_BLOBS)
+    math(EXPR LAST_BLOB_INDEX "${NUM_BLOBS} - 1")
+    foreach(i RANGE 0 ${LAST_BLOB_INDEX})
+      list(GET jitembed_${TARGET}_blob__files ${i} BLOB_FILE)
+      list(GET jitembed_${TARGET}_blob__dests ${i} BLOB_DEST)
+      string(APPEND TARGET_YAML "  - file: \"${BLOB_FILE}\"\n")
+      string(APPEND TARGET_YAML "    dest: \"${BLOB_DEST}\"\n")
+    endforeach()
+
+    string(APPEND TARGET_YAML " compression: ${ARG_COMPRESSION}\n")
+
+  endif()
+
   set(YAML_FILE_PATH "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}.yaml")
-  set(INCLUDE_DIR "${CUDF_GENERATED_INCLUDE_DIR}/include/jit_embed")
-  set(HEADER "${INCLUDE_DIR}/${TARGET}.h")
+  set(JIT_EMBED_DIR "${CUDF_GENERATED_INCLUDE_DIR}/jit_embed")
+  set(OUTPUT_DIR "${JIT_EMBED_DIR}/${TARGET}")
 
   # write CONFIG to temp file and pass file path to script
-  file(WRITE "${YAML_FILE_PATH}" "${TARGET_YAML}")
+  file(
+    GENERATE
+    OUTPUT "${YAML_FILE_PATH}"
+    CONTENT "${TARGET_YAML}"
+  )
 
   add_custom_command(
-    OUTPUT ${HEADER}
-    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/jit_embed.py" --output
-            "${HEADER}" --input "${YAML_FILE_PATH}"
+    OUTPUT ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.cpp ${OUTPUT_DIR}/embed.bin
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/jit_embed.py" --id
+            "${TARGET}" --output-dir "${OUTPUT_DIR}" --input "${YAML_FILE_PATH}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/jit_embed.py" "${YAML_FILE_PATH}"
-            ${jitembed_${TARGET}_incdir__source_files}
+            ${jitembed_${TARGET}_incdir__source_files} ${jitembed_${TARGET}_blob__files}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    COMMENT "Generating JIT embed for ${TARGET} (YAML: ${YAML_FILE_PATH}) into ${HEADER}"
+    COMMENT
+      "Generating JIT embed for ${TARGET} (YAML: ${YAML_FILE_PATH}) into ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.cpp ${OUTPUT_DIR}/embed.bin"
     VERBATIM
   )
 
-  add_custom_target(${TARGET} ALL DEPENDS "${HEADER}")
+  add_custom_target(
+    ${TARGET} ALL DEPENDS ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.cpp ${OUTPUT_DIR}/embed.bin
+  )
 
   message(
     STATUS
-      "JIT embed for target ${TARGET} (YAML: ${YAML_FILE_PATH}) will be generated into: ${HEADER}"
+      "JIT embed for target ${TARGET} (YAML: ${YAML_FILE_PATH}) will be generated into: ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.cpp ${OUTPUT_DIR}/embed.bin"
   )
 
-  set(${TARGET}_INCLUDE_DIR
-      ${INCLUDE_DIR}
+  set(${TARGET}_INCLUDE_DIRS
+      "${CUDF_GENERATED_INCLUDE_DIR};${OUTPUT_DIR}"
       PARENT_SCOPE
   )
-  set(${TARGET}_HEADER
-      ${HEADER}
+
+  set(${TARGET}_SOURCE_DIR
+      ${OUTPUT_DIR}
       PARENT_SCOPE
   )
 

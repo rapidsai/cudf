@@ -18,7 +18,8 @@ class program_cache;
 
 namespace rtc {
 class cache_t;
-}
+class jit_bundle;
+}  // namespace rtc
 
 /// @brief The context object contains global state internal to CUDF.
 /// It helps to ensure structured and well-defined construction and destruction of global
@@ -27,6 +28,7 @@ class context {
  private:
   std::unique_ptr<jit::program_cache> _program_cache;
   std::unique_ptr<rtc::cache_t> _rtc_cache;
+  std::unique_ptr<rtc::jit_bundle> _jit_bundle;
   init_flags _initialized_flags = init_flags::NONE;
   bool _dump_codegen            = false;
   bool _use_jit                 = false;
@@ -42,6 +44,8 @@ class context {
   jit::program_cache& program_cache();
 
   rtc::cache_t& rtc_cache();
+
+  rtc::jit_bundle& jit_bundle();
 
   [[nodiscard]] bool dump_codegen() const;
 

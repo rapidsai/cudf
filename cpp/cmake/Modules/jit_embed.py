@@ -2,15 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 import argparse
 import hashlib
+import logging
+import os
 from typing import NamedTuple, Self
 
+import lz4.frame
 import yaml
 
-BYTE_TYPE = "unsigned char"
-SIZE_TYPE = "unsigned long"
-STORAGE_SPEC = "static constexpr"
 LIST_LINE_WIDTH = 32
 NAMESPACE_PREFIX = "jit_"
+
+
+# TODO: write a schema validator for the input YAML
+
 
 ### json schema
 
@@ -25,10 +29,21 @@ NAMESPACE_PREFIX = "jit_"
             }
         ],
         "include_directories": [string]
+        "compression": string
     },
     $id: {
         "type": "strings",
         "strings": list[string]
+    },
+    $id: {
+        "type": "blobs",
+        "blobs": [
+            {
+                "file": string,
+                "dest": string
+            }
+        ],
+        "compression": string
     }
 ]
 """
@@ -41,24 +56,26 @@ PREAMBLE = f"""
 extern "C" {{
 
 typedef struct {NAMESPACE_PREFIX}bytes_t {{
-    {BYTE_TYPE} const * data;
-    {SIZE_TYPE} size;
+    unsigned char const * data;
+    unsigned long size;
 }} {NAMESPACE_PREFIX}bytes_t;
 
 typedef struct {NAMESPACE_PREFIX}byte_range_t {{
-    {SIZE_TYPE} offset;
-    {SIZE_TYPE} size;
+    unsigned long offset;
+    unsigned long size;
 }} {NAMESPACE_PREFIX}byte_range_t;
 
 typedef struct {NAMESPACE_PREFIX}bytes_array_t {{
     {NAMESPACE_PREFIX}bytes_t bytes;
     {NAMESPACE_PREFIX}byte_range_t const * ranges;
-    {SIZE_TYPE} num_ranges;
+    unsigned long num_ranges;
 }} {NAMESPACE_PREFIX}bytes_array_t;
 
 }}
 
 """
+
+logger = logging.getLogger(__name__)
 
 
 def list_string(strings: list[str]) -> str:
@@ -80,18 +97,31 @@ class CXXVarDecl(NamedTuple):
     @staticmethod
     def of_bytes(id: str, data: bytes, alignment: int) -> Self:
         byte_array = list_string([byte_hex_string(b) for b in data])
-        expr = f"""alignas({alignment}) {STORAGE_SPEC} {BYTE_TYPE} const {id}[{len(data)}] = {{
+        expr = f"""alignas({alignment}) static unsigned char const {id}[{len(data)}] = {{
 {byte_array}
 }};"""
         return CXXVarDecl(id=id, expr=expr)
 
     @staticmethod
     def of_size(id: str, size: int) -> Self:
-        expr = f"{STORAGE_SPEC} {SIZE_TYPE} const {id} = {size}ULL;"
+        expr = f"static long const {id} = {size}L;"
         return CXXVarDecl(id=id, expr=expr)
 
     def decl(self: Self) -> str:
         return f"""{self.expr}"""
+
+
+class CXXSizeDecl(NamedTuple):
+    id: str
+    size: int
+
+    @staticmethod
+    def of_size(id: str, size: int) -> Self:
+        return CXXSizeDecl(id=id, size=size)
+
+    def var(self: Self) -> CXXVarDecl:
+        expr = f"static unsigned long const {self.id} = {self.size}UL;"
+        return CXXVarDecl(id=self.id, expr=expr)
 
 
 class CXXSizeArrayDecl(NamedTuple):
@@ -103,8 +133,8 @@ class CXXSizeArrayDecl(NamedTuple):
         return CXXSizeArrayDecl(id=id, sizes=sizes)
 
     def var(self: Self) -> CXXVarDecl:
-        size_array = list_string([f"{size}ULL" for size in self.sizes])
-        expr = f"""{STORAGE_SPEC} {SIZE_TYPE} const {self.id}[{len(self.sizes)}] = {{
+        size_array = list_string([f"{size}UL" for size in self.sizes])
+        expr = f"""static unsigned long const {self.id}[{len(self.sizes)}] = {{
 {size_array}
 }};"""
         return CXXVarDecl(id=self.id, expr=expr)
@@ -147,7 +177,7 @@ class CXXBytesDecl(NamedTuple):
 {size_decl.decl()}
 
 
-{STORAGE_SPEC} {NAMESPACE_PREFIX}bytes_t const {self.id} = {{
+static {NAMESPACE_PREFIX}bytes_t const {self.id} = {{
     .data = {data_decl.id},
     .size = {size_decl.id}
 }};
@@ -170,7 +200,7 @@ class CXXRangesDecl(NamedTuple):
 
         ranges_str_formatted = list_string(ranges_str)
 
-        expr = f"""{STORAGE_SPEC} {NAMESPACE_PREFIX}byte_range_t const {self.id}[{len(self.ranges)}] = {{
+        expr = f"""static {NAMESPACE_PREFIX}byte_range_t const {self.id}[{len(self.ranges)}] = {{
 {ranges_str_formatted}
 }};"""
         return CXXVarDecl(id=self.id, expr=expr)
@@ -213,7 +243,7 @@ class CXXArrayOfBytesDecl(NamedTuple):
 
 {ranges_decl.var().decl()}
 
-{STORAGE_SPEC} {NAMESPACE_PREFIX}bytes_array_t const {self.id} = {{
+static {NAMESPACE_PREFIX}bytes_array_t const {self.id} = {{
     .bytes = {bytes_decl.id},
     .ranges = {ranges_decl.id},
     .num_ranges = {len(self.ranges)}
@@ -223,6 +253,53 @@ class CXXArrayOfBytesDecl(NamedTuple):
         return CXXVarDecl(
             id=self.id,
             expr=expr,
+        )
+
+
+class CXXBinEmbedDecl(NamedTuple):
+    id: str
+
+    @staticmethod
+    def of(id: str) -> Self:
+        return CXXBinEmbedDecl(id=id)
+
+    def var(self: Self) -> CXXVarDecl:
+        return CXXVarDecl(
+            id=self.id,
+            expr=f"""
+ extern unsigned char const {self.id}_begin[];
+ extern unsigned char const {self.id}_end[];
+
+static {NAMESPACE_PREFIX}bytes_t const {self.id} = {{
+    .data = {self.id}_begin,
+    .size = (unsigned long)({self.id}_end - {self.id}_begin)
+}};
+
+ """,
+        )
+
+
+class CXXAsmEmbedDecl(NamedTuple):
+    id: str
+    file: str
+
+    @staticmethod
+    def of_file(id: str, file: str) -> Self:
+        return CXXAsmEmbedDecl(id=id, file=file)
+
+    def var(self: Self) -> CXXVarDecl:
+        return CXXVarDecl(
+            id=self.id,
+            expr=f"""
+ asm(
+     ".section .rodata\\n"
+     ".global {self.id}_begin\\n"
+     ".global {self.id}_end\\n"
+     "{self.id}_begin:\\n"
+     ".incbin \\"{self.file}\\"\\n"
+     "{self.id}_end:\\n"
+ );
+""",
         )
 
 
@@ -239,14 +316,22 @@ def merge_bytes_with_null_terminators(
     return merged, ranges
 
 
-def generate_cxx_strings_data(id: str, strings: list[str]) -> str:
+class EmbedOutput(NamedTuple):
+    cxx_header: str
+    cxx_source: str
+    bin_file_name: str | None
+    bin_file_data: bytes | None
+    hash: bytes
+
+
+def generate_cxx_strings_data(id: str, strings: list[str]) -> EmbedOutput:
     data, ranges = merge_bytes_with_null_terminators(
         [s.encode("utf-8") for s in strings]
     )
 
     sha = hashlib.sha256()
     sha.update(data)
-    data_hash: bytes = sha.digest()
+    hash = sha.digest()
 
     arrays_decl = CXXArrayOfBytesDecl.of_byte_ranges(
         id=f"{id}",
@@ -255,18 +340,17 @@ def generate_cxx_strings_data(id: str, strings: list[str]) -> str:
         ranges=ranges,
     )
 
-    data_hash_decl: CXXBytesDecl = CXXBytesDecl.of_bytes(
-        id=f"{id}_hash",
-        data=data_hash,
-        alignment=1,
-        num_null_terminators=0,
-    )
-
-    return f"""
+    cxx_header = f"""
 {arrays_decl.var().decl()}
-
-{data_hash_decl.var().decl()}
 """
+
+    return EmbedOutput(
+        cxx_header=cxx_header,
+        cxx_source="",
+        bin_file_name=None,
+        bin_file_data=None,
+        hash=hash,
+    )
 
 
 def load_file_bytes(file_path: str) -> bytes:
@@ -278,11 +362,29 @@ def generate_cxx_source_files_data(
     id: str,
     file_paths: list[str],
     dests: list[str],
-    include_directories: list[str] = [],
-) -> str:
-    files_bytes, files_ranges = merge_bytes_with_null_terminators(
+    include_directories: list[str],
+    compression: str,
+) -> EmbedOutput:
+    uncompressed_files_bytes, files_ranges = merge_bytes_with_null_terminators(
         [load_file_bytes(p) for p in file_paths]
     )
+
+    assert compression in ("none", "lz4"), "Invalid compression type"
+    compress = compression != "none"
+
+    compressed_files_bytes = (
+        lz4.frame.compress(
+            uncompressed_files_bytes,
+            compression_level=lz4.frame.COMPRESSIONLEVEL_MAX,
+        )
+        if compress
+        else None
+    )
+
+    if compress:
+        logger.info(
+            f"{id}'s uncompressed size is {len(uncompressed_files_bytes)} bytes, compressed size is {len(compressed_files_bytes)} bytes"
+        )
 
     merged_dests_bytes, merged_dests_ranges = (
         merge_bytes_with_null_terminators([d.encode("utf-8") for d in dests])
@@ -296,9 +398,10 @@ def generate_cxx_source_files_data(
 
     # compute combined sha256 hash of all files
     sha = hashlib.sha256()
-    sha.update(files_bytes)
+    sha.update(uncompressed_files_bytes)
     sha.update(merged_dests_bytes)
     sha.update(merged_include_directories_bytes)
+    sha.update(compression.encode("utf-8"))
 
     hash: bytes = sha.digest()
 
@@ -311,11 +414,20 @@ def generate_cxx_source_files_data(
         )
     )
 
-    file_data_decl: CXXArrayOfBytesDecl = CXXArrayOfBytesDecl.of_byte_ranges(
-        id=f"{id}_file_data",
-        data=files_bytes,
-        ranges=files_ranges,
-        alignment=1,
+    binary_file_name = f"{id}_binary.bin"
+
+    binary_decl: CXXBinEmbedDecl = CXXBinEmbedDecl.of(id=f"{id}_binary")
+
+    binary_size_decl: CXXSizeDecl = CXXSizeDecl.of_size(
+        id=f"{id}_uncompressed_size", size=len(uncompressed_files_bytes)
+    )
+
+    binary_embed_decl: CXXAsmEmbedDecl = CXXAsmEmbedDecl.of_file(
+        id=f"{id}_binary", file=binary_file_name
+    )
+
+    binary_ranges_decl = CXXRangesDecl.of_ranges(
+        id=f"{id}_ranges", ranges=files_ranges
     )
 
     include_directories_decls: CXXArrayOfBytesDecl = (
@@ -327,31 +439,126 @@ def generate_cxx_source_files_data(
         )
     )
 
-    hash_decl: CXXBytesDecl = CXXBytesDecl.of_bytes(
-        id=f"{id}_hash",
-        data=hash,
-        alignment=1,
-        num_null_terminators=0,
-    )
-
-    # TODO: add lz4 compression and decompression as options (default)
-
-    return f"""
+    cxx_header = f"""
 {file_destinations_decls.var().decl()}
 
-{file_data_decl.var().decl()}
+{binary_decl.var().decl()}
+
+{binary_size_decl.var().decl()}
+
+{binary_ranges_decl.var().decl()}
 
 {include_directories_decls.var().decl()}
 
-{hash_decl.var().decl()}
 """
 
+    cxx_source = f"""
+{binary_embed_decl.var().decl()}
+"""
 
-# TODO: write a schema validator for the input YAML
+    return EmbedOutput(
+        cxx_header=cxx_header,
+        cxx_source=cxx_source,
+        bin_file_name=binary_file_name,
+        bin_file_data=compressed_files_bytes
+        if compress
+        else uncompressed_files_bytes,
+        hash=hash,
+    )
 
 
-def generate_embed_source(entries: dict[str, dict[str, dict]]) -> str:
-    code: str = ""
+def generate_cxx_blobs_data(
+    id: str, blob_paths: list[str], dests: list[str], compression: str
+) -> EmbedOutput:
+    uncompressed_blob_bytes, blob_ranges = merge_bytes_with_null_terminators(
+        [load_file_bytes(p) for p in blob_paths]
+    )
+
+    assert compression in ("none", "lz4"), "Invalid compression type"
+    compress = compression != "none"
+
+    compressed_blob_bytes = (
+        lz4.frame.compress(
+            uncompressed_blob_bytes,
+            compression_level=lz4.frame.COMPRESSIONLEVEL_MAX,
+        )
+        if compress
+        else None
+    )
+
+    merged_dests_bytes, merged_dests_ranges = (
+        merge_bytes_with_null_terminators([d.encode("utf-8") for d in dests])
+    )
+
+    if compress:
+        logger.info(
+            f"{id}'s uncompressed size is {len(uncompressed_blob_bytes)} bytes, compressed size is {len(compressed_blob_bytes)} bytes"
+        )
+
+    # compute combined sha256 hash of all files
+    sha = hashlib.sha256()
+    sha.update(uncompressed_blob_bytes)
+    sha.update(merged_dests_bytes)
+    sha.update(compression.encode("utf-8"))
+
+    hash: bytes = sha.digest()
+
+    file_destinations_decls: CXXArrayOfBytesDecl = (
+        CXXArrayOfBytesDecl.of_byte_ranges(
+            id=f"{id}_file_destinations",
+            data=merged_dests_bytes,
+            ranges=merged_dests_ranges,
+            alignment=1,
+        )
+    )
+
+    binary_file_name = f"{id}_binary.bin"
+
+    binary_decl: CXXBinEmbedDecl = CXXBinEmbedDecl.of(id=f"{id}_binary")
+
+    binary_size_decl: CXXSizeDecl = CXXSizeDecl.of_size(
+        id=f"{id}_uncompressed_size", size=len(uncompressed_blob_bytes)
+    )
+
+    binary_embed_decl: CXXAsmEmbedDecl = CXXAsmEmbedDecl.of_file(
+        id=f"{id}_binary", file=binary_file_name
+    )
+
+    binary_ranges_decl = CXXRangesDecl.of_ranges(
+        id=f"{id}_ranges", ranges=blob_ranges
+    )
+
+    cxx_header = f"""
+
+{file_destinations_decls.var().decl()}
+
+{binary_decl.var().decl()}
+
+{binary_size_decl.var().decl()}
+
+{binary_ranges_decl.var().decl()}
+"""
+
+    cxx_source = f"""
+{binary_embed_decl.var().decl()}
+"""
+
+    return EmbedOutput(
+        cxx_header=cxx_header,
+        cxx_source=cxx_source,
+        bin_file_name=binary_file_name,
+        bin_file_data=compressed_blob_bytes
+        if compress
+        else uncompressed_blob_bytes,
+        hash=hash,
+    )
+
+
+def generate_embed(
+    id: str, entries: dict[str, dict[str, dict]], output_dir: str
+):
+    outputs: list[EmbedOutput] = []
+    sha = hashlib.sha256()
 
     for entry_id, entry_value in entries.items():
         entry_type = entry_value["type"]
@@ -361,35 +568,85 @@ def generate_embed_source(entries: dict[str, dict[str, dict]]) -> str:
             file_paths = [s["file"] for s in sources]
             dests = [s["dest"] for s in sources]
             include_directories: list[str] = entry_value["include_directories"]
-            code += generate_cxx_source_files_data(
-                entry_id, file_paths, dests, include_directories
+            compression = entry_value["compression"]
+            output = generate_cxx_source_files_data(
+                entry_id, file_paths, dests, include_directories, compression
             )
+            sha.update(output.hash)
+            outputs.append(output)
 
         elif entry_type == "strings":
             options: list[str] = entry_value["strings"]
-            code += generate_cxx_strings_data(entry_id, options)
+            output = generate_cxx_strings_data(entry_id, options)
+            sha.update(output.hash)
+            outputs.append(output)
+
+        elif entry_type == "blobs":
+            blobs: list[str] = entry_value["blobs"]
+            file_paths = [s["file"] for s in blobs]
+            dests = [s["dest"] for s in blobs]
+            compression = entry_value["compression"]
+            output = generate_cxx_blobs_data(
+                entry_id, file_paths, dests, compression
+            )
+            sha.update(output.hash)
+            outputs.append(output)
 
         else:
             raise ValueError(f"Unknown type: {entry_type}")
 
-    return f"""
+    hash = sha.digest()
+
+    hash_decl: CXXBytesDecl = CXXBytesDecl.of_bytes(
+        id=f"{id}_hash",
+        data=hash,
+        alignment=1,
+        num_null_terminators=0,
+    )
+
+    cxx_header = f"""
 {PREAMBLE}
 
 extern "C" {{
 
-{code}
+
+{hash_decl.var().decl()}
+
+{"\n\n".join([output.cxx_header for output in outputs])}
 
 }}
 
 """
 
-# TODO: use ASM embed for blobs
+    cxx_source = f"""
+{"\n\n".join([output.cxx_source for output in outputs])}
+"""
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    with open(f"{output_dir}/embed.hpp", "w") as f:
+        f.write(cxx_header)
+
+    with open(f"{output_dir}/embed.cpp", "w") as f:
+        f.write(cxx_source)
+
+    for output in outputs:
+        if output.bin_file_name and output.bin_file_data:
+            with open(f"{output_dir}/{output.bin_file_name}", "wb") as f:
+                f.write(output.bin_file_data)
 
 
-# Usage: embed.py --input <input file> --output <output file>
+# Usage: embed.py --id <id> --input <input file> --output-dir <output dir>
 def main():
     parser = argparse.ArgumentParser(
         description="Embed headers, options, or binary blobs into C++ source code."
+    )
+
+    parser.add_argument(
+        "--id",
+        type=str,
+        required=True,
+        help="Identifier for the output",
     )
 
     parser.add_argument(
@@ -400,17 +657,18 @@ def main():
     )
 
     parser.add_argument(
-        "--output", type=str, required=True, help="Output C++ source file"
+        "--output-dir",
+        type=str,
+        required=True,
+        help="Output directory for generated files",
     )
 
     args = parser.parse_args()
 
     with open(args.input, "rb") as f:
         description = yaml.safe_load(f)
-    code = generate_embed_source(description)
 
-    with open(args.output, "w") as f:
-        f.write(code)
+    generate_embed(args.id, description, args.output_dir)
 
 
 if __name__ == "__main__":

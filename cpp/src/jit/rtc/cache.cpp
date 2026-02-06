@@ -35,9 +35,8 @@ namespace {
 
 }  // namespace
 
-cache_t::cache_t(bool enabled, std::string cache_dir, cache_limits const& limits)
-  : enabled_{enabled},
-    cache_dir_{std::move(cache_dir)},
+cache_t::cache_t(std::string cache_dir, cache_limits const& limits)
+  : cache_dir_{std::move(cache_dir)},
     limits_{limits},
     blobs_cache_{limits.num_blobs},
     fragments_cache_{limits.num_fragments},
@@ -53,122 +52,14 @@ cache_t::cache_t(bool enabled, std::string cache_dir, cache_limits const& limits
   }
 }
 
-bool cache_t::is_enabled()
-{
-  std::atomic_ref c{enabled_};
-  return c.load(std::memory_order_relaxed);
-}
-
-void cache_t::enable()
-{
-  std::atomic_ref c{enabled_};
-  c.store(true, std::memory_order_relaxed);
-}
-
-void cache_t::disable()
-{
-  std::atomic_ref c{enabled_};
-  c.store(false, std::memory_order_relaxed);
-}
-
 std::string const& cache_t::get_cache_dir() { return cache_dir_; }
 
-void cache_t::store_blob_to_memory(sha256_hash const& sha, std::shared_future<blob> binary)
+std::optional<blob_t> blob_t::from_file(char const* path)
 {
-  CUDF_FUNC_RANGE();
-
-  if (!enabled_) { return; }
-
-  std::atomic_ref tick{tick_};
-  auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
-
-  detail::write_guard guard{blobs_cache_.lock_};
-
-  blobs_cache_.insert(sha, std::move(binary), current_tick);
-}
-
-void cache_t::store_blob_to_disk(sha256_hash const& sha, blob_view binary)
-{
-  CUDF_FUNC_RANGE();
-
-  if (!enabled_) { return; }
-
-  char temp_path[] = "/tmp/cudf-blob-XXXXXX";
-
-  {
-    int fd = mkstemp(temp_path);
-    if (fd == -1) { throw_posix("Failed to create temporary file for RTC cache", "mkstemp"); }
-
-    CUDF_DEFER([&] {
-      if (close(fd) == -1) { throw_posix("Failed to close temporary RTC cache file", "close"); }
-    });
-
-    if (write(fd, binary.data(), binary.size()) == -1) {
-      throw_posix("Failed to write RTC cache to temporary file", "write");
-    }
-  }
-
-  auto hex        = sha.to_hex_string();
-  auto final_path = std::format("{}/{}.blob", cache_dir_, hex.view());
-
-  std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
-
-  // rename is atomic, even if another process is performing the same operation
-  if (rename(temp_path, final_path.c_str()) == -1) {
-    auto errc = errno;
-
-    if (errc == EEXIST) {
-      // another process has already created the file, so just remove our temp file
-      if (remove(temp_path) == -1) {
-        throw_posix("Failed to remove temporary RTC cache file", "remove");
-      }
-      return;
-    } else {
-      throw_posix(
-        std::format("Failed to move temporary RTC cache file to final location ({})", final_path),
-        "rename");
-    }
-  }
-}
-
-std::optional<std::shared_future<blob>> cache_t::query_blob_from_memory(sha256_hash const& sha)
-{
-  CUDF_FUNC_RANGE();
-
-  if (!enabled_) { return std::nullopt; }
-
-  std::atomic_ref tick{tick_};
-  auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
-
-  {
-    detail::read_guard guard{blobs_cache_.lock_};
-    auto const it = blobs_cache_.entries_.find(sha);
-
-    if (it != blobs_cache_.entries_.end()) {
-      counter_.hit_memory_blob();
-      it->second.hit(current_tick);
-      return it->second.value;
-    } else {
-      counter_.miss_memory_blob();
-      return std::nullopt;
-    }
-  }
-}
-
-std::optional<blob> cache_t::query_blob_from_disk(sha256_hash const& sha)
-{
-  CUDF_FUNC_RANGE();
-
-  if (!enabled_) { return std::nullopt; }
-
-  auto hex  = sha.to_hex_string();
-  auto path = std::format("{}/{}.blob", cache_dir_, hex.view());
-
-  int fd = open(path.c_str(), O_RDONLY);
+  int fd = open(path, O_RDONLY);
 
   if (fd == -1) {
     if (errno == ENOENT) {
-      counter_.miss_disk_blob();
       return std::nullopt;
     } else {
       throw_posix("Failed to open RTC cache file from disk", "open");
@@ -192,88 +83,272 @@ std::optional<blob> cache_t::query_blob_from_disk(sha256_hash const& sha)
     }
   };
 
-  counter_.hit_disk_blob();
-
-  return std::make_shared<blob_t>(
-    blob_t::from_parts(static_cast<uint8_t const*>(map), file_size, nullptr, deleter));
+  return blob_t::from_parts(static_cast<uint8_t const*>(map), file_size, nullptr, deleter);
 }
 
-void cache_t::store_fragment(sha256_hash const& sha, std::shared_future<fragment> frag)
+namespace {
+
+std::optional<blob> get_disk_blob(std::string const& cache_dir,
+                                  std::string const& object_type,
+                                  sha256_hash const& sha)
 {
-  CUDF_FUNC_RANGE();
+  auto hex  = sha.to_hex_string();
+  auto path = std::format("{}/{}.{}.bin", cache_dir, object_type, hex.view());
 
-  if (!enabled_) { return; }
+  auto blob = blob_t::from_file(path.c_str());
 
-  std::atomic_ref tick{tick_};
-  auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
-
+  if (!blob.has_value()) { return std::nullopt; }
   {
-    detail::write_guard guard{fragments_cache_.lock_};
-
-    fragments_cache_.insert(sha, std::move(frag), current_tick);
+    return std::make_shared<blob_t>(std::move(*blob));
   }
 }
 
-std::optional<std::shared_future<fragment>> cache_t::query_fragment(sha256_hash const& sha)
+void add_blob_to_disk(std::string const& cache_dir,
+                      std::string const& object_type,
+                      sha256_hash const& sha,
+                      blob_view binary)
 {
-  CUDF_FUNC_RANGE();
-
-  if (!enabled_) { return std::nullopt; }
-
-  std::atomic_ref tick{tick_};
-  auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
+  char temp_path[] = "/tmp/cudf-blob-XXXXXX";
 
   {
-    detail::read_guard guard{fragments_cache_.lock_};
+    int fd = mkstemp(temp_path);
+    if (fd == -1) { throw_posix("Failed to create temporary file for RTC cache", "mkstemp"); }
 
-    auto const it = fragments_cache_.entries_.find(sha);
-    if (it != fragments_cache_.entries_.end()) {
-      counter_.hit_memory_fragment();
-      it->second.hit(current_tick);
-      return it->second.value;
+    CUDF_DEFER([&] {
+      if (close(fd) == -1) { throw_posix("Failed to close temporary RTC cache file", "close"); }
+    });
+
+    if (write(fd, binary.data(), binary.size()) == -1) {
+      throw_posix("Failed to write RTC cache to temporary file", "write");
+    }
+  }
+
+  auto hex        = sha.to_hex_string();
+  auto final_path = std::format("{}/{}.{}.bin", cache_dir, object_type, hex.view());
+
+  std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
+
+  // rename is atomic, even if another process is performing the same operation
+  if (rename(temp_path, final_path.c_str()) == -1) {
+    auto errc = errno;
+
+    if (errc == EEXIST) {
+      // another process has already created the file, so just remove our temp file
+      if (remove(temp_path) == -1) {
+        throw_posix("Failed to remove temporary RTC cache file", "remove");
+      }
+      return;
     } else {
-      counter_.miss_memory_fragment();
-      return std::nullopt;
+      throw_posix(
+        std::format("Failed to move temporary RTC cache file to final location ({})", final_path),
+        "rename");
     }
   }
 }
 
-void cache_t::store_library(sha256_hash const& sha, std::shared_future<library> mod)
+}  // namespace
+
+std::shared_future<blob> cache_t::query_or_insert_blob(sha256_hash const& sha,
+                                                       std::function<blob()> maker)
 {
   CUDF_FUNC_RANGE();
-
-  if (!enabled_) { return; }
 
   std::atomic_ref tick{tick_};
   auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
 
-  {
-    detail::write_guard guard{libraries_cache_.lock_};
+  bool unlocked = false;
+  lock_.lock();
 
-    libraries_cache_.insert(sha, std::move(mod), current_tick);
+  CUDF_DEFER([&] {
+    if (!unlocked) { lock_.unlock(); }
+  });
+
+  auto const it = blobs_cache_.entries_.find(sha);
+  // check memory cache
+  if (it != blobs_cache_.entries_.end()) {
+    counter_.hit_memory_blob();
+
+    // update LRU tick
+    it->second.hit(current_tick);
+    return it->second.value;
+
+  } else {
+    counter_.miss_memory_blob();
+
+    // check disk cache
+    auto disk_blob = get_disk_blob(cache_dir_, "blob", sha);
+
+    if (disk_blob.has_value()) {
+      counter_.hit_disk_blob();
+      std::promise<blob> promise;
+      promise.set_value(std::move(*disk_blob));
+
+      auto fut = promise.get_future();
+
+      // insert into cache
+      blobs_cache_.insert(sha, fut.share(), current_tick);
+      return fut.share();
+
+    } else {
+      counter_.miss_disk_blob();
+
+      std::promise<blob> promise;
+      auto fut = promise.get_future();
+      blobs_cache_.insert(sha, fut.share(), current_tick);
+
+      // we can release the lock while calling the maker function since it may be expensive and we
+      // have already reserved a spot in the cache for this sha
+      lock_.unlock();
+      unlocked = true;
+
+      auto result = maker();
+      promise.set_value(result);
+
+      // store result to disk
+      add_blob_to_disk(cache_dir_, "blob", sha, result->view());
+
+      return fut.share();
+    }
   }
 }
 
-std::optional<std::shared_future<library>> cache_t::query_library(sha256_hash const& sha)
+std::shared_future<fragment> cache_t::query_or_insert_fragment(sha256_hash const& sha,
+                                                               binary_type type,
+                                                               std::function<fragment()> maker)
 {
   CUDF_FUNC_RANGE();
-
-  if (!enabled_) { return std::nullopt; }
 
   std::atomic_ref tick{tick_};
   auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
 
-  {
-    detail::read_guard guard{libraries_cache_.lock_};
+  bool unlocked = false;
+  lock_.lock();
 
-    auto const it = libraries_cache_.entries_.find(sha);
-    if (it != libraries_cache_.entries_.end()) {
-      counter_.hit_memory_library();
-      it->second.hit(current_tick);
-      return it->second.value;
+  CUDF_DEFER([&] {
+    if (!unlocked) { lock_.unlock(); }
+  });
+
+  auto const it = fragments_cache_.entries_.find(sha);
+  // check memory cache
+  if (it != fragments_cache_.entries_.end()) {
+    counter_.hit_memory_fragment();
+    // update LRU tick
+    it->second.hit(current_tick);
+    return it->second.value;
+  } else {
+    counter_.miss_memory_fragment();
+
+    // check disk cache
+    auto disk_blob = get_disk_blob(cache_dir_, "fragment", sha);
+    if (disk_blob.has_value()) {
+      counter_.hit_disk_fragment();
+
+      std::promise<fragment> promise;
+      auto fut = promise.get_future();
+      fragments_cache_.insert(sha, fut.share(), current_tick);
+
+      // we can release the lock while calling the maker function since it may be expensive and we
+      // have already reserved a spot in the cache for this sha
+      lock_.unlock();
+      unlocked = true;
+
+      fragment_t::load_params load_params{.binary = *disk_blob, .type = type};
+
+      auto frag = fragment_t::load(load_params);
+      promise.set_value(std::move(frag));
+
+      return fut.share();
+
     } else {
-      counter_.miss_memory_library();
-      return std::nullopt;
+      counter_.miss_disk_fragment();
+
+      std::promise<fragment> promise;
+
+      auto fut = promise.get_future();
+      fragments_cache_.insert(sha, fut.share(), current_tick);
+
+      // we can release the lock while calling the maker function since it may be expensive and we
+      // have already reserved a spot in the cache for this sha
+      lock_.unlock();
+      unlocked = true;
+
+      auto result = maker();
+      promise.set_value(result);
+
+      // store result to disk
+      add_blob_to_disk(cache_dir_, "fragment", sha, result->get(type)->view());
+
+      return fut.share();
+    }
+  }
+}
+
+std::shared_future<library> cache_t::query_or_insert_library(
+  sha256_hash const& sha, binary_type type, std::function<std::tuple<library, blob>()> maker)
+{
+  CUDF_FUNC_RANGE();
+
+  std::atomic_ref tick{tick_};
+  auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
+
+  bool unlocked = false;
+  lock_.lock();
+
+  CUDF_DEFER([&] {
+    if (!unlocked) { lock_.unlock(); }
+  });
+
+  auto const it = libraries_cache_.entries_.find(sha);
+  // check memory cache
+  if (it != libraries_cache_.entries_.end()) {
+    counter_.hit_memory_library();
+    // update LRU tick
+    it->second.hit(current_tick);
+    return it->second.value;
+  } else {
+    counter_.miss_memory_library();
+
+    // check disk cache
+    auto disk_blob = get_disk_blob(cache_dir_, "library", sha);
+    if (disk_blob.has_value()) {
+      counter_.hit_disk_library();
+
+      std::promise<library> promise;
+      auto fut = promise.get_future();
+      libraries_cache_.insert(sha, fut.share(), current_tick);
+
+      // we can release the lock while calling the maker function since it may be expensive and we
+      // have already reserved a spot in the cache for this sha
+      lock_.unlock();
+      unlocked = true;
+
+      library_t::load_params load_params{.binary = (*disk_blob)->view(), .type = type};
+
+      auto lib = library_t::load(load_params);
+      promise.set_value(std::move(lib));
+
+      return fut.share();
+
+    } else {
+      counter_.miss_disk_library();
+
+      std::promise<library> promise;
+
+      auto fut = promise.get_future();
+      libraries_cache_.insert(sha, fut.share(), current_tick);
+
+      // we can release the lock while calling the maker function since it may be expensive and we
+      // have already reserved a spot in the cache for this sha
+      lock_.unlock();
+      unlocked = true;
+
+      auto [library, blob] = maker();
+      promise.set_value(library);
+
+      // store result to disk
+      add_blob_to_disk(cache_dir_, "library", sha, blob->view());
+
+      return fut.share();
     }
   }
 }
@@ -286,52 +361,31 @@ cache_limits cache_t::get_limits() { return limits_; }
 
 size_t cache_t::get_blob_count()
 {
-  CUDF_FUNC_RANGE();
-
-  {
-    detail::read_guard guard{blobs_cache_.lock_};
-    return blobs_cache_.entries_.size();
-  }
+  std::lock_guard guard{lock_};
+  return blobs_cache_.entries_.size();
 }
 
 size_t cache_t::get_fragment_count()
 {
-  CUDF_FUNC_RANGE();
-
-  {
-    detail::read_guard guard{fragments_cache_.lock_};
-    return fragments_cache_.entries_.size();
-  }
+  std::lock_guard guard{lock_};
+  return fragments_cache_.entries_.size();
 }
 
 size_t cache_t::get_library_count()
 {
-  CUDF_FUNC_RANGE();
-
-  {
-    detail::read_guard guard{libraries_cache_.lock_};
-    return libraries_cache_.entries_.size();
-  }
+  std::lock_guard guard{lock_};
+  return libraries_cache_.entries_.size();
 }
 
 void cache_t::clear_memory_store()
 {
   CUDF_FUNC_RANGE();
 
-  {
-    detail::write_guard guard{blobs_cache_.lock_};
-    blobs_cache_.entries_.clear();
-  }
+  std::lock_guard guard{lock_};
 
-  {
-    detail::write_guard guard{fragments_cache_.lock_};
-    fragments_cache_.entries_.clear();
-  }
-
-  {
-    detail::write_guard guard{libraries_cache_.lock_};
-    libraries_cache_.entries_.clear();
-  }
+  blobs_cache_.entries_.clear();
+  fragments_cache_.entries_.clear();
+  libraries_cache_.entries_.clear();
 }
 
 void cache_t::clear_disk_store()

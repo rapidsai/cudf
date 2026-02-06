@@ -5,23 +5,24 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/defer.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <cuda_runtime.h>
 
-#include <cudf_jit_embed.h>
 #include <fcntl.h>
 #include <jit/rtc/cache.hpp>
 #include <jit/rtc/cudf.hpp>
 #include <jit/rtc/rtc.hpp>
 #include <jit/rtc/sha256.hpp>
+#include <jit_embed/cudf_jit_embed/embed.hpp>
+#include <lz4.h>
 #include <runtime/context.hpp>
 #include <sys/file.h>
 #include <sys/stat.h>
 
 #include <cerrno>
-#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <format>
@@ -42,6 +43,229 @@
 
 namespace cudf {
 namespace rtc {
+
+namespace {
+
+sha256_hash hash_string(std::span<char const> input)
+{
+  sha256_context ctx;
+  ctx.update(std::span{reinterpret_cast<uint8_t const*>(input.data()), input.size()});
+  return ctx.finalize();
+}
+
+cache_t& get_rtc_cache() { return cudf::get_context().rtc_cache(); }
+
+[[noreturn]] void throw_posix(std::string_view message, std::string_view syscall_name)
+{
+  auto error_code = errno;
+  auto error_str  = std::format(
+    "{}. `{}` failed with {} ({})", message, syscall_name, error_code, std::strerror(error_code));
+  CUDF_FAIL(+error_str, std::runtime_error);
+}
+
+void install_file(char const* dst_path, std::span<unsigned char const> contents)
+{
+  int dst_file = open(dst_path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  if (dst_file == -1) {
+    if (errno == EEXIST) {
+      // file already exists, so just return
+      return;
+    }
+    throw_posix(std::format("Failed to create file ({})", dst_path), "open");
+  }
+
+  CUDF_DEFER([&] {
+    if (close(dst_file) != 0) {
+      throw_posix(std::format("Failed to close file ({})", dst_path), "close");
+    }
+  });
+
+  if (write(dst_file, contents.data(), contents.size()) == -1) {
+    throw_posix(std::format("Failed to write file ({})", dst_path), "write");
+  }
+}
+
+void install_file_set(char const* target_dir,
+                      jit_bytes_t const& compressed_binary,
+                      size_t uncompressed_size,
+                      std::span<jit_byte_range_t const> file_ranges,
+                      jit_bytes_array_t const& dst)
+{
+  std::vector<unsigned char> decompressed;
+  decompressed.resize(uncompressed_size);
+
+  int errc = LZ4_decompress_safe(reinterpret_cast<char const*>(compressed_binary.data),
+                                 reinterpret_cast<char*>(decompressed.data()),
+                                 compressed_binary.size,
+                                 uncompressed_size);
+
+  CUDF_EXPECTS(errc == static_cast<int64_t>(uncompressed_size),
+               "Failed to decompress embedded RTC source files",
+               std::runtime_error);
+
+  auto const files_data = decompressed.data();
+
+  for (size_t i = 0; i < file_ranges.size(); ++i) {
+    auto const file_data_range = file_ranges[i];
+    auto const dst_range       = dst.ranges[i];
+    auto const file_data = std::span{files_data + file_data_range.offset, file_data_range.size};
+    auto const dst_path  = std::string_view{
+      reinterpret_cast<char const*>(dst.bytes.data) + dst_range.offset, dst_range.size};
+
+    auto const target_path = std::format("{}/{}", target_dir, dst_path);
+
+    std::filesystem::create_directories(std::filesystem::path{target_path}.parent_path());
+    install_file(target_path.c_str(), file_data);
+  }
+}
+
+void install_cudf_jit(char const* target_dir)
+{
+  install_file_set(target_dir,
+                   cudf_jit_embed_blobs_binary,
+                   cudf_jit_embed_blobs_uncompressed_size,
+                   cudf_jit_embed_blobs_ranges,
+                   cudf_jit_embed_blobs_file_destinations);
+
+  install_file_set(target_dir,
+                   cudf_jit_embed_sources_binary,
+                   cudf_jit_embed_sources_uncompressed_size,
+                   cudf_jit_embed_sources_ranges,
+                   cudf_jit_embed_sources_file_destinations);
+}
+
+void create_and_install_cudf_jit(char const* target_dir)
+{
+  // directory does not exist, so create it
+  char tmp_dir_[] = "/tmp/cudf-jit-tmpdir_XXXXXX";
+  char* tmp_dir   = mkdtemp(tmp_dir_);
+  if (tmp_dir == nullptr) {
+    throw_posix(
+      std::format("Failed to create temporary JIT install directory for ({})", target_dir),
+      "mkdtemp");
+  }
+
+  install_cudf_jit(tmp_dir);
+
+  // rename the temporary directory to the target install directory
+  if (rename(tmp_dir, target_dir) == -1) {
+    throw_posix(std::format("Failed to rename temporary JIT install directory to ({})", target_dir),
+                "rename");
+  }
+}
+
+}  // namespace
+
+jit_bundle::jit_bundle(std::string install_dir) : install_dir_{std::move(install_dir)}
+{
+  ensure_installed();
+  preload_lto_library();
+}
+
+void jit_bundle::ensure_installed() const
+{
+  CUDF_FUNC_RANGE();
+
+  auto expected_hash = get_hash();
+  auto expected_path = std::format("{}/{}", install_dir_, expected_hash);
+
+  struct stat path_info;
+
+  if (lstat(expected_path.c_str(), &path_info) == -1) {
+    if (errno != ENOENT) {
+      throw_posix(std::format("Failed to get stat for directory ({})", expected_path), "lstat");
+    } else {
+      // ensure base install directory exists
+      std::filesystem::create_directories(install_dir_);
+      create_and_install_cudf_jit(expected_path.c_str());
+    }
+  } else {
+    // directory exists, perform minor sanity check
+    CUDF_EXPECTS(S_ISDIR(path_info.st_mode),
+                 +std::format("JIT install path ({}) exists but is not a directory", expected_path),
+                 std::runtime_error);
+  }
+}
+
+void jit_bundle::preload_lto_library()
+{
+  auto& cache = get_rtc_cache();
+
+  auto bundle_hash = get_hash();
+
+  auto const cache_key = std::format(R"***(
+      fragment_type=CUBIN,
+      key={},
+      bundle={}
+      )***",
+                                     "cudf_lto_library",
+                                     bundle_hash);
+
+  auto const cache_key_sha256 = hash_string(cache_key);
+
+  auto compile = [&] {
+    auto directory = get_directory();
+    auto path      = std::format("{}/{}", directory, "cudf_lto_library.cubin");
+    auto cubin     = blob_t::from_file(path.c_str());
+    CUDF_EXPECTS(cubin.has_value(),
+                 +std::format("Failed to load LTO library cubin from disk at ({})", path),
+                 std::runtime_error);
+    fragment_t::load_params load_params{.binary = std::make_shared<blob_t>(std::move(*cubin)),
+                                        .type   = binary_type::LTO_IR};
+    return fragment_t::load(load_params);
+  };
+
+  auto fut = cache.query_or_insert_fragment(cache_key_sha256, binary_type::LTO_IR, compile);
+
+  lto_library_ = fut.get();
+}
+
+std::string jit_bundle::get_hash() const
+{
+  auto str = sha256_hex_string::make(
+    std::span{cudf_jit_embed_hash.data, static_cast<size_t>(cudf_jit_embed_hash.size)});
+  return std::string{str.view()};
+}
+
+std::string jit_bundle::get_directory() const
+{
+  auto hash = get_hash();
+  return std::format("{}/{}", install_dir_, hash);
+}
+
+fragment jit_bundle::get_lto_library() const { return lto_library_; }
+
+std::vector<std::string> jit_bundle::get_include_directories() const
+{
+  std::vector<std::string> directories;
+  auto base_dir = get_directory();
+
+  auto include_directories_data =
+    reinterpret_cast<char const*>(cudf_jit_embed_sources_include_directories.bytes.data);
+
+  for (size_t i = 0; i < cudf_jit_embed_sources_include_directories.num_ranges; i++) {
+    auto range                  = cudf_jit_embed_sources_include_directories.ranges[i];
+    auto dest_include_directory = include_directories_data + range.offset;
+    directories.emplace_back(std::format("{}/{}", base_dir, dest_include_directory));
+  }
+
+  return directories;
+}
+
+std::vector<std::string> jit_bundle::get_compile_options() const
+{
+  std::vector<std::string> options;
+
+  auto embed_options_data = reinterpret_cast<const char*>(cudf_jit_embed_options.bytes.data);
+
+  for (size_t i = 0; i < cudf_jit_embed_options.num_ranges; i++) {
+    auto range  = cudf_jit_embed_options.ranges[i];
+    auto option = embed_options_data + range.offset;
+    options.emplace_back(option);
+  }
+
+  return options;
+}
 
 namespace {
 
@@ -73,415 +297,202 @@ int32_t get_current_device_physical_model()
   return props.major * 10 + props.minor;
 }
 
-/*
-void max_occupancy_config()
-{
-  CUDF_FAIL("Not implemented", std::logic_error);
-  // TODO: Same as configure_1d_max_occupancy
-}*/
-
-sha256_hash hash_string(std::span<char const> input)
-{
-  sha256_context ctx;
-  ctx.update(std::span{reinterpret_cast<uint8_t const*>(input.data()), input.size()});
-  return ctx.finalize();
-}
-
-cache_t& get_rtc_cache() { return cudf::get_context().rtc_cache(); }
-
-[[noreturn]] void throw_posix(std::string_view message, std::string_view syscall_name)
-{
-  auto error_code = errno;
-  auto error_str  = std::format(
-    "{}. `{}` failed with {} ({})", message, syscall_name, error_code, std::strerror(error_code));
-  CUDF_FAIL(+error_str, std::runtime_error);
-}
-
-void add_file(char const* dst_path, std::span<unsigned char const> contents)
-{
-  int dst_file = open(dst_path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-  if (dst_file == -1) {
-    if (errno == EEXIST) {
-      // file already exists (repeated include)
-      return;
-    }
-    throw_posix(std::format("Failed to create file ({})", dst_path), "open");
-  }
-
-  CUDF_DEFER([&] {
-    if (close(dst_file) != 0) {
-      throw_posix(std::format("Failed to close file ({})", dst_path), "close");
-    }
-  });
-
-  if (write(dst_file, contents.data(), contents.size()) == -1) {
-    throw_posix(std::format("Failed to write file ({})", dst_path), "write");
-  }
-}
-
-std::vector<unsigned char> read_file(char const* path)
-{
-  int fd = open(path, O_RDONLY);
-
-  if (fd == -1) { throw_posix(std::format("Failed to open file ({})", path), "open"); }
-
-  CUDF_DEFER([&] {
-    if (close(fd) == -1) { throw_posix(std::format("Failed to close file ({})", path), "close"); }
-  });
-
-  // get file size
-  struct stat file_stat;
-  if (fstat(fd, &file_stat) == -1) {
-    throw_posix(std::format("Failed to get file status for file ({})", path), "fstat");
-  }
-
-  std::vector<unsigned char> contents;
-  contents.resize(file_stat.st_size);
-
-  if (read(fd, contents.data(), contents.size()) == -1) {
-    throw_posix(std::format("Failed to read file ({})", path), "read");
-  }
-
-  return contents;
-}
-
-static constexpr char const* HASH_FILENAME = ".sha256.hash";
-
-void copy_includes_to_dir(char const* dst_dir)
-{
-  CUDF_FUNC_RANGE();
-
-  auto const files_data = cudf_jit_embed_sources_file_data.bytes.data;
-  auto const destinations_data =
-    reinterpret_cast<char const*>(cudf_jit_embed_sources_file_destinations.bytes.data);
-  for (size_t i = 0; i < cudf_jit_embed_sources_file_data.num_ranges; ++i) {
-    auto const file_data_range   = cudf_jit_embed_sources_file_data.ranges[i];
-    auto const destination_range = cudf_jit_embed_sources_file_destinations.ranges[i];
-
-    auto const file_data = std::span{files_data + file_data_range.offset, file_data_range.size};
-    auto const destination =
-      std::string_view{destinations_data + destination_range.offset, destination_range.size};
-
-    auto const destination_path = std::format("{}/{}", dst_dir, destination);
-
-    std::filesystem::create_directories(std::filesystem::path{destination_path}.parent_path());
-    add_file(destination_path.c_str(), file_data);
-  }
-
-  {
-    // write out the state hash file
-    auto hash_path = std::format("{}/{}", dst_dir, HASH_FILENAME);
-    add_file(hash_path.c_str(),
-             std::span{cudf_jit_embed_sources_hash.data, cudf_jit_embed_sources_hash.size});
-  }
-}
-
-std::string get_include_dir(char const* base_dir)
-{
-  auto sha256_str = sha256_hex_string::make(
-    std::span{cudf_jit_embed_sources_hash.data, cudf_jit_embed_sources_hash.size});
-
-  return std::format("{}/{}", base_dir, sha256_str.view());
-}
-
-void create_new_include_dir(char const* base_dir)
-{
-  CUDF_FUNC_RANGE();
-
-  // directory does not exist, so create it
-  char tmp_dir_data[] = "/tmp/jit-includes_XXXXXX";
-  char* tmp_dir       = mkdtemp(tmp_dir_data);
-  if (tmp_dir == nullptr) {
-    throw_posix(std::format("Failed to create temporary RTC include directory for ({})", base_dir),
-                "mkdtemp");
-  }
-
-  copy_includes_to_dir(tmp_dir);
-
-  auto include_dir = get_include_dir(base_dir);
-
-  // rename the temporary directory to the target include_dir
-  if (rename(tmp_dir, include_dir.c_str()) == -1) {
-    throw_posix(
-      std::format("Failed to rename temporary RTC include directory to ({})", include_dir),
-      "rename");
-  }
-}
-
-std::string install_includes_to(char const* base_dir)
-{
-  CUDF_FUNC_RANGE();
-
-  auto include_dir = get_include_dir(base_dir);
-
-  struct stat path_info;
-  if (lstat(include_dir.c_str(), &path_info) == -1) {
-    if (errno != ENOENT) {
-      throw_posix(std::format("Failed to get stat for directory ({})", include_dir), "lstat");
-    } else {
-      std::filesystem::create_directories(base_dir);
-      create_new_include_dir(base_dir);
-    }
-  } else {
-    // directory exists, perform important sanity checks
-    if (!S_ISDIR(path_info.st_mode)) {
-      CUDF_FAIL(+std::format("Include dir ({}) exists but is not a directory", include_dir),
-                std::runtime_error);
-    } else {
-      // verify contents match expected headers
-      auto hash_path = std::format("{}/{}", include_dir, HASH_FILENAME);
-      auto hash_data = read_file(hash_path.c_str());
-
-      CUDF_EXPECTS(std::equal(hash_data.begin(),
-                              hash_data.end(),
-                              cudf_jit_embed_sources_hash.data,
-                              cudf_jit_embed_sources_hash.data + cudf_jit_embed_sources_hash.size),
-                   +std::format("RTC include dir ({}) is corrupted", include_dir),
-                   std::runtime_error);
-    }
-  }
-
-  return include_dir;
-}
-
 }  // namespace
 
-void install_includes(char const* cache_dir)
+fragment get_or_compile_fragment(char const* name, char const* source_code_cstr, char const* key)
 {
   CUDF_FUNC_RANGE();
 
-  auto install_dir = std::format("{}/jit-install", cache_dir);
-  install_includes_to(install_dir.c_str());
-}
+  auto& bundle = get_bundle();
+  auto& cache  = get_rtc_cache();
 
-fragment_t const& compile_fragment(char const* name, char const* source_code_cstr, char const* key)
-{
-  CUDF_FUNC_RANGE();
+  auto runtime     = get_runtime_version();
+  auto driver      = get_driver_version();
+  auto sm          = get_current_device_physical_model();
+  auto bundle_hash = bundle.get_hash();
 
-  auto sm              = get_current_device_physical_model();
   auto const cache_key = std::format(R"***(
       fragment_type=LTO_IR,
       key={},
       cuda_runtime={},
       cuda_driver={},
-      arch={})***",
+      arch={},
+      bundle={}
+      )***",
                                      key,
-                                     get_runtime_version(),
-                                     get_driver_version(),
-                                     sm);
+                                     runtime,
+                                     driver,
+                                     sm,
+                                     bundle_hash);
 
   auto const cache_key_sha256 = hash_string(cache_key);
 
-  auto& cache = get_rtc_cache();
+  // TODO: add time function in cache
 
-  if (auto frag = cache.query_fragment(cache_key_sha256); frag.has_value()) {
-    std::cout << "Loading RTC base library from memory\n";
-    return *frag->get();
-  } else if (auto disk_frag = cache.query_blob_from_disk(cache_key_sha256); disk_frag.has_value()) {
-    std::cout << "Loading RTC base library from disk cache\n";
-    std::promise<fragment> prom;
-    auto fut = std::shared_future{prom.get_future()};
-    {
-      cache.store_fragment(cache_key_sha256, fut);
-      fragment_t::load_params load_params{.binary = *disk_frag, .type = binary_type::LTO_IR};
-      auto frag = fragment_t::load(load_params);
-      prom.set_value(std::move(frag));
+  auto compile = [&] {
+    auto begin       = std::chrono::high_resolution_clock::now();
+    auto cache_dir   = cache.get_cache_dir();
+    auto install_dir = std::format("{}/jit-install", cache_dir);
+
+    auto include_dirs    = bundle.get_include_directories();
+    auto compile_options = bundle.get_compile_options();
+
+    std::vector<std::string> options;
+
+    for (auto const& include_dir : include_dirs) {
+      options.emplace_back(std::format("-I{}", include_dir));
     }
-    return *fut.get();
-  }
 
-  std::cout << "Compiling and linking RTC base library\n";
-  std::promise<fragment> prom;
-  auto fut = std::shared_future{prom.get_future()};
-  cache.store_fragment(cache_key_sha256, fut);
+    for (auto const& compile_option : compile_options) {
+      options.emplace_back(compile_option);
+    }
 
-  auto begin       = std::chrono::high_resolution_clock::now();
-  auto cache_dir   = cache.get_cache_dir();
-  auto install_dir = std::format("{}/jit-install", cache_dir);
-  auto include_dir = get_include_dir(install_dir.c_str());
+    options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
+    options.emplace_back("--dlink-time-opt");
+    options.emplace_back("--relocatable-device-code=true");
+    options.emplace_back("--device-as-default-execution-space");
 
-  std::vector<std::string> include_options;
-  include_options.push_back(std::format("-I{}", include_dir));
+    // --split-compile=0
+    // --fdevice-time-trace=jit_comp_trace.json
+    // --minimal
+    // --time=compile_trace.json
+    // -time
+    // --fast-compile
+    // --pch
+    // --pch-dir=/tmp/cudf-rtc-pch
 
-  auto include_directories_data =
-    reinterpret_cast<char const*>(cudf_jit_embed_sources_include_directories.bytes.data);
-  for (size_t i = 0; i < cudf_jit_embed_sources_include_directories.num_ranges; i++) {
-    auto range                  = cudf_jit_embed_sources_include_directories.ranges[i];
-    auto dest_include_directory = include_directories_data + range.offset;
-    include_options.push_back(std::format("-I{}/{}", include_dir, dest_include_directory));
-  }
+    std::vector<char const*> options_cstr;
+    for (auto const& option : options) {
+      options_cstr.emplace_back(option.c_str());
+    }
 
-  std::vector<char const*> options;
-  auto embed_options_data = reinterpret_cast<const char*>(cudf_jit_embed_options.bytes.data);
+    auto const params = fragment_t::compile_params{.name        = name,
+                                                   .source      = source_code_cstr,
+                                                   .headers     = {},
+                                                   .options     = options_cstr,
+                                                   .target_type = binary_type::LTO_IR};
 
-  for (size_t i = 0; i < cudf_jit_embed_options.num_ranges; i++) {
-    auto range  = cudf_jit_embed_options.ranges[i];
-    auto option = embed_options_data + range.offset;
-    options.push_back(option);
-  }
+    auto frag = fragment_t::compile(params);
 
-  auto arch_flag = std::format("--gpu-architecture=sm_{}", sm);
-  options.push_back(arch_flag.c_str());
-  options.push_back("--dlink-time-opt");
-  options.push_back("--relocatable-device-code=true");
-  // options.push_back("--split-compile=0");
-  // options.push_back("--fdevice-time-trace=jit_comp_trace.json");
-  // options.push_back("--minimal");
-  // options.push_back("--time=compile_trace.json");
-  // options.push_back("-time");
-  // --fast-compile
-  options.push_back("--pch");
-  options.push_back(
-    "--pch-dir=/tmp/cudf-rtc-pch");  // [ ] fix; make it consistent (hashing of header contents?)
+    auto end = std::chrono::high_resolution_clock::now();
 
-  options.push_back("--device-as-default-execution-space");
+    auto duration = end - begin;
 
-  for (auto const& include_option : include_options) {
-    options.push_back(include_option.c_str());
-  }
+    CUDF_LOG_INFO(
+      "Compiled fragment `{}` in {} ms",
+      name,
+      std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count());
 
-  auto const params = fragment_t::compile_params{.name        = name,
-                                                 .source      = source_code_cstr,
-                                                 .headers     = {},
-                                                 .options     = options,
-                                                 .target_type = binary_type::LTO_IR};
+    return frag;
+  };
 
-  auto frag = fragment_t::compile(params);
+  auto fut = cache.query_or_insert_fragment(cache_key_sha256, binary_type::LTO_IR, compile);
 
-  auto view = frag->get(binary_type::LTO_IR)->view();
-
-  auto end = std::chrono::high_resolution_clock::now();
-  auto dur = end - begin;
-  std::cout << "RTC fragment compilation for `" << name << "` took "
-            << std::chrono::duration_cast<std::chrono::microseconds>(dur).count() << " us\n";
-
-  cache.store_blob_to_disk(cache_key_sha256, view);
-
-  prom.set_value(std::move(frag));
-  return *fut.get();
+  return fut.get();
 }
 
-fragment_t const& compile_library_fragment()
+jit_bundle& get_bundle()
+{
+  auto& context = cudf::get_context();
+  return context.jit_bundle();
+}
+
+library compile_and_link_udf(char const* name,
+                             char const* udf_code,
+                             char const* udf_key,
+                             char const* kernel_symbol)
 {
   CUDF_FUNC_RANGE();
 
-  return compile_fragment("cudf_lto_library",
-                          R"***(
- #include "jit/lto/library.inl.cuh"
- )***",
-                          "cudf_lto_library");
-}
+  auto& cache  = get_rtc_cache();
+  auto& bundle = get_bundle();
 
-fragment_t const& compile_udf_fragment(char const* source_code_cstr, char const* key)
-{
-  CUDF_FUNC_RANGE();
+  auto runtime     = get_runtime_version();
+  auto driver      = get_driver_version();
+  auto sm          = get_current_device_physical_model();
+  auto bundle_hash = bundle.get_hash();
 
-  return compile_fragment("cudf_udf_fragment", source_code_cstr, key);
-}
+  auto compile = [&] {
+    auto begin    = std::chrono::high_resolution_clock::now();
+    auto library  = bundle.get_lto_library();
+    auto fragment = get_or_compile_fragment(name, udf_code, udf_key);
 
-kernel_ref compile_and_link_udf(char const* name,
-                                char const* kernel_name,
-                                char const* kernel_key,
-                                char const* udf_code,
-                                char const* udf_key)
-{
-  CUDF_FUNC_RANGE();
+    // TODO: experiment with:
+    // optimization flags
+    // split compile
+    // split-compile-extended
+    // lineinfo and debug info options
+    // -kernels-used=
+    // sass dump
+    // time dump
+    // env variable to control options
+    // fma
+    // variables-used
+    // -optimize-unused-variables
+    // -nocache
+    // -device-stack-protector
 
-  auto sm                       = get_current_device_physical_model();
-  auto library_key              = std::format(R"***(
-      fragment_types=LTO_IR,
+    std::vector<std::string> options;
+
+    options.emplace_back("-lto");
+    options.emplace_back(std::format("-arch=sm_{}", sm));
+    options.emplace_back(std::format("-kernels-used={}", kernel_symbol));
+
+    std::vector<char const*> options_cstr;
+    for (auto const& option : options) {
+      options_cstr.emplace_back(option.c_str());
+    }
+
+    blob_view const link_fragments[] = {library->get(binary_type::LTO_IR)->view(),
+                                        fragment->get(binary_type::LTO_IR)->view()};
+
+    binary_type const fragment_binary_types[] = {binary_type::LTO_IR, binary_type::LTO_IR};
+
+    char const* const fragment_names[] = {"cudf_lto_library", "cudf_udf_fragment"};
+
+    auto const params = library_t::link_params{.name                  = name,
+                                               .output_type           = binary_type::CUBIN,
+                                               .fragments             = link_fragments,
+                                               .fragment_binary_types = fragment_binary_types,
+                                               .fragment_names        = fragment_names,
+                                               .link_options          = options_cstr};
+
+    auto blob = library_t::link_as_blob(params);
+
+    auto load_params = library_t::load_params{.binary = blob->view(), .type = binary_type::CUBIN};
+
+    auto linked_library = library_t::load(load_params);
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    auto duration = end - begin;
+
+    CUDF_LOG_INFO(
+      "Compiled fragment `{}` in {} ms",
+      name,
+      std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count());
+
+    return std::make_tuple(linked_library, blob);
+  };
+
+  auto library_cache_key              = std::format(R"***(
       target=CUBIN,
-      kernel={},
+      kernels={},
       udf={},
       cuda_runtime={},
       cuda_driver={},
       arch={})***",
-                                 kernel_key,
-                                 udf_key,
-                                 get_runtime_version(),
-                                 get_driver_version(),
-                                 sm);
-  auto const library_key_sha256 = hash_string(library_key);
+                                       kernel_symbol,
+                                       udf_key,
+                                       runtime,
+                                       driver,
+                                       sm);
+  auto const library_cache_key_sha256 = hash_string(library_cache_key);
 
-  // [ ] we also need to use the include dirs as part of the key
-  auto& cache = get_rtc_cache();
+  auto library =
+    cache.query_or_insert_library(library_cache_key_sha256, binary_type::CUBIN, compile);
 
-  // TODO: (atomicity) should probably use query_or_insert
-  if (auto lib = cache.query_library(library_key_sha256); lib.has_value()) {
-    std::cout << "Loading kernel from memory\n";
-    return lib->get()->get_kernel(kernel_name);
-  } else if (auto disk_lib = cache.query_blob_from_disk(library_key_sha256); disk_lib.has_value()) {
-    std::cout << "Loading kernel from disk cache\n";
-    std::promise<library> prom;
-    auto fut = std::shared_future{prom.get_future()};
-
-    {
-      cache.store_library(library_key_sha256, fut);
-      library_t::load_params load_params{.binary = (*disk_lib)->view(), .type = binary_type::CUBIN};
-      auto lib = library_t::load(load_params);
-      prom.set_value(std::move(lib));
-    }
-
-    return fut.get()->get_kernel(kernel_name);
-  }
-
-  std::cout << "Compiling and linking library\n";
-  auto const& library_frag = compile_library_fragment();
-
-  auto const& udf_frag = compile_udf_fragment(udf_code, udf_key);
-
-  std::promise<library> prom;
-  auto fut = std::shared_future{prom.get_future()};
-  // cache.store_library(library_key_sha256, fut);
-
-  auto begin = std::chrono::high_resolution_clock::now();
-
-  blob_view const link_fragments[]          = {library_frag.get(binary_type::LTO_IR)->view(),
-                                               udf_frag.get(binary_type::LTO_IR)->view()};
-  binary_type const fragment_binary_types[] = {binary_type::LTO_IR, binary_type::LTO_IR};
-
-  char const* const fragment_names[] = {"cudf_lto_library", "cudf_udf_fragment"};
-
-  // TODO: run compilation tests at program startup
-
-  // TODO: optimization flags
-  // TODO: split compile
-  // TODO: split-compile-extended
-  // TODO: lineinfo and debug info options
-  // TODO: -kernels-used=
-  // TODO: sass dump
-  // TODO: time dump
-  // TODO: env variable to control options
-  // TODO: fma
-  // TODO: variables-used
-  // TODO: -optimize-unused-variables
-  // TODO: -nocache
-  // TODO: -device-stack-protector
-  auto arch_flag                   = std::format("-arch=sm_{}", sm);
-  char const* const link_options[] = {         // "-split-compile=0",
-                                      "-lto",  // TODO: full flag names
-
-                                      // "-optimize-unused-variables",
-                                      "-kernels-used=transform_kernel",
-                                      arch_flag.c_str()};
-
-  auto const params = library_t::link_params{.name                  = name,
-                                             .output_type           = binary_type::CUBIN,
-                                             .fragments             = link_fragments,
-                                             .fragment_binary_types = fragment_binary_types,
-                                             .fragment_names        = fragment_names,
-                                             .link_options          = link_options};
-  // TODO: compilation flow logging with time taken, should be disabled when not in use
-  auto lib = library_t::link(params);
-
-  auto end = std::chrono::high_resolution_clock::now();
-  auto dur = end - begin;
-  std::cout << "RTC library linking for `" << name << "` took "
-            << std::chrono::duration_cast<std::chrono::microseconds>(dur).count() << " us\n";
-  // TODO: store to disk cache
-  prom.set_value(std::move(lib));
-
-  return fut.get()->get_kernel(kernel_name);
+  return library.get();
 }
 
 }  // namespace rtc

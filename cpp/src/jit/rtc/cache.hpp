@@ -13,7 +13,6 @@
 #include <atomic>
 #include <cstdint>
 #include <future>
-#include <optional>
 #include <unordered_map>
 
 namespace cudf {
@@ -22,12 +21,16 @@ namespace rtc {
 struct [[nodiscard]] cache_statistics {
   uint64_t blob_memory_hits       = 0;
   uint64_t blob_memory_misses     = 0;
-  uint64_t fragment_memory_hits   = 0;
-  uint64_t fragment_memory_misses = 0;
-  uint64_t library_memory_hits    = 0;
-  uint64_t library_memory_misses  = 0;
   uint64_t blob_disk_hits         = 0;
   uint64_t blob_disk_misses       = 0;
+  uint64_t fragment_memory_hits   = 0;
+  uint64_t fragment_memory_misses = 0;
+  uint64_t fragment_disk_hits     = 0;
+  uint64_t fragment_disk_misses   = 0;
+  uint64_t library_memory_hits    = 0;
+  uint64_t library_memory_misses  = 0;
+  uint64_t library_disk_hits      = 0;
+  uint64_t library_disk_misses    = 0;
 };
 
 struct [[nodiscard]] cache_limits {
@@ -37,96 +40,6 @@ struct [[nodiscard]] cache_limits {
 };
 
 namespace detail {
-
-struct rw_spinlock_t {
- private:
-  static constexpr size_t WRITE_STATE = ~size_t{0};
-  static constexpr size_t IDLE_STATE  = 0;
-
-  size_t state_;
-
- public:
-  rw_spinlock_t() : state_{IDLE_STATE} {}
-  rw_spinlock_t(rw_spinlock_t const&)            = default;
-  rw_spinlock_t& operator=(rw_spinlock_t const&) = default;
-  rw_spinlock_t(rw_spinlock_t&&)                 = default;
-  rw_spinlock_t& operator=(rw_spinlock_t&&)      = default;
-  ~rw_spinlock_t()                               = default;
-
-  void lock_read()
-  {
-    std::atomic_ref state{state_};
-
-    auto expected = IDLE_STATE;
-    auto target   = size_t{1};
-
-    while (!state.compare_exchange_weak(
-      expected, target, std::memory_order_acquire, std::memory_order_relaxed)) {
-      if (expected == WRITE_STATE) {
-        expected = IDLE_STATE;
-        target   = 1;
-      } else {
-        target = expected + 1;
-      }
-    }
-  }
-
-  void unlock_read()
-  {
-    std::atomic_ref state{state_};
-    state.fetch_sub(1, std::memory_order_relaxed);
-  }
-
-  void lock_write()
-  {
-    std::atomic_ref state{state_};
-
-    auto expected = IDLE_STATE;
-
-    while (!state.compare_exchange_weak(
-      expected, WRITE_STATE, std::memory_order_acquire, std::memory_order_relaxed)) {
-      expected = IDLE_STATE;
-    }
-  }
-
-  void unlock_write()
-  {
-    std::atomic_ref state{state_};
-    state.store(IDLE_STATE, std::memory_order_release);
-  }
-};
-
-template <typename Lock>
-struct read_guard {
- private:
-  Lock& lock_;
-
- public:
-  read_guard(Lock& lock) : lock_{lock} { lock_.lock_read(); }
-
-  read_guard(read_guard const&)            = delete;
-  read_guard& operator=(read_guard const&) = delete;
-  read_guard(read_guard&&)                 = delete;
-  read_guard& operator=(read_guard&&)      = delete;
-
-  ~read_guard() { lock_.unlock_read(); }
-};
-
-template <typename Lock>
-struct write_guard {
- private:
-  Lock& lock_;
-
- public:
-  write_guard(Lock& lock) : lock_{lock} { lock_.lock_write(); }
-
-  write_guard(write_guard const&)            = delete;
-  write_guard& operator=(write_guard const&) = delete;
-  write_guard(write_guard&&)                 = delete;
-  write_guard& operator=(write_guard&&)      = delete;
-
-  ~write_guard() { lock_.unlock_write(); }
-};
 
 inline constexpr size_t CACHELINE_ALIGNMENT =
   64;  // = std::hardware_destructive_interference_size */
@@ -141,10 +54,9 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
   };
 
   std::unordered_map<sha256_hash, entry, sha256_hash_hasher> entries_;
-  rw_spinlock_t lock_;
   size_t limit_;
 
-  explicit lru_memory_cache(size_t limit) : entries_{}, lock_{}, limit_{limit}
+  explicit lru_memory_cache(size_t limit) : entries_{}, limit_{limit}
   {
     // reserve space to avoid rehashing
     entries_.reserve(limit * 2);
@@ -202,51 +114,71 @@ struct alignas(CACHELINE_ALIGNMENT) counter {
 struct cache_statistics_counter {
   counter blob_memory_hits;
   counter blob_memory_misses;
-  counter fragment_memory_hits;
-  counter fragment_memory_misses;
-  counter library_memory_hits;
-  counter library_memory_misses;
   counter blob_disk_hits;
   counter blob_disk_misses;
+  counter fragment_memory_hits;
+  counter fragment_memory_misses;
+  counter fragment_disk_hits;
+  counter fragment_disk_misses;
+  counter library_memory_hits;
+  counter library_memory_misses;
+  counter library_disk_hits;
+  counter library_disk_misses;
 
   void clear()
   {
     blob_memory_hits.reset();
     blob_memory_misses.reset();
-    fragment_memory_hits.reset();
-    fragment_memory_misses.reset();
-    library_memory_hits.reset();
-    library_memory_misses.reset();
     blob_disk_hits.reset();
     blob_disk_misses.reset();
+    fragment_memory_hits.reset();
+    fragment_memory_misses.reset();
+    fragment_disk_hits.reset();
+    fragment_disk_misses.reset();
+    library_memory_hits.reset();
+    library_memory_misses.reset();
+    library_disk_hits.reset();
+    library_disk_misses.reset();
   }
 
   void hit_memory_blob() { blob_memory_hits.increment(); }
 
   void miss_memory_blob() { blob_memory_misses.increment(); }
 
+  void hit_disk_blob() { blob_disk_hits.increment(); }
+
+  void miss_disk_blob() { blob_disk_misses.increment(); }
+
   void hit_memory_fragment() { fragment_memory_hits.increment(); }
 
   void miss_memory_fragment() { fragment_memory_misses.increment(); }
+
+  void hit_disk_fragment() { fragment_disk_hits.increment(); }
+
+  void miss_disk_fragment() { fragment_disk_misses.increment(); }
 
   void hit_memory_library() { library_memory_hits.increment(); }
 
   void miss_memory_library() { library_memory_misses.increment(); }
 
-  void hit_disk_blob() { blob_disk_hits.increment(); }
+  void hit_disk_library() { library_disk_hits.increment(); }
 
-  void miss_disk_blob() { blob_disk_misses.increment(); }
+  void miss_disk_library() { library_disk_misses.increment(); }
 
   cache_statistics get_statistics() const
   {
     return cache_statistics{.blob_memory_hits       = blob_memory_hits.get(),
                             .blob_memory_misses     = blob_memory_misses.get(),
+                            .blob_disk_hits         = blob_disk_hits.get(),
+                            .blob_disk_misses       = blob_disk_misses.get(),
                             .fragment_memory_hits   = fragment_memory_hits.get(),
                             .fragment_memory_misses = fragment_memory_misses.get(),
+                            .fragment_disk_hits     = fragment_disk_hits.get(),
+                            .fragment_disk_misses   = fragment_disk_misses.get(),
                             .library_memory_hits    = library_memory_hits.get(),
                             .library_memory_misses  = library_memory_misses.get(),
-                            .blob_disk_hits         = blob_disk_hits.get(),
-                            .blob_disk_misses       = blob_disk_misses.get()};
+                            .library_disk_hits      = library_disk_hits.get(),
+                            .library_disk_misses    = library_disk_misses.get()};
   }
 };
 
@@ -266,13 +198,14 @@ struct cache_statistics_counter {
 /// copying across threads and disk.
 struct cache_t {
  private:
-  bool enabled_;
   // TODO: store under more structured pathsi, i.e. /cache.
   // TODO: stamp binaries so we can pre-load?
 
   std::string cache_dir_;
 
   cache_limits limits_;
+
+  std::mutex lock_;
 
   detail::lru_memory_cache<std::shared_future<blob>> blobs_cache_;
 
@@ -285,36 +218,24 @@ struct cache_t {
   alignas(detail::CACHELINE_ALIGNMENT) uint64_t tick_;
 
  public:
-  cache_t(bool enabled, std::string cache_dir, cache_limits const& limits);
+  cache_t(std::string cache_dir, cache_limits const& limits);
   cache_t(cache_t const&)            = delete;
   cache_t& operator=(cache_t const&) = delete;
   cache_t(cache_t&&)                 = delete;
   cache_t& operator=(cache_t&&)      = delete;
   ~cache_t()                         = default;
 
-  [[nodiscard]] bool is_enabled();
-
-  void enable();
-
-  void disable();
-
   [[nodiscard]] std::string const& get_cache_dir();
 
-  void store_blob_to_memory(sha256_hash const& sha, std::shared_future<blob> binary);
+  std::shared_future<blob> query_or_insert_blob(sha256_hash const& sha,
+                                                std::function<blob()> maker);
 
-  void store_blob_to_disk(sha256_hash const& sha, blob_view binary);
+  std::shared_future<fragment> query_or_insert_fragment(sha256_hash const& sha,
+                                                        binary_type type,
+                                                        std::function<fragment()> maker);
 
-  std::optional<std::shared_future<blob>> query_blob_from_memory(sha256_hash const& sha);
-
-  std::optional<blob> query_blob_from_disk(sha256_hash const& sha);
-
-  void store_fragment(sha256_hash const& sha, std::shared_future<fragment> frag);
-
-  std::optional<std::shared_future<fragment>> query_fragment(sha256_hash const& sha);
-
-  void store_library(sha256_hash const& sha, std::shared_future<library> mod);
-
-  std::optional<std::shared_future<library>> query_library(sha256_hash const& sha);
+  std::shared_future<library> query_or_insert_library(
+    sha256_hash const& sha, binary_type type, std::function<std::tuple<library, blob>()> maker);
 
   cache_statistics get_statistics();
 

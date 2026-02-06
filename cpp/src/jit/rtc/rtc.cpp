@@ -352,6 +352,20 @@ blob const& fragment_t::get(binary_type type) const
   return blob_;
 }
 
+std::tuple<int32_t, int32_t> kernel_ref::max_occupancy_config(size_t dynamic_shared_memory_bytes,
+                                                              int32_t block_size_limit) const
+{
+  int32_t min_grid_size;
+  int32_t block_size;
+  CUDFRTC_CHECK_CUDA(cuOccupancyMaxPotentialBlockSize(&min_grid_size,
+                                                      &block_size,
+                                                      reinterpret_cast<CUfunction>(handle_),
+                                                      nullptr,
+                                                      dynamic_shared_memory_bytes,
+                                                      block_size_limit));
+  return {min_grid_size, block_size};
+}
+
 void kernel_ref::launch(uint32_t grid_dim_x,
                         uint32_t grid_dim_y,
                         uint32_t grid_dim_z,

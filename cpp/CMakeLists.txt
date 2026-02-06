@@ -350,22 +350,33 @@ endif()
 set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
 
-
-function(add_lto_ir_target)
-
-# TODO: implement LTO target addition
-
-endfunction()
-
 list(APPEND CUDF_JIT_DEFINITIONS -DCUDF_RUNTIME_JIT -D__CUDACC_RTC__)
-list(
-  APPEND
-  CUDF_JIT_COMPILE_FLAGS
-  -std=c++${CUDF_CUDA_STANDARD}
-  # -Xcompiler=-fPIC -Xcompiler=-DPIC -fvisibility=hidden -Xfatbin=--compress-all
-  # --compress-mode=size
-  --device-int128
-  ${CUDF_JIT_DEFINITIONS}
+list(APPEND CUDF_JIT_COMPILE_FLAGS -std=c++${CUDF_CUDA_STANDARD} --device-int128
+     ${CUDF_JIT_DEFINITIONS}
+)
+
+set(CUDF_LTO_JIT_ARCHITECTURES "80-real;90-real;100-real;120-real")
+add_library(cudf_lto_library OBJECT src/jit/lto/library.cu)
+target_compile_options(cudf_lto_library PRIVATE -Xfatbin=--compress-all --compress-mode=size)
+set_target_properties(
+  cudf_lto_library
+  PROPERTIES CUDA_ARCHITECTURES "${CUDF_LTO_JIT_ARCHITECTURES}"
+             CUDA_SEPARABLE_COMPILATION ON
+             CUDA_FATBIN_COMPILATION ON
+             POSITION_INDEPENDENT_CODE ON
+             INTERPROCEDURAL_OPTIMIZATION ON
+             CXX_STANDARD 20
+             CXX_STANDARD_REQUIRED ON
+             CXX_EXTENSIONS ON
+             CXX_VISIBILITY_PRESET hidden
+             CUDA_STANDARD 20
+             CUDA_STANDARD_REQUIRED ON
+             CUDA_VISIBILITY_PRESET hidden
+)
+target_link_libraries(cudf_lto_library PRIVATE CCCL::CCCL)
+target_include_directories(
+  cudf_lto_library PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
+                           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
 )
 
 jit_add_include_directory(
@@ -378,11 +389,6 @@ jit_add_include_directory(
   INCLUDE_DIRECTORIES cudf/src cudf/src/jit/rtc/includes/system
 )
 
-# TODO: add library.cu LTO type checks need to be compiled as part of the AOT workflow to ensure
-# type consistency between AOT and JIT.
-#
-# Must be in test suite
-
 get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
 
 foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
@@ -392,20 +398,12 @@ foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
     cudf_jit_embed COPY_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
     INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
   )
-
 endforeach()
-
-# TODO: remove foreach(INC_DIR IN LISTS CUDAToolkit_INCLUDE_DIRS) message("CTKKK dir: ${INC_DIR}")
-# cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
-
-# jit_add_include_directory( cudf_jit_embed COPY_DIRECTORY ${INC_DIR} DEST_DIRECTORY
-# CUDAToolKit/${INC_DIR_NAME} INCLUDE_DIRECTORIES CUDAToolKit/${INC_DIR_NAME} )
-
-# endforeach()
-
+# TODO(lamarrr): inspect the generated cubin and make sure it doesn't contain
+# any unneeded symbols. it should be as small as possible
 jit_add_options(cudf_jit_embed OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
-
-jit_embed(cudf_jit_embed)
+jit_add_blob(cudf_jit_embed FILE "$<TARGET_OBJECTS:cudf_lto_library>" DEST cudf_lto_library.fatbin)
+jit_embed(cudf_jit_embed COMPRESSION lz4)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -921,9 +919,11 @@ add_library(
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
+  ${cudf_jit_embed_SOURCE_DIR}/embed.cpp
 )
+
 add_dependencies(cudf cudf_jit_embed)
-target_include_directories(cudf PRIVATE ${cudf_jit_embed_INCLUDE_DIR})
+target_include_directories(cudf PRIVATE ${cudf_jit_embed_INCLUDE_DIRS})
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
 # in how conda builds glibc

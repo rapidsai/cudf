@@ -9,6 +9,7 @@
 #include <memory>
 #include <span>
 #include <vector>
+#include <optional>
 
 extern "C" {
 typedef struct CUlib_st* CUlibrary;
@@ -84,6 +85,8 @@ struct [[nodiscard]] blob_t {
   static blob_t from_vector(std::vector<uint8_t>&& data);
 
   static blob_t from_static_data(std::span<uint8_t const> data);
+
+  static std::optional<blob_t> from_file(char const* path);
 };
 
 using blob = std::shared_ptr<blob_t>;
@@ -145,6 +148,9 @@ struct [[nodiscard]] kernel_ref {
 
  public:
   explicit kernel_ref(CUkernel handle) : handle_(handle) {}
+
+  std::tuple<int32_t, int32_t> max_occupancy_config(size_t dynamic_shared_memory_bytes,
+                                                    int32_t block_size_limit) const;
 
   void launch(uint32_t grid_dim_x,
               uint32_t grid_dim_y,
