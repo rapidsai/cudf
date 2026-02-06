@@ -135,13 +135,11 @@ def fillna_bool_false(column: ColumnBase) -> ColumnBase:
     boolean columns with nulls that should be treated as False (e.g.,
     is_month_start, is_year_end, etc.)
     """
-    from cudf.core.column.column import ColumnBase
-
     with column.access(mode="read", scope="internal"):
         # Use pylibcudf replace_nulls with scalar False
         false_scalar = plc.Scalar.from_py(False)
         result_plc = plc.replace.replace_nulls(column.plc_column, false_scalar)
-        return ColumnBase.from_pylibcudf(result_plc)
+        return type(column).create(result_plc, column.dtype)
 
 
 def fillna_numeric_zero(column: ColumnBase) -> ColumnBase:
@@ -177,7 +175,6 @@ def fillna_numeric_zero(column: ColumnBase) -> ColumnBase:
     This is particularly useful for numeric operations where null values
     should be treated as zero (e.g., in join helpers, groupby operations, etc.)
     """
-    from cudf.core.column.column import ColumnBase
     from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
     with column.access(mode="read", scope="internal"):
@@ -186,4 +183,4 @@ def fillna_numeric_zero(column: ColumnBase) -> ColumnBase:
             0, dtype_to_pylibcudf_type(column.dtype)
         )
         result_plc = plc.replace.replace_nulls(column.plc_column, zero_scalar)
-        return ColumnBase.from_pylibcudf(result_plc)
+        return type(column).create(result_plc, column.dtype)
