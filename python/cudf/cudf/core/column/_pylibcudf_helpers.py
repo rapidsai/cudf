@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
 
+from cudf.utils.dtypes import dtype_to_pylibcudf_type
+
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
 
@@ -175,7 +177,6 @@ def fillna_numeric_zero(column: ColumnBase) -> ColumnBase:
     This is particularly useful for numeric operations where null values
     should be treated as zero (e.g., in join helpers, groupby operations, etc.)
     """
-    from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
     with column.access(mode="read", scope="internal"):
         # Use pylibcudf replace_nulls with a typed scalar zero
