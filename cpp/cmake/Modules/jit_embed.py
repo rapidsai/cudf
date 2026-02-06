@@ -279,28 +279,23 @@ static {NAMESPACE_PREFIX}bytes_t const {self.id} = {{
         )
 
 
-class CXXAsmEmbedDecl(NamedTuple):
+class AsmEmbedDecl(NamedTuple):
     id: str
     file: str
 
     @staticmethod
     def of_file(id: str, file: str) -> Self:
-        return CXXAsmEmbedDecl(id=id, file=file)
+        return AsmEmbedDecl(id=id, file=file)
 
-    def var(self: Self) -> CXXVarDecl:
-        return CXXVarDecl(
-            id=self.id,
-            expr=f"""
- asm(
-     ".section .rodata\\n"
-     ".global {self.id}_begin\\n"
-     ".global {self.id}_end\\n"
-     "{self.id}_begin:\\n"
-     ".incbin \\"{self.file}\\"\\n"
-     "{self.id}_end:\\n"
- );
-""",
-        )
+    def decl(self: Self) -> str:
+        return f"""
+.section .rodata
+.global {self.id}_begin
+.global {self.id}_end
+{self.id}_begin:
+.incbin "{self.file}"
+{self.id}_end:
+"""
 
 
 def merge_bytes_with_null_terminators(
@@ -317,8 +312,9 @@ def merge_bytes_with_null_terminators(
 
 
 class EmbedOutput(NamedTuple):
-    cxx_header: str
-    cxx_source: str
+    cxx_header: str | None
+    cxx_source: str | None
+    asm_source: str | None
     bin_file_name: str | None
     bin_file_data: bytes | None
     hash: bytes
@@ -346,7 +342,8 @@ def generate_cxx_strings_data(id: str, strings: list[str]) -> EmbedOutput:
 
     return EmbedOutput(
         cxx_header=cxx_header,
-        cxx_source="",
+        cxx_source=None,
+        asm_source=None,
         bin_file_name=None,
         bin_file_data=None,
         hash=hash,
@@ -422,7 +419,7 @@ def generate_cxx_source_files_data(
         id=f"{id}_uncompressed_size", size=len(uncompressed_files_bytes)
     )
 
-    binary_embed_decl: CXXAsmEmbedDecl = CXXAsmEmbedDecl.of_file(
+    binary_embed_decl: AsmEmbedDecl = AsmEmbedDecl.of_file(
         id=f"{id}_binary", file=binary_file_name
     )
 
@@ -452,13 +449,14 @@ def generate_cxx_source_files_data(
 
 """
 
-    cxx_source = f"""
-{binary_embed_decl.var().decl()}
+    asm_source = f"""
+{binary_embed_decl.decl()}
 """
 
     return EmbedOutput(
         cxx_header=cxx_header,
-        cxx_source=cxx_source,
+        cxx_source=None,
+        asm_source=asm_source,
         bin_file_name=binary_file_name,
         bin_file_data=compressed_files_bytes
         if compress
@@ -520,7 +518,7 @@ def generate_cxx_blobs_data(
         id=f"{id}_uncompressed_size", size=len(uncompressed_blob_bytes)
     )
 
-    binary_embed_decl: CXXAsmEmbedDecl = CXXAsmEmbedDecl.of_file(
+    binary_embed_decl: AsmEmbedDecl = AsmEmbedDecl.of_file(
         id=f"{id}_binary", file=binary_file_name
     )
 
@@ -539,13 +537,14 @@ def generate_cxx_blobs_data(
 {binary_ranges_decl.var().decl()}
 """
 
-    cxx_source = f"""
-{binary_embed_decl.var().decl()}
+    asm_source = f"""
+{binary_embed_decl.decl()}
 """
 
     return EmbedOutput(
         cxx_header=cxx_header,
-        cxx_source=cxx_source,
+        cxx_source=None,
+        asm_source=asm_source,
         bin_file_name=binary_file_name,
         bin_file_data=compressed_blob_bytes
         if compress
@@ -612,14 +611,16 @@ extern "C" {{
 
 {hash_decl.var().decl()}
 
-{"\n\n".join([output.cxx_header for output in outputs])}
+{"\n\n".join([output.cxx_header if output.cxx_header is not None else "" for output in outputs])}
 
 }}
 
 """
 
-    cxx_source = f"""
-{"\n\n".join([output.cxx_source for output in outputs])}
+    asm_source = f"""
+{"\n\n".join([output.asm_source if output.asm_source is not None else "" for output in outputs])}
+
+.section .note.GNU-stack,"",@progbits
 """
 
     os.makedirs(output_dir, exist_ok=True)
@@ -627,8 +628,8 @@ extern "C" {{
     with open(f"{output_dir}/embed.hpp", "w") as f:
         f.write(cxx_header)
 
-    with open(f"{output_dir}/embed.cpp", "w") as f:
-        f.write(cxx_source)
+    with open(f"{output_dir}/embed.s", "w") as f:
+        f.write(asm_source)
 
     for output in outputs:
         if output.bin_file_name and output.bin_file_data:

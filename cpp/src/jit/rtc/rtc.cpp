@@ -284,7 +284,7 @@ blob_t blob_t::from_static_data(std::span<uint8_t const> data)
 fragment fragment_t::load(load_params const& params)
 {
   CUDF_FUNC_RANGE();
-  // TODO: check
+  // TODO: validate parameters
 
   return std::make_shared<fragment_t>(params.binary, params.type);
 }

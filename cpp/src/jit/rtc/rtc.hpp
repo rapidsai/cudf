@@ -7,9 +7,9 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <vector>
-#include <optional>
 
 extern "C" {
 typedef struct CUlib_st* CUlibrary;

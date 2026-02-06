@@ -253,24 +253,22 @@ function(jit_embed)
   )
 
   add_custom_command(
-    OUTPUT ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.cpp ${OUTPUT_DIR}/embed.bin
+    OUTPUT ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.s ${OUTPUT_DIR}/embed.bin
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/jit_embed.py" --id
             "${TARGET}" --output-dir "${OUTPUT_DIR}" --input "${YAML_FILE_PATH}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/jit_embed.py" "${YAML_FILE_PATH}"
             ${jitembed_${TARGET}_incdir__source_files} ${jitembed_${TARGET}_blob__files}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT
-      "Generating JIT embed for ${TARGET} (YAML: ${YAML_FILE_PATH}) into ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.cpp ${OUTPUT_DIR}/embed.bin"
+      "Generating JIT embed for ${TARGET} (YAML: ${YAML_FILE_PATH}) into ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.s"
     VERBATIM
   )
 
-  add_custom_target(
-    ${TARGET} ALL DEPENDS ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.cpp ${OUTPUT_DIR}/embed.bin
-  )
+  add_custom_target(${TARGET} ALL DEPENDS ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.s)
 
   message(
     STATUS
-      "JIT embed for target ${TARGET} (YAML: ${YAML_FILE_PATH}) will be generated into: ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.cpp ${OUTPUT_DIR}/embed.bin"
+      "JIT embed for target ${TARGET} (YAML: ${YAML_FILE_PATH}) will be generated into: ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.s"
   )
 
   set(${TARGET}_INCLUDE_DIRS

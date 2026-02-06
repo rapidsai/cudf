@@ -194,7 +194,7 @@ void jit_bundle::preload_lto_library()
   auto bundle_hash = get_hash();
 
   auto const cache_key = std::format(R"***(
-      fragment_type=CUBIN,
+      fragment_type=FATBIN,
       key={},
       bundle={}
       )***",
@@ -205,17 +205,17 @@ void jit_bundle::preload_lto_library()
 
   auto compile = [&] {
     auto directory = get_directory();
-    auto path      = std::format("{}/{}", directory, "cudf_lto_library.cubin");
+    auto path      = std::format("{}/{}", directory, "cudf_lto_library.fatbin");
     auto cubin     = blob_t::from_file(path.c_str());
     CUDF_EXPECTS(cubin.has_value(),
                  +std::format("Failed to load LTO library cubin from disk at ({})", path),
                  std::runtime_error);
     fragment_t::load_params load_params{.binary = std::make_shared<blob_t>(std::move(*cubin)),
-                                        .type   = binary_type::LTO_IR};
+                                        .type   = binary_type::FATBIN};
     return fragment_t::load(load_params);
   };
 
-  auto fut = cache.query_or_insert_fragment(cache_key_sha256, binary_type::LTO_IR, compile);
+  auto fut = cache.query_or_insert_fragment(cache_key_sha256, binary_type::FATBIN, compile);
 
   lto_library_ = fut.get();
 }
@@ -352,6 +352,7 @@ fragment get_or_compile_fragment(char const* name, char const* source_code_cstr,
     options.emplace_back("--relocatable-device-code=true");
     options.emplace_back("--device-as-default-execution-space");
 
+    // TODO: experiment with:
     // --split-compile=0
     // --fdevice-time-trace=jit_comp_trace.json
     // --minimal
@@ -476,7 +477,7 @@ library compile_and_link_udf(char const* name,
   };
 
   auto library_cache_key              = std::format(R"***(
-      target=CUBIN,
+      library_type=CUBIN,
       kernels={},
       udf={},
       cuda_runtime={},
