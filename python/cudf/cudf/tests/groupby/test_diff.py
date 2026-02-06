@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -54,8 +54,8 @@ def test_groupby_diff_row_mixed_numerics(shift_perc, direction):
         use_threads=False,
         seed=0,
     )
-    pdf = t.to_pandas()
-    gdf = cudf.from_pandas(pdf)
+    gdf = cudf.DataFrame.from_arrow(t)
+    pdf = gdf.to_pandas()
     n_shift = int(nelem * shift_perc) * direction
 
     expected = pdf.groupby(["0"]).diff(periods=n_shift)

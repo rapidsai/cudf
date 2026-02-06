@@ -18,6 +18,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 from fsspec.core import get_fs_token_paths
+from packaging import version
 from pyarrow import parquet as pq
 
 import cudf
@@ -2815,7 +2816,23 @@ def test_parquet_writer_nested(tmp_path, data):
 
 @pytest.mark.parametrize(
     "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    [
+        pytest.param(
+            cudf.Decimal32Dtype,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/apache/arrow/issues/45570 from pandas.read_parquet",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/apache/arrow/issues/45570 from pandas.read_parquet",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        cudf.Decimal128Dtype,
+    ],
 )
 @pytest.mark.parametrize("data", [[1, 2, 3], [0.00, 0.01, None, 0.5]])
 def test_parquet_writer_decimal(decimal_type, data):
@@ -2890,7 +2907,23 @@ def test_parquet_writer_nulls_pandas_read(tmp_path, pdf):
 
 @pytest.mark.parametrize(
     "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    [
+        pytest.param(
+            cudf.Decimal32Dtype,
+            marks=pytest.mark.xfail(
+                reason="Requires https://github.com/apache/arrow/pull/45583",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype,
+            marks=pytest.mark.xfail(
+                reason="Requires https://github.com/apache/arrow/pull/45583",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        cudf.Decimal128Dtype,
+    ],
 )
 def test_parquet_decimal_precision(tmp_path, decimal_type):
     df = cudf.DataFrame({"val": ["3.5", "4.2"]}).astype(decimal_type(5, 2))
@@ -2905,7 +2938,7 @@ def test_parquet_decimal_precision(tmp_path, decimal_type):
 def test_parquet_decimal_precision_empty(tmp_path):
     df = (
         cudf.DataFrame({"val": ["3.5", "4.2"]})
-        .astype(cudf.Decimal64Dtype(5, 2))
+        .astype(cudf.Decimal128Dtype(5, 2))
         .iloc[:0]
     )
     assert df.val.dtype.precision == 5
@@ -3213,7 +3246,7 @@ def test_parquet_row_group_metadata(tmp_path, large_int64_gdf, size_rows):
 def test_parquet_reader_decimal_columns():
     df = cudf.DataFrame(
         {
-            "col1": cudf.Series([1, 2, 3], dtype=cudf.Decimal64Dtype(10, 2)),
+            "col1": cudf.Series([1, 2, 3], dtype=cudf.Decimal128Dtype(10, 2)),
             "col2": [10, 11, 12],
             "col3": [12, 13, 14],
             "col4": ["a", "b", "c"],
@@ -3679,6 +3712,10 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema(tmp_path, data):
 
 
 @pytest.mark.parametrize("index", [None, True, False])
+@pytest.mark.xfail(
+    condition=version.parse(pa.__version__) < version.parse("20"),
+    reason="Requires https://github.com/apache/arrow/pull/45583",
+)
 def test_parquet_writer_roundtrip_with_arrow_schema(index):
     # Ensure that the concrete and nested types are faithfully being roundtripped
     # across Parquet with arrow schema
@@ -4310,6 +4347,10 @@ def test_parquet_reader_with_mismatched_schemas_error():
         )
 
 
+@pytest.mark.xfail(
+    condition=version.parse(pa.__version__) < version.parse("20"),
+    reason="Requires https://github.com/apache/arrow/pull/45583",
+)
 def test_parquet_roundtrip_zero_rows_no_column_mask():
     expected = cudf.DataFrame._from_data(
         {
