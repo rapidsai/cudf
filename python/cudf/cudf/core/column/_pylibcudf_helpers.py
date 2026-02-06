@@ -3,9 +3,8 @@
 
 """Helper functions that wrap common pylibcudf operations for column classes.
 
-These functions provide efficient implementations of commonly-used patterns
-that would otherwise require multiple column API calls, eliminating
-intermediate column allocations.
+These functions bypass the need to create intermediate ColumnBases by operating directly
+on pylibcudf columns.
 """
 
 from __future__ import annotations
