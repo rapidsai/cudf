@@ -18,6 +18,7 @@ import sys
 import textwrap
 import time
 import traceback
+import uuid
 import warnings
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -250,6 +251,7 @@ class RunConfig:
         default_factory=lambda: datetime.now(UTC).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
+    run_id: uuid.UUID = dataclasses.field(default_factory=uuid.uuid4)
     rmm_async: bool
     rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
@@ -387,6 +389,7 @@ class RunConfig:
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
         """Serialize the run config to a dictionary."""
         result = dataclasses.asdict(self)
+        result["run_id"] = str(self.run_id)
 
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
