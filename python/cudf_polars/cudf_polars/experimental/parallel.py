@@ -437,11 +437,20 @@ def _(
 def _(
     ir: Slice, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Check for dynamic planning - may have more partitions at runtime
+    from cudf_polars.experimental.utils import _dynamic_planning_on
+
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
+    dynamic_planning = _dynamic_planning_on(config_options)
+
     if ir.offset == 0:
         # Taking the first N rows.
         # We don't know how large each partition is, so we reduce.
         new_node, partition_info = _lower_ir_pwise(ir, rec)
-        if partition_info[new_node].count > 1:
+        if partition_info[new_node].count > 1 or dynamic_planning:
             # Collapse down to single partition
             inter = Repartition(new_node.schema, new_node)
             partition_info[inter] = PartitionInfo(count=1)

@@ -207,6 +207,9 @@ def _(
         )
 
     config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
 
     # Lower children
     left, right = ir.children
@@ -214,11 +217,8 @@ def _(
     right, pi_right = rec(right)
 
     # For rapidsmpf runtime, always repartition both sides to single partition
-    # to handle dynamic planning correctly
-    if (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
+    # (ConditionalJoin can't be distributed, so we always need single partition)
+    if config_options.executor.runtime == "rapidsmpf":  # pragma: no cover
         # Repartition left if needed
         left = Repartition(left.schema, left)
         pi_left[left] = PartitionInfo(count=1)
@@ -279,14 +279,14 @@ def _(
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
 
+    # Check for dynamic planning - may have more partitions at runtime
+    from cudf_polars.experimental.utils import _dynamic_planning_on
+
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_join'"
+        "'in-memory' executor not supported in 'lower_ir_node'"
     )
-    dynamic_planning = (
-        config_options.executor.runtime == "rapidsmpf"
-        and config_options.executor.dynamic_planning is not None
-    )
+    dynamic_planning = _dynamic_planning_on(config_options)
 
     left, right = children
     output_count = max(partition_info[left].count, partition_info[right].count)
@@ -306,15 +306,6 @@ def _(
             rec,
             msg=f"Join({maintain_order=}) not supported for multiple partitions.",
         )
-
-    # Check for dynamic planning - defer broadcast vs shuffle decision to runtime
-    # Only use dynamic planning for inner/left/semi/anti joins (not right/full)
-    join_type = ir.options[0]
-    if dynamic_planning and join_type in ("Inner", "Left", "Semi", "Anti"):
-        # Don't insert Shuffle nodes - let runtime decide strategy
-        new_node = ir.reconstruct(children)
-        partition_info[new_node] = PartitionInfo(count=output_count)
-        return new_node, partition_info
 
     if _should_bcast_join(
         ir,

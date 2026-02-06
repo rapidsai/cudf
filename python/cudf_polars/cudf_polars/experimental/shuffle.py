@@ -312,8 +312,20 @@ def _(
 
     (child,) = ir.children
 
+    # Check for dynamic planning - may have more partitions at runtime
+    from cudf_polars.experimental.utils import _dynamic_planning_on
+
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
+
     new_child, pi = rec(child)
-    if pi[new_child].count == 1 or ir.keys == pi[new_child].partitioned_on:
+    already_partitioned = ir.keys == pi[new_child].partitioned_on
+    single_partition = pi[new_child].count == 1 and not _dynamic_planning_on(
+        config_options
+    )
+    if single_partition or already_partitioned:
         # Already shuffled
         return new_child, pi
     new_node = ir.reconstruct([new_child])

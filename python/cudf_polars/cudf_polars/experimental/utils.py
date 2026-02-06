@@ -52,6 +52,15 @@ def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
             )
 
 
+def _dynamic_planning_on(config_options: ConfigOptions) -> bool:
+    """Check if dynamic planning is enabled for rapidsmpf runtime."""
+    return (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+        and config_options.executor.dynamic_planning is not None
+    )
+
+
 def _lower_ir_fallback(
     ir: IR,
     rec: LowerIRTransformer,

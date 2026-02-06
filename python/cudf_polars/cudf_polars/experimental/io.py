@@ -406,7 +406,7 @@ class StreamingSink(IR):
 @lower_ir_node.register(Sink)
 def _(
     ir: Sink, rec: LowerIRTransformer
-) -> tuple[StreamingSink, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     child, partition_info = rec(ir.children[0])
     executor_options = rec.state["config_options"].executor
 
@@ -420,6 +420,16 @@ def _(
             "Writing to an existing path is not supported when sinking "
             "to a directory. If you are using the 'distributed' scheduler, "
             "please remove the target directory before calling 'collect'. "
+        )
+
+    # RapidsMPF runtime: StreamingSink not supported, fall back to single partition
+    if (
+        executor_options.runtime == "rapidsmpf"
+    ):  # pragma: no cover; Requires rapidsmpf runtime
+        from cudf_polars.experimental.utils import _lower_ir_fallback
+
+        return _lower_ir_fallback(
+            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
         )
 
     new_node = StreamingSink(
@@ -601,30 +611,6 @@ def _directory_sink_graph(
     }
     graph[setup_name] = (_prepare_sink_directory, sink.path)
     return graph
-
-
-@lower_ir_node.register(StreamingSink)
-def _(
-    ir: StreamingSink, rec: LowerIRTransformer
-) -> tuple[
-    IR, MutableMapping[IR, PartitionInfo]
-]:  # pragma: no cover; Requires rapidsmpf runtime
-    from cudf_polars.experimental.parallel import _lower_ir_pwise
-    from cudf_polars.experimental.utils import _lower_ir_fallback
-
-    config_options = rec.state["config_options"]
-
-    # RapidsMPF runtime: StreamingSink not supported, fall back to single partition
-    if (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
-    ):
-        return _lower_ir_fallback(
-            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
-        )
-
-    # Default: partition-wise lowering
-    return _lower_ir_pwise(ir, rec)
 
 
 @generate_ir_tasks.register(StreamingSink)

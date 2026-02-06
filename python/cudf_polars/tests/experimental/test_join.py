@@ -81,7 +81,6 @@ def test_join(left, right, how, reverse, max_rows_per_partition, broadcast_join_
 
 @pytest.mark.parametrize("broadcast_join_limit", [1, 2, 3, 4])
 def test_broadcast_join_limit(left, right, broadcast_join_limit):
-    # Disable dynamic planning to test static lowering decisions
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -91,7 +90,6 @@ def test_broadcast_join_limit(left, right, broadcast_join_limit):
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
             "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
-            "dynamic_planning": None,
         },
     )
     left = pl.LazyFrame(
@@ -256,7 +254,6 @@ def test_join_maintain_order_fallback_streaming(left, right, maintain_order):
 
 
 def test_cache_preserves_partitioning_join():
-    # Disable dynamic planning to test static lowering partitioning
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -264,7 +261,6 @@ def test_cache_preserves_partitioning_join():
             "max_rows_per_partition": 3,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
-            "dynamic_planning": None,
         },
     )
 

@@ -453,11 +453,9 @@ def _decompose_expr_node(
     partition_count = partition_info[input_ir].count
 
     # Check for dynamic planning - may have more partitions at runtime
-    dynamic_planning = (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
-        and config_options.executor.dynamic_planning is not None
-    )
+    from cudf_polars.experimental.utils import _dynamic_planning_on
+
+    dynamic_planning = _dynamic_planning_on(config_options)
 
     if expr.is_pointwise:
         # Pointwise expressions are always supported as-is.

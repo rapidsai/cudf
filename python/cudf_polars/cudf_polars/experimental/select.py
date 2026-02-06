@@ -277,13 +277,10 @@ def _(
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
 
+    from cudf_polars.experimental.utils import _dynamic_planning_on
+
     config_options = rec.state["config_options"]
-    dynamic_planning = (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
-        and config_options.executor.dynamic_planning is not None
-    )
-    single_partition = pi.count == 1 and not dynamic_planning
+    single_partition = pi.count == 1 and not _dynamic_planning_on(config_options)
 
     if not single_partition and _contains_unsupported_fill_strategy(
         [e.value for e in ir.exprs]
