@@ -314,10 +314,6 @@ def _(
 
     # Check for dynamic planning - may have more partitions at runtime
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
-
     new_child, pi = rec(child)
     already_partitioned = ir.keys == pi[new_child].partitioned_on
     single_partition = pi[new_child].count == 1 and not _dynamic_planning_on(

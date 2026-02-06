@@ -54,9 +54,12 @@ def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
 
 def _dynamic_planning_on(config_options: ConfigOptions) -> bool:
     """Check if dynamic planning is enabled for rapidsmpf runtime."""
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
+
     return (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
+        config_options.executor.runtime == "rapidsmpf"
         and config_options.executor.dynamic_planning is not None
     )
 
