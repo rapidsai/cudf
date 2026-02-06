@@ -230,6 +230,34 @@ def evaluate_pipeline(
         # Get the bootstrap-initialized communicator
         bootstrap_ctx = get_bootstrap_context()
 
+        # Configure memory limits for spilling (similar to Dask workers)
+        memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
+        rrun_spill_device = config_options.executor.client_device_threshold
+        if rrun_spill_device > 0.0 and rrun_spill_device < 1.0:
+            total_memory = rmm.mr.available_device_memory()[1]
+            spill_threshold = int(total_memory * rrun_spill_device)
+            memory_available = {
+                MemoryType.DEVICE: LimitAvailableMemory(mr, limit=spill_threshold)
+            }
+
+            # Debug output on rank 0
+            from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import get_rank
+
+            rank = get_rank()
+            if rank == 0:
+                print(
+                    f"[RMM Config] Total device memory: {total_memory / 1e9:.2f} GB",
+                    flush=True,
+                )
+                print(
+                    f"[RMM Config] Spill threshold ({rrun_spill_device:.1%}): {spill_threshold / 1e9:.2f} GB",
+                    flush=True,
+                )
+                print(
+                    f"[RMM Config] Spill to pinned memory: {config_options.executor.spill_to_pinned_memory}",
+                    flush=True,
+                )
+
         options = Options(
             {
                 # By default, set the number of streaming threads to the max
@@ -251,16 +279,20 @@ def evaluate_pipeline(
         else:
             stream_pool = True  # Use stream pool for distributed execution
 
-        # Note: For rrun, we use the communicator from bootstrap_ctx
-        # The BufferResource is created but memory limits are not enforced
-        # in the same way as single-GPU mode
+        # Create BufferResource with memory limits for spilling
         br = BufferResource(
             mr,
             pinned_mr=pinned_mr,
-            memory_available=None,  # No memory limits for distributed
+            memory_available=memory_available,
             stream_pool=stream_pool,
         )
         rmpf_context_manager = Context(bootstrap_ctx, br, options)
+
+        # Enable RMM statistics for monitoring (similar to Dask)
+        try:
+            rmm.statistics.enable_statistics()
+        except Exception:
+            pass  # Statistics not available or already enabled
     else:
         # Using "single" mode.
         # Create a new local RapidsMPF context.
