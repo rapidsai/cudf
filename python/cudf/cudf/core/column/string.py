@@ -23,7 +23,6 @@ from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
@@ -908,7 +907,7 @@ class StringColumn(ColumnBase, Scannable):
                 Self,
                 ColumnBase.create(
                     plc.nvtext.tokenize.character_tokenize(self.plc_column),
-                    cudf.ListDtype(CUDF_STRING_DTYPE),
+                    cudf.ListDtype(self.dtype),
                 ),
             )
 
@@ -1139,12 +1138,9 @@ class StringColumn(ColumnBase, Scannable):
                 ),
                 maxsplit,
             )
-            element_dtype = self._get_pandas_compatible_dtype(
-                CUDF_STRING_DTYPE
-            )
             return cast(
                 Self,
-                ColumnBase.create(plc_column, cudf.ListDtype(element_dtype)),
+                ColumnBase.create(plc_column, cudf.ListDtype(self.dtype)),
             )
 
     def split_record_re(self, pattern: str, maxsplit: int) -> Self:
@@ -1207,16 +1203,9 @@ class StringColumn(ColumnBase, Scannable):
                 delimiter,
                 maxsplit,
             )
-            if isinstance(self.dtype, pd.ArrowDtype):
-                element_dtype = get_dtype_of_same_kind(
-                    self.dtype,
-                    CUDF_STRING_DTYPE,
-                )
-            else:
-                element_dtype = CUDF_STRING_DTYPE
             return cast(
                 Self,
-                ColumnBase.create(plc_column, cudf.ListDtype(element_dtype)),
+                ColumnBase.create(plc_column, cudf.ListDtype(self.dtype)),
             )
 
     def split_record(self, delimiter: plc.Scalar, maxsplit: int) -> Self:

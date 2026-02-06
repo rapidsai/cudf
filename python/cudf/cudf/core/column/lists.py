@@ -207,7 +207,7 @@ class ListColumn(ColumnBase):
             )
             return cast(
                 "cudf.core.column.string.StringColumn",
-                ColumnBase.create(plc_column, CUDF_STRING_DTYPE),
+                ColumnBase.create(plc_column, dtype),
             )
 
     def _transform_leaves(
