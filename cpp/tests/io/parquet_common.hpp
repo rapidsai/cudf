@@ -15,8 +15,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <src/io/parquet/compact_protocol_reader.hpp>
-
 #include <random>
 #include <type_traits>
 
