@@ -20,7 +20,7 @@
  */
 
 /**
- * @brief Enum to represent the currenlty used hybrid scan filters
+ * @brief Enum to represent the currently used hybrid scan filters
  */
 enum class hybrid_scan_filter_type : uint8_t {
   ROW_GROUPS_WITH_STATS         = 0,

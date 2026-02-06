@@ -264,7 +264,8 @@ ConfigureNVBench(
 # * hybrid scan multithread benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(
-  HYBRID_SCAN_MULTITHREAD_NVBENCH io/parquet/experimental/hybrid_scan/hybrid_scan_multithread.cpp io/parquet/experimental/hybrid_scan/hybrid_scan_composer.cpp
+  HYBRID_SCAN_MULTITHREAD_NVBENCH io/parquet/experimental/hybrid_scan/hybrid_scan_multithread.cpp
+  io/parquet/experimental/hybrid_scan/hybrid_scan_composer.cpp
 )
 
 # ##################################################################################################
