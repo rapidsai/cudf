@@ -242,7 +242,8 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
                                        row_mask_mutable_view,
                                        cudf::io::parquet::experimental::use_data_page_mask::YES,
                                        options,
-                                       stream);
+                                       stream,
+                                       mr);
 
   // Get column chunk byte ranges from the reader
   auto const payload_column_chunk_byte_ranges =
@@ -260,7 +261,8 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
                                         row_mask->view(),
                                         cudf::io::parquet::experimental::use_data_page_mask::YES,
                                         options,
-                                        stream);
+                                        stream,
+                                        mr);
 
   return std::tuple{std::move(filter_table),
                     std::move(payload_table),
@@ -315,11 +317,12 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
         cudf::io::parquet::experimental::use_data_page_mask::YES,
         filter_column_chunk_data,
         options,
-        stream);
+        stream,
+        mr);
 
       auto row_mask_mutable_view = row_mask->mutable_view();
       while (reader->has_next_table_chunk()) {
-        auto chunk = reader->materialize_filter_columns_chunk(row_mask_mutable_view, stream);
+        auto chunk = reader->materialize_filter_columns_chunk(row_mask_mutable_view);
         tables.push_back(std::move(chunk.tbl));
         filter_metadata = std::move(chunk.metadata);
       }
@@ -359,10 +362,11 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
         cudf::io::parquet::experimental::use_data_page_mask::YES,
         payload_column_chunk_data,
         options,
-        stream);
+        stream,
+        mr);
 
       while (reader->has_next_table_chunk()) {
-        auto chunk = reader->materialize_payload_columns_chunk(row_mask->view(), stream);
+        auto chunk = reader->materialize_payload_columns_chunk(row_mask->view());
         tables.push_back(std::move(chunk.tbl));
         payload_metadata = std::move(chunk.metadata);
       }
@@ -418,5 +422,5 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
 
   // Materialize the table with all columns
   return reader->materialize_all_columns(
-    current_row_group_indices, all_column_chunk_data, options, stream);
+    current_row_group_indices, all_column_chunk_data, options, stream, mr);
 }

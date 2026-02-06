@@ -68,6 +68,14 @@ def _(
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
+    # RapidsMPF runtime: Use rapidsmpf-specific lowering
+    if (
+        config_options.executor.runtime == "rapidsmpf"
+    ):  # pragma: no cover; Requires rapidsmpf runtime
+        from cudf_polars.experimental.rapidsmpf.io import lower_dataframescan_rapidsmpf
+
+        return lower_dataframescan_rapidsmpf(ir, rec)
+
     rows_per_partition = config_options.executor.max_rows_per_partition
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
@@ -150,6 +158,7 @@ class SplitScan(IR):
         "total_splits",
         "parquet_options",
     )
+    _n_non_child_args = 13
     base_scan: Scan
     """Scan operation this node is based on."""
     split_index: int
@@ -174,7 +183,17 @@ class SplitScan(IR):
         self._non_child_args = (
             split_index,
             total_splits,
-            *base_scan._non_child_args,
+            base_scan.schema,
+            base_scan.typ,
+            base_scan.reader_options,
+            base_scan.paths,
+            base_scan.with_columns,
+            base_scan.skip_rows,
+            base_scan.n_rows,
+            base_scan.row_index,
+            base_scan.include_file_paths,
+            base_scan.predicate,
+            base_scan.parquet_options,
         )
         self.parquet_options = parquet_options
         self.children = ()
@@ -278,6 +297,16 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     partition_info: MutableMapping[IR, PartitionInfo]
     config_options = rec.state["config_options"]
+
+    # RapidsMPF runtime: Use rapidsmpf-specific lowering
+    if (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+    ):  # pragma: no cover; Requires rapidsmpf runtime
+        from cudf_polars.experimental.rapidsmpf.io import lower_scan_rapidsmpf
+
+        return lower_scan_rapidsmpf(ir, rec)
+
     if (
         ir.typ in ("csv", "parquet", "ndjson")
         and ir.n_rows == -1
@@ -351,6 +380,7 @@ class StreamingSink(IR):
 
     __slots__ = ("executor_options", "sink")
     _non_child = ("schema", "sink", "executor_options")
+    _n_non_child_args = 0
 
     sink: Sink
     executor_options: StreamingExecutor
@@ -365,6 +395,7 @@ class StreamingSink(IR):
         self.schema = schema
         self.sink = sink
         self.executor_options = executor_options
+        self._non_child_args = ()
         self.children = (df,)
 
     def get_hashable(self) -> Hashable:
@@ -570,6 +601,30 @@ def _directory_sink_graph(
     }
     graph[setup_name] = (_prepare_sink_directory, sink.path)
     return graph
+
+
+@lower_ir_node.register(StreamingSink)
+def _(
+    ir: StreamingSink, rec: LowerIRTransformer
+) -> tuple[
+    IR, MutableMapping[IR, PartitionInfo]
+]:  # pragma: no cover; Requires rapidsmpf runtime
+    from cudf_polars.experimental.parallel import _lower_ir_pwise
+    from cudf_polars.experimental.utils import _lower_ir_fallback
+
+    config_options = rec.state["config_options"]
+
+    # RapidsMPF runtime: StreamingSink not supported, fall back to single partition
+    if (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+    ):
+        return _lower_ir_fallback(
+            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
+        )
+
+    # Default: partition-wise lowering
+    return _lower_ir_pwise(ir, rec)
 
 
 @generate_ir_tasks.register(StreamingSink)
