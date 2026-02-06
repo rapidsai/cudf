@@ -32,7 +32,6 @@ from cudf.core.column import (
     deserialize_columns,
     serialize_columns,
 )
-from cudf.core.column._pylibcudf_helpers import fillna_numeric_zero
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.mixins import BinaryOperand, Scannable
@@ -1825,7 +1824,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                         # Arbitrarily fill with zeros. For ufuncs, we assume
                         # that the end result propagates nulls via a bitwise
                         # and, so these elements are irrelevant.
-                        inp = fillna_numeric_zero(inp)
+                        inp = inp.fillna(0)
                     cupy_inputs.append(cupy.asarray(inp))
 
                 cp_output = cupy_func(*cupy_inputs, **kwargs)

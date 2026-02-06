@@ -22,7 +22,6 @@ from cudf.api.types import (
 )
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.accessors.lists import ListMethods
-from cudf.core.column._pylibcudf_helpers import fillna_bool_false
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.options import get_option
@@ -3795,7 +3794,7 @@ class StringMethods(BaseAccessor):
             # mypy can't deduce that the return value of
             # StringColumn.__eq__ is ColumnBase because the binops are
             # dynamically added by a mixin class
-            fillna_bool_false(cast(ColumnBase, self._column == ""))
+            cast(ColumnBase, self._column == "").fillna(False)
         )
 
     def isspace(self) -> Series | Index:

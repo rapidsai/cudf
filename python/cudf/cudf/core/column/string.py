@@ -19,7 +19,6 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column._pylibcudf_helpers import (
-    fillna_bool_false,
     string_is_float,
     string_is_int,
 )
@@ -281,7 +280,7 @@ class StringColumn(ColumnBase, Scannable):
         if dtype.kind == "b":
             result = self.count_characters() > np.int8(0)
             if not is_pandas_nullable_extension_dtype(dtype):
-                result = fillna_bool_false(result)
+                result = result.fillna(False)
             return result._with_type_metadata(dtype)
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
@@ -1589,7 +1588,7 @@ class StringColumn(ColumnBase, Scannable):
                     isinstance(self.dtype, pd.StringDtype)
                     and self.dtype.na_value is np.nan
                 ):
-                    res = fillna_bool_false(res)
+                    res = res.fillna(False)
                     new_type = np.dtype(np.bool_)
                 else:
                     new_type = get_dtype_of_same_kind(

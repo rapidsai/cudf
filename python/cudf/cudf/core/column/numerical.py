@@ -17,7 +17,6 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import as_buffer
-from cudf.core.column._pylibcudf_helpers import fillna_numeric_zero
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
@@ -959,7 +958,7 @@ class NumericalColumn(NumericalBaseColumn):
             ):
                 return True
             else:
-                filled = fillna_numeric_zero(self)
+                filled = self.fillna(0)
                 return (
                     filled.astype(to_dtype).astype(filled.dtype) == filled
                 ).all()
@@ -979,7 +978,7 @@ class NumericalColumn(NumericalBaseColumn):
             # NOTE(seberg): it would make sense to limit to the mantissa range.
             min_val, max_val = self.minmax()
             if (float(min_val) >= min_) and (float(max_val) <= max_):
-                filled = fillna_numeric_zero(self)
+                filled = self.fillna(0)
                 return (filled % 1 == 0).all()
             else:
                 return False

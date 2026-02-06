@@ -47,7 +47,6 @@ from cudf.core.column import (
     as_column,
     column_empty,
 )
-from cudf.core.column._pylibcudf_helpers import fillna_numeric_zero
 from cudf.core.column.column import concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
@@ -6669,7 +6668,7 @@ class IndexedFrame(Frame):
             cols = []
             for col in self._columns:
                 if col.dtype.kind == "f":
-                    col_filled = fillna_numeric_zero(col)
+                    col_filled = col.fillna(0)
                     as_int = col_filled.astype(np.dtype(np.int64))
                     if cp.allclose(col_filled, as_int):
                         cols.append(as_int)
