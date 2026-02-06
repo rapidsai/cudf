@@ -19,8 +19,9 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column._pylibcudf_helpers import (
-    all_strings_match_type,
     fillna_bool_false,
+    string_is_float,
+    string_is_int,
 )
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtype.validators import is_dtype_obj_string
@@ -285,14 +286,14 @@ class StringColumn(ColumnBase, Scannable):
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
         if dtype.kind in {"i", "u"}:
-            if not all_strings_match_type(self, "integer"):
+            if not string_is_int(self):
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
             cast_func = plc.strings.convert.convert_integers.to_integers
         elif dtype.kind == "f":
-            if not all_strings_match_type(self, "float"):
+            if not string_is_float(self):
                 raise ValueError(
                     "Could not convert strings to float "
                     "type due to presence of non-floating values."
@@ -435,11 +436,9 @@ class StringColumn(ColumnBase, Scannable):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in {"i", "u"} and all_strings_match_type(
-            self, "integer"
-        ):
+        elif to_dtype.kind in {"i", "u"} and string_is_int(self):
             return True
-        elif to_dtype.kind == "f" and all_strings_match_type(self, "float"):
+        elif to_dtype.kind == "f" and string_is_float(self):
             return True
         else:
             return False

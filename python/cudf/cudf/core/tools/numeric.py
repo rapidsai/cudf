@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.core.column import as_column
-from cudf.core.column._pylibcudf_helpers import all_strings_match_type
+from cudf.core.column._pylibcudf_helpers import string_is_int
 from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype
 from cudf.core.index import ensure_index
@@ -226,7 +226,7 @@ def _convert_str_col(
     if col.dtype != CUDF_STRING_DTYPE:
         raise TypeError("col must be string dtype.")
 
-    if all_strings_match_type(col, "integer"):
+    if string_is_int(col):
         return col.astype(dtype=np.dtype(np.int64))  # type: ignore[return-value]
 
     # TODO: This can be handled by libcudf in

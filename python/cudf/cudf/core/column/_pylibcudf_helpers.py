@@ -18,13 +18,14 @@ if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
 
 __all__ = [
-    "all_strings_match_type",
     "fillna_bool_false",
     "fillna_numeric_zero",
+    "string_is_float",
+    "string_is_int",
 ]
 
 
-def all_strings_match_type(
+def _all_strings_match_type(
     column: ColumnBase,
     type_check: Literal["integer", "float"],
 ) -> bool:
@@ -52,7 +53,7 @@ def all_strings_match_type(
             raise ValueError(...)
 
     Use:
-        if not all_strings_match_type(col, "integer"):
+        if not string_is_int(col):
             raise ValueError(...)
 
     Notes
@@ -89,6 +90,16 @@ def all_strings_match_type(
         result = result_scalar.to_py()
         assert isinstance(result, bool), f"Expected bool, got {type(result)}"
         return result
+
+
+def string_is_int(column: ColumnBase) -> bool:
+    """Check if all non-null strings in a column are integers."""
+    return _all_strings_match_type(column, "integer")
+
+
+def string_is_float(column: ColumnBase) -> bool:
+    """Check if all non-null strings in a column are floats."""
+    return _all_strings_match_type(column, "float")
 
 
 def fillna_bool_false(column: ColumnBase) -> ColumnBase:

@@ -16,7 +16,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf.api.types import is_integer, is_scalar
-from cudf.core.column._pylibcudf_helpers import all_strings_match_type
+from cudf.core.column._pylibcudf_helpers import string_is_int
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import DatetimeIndex, Index, ensure_index
@@ -235,7 +235,7 @@ def to_datetime(
                         )
                         break
                     elif arg_col.dtype.kind == "O":
-                        if not all_strings_match_type(arg_col, "integer"):
+                        if not string_is_int(arg_col):
                             col = new_series._column.strptime(
                                 np.dtype("datetime64[ns]"), format=format
                             )
