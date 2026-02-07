@@ -57,7 +57,7 @@ def count_failures(log_file_name, pattern):
 def render_results(results, num_rows=20):
     table = Table()
     table.add_column("Failure message")
-    table.add_column("Number of occurences")
+    table.add_column("Number of occurrences")
 
     for msg, num in results.most_common(20):
         table.add_row(msg, str(num))
