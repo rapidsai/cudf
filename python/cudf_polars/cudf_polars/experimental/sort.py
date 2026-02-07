@@ -462,6 +462,7 @@ class ShuffleSorted(IR):
 
     __slots__ = ("by", "null_order", "order", "shuffle_method")
     _non_child = ("schema", "by", "order", "null_order", "shuffle_method")
+    _n_non_child_args = 5
     by: tuple[NamedExpr, ...]
     """Keys by which the data was sorted."""
     order: tuple[plc.types.Order, ...]
@@ -599,6 +600,29 @@ def _(
     partition_info[final_sort_node] = partition_info[shuffle]
 
     return final_sort_node, partition_info
+
+
+@lower_ir_node.register(ShuffleSorted)
+def _(
+    ir: ShuffleSorted, rec: LowerIRTransformer
+) -> tuple[
+    IR, MutableMapping[IR, PartitionInfo]
+]:  # pragma: no cover; Requires rapidsmpf runtime
+    from cudf_polars.experimental.parallel import _lower_ir_pwise
+
+    config_options = rec.state["config_options"]
+
+    # RapidsMPF runtime: ShuffleSorted not supported, fall back to single partition
+    if (
+        config_options.executor.name == "streaming"
+        and config_options.executor.runtime == "rapidsmpf"
+    ):
+        return _lower_ir_fallback(
+            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
+        )
+
+    # Default: partition-wise lowering
+    return _lower_ir_pwise(ir, rec)
 
 
 @generate_ir_tasks.register(ShuffleSorted)

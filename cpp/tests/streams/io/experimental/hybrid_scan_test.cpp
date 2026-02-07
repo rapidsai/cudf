@@ -1,7 +1,9 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#include "tests/io/experimental/hybrid_scan_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -16,64 +18,6 @@
 #include <vector>
 
 namespace {
-
-cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
-{
-  using namespace cudf::io::parquet;
-
-  constexpr auto header_len = sizeof(file_header_s);
-  constexpr auto ender_len  = sizeof(file_ender_s);
-  size_t const len          = buffer.size();
-
-  auto const header_buffer = cudf::host_span<uint8_t const>(buffer.data(), header_len);
-  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer.data());
-  auto const ender_buffer =
-    cudf::host_span<uint8_t const>(buffer.data() + len - ender_len, ender_len);
-  auto const ender = reinterpret_cast<file_ender_s const*>(ender_buffer.data());
-  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
-  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-               "Corrupted header or footer");
-  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-               "Incorrect footer length");
-
-  return cudf::host_span<uint8_t const>(buffer.data() + len - ender->footer_len - ender_len,
-                                        ender->footer_len);
-}
-
-cudf::host_span<uint8_t const> fetch_page_index_bytes(
-  cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes)
-{
-  return cudf::host_span<uint8_t const>(
-    reinterpret_cast<uint8_t const*>(buffer.data()) + page_index_bytes.offset(),
-    page_index_bytes.size());
-}
-
-std::vector<rmm::device_buffer> fetch_byte_ranges(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  std::vector<rmm::device_buffer> buffers{};
-  buffers.reserve(byte_ranges.size());
-
-  std::transform(
-    byte_ranges.begin(),
-    byte_ranges.end(),
-    std::back_inserter(buffers),
-    [&](auto const& byte_range) {
-      auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = byte_range.size();
-      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
-      return buffer;
-    });
-
-  stream.synchronize_no_throw();
-  return buffers;
-}
 
 template <typename... UniqPtrs>
 std::vector<std::unique_ptr<cudf::column>> make_uniqueptrs_vector(UniqPtrs&&... uniqptrs)
@@ -173,14 +117,14 @@ TEST_F(HybridScanTest, DictionaryPageFiltering)
 
   auto const dict_byte_ranges =
     std::get<1>(reader->secondary_filters_byte_ranges(input_row_group_indices, in_opts));
-  std::vector<rmm::device_buffer> dictionary_page_buffers =
-    fetch_byte_ranges(file_buffer_span,
-                      dict_byte_ranges,
-                      cudf::test::get_default_stream(),
-                      cudf::get_current_device_resource_ref());
+  auto dictionary_page_buffers = fetch_byte_ranges(file_buffer_span,
+                                                   dict_byte_ranges,
+                                                   cudf::test::get_default_stream(),
+                                                   cudf::get_current_device_resource_ref());
+  auto dictionary_page_data    = make_device_spans<uint8_t>(dictionary_page_buffers);
 
   auto result = reader->filter_row_groups_with_dictionary_pages(
-    dictionary_page_buffers, input_row_group_indices, in_opts, cudf::test::get_default_stream());
+    dictionary_page_data, input_row_group_indices, in_opts, cudf::test::get_default_stream());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

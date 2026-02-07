@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -57,6 +57,17 @@ def test_fill_null_with_string():
 )
 def test_fill_null_with_strategy(null_data, strategy):
     q = null_data.select(pl.col("a").fill_null(strategy=strategy))
+    if POLARS_VERSION_LT_132:
+        assert_ir_translation_raises(q, NotImplementedError)
+    else:
+        assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("strategy", ["zero", "one"])
+def test_fill_null_with_strategy_bool(strategy):
+    q = pl.LazyFrame({"a": [True, None, False]}).select(
+        pl.col("a").fill_null(strategy=strategy)
+    )
     if POLARS_VERSION_LT_132:
         assert_ir_translation_raises(q, NotImplementedError)
     else:

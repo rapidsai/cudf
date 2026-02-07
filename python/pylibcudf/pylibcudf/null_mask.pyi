@@ -41,3 +41,6 @@ def bitmask_or(
 def null_count(
     bitmask: Span, start: int, stop: int, stream: Stream | None = None
 ) -> int: ...
+def index_of_first_set_bit(
+    bitmask: Span, start: int, stop: int, stream: Stream | None = None
+) -> int: ...

@@ -5,28 +5,25 @@ from __future__ import annotations
 
 import itertools
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.dtype.validators import is_dtype_obj_list
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
-from cudf.utils.dtypes import (
-    get_dtype_of_same_kind,
-    is_dtype_obj_list,
-)
+from cudf.utils.dtypes import get_dtype_of_same_kind
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
 )
-from cudf.utils.utils import _is_null_host_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -45,23 +42,24 @@ class ListColumn(ColumnBase):
         cls, plc_column: plc.Column, dtype: ListDtype
     ) -> tuple[plc.Column, ListDtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, ListDtype)
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_list(dtype)
-        ):
+        if not is_dtype_obj_list(dtype):
             raise ValueError("dtype must be a cudf.ListDtype")
+
+        child = plc_column.list_view().child()
+        try:
+            ColumnBase._validate_dtype_recursively(child, dtype.element_type)
+        except ValueError as e:
+            raise ValueError(
+                f"List element type validation failed: {e}"
+            ) from e
+
         return plc_column, dtype
 
     def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
-        dtype = cast("ListDtype", self.dtype)
-        return ColumnBase.from_pylibcudf(sliced_plc_col)._with_type_metadata(
-            dtype.element_type
-        )
+        assert isinstance(self.dtype, ListDtype)
+        return ColumnBase.create(sliced_plc_col, self.dtype.element_type)
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
@@ -151,7 +149,7 @@ class ListColumn(ColumnBase):
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
-            if _is_null_host_scalar(data):
+            if is_na_like(data):
                 mask_bools.append(False)
                 offset_vals.append(offset)
             else:
@@ -271,10 +269,7 @@ class ListColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
-        ):
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")

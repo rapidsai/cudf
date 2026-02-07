@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import pandas as pd
 import pyarrow as pa
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-from typing_extensions import Self
 
 import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, _handle_nulls, as_column
+from cudf.core.dtype.validators import is_dtype_obj_interval
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
-from cudf.utils.dtypes import is_dtype_obj_interval
 from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
 if TYPE_CHECKING:
@@ -42,14 +41,18 @@ class IntervalColumn(ColumnBase):
             raise ValueError(
                 "plc_column must have two children (left edges, right edges)."
             )
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, IntervalDtype)
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_interval(dtype)
-        ):
+        if not is_dtype_obj_interval(dtype):
             raise ValueError("dtype must be a IntervalDtype.")
+
+        # Validate that children dtypes are compatible with target subtype
+        for i, child in enumerate(plc_column.children()):
+            try:
+                ColumnBase._validate_dtype_recursively(child, dtype.subtype)
+            except ValueError as e:
+                raise ValueError(
+                    f"{'Right' if i else 'Left'} interval bound validation failed: {e}"
+                ) from e
+
         return plc_column, dtype
 
     def _with_type_metadata(self, dtype: DtypeObj) -> ColumnBase:
@@ -90,8 +93,8 @@ class IntervalColumn(ColumnBase):
         if not isinstance(array, pa.ExtensionArray):
             raise ValueError("Expected ExtensionArray for interval data")
         new_col = super().from_arrow(array.storage)
-        return new_col._with_type_metadata(
-            IntervalDtype.from_arrow(array.type)
+        return ColumnBase.create(
+            new_col.plc_column, IntervalDtype.from_arrow(array.type)
         )  # type: ignore[return-value]
 
     def to_arrow(self) -> pa.Array:
@@ -144,17 +147,10 @@ class IntervalColumn(ColumnBase):
         )
 
     def copy(self, deep: bool = True) -> Self:
-        return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
-
-    def _adjust_reduce_result(
-        self,
-        result_col: ColumnBase,
-        reduction_op: str,
-        col_dtype: DtypeObj,
-        plc_scalar: plc.Scalar,
-    ) -> ColumnBase:
-        """Preserve IntervalDtype metadata on reduction result."""
-        return result_col._with_type_metadata(col_dtype)
+        plc_col = self.plc_column
+        if deep:
+            plc_col = plc_col.copy()
+        return ColumnBase.create(plc_col, self.dtype)  # type: ignore[return-value]
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
@@ -183,9 +179,10 @@ class IntervalColumn(ColumnBase):
 
     @property
     def left(self) -> ColumnBase:
-        return ColumnBase.from_pylibcudf(
-            self.plc_column.children()[0]
-        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
+        return ColumnBase.create(
+            self.plc_column.children()[0],
+            self.dtype.subtype,  # type: ignore[union-attr]
+        )
 
     @functools.cached_property
     def mid(self) -> ColumnBase:
@@ -197,9 +194,10 @@ class IntervalColumn(ColumnBase):
 
     @property
     def right(self) -> ColumnBase:
-        return ColumnBase.from_pylibcudf(
-            self.plc_column.children()[1]
-        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
+        return ColumnBase.create(
+            self.plc_column.children()[1],
+            self.dtype.subtype,  # type: ignore[union-attr]
+        )
 
     @property
     def __cuda_array_interface__(self) -> dict[str, Any]:
@@ -213,15 +211,35 @@ class IntervalColumn(ColumnBase):
     def set_closed(
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
-        return self._with_type_metadata(  # type: ignore[return-value]
-            IntervalDtype(self.dtype.subtype, closed)  # type: ignore[union-attr]
+        return ColumnBase.create(  # type: ignore[return-value]
+            self.plc_column,
+            IntervalDtype(self.dtype.subtype, closed),  # type: ignore[union-attr]
         )
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:
-        if isinstance(dtype, IntervalDtype):
-            return self._with_type_metadata(dtype)  # type: ignore[return-value]
-        else:
+        if not isinstance(dtype, IntervalDtype):
             raise ValueError("dtype must be IntervalDtype")
+
+        # If subtype is changing, cast children to match new subtype
+        if dtype.subtype != self.dtype.subtype:  # type: ignore[union-attr]
+            new_children = tuple(
+                ColumnBase.from_pylibcudf(child).astype(dtype.subtype)
+                for child in self.plc_column.children()
+            )
+            # Reconstruct plc_column with cast children
+            plc_column = plc.Column(
+                plc.DataType(plc.TypeId.STRUCT),
+                self.plc_column.size(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                self.plc_column.offset(),
+                [child.plc_column for child in new_children],
+            )
+        else:
+            plc_column = self.plc_column
+
+        return ColumnBase.create(plc_column, dtype)  # type: ignore[return-value]
 
     def to_pandas(
         self,
@@ -234,10 +252,7 @@ class IntervalColumn(ColumnBase):
         # self.to_arrow) is currently the best known way to convert interval
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
-        if nullable or (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
-        ):
+        if nullable or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")

@@ -647,7 +647,6 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 # * nvtext test -----------------------------------------------------------------------------------
 ConfigureTest(
   TEXT_TEST
-  text/bpe_tests.cpp
   text/deduplicate_tests.cpp
   text/edit_distance_tests.cpp
   text/jaccard_tests.cpp
@@ -753,7 +752,8 @@ ConfigureTest(
 ConfigureTest(STREAM_IO_ORC_TEST streams/io/orc_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_IO_PARQUET_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
 ConfigureTest(
-  STREAM_IO_HYBRID_SCAN_TEST streams/io/experimental/hybrid_scan_test.cpp STREAM_MODE testing
+  STREAM_IO_HYBRID_SCAN_TEST io/experimental/hybrid_scan_common.cpp
+  streams/io/experimental/hybrid_scan_test.cpp STREAM_MODE testing
 )
 ConfigureTest(STREAM_JOIN_TEST streams/join_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
@@ -792,7 +792,6 @@ ConfigureTest(
 )
 ConfigureTest(
   STREAM_TEXT_TEST
-  streams/text/bpe_test.cpp
   streams/text/edit_distance_test.cpp
   streams/text/ngrams_test.cpp
   streams/text/replace_test.cpp

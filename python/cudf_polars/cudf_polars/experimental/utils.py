@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition utilities."""
 
@@ -63,22 +63,11 @@ def _lower_ir_fallback(
     # those children will be collapsed with `Repartition`.
     from cudf_polars.experimental.repartition import Repartition
 
-    # TODO: (IMPORTANT) Since Repartition is a local operation,
-    # the current fallback logic will only work for one rank!
-    # For multiple ranks, we will need to AllGather the data
-    # on all ranks.
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
     )
-    if (
-        (rapidsmpf_engine := config_options.executor.runtime == "rapidsmpf")
-        and config_options.executor.scheduler == "distributed"
-    ):  # pragma: no cover; Requires distributed
-        raise NotImplementedError(
-            "Fallback is not yet supported distributed execution "
-            "with the RAPIDS-MPF streaming runtime."
-        )
+    rapidsmpf_engine = config_options.executor.runtime == "rapidsmpf"
 
     # Lower children
     lowered_children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)

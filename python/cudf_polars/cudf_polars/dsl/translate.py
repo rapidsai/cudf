@@ -9,9 +9,7 @@ import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
-
-from typing_extensions import assert_never
+from typing import TYPE_CHECKING, Any, assert_never
 
 import polars as pl
 
