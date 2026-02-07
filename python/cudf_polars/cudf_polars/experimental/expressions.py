@@ -459,11 +459,8 @@ def _decompose_expr_node(
     # Check for dynamic planning - may have more partitions at runtime
     dynamic_planning = _dynamic_planning_on(config_options)
 
-    if expr.is_pointwise:
-        # Pointwise expressions are always supported as-is.
-        return expr, input_ir, partition_info
-    elif partition_count == 1 and not dynamic_planning:
-        # Single-partition without dynamic planning - no decomposition needed.
+    if expr.is_pointwise or (partition_count == 1 and not dynamic_planning):
+        # Single-partition and pointwise expressions are always supported.
         return expr, input_ir, partition_info
     elif isinstance(expr, Len) or (
         isinstance(expr, Agg) and expr.name in _SUPPORTED_AGGS
