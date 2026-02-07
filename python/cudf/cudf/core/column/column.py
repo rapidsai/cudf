@@ -1663,11 +1663,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         return result
 
-        # return ColumnBase.create(
-        #     result.plc_column,
-        #     get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
-        # )
-
     @cached_property
     def nan_count(self) -> int:
         return 0

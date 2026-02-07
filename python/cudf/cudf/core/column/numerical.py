@@ -234,10 +234,6 @@ class NumericalColumn(NumericalBaseColumn):
 
         return result
 
-        # return result._with_type_metadata(
-        #     get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-        # )
-
     def element_indexing(self, index: int) -> ScalarLike | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):

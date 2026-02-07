@@ -1071,7 +1071,6 @@ class IntervalDtype(_BaseDtype):
             else self.subtype,
             closed=self.closed,
         )
-        # return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, str):
