@@ -215,6 +215,7 @@ def _(
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'lower_ir_node'"
     )
+    dynamic_planning = _dynamic_planning_on(config_options)
 
     # Lower children
     left, right = ir.children
@@ -227,11 +228,11 @@ def _(
     output_count = max(left_count, right_count)
     fallback_msg = "ConditionalJoin not supported for multiple partitions."
     if left_count < right_count:
-        if left_count > 1:
+        if left_count > 1 or dynamic_planning:
             left = Repartition(left.schema, left)
             pi_left[left] = PartitionInfo(count=1)
             _fallback_inform(fallback_msg, config_options)
-    elif right_count > 1:
+    elif right_count > 1 or dynamic_planning:
         right = Repartition(right.schema, right)
         pi_right[right] = PartitionInfo(count=1)
         _fallback_inform(fallback_msg, config_options)
