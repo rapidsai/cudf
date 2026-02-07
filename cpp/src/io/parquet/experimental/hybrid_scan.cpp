@@ -339,8 +339,13 @@ void hybrid_scan_reader::setup_chunking_for_all_columns(
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->setup_chunking_for_all_columns(
-    chunk_read_limit, pass_read_limit, input_row_group_indices, column_chunk_data, options, stream, mr);
+  return _impl->setup_chunking_for_all_columns(chunk_read_limit,
+                                               pass_read_limit,
+                                               input_row_group_indices,
+                                               column_chunk_data,
+                                               options,
+                                               stream,
+                                               mr);
 }
 
 table_with_metadata hybrid_scan_reader::materialize_all_columns_chunk() const
