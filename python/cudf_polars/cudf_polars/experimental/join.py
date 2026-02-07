@@ -221,21 +221,6 @@ def _(
     left, pi_left = rec(left)
     right, pi_right = rec(right)
 
-    # For rapidsmpf runtime, always repartition both sides to single partition
-    # (ConditionalJoin can't be distributed, so we always need single partition)
-    if config_options.executor.runtime == "rapidsmpf":  # pragma: no cover
-        # Repartition left if needed
-        left = Repartition(left.schema, left)
-        pi_left[left] = PartitionInfo(count=1)
-        # Repartition right if needed
-        right = Repartition(right.schema, right)
-        pi_right[right] = PartitionInfo(count=1)
-
-        new_node = ir.reconstruct([left, right])
-        partition_info = reduce(operator.or_, (pi_left, pi_right))
-        partition_info[new_node] = PartitionInfo(count=1)
-        return new_node, partition_info
-
     # Fallback to single partition on the smaller table
     left_count = pi_left[left].count
     right_count = pi_right[right].count

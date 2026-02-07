@@ -167,7 +167,7 @@ def test_join_conditional(reverse, max_rows_per_partition):
     if reverse:
         left, right = right, left
     q = left.join_where(right, pl.col("y") < pl.col("yy"))
-    if max_rows_per_partition == 3 and DEFAULT_RUNTIME != "rapidsmpf":
+    if max_rows_per_partition == 3:
         with pytest.warns(
             UserWarning, match="ConditionalJoin not supported for multiple partitions."
         ):
