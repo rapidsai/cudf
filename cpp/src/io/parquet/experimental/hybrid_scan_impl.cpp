@@ -672,13 +672,11 @@ void hybrid_scan_reader_impl::setup_chunking_for_all_columns(
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
 
-  reset_internal_state();
+  prepare_materialization(
+    read_columns_mode::ALL_COLUMNS, row_group_indices.size(), options, stream, mr);
 
-  initialize_options(row_group_indices, options, stream, mr);
   _input_pass_read_limit   = pass_read_limit;
   _output_chunk_read_limit = chunk_read_limit;
-
-  select_columns(read_columns_mode::ALL_COLUMNS, options);
 
   // Convert the input expression (must be done after column selection)
   _expr_conv = build_converted_expression(options);
