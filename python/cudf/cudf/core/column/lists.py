@@ -18,7 +18,7 @@ from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtype.validators import is_dtype_obj_list
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, get_dtype_of_same_kind
+from cudf.utils.dtypes import get_dtype_of_same_kind
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
@@ -420,6 +420,7 @@ class ListColumn(ColumnBase):
         separator: str | StringColumn,
         sep_na_rep: str,
         string_na_rep: str,
+        result_dtype: DtypeObj,
     ) -> StringColumn:
         with self.access(mode="read", scope="internal"):
             if isinstance(separator, str):
@@ -438,7 +439,7 @@ class ListColumn(ColumnBase):
             )
             return cast(
                 "cudf.core.column.string.StringColumn",
-                ColumnBase.create(plc_column, CUDF_STRING_DTYPE),
+                ColumnBase.create(plc_column, result_dtype),
             )
 
     def minhash_ngrams(
